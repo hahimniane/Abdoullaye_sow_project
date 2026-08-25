@@ -7173,13 +7173,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'The businesses on this route can see your parcel now. Prices appear here as they answer.';
 
   @override
-  String freightQuotePaysBackIfLost(String amount) {
-    return 'Pays back $amount if the parcel is lost';
+  String freightQuoteCoversLoss(String business) {
+    return '$business pays you back if this parcel is lost';
   }
 
   @override
-  String freightQuoteNoPaybackIfLost(String business) {
-    return '$business pays back nothing if the parcel is lost';
+  String freightQuoteDoesNotCoverLoss(String business) {
+    return '$business does not cover lost parcels';
   }
 
   @override

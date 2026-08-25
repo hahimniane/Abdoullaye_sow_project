@@ -85,14 +85,14 @@ class BusinessDestinationOption {
   /// freight.
   final List<FreightCategory> freightCategories;
 
-  /// Whether this business pays the customer back for a parcel it loses, and
-  /// on what terms. Null when it does not offer freight - which is not the
-  /// same as offering freight and covering nothing.
+  /// Whether this business makes good on a parcel it loses. Null when it does
+  /// not offer freight - which is not the same as offering freight and
+  /// covering nothing.
   final FreightCoveragePolicy? freightCoverage;
 
-  /// What the business pays back per item type: the customer says what the
-  /// item is and this table says what it is worth. Raw wire shape; read
-  /// through freight_payback.
+  /// What the business carries and what it charges for each of those things:
+  /// the customer says what the item is and this catalogue says its price.
+  /// Raw wire shape; read through freight_payback.
   final Map<String, dynamic>? freightPaybackTable;
 
   /// The one line the option card shows about who stands behind the parcel.

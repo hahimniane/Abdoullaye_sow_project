@@ -70,7 +70,7 @@ class FreightShipmentService {
           if ((itemCategoryId ?? '').trim().isNotEmpty)
             'itemCategoryId': itemCategoryId!.trim(),
           // Present-but-empty means "the category catch-all": the server
-          // resolves '' to the business's other-payback row.
+          // resolves '' to the business's catch-all row for the category.
           if (itemId != null) 'itemId': itemId.trim(),
           if (destinationDelivery) 'destinationDelivery': true,
           if (destinationDelivery &&

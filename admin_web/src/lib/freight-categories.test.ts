@@ -270,20 +270,17 @@ test("each row carries its own pricing, and an untouched row carries none", () =
           items: [
             {
               ...emptyFreightPaybackItem("iphone-16", "iPhone 16"),
-              amount: "400",
               pricingMode: "flat",
               flatPrice: "50",
               includedKg: "2",
             },
             {
               ...emptyFreightPaybackItem("tv", "Television"),
-              amount: "300",
               pricingMode: "flat",
               flatPrice: "120",
             },
             {
               ...emptyFreightPaybackItem("cables", "Cables"),
-              amount: "20",
               pricingMode: "per_kg",
             },
             // Saved before pricing moved onto the row. It must reach the
@@ -291,11 +288,9 @@ test("each row carries its own pricing, and an untouched row carries none", () =
             // what priced it yesterday and has to price it tomorrow.
             {
               ...emptyFreightPaybackItem("laptop", "Laptop"),
-              amount: "800",
               pricingMode: "",
             },
           ],
-          otherAmount: "100",
           otherPricingMode: "per_kg",
         },
       },
@@ -306,7 +301,6 @@ test("each row carries its own pricing, and an untouched row carries none", () =
     {
       id: "iphone-16",
       label: "iPhone 16",
-      paybackAmount: 400,
       pricingMode: "flat",
       flatPrice: 50,
       includedKg: 2,
@@ -316,7 +310,6 @@ test("each row carries its own pricing, and an untouched row carries none", () =
     {
       id: "tv",
       label: "Television",
-      paybackAmount: 300,
       pricingMode: "flat",
       flatPrice: 120,
     },
@@ -325,17 +318,16 @@ test("each row carries its own pricing, and an untouched row carries none", () =
     {
       id: "cables",
       label: "Cables",
-      paybackAmount: 20,
       pricingMode: "per_kg",
     },
-    {id: "laptop", label: "Laptop", paybackAmount: 800},
+    {id: "laptop", label: "Laptop"},
   ]);
   assert.equal(electronics.otherPricingMode, "per_kg");
   assert.doesNotMatch(JSON.stringify(payload), /eightFactor/);
   // A row with no mode sends no pricing keys at all. The absence is what
   // tells the server this business has never put a number on it.
   const laptop = electronics.items.find((item) => item.id === "laptop");
-  assert.deepEqual(laptop, {id: "laptop", label: "Laptop", paybackAmount: 800});
+  assert.deepEqual(laptop, {id: "laptop", label: "Laptop"});
 });
 
 test("a priced row is refused here on the bands the server refuses on", () => {
@@ -347,7 +339,6 @@ test("a priced row is refused here on the bands the server refuses on", () => {
           items: [
             {...emptyFreightPaybackItem("iphone", "iPhone"), ...patch},
           ],
-          otherAmount: "0",
         },
       },
     });
@@ -518,14 +509,12 @@ test("both consoles are wired to the freight category and coverage contract", ()
   // The comparison surface: coverage on the card, before a business is picked.
   assert.match(customer, /freightCoverageComparisonLine\(/);
   assert.match(customer, /customer-destination-coverage/);
-  // The amount is on the screen, not behind an "i": UI convention 1 forbids
-  // hiding anything the reader needs to avoid a mistake, and what a business
-  // owes on a lost parcel is exactly that.
-  // The card says whether the business stands behind the parcel; it never
-  // quotes the sum, because a lost parcel is rare and a figure invites an
-  // argument rather than a decision.
+  // Whether the business stands behind the parcel is on the screen, not
+  // behind an "i": UI convention 1 forbids hiding anything the reader needs
+  // to avoid a mistake, and that is exactly it. It never quotes a sum,
+  // because a figure invites an argument rather than a decision.
   assert.match(customer, /pays you back for it/);
-  assert.doesNotMatch(customer, /pays you<\/span> \{formatMoney\(paybackAmount\)\}/);
+  assert.doesNotMatch(customer, /formatMoney\(payback/);
   assert.doesNotMatch(customer, /<FieldInfo[\s\S]{0,400}We pay up to/);
 
   const business = readFileSync(
@@ -541,9 +530,13 @@ test("both consoles are wired to the freight category and coverage contract", ()
   assert.doesNotMatch(business, /onCategoryRate/);
   assert.doesNotMatch(business, /<span>Price multiplier<\/span>/);
   assert.match(business, /How is this priced\?/);
-  // What a business owes on a lost parcel is money moving, so it stays on the
-  // screen whether or not anyone presses the "i".
-  assert.match(business, /You pay the customer back, not Laawol/);
+  // Who settles a claim is money moving, so it stays on the screen whether or
+  // not anyone presses the "i" - and it names no sum, because there is none.
+  assert.match(business, /You make good on the parcel, not Laawol/);
+  // The catch-all is a row a business prices or leaves for a request. There
+  // is no amount switching it on any more.
+  assert.match(business, /unpricedLabel="Ask me for a price"/);
+  assert.doesNotMatch(business, /otherAmount/);
 
   // Both halves ride on the one callable that already carries them.
   const settings = readFileSync(

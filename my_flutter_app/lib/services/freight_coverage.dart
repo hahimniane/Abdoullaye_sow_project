@@ -12,11 +12,11 @@
 /// item rather than per kilo, so the risk already sits inside the shipping
 /// rate; a separate percentage would bill the same risk twice.
 ///
-/// That leaves one question: does this business pay for a parcel it loses? If
-/// yes, it pays the full payback it published for that item. If no, the
-/// customer gets nothing back and has to be told so while the business can
-/// still be avoided. The sender is never asked what the parcel is worth - they
-/// say what the item is, and the business's own table says what it pays.
+/// That leaves one question: does this business make good on a parcel it
+/// loses? If no, the customer gets nothing back and has to be told so while
+/// the business can still be avoided. There is no amount on either side of
+/// that answer - the sender is never asked what the parcel is worth, and the
+/// business never publishes a figure it would then be haggled down from.
 ///
 /// The platform is not the insurer - the business pays the customer back. So
 /// the screens show whose promise it is, by name.
@@ -66,7 +66,7 @@ enum FreightCoverageSummary {
   /// It carries the parcel but pays nothing if it goes missing.
   noCoverage,
 
-  /// It pays back what it published for the item, at no charge.
+  /// It makes good on the parcel if it is lost, at no charge.
   coversLoss,
 }
 

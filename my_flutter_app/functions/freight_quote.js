@@ -14,11 +14,11 @@
  * is the same problem: the price cannot be known until the side carrying
  * the goods says what it is.
  *
- * The one thing this adds over transport is coverage. A freight quote has
- * to state what the business pays back if it loses the parcel, because the
- * customer is choosing between businesses on that as well as on price, and
- * a quote that omitted it would be worse than the instant booking it
- * replaces.
+ * The one thing this adds over transport is cover. A freight quote says
+ * whether the business makes good on the parcel if it loses it, because the
+ * customer is choosing between businesses on that as well as on price. It
+ * is a yes or a no, never an amount - a figure per parcel invites the
+ * haggling the rest of this design exists to avoid.
  */
 
 /** A request nobody answers in a week is a request the customer forgot. */
@@ -39,7 +39,7 @@ const FREIGHT_QUOTE_STATUS = Object.freeze({
 const FREIGHT_QUOTE_ERRORS = Object.freeze({
   amount_invalid: "Enter what you charge to send this",
   amount_out_of_range: "That price is outside what this platform handles",
-  payback_invalid: "Say what you pay back if this is lost, or zero",
+  covers_invalid: "Say whether you cover this parcel if it is lost",
   terms_too_long: "Keep the note under 1000 characters",
   description_required: "Describe what is being sent",
   description_too_long: "Keep the description under 2000 characters",
@@ -84,10 +84,10 @@ function validateFreightQuoteRequest(raw) {
 /**
  * What a business is offering, cleaned.
  *
- * The payback is part of the quote rather than read from the business's
- * table, because this is an item that table does not cover - the whole
- * reason the request exists. A business that will not stand behind this
- * particular parcel says zero, and the customer sees that before choosing.
+ * Cover is stated per quote rather than read from the business's standing
+ * policy, because this is a parcel that policy was never written for - the
+ * whole reason the request exists. A business that will not stand behind
+ * this particular one says so, and the customer sees that beside the price.
  *
  * @param {object} raw The quote payload.
  * @return {object} {ok, quote} cleaned, or {ok: false, error}.
@@ -100,12 +100,6 @@ function validateFreightQuote(raw) {
   if (amountCents > MAX_FREIGHT_QUOTE_CENTS) {
     return {ok: false, error: "amount_out_of_range"};
   }
-  const paybackCents = raw?.paybackAmountCents === undefined ?
-    0 :
-    Number(raw.paybackAmountCents);
-  if (!Number.isSafeInteger(paybackCents) || paybackCents < 0) {
-    return {ok: false, error: "payback_invalid"};
-  }
   const terms = String(raw?.terms || "").trim();
   if (terms.length > MAX_TERMS_LENGTH) {
     return {ok: false, error: "terms_too_long"};
@@ -114,10 +108,9 @@ function validateFreightQuote(raw) {
     ok: true,
     quote: {
       amountCents,
-      paybackAmountCents: paybackCents,
-      // Cover is still free and still the business's own promise: it either
-      // makes good on this parcel or it does not, and it says which here.
-      coversLoss: paybackCents > 0,
+      // Free, and the business's own promise: it either makes good on this
+      // parcel or it does not, and it says which here.
+      coversLoss: raw?.coversLoss === true,
       terms,
     },
   };

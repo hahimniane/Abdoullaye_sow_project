@@ -7,9 +7,9 @@ import '../models/freight_quote.dart';
 ///
 /// The same marketplace shape as `TransportService`: one request fans out to
 /// every business serving the route, each answers with its own number, and the
-/// customer picks. What freight adds is the payback - a business quoting an
-/// item outside its published table has to say here whether it will make good
-/// on it, because that is half of what the customer is choosing between.
+/// customer picks. What freight adds is cover - a business quoting an item
+/// outside its published table has to say here whether it will make good on
+/// it, because that is half of what the customer is choosing between.
 class FreightQuoteService {
   FreightQuoteService({
     FirebaseFunctions? functions,
@@ -53,12 +53,12 @@ class FreightQuoteService {
     );
   }
 
-  /// A business answering with its price and what it pays back if it loses
-  /// the parcel. [businessId] is only needed by staff who manage more than one.
+  /// A business answering with its price and whether it makes good on the
+  /// parcel. [businessId] is only needed by staff who manage more than one.
   Future<String> submitQuote({
     required String requestId,
     required int amountCents,
-    int paybackAmountCents = 0,
+    bool coversLoss = false,
     String businessId = '',
     String terms = '',
   }) async {
@@ -67,7 +67,7 @@ class FreightQuoteService {
         .call<Map<String, dynamic>>({
           'requestId': requestId,
           'amountCents': amountCents,
-          'paybackAmountCents': paybackAmountCents,
+          'coversLoss': coversLoss,
           if (businessId.trim().isNotEmpty) 'businessId': businessId.trim(),
           if (terms.trim().isNotEmpty) 'terms': terms.trim(),
         });

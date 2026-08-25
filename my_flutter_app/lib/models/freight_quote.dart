@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// One business's answer to "what do you charge to send this?".
 ///
 /// Mirror of the `freightQuotes` document the server writes in
-/// `submitFreightQuote`. The payback rides on the quote rather than being read
-/// from the business's published table, because the whole reason this document
+/// `submitFreightQuote`. Cover rides on the quote rather than being read from
+/// the business's standing policy, because the whole reason this document
 /// exists is that the table has no row for this parcel - so the business says
 /// here, per quote, whether it stands behind this one.
 class FreightQuote {
@@ -14,7 +14,6 @@ class FreightQuote {
     required this.businessId,
     required this.businessName,
     required this.amountCents,
-    required this.paybackAmountCents,
     required this.coversLoss,
     required this.currency,
     required this.status,
@@ -31,9 +30,8 @@ class FreightQuote {
   /// What this business charges to carry the parcel.
   final int amountCents;
 
-  /// What it pays back if the parcel is lost. Zero is a real answer, and the
-  /// customer is shown it plainly rather than left to assume cover.
-  final int paybackAmountCents;
+  /// Whether it makes good on the parcel if it never arrives. A yes or a no,
+  /// with no sum against it, and it costs the customer nothing either way.
   final bool coversLoss;
   final String currency;
   final String status;
@@ -51,7 +49,6 @@ class FreightQuote {
       expiresAt != null && !expiresAt!.isAfter(DateTime.now());
 
   double get amount => amountCents / 100;
-  double get paybackAmount => paybackAmountCents / 100;
 
   factory FreightQuote.fromFirestore(DocumentSnapshot doc) => FreightQuote
       .fromMap(
@@ -63,19 +60,15 @@ class FreightQuote {
     required String id,
     required Map<String, dynamic> data,
   }) {
-    final paybackCents = (data['paybackAmountCents'] as num?)?.toInt() ?? 0;
     return FreightQuote(
       id: id,
       requestId: (data['requestId'] ?? '') as String,
       businessId: (data['businessId'] ?? '') as String,
       businessName: (data['businessName'] ?? '') as String,
       amountCents: (data['amountCents'] as num?)?.toInt() ?? 0,
-      paybackAmountCents: paybackCents,
-      // The stored flag is the business's own statement; an older document
-      // without one is read from the amount it promised.
-      coversLoss: data['coversLoss'] is bool
-          ? data['coversLoss'] as bool
-          : paybackCents > 0,
+      // A document with nothing to say about cover is a business that has
+      // not promised one, which is the safe reading for the customer.
+      coversLoss: data['coversLoss'] == true,
       currency: (data['currency'] ?? 'usd') as String,
       status: (data['status'] ?? '') as String,
       revision: (data['revision'] as num?)?.toInt() ?? 1,

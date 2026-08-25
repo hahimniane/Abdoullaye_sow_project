@@ -3035,7 +3035,7 @@
   },
   "freightAskForPriceCta": "Demander un prix",
   "freightAskForPriceTitle": "Demander un prix",
-  "freightAskForPriceIntro": "Décrivez ce que vous envoyez vers {country}. Chaque entreprise sur cet itinéraire peut répondre avec son propre prix et indiquer ce qu'elle rembourse si le colis est perdu.",
+  "freightAskForPriceIntro": "Décrivez ce que vous envoyez vers {country}. Chaque entreprise sur cet itinéraire peut répondre avec son propre prix et indiquer si elle couvre le colis en cas de perte.",
   "@freightAskForPriceIntro": {
     "placeholders": {
       "country": {
@@ -3072,16 +3072,16 @@
   },
   "waitingForFreightQuotes": "En attente des prix",
   "waitingForFreightQuotesSubtitle": "Les entreprises de cet itinéraire voient votre colis. Les prix s'affichent ici dès qu'elles répondent.",
-  "freightQuotePaysBackIfLost": "Rembourse {amount} si le colis est perdu",
-  "@freightQuotePaysBackIfLost": {
+  "freightQuoteCoversLoss": "{business} vous rembourse si ce colis est perdu",
+  "@freightQuoteCoversLoss": {
     "placeholders": {
-      "amount": {
+      "business": {
         "type": "String"
       }
     }
   },
-  "freightQuoteNoPaybackIfLost": "{business} ne rembourse rien si le colis est perdu",
-  "@freightQuoteNoPaybackIfLost": {
+  "freightQuoteDoesNotCoverLoss": "{business} ne couvre pas les colis perdus",
+  "@freightQuoteDoesNotCoverLoss": {
     "placeholders": {
       "business": {
         "type": "String"

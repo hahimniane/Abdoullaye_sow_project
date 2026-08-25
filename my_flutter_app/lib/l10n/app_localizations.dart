@@ -12786,17 +12786,17 @@ abstract class AppLocalizations {
   /// **'The businesses on this route can see your parcel now. Prices appear here as they answer.'**
   String get waitingForFreightQuotesSubtitle;
 
-  /// No description provided for @freightQuotePaysBackIfLost.
+  /// No description provided for @freightQuoteCoversLoss.
   ///
   /// In en, this message translates to:
-  /// **'Pays back {amount} if the parcel is lost'**
-  String freightQuotePaysBackIfLost(String amount);
+  /// **'{business} pays you back if this parcel is lost'**
+  String freightQuoteCoversLoss(String business);
 
-  /// No description provided for @freightQuoteNoPaybackIfLost.
+  /// No description provided for @freightQuoteDoesNotCoverLoss.
   ///
   /// In en, this message translates to:
-  /// **'{business} pays back nothing if the parcel is lost'**
-  String freightQuoteNoPaybackIfLost(String business);
+  /// **'{business} does not cover lost parcels'**
+  String freightQuoteDoesNotCoverLoss(String business);
 
   /// No description provided for @selectFreightQuote.
   ///

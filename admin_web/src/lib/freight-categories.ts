@@ -8,11 +8,11 @@
  *   two businesses can be compared on the same words. It carries no price of
  *   its own - what a thing costs is set on the item row, by the business.
  * - **Cover** answers "if you lose it, do you make me whole". One yes/no per
- *   business, and the amount is the business's own published payback for that
- *   item. Nothing is charged for it: a business already prices each item
- *   according to what it is worth to carry - which is why freight is priced
- *   per item at all - so the risk is inside the shipping rate, and a separate
- *   percentage billed the same risk twice.
+ *   business, and no figure anywhere: a business either stands behind the
+ *   parcel or it does not. Nothing is charged for it either, because a
+ *   business already prices each item according to what it is worth to carry
+ *   - which is why freight is priced per item at all - so the risk is inside
+ *   the shipping rate, and a separate percentage billed the same risk twice.
  *
  * The platform is not the insurer: the business pays the customer back. This
  * module's job on the client is to mirror the server's arithmetic exactly, so
@@ -93,7 +93,7 @@ export type FreightCategoryOption = {
 /**
  * One question, one answer. Mirrors what `freightCoveragePolicy` sends from
  * functions/freight_coverage.js: a business either makes good on a parcel it
- * loses or it does not, and what it pays is its own published payback.
+ * loses or it does not.
  */
 export type FreightCoveragePolicy = {
   coversLoss: boolean;
@@ -207,13 +207,12 @@ export function freightWeightPricing({
 
 /**
  * The one line that lets a customer compare two businesses on protection
- * before choosing either. Money is formatted by the caller so this stays
- * pure and the customer's locale still decides how a dollar looks.
+ * before choosing either.
  *
- * Whether this business stands behind the parcel, in the sentence a
- * customer reads while it is still in the room. No amount: the business
- * that stands behind nothing is the thing worth knowing here, and a figure
- * on a card turns a rare event into a headline.
+ * Whether this business stands behind the parcel, in the sentence a customer
+ * reads while it is still in the room. There is no figure to show and none to
+ * format: cover is a yes or a no, and the business that stands behind nothing
+ * is the thing worth knowing here.
  */
 export function freightCoverageComparisonLine(
   policy: FreightCoveragePolicy | null,
@@ -221,11 +220,6 @@ export function freightCoverageComparisonLine(
   if (!policy || !policy.coversLoss) {
     return "This business does not pay for a lost parcel";
   }
-  // No figure. Losing a parcel is rare, and putting a number on the card
-  // turns a reassurance into a headline - and into the number a customer
-  // expects to argue over. What they need to know is whether this business
-  // stands behind the parcel at all; the published amount is what settles a
-  // claim on the rare day there is one.
   return "Pays you back if it is lost";
 }
 
@@ -252,7 +246,6 @@ export type FreightPaybackPricingMode = "" | "flat" | "per_kg";
 export type FreightPaybackItemDraft = {
   id: string;
   label: string;
-  amount: string;
   pricingMode: FreightPaybackPricingMode;
   /** What this item costs to carry, whatever it weighs. */
   flatPrice: string;
@@ -262,7 +255,13 @@ export type FreightPaybackItemDraft = {
 
 export type FreightPaybackCategoryDraft = {
   items: FreightPaybackItemDraft[];
-  otherAmount: string;
+  /**
+   * How anything else in this category is priced, or empty for "ask me".
+   *
+   * The mode is the whole switch: a catch-all exists because the business
+   * priced one, and a category that never did sends the customer to a
+   * request instead.
+   */
   otherPricingMode: FreightPaybackPricingMode;
   otherFlatPrice: string;
   otherIncludedKg: string;
@@ -275,7 +274,6 @@ export function emptyFreightPaybackItem(
   return {
     id,
     label,
-    amount: "0",
     pricingMode: "per_kg",
     flatPrice: "",
     includedKg: "",
@@ -285,8 +283,7 @@ export function emptyFreightPaybackItem(
 export function emptyFreightPaybackCategory(): FreightPaybackCategoryDraft {
   return {
     items: [],
-    otherAmount: "0",
-    otherPricingMode: "per_kg",
+    otherPricingMode: "",
     otherFlatPrice: "",
     otherIncludedKg: "",
   };
@@ -303,7 +300,7 @@ export type FreightSettingsDraft = {
   customCategories: FreightCustomCategoryDraft[];
   /** Whether this business makes good on a parcel it loses. */
   coversLoss: boolean;
-  /** What each item pays back if lost - the business's numbers, per row. */
+  /** What this business carries, and how each row is priced. */
   payback: Record<string, FreightPaybackCategoryDraft>;
   /**
    * Whether this business accepts being paid after the parcel reaches the
@@ -396,13 +393,11 @@ function paybackDraftFrom(
         return {
           id: trimmedString(row.id),
           label: trimmedString(row.label),
-          amount: numberText(row.paybackAmount, "0"),
           pricingMode: pricingModeText(row.pricingMode),
           flatPrice: numberText(row.flatPrice, ""),
           includedKg: numberText(row.includedKg, ""),
         };
       }),
-      otherAmount: numberText(entry.otherPaybackAmount, "0"),
       otherPricingMode: pricingModeText(entry.otherPricingMode),
       otherFlatPrice: numberText(entry.otherFlatPrice, ""),
       otherIncludedKg: numberText(entry.otherIncludedKg, ""),
@@ -471,9 +466,9 @@ function paybackPricingError(draft: FreightSettingsDraft): string | null {
         flatPrice: item.flatPrice,
         includedKg: item.includedKg,
       }));
-    // The catch-all only prices what it can also carry: a category that pays
-    // back nothing for an unlisted item sends the customer to a request.
-    if ((Number(entry.otherAmount || 0) || 0) > 0) {
+    // A catch-all exists only once the business has priced one; a category
+    // that named no mode sends every unlisted item to a request instead.
+    if (entry.otherPricingMode) {
       rows.push({
         name: `${categoryLabel} · anything else`,
         mode: entry.otherPricingMode,
@@ -538,8 +533,8 @@ export function validateFreightSettings(
   const pricingError = paybackPricingError(draft);
   if (pricingError) return pricingError;
 
-  // Cover has nothing left to validate: it is one yes/no, and the amount it
-  // promises comes from the payback rows this business already priced.
+  // Cover has nothing to validate: it is one yes/no, with no figure attached
+  // to any row for it to disagree with.
   return null;
 }
 
@@ -567,11 +562,7 @@ export type FreightSettingsPayload = {
   freightPaybackTable: Record<
     string,
     {
-      items: Array<
-        {id: string; label: string; paybackAmount: number} &
-          FreightItemPricingPayload
-      >;
-      otherPaybackAmount: number;
+      items: Array<{id: string; label: string} & FreightItemPricingPayload>;
     } & FreightOtherPricingPayload
   >;
   freightPayOnArrival: boolean;
@@ -654,18 +645,18 @@ export function buildFreightSettingsPayload(
                   item.id.trim() ||
                   item.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
                 label: item.label.trim(),
-                paybackAmount: Number(item.amount || 0) || 0,
                 ...pricingPayload(item),
               })),
-            otherPaybackAmount: Number(entry.otherAmount || 0) || 0,
             ...otherPricingPayload(entry),
           },
         ])
-        // An untouched category is not sent as an empty promise.
+        // An untouched category is not sent as an empty row.
         .filter(
           ([, entry]) =>
             (entry as {items: unknown[]}).items.length > 0 ||
-            (entry as {otherPaybackAmount: number}).otherPaybackAmount > 0,
+            Boolean(
+              (entry as FreightOtherPricingPayload).otherPricingMode,
+            ),
         ),
     ),
     freightPayOnArrival: draft.payOnArrival,

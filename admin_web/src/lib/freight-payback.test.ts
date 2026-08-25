@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { freightCoverageComparisonLine } from "./freight-categories.ts";
+import { freightQuoteCoverageLine } from "./freight-quote.ts";
 import {
   FREIGHT_PAYBACK_ERRORS,
   freightItemChoicesFor,
@@ -16,34 +18,45 @@ import {
 const TABLE = {
   electronics: {
     items: [
-      {id: "iphone", label: "iPhone", paybackAmount: 400},
-      {id: "samsung-phone", label: "Samsung phone", paybackAmount: 250},
+      {id: "iphone", label: "iPhone"},
+      {id: "samsung-phone", label: "Samsung phone"},
     ],
-    otherPaybackAmount: 100,
+    otherPricingMode: "per_kg",
   },
-  clothing: {items: [], otherPaybackAmount: 0},
+  clothing: {items: []},
 };
 
-test("prices the exact row the business published", () => {
-  assert.equal(
-    freightPaybackFor({table: TABLE, categoryId: "electronics", itemId: "iphone"})
-      .paybackAmount,
-    400,
-  );
-  assert.equal(
+test("finds the exact row the business listed", () => {
+  const phone = freightPaybackFor({
+    table: TABLE, categoryId: "electronics", itemId: "iphone",
+  });
+  assert.deepEqual(phone, {listed: true, source: "item", label: "iPhone"});
+  assert.deepEqual(
     freightPaybackFor({
       table: TABLE, categoryId: "electronics", itemId: "samsung-phone",
-    }).paybackAmount,
-    250,
+    }),
+    {listed: true, source: "item", label: "Samsung phone"},
   );
+});
+
+test("listing answers whether, never how much", () => {
+  // The whole return value. Anything that looked like a figure per item is
+  // gone: a business covers a parcel or it does not, and that is one flag
+  // on the business rather than a number on a row.
+  const lookup = freightPaybackFor({
+    table: TABLE, categoryId: "electronics", itemId: "iphone",
+  });
+  assert.deepEqual(Object.keys(lookup).sort(), ["label", "listed", "source"]);
 });
 
 test("falls back to the catch-all, and says unlisted otherwise", () => {
   const unknown = freightPaybackFor({
     table: TABLE, categoryId: "electronics", itemId: "walkman",
   });
-  assert.equal(unknown.paybackAmount, 100);
+  assert.equal(unknown.listed, true);
   assert.equal(unknown.source, "other");
+  // A category whose catch-all names no pricing has no catch-all at all:
+  // having a mode is what makes it a row.
   assert.equal(
     freightPaybackFor({table: TABLE, categoryId: "clothing", itemId: "boubou"})
       .listed,
@@ -55,22 +68,23 @@ test("falls back to the catch-all, and says unlisted otherwise", () => {
   );
 });
 
-test("the payback is what the customer is promised, and it costs nothing", () => {
-  // The business's published amount reaches the screen in full, beside a
-  // price column that says outright there is no charge for it.
+test("the promise reaches the customer, and it costs nothing", () => {
+  // The estimate says the parcel is covered and that it costs nothing. There
+  // is no sum, no ceiling and no per-item figure to disagree with the claim.
   const customer = readFileSync(
     new URL("../components/customer-shipping-services.tsx", import.meta.url),
     "utf8",
   );
   assert.match(customer, /Protection included · paid back if lost/);
-  // Never a ceiling, and never a sum: the estimate says the parcel is
-  // covered and that it costs nothing, and leaves the amount to the claim.
   assert.doesNotMatch(customer, /Protection included · up to/);
-  assert.doesNotMatch(customer, /Paid back if lost"\n?\s*value=\{formatMoney/);
   assert.match(customer, /value: "Free"/);
   assert.doesNotMatch(customer, /label:\s*"Cover for loss"/);
   // Nothing anywhere in the estimate adds a cover line to the total.
   assert.doesNotMatch(customer, /\+ coverageFee/);
+  // And the cover the estimate states is the business's yes/no narrowed to
+  // this parcel, not a number read off the row.
+  assert.doesNotMatch(customer, /paybackAmount/);
+  assert.match(customer, /coversThisParcel/);
 });
 
 const businessSettingsSource = readFileSync(
@@ -81,6 +95,84 @@ const operationsSource = readFileSync(
   new URL("../components/business/operations-panels.tsx", import.meta.url),
   "utf8",
 );
+const customerSource = readFileSync(
+  new URL("../components/customer-shipping-services.tsx", import.meta.url),
+  "utf8",
+);
+
+/** Anything a reader would take for a sum of money. */
+const FIGURE =
+  /formatMoney|[$€£]\s*\d|\d[\d,.]*\s*(?:USD|EUR|dollars?)|Cents\b/i;
+/** A sentence a customer could read as a statement about cover. */
+const COVERAGE_PHRASE =
+  /lost parcel|if (?:it|this) is lost|pays? (?:you )?back|paid back|cover(?:s|ed)? (?:this|a|the) parcel|[Pp]rotection/;
+
+/**
+ * The body of one top-level function, from its declaration to the closing
+ * brace in column one. Crude, and exactly enough: it is how the whole of a
+ * component's rendered prose gets checked rather than just its literals.
+ */
+function functionBody(source: string, declaration: string): string {
+  const start = source.indexOf(declaration);
+  assert.notEqual(start, -1, `${declaration} is not in the source`);
+  const end = source.indexOf("\n}\n", start);
+  assert.notEqual(end, -1, `${declaration} has no closing brace`);
+  return source.slice(start, end);
+}
+
+test("no customer-facing coverage line can ever carry a figure", () => {
+  // This is the fourth attempt at removing the per-item amount, and each of
+  // the first three grew one back somewhere near the word "cover". Cover is
+  // a yes or a no: a figure beside it is the thing a customer argues over,
+  // and there is no longer any field it could honestly be read from.
+  for (const line of [
+    freightCoverageComparisonLine(null),
+    freightCoverageComparisonLine({coversLoss: false}),
+    freightCoverageComparisonLine({coversLoss: true}),
+    freightQuoteCoverageLine(true),
+    freightQuoteCoverageLine(false),
+    freightQuoteCoverageLine(undefined),
+  ]) {
+    assert.doesNotMatch(line, /[$€£]|\d/, `"${line}" states a figure`);
+  }
+
+  // Everything either screen SAYS about cover, checked for a currency the
+  // same way a reader would notice one: quoted strings (labels, options,
+  // aria-labels) and the prose between tags alike, because the amount came
+  // back as each of those in turn.
+  for (const source of [
+    customerSource,
+    businessSettingsSource,
+    operationsSource,
+  ]) {
+    const said = [
+      ...[...source.matchAll(/"[^"\n]*"|'[^'\n]*'/g)].map(([hit]) => hit),
+      ...[...source.matchAll(/>([^<>{}]+)</g)].map(([, text]) =>
+        text.replace(/\s+/g, " ").trim(),
+      ),
+    ];
+    for (const sentence of said) {
+      if (!COVERAGE_PHRASE.test(sentence)) continue;
+      assert.doesNotMatch(sentence, FIGURE, `"${sentence}" states a figure`);
+    }
+  }
+
+  // And the two blocks that render cover as prose rather than as a string,
+  // where a figure would arrive as a formatMoney call instead.
+  assert.doesNotMatch(
+    functionBody(customerSource, "function FreightProtectionNote("),
+    FIGURE,
+  );
+  const card = customerSource.slice(
+    customerSource.indexOf('className={paysBack ? "quote-payback"'),
+  );
+  assert.doesNotMatch(card.slice(0, card.indexOf("</p>")), FIGURE);
+
+  // Nothing left in the model for a screen to read one from, either.
+  assert.doesNotMatch(customerSource, /paybackAmount|payoutCap/i);
+  assert.doesNotMatch(businessSettingsSource, /paybackAmount|payoutCap/i);
+  assert.doesNotMatch(operationsSource, /paybackAmount|payoutCap/i);
+});
 
 test("the form follows its own answer, and never narrates history", () => {
   // A form that ignores the answer it just received reads as broken: the
@@ -121,12 +213,10 @@ test("the funnel unions items across providers and matches honestly", () => {
           {
             id: "iphone",
             label: "iPhone",
-            paybackAmount: 400,
             pricingMode: "flat",
             flatPrice: 50,
           },
         ],
-        otherPaybackAmount: 0,
       },
     },
   };
@@ -134,7 +224,6 @@ test("the funnel unions items across providers and matches honestly", () => {
     freightPaybackTable: {
       electronics: {
         items: [],
-        otherPaybackAmount: 50,
         otherPricingMode: "per_kg",
       },
     },
@@ -169,14 +258,13 @@ test("the funnel unions items across providers and matches honestly", () => {
     false, // nothing priced, so nothing to book - it answers a request
   );
   // A row this business lists but has never put a number on cannot be
-  // booked either: the payback is a promise, not a price.
+  // booked either: listing is a routing answer, not a price.
   assert.equal(
     providerQualifiesForItem(
       {
         freightPaybackTable: {
           electronics: {
-            items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
-            otherPaybackAmount: 0,
+            items: [{id: "iphone", label: "iPhone"}],
           },
         },
       },
@@ -248,16 +336,15 @@ test("the freight form reveals itself one answered question at a time", () => {
   );
 });
 
-// Twin of the pricing half of functions/test/freight-payback.test.js. Each row
-// answers two questions at once - what it costs to carry, and what it pays
-// back if lost - so both come from the same place and can never disagree.
+// Twin of the pricing half of functions/test/freight-payback.test.js. A row
+// says what it costs to carry and nothing else - there is no second number on
+// it for the price to disagree with.
 const PRICED = {
   electronics: {
     items: [
       {
         id: "iphone-16",
         label: "iPhone 16",
-        paybackAmount: 400,
         pricingMode: "flat",
         flatPrice: 50,
         includedKg: 2,
@@ -265,23 +352,20 @@ const PRICED = {
       {
         id: "tv",
         label: "Television",
-        paybackAmount: 300,
         pricingMode: "flat",
         flatPrice: 120,
       },
       {
         id: "cables",
         label: "Cables",
-        paybackAmount: 20,
         pricingMode: "per_kg",
       },
-      // Listed, promised, never priced.
-      {id: "laptop", label: "Laptop", paybackAmount: 800},
+      // Listed, never priced.
+      {id: "laptop", label: "Laptop"},
     ],
-    otherPaybackAmount: 100,
     otherPricingMode: "per_kg",
   },
-  clothing: {items: [], otherPaybackAmount: 40},
+  clothing: {items: []},
 };
 
 test("a set price is published, and never asks the customer for a weight", () => {
@@ -327,9 +411,9 @@ test("a by-weight row is the route's own rate, and nothing on top", () => {
 });
 
 test("a row nobody priced is not priced, and never guesses", () => {
-  // A payback is a promise, not a price. A listed row with no pricing of its
-  // own is an item this business has never quoted, and it takes its own
-  // answer rather than the catch-all's - which is for things nobody listed.
+  // A listed row with no pricing of its own is an item this business has
+  // never quoted, and it takes its own answer rather than the catch-all's -
+  // which is for things nobody listed.
   const unpriced = freightItemPricing({
     table: PRICED,
     categoryId: "electronics",

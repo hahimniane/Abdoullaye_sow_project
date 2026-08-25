@@ -6,7 +6,7 @@
 /// The server's split is kept here on purpose: the **platform owns the list**,
 /// so a customer holding a phone finds "Electronics" at every business and can
 /// compare two quotes; the **business owns the price**. The category sorts the
-/// parcel and names the payback row to look in; what the parcel costs comes
+/// parcel and names the catalogue row to look in; what the parcel costs comes
 /// from the item row the business priced (`utils/freight_payback.dart`), so
 /// every default here is 1 and no category moves a price on its own.
 ///

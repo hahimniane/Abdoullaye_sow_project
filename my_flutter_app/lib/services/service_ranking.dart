@@ -208,10 +208,10 @@ List<double> _speedRank(
 
 /// How good a business's loss policy is, as a sortable key.
 ///
-/// One question, so one number: a business that pays for a parcel it loses
-/// beats one that does not. What it pays is the payback it published for the
-/// item, which the funnel has already pinned by the time this sorts, so there
-/// is no second term to break ties on - the caller appends price and rating.
+/// One question, so one number: a business that makes good on a parcel it
+/// loses beats one that does not. There is no amount behind that answer, so
+/// there is no second term to break ties on - the caller appends price and
+/// rating.
 List<double> freightCoverageRank(BusinessDestinationOption option) {
   return option.freightCoverage?.coversLoss == true
       ? const [0]

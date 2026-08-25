@@ -3035,7 +3035,7 @@
   },
   "freightAskForPriceCta": "Ask for a price",
   "freightAskForPriceTitle": "Ask for a price",
-  "freightAskForPriceIntro": "Describe what you are sending to {country}. Every business on this route can answer with its own price and say what it pays back if the parcel is lost.",
+  "freightAskForPriceIntro": "Describe what you are sending to {country}. Every business on this route can answer with its own price and say whether it covers the parcel if it is lost.",
   "@freightAskForPriceIntro": {
     "placeholders": {
       "country": {
@@ -3072,16 +3072,16 @@
   },
   "waitingForFreightQuotes": "Waiting for prices",
   "waitingForFreightQuotesSubtitle": "The businesses on this route can see your parcel now. Prices appear here as they answer.",
-  "freightQuotePaysBackIfLost": "Pays back {amount} if the parcel is lost",
-  "@freightQuotePaysBackIfLost": {
+  "freightQuoteCoversLoss": "{business} pays you back if this parcel is lost",
+  "@freightQuoteCoversLoss": {
     "placeholders": {
-      "amount": {
+      "business": {
         "type": "String"
       }
     }
   },
-  "freightQuoteNoPaybackIfLost": "{business} pays back nothing if the parcel is lost",
-  "@freightQuoteNoPaybackIfLost": {
+  "freightQuoteDoesNotCoverLoss": "{business} does not cover lost parcels",
+  "@freightQuoteDoesNotCoverLoss": {
     "placeholders": {
       "business": {
         "type": "String"

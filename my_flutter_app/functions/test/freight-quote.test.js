@@ -46,26 +46,25 @@ describe("asking for a price", () => {
 });
 
 describe("answering with a price", () => {
-  it("carries what it costs and what it pays back", () => {
-    // A quote has to state cover, because the customer is choosing between
-    // businesses on that as well as on price.
+  it("carries what it costs and whether it is covered", () => {
+    // A quote states cover, because the customer is choosing between
+    // businesses on that as well as on price - but never a sum.
     const result = validateFreightQuote({
       amountCents: 8500,
-      paybackAmountCents: 40000,
+      coversLoss: true,
       terms: "  Two weeks by sea  ",
     });
     assert.equal(result.ok, true);
     assert.equal(result.quote.amountCents, 8500);
-    assert.equal(result.quote.paybackAmountCents, 40000);
     assert.equal(result.quote.coversLoss, true);
     assert.equal(result.quote.terms, "Two weeks by sea");
+    assert.equal("paybackAmountCents" in result.quote, false);
   });
 
   it("lets a business quote without standing behind the parcel", () => {
-    // Zero payback is an answer, not an omission - and the customer sees it
+    // Not covering is an answer, not an omission - and the customer sees it
     // beside the price before choosing.
     const result = validateFreightQuote({amountCents: 5000});
-    assert.equal(result.quote.paybackAmountCents, 0);
     assert.equal(result.quote.coversLoss, false);
   });
 
@@ -82,13 +81,6 @@ describe("answering with a price", () => {
           amountCents: MAX_FREIGHT_QUOTE_CENTS + 1,
         }).error,
         "amount_out_of_range",
-    );
-    assert.equal(
-        validateFreightQuote({
-          amountCents: 5000,
-          paybackAmountCents: -1,
-        }).error,
-        "payback_invalid",
     );
     assert.equal(
         validateFreightQuote({

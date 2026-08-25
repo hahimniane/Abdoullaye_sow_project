@@ -3790,14 +3790,13 @@ Object.assign(TEXT_TRANSLATIONS, {
   "If a parcel is lost": "Si un colis est perdu",
   "Nothing extra is charged for this. You price each item above according to what it is worth to carry, so the risk is already in your rate.":
     "Rien n’est facturé en plus pour cela. Vous fixez le prix de chaque article ci-dessus selon ce qu’il vaut à transporter : le risque est donc déjà dans votre tarif.",
-  "If you cover parcels and one goes missing, you pay the customer the full payback you published for that item. If you do not cover them, the customer gets nothing back, and they are told so before they book.":
-    "Si vous couvrez les colis et que l’un d’eux disparaît, vous versez au client la totalité du remboursement que vous avez publié pour cet article. Si vous ne les couvrez pas, le client ne reçoit rien, et il en est informé avant de réserver.",
-  "You pay the customer back, not Laawol - the full payback you published for that item, and the policy in force on the day they booked is the one that is judged.":
-    "C’est vous qui remboursez le client, pas Laawol : la totalité du remboursement que vous avez publié pour cet article, et c’est la politique en vigueur le jour de la réservation qui fait foi.",
+  "If you cover parcels and one goes missing, you make good on it with the customer. If you do not cover them, the customer gets nothing back, and they are told so before they book.":
+    "Si vous couvrez les colis et que l’un d’eux disparaît, vous dédommagez le client. Si vous ne les couvrez pas, le client ne reçoit rien, et il en est informé avant de réserver.",
+  "You make good on the parcel, not Laawol, and the policy in force on the day the customer booked is the one that is judged.":
+    "C’est vous qui dédommagez pour le colis, pas Laawol, et c’est la politique en vigueur le jour de la réservation du client qui fait foi.",
   "Do you pay for a lost parcel?": "Remboursez-vous un colis perdu ?",
   "No, parcels are not covered": "Non, les colis ne sont pas couverts",
-  "Yes, I pay back the full published amount":
-    "Oui, je rembourse la totalité du montant publié",
+  "Yes, I cover a parcel I lose": "Oui, je couvre un colis que je perds",
   // Delivering the parcel to the receiver's own address at the destination.
   "Do you deliver to the receiver at the destination?":
     "Livrez-vous au destinataire à l’arrivée ?",
@@ -3840,15 +3839,15 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Une catégorie que vous ajoutez ne peut pas reprendre le nom d’une catégorie standard.",
   "Two of the categories you added have the same name. Give each one its own.":
     "Deux des catégories que vous avez ajoutées portent le même nom. Donnez-en un propre à chacune.",
-  // Each row: what it costs to carry, and what it pays back if lost.
+  // Each row: what this business carries, and what it costs.
   "What you carry, and what it costs":
     "Ce que vous transportez, et ce que cela coûte",
-  "Each row answers two questions: what you charge to carry that thing, and what you pay the customer if you lose it. An item you have not listed cannot be booked instantly; the customer asks you for a quote instead.":
-    "Chaque ligne répond à deux questions : ce que vous facturez pour transporter cette chose, et ce que vous versez au client si vous la perdez. Un article que vous n’avez pas listé ne peut pas être réservé immédiatement ; le client vous demande alors un devis.",
+  "Each row says what you charge to carry that thing. An item you have not listed cannot be booked instantly; the customer asks you for a quote instead.":
+    "Chaque ligne indique ce que vous facturez pour transporter cette chose. Un article que vous n’avez pas listé ne peut pas être réservé immédiatement ; le client vous demande alors un devis.",
   "A known object can have a set price - “iPhone 16, $50” - and the customer is never asked what it weighs. Goods that vary every time are priced by weight at your rate for the destination.":
     "Un objet connu peut avoir un prix fixe — « iPhone 16, 50 $ » — et on ne demande jamais au client ce qu’il pèse. Les marchandises qui varient à chaque fois sont tarifées au poids, à votre tarif pour la destination.",
-  "If you cover lost parcels, the payback is what you owe in full - a $400 iPhone pays back $400. The customer is charged nothing for that, so price each row for what it is worth to you to carry.":
-    "Si vous couvrez les colis perdus, le remboursement est ce que vous devez intégralement : un iPhone à 400 $ rembourse 400 $. Le client ne paie rien pour cela, alors tarifez chaque ligne selon ce qu’elle vaut à transporter pour vous.",
+  "Cover is a separate question, answered once above for every parcel you carry. The customer is charged nothing for it, so price each row for what it is worth to you to carry.":
+    "La couverture est une question à part, à laquelle vous répondez une seule fois ci-dessus pour tous les colis que vous transportez. Le client ne paie rien pour cela, alors tarifez chaque ligne selon ce qu’elle vaut à transporter pour vous.",
   "A row you list but never price behaves the same way as one you never listed: the customer asks you for a price, and you answer it under Price requests.":
     "Une ligne que vous listez sans jamais la tarifer se comporte comme une ligne jamais listée : le client vous demande un prix, et vous y répondez sous Demandes de prix.",
   "How is this priced?": "Comment est-ce tarifé ?",
@@ -3861,11 +3860,13 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Give a weight and you weigh it at drop-off: anything over that is charged at your per-kg rate for the destination, on top of the price.":
     "Indiquez un poids et vous le pesez au dépôt : tout ce qui dépasse est facturé à votre tarif au kilo pour la destination, en plus du prix.",
   "Any weight": "Quel que soit le poids",
-  "Anything else in this category pays back (USD)":
-    "Tout le reste de cette catégorie rembourse (USD)",
+  "Anything else in this category": "Tout le reste de cette catégorie",
+  "Price it and everything in this category you did not name is bookable at that price.":
+    "Tarifez-le et tout ce que vous n’avez pas nommé dans cette catégorie devient réservable à ce prix.",
+  "Leave it unpriced and a customer sending something you did not list asks you for a price instead, and you answer it under Price requests.":
+    "Laissez-le sans tarif et un client qui envoie une chose que vous n’avez pas listée vous demande un prix, auquel vous répondez sous Demandes de prix.",
+  "Ask me for a price": "Demandez-moi un prix",
   "What it is": "Ce que c'est",
-  "You pay back if lost (USD)": "Vous remboursez en cas de perte (USD)",
-  "0 = you pay nothing back": "0 = vous ne remboursez rien",
   "Add an item": "Ajouter un article",
   "No items yet": "Aucun article pour l’instant",
   // The freight booking form.
@@ -3874,9 +3875,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Nothing is charged for protection, and nothing is owed if the parcel goes missing.":
     "Rien n’est facturé pour la protection, et rien n’est dû si le colis disparaît.",
   "If this is lost,": "En cas de perte,",
-  "pays you": "vous rembourse",
-  "if it is lost — the full amount this business publishes for this item. The business pays you back, not Laawol.":
-    "s’il est perdu — la totalité du montant que cette entreprise publie pour cet article. C’est l’entreprise qui vous rembourse, pas Laawol.",
+  "pays you back for it. The business pays you, not Laawol.":
+    "vous rembourse pour celui-ci. C’est l’entreprise qui vous paie, pas Laawol.",
   "What you are sending": "Ce que vous envoyez",
   // A known object has one published price, so no weight is ever asked for.
   "Set price": "Prix fixe",
@@ -3902,7 +3902,6 @@ Object.assign(TEXT_TRANSLATIONS, {
     "/ kg. Si ce débit échoue, vous devrez ouvrir l’application pour finaliser le paiement avant que votre expédition puisse continuer.",
   "This item has a set price that covers the parcel whatever it weighs. Nothing is weighed and nothing is settled afterwards - what you pay today is the whole price.":
     "Cet article a un prix fixe qui couvre le colis quel que soit son poids. Rien n’est pesé et rien n’est régularisé ensuite : ce que vous payez aujourd’hui est le prix complet.",
-  "Paid back if lost": "Remboursé en cas de perte",
   // Where the parcel ends up at the destination.
   "Where does the receiver get it?": "Où le destinataire le récupère-t-il ?",
   "The receiver collects it": "Le destinataire le récupère",
@@ -3944,8 +3943,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Ask for a price": "Demander un prix",
   "No business on this route has priced this parcel.":
     "Aucune entreprise sur cet itinéraire n’a tarifé ce colis.",
-  "Describe it and every approved business on this route can answer with what it charges and what it pays back if it is lost.":
-    "Décrivez-le et chaque entreprise approuvée sur cet itinéraire peut répondre avec son tarif et ce qu’elle rembourse en cas de perte.",
+  "Describe it and every approved business on this route can answer with what it charges and whether it covers it if it is lost.":
+    "Décrivez-le et chaque entreprise approuvée sur cet itinéraire peut répondre avec son tarif et si elle le couvre en cas de perte.",
   "The more the business knows, the closer the price it can give you.":
     "Plus l’entreprise en sait, plus le prix qu’elle vous donne sera juste.",
   "Weight (kg), if you know it": "Poids (kg), si vous le connaissez",
@@ -3964,10 +3963,6 @@ Object.assign(TEXT_TRANSLATIONS, {
   "The businesses on this route have your request. Each one that answers appears here, and you will be told when a price arrives.":
     "Les entreprises de cet itinéraire ont votre demande. Chacune qui répond apparaît ici, et vous serez prévenu dès qu’un prix arrive.",
   "Price to send it": "Prix pour l’envoyer",
-  "Pays back": "Rembourse",
-  "if it is lost": "en cas de perte",
-  "Pays nothing back if it is lost":
-    "Ne rembourse rien en cas de perte",
   "Accept this price": "Accepter ce prix",
   "Accepting...": "Acceptation...",
   Chosen: "Choisi",
@@ -3988,10 +3983,12 @@ Object.assign(TEXT_TRANSLATIONS, {
   Asked: "Demandé le",
   "No description given": "Aucune description fournie",
   "What you charge (USD)": "Ce que vous facturez (USD)",
-  "What you pay back if it is lost (USD)":
-    "Ce que vous remboursez en cas de perte (USD)",
-  "This parcel is not in your item list, so this price carries its own promise. Enter 0 and the customer is told plainly that you pay nothing back if it is lost.":
-    "Ce colis ne figure pas dans votre liste d’articles, donc ce prix porte son propre engagement. Saisissez 0 et le client est clairement informé que vous ne remboursez rien en cas de perte.",
+  "Do you cover this parcel if it is lost?":
+    "Couvrez-vous ce colis en cas de perte ?",
+  "No, I do not cover this parcel": "Non, je ne couvre pas ce colis",
+  "Yes, I cover this parcel": "Oui, je couvre ce colis",
+  "This parcel is not in your item list, so this price carries its own promise. Say no and the customer is told plainly that you do not cover it.":
+    "Ce colis ne figure pas dans votre liste d’articles, donc ce prix porte son propre engagement. Répondez non et le client est clairement informé que vous ne le couvrez pas.",
   "The customer is charged nothing for it, so price the parcel for what it is worth to you to carry.":
     "Le client ne paie rien pour cela, alors tarifez le colis selon ce qu’il vaut à transporter pour vous.",
   "Note for the customer (optional)": "Note pour le client (facultatif)",
@@ -4007,8 +4004,8 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Saisissez ce que vous facturez pour envoyer cela",
   "That price is outside what this platform handles":
     "Ce prix dépasse ce que cette plateforme traite",
-  "Say what you pay back if this is lost, or zero":
-    "Indiquez ce que vous remboursez en cas de perte, ou zéro",
+  "Say whether you cover this parcel if it is lost":
+    "Indiquez si vous couvrez ce colis en cas de perte",
   "Keep the note under 1000 characters":
     "Limitez la note à 1000 caractères",
   "Describe what is being sent": "Décrivez ce qui est envoyé",
@@ -4075,8 +4072,10 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Describe the parcel: what it is, how many, how it is packed.":
     "Décrivez le colis : ce que c’est, combien, comment il est emballé.",
   "Email address": "Adresse courriel",
-  "what the payback on a quote means":
-    "ce que signifie le remboursement sur un devis",
+  "what cover on a quote means":
+    "ce que signifie la couverture sur un devis",
+  "what the catch-all row does":
+    "à quoi sert la ligne fourre-tout",
   "Leave blank if you are not sure": "Laissez vide si vous n’êtes pas sûr",
   "Note for the customer": "Note pour le client",
   "Explain missing documents, expiry issues, or why a document is not applicable.":

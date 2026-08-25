@@ -340,8 +340,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       ? _itemPricing.flatPrice
       : freightShippingFee(weightKg: _weightKg, ratePerKg: _ratePerKg);
 
-  /// The business publishes what each item pays back; the customer only says
-  /// what the item is. Mirrors the web console exactly - see freight_payback.
+  /// The business publishes the items it carries; the customer only says
+  /// which one this is. Mirrors the web console exactly - see freight_payback.
   bool get _usesItemPricing =>
       (_selected?.freightPaybackTable?.isNotEmpty ?? false);
 
@@ -419,7 +419,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           ? _mode
           : (modes.isNotEmpty ? modes.first : 'sea');
       // The funnel already answered what is being sent, and the server
-      // resolves both the price and the payback row from the submitted
+      // resolves both the price and the cover answer from the submitted
       // category. Substituting the business's default here moved a listed
       // item under the wrong category and got the booking refused at payment
       // - the funnel's answer travels verbatim, exactly as on web.
@@ -1539,17 +1539,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   }
 
   /// Who stands behind the parcel. There is nothing to ask and nothing to
-  /// charge: the business publishes what each item pays back, so this states
-  /// the promise - or its absence - while the business can still be swapped
-  /// for another.
+  /// charge: one flag states the promise - or its absence - while the business
+  /// can still be swapped for another.
   Widget _coverageSection(ThemeData theme, AppLocalizations l10n) {
     final option = _selected!;
     final policy = option.freightCoverage;
     if (policy == null) return const SizedBox.shrink();
 
-    // The published amount settles a claim; it is deliberately not read here,
-    // because this card states whether the business stands behind the parcel
-    // and never quotes a sum for it.
     final covers = policy.coversLoss;
     return Card(
       margin: EdgeInsets.zero,
@@ -1590,11 +1586,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               )
             else ...[
               Text(
-                // No sum. Losing a parcel is rare, and a figure on the
-                // booking screen turns a reassurance into a headline - and
-                // into the number a customer expects to argue over. What
-                // they need before choosing is whether this business stands
-                // behind the parcel at all.
+                // No sum. A figure beside cover turns a reassurance into a
+                // headline, and into the number a customer expects to argue
+                // over. What they need before choosing is whether this
+                // business stands behind the parcel at all.
                 l10n.freightCoveragePaysForLoss(option.businessName),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w700,

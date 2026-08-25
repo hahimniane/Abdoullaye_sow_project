@@ -6,9 +6,10 @@ import 'package:my_flutter_app/services/freight_coverage.dart';
 
 /// The app half of freight loss coverage. The same assertions
 /// `functions/test/freight-coverage.test.js` makes, because the promise the
-/// customer reads ("we pay you $X") is the promise the shipment record will
-/// carry, and because cover is free: any fee reaching the total or the
-/// callable is a bug this file is here to catch.
+/// customer reads is the promise the shipment record will carry, and because
+/// cover is one flag: free, and with no sum against it. Any fee reaching the
+/// total or the callable, and any figure reaching a coverage line, is a bug
+/// this file is here to catch.
 
 void main() {
   group('reading a policy', () {
@@ -182,7 +183,7 @@ void main() {
       }
     });
 
-    test('a payback business asks for the item, never a value', () {
+    test('a business with a catalogue asks for the item, never a value', () {
       expect(screen, contains('_usesItemPricing'));
       expect(screen, contains('itemId: _submittedItemId'));
       expect(
@@ -249,4 +250,134 @@ void main() {
       expect(screen, contains('error.message'));
     });
   });
+
+  _noFigureBesideCoverTests();
+}
+
+/// Cover is a yes or a no. A business does not say what a missing parcel is
+/// worth, so nothing the customer reads about cover may carry a figure.
+///
+/// This has come back three times. The guard is deliberately mechanical: a
+/// coverage string that grows an amount, or a coverage line that formats
+/// money, fails here rather than shipping.
+void _noFigureBesideCoverTests() {
+  Map<String, Object?> arb(String locale) =>
+      jsonDecode(File('lib/l10n/app_$locale.arb').readAsStringSync())
+          as Map<String, Object?>;
+
+  /// Keys whose name says they are about cover.
+  final coverageKey = RegExp(
+    r'coverage|payback|coverloss|coversloss',
+    caseSensitive: false,
+  );
+
+  /// Freight copy that talks about a parcel going missing, whatever it is
+  /// called - the string, not the key, is what the customer reads.
+  final talksAboutLoss = RegExp(
+    r'\blost\b|\bgoes missing\b|\bperdu\b|\bperte\b',
+    caseSensitive: false,
+  );
+
+  /// A currency symbol, a bare number, or a placeholder standing in for one.
+  final carriesMoney = RegExp(
+    r'[$€£₣]|\d|\{[^}]*'
+    r'(amount|price|value|fee|sum|cap|rate|total|payback)'
+    r'[^}]*\}',
+    caseSensitive: false,
+  );
+
+  group('no figure ever sits beside cover', () {
+    test('no coverage string in either catalog carries an amount', () {
+      for (final locale in const ['en', 'fr']) {
+        final catalog = arb(locale);
+        for (final entry in catalog.entries) {
+          final key = entry.key;
+          final value = entry.value;
+          if (key.startsWith('@') || value is! String) continue;
+          final aboutCover = coverageKey.hasMatch(key) ||
+              (key.startsWith('freight') && talksAboutLoss.hasMatch(value));
+          if (!aboutCover) continue;
+          expect(
+            carriesMoney.hasMatch(value),
+            isFalse,
+            reason: 'app_$locale.arb puts a figure against cover in $key: '
+                '"$value"',
+          );
+        }
+      }
+    });
+
+    test('the booking screen states cover with no money in the same card', () {
+      final block = _blockAfter(
+        File('lib/screens/send_freight_screen.dart').readAsStringSync(),
+        'Widget _coverageSection(',
+      );
+      expect(block, contains('freightCoveragePaysForLoss'));
+      for (final gone in const [
+        'freightMoney',
+        'Amount',
+        'Cents',
+        'toStringAsFixed',
+      ]) {
+        expect(block, isNot(contains(gone)), reason: gone);
+      }
+    });
+
+    test('a quote card names the business, never a sum, for cover', () {
+      final details = File(
+        'lib/screens/freight_quote_details_screen.dart',
+      ).readAsStringSync();
+      // The only argument either cover line takes is who is promising.
+      expect(
+        details,
+        contains('l10n.freightQuoteCoversLoss(quote.businessName)'),
+      );
+      expect(
+        details,
+        contains('l10n.freightQuoteDoesNotCoverLoss(quote.businessName)'),
+      );
+    });
+
+    test('nothing the app reads exposes a per-parcel figure to show', () {
+      // The durable half of the guard: with no amount on the quote, the
+      // catalogue lookup or the policy, no screen can put one beside cover
+      // even if someone tries.
+      for (final path in const [
+        'lib/models/freight_quote.dart',
+        'lib/utils/freight_payback.dart',
+        'lib/services/freight_coverage.dart',
+        'lib/services/freight_quote_service.dart',
+        'lib/screens/freight_quote_details_screen.dart',
+      ]) {
+        // The catalogue keeps its server-side name; it holds prices, not
+        // promises, so the field and the module are allowed to say payback.
+        final source = File(path).readAsStringSync().replaceAll(
+          RegExp(r'freightPaybackTable|freightPaybackFor|FreightPaybackLookup|'
+              r'freight_payback|freight-payback|freight_payback\.dart'),
+          '',
+        );
+        for (final gone in const ['payback', 'Payback', 'payoutCap']) {
+          expect(source.contains(gone), isFalse, reason: '$path still has $gone');
+        }
+      }
+    });
+  });
+}
+
+/// The body of the declaration [marker] introduces, brace-matched, so an
+/// assertion about one widget cannot be satisfied by the rest of the file.
+String _blockAfter(String source, String marker) {
+  final start = source.indexOf(marker);
+  if (start < 0) return '';
+  final open = source.indexOf('{', start);
+  if (open < 0) return '';
+  var depth = 0;
+  for (var i = open; i < source.length; i += 1) {
+    if (source[i] == '{') depth += 1;
+    if (source[i] == '}') {
+      depth -= 1;
+      if (depth == 0) return source.substring(open, i + 1);
+    }
+  }
+  return source.substring(open);
 }

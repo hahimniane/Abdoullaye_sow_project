@@ -1,29 +1,34 @@
-/// What a lost parcel pays back - the business's table, not the sender's
-/// claim.
+/// What a business carries, and what it charges for each of those things.
 ///
 /// Mirror of `my_flutter_app/functions/freight_payback.js` (the authority)
 /// and `admin_web/src/lib/freight-payback.ts`. All three clients must price
 /// the same item identically; the server re-prices everything anyway, so a
 /// drifted mirror shows a wrong number only until the callable answers.
+///
+/// Nothing here says what a missing parcel is worth. A business either makes
+/// good on one or it does not - the single flag in `services/freight_coverage
+/// .dart` - and a figure per item invited exactly the haggling the design
+/// exists to remove.
 library;
 
 class FreightPaybackLookup {
   const FreightPaybackLookup({
     required this.listed,
-    required this.paybackAmount,
     this.source,
     this.label = '',
   });
 
+  /// Whether this business lists the item at all. A routing answer, not a
+  /// promise: a row it has is a row a customer can pick, and anything else
+  /// becomes a price request.
   final bool listed;
-  final double paybackAmount;
 
   /// 'item' for an exact row, 'other' for the category catch-all.
   final String? source;
   final String label;
 }
 
-/// The payback row for an item: exact row first, then the category's
+/// Whether this business lists the item: exact row first, then the category's
 /// catch-all. Unlisted is a routing answer - it sends the booking to the
 /// quote-request path instead of instant booking.
 FreightPaybackLookup freightPaybackFor({
@@ -33,7 +38,7 @@ FreightPaybackLookup freightPaybackFor({
 }) {
   final entry = table?[categoryId.trim()];
   if (entry is! Map) {
-    return const FreightPaybackLookup(listed: false, paybackAmount: 0);
+    return const FreightPaybackLookup(listed: false);
   }
   final wanted = itemId.trim();
   final items = entry['items'];
@@ -42,22 +47,19 @@ FreightPaybackLookup freightPaybackFor({
       if (raw is Map && raw['id'] == wanted) {
         return FreightPaybackLookup(
           listed: true,
-          paybackAmount: (raw['paybackAmount'] as num?)?.toDouble() ?? 0,
           source: 'item',
           label: (raw['label'] ?? '') as String,
         );
       }
     }
   }
-  final other = (entry['otherPaybackAmount'] as num?)?.toDouble() ?? 0;
-  if (other > 0) {
-    return FreightPaybackLookup(
-      listed: true,
-      paybackAmount: other,
-      source: 'other',
-    );
+  // The category's catch-all covers anything else in it, when the business
+  // has priced one.
+  final otherMode = entry['otherPricingMode'];
+  if (otherMode != null && '$otherMode'.isNotEmpty) {
+    return const FreightPaybackLookup(listed: true, source: 'other');
   }
-  return const FreightPaybackLookup(listed: false, paybackAmount: 0);
+  return const FreightPaybackLookup(listed: false);
 }
 
 /// How one item is charged for: a set price, or the scale.
@@ -131,9 +133,9 @@ double _numberOr(Object? value, double fallback) {
 
 /// How to charge for one item: a set price, or by weight.
 ///
-/// Resolves in the same order the payback does - the exact row, then the
-/// category catch-all - so the price and the promise always come from the
-/// same place. Anything the business has not put a number on comes back
+/// Resolves in the same order the listing does - the exact row, then the
+/// category catch-all - so the price and the cover answer always come from
+/// the same place. Anything the business has not put a number on comes back
 /// unpriced, and the customer asks it for a price instead of being shown one
 /// the platform invented.
 FreightItemPricing freightItemPricing({

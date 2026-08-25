@@ -13,34 +13,28 @@ void main() {
   const table = <String, dynamic>{
     'electronics': {
       'items': [
-        {'id': 'iphone', 'label': 'iPhone', 'paybackAmount': 400},
-        {'id': 'samsung-phone', 'label': 'Samsung phone', 'paybackAmount': 250},
+        {'id': 'iphone', 'label': 'iPhone'},
+        {'id': 'samsung-phone', 'label': 'Samsung phone'},
       ],
-      'otherPaybackAmount': 100,
+      'otherPricingMode': 'per_kg',
     },
-    'clothing': {'items': <Object>[], 'otherPaybackAmount': 0},
+    'clothing': {'items': <Object>[]},
   };
 
-  test('prices the exact row the business published', () {
-    expect(
-      freightPaybackFor(
-        table: table, categoryId: 'electronics', itemId: 'iphone',
-      ).paybackAmount,
-      400,
+  test('finds the exact row the business published', () {
+    final iphone = freightPaybackFor(
+      table: table, categoryId: 'electronics', itemId: 'iphone',
     );
-    expect(
-      freightPaybackFor(
-        table: table, categoryId: 'electronics', itemId: 'samsung-phone',
-      ).paybackAmount,
-      250,
-    );
+    expect(iphone.listed, true);
+    expect(iphone.source, 'item');
+    expect(iphone.label, 'iPhone');
   });
 
   test('falls back to the catch-all, and says unlisted otherwise', () {
     final unknown = freightPaybackFor(
       table: table, categoryId: 'electronics', itemId: 'walkman',
     );
-    expect(unknown.paybackAmount, 100);
+    expect(unknown.listed, true);
     expect(unknown.source, 'other');
     expect(
       freightPaybackFor(table: table, categoryId: 'clothing', itemId: 'boubou')
@@ -53,15 +47,23 @@ void main() {
     );
   });
 
-  test('the payback is the published amount, whole', () {
-    // What a covering business pays back is the row it published, not a
-    // proportion of it - and it costs the customer nothing to be owed it.
-    final listed = freightPaybackFor(
-      table: table, categoryId: 'electronics', itemId: 'iphone',
+  test('a category with no catch-all pricing lists nothing extra', () {
+    // A catch-all is "listed" purely by being priced. Without a pricing mode
+    // there is no row for anything else in the category, so the customer is
+    // sent to ask rather than booked against a business that never said yes.
+    const noCatchAll = <String, dynamic>{
+      'electronics': {
+        'items': [
+          {'id': 'iphone', 'label': 'iPhone'},
+        ],
+      },
+    };
+    expect(
+      freightPaybackFor(
+        table: noCatchAll, categoryId: 'electronics', itemId: 'walkman',
+      ).listed,
+      false,
     );
-    expect(listed.paybackAmount, 400);
-    expect(listed.source, 'item');
-    expect(listed.label, 'iPhone');
   });
 
   test('the funnel offers every listed item, and a way past the list', () {
@@ -69,17 +71,15 @@ void main() {
       'electronics': {
         'items': [
           {
-            'id': 'iphone', 'label': 'iPhone', 'paybackAmount': 400,
+            'id': 'iphone', 'label': 'iPhone',
             'pricingMode': 'flat', 'flatPrice': 50,
           },
         ],
-        'otherPaybackAmount': 0,
       },
     };
     const withCatchAll = <String, dynamic>{
       'electronics': {
         'items': <Object>[],
-        'otherPaybackAmount': 50,
         'otherPricingMode': 'per_kg',
       },
     };
@@ -94,7 +94,7 @@ void main() {
       [otherItemId],
     );
 
-    // Booking on the spot needs BOTH a price and a payback row from the same
+    // Booking on the spot needs BOTH a price and a listed row from the same
     // business - the pair the callable checks before it charges anything.
     expect(providerQualifiesForItem(withTable, 'electronics', 'iphone'), true);
     expect(
@@ -110,31 +110,30 @@ void main() {
     expect(providerQualifiesForItem(null, 'electronics', 'anything'), false);
   });
 
-  test('a row with a payback but no price cannot be booked', () {
-    // The sharp edge: the business stands behind this item but has never said
-    // what it charges to carry it. Half an answer is not a booking.
-    const paybackOnly = <String, dynamic>{
+  test('a listed row with no price cannot be booked', () {
+    // The sharp edge: the business lists this item but has never said what it
+    // charges to carry it. Half an answer is not a booking.
+    const listedOnly = <String, dynamic>{
       'electronics': {
         'items': [
-          {'id': 'legacy', 'label': 'Legacy row', 'paybackAmount': 90},
+          {'id': 'legacy', 'label': 'Legacy row'},
         ],
-        'otherPaybackAmount': 0,
       },
     };
     expect(
       freightPaybackFor(
-        table: paybackOnly, categoryId: 'electronics', itemId: 'legacy',
+        table: listedOnly, categoryId: 'electronics', itemId: 'legacy',
       ).listed,
       true,
     );
     expect(
       freightItemPricing(
-        table: paybackOnly, categoryId: 'electronics', itemId: 'legacy',
+        table: listedOnly, categoryId: 'electronics', itemId: 'legacy',
       ).priced,
       false,
     );
     expect(
-      providerQualifiesForItem(paybackOnly, 'electronics', 'legacy'),
+      providerQualifiesForItem(listedOnly, 'electronics', 'legacy'),
       false,
     );
   });
@@ -148,26 +147,25 @@ void main() {
           // A known object: one price, and an allowance so the retail box and
           // charger do not come out of the business's pocket.
           {
-            'id': 'iphone', 'label': 'iPhone 16', 'paybackAmount': 400,
+            'id': 'iphone', 'label': 'iPhone 16',
             'pricingMode': 'flat', 'flatPrice': 50, 'includedKg': 2,
           },
           // A set price covering the parcel however heavy it is.
           {
-            'id': 'sim', 'label': 'SIM card', 'paybackAmount': 5,
+            'id': 'sim', 'label': 'SIM card',
             'pricingMode': 'flat', 'flatPrice': 10,
           },
           // Goods that vary, priced by the scale at the route rate.
           {
-            'id': 'mixed-tech', 'label': 'Assorted tech', 'paybackAmount': 100,
+            'id': 'mixed-tech', 'label': 'Assorted tech',
             'pricingMode': 'per_kg',
           },
           // A row this business has never put a number on.
-          {'id': 'legacy', 'label': 'Legacy row', 'paybackAmount': 90},
+          {'id': 'legacy', 'label': 'Legacy row'},
         ],
-        'otherPaybackAmount': 60,
         'otherPricingMode': 'per_kg',
       },
-      'clothing': {'items': <Object>[], 'otherPaybackAmount': 40},
+      'clothing': {'items': <Object>[]},
     };
 
     test('prices a known object once, and never weighs it at booking', () {
@@ -242,7 +240,7 @@ void main() {
     });
 
     test('sends everything to a request when there is no table at all', () {
-      // A catch-all payback without a catch-all price is not a price either.
+      // A category listed with no catch-all pricing is not a price either.
       for (final query in const <(Map<String, dynamic>?, String, String)>[
         (null, 'electronics', 'iphone'),
         (priced, 'clothing', 'boubou'),
@@ -267,11 +265,10 @@ void main() {
           'items': [
             {
               'id': 'mixed-tech', 'label': 'Assorted tech',
-              'paybackAmount': 100, 'pricingMode': 'per_kg',
+              'pricingMode': 'per_kg',
             },
-            {'id': 'legacy', 'label': 'Legacy row', 'paybackAmount': 90},
+            {'id': 'legacy', 'label': 'Legacy row'},
           ],
-          'otherPaybackAmount': 60,
           'otherPricingMode': 'flat',
           'otherFlatPrice': 25,
           'otherIncludedKg': 3,
@@ -456,7 +453,7 @@ void main() {
       );
     });
 
-    test("a quote carries its own payback into the comparison", () {
+    test('a quote carries its own cover answer into the comparison', () {
       // The item is not in the business's table, so the promise travels on
       // the quote - and a business that will not make good says so where the
       // customer is still choosing.
@@ -467,7 +464,6 @@ void main() {
           'businessId': 'biz',
           'businessName': 'Ndiaye Cargo',
           'amountCents': 12500,
-          'paybackAmountCents': 40000,
           'coversLoss': true,
           'currency': 'usd',
           'status': 'submitted',
@@ -475,7 +471,6 @@ void main() {
         },
       );
       expect(quote.amount, 125);
-      expect(quote.paybackAmount, 400);
       expect(quote.coversLoss, true);
       expect(quote.isSubmitted, true);
 
@@ -488,15 +483,33 @@ void main() {
           'status': 'submitted',
         },
       );
-      expect(bare.paybackAmountCents, 0);
+      // Nothing said about cover is not cover: the customer must not be left
+      // to assume a promise no business made.
       expect(bare.coversLoss, false);
 
-      // Both halves reach the card the customer compares on.
-      expect(details, contains('freightQuotePaysBackIfLost'));
-      expect(details, contains('freightQuoteNoPaybackIfLost'));
+      // Both halves reach the card the customer compares on, and the price is
+      // the only figure on it.
+      expect(details, contains('freightQuoteCoversLoss'));
+      expect(details, contains('freightQuoteDoesNotCoverLoss'));
       expect(details, contains('quote.coversLoss'));
       expect(details, contains('freightMoney(quote.amount)'));
       expect(details, contains('_service.selectQuote('));
+    });
+
+    test('a business states cover, never a sum, when it answers', () {
+      // The callable takes a flag. An amount here is the per-parcel figure
+      // this whole design exists to keep out of the conversation.
+      expect(service, contains("'coversLoss': coversLoss,"));
+      expect(service, contains('bool coversLoss = false,'));
+      for (final gone in const [
+        'paybackAmountCents',
+        'paybackAmount',
+        'coveragePayoutCapCents',
+        'payoutCapCents',
+      ]) {
+        expect(service, isNot(contains(gone)), reason: gone);
+        expect(details, isNot(contains(gone)), reason: gone);
+      }
     });
 
     test('the request-and-quote copy exists in both catalogs', () {
@@ -524,8 +537,8 @@ void main() {
         'freightQuoteAskedBusinesses',
         'waitingForFreightQuotes',
         'waitingForFreightQuotesSubtitle',
-        'freightQuotePaysBackIfLost',
-        'freightQuoteNoPaybackIfLost',
+        'freightQuoteCoversLoss',
+        'freightQuoteDoesNotCoverLoss',
         'selectFreightQuote',
         'selectingFreightQuote',
         'confirmFreightQuoteTitle',

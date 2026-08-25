@@ -84,7 +84,7 @@ import {
 } from "@/lib/freight-categories";
 import {
   freightQuoteErrorMessage,
-  freightQuotePaybackParts,
+  freightQuoteCoverageLine,
   validateFreightQuoteRequest,
 } from "@/lib/freight-quote";
 import {
@@ -2443,9 +2443,9 @@ function FreightShipmentForm({
     [destination],
   );
   const selectedCategory = freightCategoryById(categories, activeCategoryId);
-  // Protection is the business's own published payback for the item the
-  // customer picked, and it is free: the business priced that item for what
-  // it is worth to carry, so the risk already sits in the shipping rate.
+  // Protection is one yes/no from the business, and it is free: the business
+  // priced each item for what it is worth to carry, so the risk already sits
+  // in the shipping rate. There is no figure per item to read here.
   const paybackTable = (destination as unknown as {
     freightPaybackTable?: Record<string, unknown>;
   } | null)?.freightPaybackTable;
@@ -2488,8 +2488,10 @@ function FreightShipmentForm({
       })
     : null;
   const coversLoss = coveragePolicy?.coversLoss === true;
-  const paybackAmount =
-    coversLoss && itemLookup?.listed ? itemLookup.paybackAmount : 0;
+  // A promise is only worth stating about a parcel this business will take:
+  // a row it does not list goes to a price request, where cover is answered
+  // on the quote instead.
+  const coversThisParcel = coversLoss && itemLookup?.listed === true;
   const deliveryPolicy = freightDeliveryPolicy(destination);
   const deliveryChosen = deliveryPolicy.offered && wantsDelivery;
   // Where the parcel is going decides the fee wherever the business named
@@ -2852,7 +2854,7 @@ function FreightShipmentForm({
                   value={`${weightKg} kg`}
                 />
               )}
-              {paybackAmount > 0 && (
+              {coversThisParcel && (
                 <ReviewDetail
                   label="If it is lost"
                   value={`${destination?.businessName ?? "The business"} pays you back`}
@@ -3204,7 +3206,7 @@ function FreightShipmentForm({
               <FreightProtectionNote
                 businessName={destination.businessName}
                 covered={coversLoss}
-                paybackAmount={paybackAmount}
+                covers={coversThisParcel}
               />
             )}
             {destination && deliveryPolicy.offered && (
@@ -3323,7 +3325,7 @@ function FreightShipmentForm({
                     label: "Shipping subtotal",
                     value: formatMoney(shippingSubtotal),
                   },
-                  ...(paybackAmount > 0
+                  ...(coversThisParcel
                     ? [
                         {
                           // Insurance language, not loss-talk: the promise
@@ -3382,22 +3384,26 @@ function FreightShipmentForm({
 }
 
 /**
- * What this business owes if the parcel goes missing.
+ * Whether this business stands behind the parcel if it goes missing.
  *
- * The amount is on the screen rather than behind an "i": UI convention 1
- * forbids hiding anything the reader needs to avoid a mistake, and choosing
- * between two businesses without knowing which one stands behind the parcel
- * is exactly that. The business that stands behind nothing says so here,
- * while the parcel is still in the room.
+ * It is on the screen rather than behind an "i": UI convention 1 forbids
+ * hiding anything the reader needs to avoid a mistake, and choosing between
+ * two businesses without knowing which one stands behind the parcel is
+ * exactly that. The business that stands behind nothing says so here, while
+ * the parcel is still in the room.
+ *
+ * `covered` is the business's standing answer and `covers` narrows it to this
+ * parcel: a row this business does not list is not one it has promised
+ * anything about, and it is heading for a price request anyway.
  */
 function FreightProtectionNote({
   businessName,
   covered,
-  paybackAmount,
+  covers,
 }: {
   businessName: string;
   covered: boolean;
-  paybackAmount: number;
+  covers: boolean;
 }) {
   if (!covered) {
     return (
@@ -3411,7 +3417,7 @@ function FreightProtectionNote({
       </div>
     );
   }
-  if (paybackAmount <= 0) return null;
+  if (!covers) return null;
   return (
     <div className="customer-quote-row customer-form-span">
       <div>
@@ -3535,7 +3541,6 @@ type FreightQuoteRequestRow = FirestoreRow & {
   selectedQuoteId?: string;
   selectedBusinessName?: string;
   selectedAmountCents?: number;
-  selectedPaybackAmountCents?: number;
 };
 
 type FreightQuoteRow = FirestoreRow & {
@@ -3543,7 +3548,6 @@ type FreightQuoteRow = FirestoreRow & {
   businessId?: string;
   businessName?: string;
   amountCents?: number;
-  paybackAmountCents?: number;
   coversLoss?: boolean;
   currency?: string;
   terms?: string;
@@ -3735,7 +3739,7 @@ function FreightPriceRequest({
         <span>No business on this route has priced this parcel.</span>{" "}
         <span>
           Describe it and every approved business on this route can answer
-          with what it charges and what it pays back if it is lost.
+          with what it charges and whether it covers it if it is lost.
         </span>
         {destinationCountryName && (
           <span className="customer-quote-value">
@@ -3805,7 +3809,7 @@ function FreightPriceRequest({
 /**
  * The answers, side by side.
  *
- * Price and payback sit on the same card because they are one decision: a
+ * Price and cover sit on the same card because they are one decision: a
  * cheaper business that pays nothing back and a dearer one that makes good
  * are not comparable on price alone, and the customer has to be able to see
  * both before choosing either.
@@ -3884,8 +3888,7 @@ function CustomerFreightQuotes({
         <div className="customer-freight-quote-grid">
           {open.map((quote) => {
             const selected = quote.id === selectedQuoteId;
-            const payback = freightQuotePaybackParts(quote.paybackAmountCents);
-            const paysBack = payback.paysBack;
+            const paysBack = quote.coversLoss === true;
             return (
               <article
                 className={`customer-freight-quote-card${selected ? " selected" : ""}`}
@@ -3906,23 +3909,16 @@ function CustomerFreightQuotes({
                 </div>
                 {/* Price and promise on one card: a cheaper business that
                     pays nothing back is not cheaper in the way that matters,
-                    and the customer can only see that if both are here. */}
+                    and the customer can only see that if both are here. The
+                    promise is the same sentence a published item's card uses,
+                    so cover reads as one thing wherever it is met. */}
                 <p className={paysBack ? "quote-payback" : "quote-payback none"}>
                   {paysBack ? (
-                    <>
-                      <ShieldCheck aria-hidden="true" size={15} />{" "}
-                      <span>Pays back</span>{" "}
-                      <strong>
-                        {formatMoney(payback.amount, text(quote.currency, "USD"))}
-                      </strong>{" "}
-                      <span>if it is lost</span>
-                    </>
+                    <ShieldCheck aria-hidden="true" size={15} />
                   ) : (
-                    <>
-                      <XCircle aria-hidden="true" size={15} />{" "}
-                      <span>Pays nothing back if it is lost</span>
-                    </>
-                  )}
+                    <XCircle aria-hidden="true" size={15} />
+                  )}{" "}
+                  <span>{freightQuoteCoverageLine(quote.coversLoss)}</span>
                 </p>
                 {text(quote.terms, "") && (
                   <p className="customer-transport-quote-terms">

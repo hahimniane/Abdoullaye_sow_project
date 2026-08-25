@@ -18,11 +18,11 @@ import {
 
 /**
  * A business option shaped like the one listActiveBarrelDestinationOptions
- * sends. The payback table is what decides a freight price now: a set price
+ * sends. The catalogue is what decides a freight price now: a set price
  * stands on its own, and everything else is the route rate times the weight.
  */
 const BY_WEIGHT_TABLE = {
-  general: {items: [], otherPaybackAmount: 50, otherPricingMode: "per_kg"},
+  general: {items: [], otherPricingMode: "per_kg"},
 };
 
 function option(
@@ -79,10 +79,9 @@ test("ranks on the real quote, not the headline rate", () => {
     paybackTable: {
       electronics: {
         items: [
-          {id: "iphone", label: "iPhone", paybackAmount: 400,
+          {id: "iphone", label: "iPhone",
             pricingMode: "flat", flatPrice: 150},
         ],
-        otherPaybackAmount: 0,
       },
     },
   });
@@ -91,10 +90,9 @@ test("ranks on the real quote, not the headline rate", () => {
     paybackTable: {
       electronics: {
         items: [
-          {id: "iphone", label: "iPhone", paybackAmount: 400,
+          {id: "iphone", label: "iPhone",
             pricingMode: "per_kg"},
         ],
-        otherPaybackAmount: 0,
       },
     },
   });
@@ -104,8 +102,7 @@ test("ranks on the real quote, not the headline rate", () => {
     airRate: 1,
     paybackTable: {
       electronics: {
-        items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
-        otherPaybackAmount: 0,
+        items: [{id: "iphone", label: "iPhone"}],
       },
     },
   });
@@ -172,9 +169,9 @@ test("best cover puts the business that stands behind the parcel first", () => {
 });
 
 test("cover is one comparison, and price breaks the tie beneath it", () => {
-  // There is nothing left to grade a covering business by: it owes the full
-  // published payback for the item, and the customer already picked the
-  // item. So the sort falls through to the tiebreakers it always had.
+  // There is nothing left to grade a covering business by: cover is a yes or
+  // a no, with no figure to rank one yes above another. So the sort falls
+  // through to the tiebreakers it always had.
   const sorted = sortServiceOptions(
     [
       option("dear-cover", { airRate: 40, coversLoss: true }),

@@ -3378,8 +3378,8 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
     // unchanged. Leaving any of it out of this preview quotes an adjustment
     // that refunds a fee the customer is still owed the service for, and the
     // owner reads that number before agreeing to the charge. Coverage is
-    // read off the row rather than assumed: it is zero on anything booked
-    // under the published-payback model and non-zero on older shipments.
+    // read off the row rather than assumed: cover is free, so it is zero on
+    // anything booked per item and non-zero only on older shipments.
     const coverage = Number(row.coverageFeeCents ?? 0) / 100;
     const destinationDelivery =
       Number(row.destinationDeliveryFeeCents ?? 0) / 100;
@@ -3425,19 +3425,16 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
     }
   }
 
-  // What this business charges for a parcel it has never listed, and what it
-  // pays back if that parcel is lost. Both belong to the quote rather than to
-  // the payback table: the table has no row for this, which is the whole
-  // reason the customer had to ask.
+  // What this business charges for a parcel it has never listed, and whether
+  // it stands behind that one. Both belong to the quote rather than to the
+  // catalogue: the catalogue has no row for this, which is the whole reason
+  // the customer had to ask.
   async function sendQuote(request: FirestoreRow) {
     const draft = quoteDrafts[request.id] ?? emptyFreightQuoteDraft();
     const price = Number(draft.price);
-    const payback = draft.payback.trim() === "" ? 0 : Number(draft.payback);
     const validated = validateFreightQuote({
       amountCents: Number.isFinite(price) ? Math.round(price * 100) : Number.NaN,
-      paybackAmountCents: Number.isFinite(payback)
-        ? Math.round(payback * 100)
-        : Number.NaN,
+      coversLoss: draft.coversLoss,
       terms: draft.terms,
     });
     if (!validated.ok) {
@@ -3451,7 +3448,7 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
         requestId: request.id,
         businessId,
         amountCents: validated.quote.amountCents,
-        paybackAmountCents: validated.quote.paybackAmountCents,
+        coversLoss: validated.quote.coversLoss,
         terms: validated.quote.terms,
       });
       setMessage("Your price was sent to the customer.");
@@ -3615,19 +3612,19 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
 /** What a business is offering for a parcel it has never listed. */
 type FreightQuoteDraft = {
   price: string;
-  payback: string;
+  coversLoss: boolean;
   terms: string;
 };
 
 function emptyFreightQuoteDraft(): FreightQuoteDraft {
-  return { price: "", payback: "", terms: "" };
+  return { price: "", coversLoss: false, terms: "" };
 }
 
 /**
  * Customers asking this business what it charges.
  *
- * Everything here is a parcel with no row in this business's table, so the
- * price and the payback both come from the answer rather than from settings.
+ * Everything here is a parcel with no row in this business's catalogue, so the
+ * price and the promise both come from the answer rather than from settings.
  * A business that has already answered sees its own number and can change it:
  * one price per request, revised, never stacked.
  */
@@ -3677,10 +3674,7 @@ function FreightPriceRequestsFeed({
             Number(existing?.amountCents ?? 0) > 0
               ? String(Number(existing?.amountCents) / 100)
               : "",
-          payback:
-            Number(existing?.paybackAmountCents ?? 0) > 0
-              ? String(Number(existing?.paybackAmountCents) / 100)
-              : "",
+          coversLoss: existing?.coversLoss === true,
           terms: text(existing?.terms, ""),
         };
         const weightKg = Number(request.weightKg ?? 0);
@@ -3726,12 +3720,12 @@ function FreightPriceRequestsFeed({
               </label>
               <label className="bar-field">
                 <span className="label-with-info">
-                  What you pay back if it is lost (USD)
-                  <FieldInfo label="what the payback on a quote means">
+                  Do you cover this parcel if it is lost?
+                  <FieldInfo label="what cover on a quote means">
                     <p>
                       This parcel is not in your item list, so this price
-                      carries its own promise. Enter 0 and the customer is
-                      told plainly that you pay nothing back if it is lost.
+                      carries its own promise. Say no and the customer is
+                      told plainly that you do not cover it.
                     </p>
                     <p>
                       The customer is charged nothing for it, so price the
@@ -3739,15 +3733,18 @@ function FreightPriceRequestsFeed({
                     </p>
                   </FieldInfo>
                 </span>
-                <input
-                  aria-label="What you pay back if it is lost (USD)"
-                  inputMode="decimal"
+                <select
+                  aria-label="Do you cover this parcel if it is lost?"
                   onChange={(event) =>
-                    onDraft(request.id, { payback: event.target.value })
+                    onDraft(request.id, {
+                      coversLoss: event.target.value === "yes",
+                    })
                   }
-                  placeholder="0"
-                  value={draft.payback}
-                />
+                  value={draft.coversLoss ? "yes" : "no"}
+                >
+                  <option value="no">No, I do not cover this parcel</option>
+                  <option value="yes">Yes, I cover this parcel</option>
+                </select>
               </label>
               <label className="bar-field">
                 <span>Note for the customer (optional)</span>

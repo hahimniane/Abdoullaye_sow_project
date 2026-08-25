@@ -8,14 +8,18 @@
  * problem. The price cannot be known until the side carrying the goods says
  * what it is.
  *
- * The one thing this adds over transport is cover. A freight quote states
- * what the business pays back if it loses the parcel, because the customer is
- * choosing between businesses on that as well as on price.
+ * The one thing this adds over transport is cover. A freight quote says
+ * whether the business makes good on the parcel if it loses it, because the
+ * customer is choosing between businesses on that as well as on price. It is
+ * a yes or a no, never an amount - a figure per parcel invites the haggling
+ * the rest of this design exists to avoid.
  *
  * Mirror of my_flutter_app/functions/freight_quote.js (the authority). The
  * server re-validates everything; these functions exist so the screen refuses
  * what the callable would refuse, in the same words.
  */
+
+import { freightCoverageComparisonLine } from "./freight-categories.ts";
 
 /** A request nobody answers in a week is a request the customer forgot. */
 export const FREIGHT_QUOTE_WINDOW_DAYS = 7;
@@ -35,7 +39,7 @@ export const FREIGHT_QUOTE_STATUS = {
 export const FREIGHT_QUOTE_ERRORS: Record<string, string> = {
   amount_invalid: "Enter what you charge to send this",
   amount_out_of_range: "That price is outside what this platform handles",
-  payback_invalid: "Say what you pay back if this is lost, or zero",
+  covers_invalid: "Say whether you cover this parcel if it is lost",
   terms_too_long: "Keep the note under 1000 characters",
   description_required: "Describe what is being sent",
   description_too_long: "Keep the description under 2000 characters",
@@ -99,7 +103,6 @@ export function validateFreightQuoteRequest(raw: {
 
 export type FreightQuotePayload = {
   amountCents: number;
-  paybackAmountCents: number;
   coversLoss: boolean;
   terms: string;
 };
@@ -107,14 +110,14 @@ export type FreightQuotePayload = {
 /**
  * What a business is offering, cleaned.
  *
- * The payback is part of the quote rather than read from the business's
- * table, because this is an item that table does not cover - the whole reason
- * the request exists. A business that will not stand behind this particular
- * parcel says zero, and the customer sees that before choosing.
+ * Cover is stated per quote rather than read from the business's standing
+ * policy, because this is a parcel that policy was never written for - the
+ * whole reason the request exists. A business that will not stand behind this
+ * particular one says so, and the customer sees that beside the price.
  */
 export function validateFreightQuote(raw: {
   amountCents?: unknown;
-  paybackAmountCents?: unknown;
+  coversLoss?: unknown;
   terms?: unknown;
 }): {ok: true; quote: FreightQuotePayload} | {ok: false; error: string} {
   const amountCents = Number(raw?.amountCents);
@@ -124,13 +127,6 @@ export function validateFreightQuote(raw: {
   if (amountCents > MAX_FREIGHT_QUOTE_CENTS) {
     return {ok: false, error: "amount_out_of_range"};
   }
-  const paybackCents =
-    raw?.paybackAmountCents === undefined || raw?.paybackAmountCents === ""
-      ? 0
-      : Number(raw.paybackAmountCents);
-  if (!Number.isSafeInteger(paybackCents) || paybackCents < 0) {
-    return {ok: false, error: "payback_invalid"};
-  }
   const terms = String(raw?.terms ?? "").trim();
   if (terms.length > MAX_FREIGHT_QUOTE_TERMS_LENGTH) {
     return {ok: false, error: "terms_too_long"};
@@ -139,10 +135,10 @@ export function validateFreightQuote(raw: {
     ok: true,
     quote: {
       amountCents,
-      paybackAmountCents: paybackCents,
-      // Cover is still free and still the business's own promise: it either
-      // makes good on this parcel or it does not, and it says which here.
-      coversLoss: paybackCents > 0,
+      // Free, and the business's own promise: it either makes good on this
+      // parcel or it does not, and it says which here. Anything that is not
+      // an explicit yes is a no, exactly as the callable reads it.
+      coversLoss: raw?.coversLoss === true,
       terms,
     },
   };
@@ -160,19 +156,14 @@ export function freightQuoteDocumentId(
 }
 
 /**
- * What a quote promises if the parcel never arrives.
+ * What a quote promises if the parcel never arrives, in the sentence the
+ * customer reads on the card beside the price.
  *
- * The amount is named, unlike the card for a published item: this is a
- * one-off offer for a parcel with no row anywhere, so there is nothing else
- * the customer could read it from. Returned as parts rather than a sentence
- * so the screen can put the figure between two translated halves.
+ * Deliberately the same two sentences a published item's card uses: cover is
+ * one question with one answer wherever a customer meets it, and reading two
+ * different phrasings for the same promise is how a customer starts believing
+ * they are two different promises.
  */
-export function freightQuotePaybackParts(
-  paybackAmountCents: unknown,
-): {paysBack: boolean; amount: number} {
-  const cents = Number(paybackAmountCents);
-  if (!Number.isFinite(cents) || cents <= 0) {
-    return {paysBack: false, amount: 0};
-  }
-  return {paysBack: true, amount: cents / 100};
+export function freightQuoteCoverageLine(coversLoss: unknown): string {
+  return freightCoverageComparisonLine({coversLoss: coversLoss === true});
 }

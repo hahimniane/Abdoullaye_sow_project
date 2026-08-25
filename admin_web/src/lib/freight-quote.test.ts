@@ -3,8 +3,9 @@
 // The server is the authority - it re-validates the request and the quote,
 // and it is what actually closes the losing quotes when a customer chooses.
 // These tests exist because the client has to SAY the same thing: a customer
-// shown a price with no payback beside it, or a business whose refusal reads
-// as a code, has been let down by the interface rather than by the rules.
+// shown a price with nothing said about cover beside it, or a business whose
+// refusal reads as a code, has been let down by the interface rather than by
+// the rules.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -13,9 +14,9 @@ import test from "node:test";
 import { translateValue } from "./french-dom.ts";
 import {
   FREIGHT_QUOTE_ERRORS,
+  freightQuoteCoverageLine,
   freightQuoteDocumentId,
   freightQuoteErrorMessage,
-  freightQuotePaybackParts,
   validateFreightQuote,
   validateFreightQuoteRequest,
 } from "./freight-quote.ts";
@@ -83,20 +84,35 @@ test("a request without a description is refused in the server's words", () => {
 test("a quote states a price and its own promise", () => {
   const quote = validateFreightQuote({
     amountCents: 24500,
-    paybackAmountCents: 40000,
+    coversLoss: true,
     terms: " Sails on the 14th ",
   });
   assert.deepEqual(quote.ok && quote.quote, {
     amountCents: 24500,
-    paybackAmountCents: 40000,
     coversLoss: true,
     terms: "Sails on the 14th",
   });
-  // Zero is an answer, not a blank: this business will not stand behind this
-  // particular parcel, and the customer is told so before choosing.
+  // The promise is a yes or a no and carries no figure of its own - there is
+  // nothing on a quote for a customer to argue an amount from.
+  assert.deepEqual(
+    quote.ok && Object.keys(quote.quote).sort(),
+    ["amountCents", "coversLoss", "terms"],
+  );
+  // Silence is a no, exactly as the callable reads it: this business will not
+  // stand behind this particular parcel, and the customer is told so before
+  // choosing.
   const bare = validateFreightQuote({amountCents: 1000});
-  assert.equal(bare.ok && bare.quote.paybackAmountCents, 0);
   assert.equal(bare.ok && bare.quote.coversLoss, false);
+  assert.equal(
+    validateFreightQuote({amountCents: 1000, coversLoss: "yes"}).ok &&
+      (
+        validateFreightQuote({
+          amountCents: 1000,
+          coversLoss: "yes",
+        }) as {quote: {coversLoss: boolean}}
+      ).quote.coversLoss,
+    false,
+  );
 
   assert.equal(
     freightQuoteErrorMessage(
@@ -107,39 +123,40 @@ test("a quote states a price and its own promise", () => {
   );
   const huge = validateFreightQuote({amountCents: 100000001});
   assert.equal(!huge.ok && huge.error, "amount_out_of_range");
-  const negative = validateFreightQuote({
-    amountCents: 1000,
-    paybackAmountCents: -1,
-  });
-  assert.equal(!negative.ok && negative.error, "payback_invalid");
   const wordy = validateFreightQuote({
     amountCents: 1000,
     terms: "x".repeat(1001),
   });
   assert.equal(!wordy.ok && wordy.error, "terms_too_long");
+  // The refusal the callable would answer with if cover ever went unanswered,
+  // in its words rather than as a code.
+  assert.equal(
+    freightQuoteErrorMessage("covers_invalid"),
+    "Say whether you cover this parcel if it is lost",
+  );
 });
 
 test("one business, one price - a second answer revises the first", () => {
   assert.equal(freightQuoteDocumentId("req1", "biz1"), "req1__biz1");
 });
 
-test("a quote's payback reaches the customer's comparison", () => {
-  // Price alone cannot be compared. A cheaper business that pays nothing
-  // back is not cheaper in the way that decides this, so both numbers are on
-  // the same card and the business standing behind nothing says so there.
-  assert.deepEqual(freightQuotePaybackParts(40000), {
-    paysBack: true,
-    amount: 400,
-  });
-  assert.deepEqual(freightQuotePaybackParts(0), {paysBack: false, amount: 0});
-  assert.deepEqual(freightQuotePaybackParts(undefined), {
-    paysBack: false,
-    amount: 0,
-  });
+test("a quote's cover reaches the customer's comparison", () => {
+  // Price alone cannot be compared. A cheaper business that stands behind
+  // nothing is not cheaper in the way that decides this, so the promise is on
+  // the same card - and in the same two sentences a published item's card
+  // uses, because one promise read two ways becomes two promises.
+  assert.equal(freightQuoteCoverageLine(true), "Pays you back if it is lost");
+  assert.equal(
+    freightQuoteCoverageLine(false),
+    "This business does not pay for a lost parcel",
+  );
+  assert.equal(
+    freightQuoteCoverageLine(undefined),
+    "This business does not pay for a lost parcel",
+  );
 
-  assert.match(customerSource, /freightQuotePaybackParts\(quote\.paybackAmountCents\)/);
-  assert.match(customerSource, /<span>Pays back<\/span>/);
-  assert.match(customerSource, /Pays nothing back if it is lost/);
+  assert.match(customerSource, /freightQuoteCoverageLine\(quote\.coversLoss\)/);
+  assert.match(customerSource, /const paysBack = quote\.coversLoss === true;/);
   // The price is on the card too, from the quote rather than from any rate.
   assert.match(customerSource, /Price to send it/);
   assert.match(
@@ -159,9 +176,10 @@ test("choosing one price closes the rest, and the screen says so", () => {
   assert.match(customerSource, /"Chosen"/);
 });
 
-test("the business feed answers with a price and a payback", () => {
-  // The request arrives with the parcel described, and the answer is two
-  // numbers: what this business charges, and what it owes if it loses it.
+test("the business feed answers with a price and a promise", () => {
+  // The request arrives with the parcel described, and the answer is a price
+  // and a yes/no: what this business charges, and whether it stands behind
+  // this parcel. Never an amount for the second.
   assert.match(operationsSource, /freightQuoteRequests/);
   assert.match(
     operationsSource,
@@ -173,7 +191,8 @@ test("the business feed answers with a price and a payback", () => {
   );
   assert.match(operationsSource, /"submitFreightQuote"/);
   assert.match(operationsSource, /What you charge \(USD\)/);
-  assert.match(operationsSource, /What you pay back if it is lost \(USD\)/);
+  assert.match(operationsSource, /Do you cover this parcel if it is lost\?/);
+  assert.match(operationsSource, /coversLoss: validated\.quote\.coversLoss,/);
   // A business that already answered sees its own number and may change it.
   assert.match(operationsSource, /\? "Change your price"/);
 });
@@ -185,16 +204,17 @@ test("everything the two screens say has French", () => {
     "Weight (kg), if you know it",
     "Waiting for prices",
     "Price to send it",
-    "Pays back",
-    "if it is lost",
-    "Pays nothing back if it is lost",
+    "Pays you back if it is lost",
+    "This business does not pay for a lost parcel",
     "Accept this price",
     "Not chosen",
     "Price requests",
     "No one is waiting on a price",
     "Waiting on you",
     "What you charge (USD)",
-    "What you pay back if it is lost (USD)",
+    "Do you cover this parcel if it is lost?",
+    "No, I do not cover this parcel",
+    "Yes, I cover this parcel",
     "Send your price",
     "Change your price",
     "Your price was sent to the customer.",

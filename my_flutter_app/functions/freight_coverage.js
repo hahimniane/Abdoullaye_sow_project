@@ -7,15 +7,15 @@
  * is already inside the shipping rate. Bolting a separate "coverage fee" on
  * top charged the customer twice for the same thing.
  *
- * So the policy is one question: does this business pay for a parcel it
- * loses? If yes, it pays the FULL payback it published for that item - no
- * rate, no proportion, no deductible. If no, the customer gets nothing back
- * and is told so plainly before they choose that business.
+ * So the policy is one question: does this business make good on a parcel
+ * it loses? Yes or no, and that is the whole of it. No rate, no proportion,
+ * no deductible, and no figure per item - publishing an amount only ever
+ * gave both sides a number to argue over on the worst day. A business that
+ * does not cover says so plainly before the customer chooses it.
  *
- * The customer is never asked what the parcel is worth. They say WHAT the
- * item is; the business's own published table says what it pays back. A
- * sender's own valuation was always either a guess or an incentive, and
- * pricing off it made the honest customer subsidise the optimistic one.
+ * The customer is never asked what the parcel is worth either. A sender's
+ * own valuation was always a guess or an incentive, and pricing off it made
+ * the honest customer subsidise the optimistic one.
  *
  * The platform is not the insurer - the business pays the customer back. A
  * snapshot of the policy is written onto the shipment because settings
@@ -54,9 +54,8 @@ function freightCoveragePolicy(business) {
  * App builds predating the item picker ask the sender what the parcel is
  * worth. Those builds are still in customers' hands, so the number is still
  * accepted and recorded - but it never sets a price and never sets a
- * promise. Cover follows the business's published payback, exactly as it
- * does for a current client, so the same parcel is covered the same amount
- * whichever build booked it.
+ * promise. Cover is the business's one flag either way, so the same parcel
+ * is covered the same whichever build booked it.
  *
  * @param {object} params Inputs.
  * @param {object} params.business The business document.
@@ -80,7 +79,6 @@ function quoteFreightCoverage({business, declaredValue}) {
     coverageFee: 0,
     coverageFeeCents: 0,
     covered: false,
-    payoutCapCents: 0,
     policy,
   };
 }

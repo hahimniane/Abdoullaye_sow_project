@@ -734,10 +734,9 @@ describe("freight service callable lifecycle", () => {
       freightPaybackTable: {
         electronics: {
           items: [{
-            id: "iphone", label: "iPhone 16", paybackAmount: 400,
+            id: "iphone", label: "iPhone 16",
             pricingMode: "flat", flatPrice: 50, includedKg: 2,
           }],
-          otherPaybackAmount: 0,
         },
       },
     }, {merge: true});
@@ -770,10 +769,9 @@ describe("freight service callable lifecycle", () => {
       freightPaybackTable: {
         electronics: {
           items: [{
-            id: "iphone", label: "iPhone 16", paybackAmount: 400,
+            id: "iphone", label: "iPhone 16",
             pricingMode: "flat", flatPrice: 50, includedKg: 2,
           }],
-          otherPaybackAmount: 0,
         },
       },
     }, {merge: true});
@@ -803,10 +801,9 @@ describe("freight service callable lifecycle", () => {
       freightPaybackTable: {
         electronics: {
           items: [{
-            id: "sim", label: "SIM card", paybackAmount: 5,
+            id: "sim", label: "SIM card",
             pricingMode: "flat", flatPrice: 10,
           }],
-          otherPaybackAmount: 0,
         },
       },
     }, {merge: true});
@@ -841,10 +838,9 @@ describe("freight service callable lifecycle", () => {
       freightPaybackTable: {
         electronics: {
           items: [{
-            id: "mixed", label: "Assorted", paybackAmount: 100,
+            id: "mixed", label: "Assorted",
             pricingMode: "per_kg", weightFactor: 2,
           }],
-          otherPaybackAmount: 0,
         },
       },
     }, {merge: true});
@@ -869,8 +865,7 @@ describe("freight service callable lifecycle", () => {
     await db.collection("businesses").doc(businessId).set({
       freightPaybackTable: {
         electronics: {
-          items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
-          otherPaybackAmount: 0,
+          items: [{id: "iphone", label: "iPhone"}],
         },
       },
     }, {merge: true});
@@ -915,10 +910,9 @@ describe("freight service callable lifecycle", () => {
           freightPaybackTable: {
             electronics: {
               items: [{
-                id: "iphone", label: "iPhone", paybackAmount: 400,
+                id: "iphone", label: "iPhone",
                 pricingMode: "per_kg",
               }],
-              otherPaybackAmount: 0,
             },
           },
         }, {merge: true});
@@ -936,10 +930,11 @@ describe("freight service callable lifecycle", () => {
         assert.equal(shipment.coverageFeeCents, 0);
         assert.equal(shipment.price, 125);
         assert.equal(shipment.estimatedTotalCents, 12500);
-        // Covered means the FULL published payback, free of charge.
+        // Covered is the whole answer: this business makes good on the
+        // parcel. No figure is attached to it and none is charged for it.
         assert.equal(shipment.coverageCovered, true);
-        assert.equal(shipment.coveragePayoutCapCents, 40000);
-        assert.equal(shipment.paybackAmountCents, 40000);
+        assert.equal("coveragePayoutCapCents" in shipment, false);
+        assert.equal("paybackAmountCents" in shipment, false);
       });
 
   it("promises nothing when the business does not cover loss",
@@ -950,10 +945,9 @@ describe("freight service callable lifecycle", () => {
           freightPaybackTable: {
             electronics: {
               items: [{
-                id: "iphone", label: "iPhone", paybackAmount: 400,
+                id: "iphone", label: "iPhone",
                 pricingMode: "per_kg",
               }],
-              otherPaybackAmount: 0,
             },
           },
         }, {merge: true});
@@ -967,11 +961,9 @@ describe("freight service callable lifecycle", () => {
         });
         const shipment = await freightData(booking.shipmentId);
         assert.equal(shipment.coverageCovered, false);
-        assert.equal(shipment.coveragePayoutCapCents, 0);
         assert.equal(shipment.coverageFeeCents, 0);
         // The parcel is still carried, and its payback is still recorded -
         // it is the promise that is absent, not the item.
-        assert.equal(shipment.paybackAmountCents, 40000);
       });
 
   it("delivers to the receiver's address for the business's flat fee",

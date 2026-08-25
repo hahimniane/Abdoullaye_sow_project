@@ -7297,13 +7297,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Les entreprises de cet itinéraire voient votre colis. Les prix s\'affichent ici dès qu\'elles répondent.';
 
   @override
-  String freightQuotePaysBackIfLost(String amount) {
-    return 'Rembourse $amount si le colis est perdu';
+  String freightQuoteCoversLoss(String business) {
+    return '$business vous rembourse si ce colis est perdu';
   }
 
   @override
-  String freightQuoteNoPaybackIfLost(String business) {
-    return '$business ne rembourse rien si le colis est perdu';
+  String freightQuoteDoesNotCoverLoss(String business) {
+    return '$business ne couvre pas les colis perdus';
   }
 
   @override

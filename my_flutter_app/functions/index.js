@@ -63,16 +63,12 @@ const FREIGHT_PAYBACK_ERRORS = {
   too_many_items: "A category can hold at most 30 items",
   item_invalid: "Every item needs a name",
   item_duplicated: "Two items in one category share the same id",
-  payback_out_of_range:
-    "Payback amounts must be between $0 and $10,000",
   pricing_mode_invalid:
     "Say whether that item has a set price or is priced by weight",
   flat_price_out_of_range:
     "A set price must be between $0 and $10,000",
   included_kg_out_of_range:
     "The weight a set price covers must be between 0 and 200 kg",
-  weight_factor_out_of_range:
-    "A by-weight item must be between 0.5x and 10x your per-kilo rate",
 };
 const {
   VIEWING_REQUESTED,
@@ -21393,7 +21389,6 @@ exports.createFreightShipmentPaymentIntent = onCall(
           coverageFee: itemQuote.coverageFee,
           coverageFeeCents: itemQuote.coverageFeeCents,
           covered: itemQuote.covered,
-          payoutCapCents: itemQuote.payoutCapCents,
           policy: policyNow,
         };
       } else {
@@ -21478,13 +21473,10 @@ exports.createFreightShipmentPaymentIntent = onCall(
           weightVerificationRequired: itemPricing.weighsAtDropOff,
           ...(itemSnapshot ? {
             itemId: String(itemId || ""),
-            paybackAmountCents: itemSnapshot.paybackAmountCents,
-            paybackSource: itemSnapshot.paybackSource,
           } : {}),
           declaredValueCents: coverage.declaredValueCents,
           coverageFeeCents: coverage.coverageFeeCents,
           coverageCovered: coverage.covered,
-          coveragePayoutCapCents: coverage.payoutCapCents,
           // A snapshot, not a reference: a claim argued six weeks later has
           // to be judged on the terms in force when the parcel was handed
           // over, and a business can change its policy at any time.
@@ -22758,7 +22750,6 @@ exports.selectFreightQuote = onCall(
           selectedBusinessId: quote.businessId,
           selectedBusinessName: quote.businessName || "",
           selectedAmountCents: quote.amountCents,
-          selectedPaybackAmountCents: quote.paybackAmountCents || 0,
           selectedCoversLoss: quote.coversLoss === true,
           selectedAt: now,
           updatedAt: now,
@@ -23198,9 +23189,7 @@ exports.confirmFreightShipmentWeight = onCall(
               String(shipment.itemId || ""),
             itemCategoryId: correctedCategoryId ||
               String(shipment.itemCategoryId || ""),
-            paybackAmountCents: corrected.paybackAmountCents,
             coverageFeeCents: corrected.coverageFeeCents,
-            coveragePayoutCapCents: corrected.payoutCapCents,
             coverageCovered: corrected.covered,
             itemCorrectedBy: callerUid,
           };

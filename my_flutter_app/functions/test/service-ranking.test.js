@@ -65,11 +65,10 @@ describe("what a parcel actually costs at each business", () => {
     const priced = (mode, flatPrice) => ({
       electronics: {
         items: [{
-          id: "iphone", label: "iPhone", paybackAmount: 400,
+          id: "iphone", label: "iPhone",
           pricingMode: mode,
           ...(flatPrice ? {flatPrice} : {}),
         }],
-        otherPaybackAmount: 0,
       },
     });
     const cheapPerKg = option("cheap-per-kg", {
@@ -125,10 +124,9 @@ describe("what a parcel actually costs at each business", () => {
     const byWeight = {
       general: {
         items: [{
-          id: "box", label: "Box", paybackAmount: 100,
+          id: "box", label: "Box",
           pricingMode: "per_kg",
         }],
-        otherPaybackAmount: 0,
       },
     };
     const withCover = option("covers", {

@@ -9,9 +9,10 @@ import '../utils/freight_localization.dart';
 ///
 /// The same marketplace shape as `transport_request_details_screen.dart`: one
 /// request, many answers, and the customer takes one. What is different is the
-/// second number on every card - a business quoting an item outside its
-/// published table states what it pays back if it loses the parcel, and a
-/// business that will not pay says so here, where it can still be passed over.
+/// second line on every card - a business quoting an item outside its
+/// published table states whether it makes good on the parcel, and one that
+/// will not says so here, where it can still be passed over. That line never
+/// carries a sum: cover is a yes or a no, and it is free either way.
 class FreightQuoteDetailsScreen extends StatefulWidget {
   const FreightQuoteDetailsScreen({
     super.key,
@@ -291,8 +292,8 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
   }
 }
 
-/// One business's answer: what it charges, and what it owes if the parcel
-/// never arrives.
+/// One business's answer: what it charges, and whether it stands behind the
+/// parcel if it never arrives.
 class _FreightQuoteCard extends StatelessWidget {
   const _FreightQuoteCard({
     required this.quote,
@@ -353,11 +354,12 @@ class _FreightQuoteCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
+                    // The price is the only figure on this card. A sum beside
+                    // cover turns a reassurance into the number a customer
+                    // expects to argue over.
                     quote.coversLoss
-                        ? l10n.freightQuotePaysBackIfLost(
-                            freightMoney(quote.paybackAmount),
-                          )
-                        : l10n.freightQuoteNoPaybackIfLost(quote.businessName),
+                        ? l10n.freightQuoteCoversLoss(quote.businessName)
+                        : l10n.freightQuoteDoesNotCoverLoss(quote.businessName),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: quote.coversLoss
                           ? theme.colorScheme.onSurface

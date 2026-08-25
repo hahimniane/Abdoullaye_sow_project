@@ -12,42 +12,37 @@ const {
 const TABLE = {
   electronics: {
     items: [
-      {id: "iphone", label: "iPhone", paybackAmount: 400},
-      {id: "samsung-phone", label: "Samsung phone", paybackAmount: 250},
+      {id: "iphone", label: "iPhone"},
+      {id: "samsung-phone", label: "Samsung phone"},
     ],
-    otherPaybackAmount: 100,
+    otherPricingMode: "per_kg",
   },
-  clothing: {items: [], otherPaybackAmount: 0},
+  clothing: {items: []},
 };
 
 const POLICY = {coversLoss: true};
 
-describe("what an item pays back", () => {
-  it("prices the exact row the business published", () => {
-    // The whole redesign in one assertion: the number is the business's, and
-    // an iPhone is not a Samsung.
+describe("what a business lists", () => {
+  it("finds the exact row the business published", () => {
     const iphone = freightPaybackFor({
       table: TABLE, categoryId: "electronics", itemId: "iphone",
     });
-    const samsung = freightPaybackFor({
-      table: TABLE, categoryId: "electronics", itemId: "samsung-phone",
-    });
-    assert.equal(iphone.paybackAmount, 400);
-    assert.equal(samsung.paybackAmount, 250);
+    assert.equal(iphone.listed, true);
     assert.equal(iphone.source, "item");
+    assert.equal(iphone.label, "iPhone");
   });
 
-  it("falls back to the category's own catch-all, when priced", () => {
+  it("falls back to the category's catch-all when it has one", () => {
     const unknown = freightPaybackFor({
       table: TABLE, categoryId: "electronics", itemId: "walkman",
     });
-    assert.equal(unknown.paybackAmount, 100);
+    assert.equal(unknown.listed, true);
     assert.equal(unknown.source, "other");
   });
 
   it("says unlisted rather than guessing", () => {
     // Unlisted is a routing answer, not an error: it is what sends the
-    // booking to the quote-request path.
+    // booking to the price-request path.
     for (const query of [
       {table: TABLE, categoryId: "clothing", itemId: "boubou"},
       {table: TABLE, categoryId: "food"},
@@ -56,32 +51,31 @@ describe("what an item pays back", () => {
       assert.equal(freightPaybackFor(query).listed, false);
     }
   });
+
+  it("attaches no amount to anything", () => {
+    // A business does not say what it will pay for a missing parcel. It
+    // either covers the parcel or it does not, and a figure per item was
+    // an invitation to argue over the number.
+    const row = freightPaybackFor({
+      table: TABLE, categoryId: "electronics", itemId: "iphone",
+    });
+    assert.equal("paybackAmount" in row, false);
+  });
 });
 
-describe("what the table promises", () => {
+describe("whether a parcel is covered", () => {
   const business = {freightPaybackTable: TABLE};
 
-  it("promises the business's full published payback, free", () => {
+  it("answers yes or no, and charges nothing either way", () => {
     const quote = quoteFreightItemCoverage({
       business, policy: POLICY, categoryId: "electronics", itemId: "iphone",
     });
-    // The whole promise, not a proportion of it - and it costs nothing,
-    // because the business already priced this item for what it is worth to
-    // carry. The customer never typed a number anywhere.
-    assert.equal(quote.payoutCapCents, 40000);
+    assert.equal(quote.ok, true);
     assert.equal(quote.covered, true);
     assert.equal(quote.coverageFeeCents, 0);
-    assert.equal(quote.coverageFee, 0);
-  });
-
-  it("never charges for cover, whatever the item is worth", () => {
-    // An iPhone and a Samsung differ in what they pay back, never in price.
-    for (const itemId of ["iphone", "samsung-phone", "walkman"]) {
-      const quote = quoteFreightItemCoverage({
-        business, policy: POLICY, categoryId: "electronics", itemId,
-      });
-      assert.equal(quote.coverageFeeCents, 0, itemId);
-    }
+    // No sum anywhere: the answer is the whole answer.
+    assert.equal("payoutCapCents" in quote, false);
+    assert.equal("paybackAmountCents" in quote, false);
   });
 
   it("carries-but-does-not-cover when the business does not cover", () => {
@@ -94,10 +88,9 @@ describe("what the table promises", () => {
     assert.equal(quote.ok, true);
     assert.equal(quote.covered, false);
     assert.equal(quote.coverageFeeCents, 0);
-    assert.equal(quote.payoutCapCents, 0);
   });
 
-  it("routes unlisted items away instead of pricing them", () => {
+  it("routes unlisted items away instead of covering them", () => {
     const quote = quoteFreightItemCoverage({
       business, policy: POLICY, categoryId: "clothing", itemId: "boubou",
     });
@@ -106,45 +99,35 @@ describe("what the table promises", () => {
   });
 });
 
-describe("saving the table", () => {
-  it("cleans and keeps a sensible table", () => {
+describe("saving the catalogue", () => {
+  it("cleans and keeps a sensible list", () => {
     const result = validateFreightPaybackTable({
       electronics: {
-        items: [{id: "IPhone!", label: "  iPhone  ", paybackAmount: 400.005}],
-        otherPaybackAmount: 50,
+        items: [{
+          id: "IPhone!", label: "  iPhone  ",
+          pricingMode: "flat", flatPrice: 50,
+        }],
       },
     });
     assert.equal(result.ok, true);
     const row = result.table.electronics.items[0];
     assert.equal(row.id, "iphone-");
     assert.equal(row.label, "iPhone");
-    assert.equal(row.paybackAmount, 400.01);
-  });
-
-  it("refuses paybacks past the platform ceiling instead of clamping", () => {
-    // A business that types $50,000 must be told the ceiling, not saved at
-    // $10,000 and left believing it promised more.
-    const result = validateFreightPaybackTable({
-      electronics: {
-        items: [{id: "tv", label: "TV", paybackAmount: 50000}],
-        otherPaybackAmount: 0,
-      },
-    });
-    assert.equal(result.ok, false);
-    assert.equal(result.error, "payback_out_of_range");
+    assert.equal(row.flatPrice, 50);
+    assert.equal("paybackAmount" in row, false);
   });
 
   it("refuses duplicates and empty rows", () => {
     assert.equal(validateFreightPaybackTable({
       electronics: {
         items: [
-          {id: "iphone", label: "iPhone", paybackAmount: 1},
-          {id: "iphone", label: "iPhone again", paybackAmount: 2},
+          {id: "iphone", label: "iPhone"},
+          {id: "iphone", label: "iPhone again"},
         ],
       },
     }).error, "item_duplicated");
     assert.equal(validateFreightPaybackTable({
-      electronics: {items: [{id: "", label: "", paybackAmount: 1}]},
+      electronics: {items: [{id: "", label: ""}]},
     }).error, "item_invalid");
   });
 
@@ -153,11 +136,11 @@ describe("saving the table", () => {
         {ok: true, table: {}});
   });
 
-  it("suggests items with no prices attached", () => {
-    // Suggestions seed the editor; only the business's own numbers count.
+  it("suggests items with no numbers attached", () => {
     for (const items of Object.values(STANDARD_FREIGHT_ITEMS)) {
       for (const item of items) {
         assert.equal("paybackAmount" in item, false, item.id);
+        assert.equal("flatPrice" in item, false, item.id);
       }
     }
   });
@@ -170,26 +153,25 @@ describe("how a business prices what it carries", () => {
         // A known object: one price, and an allowance so the retail box and
         // charger do not come out of the business's pocket.
         {
-          id: "iphone", label: "iPhone 16", paybackAmount: 400,
+          id: "iphone", label: "iPhone 16",
           pricingMode: "flat", flatPrice: 50, includedKg: 2,
         },
         // A set price covering the parcel however heavy it is.
         {
-          id: "sim", label: "SIM card", paybackAmount: 5,
+          id: "sim", label: "SIM card",
           pricingMode: "flat", flatPrice: 10,
         },
         // Goods that vary, priced by the scale at the route rate.
         {
-          id: "mixed-tech", label: "Assorted tech", paybackAmount: 100,
+          id: "mixed-tech", label: "Assorted tech",
           pricingMode: "per_kg",
         },
         // A row saved before pricing existed.
-        {id: "legacy", label: "Legacy row", paybackAmount: 90},
+        {id: "legacy", label: "Legacy row"},
       ],
-      otherPaybackAmount: 60,
       otherPricingMode: "per_kg",
     },
-    clothing: {items: [], otherPaybackAmount: 40},
+    clothing: {items: [], },
   };
 
   it("prices a known object once, and never weighs it at booking", () => {
@@ -262,12 +244,12 @@ describe("how a business prices what it carries", () => {
 
 describe("saving a priced row", () => {
   const priced = (item) => validateFreightPaybackTable({
-    electronics: {items: [item], otherPaybackAmount: 0},
+    electronics: {items: [item], },
   });
 
   it("keeps a set price and its allowance", () => {
     const r = priced({
-      id: "iphone", label: "iPhone", paybackAmount: 400,
+      id: "iphone", label: "iPhone",
       pricingMode: "flat", flatPrice: 50.005, includedKg: 2.5,
     });
     assert.equal(r.ok, true);
@@ -278,7 +260,7 @@ describe("saving a priced row", () => {
 
   it("drops an allowance of zero rather than storing a false limit", () => {
     const r = priced({
-      id: "sim", label: "SIM", paybackAmount: 5,
+      id: "sim", label: "SIM",
       pricingMode: "flat", flatPrice: 10, includedKg: 0,
     });
     assert.equal("includedKg" in r.table.electronics.items[0], false);
@@ -286,24 +268,24 @@ describe("saving a priced row", () => {
 
   it("refuses a price or allowance outside the band", () => {
     assert.equal(priced({
-      id: "a", label: "A", paybackAmount: 1,
+      id: "a", label: "A",
       pricingMode: "flat", flatPrice: 0,
     }).error, "flat_price_out_of_range");
     assert.equal(priced({
-      id: "a", label: "A", paybackAmount: 1,
+      id: "a", label: "A",
       pricingMode: "flat", flatPrice: 999999,
     }).error, "flat_price_out_of_range");
     assert.equal(priced({
-      id: "a", label: "A", paybackAmount: 1,
+      id: "a", label: "A",
       pricingMode: "flat", flatPrice: 50, includedKg: 5000,
     }).error, "included_kg_out_of_range");
     assert.equal(priced({
-      id: "a", label: "A", paybackAmount: 1, pricingMode: "sometimes",
+      id: "a", label: "A", pricingMode: "sometimes",
     }).error, "pricing_mode_invalid");
   });
 
   it("leaves a row that states no pricing alone", () => {
-    const r = priced({id: "a", label: "A", paybackAmount: 1});
+    const r = priced({id: "a", label: "A"});
     assert.equal(r.ok, true);
     assert.equal("pricingMode" in r.table.electronics.items[0], false);
   });

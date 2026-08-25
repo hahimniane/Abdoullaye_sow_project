@@ -1,12 +1,17 @@
 /**
- * What a lost parcel pays back - the business's table, not the sender's
- * claim. A covering business owes the whole published amount; the customer
- * is charged nothing for that promise, because the item was already priced
- * for what it is worth to carry.
+ * What a business carries, and what it charges for each of those things.
  *
- * The same table says what each thing costs to carry: one row answers both
- * questions, so the price and the promise can never come from different
- * places.
+ * The list is the catalogue: the rows here are what a customer picks from,
+ * and each one says how this business prices that thing. An item it has not
+ * listed, or has listed and not priced, becomes a request the business
+ * answers rather than something bookable on the spot.
+ *
+ * There is no amount attached to losing a parcel. A business either makes
+ * good on one or it does not - the single flag in the coverage policy - and
+ * publishing a figure per item invited exactly the haggling the design was
+ * meant to remove. Cover is never charged for either way: a business prices
+ * each item for what it is worth to carry, so the risk is already inside
+ * what it charges.
  *
  * Mirror of my_flutter_app/functions/freight_payback.js (the authority) and
  * my_flutter_app/lib/utils/freight_payback.dart. All three clients must
@@ -15,7 +20,6 @@
  * the callable to answer with the right one.
  */
 
-export const PLATFORM_MAX_PAYBACK = 10000;
 export const MAX_ITEMS_PER_CATEGORY = 30;
 export const MAX_ITEM_LABEL_LENGTH = 60;
 
@@ -35,7 +39,6 @@ export type FreightPricingMode = "flat" | "per_kg";
 export type PaybackItem = {
   id: string;
   label: string;
-  paybackAmount: number;
   pricingMode?: FreightPricingMode;
   flatPrice?: number;
   includedKg?: number;
@@ -43,7 +46,6 @@ export type PaybackItem = {
 
 export type PaybackCategoryEntry = {
   items: PaybackItem[];
-  otherPaybackAmount: number;
   otherPricingMode?: FreightPricingMode;
   otherFlatPrice?: number;
   otherIncludedKg?: number;
@@ -52,7 +54,7 @@ export type PaybackCategoryEntry = {
 export type PaybackTable = Record<string, PaybackCategoryEntry>;
 
 /**
- * Why a payback table would not save, in the business's own words.
+ * Why a catalogue would not save, in the business's own words.
  *
  * Mirrors the map the callable answers with, so a refusal reads the same
  * whether this console caught it or the server did.
@@ -63,7 +65,6 @@ export const FREIGHT_PAYBACK_ERRORS: Record<string, string> = {
   too_many_items: "A category can hold at most 30 items",
   item_invalid: "Every item needs a name",
   item_duplicated: "Two items in one category share the same id",
-  payback_out_of_range: "Payback amounts must be between $0 and $10,000",
   pricing_mode_invalid: "Say whether an item has a set price or is priced by weight",
   flat_price_out_of_range: "A set price must be between $0.01 and $10,000",
   included_kg_out_of_range: "An included weight must be between 0 and 200 kg",
@@ -74,7 +75,7 @@ export function freightPaybackErrorMessage(code: unknown): string {
   return FREIGHT_PAYBACK_ERRORS[key] ?? FREIGHT_PAYBACK_ERRORS.table_invalid;
 }
 
-/** Starter rows for the editor. Amounts are the business's job, not ours. */
+/** Starter rows for the editor. Pricing is the business's job, not ours. */
 export const STANDARD_FREIGHT_ITEMS: Record<
   string,
   ReadonlyArray<{id: string; label: string}>
@@ -97,15 +98,17 @@ export const STANDARD_FREIGHT_ITEMS: Record<
 
 export type PaybackLookup = {
   listed: boolean;
-  paybackAmount: number;
   source: "item" | "other" | null;
   label?: string;
 };
 
 /**
- * The payback row for an item: exact row first, then the category's
- * catch-all. Unlisted is a routing answer - it sends the booking to the
- * quote-request path instead of instant booking.
+ * Whether this business lists the item at all: exact row first, then the
+ * category's catch-all.
+ *
+ * Listing is a routing answer, not a promise - it decides whether a customer
+ * books on the spot or asks this business for a price. What is owed on a lost
+ * parcel is not per-item: it is the one cover flag on the business.
  */
 export function freightPaybackFor({
   table,
@@ -121,26 +124,22 @@ export function freightPaybackFor({
       ? (table as Record<string, unknown>)[String(categoryId || "").trim()]
       : undefined;
   if (!record || typeof record !== "object") {
-    return {listed: false, paybackAmount: 0, source: null};
+    return {listed: false, source: null};
   }
-  const entry = record as {items?: unknown; otherPaybackAmount?: unknown};
+  const entry = record as {items?: unknown; otherPricingMode?: unknown};
   const wanted = String(itemId || "").trim();
   if (wanted && Array.isArray(entry.items)) {
     const row = entry.items.find(
       (item) => (item as PaybackItem | undefined)?.id === wanted,
     ) as PaybackItem | undefined;
     if (row) {
-      return {
-        listed: true,
-        paybackAmount: Number(row.paybackAmount) || 0,
-        source: "item",
-        label: String(row.label || ""),
-      };
+      return {listed: true, source: "item", label: String(row.label || "")};
     }
   }
-  const other = Number(entry.otherPaybackAmount) || 0;
-  if (other > 0) return {listed: true, paybackAmount: other, source: "other"};
-  return {listed: false, paybackAmount: 0, source: null};
+  // The category's catch-all covers anything else in it, when the business
+  // has priced one. Having a mode is what makes it a row at all.
+  if (entry.otherPricingMode) return {listed: true, source: "other"};
+  return {listed: false, source: null};
 }
 
 export type FreightItemPricing = {
@@ -158,11 +157,11 @@ export type FreightItemPricing = {
 /**
  * How to charge for one item: a set price, or by weight.
  *
- * Resolves in the same order the payback does - the exact row, then the
- * category catch-all - so the price and the promise always come from the
- * same place. A row nobody priced answers `priced: false`, and the customer
- * is sent to ask this business for a number instead of being quoted one it
- * never chose.
+ * Resolves in the same order the listing does - the exact row, then the
+ * category catch-all - so what a customer can pick and what it costs always
+ * come from the same place. A row nobody priced answers `priced: false`, and
+ * the customer is sent to ask this business for a number instead of being
+ * quoted one it never chose.
  */
 export function freightItemPricing({
   table,
@@ -292,7 +291,7 @@ export function freightItemChoicesFor(
     const table = providerTable(option);
     if (!table) continue;
     const entry = table[String(categoryId || "").trim()] as
-      | {items?: unknown; otherPaybackAmount?: unknown}
+      | {items?: unknown}
       | undefined;
     if (!entry || typeof entry !== "object") continue;
     for (const raw of Array.isArray(entry.items) ? entry.items : []) {
@@ -311,7 +310,7 @@ export function freightItemChoicesFor(
 /**
  * Whether one provider can book this item on the spot.
  *
- * Two conditions, and both are the server's: the item resolves to a payback
+ * Two conditions, and both are the server's: the item resolves to a listed
  * row (exact row, then the category catch-all) AND that same row names a
  * price. A provider that lists an item without pricing it, or that has no
  * table at all, answers the request path instead - it has a number to give,

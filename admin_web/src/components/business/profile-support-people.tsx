@@ -1304,8 +1304,8 @@ export function BusinessServicesPanel({
  *
  * Two settings, one card, because they answer the same question for the owner:
  * "what am I willing to carry, and at what price." They stay separate for the
- * customer - the category says what is in the box, the payback row says what
- * this business owes if it loses one - but an owner sets them in one sitting.
+ * customer - the category says what is in the box, cover says whether this
+ * business stands behind it - but an owner sets them in one sitting.
  */
 function FreightGoodsEditor({
   draft,
@@ -1430,19 +1430,17 @@ function FreightGoodsEditor({
                 already in your rate.
               </p>
               <p>
-                If you cover parcels and one goes missing, you pay the
-                customer the full payback you published for that item. If you
-                do not cover them, the customer gets nothing back, and they
-                are told so before they book.
+                If you cover parcels and one goes missing, you make good on
+                it with the customer. If you do not cover them, the customer
+                gets nothing back, and they are told so before they book.
               </p>
             </FieldInfo>
           </span>
         </p>
         {draft.coversLoss && (
           <div className="customer-inline-note wide">
-            You pay the customer back, not Laawol - the full payback you
-            published for that item, and the policy in force on the day they
-            booked is the one that is judged.
+            You make good on the parcel, not Laawol, and the policy in force
+            on the day the customer booked is the one that is judged.
           </div>
         )}
         <label className="lst-field">
@@ -1454,9 +1452,7 @@ function FreightGoodsEditor({
             value={draft.coversLoss ? "yes" : "no"}
           >
             <option value="no">No, parcels are not covered</option>
-            <option value="yes">
-              Yes, I pay back the full published amount
-            </option>
+            <option value="yes">Yes, I cover a parcel I lose</option>
           </select>
         </label>
         <label className="lst-field wide">
@@ -1492,10 +1488,9 @@ function FreightGoodsEditor({
               What you carry, and what it costs
               <FieldInfo label="how the item list works">
                 <p>
-                  Each row answers two questions: what you charge to carry
-                  that thing, and what you pay the customer if you lose it.
-                  An item you have not listed cannot be booked instantly;
-                  the customer asks you for a quote instead.
+                  Each row says what you charge to carry that thing. An item
+                  you have not listed cannot be booked instantly; the
+                  customer asks you for a quote instead.
                 </p>
                 <p>
                   A known object can have a set price - &ldquo;iPhone 16,
@@ -1509,10 +1504,9 @@ function FreightGoodsEditor({
                   you answer it under Price requests.
                 </p>
                 <p>
-                  If you cover lost parcels, the payback is what you owe in
-                  full - a $400 iPhone pays back $400. The customer is
-                  charged nothing for that, so price each row for what it is
-                  worth to you to carry.
+                  Cover is a separate question, answered once above for every
+                  parcel you carry. The customer is charged nothing for it,
+                  so price each row for what it is worth to you to carry.
                 </p>
               </FieldInfo>
             </span>
@@ -1525,16 +1519,21 @@ function FreightGoodsEditor({
 }
 
 /**
- * How this business prices one row, and what it pays back if it loses it.
+ * How this business charges for one row.
  *
  * Two ways to charge, and the business picks per row because only it knows
  * which of its goods are which. A known object gets one price and never sees
  * a scale; goods that vary are weighed, and the weigh-and-confirm settlement
  * runs exactly as it does for every other parcel.
+ *
+ * `unpricedLabel` adds a third answer for a row that may legitimately have
+ * none - the category catch-all, which exists only once someone prices it.
+ * An item row is not offered it: the business added that row on purpose.
  */
 function FreightRowPricingFields({
   onPatch,
   row,
+  unpricedLabel,
 }: {
   onPatch: (patch: {
     pricingMode?: FreightPaybackPricingMode;
@@ -1546,22 +1545,35 @@ function FreightRowPricingFields({
     flatPrice: string;
     includedKg: string;
   };
+  unpricedLabel?: string;
 }) {
   // By weight is the business's own per-kg rate for the route, so choosing it
   // leaves nothing else to fill in.
   const flat = row.pricingMode === "flat";
+  const selected = unpricedLabel
+    ? row.pricingMode
+    : flat
+      ? "flat"
+      : "per_kg";
   return (
     <div className="payback-pricing-row">
       <label className="lst-field">
         <span>How is this priced?</span>
         <select
-          onChange={(event) =>
+          onChange={(event) => {
+            const value = event.target.value;
             onPatch({
-              pricingMode: event.target.value === "flat" ? "flat" : "per_kg",
-            })
-          }
-          value={flat ? "flat" : "per_kg"}
+              pricingMode:
+                value === "flat"
+                  ? "flat"
+                  : value === "per_kg"
+                    ? "per_kg"
+                    : "",
+            });
+          }}
+          value={selected}
         >
+          {unpricedLabel && <option value="">{unpricedLabel}</option>}
           <option value="flat">A set price</option>
           <option value="per_kg">By weight</option>
         </select>
@@ -1614,10 +1626,9 @@ function FreightRowPricingFields({
 }
 
 /**
- * The item list: per category, the things this business carries, what each
- * costs and what each pays back if lost. The same rows double as the
- * customer's item picker, so an empty list here is an item nobody can
- * instant-book.
+ * The item list: per category, the things this business carries and what each
+ * costs. The same rows double as the customer's item picker, so an empty list
+ * here is an item nobody can instant-book.
  */
 function FreightPaybackEditor({
   draft,
@@ -1691,23 +1702,6 @@ function FreightPaybackEditor({
                         value={item.label}
                       />
                     </label>
-                    {/* An unlabelled number beside the name reads as the
-                        price. It is the opposite: what this business owes
-                        if it loses the parcel, and it is never charged to
-                        anyone. What the customer pays is set below. */}
-                    <label className="payback-item-field">
-                      <span>You pay back if lost (USD)</span>
-                      <input
-                        inputMode="decimal"
-                        min="0"
-                        onChange={(event) =>
-                          patchItem({amount: event.target.value})
-                        }
-                        placeholder="0 = you pay nothing back"
-                        type="number"
-                        value={item.amount}
-                      />
-                    </label>
                     <button
                       aria-label={`Remove ${item.label || "item"}`}
                       className="lst-icon-btn"
@@ -1759,55 +1753,43 @@ function FreightPaybackEditor({
               ))}
             </div>
             <div className="payback-other">
-              <label className="lst-field">
+              <p className="service-config-note">
                 <span className="label-with-info">
-                  Anything else in this category pays back (USD)
-                  <FieldInfo label="what the catch-all amount does">
+                  Anything else in this category
+                  <FieldInfo label="what the catch-all row does">
                     <p>
-                      0 means an item you have not listed cannot be booked
-                      instantly - the customer asks you for a quote instead.
-                      Any other number covers everything in this category you
-                      did not name.
+                      Price it and everything in this category you did not
+                      name is bookable at that price.
+                    </p>
+                    <p>
+                      Leave it unpriced and a customer sending something you
+                      did not list asks you for a price instead, and you
+                      answer it under Price requests.
                     </p>
                   </FieldInfo>
                 </span>
-                <input
-                  inputMode="decimal"
-                  min="0"
-                  onChange={(event) =>
-                    patchCategory(category.id, {
-                      otherAmount: event.target.value,
-                    })
-                  }
-                  type="number"
-                  value={entry.otherAmount}
-                />
-              </label>
-              {/* The catch-all is priced only when it can be booked: a
-                  category that pays back nothing for an unlisted item sends
-                  the customer to a quote, where you price it yourself. */}
-              {(Number(entry.otherAmount || 0) || 0) > 0 && (
-                <FreightRowPricingFields
-                  onPatch={(patch) =>
-                    patchCategory(category.id, {
-                      ...(patch.pricingMode !== undefined && {
-                        otherPricingMode: patch.pricingMode,
-                      }),
-                      ...(patch.flatPrice !== undefined && {
-                        otherFlatPrice: patch.flatPrice,
-                      }),
-                      ...(patch.includedKg !== undefined && {
-                        otherIncludedKg: patch.includedKg,
-                      }),
-                    })
-                  }
-                  row={{
-                    pricingMode: entry.otherPricingMode,
-                    flatPrice: entry.otherFlatPrice,
-                    includedKg: entry.otherIncludedKg,
-                  }}
-                />
-              )}
+              </p>
+              <FreightRowPricingFields
+                onPatch={(patch) =>
+                  patchCategory(category.id, {
+                    ...(patch.pricingMode !== undefined && {
+                      otherPricingMode: patch.pricingMode,
+                    }),
+                    ...(patch.flatPrice !== undefined && {
+                      otherFlatPrice: patch.flatPrice,
+                    }),
+                    ...(patch.includedKg !== undefined && {
+                      otherIncludedKg: patch.includedKg,
+                    }),
+                  })
+                }
+                row={{
+                  pricingMode: entry.otherPricingMode,
+                  flatPrice: entry.otherFlatPrice,
+                  includedKg: entry.otherIncludedKg,
+                }}
+                unpricedLabel="Ask me for a price"
+              />
             </div>
           </details>
         );
