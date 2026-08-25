@@ -476,6 +476,21 @@ describe("payment runtime configuration", () => {
 });
 
 describe("saving a card without charging it", () => {
+  it("returns the customer to the page that actually exists", () => {
+    // A hand-written /pay sent them to a 403 with their card already
+    // saved. The return page is at /pay/return/, and one helper already
+    // knows that - so this flow uses it rather than composing its own.
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    const start = source.indexOf("payOnArrival === true &&");
+    assert.ok(start > 0, "the pay-on-arrival checkout branch is missing");
+    const branch = source.slice(start, start + 1600);
+    assert.match(branch, /customerCheckoutReturnUrls\(/);
+    assert.doesNotMatch(branch, /\/pay\?/);
+  });
+
   it("states the currency a setup session cannot go out without", () => {
   // A setup session charges nothing, so Stripe has no line item to infer a
   // currency from and refuses the call with "Missing required param:

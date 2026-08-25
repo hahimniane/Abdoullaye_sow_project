@@ -7083,20 +7083,21 @@ exports.createCustomerCheckoutSession = onCall(
           shipmentRecord.stripeChargeType === "direct" ?
             (shipmentRecord.stripeConnectedAccountId || undefined) :
             undefined;
-        // The same /pay return page every checkout uses; setup=1 routes its
-        // confirmation call to completeFreightShipmentCardSave instead of
-        // confirmCustomerCheckoutSession.
-        const consoleUrl = normalizedConsoleUrl(
-            process.env.CUSTOMER_CONSOLE_URL,
-        );
-        const returnBase = `${consoleUrl}/pay?type=freightShipment` +
-          `&id=${encodeURIComponent(recordId)}`;
+        // Built by the same helper every other checkout uses, rather than
+        // by hand: the return page lives at /pay/return/, and a hand-written
+        // /pay sent the customer to a 403 after their card was already
+        // saved. setup=1 routes the confirmation call to
+        // completeFreightShipmentCardSave instead of the payment one.
+        const returnUrls = customerCheckoutReturnUrls({
+          consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+          orderType: "freightShipment",
+          recordId,
+        });
         const session = await createStripeSetupCheckoutSession({
           customerId: shipmentRecord.stripeCustomerId,
           connectedAccountId: setupConnectedAccountId,
-          successUrl: `${returnBase}&setup=1` +
-            `&session={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `${returnBase}&status=cancel`,
+          successUrl: `${returnUrls.successUrl}&setup=1`,
+          cancelUrl: returnUrls.cancelUrl,
           metadata: {
             shipmentId: recordId,
             customerUid,
