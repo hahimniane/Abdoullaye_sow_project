@@ -4972,6 +4972,10 @@ async function cancelStripeSetupIntent(setupIntentId, connectedAccountId) {
 async function createStripeSetupCheckoutSession(params) {
   const body = new URLSearchParams();
   body.set("mode", "setup");
+  // A setup session charges nothing, so there are no line items for Stripe
+  // to infer a currency from - it has to be stated, or the session is
+  // refused outright.
+  body.set("currency", SHIPMENT_CURRENCY);
   body.set("customer", params.customerId);
   body.set("success_url", params.successUrl);
   body.set("cancel_url", params.cancelUrl);

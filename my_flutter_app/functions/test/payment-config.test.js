@@ -474,3 +474,29 @@ describe("payment runtime configuration", () => {
     );
   });
 });
+
+describe("saving a card without charging it", () => {
+  it("states the currency a setup session cannot go out without", () => {
+  // A setup session charges nothing, so Stripe has no line item to infer a
+  // currency from and refuses the call with "Missing required param:
+  // currency". Nothing local catches it - the tests mock Stripe - so the
+  // first sign was a customer being told their booking could not be
+  // started. This pins the params that call cannot go out without.
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    const start = source.indexOf(
+        "async function createStripeSetupCheckoutSession(",
+    );
+    assert.ok(start > 0, "the setup-session helper is missing");
+    const body = source.slice(start, start + 1200);
+    for (const param of ["mode", "currency", "customer", "success_url"]) {
+      assert.match(
+          body,
+          new RegExp(`body\\.set\\("${param}"`),
+          `a setup session must send ${param}`,
+      );
+    }
+  });
+});
