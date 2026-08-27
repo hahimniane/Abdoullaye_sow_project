@@ -52,6 +52,8 @@ function directPaymentPath(
       return ["barrelOrders", recordId];
     case "freightShipment":
       return ["freightShipments", recordId];
+    case "transportJob":
+      return ["transportRequests", recordId];
     case "carDeposit":
     case "carPurchase":
     case "holdExtension":
@@ -99,15 +101,35 @@ export function PayReturn() {
       setState("pending");
       if (sessionId && confirmationStartedFor !== user.uid) {
         confirmationStartedFor = user.uid;
-        const confirmCheckout = httpsCallable<
-          {
-            orderType: CustomerCheckoutOrderType;
-            recordId: string;
-            sessionId: string;
-          },
-          CheckoutReturnConfirmation
-        >(functions, "confirmCustomerCheckoutSession");
-        void confirmCheckout({ orderType: type, recordId, sessionId })
+        // setup=1 is a pay-on-arrival card save: the session verified a
+        // card without charging it, and its own completion callable turns
+        // that into a booked shipment. Everything else is a payment.
+        const isCardSetup = search.get("setup") === "1";
+        const confirm = isCardSetup
+          ? httpsCallable<
+              { shipmentId: string; sessionId: string },
+              { success?: boolean }
+            >(functions, "completeFreightShipmentCardSave")({
+              shipmentId: recordId,
+              sessionId,
+            }).then((response) => ({
+              data: {
+                state: response.data?.success ? "success" : "pending",
+              } as CheckoutReturnConfirmation,
+            }))
+          : httpsCallable<
+              {
+                orderType: CustomerCheckoutOrderType;
+                recordId: string;
+                sessionId: string;
+              },
+              CheckoutReturnConfirmation
+            >(functions, "confirmCustomerCheckoutSession")({
+              orderType: type,
+              recordId,
+              sessionId,
+            });
+        void confirm
           .then((response) => {
             if (active && response.data.state === "success") {
               setState("success");

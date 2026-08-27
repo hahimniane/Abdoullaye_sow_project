@@ -1,6 +1,18 @@
 const assert = require("node:assert/strict");
 const {before, describe, it} = require("node:test");
 const admin = require("firebase-admin");
+// This suite writes with ADMIN credentials. Without the emulator env
+// those writes land in PRODUCTION - on 2026-08-16 a direct `node
+// --test` run did exactly that, seeding 68 approved fixture
+// businesses that real customers could see. Fail closed instead.
+if (!process.env.FIRESTORE_EMULATOR_HOST) {
+  throw new Error(
+      "Run this through `npm run test:shared-barrel` " +
+      "(firebase emulators:exec). " +
+      "A direct node --test run would write its fixtures into the " +
+      "real project.");
+}
+
 const {
   MARKETPLACE_DISCLOSURE_VERSION,
 } = require("../marketplace_disclosure");
@@ -223,11 +235,24 @@ async function participantData(poolId, uid) {
   return doc.data() || {};
 }
 
-async function refundRequestsFor(poolId) {
-  const snapshot = await db.collection("walletRefundRequests")
+// A participant who is owed their deposit back no longer opens a
+// `walletRefundRequests` document - the wallet and that queue are removed
+// (docs/PLAN-2026-08-backlog.md #3). What survives is the platform
+// notification that says the money is owed, which is what these tests check.
+async function refundNoticesFor(poolId) {
+  const snapshot = await db.collection("platformNotifications")
       .where("barrelPoolId", "==", poolId)
       .get();
-  return snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+  return snapshot.docs
+      .map((doc) => ({id: doc.id, ...doc.data()}))
+      .filter((row) => row.type === "deposit_refund_due");
+}
+
+async function walletDocsFor(uid) {
+  const wallet = await db.collection("wallets").doc(uid).get();
+  const transactions = await db.collection("wallets").doc(uid)
+      .collection("transactions").get();
+  return {exists: wallet.exists, transactions: transactions.size};
 }
 
 describe("shared barrel callable lifecycle", () => {
@@ -691,7 +716,7 @@ describe("shared barrel callable lifecycle", () => {
     const [reopenedPool, rejectedJoiner, refunds] = await Promise.all([
       poolData(rejectPool.poolId),
       participantData(rejectPool.poolId, JOINER_UID),
-      refundRequestsFor(rejectPool.poolId),
+      refundNoticesFor(rejectPool.poolId),
     ]);
     assert.equal(reopenedPool.status, "open");
     assert.equal(reopenedPool.openShares, 2);
@@ -975,7 +1000,7 @@ describe("shared barrel callable lifecycle", () => {
     const [pool, joiner, refunds] = await Promise.all([
       poolData(created.poolId),
       participantData(created.poolId, JOINER_UID),
-      refundRequestsFor(created.poolId),
+      refundNoticesFor(created.poolId),
     ]);
     assert.equal(pool.status, "partially_filled");
     assert.equal(pool.openShares, 1);
@@ -991,6 +1016,13 @@ describe("shared barrel callable lifecycle", () => {
     assert.equal(refunds.length, 1);
     assert.equal(refunds[0].participantUid, JOINER_UID);
     assert.equal(refunds[0].amountCents, 3000);
+    assert.equal(Object.hasOwn(joiner, "walletRefundRequestId"), false);
+    // Nothing is parked in a platform-held balance on the way out.
+    const wallet = await walletDocsFor(JOINER_UID);
+    assert.equal(wallet.exists, false);
+    assert.equal(wallet.transactions, 0);
+    const refundRequests = await db.collection("walletRefundRequests").get();
+    assert.equal(refundRequests.size, 0);
   });
 
   it("forfeits an accepted joiner deposit after the grace window", async () => {
@@ -1015,7 +1047,7 @@ describe("shared barrel callable lifecycle", () => {
     const [pool, joiner, refunds] = await Promise.all([
       poolData(created.poolId),
       participantData(created.poolId, JOINER_UID),
-      refundRequestsFor(created.poolId),
+      refundNoticesFor(created.poolId),
     ]);
     assert.equal(pool.status, "partially_filled");
     assert.equal(pool.openShares, 1);
@@ -1040,7 +1072,7 @@ describe("shared barrel callable lifecycle", () => {
       poolData(created.poolId),
       participantData(created.poolId, OWNER_UID),
       participantData(created.poolId, JOINER_UID),
-      refundRequestsFor(created.poolId),
+      refundNoticesFor(created.poolId),
     ]);
     assert.equal(pool.status, "cancelled");
     assert.equal(pool.forfeitedDepositAmountCents, 3000);
@@ -1071,7 +1103,7 @@ describe("shared barrel callable lifecycle", () => {
       poolData(created.poolId),
       participantData(created.poolId, OWNER_UID),
       participantData(created.poolId, JOINER_UID),
-      refundRequestsFor(created.poolId),
+      refundNoticesFor(created.poolId),
     ]);
     assert.equal(pool.status, "cancelled");
     assert.equal(pool.forfeitedDepositAmountCents, 3000);
@@ -1104,7 +1136,7 @@ describe("shared barrel callable lifecycle", () => {
       poolData(created.poolId),
       participantData(created.poolId, OWNER_UID),
       participantData(created.poolId, JOINER_UID),
-      refundRequestsFor(created.poolId),
+      refundNoticesFor(created.poolId),
     ]);
     assert.equal(pool.status, "cancelled");
     assert.equal(Number(pool.forfeitedDepositAmountCents || 0), 0);
@@ -1131,7 +1163,7 @@ describe("shared barrel callable lifecycle", () => {
       poolData(created.poolId),
       participantData(created.poolId, OWNER_UID),
       participantData(created.poolId, JOINER_UID),
-      refundRequestsFor(created.poolId),
+      refundNoticesFor(created.poolId),
     ]);
     assert.equal(pool.status, "expired");
     assert.equal(owner.joinStatus, "cancelled");

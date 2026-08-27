@@ -1,5 +1,7 @@
 const crypto = require("node:crypto");
 
+const {checkoutSessionSecured} = require("./payment_hold");
+
 const CUSTOMER_CHECKOUT_ACTIONS = Object.freeze({
   parking: Object.freeze({
     createFunction: "createParkingReservation",
@@ -66,6 +68,12 @@ const CUSTOMER_CHECKOUT_ACTIONS = Object.freeze({
     recordIdKey: "purchaseId",
     productName: "Laawol vehicle purchase",
     collection: "carPurchases",
+  }),
+  transportJob: Object.freeze({
+    createFunction: "createTransportJobPaymentIntent",
+    recordIdKey: "requestId",
+    productName: "Laawol car transport",
+    collection: "transportRequests",
   }),
   holdExtension: Object.freeze({
     createFunction: "createPaidHoldExtensionPaymentIntent",
@@ -187,12 +195,11 @@ function customerCheckoutReturnVerification({
     throw error;
   }
 
-  const paymentIntentId = String(session.payment_intent || "").trim();
-  const paid =
-    String(session.status || "").trim() === "complete" &&
-    String(session.payment_status || "").trim() === "paid" &&
-    paymentIntentId.startsWith("pi_");
-  if (!paid) {
+  // "Secured", not "paid": a manual-capture session completes with
+  // payment_status "unpaid" while the money sits reserved on the card. Taking
+  // Stripe's word at face value here would reject every held payment - see
+  // payment_hold.js for the full model.
+  if (!checkoutSessionSecured(session)) {
     return {state: "pending", event: null};
   }
 

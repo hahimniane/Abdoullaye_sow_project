@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useConsoleDocumentTitle } from "@/lib/document-title";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -8,6 +10,7 @@ import {
   BarChart3,
   Banknote,
   Building2,
+  CalendarClock,
   Car,
   ClipboardList,
   ExternalLink,
@@ -25,6 +28,7 @@ import {
   UserCog,
 } from "lucide-react";
 
+import {AssistantWidget} from "@/components/business/assistant-widget";
 import {GrowthPanel} from "@/components/business/growth-panel";
 import {
   BarrelsPanel,
@@ -58,6 +62,7 @@ import {
   type BusinessTab,
 } from "@/lib/business-sidebar";
 import { summarizeBusinessEarnings } from "@/lib/business-earnings";
+import { buildBusinessVerificationChecklist } from "@/lib/business-verification";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import {
@@ -124,8 +129,14 @@ function tabForNotification(
       return "freight";
     case "parking_reservation_status":
       return "parking";
+    case "car_viewing_status":
+      // Viewing requests are worked from the purchases queue, where the
+      // negotiation controls live. Unmapped, this fell through to "today".
+      return "purchases";
     case "transport_opportunity":
     case "transport_request_status":
+    case "transport_quote_won":
+    case "transport_quote_lost":
       return "transport";
     default:
       return "today";
@@ -201,6 +212,7 @@ export function BusinessConsole({
   const businessId = text(profile.businessId, "");
   const previewMode = Boolean(previewBusiness);
   const [activeTab, setActiveTab] = useState<BusinessTab>("today");
+  useConsoleDocumentTitle("business");
   // Set when a notification is opened, so the destination panel can scroll to
   // and highlight the exact record instead of dropping the business into a
   // list of everything and making them hunt for it.
@@ -213,11 +225,19 @@ export function BusinessConsole({
     previewBusiness,
   );
   const [businessError, setBusinessError] = useState("");
+  // Only work that is actually the business's to do. A document sitting in
+  // "submitted" is waiting on our review, not on them, and telling them to go
+  // upload it again would be its own kind of wrong.
+  const documentsOutstanding = useMemo(() => {
+    if (!business) return false;
+    const {summary} = buildBusinessVerificationChecklist(business);
+    return summary.missing > 0 || summary.needsChanges > 0;
+  }, [business]);
   const enabled = Boolean(businessId && !previewMode);
 
   const handleSignOut = useCallback(async () => {
     if (
-      confirmImportantAction(
+      await confirmImportantAction(
         "Sign out? You will need to sign in again to continue.",
         "Se déconnecter ? Vous devrez vous reconnecter pour continuer.",
       )
@@ -385,7 +405,9 @@ export function BusinessConsole({
   ].slice(0, 8);
 
   return (
-    <div className="app-shell">
+    // has-floating-assistant reserves scroll room at the end of the page so
+    // the bubble can never permanently cover a control (see globals.css).
+    <div className="app-shell has-floating-assistant">
       <header className="topbar">
         <div className="topbar-title">
           <button
@@ -512,7 +534,11 @@ export function BusinessConsole({
           )}
           {!isApproved && businessId && (
             <div className="info-band">
-              {businessStatusNotice(status)}
+              {businessStatusNotice(
+                status,
+                payoutStatus.state === "ready",
+                documentsOutstanding,
+              )}
             </div>
           )}
 
@@ -552,6 +578,13 @@ export function BusinessConsole({
           )}
           {activeTab === "purchases" && (
             <PurchasesPanel businessId={businessId} previewMode={previewMode} />
+          )}
+          {activeTab === "viewings" && (
+            <PurchasesPanel
+              businessId={businessId}
+              previewMode={previewMode}
+              scope="viewings"
+            />
           )}
           {activeTab === "barrels" && (
             <BarrelsPanel
@@ -653,6 +686,10 @@ export function BusinessConsole({
           )}
         </section>
       </main>
+
+      {/* Mounted once for the whole console so the assistant floats over every
+          tab and keeps its conversation while the business navigates. */}
+      <AssistantWidget businessId={businessId} previewMode={previewMode} />
     </div>
   );
 }
@@ -978,6 +1015,8 @@ function PayoutsPanel({
   >("");
   const [error, setError] = useState("");
   const [autoRefreshKey, setAutoRefreshKey] = useState("");
+  const [autoCheckFailed, setAutoCheckFailed] = useState(false);
+  const lastAutoCheck = useRef(0);
   const [feeSettings, setFeeSettings] = useState<BusinessFeeSettings | null>(
     null,
   );
@@ -1046,8 +1085,15 @@ function PayoutsPanel({
           functions,
           "refreshBusinessStripeAccountStatus",
         )({ businessId });
+        setAutoCheckFailed(false);
     } catch (err) {
-      if (!silent) {
+      if (silent) {
+        // A silently swallowed failure here is indistinguishable from
+        // "Stripe still says no": the business finishes onboarding and this
+        // panel goes on telling them to finish onboarding, forever, with no
+        // hint that the check itself never ran.
+        setAutoCheckFailed(true);
+      } else {
           setError(
             err instanceof Error
               ? err.message
@@ -1073,8 +1119,31 @@ function PayoutsPanel({
     const key = `${businessId}:${payoutStatus.stripeAccountId}`;
     if (autoRefreshKey === key) return;
     setAutoRefreshKey(key);
+    lastAutoCheck.current = Date.now();
     void refresh({silent: true});
   }, [autoRefreshKey, businessId, payoutStatus.state, payoutStatus.stripeAccountId, previewMode, refresh]);
+
+  // Stripe onboarding is finished on Stripe's own site, so the answer almost
+  // always arrives while this tab is in the background. The once-per-account
+  // check above has already run by then and will not run again, which is why
+  // a business that has genuinely finished still gets told to finish. Check
+  // again whenever they come back to the tab.
+  useEffect(() => {
+    if (!businessId || previewMode || payoutStatus.state === "ready") return;
+    function recheck() {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastAutoCheck.current < 10_000) return;
+      lastAutoCheck.current = now;
+      void refresh({silent: true});
+    }
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", recheck);
+    return () => {
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", recheck);
+    };
+  }, [businessId, payoutStatus.state, previewMode, refresh]);
 
   const actionLabel = busy
     ? busyAction === "refresh" || busyAction === "auto"
@@ -1124,6 +1193,13 @@ function PayoutsPanel({
           </button>
         )}
       </div>
+      {autoCheckFailed && payoutStatus.state !== "ready" && (
+        <div className="info-band">
+          We could not check your Stripe status automatically, so the status
+          above may be out of date. If you have finished with Stripe, press
+          {" "}<strong>{payoutStatus.refreshLabel}</strong>.
+        </div>
+      )}
       {payoutStatus.helperText && (
         <div className="info-band">{payoutStatus.helperText}</div>
       )}
@@ -1477,6 +1553,7 @@ function tabIcon(tab: BusinessTab) {
     profile: <Building2 {...props} />,
     listings: <Car {...props} />,
     purchases: <ClipboardList {...props} />,
+    viewings: <CalendarClock {...props} />,
     barrels: <Package {...props} />,
     freight: <Package {...props} />,
     transport: <Truck {...props} />,
@@ -1560,6 +1637,27 @@ function statusLabel(value: unknown) {
       .join(" ");
 }
 
-function businessStatusNotice(status: unknown) {
-  return `This business is currently ${statusLabel(status).toLowerCase()}. Complete Stripe setup and any requested profile details while it waits for platform approval.`;
+/**
+ * What the business still has to do, in one sentence.
+ *
+ * Stripe is only half of getting approved: the platform also requires a
+ * document per service (shipping authority, dealer license, transport
+ * insurance...). Saying "nothing more is needed" the moment Stripe goes green
+ * is as wrong as the old copy that demanded Stripe setup after it was done -
+ * a business would sit and wait for an approval that cannot come until they
+ * upload something nobody told them about.
+ */
+function businessStatusNotice(
+  status: unknown,
+  stripeReady = false,
+  documentsOutstanding = false,
+) {
+  const state = statusLabel(status).toLowerCase();
+  if (!stripeReady) {
+    return `This business is currently ${state}. Complete Stripe setup and any requested profile details while it waits for platform approval.`;
+  }
+  if (documentsOutstanding) {
+    return `This business is currently ${state}. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.`;
+  }
+  return `This business is currently ${state}. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.`;
 }

@@ -251,13 +251,25 @@ describe("marketplace people backend contract", () => {
       "parkedCars",
       "carPurchases",
       "barrelPoolBalanceRequests",
-      "walletRefundRequests",
-      "wallets",
+      "supportCases",
     ]) {
       assert.match(source, new RegExp(dependency));
     }
     assert.match(source, /failed-precondition/);
     assert.match(source, /deletedUserTombstones/);
+  });
+
+  it("no longer blocks deletion on the retired wallet", () => {
+    // The wallet is removed (docs/PLAN-2026-08-backlog.md #3) and the stored
+    // balances are test data, so a leftover balance or refund request must
+    // not stand between an admin and a deletion they have decided on.
+    const source = sourceBetween(
+        "const USER_DELETION_DEPENDENCIES",
+        "exports.deleteUser",
+    );
+    assert.doesNotMatch(source, /walletRefundRequests/);
+    assert.doesNotMatch(source, /wallet-balance-must-be-resolved/);
+    assert.doesNotMatch(source, /collection\("wallets"\)/);
   });
 
   it("makes missing-profile repair create-only", () => {

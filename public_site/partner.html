@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/styles.css?v=22" />
+  <link rel="stylesheet" href="assets/styles.css?v=32" />
   <link rel="icon" type="image/png" href="assets/logo.png" />
   <style>
     /* Partner application — scoped styles layered on top of the shared form CSS */
@@ -198,7 +198,7 @@
     <div class="container footer-grid">
       <div class="footer-brand">
         <a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Laawol" width="32" height="32" style="border-radius:8px;display:block" /></span><span class="brand-text light">Laawol<span>Digital</span></span></a>
-        <p>Une plateforme de confiance pour la diaspora africaine : des entreprises inscrites proposent l’expédition, les voitures, le fret, la restauration et des services professionnels avec un accompagnement plus clair.</p>
+        <p>Une plateforme de confiance pour la diaspora africaine : des entreprises inscrites proposent l’expédition de barils et de fret, la vente, le transport et le stationnement de voitures — avec des prix clairs et un vrai suivi.</p>
       </div>
       <div class="footer-col"><h4>Explorer</h4>
         <a href="services.html">Services</a><a href="tracking.html">Suivi de commande</a><a href="app.html">Application</a><a href="about.html">À propos</a>
@@ -213,14 +213,17 @@
     <div class="container footer-bottom">
       <span>© <span id="year"></span> Laawol Digital. Tous droits réservés.</span>
       <span class="footer-legal"><a href="privacy.html">Confidentialité</a><span aria-hidden="true"> · </span><a href="terms.html">Conditions d’utilisation</a></span>
-      <span class="footer-tag">Laawol — la route vers le pays.</span>
+      <span class="footer-tag">« Laawol » signifie « le chemin » en pular. Laawol — la route vers le pays.</span>
     </div>
   </footer>
 
   <script src="assets/script.js?v=13"></script>
-  <script src="assets/i18n.js?v=9"></script>
+  <script src="assets/mailto.js?v=2" defer></script>
+  <script src="assets/motion.js?v=10" defer></script>
+  <script src="assets/chat.js?v=3" defer></script>
+  <script src="assets/i18n.js?v=11"></script>
   <script src="assets/country-catalog.js?v=1"></script>
-  <script src="assets/content.js?v=9"></script>
+  <script src="assets/content.js?v=10"></script>
 
   <script type="module">
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -269,6 +272,7 @@
       // Shared barrels: paused platform-wide (Settings -> Feature availability
       // -> Shared barrel pools). Not deleted, just hidden until re-enabled.
       // { key: "sharedBarrels", label: "Shared barrels", desc: "Manage partial barrels, drop-offs, and customer consolidation." },
+      { key: "freight",        label: "Freight (parcels)", desc: "Ship parcels and boxes by weight, by air or sea." },
       { key: "carSales",       label: "Car sales", desc: "Publish cars so customers can browse and buy them." },
       { key: "carParking",     label: "Car parking", desc: "Manage parked cars and parking receipts." },
       { key: "carTransport",   label: "Car transport", desc: "Track vehicle transport requests." },
@@ -476,7 +480,12 @@
       if (!$("marketplaceAccept").checked) return showError("Veuillez confirmer que vous comprenez votre rôle de prestataire indépendant.");
 
       submitBtn.disabled = true;
-      submitBtn.textContent = "Envoi…";
+      // localize() maps through the i18n dictionary for the CURRENT language -
+      // a hardcoded string here shows French to English readers (the page
+      // walker only translates static markup, not text set after a click).
+      submitBtn.textContent = localize("Envoi…");
+      submitBtn.classList.add("is-loading");
+      submitBtn.setAttribute("aria-busy", "true");
 
       try {
         // 1. Always create (or sign into) the applicant's OWN account, and make
@@ -567,7 +576,9 @@
         const friendly = (err && err.message) ? err.message.replace(/^functions\/[a-z-]+:?\s*/i, "") : "Une erreur est survenue. Veuillez réessayer.";
         showError(friendly);
         submitBtn.disabled = false;
-        submitBtn.textContent = "Envoyer la demande";
+        submitBtn.textContent = localize("Envoyer la demande");
+        submitBtn.classList.remove("is-loading");
+        submitBtn.removeAttribute("aria-busy");
       }
     });
   </script>

@@ -11,3 +11,15 @@ my_flutter_app/.firebase-preflight-*.json
 # Release binaries are generated artifacts, not source. Store signed release
 # outputs in the CI/release system with provenance instead of committing them.
 release_artifacts/*
+
+# Temp manifests written per-process by deploy/backend-deploy.mjs while it
+# batches function deploys. Run artifacts, not source.
+my_flutter_app/.firebase-batch-*.json
+
+# Local-only Stripe build config. Never committed - holds the publishable
+# key passed to release builds via --dart-define.
+my_flutter_app/.env.stripe.local
+
+# Temp deploy config written when deploying a subset of functions without
+# re-running the predeploy lint+test hook per batch.
+my_flutter_app/.firebase-nopredeploy.json

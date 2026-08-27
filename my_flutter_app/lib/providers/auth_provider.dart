@@ -164,6 +164,9 @@ class AuthProvider extends ChangeNotifier {
       _clearProfileState();
       _userEmail = user.email;
       await _checkUserRole();
+      // Covers the restored-session cold start, which never runs authenticate()
+      // and so never re-registered a rotated FCM token. Does not prompt.
+      unawaited(_refreshPushRegistrationIfPossible());
     } else {
       _clearProfileState();
       _userEmail = null;
@@ -388,6 +391,14 @@ class AuthProvider extends ChangeNotifier {
       await _pushNotifications.requestPermissionAndRegister();
     } catch (error) {
       debugPrint('Push registration skipped: $error');
+    }
+  }
+
+  Future<void> _refreshPushRegistrationIfPossible() async {
+    try {
+      await _pushNotifications.refreshRegistrationIfPermitted();
+    } catch (error) {
+      debugPrint('Push token refresh skipped: $error');
     }
   }
 
@@ -757,6 +768,7 @@ class AuthProvider extends ChangeNotifier {
     double? freightPickupOriginLat,
     double? freightPickupOriginLng,
     Map<String, double>? freightPickupBoroughPrices,
+    Map<String, dynamic>? pickupPlan,
   }) async {
     if (_user == null) {
       throw 'Please sign in first.';
@@ -809,6 +821,7 @@ class AuthProvider extends ChangeNotifier {
       'freightPickupOriginLat': ?freightPickupOriginLat,
       'freightPickupOriginLng': ?freightPickupOriginLng,
       'freightPickupBoroughPrices': ?freightPickupBoroughPrices,
+      'pickupPlan': ?pickupPlan,
     });
     await refreshUserProfile();
   }

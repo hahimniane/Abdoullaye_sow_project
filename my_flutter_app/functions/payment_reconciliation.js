@@ -28,6 +28,27 @@ const PAYMENT_ROUTES = Object.freeze({
     cancelledDomainStatus: "cancelled",
     operationKeys: ["reservationId"],
   }),
+  // A business-entered walk-up car whose customer was sent a Stripe payment
+  // link (docs/PLAN-2026-08-backlog.md item 5). No customer account exists
+  // for it - deliberately - so the business that entered the car is the
+  // identity every Stripe event for it is checked against.
+  business_parking_entry: Object.freeze({
+    kind: "business_parking_entry",
+    identityKeys: ["reservationId"],
+    collection: "parkedCars",
+    documentIdKey: "reservationId",
+    customerMetadataKey: "businessId",
+    customerField: "businessId",
+    businessField: "businessId",
+    amountCentsField: "amountDueCents",
+    currencyField: "currency",
+    intentField: "stripePaymentIntentId",
+    paymentStatusField: "paymentStatus",
+    domainStatusField: "status",
+    succeededDomainStatus: "reserved",
+    cancelledDomainStatus: "cancelled",
+    operationKeys: ["reservationId"],
+  }),
   barrel_pool_deposit: Object.freeze({
     kind: "shared_barrel_deposit",
     identityKeys: ["poolId", "participantUid"],
@@ -131,6 +152,23 @@ const PAYMENT_ROUTES = Object.freeze({
     succeededDomainStatus: "pending",
     cancelledDomainStatus: "cancelled",
     operationKeys: ["orderId"],
+  }),
+  transport_job: Object.freeze({
+    kind: "transport_job",
+    identityKeys: ["requestId"],
+    collection: "transportRequests",
+    documentIdKey: "requestId",
+    customerMetadataKey: "customerUid",
+    customerField: "customerUid",
+    businessField: "businessId",
+    amountCentsField: "totalCents",
+    currencyField: "currency",
+    intentField: "stripePaymentIntentId",
+    paymentStatusField: "paymentStatus",
+    domainStatusField: "status",
+    succeededDomainStatus: "pending",
+    cancelledDomainStatus: "cancelled",
+    operationKeys: ["requestId"],
   }),
   freight_shipment: Object.freeze({
     kind: "freight",
@@ -429,7 +467,15 @@ function reconciliationMismatches({target, intent, document}) {
         actual: ids,
       });
     }
-  } else {
+  } else if (clean(data[config.intentField])) {
+    // A stored id must match exactly. But an EMPTY stored id means the
+    // intent was never bound to the document - hosted Checkout mints the
+    // PaymentIntent only when the customer opens the page, after the record
+    // was written - and that is "not yet bound", not "different payment".
+    // Treating it as a mismatch made every link-paid parking entry
+    // unreconcilable by webhook and sweep alike. Identity is still enforced:
+    // the intent's own signed metadata routed to exactly this document, and
+    // amount and currency must match above.
     pushMismatch(
         mismatches,
         config.intentField,
@@ -471,6 +517,11 @@ function paymentStateFromStripe({eventType, intent}) {
   }
   const eventStates = {
     "payment_intent.succeeded": PAYMENT_STATES.SUCCEEDED,
+    // A manual-capture intent never emits payment_intent.succeeded at
+    // confirmation - this is its "customer has paid" event. The money is
+    // reserved on the card and capture cannot fail the way a fresh charge
+    // can, so it counts as success (see payment_hold.js).
+    "payment_intent.amount_capturable_updated": PAYMENT_STATES.SUCCEEDED,
     "payment_intent.processing": PAYMENT_STATES.PROCESSING,
     "payment_intent.payment_failed": PAYMENT_STATES.FAILED,
     "payment_intent.canceled": PAYMENT_STATES.CANCELLED,
@@ -483,7 +534,11 @@ function paymentStateFromStripe({eventType, intent}) {
     requires_payment_method: PAYMENT_STATES.FAILED,
     requires_action: PAYMENT_STATES.PROCESSING,
     requires_confirmation: PAYMENT_STATES.PROCESSING,
-    requires_capture: PAYMENT_STATES.PROCESSING,
+    // Held, not merely in flight: the bank has reserved the funds. Mapping
+    // this to PROCESSING (as before 2026-08-10) left every held order
+    // permanently pending, because a hold never becomes "succeeded" on its
+    // own - capture is OUR move, made later by the hold scheduler.
+    requires_capture: PAYMENT_STATES.SUCCEEDED,
   };
   return statusStates[clean(intent?.status)] || PAYMENT_STATES.PENDING;
 }
@@ -568,7 +623,7 @@ function buildReconciliationDecision({target, intent, document, event}) {
   });
   const decision = advanceReconciliationState({
     // A client completion call can persist paymentStatus before all domain
-    // side effects (inventory, wallet, payout, pool summaries) are complete.
+    // side effects (inventory, payout, pool summaries) are complete.
     // Only the server reconciliation marker proves the authoritative Stripe
     // event finished. Without it, replay the idempotent completion handler.
     currentState: data.stripeReconciliationState || PAYMENT_STATES.PENDING,

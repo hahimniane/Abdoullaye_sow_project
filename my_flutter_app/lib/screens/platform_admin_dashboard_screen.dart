@@ -792,7 +792,9 @@ Future<void> showAddPlatformManagerDialog(BuildContext context) async {
               messenger.showSnackBar(
                 SnackBar(
                   content: Text('$error'),
-                  backgroundColor: AppColors.brandRed,
+                  // errorRed, not brandRed: brandRed aliases the teal brand
+                  // colour, which made failures look like successes.
+                  backgroundColor: AppColors.errorRed,
                   behavior: SnackBarBehavior.floating,
                 ),
               );

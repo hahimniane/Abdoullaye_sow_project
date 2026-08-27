@@ -1278,6 +1278,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get myPurchases => 'My Purchases';
 
   @override
+  String get hubViewingsSubtitle => 'Appointments to see a car';
+
+  @override
+  String get myCarViewings => 'Car viewings';
+
+  @override
+  String get noCarViewingsYet =>
+      'No car viewings yet. Ask to see a car from its listing.';
+
+  @override
   String get noPurchasesYet => 'No car purchases yet.';
 
   @override
@@ -2496,7 +2506,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String destinationChangeCredited(Object amount) {
-    return 'Shipment updated. $amount credited to your wallet.';
+    return 'Shipment updated. $amount is on its way back to your card.';
   }
 
   @override
@@ -3548,6 +3558,64 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get cancelOrderTitle => 'Cancel this order?';
+
+  @override
+  String get cancelOrderHeldBody =>
+      'Your card was never charged — the hold is released and you pay nothing.';
+
+  @override
+  String get cancelOrderCapturedBody =>
+      'Your payment is refunded minus the card processing fee, as stated at checkout.';
+
+  @override
+  String get cancelWholeOrderHeldBody =>
+      'This shipment was paid together with the rest of its order, so the whole order is cancelled. Your card was never charged — you pay nothing.';
+
+  @override
+  String get cancelWholeOrderCapturedBody =>
+      'This shipment was paid together with the rest of its order, so the whole order is cancelled. Your payment is refunded minus the card processing fee.';
+
+  @override
+  String get keepOrder => 'Keep order';
+
+  @override
+  String get cancelOrderConfirm => 'Cancel order';
+
+  @override
+  String get cancelOrderFreeAction => 'Cancel order (free)';
+
+  @override
+  String get cancelOrderRefundAction => 'Cancel order (refund minus card fee)';
+
+  @override
+  String get orderCancelledFree =>
+      'Order cancelled. Your card was never charged.';
+
+  @override
+  String get orderRefunded =>
+      'Order cancelled. Your refund is on its way, minus the card fee.';
+
+  @override
+  String get genericError => 'Something went wrong. Please try again.';
+
+  @override
+  String get paymentHoldNotice =>
+      'No charge today — the amount is reserved on your card and charged when the reservation window ends (5–7 days for most cards). Cancelling before then is free; after that, refunds lose the card processing fee.';
+
+  @override
+  String get freightSortBestRated => 'Best rated';
+
+  @override
+  String get freightSortCheapest => 'Cheapest';
+
+  @override
+  String get freightSortBestCover => 'Best cover';
+
+  @override
+  String get freightSortFastest => 'Fastest';
+
+  @override
   String get searchBusinessOrCountry => 'Search a business or country';
 
   @override
@@ -3615,6 +3683,15 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get freightNextDropOffAtBusiness =>
       'Drop off your parcel at the business location. The business will confirm the weight after drop-off.';
+
+  @override
+  String freightNextDropOffAtProviderSetPrice(Object businessName) {
+    return 'Drop off your parcel at $businessName. The price for this item is set, so there is nothing left to pay.';
+  }
+
+  @override
+  String get freightNextDropOffAtBusinessSetPrice =>
+      'Drop off your parcel at the business location. The price for this item is set, so there is nothing left to pay.';
 
   @override
   String get freightNextWeightReview =>
@@ -3702,8 +3779,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookAndPay => 'Book & pay';
 
   @override
-  String get freightDropOffNote =>
-      'Drop your parcel at the business location. Pickup coming soon.';
+  String get freightDropOffNote => 'Drop your parcel at the business location.';
 
   @override
   String freightDropOffAddress(Object address) {
@@ -3830,8 +3906,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String confirmTransportQuoteMessage(Object businessName, Object price) {
-    return 'Choose $businessName for $price? This closes the request to other businesses.';
+    return 'Choose $businessName for $price? The amount is held on your card, not charged, and cancelling while it is held is free. This closes the request to other businesses.';
   }
+
+  @override
+  String get transportPaymentTitle => 'Pay to confirm your carrier';
+
+  @override
+  String transportPaymentBody(Object price) {
+    return '$price is held on your card — not charged — and the carrier can only start once it is secured. Cancelling while held is free.';
+  }
+
+  @override
+  String get transportPayNow => 'Pay now';
+
+  @override
+  String get transportPaymentFailed =>
+      'The payment could not be completed. Nothing was charged — try again.';
 
   @override
   String get keepComparing => 'Keep comparing';
@@ -4146,10 +4237,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get goodEvening => 'Good evening';
 
   @override
-  String get signInToYourWallet => 'Sign in to your wallet';
+  String get signInToYourAccount => 'Sign in to your account';
 
   @override
-  String get walletSignInSubtitle => 'Track orders, balances and refunds.';
+  String get accountSignInSubtitle => 'Track your orders and shipments.';
 
   @override
   String shippingBusinessUnavailable(Object businessName, Object countryName) {
@@ -4210,7 +4301,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get businessOperationsWebNote =>
-      'Manage freight, barrels, transport, parking, destinations, staff, and payouts in the secure business console. This avoids entering a customer booking or payment flow by mistake.';
+      'Opens the secure business console in your browser, where staff, payouts and destinations live.';
+
+  @override
+  String get businessServiceOverviewUnpaid => 'Unpaid';
+
+  @override
+  String get businessServiceOverviewOpen => 'Open';
+
+  @override
+  String get businessServiceOverviewShowAll => 'Show all activity';
+
+  @override
+  String get businessServiceOverviewEmpty =>
+      'No services are switched on for your account yet.';
 
   @override
   String get businessCarsMobileNote =>
@@ -4225,6 +4329,53 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get businessConsoleOpenFailed =>
       'Could not open the business console. Visit business.laawoldigital.com in your browser.';
+
+  @override
+  String get businessAssistantTitle => 'Assistant';
+
+  @override
+  String get businessAssistantOpen => 'Ask the assistant';
+
+  @override
+  String get businessAssistantEmptyTitle => 'How can I help today?';
+
+  @override
+  String get businessAssistantEmptyHint =>
+      'I can answer questions about your operations and record work for you. Try asking me to:';
+
+  @override
+  String get businessAssistantCapabilityParkedCars =>
+      'Check which cars are parked right now';
+
+  @override
+  String get businessAssistantCapabilityWalkUp =>
+      'Record a walk-up parking entry';
+
+  @override
+  String get businessAssistantCapabilityTracking =>
+      'Add a shipment tracking update';
+
+  @override
+  String get businessAssistantInputHint => 'Message the assistant...';
+
+  @override
+  String get businessAssistantSend => 'Send';
+
+  @override
+  String get businessAssistantConfirm => 'Confirm';
+
+  @override
+  String get businessAssistantCancel => 'Cancel';
+
+  @override
+  String get businessAssistantConfirmed => 'Confirmed';
+
+  @override
+  String get businessAssistantDeclined => 'Declined';
+
+  @override
+  String get businessAssistantError =>
+      'Something went wrong. Please try again.';
 
   @override
   String get businessChangesRequestedBanner =>
@@ -5387,6 +5538,130 @@ class AppLocalizationsEn extends AppLocalizations {
   String get marketplaceDestinationChangeSummary => 'Paid destination change';
 
   @override
+  String get pickupBusinessUnavailable =>
+      'This business does not offer home pickup yet. Choose office drop-off or another provider.';
+
+  @override
+  String get pickupAddressQuoteFailed =>
+      'Pickup is not available for this address. Check the address or choose office drop-off.';
+
+  @override
+  String get pickupPlanSectionTitle => 'Home pickup';
+
+  @override
+  String get pickupPlanSectionSubtitle =>
+      'Collecting items from the customer\'s address instead of them bringing it to you. Each service either follows your shared plan or sets its own.';
+
+  @override
+  String get pickupPlanOfferToggle => 'Use one shared plan';
+
+  @override
+  String get pickupPlanDisabledHint =>
+      'Services set to “follow the shared plan” below are priced by these settings.';
+
+  @override
+  String get pickupPlanModeLabel => 'Pricing mode';
+
+  @override
+  String get pickupPlanModeFlat => 'Flat fee';
+
+  @override
+  String get pickupPlanModeDistance => 'By distance';
+
+  @override
+  String get pickupPlanModeBorough => 'By borough (NYC)';
+
+  @override
+  String get pickupPlanMaxMiles => 'Max pickup distance (miles)';
+
+  @override
+  String get pickupPlanFlatHint =>
+      'One price for any pickup within your maximum distance. Addresses beyond it are refused, never surcharged.';
+
+  @override
+  String get pickupPlanFlatFee => 'Flat pickup fee (USD)';
+
+  @override
+  String get pickupPlanDistanceHint =>
+      'Fee = base fee + per-mile rate × driving distance, never below your minimum. Addresses beyond your maximum distance are refused.';
+
+  @override
+  String get pickupPlanOriginAddress => 'Pickup origin address';
+
+  @override
+  String get pickupPlanOriginHelper => 'Where your pickups start from';
+
+  @override
+  String get pickupPlanBaseFee => 'Base fee (USD)';
+
+  @override
+  String get pickupPlanPerMile => 'Per mile (USD)';
+
+  @override
+  String get pickupPlanMinFee => 'Minimum fee (USD)';
+
+  @override
+  String get pickupPlanBoroughHint =>
+      'One flat fee per borough you serve. Leave a borough blank to not serve it — the customer\'s address decides which fee applies.';
+
+  @override
+  String get pickupPlanPerServiceHint => 'Each service, one at a time';
+
+  @override
+  String get pickupPlanChoiceInherit => 'Follow the shared plan';
+
+  @override
+  String get pickupPlanChoiceCustom => 'Set its own pickup fees';
+
+  @override
+  String get pickupPlanChoiceOff => 'No pickup for this service';
+
+  @override
+  String get pickupPlanSharedSectionLabel => 'the shared pickup plan';
+
+  @override
+  String get pickupPlanServiceBarrels => 'Barrel shipping';
+
+  @override
+  String get pickupPlanServiceFreight => 'Freight';
+
+  @override
+  String get pickupPlanServiceParking => 'Car parking';
+
+  @override
+  String get pickupPlanServiceCarTransport => 'Car transport';
+
+  @override
+  String pickupPlanErrorCapRequired(Object section) {
+    return 'Enter the maximum pickup distance in miles for $section.';
+  }
+
+  @override
+  String pickupPlanErrorFlatFee(Object section) {
+    return 'Enter the flat pickup fee for $section.';
+  }
+
+  @override
+  String pickupPlanErrorDistanceFees(Object section) {
+    return 'Enter the base, per-mile, and minimum fees for $section.';
+  }
+
+  @override
+  String pickupPlanErrorOrigin(Object section) {
+    return 'Enter the pickup origin address for $section.';
+  }
+
+  @override
+  String pickupPlanErrorBoroughPrice(Object section) {
+    return 'Set a pickup fee for at least one borough for $section.';
+  }
+
+  @override
+  String pickupPlanErrorBoroughRequiresNewYork(Object section) {
+    return 'Pickup by borough is only available to New York businesses ($section).';
+  }
+
+  @override
   String get freightPickupSectionTitle => 'Freight pickup';
 
   @override
@@ -5805,4 +6080,1136 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get invitationVerificationEmailFailed =>
       'The verification email could not be sent. Please try again.';
+
+  @override
+  String get editTransportRequest => 'Edit request';
+
+  @override
+  String get editTransportRequestTitle => 'Edit your request';
+
+  @override
+  String get editTransportRequestSubtitle =>
+      'You can change your request until you choose a quote.';
+
+  @override
+  String get transportEditContactSection => 'Contact and pickup';
+
+  @override
+  String get transportEditVehicleSection => 'Vehicle and destination';
+
+  @override
+  String get transportEditQuoteWarningTitle => 'This will reset your quotes';
+
+  @override
+  String get transportEditQuoteWarningMessage =>
+      'Businesses priced their quotes on your current details. Changing the vehicle, pickup area, transport method or destination clears the quotes you already have, and businesses will be asked to quote again.';
+
+  @override
+  String get transportEditKeepEditing => 'Keep editing';
+
+  @override
+  String get transportEditSaveAnyway => 'Save and reset quotes';
+
+  @override
+  String get transportEditSaved => 'Request updated';
+
+  @override
+  String get transportEditSavedRequote =>
+      'Request updated. Businesses will send new quotes.';
+
+  @override
+  String get transportEditNoChanges => 'Nothing changed';
+
+  @override
+  String get couldNotUpdateTransportRequest =>
+      'Could not update this request. Please try again.';
+
+  @override
+  String get transportEditDestinationMoved =>
+      'Your request now goes to businesses serving the new destination.';
+
+  @override
+  String get notes => 'Notes';
+
+  @override
+  String get vehicleOperable => 'Vehicle is drivable';
+
+  @override
+  String get transportEditNeedsPickup => 'I need pickup from an address';
+
+  @override
+  String get addressApartmentLabel => 'Apartment, suite, or unit (optional)';
+
+  @override
+  String get addressApartmentHint => 'Apt 4B';
+
+  @override
+  String get addressApartmentHelper =>
+      'Apartment numbers are rarely in the suggestion — add yours here.';
+
+  @override
+  String get addressCityLabel => 'City';
+
+  @override
+  String get addressStateLabel => 'State or region';
+
+  @override
+  String get addressPostalCodeLabel => 'ZIP or postal code';
+
+  @override
+  String get addressCountryLabel => 'Country';
+
+  @override
+  String get recordAParkedCar => 'Record a parked car';
+
+  @override
+  String get recordTheCar => 'Record the car';
+
+  @override
+  String get recordingParkedCar => 'Recording...';
+
+  @override
+  String get parkedCarRecorded => 'Parked car recorded';
+
+  @override
+  String get printReceiptOnly => 'Print a receipt only';
+
+  @override
+  String get howDoesThisParkingGetPaid => 'How does this parking get paid?';
+
+  @override
+  String get customerPaysUsDirectly => 'Customer pays us directly (Zelle/cash)';
+
+  @override
+  String get sendTheCustomerAPaymentLink => 'Send the customer a payment link';
+
+  @override
+  String get directPaymentExplainer =>
+      'We record what the customer owes you and take no cut. You mark it received when the money arrives.';
+
+  @override
+  String get paymentLinkExplainer =>
+      'We bill the customer for you and send you the rest.';
+
+  @override
+  String get paymentLinkShareHint =>
+      'Send this link to the customer so they can pay. It stays valid until they use it.';
+
+  @override
+  String get directPaymentResultHint =>
+      'The customer pays your business directly. We record the amount and never bill it. Mark the payment received once the money arrives.';
+
+  @override
+  String get paymentLinkLabel => 'Payment link';
+
+  @override
+  String get copyPaymentLink => 'Copy payment link';
+
+  @override
+  String get sharePaymentLink => 'Share payment link';
+
+  @override
+  String get paymentLinkShareFailed => 'Could not open the share sheet';
+
+  @override
+  String paymentLinkShareMessage(
+    String business,
+    String car,
+    String code,
+    String amount,
+    String link,
+  ) {
+    return '$business parked your $car. Tracking $code. Amount due $amount. Pay here: $link';
+  }
+
+  @override
+  String get paymentLinkCopied => 'Payment link copied';
+
+  @override
+  String get amountDue => 'Amount due';
+
+  @override
+  String get amountRecorded => 'Amount recorded';
+
+  @override
+  String get paymentStatusLabel => 'Payment status';
+
+  @override
+  String get receivedVia => 'Received via';
+
+  @override
+  String get markPaymentReceived => 'Mark payment received';
+
+  @override
+  String get markPaymentReceivedTitle => 'Record this payment?';
+
+  @override
+  String get markPaymentReceivedMessage =>
+      'Record this parking as paid to your business? This cannot be undone here.';
+
+  @override
+  String get paymentRecorded => 'Payment recorded.';
+
+  @override
+  String get parkingAlreadyMarkedPaid =>
+      'This parking was already marked paid.';
+
+  @override
+  String get paymentCouldNotBeRecorded => 'The payment could not be recorded.';
+
+  @override
+  String get carCouldNotBeRecorded => 'The car could not be recorded.';
+
+  @override
+  String get paymentLinkCopyFailed =>
+      'The payment link could not be copied. Select and copy it manually.';
+
+  @override
+  String get awaitingPaymentToTheBusiness => 'Awaiting payment to the business';
+
+  @override
+  String get paidToTheBusiness => 'Paid to the business';
+
+  @override
+  String get paymentLinkSent => 'Payment link sent';
+
+  @override
+  String get paymentLinkPaid => 'Payment link paid';
+
+  @override
+  String get nothingToCollect => 'Nothing to collect';
+
+  @override
+  String get receivedViaZelle => 'Zelle transfer';
+
+  @override
+  String get receivedViaCash => 'Cash payment';
+
+  @override
+  String get receivedViaCashApp => 'Cash App';
+
+  @override
+  String get receivedViaVenmo => 'Venmo';
+
+  @override
+  String get receivedViaCheck => 'Paper check';
+
+  @override
+  String get receivedViaCardInPerson => 'Card in person';
+
+  @override
+  String get receivedViaOther => 'Another method';
+
+  @override
+  String get parkingErrorBusinessRequired =>
+      'Choose a business before recording a car.';
+
+  @override
+  String get parkingErrorCustomerName => 'Enter the customer\'s name.';
+
+  @override
+  String get parkingErrorCustomerPhone => 'Enter the customer\'s phone number.';
+
+  @override
+  String get parkingErrorCustomerEmail => 'Enter a valid email address.';
+
+  @override
+  String get parkingErrorPaymentLinkContact =>
+      'A payment link needs a phone number or an email address.';
+
+  @override
+  String get parkingErrorCarMake => 'Select the car make.';
+
+  @override
+  String get parkingErrorCarModel => 'Select the car model.';
+
+  @override
+  String get parkingErrorCarYear => 'Select the car year.';
+
+  @override
+  String get parkingErrorCarYearInvalid => 'Select a valid car year.';
+
+  @override
+  String get parkingErrorStartDate => 'Choose the day the car arrives.';
+
+  @override
+  String get parkingErrorEndDate => 'Choose the day the car leaves.';
+
+  @override
+  String get parkingErrorEndBeforeStart =>
+      'The end date cannot be before the start date.';
+
+  @override
+  String get notPaid => 'Not paid';
+
+  @override
+  String get parkingPaymentLinkAlreadyUsed =>
+      'This link was already used to pay. Nothing further is owed.';
+
+  @override
+  String get cancelPaymentLink => 'Cancel payment link';
+
+  @override
+  String get cancelPaymentLinkConfirm =>
+      'Cancel this payment link? The customer will no longer be able to pay with it.';
+
+  @override
+  String get paymentLinkCancelled => 'Payment link cancelled.';
+
+  @override
+  String get parkingPaymentLinkCancelled => 'This payment link was cancelled.';
+
+  @override
+  String get paymentLinkCouldNotBeCancelled =>
+      'The payment link could not be cancelled.';
+
+  @override
+  String get parkingPrintReceipt => 'Print receipt';
+
+  @override
+  String get parkingPrintInvoice => 'Print invoice';
+
+  @override
+  String get parkingDocumentCouldNotBeOpened =>
+      'The document could not be opened.';
+
+  @override
+  String get resendPaymentLink => 'Resend payment link';
+
+  @override
+  String get parkingPaymentLinkEmailed =>
+      'Payment link emailed to the customer.';
+
+  @override
+  String get parkingPaymentLinkTexted => 'Payment link texted to the customer.';
+
+  @override
+  String get parkingPaymentLinkEmailedAndTexted =>
+      'Payment link emailed and texted to the customer.';
+
+  @override
+  String get parkingPaymentLinkNotDelivered =>
+      'The link could not be emailed or texted. Copy it and send it to the customer yourself.';
+
+  @override
+  String get parkingPaymentLinkCouldNotBeResent =>
+      'The payment link could not be resent.';
+
+  @override
+  String get parkingPaymentLinkReissued =>
+      'The amount changed, so a new payment link was issued.';
+
+  @override
+  String get parkingPaidCannotBeEdited =>
+      'This parking has been paid for and can no longer be edited.';
+
+  @override
+  String get parkingNothingChanged => 'Nothing was changed.';
+
+  @override
+  String get parkingRecordCouldNotBeUpdated =>
+      'The parking record could not be updated.';
+
+  @override
+  String get parkedBetween => 'Parked between';
+
+  @override
+  String get dateFrom => 'From';
+
+  @override
+  String get dateTo => 'To';
+
+  @override
+  String get anyDate => 'Any date';
+
+  @override
+  String get clearDates => 'Clear dates';
+
+  @override
+  String get vinNumberOptional => 'VIN (optional)';
+
+  @override
+  String get checkPaymentStatus => 'Check payment status';
+
+  @override
+  String get checkingPaymentStatus => 'Checking...';
+
+  @override
+  String get parkingPaymentConfirmedWithStripe =>
+      'Payment confirmed with Stripe and recorded.';
+
+  @override
+  String get parkingPaymentAlreadyRecorded => 'Already recorded as paid.';
+
+  @override
+  String get parkingPaymentNotReceivedYet =>
+      'Stripe has not received this payment yet.';
+
+  @override
+  String get parkingPaymentStatusCouldNotBeChecked =>
+      'The payment status could not be checked.';
+
+  @override
+  String get parkingPaymentLinkAlreadyCancelled =>
+      'This payment link was already cancelled.';
+
+  @override
+  String get parkingEnds => 'Ends';
+
+  @override
+  String get parkingEnded => 'Ended';
+
+  @override
+  String get parkingStatusUpdated => 'Parking status updated.';
+
+  @override
+  String get parkingStatusCouldNotBeUpdated =>
+      'The parking status could not be updated.';
+
+  @override
+  String get searchParkedCars => 'Search tracking, owner, car, VIN…';
+
+  @override
+  String get noParkingRecordsMatchFilter =>
+      'No parking records match this filter.';
+
+  @override
+  String parkedCarRecordedWithCode(Object trackingCode) {
+    return 'Parked car recorded. Tracking number: $trackingCode';
+  }
+
+  @override
+  String get businessServiceOverviewNeedsYou => 'need you';
+
+  @override
+  String get businessTransportTitle => 'Transport bids & jobs';
+
+  @override
+  String get businessTransportSubtitle =>
+      'Quote the requests you were invited to, then move the jobs you won.';
+
+  @override
+  String get businessTransportOpenToBid => 'Open to bid';
+
+  @override
+  String get businessTransportQuoted => 'Your quotes';
+
+  @override
+  String get businessTransportWonJobs => 'Won jobs';
+
+  @override
+  String get businessTransportNoOpportunities =>
+      'No transport request is open for a bid right now.';
+
+  @override
+  String get businessTransportNoQuotes =>
+      'You have no live quotes. Bid on an open request to get one.';
+
+  @override
+  String get businessTransportNoJobs =>
+      'No customer has chosen your quote yet.';
+
+  @override
+  String get businessTransportQuoteDeadline => 'Quote deadline';
+
+  @override
+  String get businessTransportWindowClosed => 'The quote window has closed.';
+
+  @override
+  String get businessTransportRoute => 'Route';
+
+  @override
+  String get businessTransportVehicleOperable => 'Runs and drives';
+
+  @override
+  String get businessTransportVehicleNotOperable => 'Needs assistance';
+
+  @override
+  String get businessTransportPreferredPickup => 'Preferred pickup';
+
+  @override
+  String get businessTransportFlexibleDates => 'Flexible';
+
+  @override
+  String get businessTransportSendQuote => 'Send quote';
+
+  @override
+  String get businessTransportSendingQuote => 'Sending quote…';
+
+  @override
+  String get businessTransportReviseQuote => 'Revise quote';
+
+  @override
+  String get businessTransportRevisingQuote => 'Saving revision…';
+
+  @override
+  String get businessTransportReviseNotice =>
+      'You already have a quote on this request. Sending again replaces it — one business has one quote per request.';
+
+  @override
+  String get businessTransportCurrentQuote => 'Your current quote';
+
+  @override
+  String businessTransportRevisionNumber(Object revision) {
+    return 'Revision $revision';
+  }
+
+  @override
+  String get businessTransportWithdrawQuote => 'Withdraw quote';
+
+  @override
+  String get businessTransportWithdrawingQuote => 'Withdrawing…';
+
+  @override
+  String get businessTransportWithdrawTitle => 'Withdraw this quote?';
+
+  @override
+  String get businessTransportWithdrawMessage =>
+      'The customer will no longer be able to choose it. The request goes back to open, so you can bid again.';
+
+  @override
+  String get businessTransportQuoteWithdrawn =>
+      'Quote withdrawn. The request is open for a new bid.';
+
+  @override
+  String get businessTransportWithdrawFailed =>
+      'The quote could not be withdrawn. Try again.';
+
+  @override
+  String get businessTransportQuoteSent => 'Quote sent to the customer.';
+
+  @override
+  String businessTransportQuoteRevised(Object revision) {
+    return 'Quote revised. The customer now sees revision $revision.';
+  }
+
+  @override
+  String get businessTransportQuoteFailed =>
+      'The quote could not be sent. Try again.';
+
+  @override
+  String get businessTransportAmountLabel => 'Your transport price (USD)';
+
+  @override
+  String get businessTransportAmountHint => 'For example, 1250.00';
+
+  @override
+  String get businessTransportAmountHelp =>
+      'The transport leg only. Laawol adds your pickup fee on top.';
+
+  @override
+  String get businessTransportPickupLeg => 'Pickup leg';
+
+  @override
+  String get businessTransportPickupPending =>
+      'Priced from your pickup plan when this quote is sent.';
+
+  @override
+  String get businessTransportPickupNotCharged =>
+      'No separate pickup fee — include collection in your price.';
+
+  @override
+  String get businessTransportCustomerTotal => 'Customer pays';
+
+  @override
+  String get businessTransportCustomerTotalPending =>
+      'Your price plus the pickup fee, once it is priced.';
+
+  @override
+  String get businessTransportTermsLabel => 'Terms and inclusions (optional)';
+
+  @override
+  String get businessTransportTermsHint =>
+      'What is included, timing assumptions, and any conditions.';
+
+  @override
+  String get businessTransportQuoteExpired => 'Expired';
+
+  @override
+  String get transportQuoteAmountRequired => 'Enter your transport price.';
+
+  @override
+  String get transportQuoteAmountInvalid =>
+      'Enter the price as a number, for example 1250.00.';
+
+  @override
+  String get transportQuoteAmountFractional =>
+      'Prices are in whole cents — two decimal places at most.';
+
+  @override
+  String get transportQuoteAmountNotPositive =>
+      'A quote has to be more than zero.';
+
+  @override
+  String get transportQuoteAmountAboveCap =>
+      'A quote cannot be more than 1,000,000 USD.';
+
+  @override
+  String get transportQuoteCurrencyNotSupported =>
+      'Transport quotes must be in US dollars.';
+
+  @override
+  String get transportQuoteMethodNotSupported =>
+      'Choose open or enclosed transport.';
+
+  @override
+  String get transportQuoteDatesIncomplete => 'Give both estimates or neither.';
+
+  @override
+  String get transportQuotePickupNotInFuture =>
+      'The estimated pickup date has to be in the future.';
+
+  @override
+  String get transportQuoteDeliveryBeforePickup =>
+      'Delivery cannot be before pickup.';
+
+  @override
+  String get transportQuoteTermsTooLong =>
+      'Terms must be 1000 characters or fewer.';
+
+  @override
+  String get transportStatusScheduled => 'Scheduled';
+
+  @override
+  String get transportJobMoveTitle => 'Move this job';
+
+  @override
+  String transportJobStatusUnknown(Object status) {
+    return 'This job is on $status, which the transport workflow did not set — no transport action applies here.';
+  }
+
+  @override
+  String get transportJobNothingLeft =>
+      'This job is finished. There is nothing left to move.';
+
+  @override
+  String get transportJobStatusUpdated => 'Transport updated.';
+
+  @override
+  String transportJobStatusAlready(Object status) {
+    return 'This job was already $status.';
+  }
+
+  @override
+  String get transportJobStatusFailed =>
+      'The transport status could not be updated. Try again.';
+
+  @override
+  String get transportJobContainerRequired =>
+      'Add the container number before marking this transport in transit.';
+
+  @override
+  String transportJobTransitionNotAllowed(Object from, Object to) {
+    return 'A transport cannot move from $from to $to.';
+  }
+
+  @override
+  String transportJobContainerOnFile(Object number) {
+    return 'Container $number';
+  }
+
+  @override
+  String get transportJobAcceptedQuote => 'Accepted quote';
+
+  @override
+  String get requestViewing => 'Request a viewing';
+
+  @override
+  String get manageViewing => 'Manage viewing';
+
+  @override
+  String get requestViewingSummary =>
+      'Propose a time to come and see this vehicle. The seller confirms it or offers other times.';
+
+  @override
+  String get requestViewingQuestion => 'Send viewing request?';
+
+  @override
+  String get requestViewingConfirmMessage =>
+      'The seller will confirm this time or offer other times. Nothing is charged.';
+
+  @override
+  String get viewingRequestSent =>
+      'Viewing request sent. The seller will confirm it or offer other times.';
+
+  @override
+  String get viewingConversationTitle => 'Your viewing for this car';
+
+  @override
+  String get viewingStatusRequested => 'Viewing requested';
+
+  @override
+  String get viewingStatusCountered => 'Other times offered';
+
+  @override
+  String get viewingStatusDeclined => 'Viewing declined';
+
+  @override
+  String get viewingStatusExpired => 'Proposal expired';
+
+  @override
+  String get viewingStatusCancelled => 'Viewing cancelled';
+
+  @override
+  String get viewingYourTurn => 'Your turn';
+
+  @override
+  String get viewingWaitingOnBuyer => 'Waiting on the buyer';
+
+  @override
+  String get viewingWaitingOnSeller => 'Waiting on the seller';
+
+  @override
+  String get viewingProposedByYou => 'You proposed';
+
+  @override
+  String get viewingProposedByBuyer => 'The buyer proposed';
+
+  @override
+  String get viewingProposedBySeller => 'The seller offered';
+
+  @override
+  String get viewingTimesOnTable => 'Times on the table';
+
+  @override
+  String viewingConfirmedFor(Object time) {
+    return 'Confirmed for $time';
+  }
+
+  @override
+  String viewingRespondBy(Object time) {
+    return 'Reply by $time';
+  }
+
+  @override
+  String get viewingAcceptTime => 'Accept this time';
+
+  @override
+  String get viewingOfferOtherTimes => 'Offer other times';
+
+  @override
+  String get viewingProposeAnotherTime => 'Propose another time';
+
+  @override
+  String get viewingDeclineRequest => 'Decline';
+
+  @override
+  String get viewingDeclineQuestion => 'Decline this viewing?';
+
+  @override
+  String get viewingDeclineConfirmMessage =>
+      'The buyer will be told you cannot show the car at these times.';
+
+  @override
+  String get viewingDeclinedMessage => 'Viewing declined.';
+
+  @override
+  String viewingConfirmedMessage(Object time) {
+    return 'Viewing confirmed for $time.';
+  }
+
+  @override
+  String get viewingTimesSent => 'Your times were sent.';
+
+  @override
+  String get viewingActionFailed =>
+      'That could not be done right now. Try again.';
+
+  @override
+  String get viewingProposalExpiredNotice =>
+      'Nobody answered in time, so this proposal expired.';
+
+  @override
+  String get viewingNoMoreCounters =>
+      'This has gone back and forth enough - accept a time, decline, or cancel.';
+
+  @override
+  String get viewingClosedNotice =>
+      'This viewing is closed. Nothing on it can be changed.';
+
+  @override
+  String get viewingHistoryTitle => 'What has happened so far';
+
+  @override
+  String viewingHistoryEntryLine(Object who, Object action, Object when) {
+    return '$who • $action • $when';
+  }
+
+  @override
+  String get viewingActorYou => 'You';
+
+  @override
+  String get viewingActorBuyer => 'The buyer';
+
+  @override
+  String get viewingActorSeller => 'The seller';
+
+  @override
+  String get viewingHistoryActionProposed => 'proposal';
+
+  @override
+  String get viewingHistoryActionAccepted => 'acceptance';
+
+  @override
+  String get viewingHistoryActionDeclined => 'decline';
+
+  @override
+  String get viewingHistoryActionCancelled => 'cancellation';
+
+  @override
+  String get viewingProposalSheetTitleCustomer => 'Propose a viewing time';
+
+  @override
+  String get viewingProposalSheetTitleBusiness => 'Offer viewing times';
+
+  @override
+  String get viewingProposalSheetMessageCustomer =>
+      'Pick the time that suits you. The seller can accept it or offer other times.';
+
+  @override
+  String viewingProposalSheetMessageBusiness(Object count) {
+    return 'Offer up to $count times. The buyer picks one or comes back with another.';
+  }
+
+  @override
+  String get viewingRescheduleNotice =>
+      'Proposing a new time reopens the conversation, so the agreed appointment stops being confirmed.';
+
+  @override
+  String get viewingChooseTime => 'Choose a viewing time.';
+
+  @override
+  String viewingSlotsChosen(Object count, Object max) {
+    return '$count of $max times chosen';
+  }
+
+  @override
+  String get viewingSendProposal => 'Send';
+
+  @override
+  String get whatIsTheItem => 'What is the item?';
+
+  @override
+  String get somethingElseInCategory => 'Something else in this category';
+
+  @override
+  String get whenDoYouPay => 'When do you pay?';
+
+  @override
+  String get payNowOption => 'Pay now';
+
+  @override
+  String get payOnArrivalOption => 'Pay when it arrives';
+
+  @override
+  String payOnArrivalExplainer(Object business) {
+    return 'Nothing is charged today. Your card is saved and verified now, and charged automatically when $business marks your shipment arrived. If that charge doesn\'t go through, you\'ll be asked to complete payment in the app.';
+  }
+
+  @override
+  String get saveCardAndBook => 'Save card & book';
+
+  @override
+  String get freightCategoryQuestion => 'What\'s in the parcel?';
+
+  @override
+  String get freightCategoryHelp =>
+      'Businesses charge more for what costs more to replace.';
+
+  @override
+  String get freightCategoryGeneral => 'General goods';
+
+  @override
+  String get freightCategoryGeneralHint =>
+      'Household items, gifts, anything not listed below';
+
+  @override
+  String get freightCategoryClothing => 'Clothes and fabric';
+
+  @override
+  String get freightCategoryClothingHint => 'Clothing, shoes, cloth, bedding';
+
+  @override
+  String get freightCategoryFood => 'Food';
+
+  @override
+  String get freightCategoryFoodHint => 'Dry and packaged food only';
+
+  @override
+  String get freightCategoryDocuments => 'Documents';
+
+  @override
+  String get freightCategoryDocumentsHint =>
+      'Papers, certificates, printed matter';
+
+  @override
+  String get freightCategoryCosmetics => 'Cosmetics and liquids';
+
+  @override
+  String get freightCategoryCosmeticsHint => 'Creams, perfumes, hair products';
+
+  @override
+  String get freightCategoryElectronics => 'Electronics';
+
+  @override
+  String get freightCategoryElectronicsHint =>
+      'Phones, laptops, tablets, chargers';
+
+  @override
+  String get freightCategoryFragile => 'Fragile items';
+
+  @override
+  String get freightCategoryFragileHint =>
+      'Glass, ceramics, anything breakable';
+
+  @override
+  String get freightCoverageNone => 'No coverage';
+
+  @override
+  String get freightCoverageCoversLoss => 'Covers loss';
+
+  @override
+  String get freightCoverageSectionTitle => 'If it goes missing';
+
+  @override
+  String freightCoveragePaysForLoss(Object businessName) {
+    return '$businessName pays you back if this parcel is lost.';
+  }
+
+  @override
+  String get freightCoverageNoExtraCharge =>
+      'Included in the price, at no extra charge.';
+
+  @override
+  String freightCoverageWhoPays(Object businessName) {
+    return 'Laawol records this agreement. $businessName is the business that pays.';
+  }
+
+  @override
+  String freightCoverageNotOffered(Object businessName) {
+    return '$businessName does not cover lost parcels. If this parcel goes missing, nothing is paid back.';
+  }
+
+  @override
+  String get freightDestinationDeliveryTitle => 'How the receiver gets it';
+
+  @override
+  String get freightDestinationDeliveryCollect => 'Receiver collects it';
+
+  @override
+  String freightDestinationDeliveryCollectHelp(Object businessName) {
+    return 'They pick the parcel up from $businessName at the destination.';
+  }
+
+  @override
+  String freightDestinationDeliveryToAddress(Object amount) {
+    return 'Deliver to their address · $amount';
+  }
+
+  @override
+  String get freightSetPriceTitle => 'Price for this item';
+
+  @override
+  String freightSetPriceLine(Object amount) {
+    return '$amount set price';
+  }
+
+  @override
+  String freightSetPriceCoversUpTo(String kilograms, String rate) {
+    return 'Covers up to $kilograms kg, then $rate per kg over';
+  }
+
+  @override
+  String get freightSetPriceCoversAnyWeight =>
+      'Covers this item whatever it weighs';
+
+  @override
+  String get freightSetPriceFinal => 'This is the full price for this item.';
+
+  @override
+  String get freightSetPriceOverAllowanceNote =>
+      'The business weighs the parcel at drop-off and charges for any weight over what this price covers.';
+
+  @override
+  String get freightDestinationDeliveryFeeLabel => 'Delivery at destination';
+
+  @override
+  String get freightReceiverAddressLabel => 'Receiver\'s address';
+
+  @override
+  String get freightReceiverAddressHint => 'Neighbourhood, landmark, city';
+
+  @override
+  String get freightReceiverAddressHelper =>
+      'Include the neighbourhood and a landmark nearby, so the driver can find it.';
+
+  @override
+  String get freightReceiverAddressRequired =>
+      'Enter the address where the parcel should be delivered.';
+
+  @override
+  String get freightReceiverAddressTooLong =>
+      'That address is too long. Keep it to the neighbourhood, a landmark and the city.';
+
+  @override
+  String get outForDelivery => 'Out for delivery';
+
+  @override
+  String get freightNextOutForDelivery =>
+      'Your parcel has arrived and is on its way to the receiver\'s address.';
+
+  @override
+  String pickupPlanTakingPickups(String services) {
+    return 'Taking pickups: $services.';
+  }
+
+  @override
+  String get pickupPlanNoPickups =>
+      'No service is taking pickups. Customers bring everything to you.';
+
+  @override
+  String pickupPlanBringToYou(String services) {
+    return 'Customers bring these to you: $services.';
+  }
+
+  @override
+  String get pickupPlanSharedOffWarning =>
+      'No pickup: the shared plan above is off. Turn it on, or give this service its own fees.';
+
+  @override
+  String get pickupPlanOwnFeesNote =>
+      'Takes pickups on these fees, whether or not the shared plan is on.';
+
+  @override
+  String get freightDestinationDeliveryToAddressByArea =>
+      'Deliver to their address';
+
+  @override
+  String get freightDeliveryAreaLabel => 'Where is it going?';
+
+  @override
+  String get freightNoPriceForItemTitle => 'No set price for this';
+
+  @override
+  String freightNoBusinessPricedItem(String country) {
+    return 'No business shipping to $country has set a price for this. Describe it and they can each answer with their own.';
+  }
+
+  @override
+  String freightBusinessHasNotPricedItem(String business) {
+    return '$business has not set a price for this item. Ask, and it will answer with one.';
+  }
+
+  @override
+  String get freightAskForPriceCta => 'Ask for a price';
+
+  @override
+  String get freightAskForPriceTitle => 'Ask for a price';
+
+  @override
+  String freightAskForPriceIntro(String country) {
+    return 'Describe what you are sending to $country. Every business on this route can answer with its own price and say what it pays back if the parcel is lost.';
+  }
+
+  @override
+  String get freightAskForPriceNote =>
+      'You are not committing to anything. You choose which price to take, or none of them.';
+
+  @override
+  String get freightQuoteDescriptionLabel => 'What are you sending?';
+
+  @override
+  String get freightQuoteDescriptionHint =>
+      'Two suitcases of clothes and a small microwave';
+
+  @override
+  String get freightQuoteDescriptionRequired => 'Describe what you are sending';
+
+  @override
+  String get freightQuoteWeightLabel => 'Weight in kg';
+
+  @override
+  String get freightQuoteWeightHelper =>
+      'Optional. A weight helps a business answer faster.';
+
+  @override
+  String get freightQuoteSendRequest => 'Ask for a price';
+
+  @override
+  String get freightQuoteSending => 'Sending…';
+
+  @override
+  String get freightQuoteRequestFailed =>
+      'Your request could not be sent. Try again.';
+
+  @override
+  String get freightQuotesTitle => 'Prices for your parcel';
+
+  @override
+  String get freightQuotesIntro =>
+      'Each price is one business\'s own. Choose the one you want to send with.';
+
+  @override
+  String freightQuoteRequestReference(String code) {
+    return 'Request $code';
+  }
+
+  @override
+  String freightQuoteAskedBusinesses(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count businesses can answer',
+      one: '1 business can answer',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get waitingForFreightQuotes => 'Waiting for prices';
+
+  @override
+  String get waitingForFreightQuotesSubtitle =>
+      'The businesses on this route can see your parcel now. Prices appear here as they answer.';
+
+  @override
+  String freightQuoteCoversLoss(String business) {
+    return '$business pays you back if this parcel is lost';
+  }
+
+  @override
+  String freightQuoteDoesNotCoverLoss(String business) {
+    return '$business does not cover lost parcels';
+  }
+
+  @override
+  String get selectFreightQuote => 'Choose this price';
+
+  @override
+  String get selectingFreightQuote => 'Choosing…';
+
+  @override
+  String confirmFreightQuoteTitle(String business) {
+    return 'Send with $business?';
+  }
+
+  @override
+  String confirmFreightQuoteMessage(String business, String price) {
+    return '$business charges $price to send this parcel.';
+  }
+
+  @override
+  String get couldNotSelectFreightQuote =>
+      'That price could not be chosen. Try again.';
+
+  @override
+  String get couldNotLoadFreightQuotes => 'Prices could not be loaded.';
+
+  @override
+  String get freightQuoteChosenTitle => 'Price chosen';
+
+  @override
+  String freightQuoteChosenMessage(String business, String price) {
+    return '$business will send your parcel for $price.';
+  }
 }

@@ -117,6 +117,69 @@ void main() {
     expect(shipment.verifiedWeightKg, 20);
     expect(shipment.finalTotal, 265);
     expect(shipment.balanceDue, 20);
+    // A shipment booked by weight says nothing about the scale, and the
+    // scale is exactly where it is going.
+    expect(shipment.weighsAtDropOff, isTrue);
+  });
+
+  test('a set price with no allowance is not waiting on a scale', () {
+    final setPrice = CustomerTrackingShipment.fromFreightData('freight-flat', {
+      'trackingCode': 'FRT-FLAT-001',
+      'status': 'pending',
+      'paymentStatus': 'succeeded',
+      'price': 50,
+      'weightVerificationRequired': false,
+    });
+    expect(setPrice.weighsAtDropOff, isFalse);
+    // An allowance puts it back on the scale: the counter checks whether the
+    // parcel outgrew what the price covers.
+    final withAllowance = CustomerTrackingShipment.fromFreightData(
+      'freight-allowance',
+      {'status': 'pending', 'weightVerificationRequired': true},
+    );
+    expect(withAllowance.weighsAtDropOff, isTrue);
+  });
+
+  testWidgets('a set-price parcel is never promised a weight confirmation', (
+    tester,
+  ) async {
+    final repository = _FakeTrackingRepository([
+      CustomerTrackingShipment.fromFreightData('freight-flat', {
+        'trackingCode': 'FRT-FLAT-001',
+        'receiverName': 'Aissatou Diallo',
+        'destinationCountryName': 'Guinea',
+        'businessName': 'Laawol Freight',
+        'price': 50,
+        'estimatedTotal': 50,
+        'status': 'pending',
+        'paymentStatus': 'succeeded',
+        'priceSettlementStatus': 'settled',
+        'mode': 'air',
+        'weightVerificationRequired': false,
+      }),
+    ]);
+
+    await _pumpTracking(tester, repository, focusShipmentId: 'freight-flat');
+    expect(tester.takeException(), isNull);
+    expect(
+      find.textContaining('The price for this item is set'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('will confirm the weight after drop-off'),
+      findsNothing,
+    );
+
+    await _pumpTracking(
+      tester,
+      repository,
+      locale: const Locale('fr'),
+      focusShipmentId: 'freight-flat',
+    );
+    expect(
+      find.textContaining('Le prix de cet article est fixé'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('freight shipment is visible on tracking in English and French', (
@@ -193,6 +256,58 @@ void main() {
     expect(find.text('FRT-OTHER-002'), findsNothing);
     expect(find.text('Search tracking, receiver, country'), findsNothing);
     expect(find.text('View all shipments'), findsOneWidget);
+  });
+
+  testWidgets('arrival copy follows how the receiver gets the parcel', (
+    tester,
+  ) async {
+    Map<String, dynamic> arrived({required bool delivery}) => {
+      'trackingCode': 'FRT-ARRIVED-001',
+      'receiverName': 'Aissatou Diallo',
+      'destinationCountryName': 'Guinea',
+      'businessName': 'Laawol Freight',
+      'price': 125,
+      'estimatedTotal': 125,
+      'status': 'ready_for_pickup',
+      'paymentStatus': 'succeeded',
+      'mode': 'air',
+      'estimatedWeightKg': 10,
+      'destinationDelivery': delivery,
+    };
+
+    // Collected from the business at the destination.
+    await _pumpTracking(
+      tester,
+      _FakeTrackingRepository([
+        CustomerTrackingShipment.fromFreightData(
+          'freight-collect',
+          arrived(delivery: false),
+        ),
+      ]),
+    );
+    expect(find.text('Ready for pickup'), findsWidgets);
+    expect(find.text('Your parcel is ready for pickup.'), findsOneWidget);
+    expect(find.text('Out for delivery'), findsNothing);
+
+    // Nobody is collecting a parcel the business is driving to an address.
+    await _pumpTracking(
+      tester,
+      _FakeTrackingRepository([
+        CustomerTrackingShipment.fromFreightData(
+          'freight-deliver',
+          arrived(delivery: true),
+        ),
+      ]),
+    );
+    expect(find.text('Out for delivery'), findsWidgets);
+    expect(
+      find.text(
+        "Your parcel has arrived and is on its way to the receiver's address.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Ready for pickup'), findsNothing);
+    expect(find.text('Your parcel is ready for pickup.'), findsNothing);
   });
 
   testWidgets('freight balance is visible and actionable in tracking', (

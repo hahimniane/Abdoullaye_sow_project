@@ -185,7 +185,12 @@ test("payment cancellation never cancels a successful or in-flight charge",
         assert.match(source, /retrieveStripePaymentIntent/);
         assert.match(source, /intent\.status === "succeeded"/);
         assert.match(source, /intent\.status === "processing"/);
-        assert.match(source, /intent\.status === "requires_capture"/);
+        // Contract changed 2026-08-10 with the hold-first payment model:
+        // requires_capture is a HELD payment, and cancelling it releases the
+        // hold for free - that is the customer promise of the model. Only
+        // genuinely in-flight ("processing") payments stay uncancellable, so
+        // requires_capture must NOT appear in the refusal branch.
+        assert.doesNotMatch(source, /intent\.status === "requires_capture"/);
         assert.match(source, /cancelStripePaymentIntent/);
         assert.match(source, /recoveredPayment:\s*true/);
       }
@@ -284,4 +289,21 @@ test("support attachment access evaluates admin permissions once", () => {
       supportAccessSource,
       /canManageBusinessSupport\(firestore\.get/,
   );
+});
+
+test("no callable is exported twice", () => {
+  // A duplicate `exports.x = onCall(...)` is silently legal in JS: the last
+  // definition wins and the earlier one becomes dead code that still reads
+  // like it runs. That happened to cancelSecuredCustomerOrder on 2026-08-14 -
+  // two versions were written and committed, and only re-reading the file
+  // caught it. Deployment gives no warning, so the guard lives here.
+  const names = [...indexSource.matchAll(/^exports\.([A-Za-z0-9_]+)\s*=/gm)]
+      .map((m) => m[1]);
+  const seen = new Set();
+  const duplicates = [];
+  for (const name of names) {
+    if (seen.has(name)) duplicates.push(name);
+    seen.add(name);
+  }
+  assert.deepEqual(duplicates, [], `duplicate exports: ${duplicates}`);
 });

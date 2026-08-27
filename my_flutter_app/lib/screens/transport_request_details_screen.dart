@@ -7,13 +7,16 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../data/car_catalog.dart';
+import '../models/destination_country.dart';
 import '../l10n/app_localizations.dart';
 import '../models/transport_request.dart';
 import '../models/transport_quote.dart';
 import '../providers/auth_provider.dart';
 import '../services/transport_service.dart';
+import '../widgets/destination_country_field.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
+import '../widgets/transport_journey.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
@@ -157,6 +160,11 @@ class _TransportRequestDetailsScreenState
 
   void _refreshCatalogOptions() {
     final catalog = CarCatalog.instance;
+    // A Firestore snapshot can land before CarCatalog.load() finishes, and the
+    // catalog throws rather than returning empty when read too early. Skipping
+    // this pass is safe: the next snapshot, or the edit sheet's own read, will
+    // populate the options once loading completes.
+    if (!catalog.isLoaded) return;
     _makeOptions = catalog.getMakes();
     if (_selectedMake != null && !_makeOptions.contains(_selectedMake)) {
       _makeOptions.insert(0, _selectedMake!);
@@ -366,6 +374,19 @@ class _TransportRequestDetailsScreenState
                             ],
                           ),
                           const SizedBox(height: 16),
+                          // The same journey-and-timeline answer barrels
+                          // give: where is it, and what just happened.
+                          if (_request.hasSelectedQuote) ...[
+                            TransportJourneyBar(
+                              status: _request.fulfillmentStatus.isNotEmpty
+                                  ? _request.fulfillmentStatus
+                                  : _request.status,
+                            ),
+                            TransportTrackingTimeline(
+                              requestId: _request.id,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                           _CustomerRequestInfo(request: _request),
                           if (_request.usesQuoteMarketplace) ...[
                             const SizedBox(height: 16),
@@ -611,6 +632,8 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
   String _selectingQuoteId = '';
   String _error = '';
   bool _cancelling = false;
+  bool _savingEdit = false;
+  bool _paying = false;
 
   Future<void> _selectQuote(TransportQuote quote) async {
     final l10n = AppLocalizations.of(context)!;
@@ -649,8 +672,30 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = l10n.couldNotSelectTransportQuote);
+      return;
     } finally {
       if (mounted) setState(() => _selectingQuoteId = '');
+    }
+    // Accepting is a commitment, so the money is the next step, not a later
+    // one. A failure here is recoverable: the selection stands and the
+    // details screen keeps offering Pay now.
+    await _payForJob();
+  }
+
+  Future<void> _payForJob() async {
+    if (_paying || !mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    setState(() {
+      _paying = true;
+      _error = '';
+    });
+    try {
+      await _service.payForJob(requestId: widget.request.id);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = l10n.transportPaymentFailed);
+    } finally {
+      if (mounted) setState(() => _paying = false);
     }
   }
 
@@ -688,6 +733,349 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
     }
   }
 
+  /// The customer may revise the request until they pick a quote. No business
+  /// "accepts" here - they quote - so quote selection is the real cutoff.
+  bool _canCustomerEdit(AuthProvider auth) {
+    final request = widget.request;
+    // Mirrors assertCollectingTransportRequest on the server, with one
+    // deliberate difference: the server checks the raw `status` field, but
+    // this model maps `status` to `fulfillmentStatus ?? status`, so it never
+    // reads back as 'quote_requested' and comparing it hid the action
+    // entirely. quoteStatus is stored raw, and for v2 records it only leaves
+    // 'collecting' when status leaves 'quote_requested' - so the pair below
+    // expresses the same window without depending on the mapped field.
+    return request.customerUid != null &&
+        request.customerUid == auth.user?.uid &&
+        request.flowVersion == 2 &&
+        request.quoteStatus == 'collecting';
+  }
+
+  /// Fields a business priced its quote against. Changing any of these makes
+  /// the quotes in hand quotes for a different job.
+  bool _isQuoteAffecting(Map<String, Object?> patch) {
+    const quoted = {
+      'carMake',
+      'carModel',
+      'carYear',
+      'pickupArea',
+      'vehicleOperable',
+      'requestedTransportMethod',
+      'destinationCountryId',
+    };
+    return patch.keys.any(quoted.contains);
+  }
+
+  Future<void> _saveEdit(Map<String, Object?> patch) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (patch.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.transportEditNoChanges)));
+      return;
+    }
+
+    // Warn before saving, not after: the customer has watched these quotes
+    // arrive, and clearing them silently would read as losing them.
+    if (_isQuoteAffecting(patch) && widget.request.quoteCount > 0) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.transportEditQuoteWarningTitle),
+          content: Text(l10n.transportEditQuoteWarningMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(l10n.transportEditKeepEditing),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(l10n.transportEditSaveAnyway),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+    }
+
+    setState(() {
+      _savingEdit = true;
+      _error = '';
+    });
+    try {
+      final result = await _service.updateRequestDetails(
+        requestId: widget.request.id,
+        destinationCountryId: patch['destinationCountryId'] as String?,
+        carMake: patch['carMake'] as String?,
+        carModel: patch['carModel'] as String?,
+        carYear: patch['carYear'] as String?,
+        customerPhone: patch['customerPhone'] as String?,
+        pickupArea: patch['pickupArea'] as String?,
+        pickupAddress: patch['pickupAddress'] as String?,
+        notes: patch['notes'] as String?,
+        vehicleOperable: patch['vehicleOperable'] as bool?,
+        requestedTransportMethod: patch['requestedTransportMethod'] as String?,
+        flexibleDates: patch['flexibleDates'] as bool?,
+      );
+      if (!mounted) return;
+      final message = !result.updated
+          ? l10n.transportEditNoChanges
+          : result.destinationChanged
+              ? l10n.transportEditDestinationMoved
+              : result.requoteRequired
+                  ? l10n.transportEditSavedRequote
+                  : l10n.transportEditSaved;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = l10n.couldNotUpdateTransportRequest);
+    } finally {
+      if (mounted) setState(() => _savingEdit = false);
+    }
+  }
+
+  Future<void> _openEditSheet() async {
+    final l10n = AppLocalizations.of(context)!;
+    final request = widget.request;
+    final catalog = CarCatalog.instance;
+    final phone = TextEditingController(text: request.customerPhone);
+    final pickupAddress = TextEditingController(text: request.pickupAddress);
+    final notes = TextEditingController(text: request.notes);
+    final pickupArea = TextEditingController(text: request.pickupArea);
+    var operable = request.vehicleOperable;
+    var method = request.requestedTransportMethod;
+    // Pickup fields stay hidden until the customer says they want pickup -
+    // an address on a drop-off request is a field that changes their price.
+    var wantsPickup = request.pickupAddress.trim().isNotEmpty;
+    DestinationCountry? country;
+    // Free text would let "toyta" and "Toyota " become separate makes, so
+    // make/model/year come from the shared catalog, each narrowing the next.
+    // Seed from the catalog's spelling when the stored value only differs by
+    // case, so the dependent pickers populate and saving cleans the record.
+    final canonMake = catalog.canonicalMake(request.carMake);
+    final canonModel =
+        catalog.canonicalModel(request.carMake, request.carModel);
+    String? make = canonMake.isNotEmpty
+        ? canonMake
+        : (request.carMake.isNotEmpty ? request.carMake : null);
+    String? model = canonModel.isNotEmpty
+        ? canonModel
+        : (request.carModel.isNotEmpty ? request.carModel : null);
+    String? year = request.carYear.isNotEmpty ? request.carYear : null;
+
+    // A stored value from before the catalog must still be selectable, or the
+    // dropdown renders empty and DropdownButton asserts on an unknown value.
+    List<String> withCurrent(List<String> options, String? current) {
+      if (current == null || current.isEmpty || options.contains(current)) {
+        return options;
+      }
+      return [current, ...options];
+    }
+
+    final patch = await showModalBottomSheet<Map<String, Object?>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+        ),
+        child: StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final makes = withCurrent(catalog.getMakes(), make);
+            final models = withCurrent(
+              make == null ? const [] : catalog.getModels(make!),
+              model,
+            );
+            final years = withCurrent(
+              make == null || model == null
+                  ? const []
+                  : catalog.getYears(make!, model!),
+              year,
+            );
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l10n.editTransportRequestTitle,
+                    style: Theme.of(sheetContext).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    l10n.editTransportRequestSubtitle,
+                    style: Theme.of(sheetContext).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 18),
+                  Text(l10n.transportEditContactSection,
+                      style: Theme.of(sheetContext).textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: phone,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(labelText: l10n.phoneNumber),
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: wantsPickup,
+                    title: Text(l10n.transportEditNeedsPickup),
+                    onChanged: (value) =>
+                        setSheetState(() => wantsPickup = value),
+                  ),
+                  if (wantsPickup) ...[
+                    TextField(
+                      controller: pickupAddress,
+                      decoration:
+                          InputDecoration(labelText: l10n.pickupAddress),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  TextField(
+                    controller: pickupArea,
+                    decoration: InputDecoration(labelText: l10n.pickupArea),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: notes,
+                    maxLines: 2,
+                    decoration: InputDecoration(labelText: l10n.notes),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(l10n.transportEditVehicleSection,
+                      style: Theme.of(sheetContext).textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  DestinationCountryField(
+                    value: country,
+                    label: l10n.destinationCountry,
+                    requiredMessage: l10n.requiredField,
+                    onChanged: (value) =>
+                        setSheetState(() => country = value),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: make,
+                    isExpanded: true,
+                    decoration: InputDecoration(labelText: l10n.carMake),
+                    items: [
+                      for (final option in makes)
+                        DropdownMenuItem(value: option, child: Text(option)),
+                    ],
+                    // Model and year belong to the old make; keeping them
+                    // would save a combination that does not exist.
+                    onChanged: (value) => setSheetState(() {
+                      make = value;
+                      model = null;
+                      year = null;
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: model,
+                    isExpanded: true,
+                    decoration: InputDecoration(labelText: l10n.carModel),
+                    items: [
+                      for (final option in models)
+                        DropdownMenuItem(value: option, child: Text(option)),
+                    ],
+                    onChanged: make == null
+                        ? null
+                        : (value) => setSheetState(() {
+                              model = value;
+                              year = null;
+                            }),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: year,
+                    isExpanded: true,
+                    decoration: InputDecoration(labelText: l10n.carYear),
+                    items: [
+                      for (final option in years)
+                        DropdownMenuItem(value: option, child: Text(option)),
+                    ],
+                    onChanged: model == null
+                        ? null
+                        : (value) => setSheetState(() => year = value),
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: operable,
+                    title: Text(l10n.vehicleOperable),
+                    onChanged: (value) =>
+                        setSheetState(() => operable = value),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: method.isEmpty ? 'open' : method,
+                    decoration:
+                        InputDecoration(labelText: l10n.transportMethod),
+                    items: const [
+                      DropdownMenuItem(value: 'open', child: Text('Open')),
+                      DropdownMenuItem(
+                          value: 'enclosed', child: Text('Enclosed')),
+                    ],
+                    onChanged: (value) =>
+                        setSheetState(() => method = value ?? method),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: () {
+                      // Send only what changed - a full resubmission would
+                      // look like an edit and void every quote.
+                      final result = <String, Object?>{};
+                      void put(String key, Object? next, Object? before) {
+                        if (next.toString().trim() !=
+                            before.toString().trim()) {
+                          result[key] = next;
+                        }
+                      }
+
+                      put('customerPhone', phone.text.trim(),
+                          request.customerPhone);
+                      put(
+                        'pickupAddress',
+                        wantsPickup ? pickupAddress.text.trim() : '',
+                        request.pickupAddress,
+                      );
+                      put('notes', notes.text.trim(), request.notes);
+                      put('pickupArea', pickupArea.text.trim(),
+                          request.pickupArea);
+                      put('carMake', make ?? '', request.carMake);
+                      put('carModel', model ?? '', request.carModel);
+                      put('carYear', year ?? '', request.carYear);
+                      if (country != null) {
+                        put('destinationCountryId', country!.id,
+                            request.destinationCountryId);
+                      }
+                      if (operable != request.vehicleOperable) {
+                        result['vehicleOperable'] = operable;
+                      }
+                      if (method != request.requestedTransportMethod) {
+                        result['requestedTransportMethod'] = method;
+                      }
+                      Navigator.of(sheetContext).pop(result);
+                    },
+                    child: Text(l10n.save),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    phone.dispose();
+    pickupAddress.dispose();
+    notes.dispose();
+    pickupArea.dispose();
+    if (patch != null && mounted) await _saveEdit(patch);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -702,6 +1090,50 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
       final price = NumberFormat.simpleCurrency(
         name: widget.request.currency.toUpperCase(),
       ).format(widget.request.selectedAmountCents / 100);
+      if (widget.request.awaitingPayment) {
+        // Accepted but unpaid: the customer owes an action before the
+        // carrier can start, so this is a call to action, not a notice.
+        final total = NumberFormat.simpleCurrency(
+          name: widget.request.currency.toUpperCase(),
+        ).format(
+          (widget.request.totalCents > 0
+                  ? widget.request.totalCents
+                  : widget.request.selectedAmountCents) /
+              100,
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _QuoteNotice(
+              icon: Icons.lock_clock_outlined,
+              title: l10n.transportPaymentTitle,
+              message: l10n.transportPaymentBody(total),
+            ),
+            if (_error.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _paying ? null : () => _payForJob(),
+              icon: _paying
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.lock_outline),
+              label: Text(l10n.transportPayNow),
+            ),
+          ],
+        );
+      }
       return _QuoteNotice(
         icon: Icons.verified_outlined,
         title: l10n.transportQuoteSelectedTitle,
@@ -783,10 +1215,27 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
                 ],
               ],
               const SizedBox(height: 14),
+              // Editing stays available for as long as quotes are being
+              // collected - the window closes when a quote is selected.
+              if (_canCustomerEdit(context.read<AuthProvider>())) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _savingEdit || _cancelling ||
+                            _selectingQuoteId.isNotEmpty
+                        ? null
+                        : _openEditSheet,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: Text(l10n.editTransportRequest),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: _cancelling || _selectingQuoteId.isNotEmpty
+                  onPressed: _cancelling || _savingEdit ||
+                          _selectingQuoteId.isNotEmpty
                       ? null
                       : _cancelRequest,
                   child: Text(

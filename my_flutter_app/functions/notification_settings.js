@@ -5,7 +5,6 @@ function defaultNotificationPreferences() {
     smsNotifications: false,
     carActivity: true,
     shipmentActivity: true,
-    walletActivity: true,
     businessActivity: true,
     reviewActivity: true,
     supportActivity: true,
@@ -27,7 +26,6 @@ function normalizeNotificationPreferences(raw) {
     carActivity: prefs.carActivity !== false && defaults.carActivity,
     shipmentActivity:
       prefs.shipmentActivity !== false && defaults.shipmentActivity,
-    walletActivity: prefs.walletActivity !== false && defaults.walletActivity,
     businessActivity:
       prefs.businessActivity !== false && defaults.businessActivity,
     reviewActivity:
@@ -55,7 +53,6 @@ function defaultPlatformNotificationSettings() {
     smsProvider: "none",
     purchaseStatus: true,
     shipmentStatus: true,
-    refundDecision: true,
     newApplication: true,
     businessLifecycle: true,
     verificationDocuments: true,
@@ -98,7 +95,6 @@ function normalizePlatformNotificationSettings(raw) {
 const NOTIFICATION_SETTING_BY_PREFERENCE = {
   carActivity: "purchaseStatus",
   shipmentActivity: "shipmentStatus",
-  walletActivity: "refundDecision",
   businessActivity: "businessLifecycle",
   reviewActivity: "reviewRequests",
   supportActivity: "supportMessages",

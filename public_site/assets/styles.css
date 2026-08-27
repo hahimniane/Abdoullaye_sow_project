@@ -36,6 +36,15 @@ a{color:inherit; text-decoration:none}
 .btn-outline:hover{border-color:var(--teal); background:#fff; transform:translateY(-2px)}
 .btn-ghost{background:transparent; color:var(--ink-soft)}
 .btn-ghost:hover{color:var(--teal-deep)}
+/* Loading state: spinner + no hover motion while a request is in flight.
+   Toggle with classList + aria-busy; the .btn base already uses inline-flex
+   with a gap, so the spinner slots in before the label. */
+.btn.is-loading{pointer-events:none; opacity:.85}
+.btn.is-loading::before{content:""; width:14px; height:14px; flex:0 0 auto;
+  border-radius:50%; border:2px solid currentColor; border-top-color:transparent;
+  animation:btn-spin .7s linear infinite}
+.btn.is-loading:hover{transform:none}
+@keyframes btn-spin{to{transform:rotate(360deg)}}
 
 /* ---------- Header ---------- */
 .site-header{position:sticky; top:0; z-index:50; background:rgba(244,250,248,.82);
@@ -99,9 +108,18 @@ a{color:inherit; text-decoration:none}
 .hero{position:relative; overflow:hidden; padding:72px 0 0}
 .hero-bg{position:absolute; inset:0; z-index:0;
   background:
-    radial-gradient(1100px 540px at 78% -8%, rgba(20,184,166,.20), transparent 60%),
-    radial-gradient(760px 460px at 6% 8%, rgba(245,158,11,.12), transparent 58%),
-    linear-gradient(180deg,#f8fffd, var(--bg) 60%)}
+    radial-gradient(1100px 540px at 78% -8%, rgba(20,184,166,.34), transparent 60%),
+    radial-gradient(760px 460px at 6% 8%, rgba(245,158,11,.22), transparent 58%),
+    radial-gradient(900px 500px at 50% 110%, rgba(13,148,136,.14), transparent 60%),
+    linear-gradient(180deg,#effcf8, var(--bg) 72%)}
+/* Fine cartographer's grid over the hero sky */
+.hero-bg::before{content:""; position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(13,148,136,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(13,148,136,.05) 1px, transparent 1px);
+  background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(120% 90% at 50% 0%, #000 40%, transparent 85%);
+  mask-image:radial-gradient(120% 90% at 50% 0%, #000 40%, transparent 85%)}
 .hero-inner{position:relative; z-index:1; display:grid; grid-template-columns:1.12fr .88fr; gap:48px; align-items:center; padding-bottom:64px}
 .eyebrow{display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:13px;
   letter-spacing:.08em; text-transform:uppercase; color:var(--teal-deep);
@@ -903,3 +921,213 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
 /* Interactive canvas globe (progressive enhancement over the SVG fallback) */
 .globe-canvas{display:none; width:100%; aspect-ratio:1/1; touch-action:none; cursor:grab}
 .globe-stage:has(.globe-canvas[style*="block"]) .globe-fallback{display:none}
+
+/* ================= Motion & atmosphere layer (motion.js) =================
+   Everything below is injected/tagged by assets/motion.js. Decorative only:
+   if motion.js never runs, no page depends on any of this. All movement is
+   transform/opacity, and every animation is disabled under
+   prefers-reduced-motion. */
+
+/* --- Sea waves: the shipping undertone at the hero's base --- */
+.sea{position:absolute; left:0; right:0; bottom:-2px; z-index:0;
+  pointer-events:none; line-height:0}
+.sea svg{width:200%; height:64px; display:block}
+.sea-1 svg{animation:seaDrift 24s linear infinite}
+.sea-2{opacity:.5}
+.sea-2 svg{animation:seaDrift 38s linear reverse infinite}
+@keyframes seaDrift{to{transform:translateX(-50%)}}
+
+/* --- Button sheen on hover --- */
+.btn{position:relative; overflow:hidden}
+.btn::after{content:""; position:absolute; top:0; bottom:0; left:-80%;
+  width:55%; transform:skewX(-22deg);
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.34), transparent);
+  transition:left .05s; pointer-events:none; opacity:0}
+.btn:hover::after{left:130%; opacity:1; transition:left .6s var(--ease-pro)}
+
+/* --- Floating glyphs on subpage heads --- */
+.glyphs{position:absolute; inset:0; z-index:0; pointer-events:none;
+  overflow:hidden}
+.glyphs b{position:absolute; font-size:30px; opacity:.14; filter:saturate(.7);
+  animation:glyphFloat 12s ease-in-out infinite alternate}
+.glyphs b:nth-child(2){animation-duration:15s; animation-delay:-4s}
+.glyphs b:nth-child(3){animation-duration:18s; animation-delay:-9s}
+@keyframes glyphFloat{from{transform:translateY(-8px) rotate(-4deg)}
+  to{transform:translateY(14px) rotate(5deg)}}
+
+/* --- Kill switch --- */
+@media (prefers-reduced-motion: reduce){
+  .sea svg, .glyphs b, .sky-plane, .sea-ship, .sea-ship svg,
+  .marquee-track{animation:none !important}
+  .mesh{display:none}
+  .sky-plane{left:64%; top:14%}
+  .sea-ship{left:58%}
+  .btn::after{display:none}
+}
+
+/* --- Wax-print texture: concentric rings + seed dots, tiled site-wide.
+   Drawn inline (data URI), colored from the brand palette, kept light so
+   text always wins. The body carries the faint version; alternating and
+   dark surfaces get stronger variants. --- */
+body{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cg fill='none' stroke='%230d9488' stroke-opacity='.055'%3E%3Ccircle cx='35' cy='35' r='22'/%3E%3Ccircle cx='35' cy='35' r='13'/%3E%3Ccircle cx='105' cy='105' r='22'/%3E%3Ccircle cx='105' cy='105' r='13'/%3E%3C/g%3E%3Cg fill='%23f59e0b' fill-opacity='.06'%3E%3Ccircle cx='35' cy='35' r='3.4'/%3E%3Ccircle cx='105' cy='105' r='3.4'/%3E%3C/g%3E%3Cg fill='%230d9488' fill-opacity='.05'%3E%3Cpath d='M105 21l6 14-6 14-6-14z'/%3E%3Cpath d='M35 91l6 14-6 14-6-14z'/%3E%3C/g%3E%3C/svg%3E");
+  background-attachment:fixed}
+.section-alt{background-color:var(--bg-soft);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cg fill='none' stroke='%230d9488' stroke-opacity='.09'%3E%3Ccircle cx='35' cy='35' r='22'/%3E%3Ccircle cx='35' cy='35' r='13'/%3E%3Ccircle cx='105' cy='105' r='22'/%3E%3Ccircle cx='105' cy='105' r='13'/%3E%3C/g%3E%3Cg fill='%23f59e0b' fill-opacity='.1'%3E%3Ccircle cx='35' cy='35' r='3.4'/%3E%3Ccircle cx='105' cy='105' r='3.4'/%3E%3C/g%3E%3C/svg%3E")}
+.site-footer{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cg fill='none' stroke='%2314b8a6' stroke-opacity='.10'%3E%3Ccircle cx='35' cy='35' r='22'/%3E%3Ccircle cx='35' cy='35' r='13'/%3E%3Ccircle cx='105' cy='105' r='22'/%3E%3Ccircle cx='105' cy='105' r='13'/%3E%3C/g%3E%3Cg fill='%23f59e0b' fill-opacity='.12'%3E%3Ccircle cx='35' cy='35' r='3.4'/%3E%3Ccircle cx='105' cy='105' r='3.4'/%3E%3C/g%3E%3C/svg%3E")}
+.cta-band{position:relative; overflow:hidden}
+
+/* --- Pictorial layer: plane, ship, harbor - drawn, not photographed --- */
+.sky-plane{position:absolute; top:14px; left:-14%; z-index:0; pointer-events:none;
+  animation:planeCross 64s linear infinite; opacity:.7}
+.sky-plane svg{width:120px; height:auto; display:block;
+  filter:drop-shadow(0 6px 14px rgba(11,59,56,.18))}
+.sky-plane .trail{stroke:var(--teal-mid); stroke-width:2.4;
+  stroke-dasharray:2 9; stroke-linecap:round; opacity:.7}
+@keyframes planeCross{
+  0%{transform:translateX(0) translateY(14px)}
+  100%{transform:translateX(128vw) translateY(-10px)}}
+
+.sea-ship{position:absolute; bottom:8px; left:-24%; z-index:1;
+  pointer-events:none; animation:shipSail 90s linear infinite}
+.sea-ship svg{width:190px; height:auto; display:block;
+  animation:shipBob 5.2s ease-in-out infinite;
+  filter:drop-shadow(0 10px 18px rgba(11,59,56,.16))}
+@keyframes shipSail{0%{transform:translateX(0)}100%{transform:translateX(148vw)}}
+@keyframes shipBob{0%,100%{transform:rotate(-1.3deg) translateY(0)}
+  50%{transform:rotate(1.1deg) translateY(-5px)}}
+
+/* Harbor silhouette riding the top edge of the footer: crane, containers,
+   ship, barrels - the working corridor, drawn in the footer's own dark. */
+.site-footer{position:relative}
+.site-footer::before{content:""; position:absolute; left:0; right:0; top:-46px;
+  height:46px; pointer-events:none; background-repeat:repeat-x;
+  background-position:bottom center; background-size:auto 46px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='46' viewBox='0 0 560 46'%3E%3Cg fill='%230b3b38'%3E%3Crect x='18' y='30' width='34' height='16'/%3E%3Crect x='22' y='6' width='4' height='26'/%3E%3Crect x='22' y='6' width='38' height='4'/%3E%3Crect x='54' y='10' width='3' height='8'/%3E%3Crect x='47' y='18' width='14' height='9'/%3E%3Crect x='80' y='34' width='24' height='12' rx='1'/%3E%3Crect x='106' y='34' width='24' height='12' rx='1'/%3E%3Crect x='93' y='23' width='24' height='10' rx='1'/%3E%3Cpath d='M170 46l10-18h52l12 18z'/%3E%3Crect x='196' y='16' width='7' height='13'/%3E%3Crect x='185' y='22' width='30' height='7' rx='2'/%3E%3Ccircle cx='300' cy='41' r='5'/%3E%3Ccircle cx='312' cy='41' r='5'/%3E%3Ccircle cx='306' cy='33' r='5'/%3E%3Crect x='296' y='44' width='20' height='2'/%3E%3Crect x='360' y='26' width='5' height='20'/%3E%3Cpath d='M362 26c-10-2-16-9-17-16 8 1 15 7 17 16zm1 0c10-2 16-9 17-16-8 1-15 7-17 16z'/%3E%3Crect x='420' y='32' width='30' height='14' rx='1'/%3E%3Crect x='426' y='20' width='30' height='11' rx='1'/%3E%3Crect x='500' y='36' width='26' height='10' rx='5'/%3E%3Crect x='500' y='24' width='26' height='10' rx='5'/%3E%3C/g%3E%3C/svg%3E");
+  opacity:.9}
+
+@media (max-width:720px){
+  .sky-plane svg{width:84px}
+  .sea-ship svg{width:130px}
+}
+
+/* --- Gradient-mesh canvas (motion.js): the living sky --- */
+.mesh{position:absolute; inset:0; z-index:0; pointer-events:none}
+.mesh canvas{width:100%; height:100%; display:block}
+/* Blend the mesh into the page: soft white behind the copy column for
+   legibility, and a fade to the page background at the bottom edge. */
+.mesh::before{content:""; position:absolute; inset:0;
+  background:
+    radial-gradient(56% 72% at 24% 46%, rgba(255,255,255,.55), transparent 75%),
+    linear-gradient(rgba(255,255,255,.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.09) 1px, transparent 1px);
+  background-size:auto, 44px 44px, 44px 44px}
+.mesh::after{content:""; position:absolute; left:0; right:0; bottom:0; height:34%;
+  background:linear-gradient(180deg, transparent, var(--bg))}
+.page-head .mesh::after{height:55%}
+
+/* --- Hero footage (motion.js, desktop only) --- */
+.hero-video{position:absolute; inset:0; z-index:0; width:100%; height:100%;
+  object-fit:cover; opacity:0; transition:opacity 1.2s ease}
+.hero-video.on{opacity:1}
+/* Crossfade: the incoming beat fades over the outgoing one */
+.hero-video{transition:opacity 1.1s ease}
+/* Over footage the mesh becomes a color grade and the veil strengthens so
+   the dark-on-light design keeps owning the page. */
+.hero.has-video .mesh{mix-blend-mode:soft-light; opacity:.42}
+/* The mesh's white pocket is off over footage - the copy carries its own
+   scrim below, and stacking both is what washed the video out. */
+.hero.has-video .mesh::before{background:none}
+.hero.has-video .hero-bg{opacity:0}
+.hero.has-video .sky-plane, .hero.has-video .sea-ship{display:none}
+.hero.has-video .sea{opacity:.6}
+/* A whisper of lift for overall legibility - NOT a veil. The previous
+   full-width 94% gradient buried the footage, and on wide monitors it
+   covered far more than the text it was meant to protect. */
+.hero.has-video::after{content:""; position:absolute; inset:0; z-index:0;
+  pointer-events:none;
+  background:linear-gradient(180deg, rgba(244,250,248,.30) 0%,
+    rgba(244,250,248,.12) 45%, rgba(244,250,248,.42) 100%)}
+.hero.has-video .hero-inner{position:relative; z-index:2}
+/* Legibility now travels WITH the copy, so it works at any viewport width
+   instead of assuming the text sits in the left 46% of the screen. */
+.hero.has-video .hero-copy{position:relative}
+.hero.has-video .hero-copy::before{content:""; position:absolute;
+  inset:-46px -70px -34px -64px; z-index:-1; pointer-events:none;
+  background:radial-gradient(72% 62% at 42% 48%,
+    rgba(246,252,250,.94) 0%, rgba(246,252,250,.80) 46%,
+    rgba(246,252,250,.30) 74%, rgba(246,252,250,0) 100%)}
+@media (prefers-reduced-motion: reduce){ .hero-video{display:none} }
+
+/* --- Laawol assistant (chat.js) --- */
+.lc-root{position:fixed; right:22px; bottom:22px; z-index:90;
+  font-family:var(--font-body)}
+.lc-fab{width:58px; height:58px; border-radius:50%; border:0; cursor:pointer;
+  background:var(--teal); color:#fff; display:flex; align-items:center;
+  justify-content:center; box-shadow:0 14px 34px rgba(13,148,136,.45);
+  transition:transform .25s var(--ease-pro), background .2s ease}
+.lc-fab:hover{transform:translateY(-3px) scale(1.05); background:#0f766e}
+.lc-fab.open{background:var(--teal-deep)}
+.lc-panel{position:absolute; right:0; bottom:74px; width:min(360px, calc(100vw - 44px));
+  background:var(--paper); border:1px solid var(--line); border-radius:18px;
+  box-shadow:var(--shadow-lg); overflow:hidden; display:flex;
+  flex-direction:column; opacity:0; transform:translateY(14px) scale(.98);
+  pointer-events:none; transition:opacity .28s var(--ease-pro),
+  transform .28s var(--ease-pro)}
+.lc-panel.open{opacity:1; transform:none; pointer-events:auto}
+.lc-head{display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; background:var(--teal-deep); color:#fff}
+.lc-head b{font-family:var(--font-head); font-size:15.5px; display:block}
+.lc-head small{opacity:.75; font-size:12px}
+.lc-x{background:none; border:0; color:#fff; font-size:24px; line-height:1;
+  cursor:pointer; opacity:.8; padding:2px 6px}
+.lc-x:hover{opacity:1}
+.lc-log{padding:14px; height:320px; overflow-y:auto; display:flex;
+  flex-direction:column; gap:10px; background:var(--bg)}
+.lc-msg{max-width:86%; padding:10px 13px; border-radius:14px; font-size:14px;
+  line-height:1.5}
+.lc-msg.bot{background:#fff; border:1px solid var(--line);
+  border-bottom-left-radius:4px; align-self:flex-start}
+.lc-msg.me{background:var(--teal); color:#fff;
+  border-bottom-right-radius:4px; align-self:flex-end}
+.lc-actions{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px}
+.lc-action{display:inline-block; background:var(--mist); color:var(--teal-deep);
+  font-weight:700; font-size:12.5px; padding:7px 12px; border-radius:999px;
+  border:1px solid rgba(13,148,136,.3)}
+.lc-action:hover{background:var(--teal); color:#fff}
+.lc-chips{display:flex; flex-wrap:wrap; gap:7px}
+.lc-chip{background:#fff; border:1.4px solid var(--line); color:var(--ink-soft);
+  font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:999px;
+  cursor:pointer; transition:border-color .15s ease, color .15s ease}
+.lc-chip:hover{border-color:var(--teal); color:var(--teal-deep)}
+.lc-form{display:flex; gap:8px; padding:12px; border-top:1px solid var(--line);
+  background:var(--paper)}
+.lc-in{flex:1; border:1.5px solid var(--line); border-radius:999px;
+  padding:9px 14px; font:inherit; font-size:14px; background:var(--bg)}
+.lc-in:focus{outline:none; border-color:var(--teal)}
+.lc-send{border:0; background:var(--teal); color:#fff; font-weight:700;
+  font-size:13.5px; padding:9px 16px; border-radius:999px; cursor:pointer}
+.lc-send:hover{background:#0f766e}
+@media (max-width:640px){ .lc-root{right:14px; bottom:14px}
+  .lc-panel{bottom:70px} .lc-log{height:46vh} }
+@media (prefers-reduced-motion: reduce){
+  .lc-panel{transition:none} .lc-fab{transition:none} }
+
+/* assistant typing indicator */
+.lc-typing{display:flex; gap:5px; align-items:center; min-height:20px}
+.lc-typing i{width:7px; height:7px; border-radius:50%; background:var(--muted);
+  animation:lcDot 1.1s ease-in-out infinite}
+.lc-typing i:nth-child(2){animation-delay:.18s}
+.lc-typing i:nth-child(3){animation-delay:.36s}
+@keyframes lcDot{0%,60%,100%{transform:translateY(0); opacity:.5}
+  30%{transform:translateY(-5px); opacity:1}}
+@media (prefers-reduced-motion: reduce){ .lc-typing i{animation:none} }
+
+/* --- Mail handoff feedback (mailto.js) --- */
+.mailto-note{margin:10px 0 0; font-size:13.5px; color:var(--ink-soft)}
+.mailto-note.warn{background:var(--warn-bg,#fdf4e3); border:1px solid #f5d9a8;
+  border-radius:10px; padding:10px 12px; color:#92400e}
+.mailto-note a{color:inherit; font-weight:700; text-decoration:underline}
+.mailto-copy{margin-left:10px; font:inherit; font-size:12.5px; font-weight:700;
+  border:1px solid currentColor; background:transparent; color:inherit;
+  border-radius:999px; padding:3px 10px; cursor:pointer}
+.mailto-copy:hover{background:rgba(0,0,0,.05)}

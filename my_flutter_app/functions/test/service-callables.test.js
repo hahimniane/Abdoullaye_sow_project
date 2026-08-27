@@ -5,6 +5,17 @@ const admin = require("firebase-admin");
 // These handlers run directly against the Firestore emulator instead of
 // through the Functions emulator, so declare the runtime explicitly before
 // loading index.js.
+// This suite writes with ADMIN credentials. Without the emulator env
+// those writes land in PRODUCTION - on 2026-08-16 a direct `node
+// --test` run did exactly that, seeding 68 approved fixture
+// businesses that real customers could see. Fail closed instead.
+if (!process.env.FIRESTORE_EMULATOR_HOST) {
+  throw new Error(
+      "Run this through `npm run test:services` (firebase emulators:exec). " +
+      "A direct node --test run would write its fixtures into the " +
+      "real project.");
+}
+
 process.env.FUNCTIONS_EMULATOR = "true";
 
 const CUSTOMER_UID = "service-test-customer";
@@ -47,6 +58,7 @@ async function seedBusiness(id, {
   seaRate = 5,
   serviceAvailability,
   freightPickup,
+  pickupPlan,
   destinationId = COUNTRY_ID,
   destinationName = "Guinea",
 } = {}) {
@@ -65,6 +77,7 @@ async function seedBusiness(id, {
       city: "Bronx",
       addressLine1: "100 Test Avenue",
       ...(freightPickup || {}),
+      ...(pickupPlan ? {state: "NY", pickupPlan} : {}),
       parkingCity: "Bronx",
       parkingAddressLine1: "100 Test Avenue",
       parkingTotalSpaces: 5,
@@ -114,7 +127,6 @@ function freightInput(businessId, overrides = {}) {
     mode: "air",
     weightKg: 10,
     pickupRequested: false,
-    useWalletBalance: false,
     ...overrides,
   };
 }
@@ -477,8 +489,11 @@ describe("freight service callable lifecycle", () => {
     );
   });
 
-  it("applies wallet funds once and makes cancellation reversal idempotent",
+  it("ignores any wallet balance now that the platform holds no money",
       async () => {
+        // The wallet is retired (docs/PLAN-2026-08-backlog.md #3). A balance
+        // left on file must never be spent: the card is charged in full and
+        // the stored balance is untouched, so it can be returned deliberately.
         const businessId = "freight-wallet-business";
         await seedBusiness(businessId);
         await db.collection("wallets").doc(CUSTOMER_UID).set({
@@ -492,40 +507,17 @@ describe("freight service callable lifecycle", () => {
           data: freightInput(businessId, {
             mode: "sea",
             weightKg: 10,
-            useWalletBalance: true,
           }),
         });
         const paidShipment = await freightData(paid.shipmentId);
-        assert.equal(paidShipment.walletAppliedCents, 2500);
-        assert.equal(paidShipment.cardChargeAmountCents, 2500);
-        const walletAfterDebit = await db.collection("wallets")
+        // The wallet fields are gone entirely, not zeroed.
+        assert.equal(Object.hasOwn(paidShipment, "walletAppliedCents"), false);
+        assert.equal(Object.hasOwn(paidShipment, "walletAppliedAmount"), false);
+        // Full price on the card - 10kg sea at 5/kg.
+        assert.equal(paidShipment.cardChargeAmountCents, 5000);
+        const walletAfter = await db.collection("wallets")
             .doc(CUSTOMER_UID).get();
-        assert.equal(walletAfterDebit.get("balanceCents"), 0);
-
-        const pendingRef = db.collection("freightShipments").doc();
-        await pendingRef.set({
-          customerUid: CUSTOMER_UID,
-          businessId,
-          businessName: "Freight Wallet Business",
-          trackingCode: "FR-CANCEL-WALLET",
-          paymentStatus: "pending",
-          status: "pending_payment",
-          walletAppliedCents: 2500,
-        });
-        await functions.cancelPendingFreightShipment.run({
-          auth: {uid: CUSTOMER_UID},
-          data: {shipmentId: pendingRef.id},
-        });
-        await functions.cancelPendingFreightShipment.run({
-          auth: {uid: CUSTOMER_UID},
-          data: {shipmentId: pendingRef.id},
-        });
-        const cancelled = await pendingRef.get();
-        const walletAfterCancel = await db.collection("wallets")
-            .doc(CUSTOMER_UID).get();
-        assert.equal(cancelled.get("paymentStatus"), "cancelled");
-        assert.equal(cancelled.get("walletAppliedReversed"), true);
-        assert.equal(walletAfterCancel.get("balanceCents"), 2500);
+        assert.equal(walletAfter.get("balanceCents"), 2500);
       });
 
   it("rejects invalid freight inputs and unavailable configurations",
@@ -733,6 +725,444 @@ describe("freight service callable lifecycle", () => {
         assert.equal(shipment.price, 150);
       });
 
+  it("books a set-price item without asking for a weight", async () => {
+    // The customer picks "iPhone 16" and sees $50. Nobody guesses the
+    // weight of a known object at their kitchen table.
+    const businessId = "freight-flat-price-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{
+            id: "iphone", label: "iPhone 16",
+            pricingMode: "flat", flatPrice: 50, includedKg: 2,
+          }],
+        },
+      },
+    }, {merge: true});
+
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {
+        weightKg: 0,
+        itemCategoryId: "electronics",
+        itemId: "iphone",
+      }),
+    });
+    const shipment = await freightData(booking.shipmentId);
+    // The set price, not 10kg x $12.50 x 2 that the category would charge.
+    assert.equal(shipment.price, 50);
+    assert.equal(shipment.pricingMode, "flat");
+    assert.equal(shipment.itemFlatPrice, 50);
+    assert.equal(shipment.itemIncludedKg, 2);
+    // It still gets weighed at the counter, because the price covers 2kg.
+    assert.equal(shipment.weightVerificationRequired, true);
+  });
+
+  it("charges only the weight a set price did not cover", async () => {
+    // The box case: priced at $50 for 2kg, handed over inside a carton at
+    // 6kg. The business is owed the 4kg it never priced for, at its route
+    // rate - and the set price itself is never recalculated.
+    const businessId = "freight-flat-excess-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{
+            id: "iphone", label: "iPhone 16",
+            pricingMode: "flat", flatPrice: 50, includedKg: 2,
+          }],
+        },
+      },
+    }, {merge: true});
+    const manager = await seedFreightManager(businessId);
+
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {
+        weightKg: 0,
+        itemCategoryId: "electronics",
+        itemId: "iphone",
+      }),
+    });
+    const confirmed = await functions.confirmFreightShipmentWeight.run({
+      auth: manager,
+      data: {shipmentId: booking.shipmentId, verifiedWeightKg: 6},
+    });
+    // $50 + 4kg x $12.50 air = $100.
+    assert.equal(confirmed.finalTotal, 100);
+    assert.equal(confirmed.balanceDue, 50);
+  });
+
+  it("never weighs a set price that covers any weight", async () => {
+    const businessId = "freight-flat-unlimited-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{
+            id: "sim", label: "SIM card",
+            pricingMode: "flat", flatPrice: 10,
+          }],
+        },
+      },
+    }, {merge: true});
+    const manager = await seedFreightManager(businessId);
+
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {
+        weightKg: 0,
+        itemCategoryId: "electronics",
+        itemId: "sim",
+      }),
+    });
+    const shipment = await freightData(booking.shipmentId);
+    assert.equal(shipment.price, 10);
+    assert.equal(shipment.weightVerificationRequired, false);
+    // Nothing a scale could change, so the scale is refused outright rather
+    // than inventing a balance the customer never agreed to.
+    await assert.rejects(
+        () => functions.confirmFreightShipmentWeight.run({
+          auth: manager,
+          data: {shipmentId: booking.shipmentId, verifiedWeightKg: 40},
+        }),
+        /set price and is not weighed/,
+    );
+  });
+
+  it("still refuses a by-weight booking with no weight", async () => {
+    const businessId = "freight-needs-weight-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{
+            id: "mixed", label: "Assorted",
+            pricingMode: "per_kg", weightFactor: 2,
+          }],
+        },
+      },
+    }, {merge: true});
+    await assert.rejects(
+        () => functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 0,
+            itemCategoryId: "electronics",
+            itemId: "mixed",
+          }),
+        }),
+        /weight must be greater than zero/,
+    );
+  });
+
+  it("sends an item nobody priced to a request, not to a guess", async () => {
+    // The platform used to charge Electronics at 2x - its own default, set
+    // by nobody at this business - on a row the business had never quoted.
+    const businessId = "freight-unpriced-row-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{id: "iphone", label: "iPhone"}],
+        },
+      },
+    }, {merge: true});
+
+    await assert.rejects(
+        () => functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            itemCategoryId: "electronics",
+            itemId: "iphone",
+          }),
+        }),
+        /item_not_priced/,
+    );
+  });
+
+  it("still quotes an app build that knows nothing about items", async () => {
+    // Builds already in customers' hands send no item. They get the plainest
+    // quote there is - this business's own per-kg rate, nothing added.
+    const businessId = "freight-legacy-client-business";
+    await seedBusiness(businessId);
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {weightKg: 10}),
+    });
+    const shipment = await freightData(booking.shipmentId);
+    // 10kg x $12.50 air, with no multiplier of any kind.
+    assert.equal(shipment.price, 125);
+    assert.equal(shipment.itemCategoryMultiplier, 1);
+  });
+
+  it("never charges for cover, however much the item pays back",
+      async () => {
+        // The business prices each item for what it is worth to carry, so
+        // the risk is already in the shipping rate. A percentage on top
+        // billed the same risk twice.
+        const businessId = "freight-free-cover-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId).set({
+          freightCoverageEnabled: true,
+          freightPaybackTable: {
+            electronics: {
+              items: [{
+                id: "iphone", label: "iPhone",
+                pricingMode: "per_kg",
+              }],
+            },
+          },
+        }, {merge: true});
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            itemCategoryId: "electronics",
+            itemId: "iphone",
+          }),
+        });
+        const shipment = await freightData(booking.shipmentId);
+        // 10kg x $12.50 air, the business's own rate and nothing added.
+        assert.equal(shipment.coverageFeeCents, 0);
+        assert.equal(shipment.price, 125);
+        assert.equal(shipment.estimatedTotalCents, 12500);
+        // Covered is the whole answer: this business makes good on the
+        // parcel. No figure is attached to it and none is charged for it.
+        assert.equal(shipment.coverageCovered, true);
+        assert.equal("coveragePayoutCapCents" in shipment, false);
+        assert.equal("paybackAmountCents" in shipment, false);
+      });
+
+  it("promises nothing when the business does not cover loss",
+      async () => {
+        const businessId = "freight-uncovered-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId).set({
+          freightPaybackTable: {
+            electronics: {
+              items: [{
+                id: "iphone", label: "iPhone",
+                pricingMode: "per_kg",
+              }],
+            },
+          },
+        }, {merge: true});
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            itemCategoryId: "electronics",
+            itemId: "iphone",
+          }),
+        });
+        const shipment = await freightData(booking.shipmentId);
+        assert.equal(shipment.coverageCovered, false);
+        assert.equal(shipment.coverageFeeCents, 0);
+        // The parcel is still carried, and its payback is still recorded -
+        // it is the promise that is absent, not the item.
+      });
+
+  it("delivers to the receiver's address for the business's flat fee",
+      async () => {
+        const businessId = "freight-delivery-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId).set({
+          freightDestinationDeliveryAvailable: true,
+          freightDestinationDeliveryFee: 15,
+        }, {merge: true});
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            destinationDelivery: true,
+            receiverAddress: "  Quartier Almamya, Conakry  ",
+          }),
+        });
+        const shipment = await freightData(booking.shipmentId);
+        // 10kg x $12.50 = $125 shipping, plus the flat $15 delivery.
+        assert.equal(shipment.destinationDelivery, true);
+        assert.equal(shipment.destinationDeliveryFeeCents, 1500);
+        assert.equal(shipment.receiverAddress, "Quartier Almamya, Conakry");
+        assert.equal(shipment.price, 140);
+        assert.equal(shipment.estimatedTotalCents, 14000);
+      });
+
+  it("refuses delivery from a business that does not offer it",
+      async () => {
+        // Silently downgrading to office collection would only surface as a
+        // parcel that never arrived at the address they paid for.
+        const businessId = "freight-no-delivery-business";
+        await seedBusiness(businessId);
+        await assert.rejects(
+            () => functions.createFreightShipmentPaymentIntent.run({
+              auth: {uid: CUSTOMER_UID},
+              data: freightInput(businessId, {
+                destinationDelivery: true,
+                receiverAddress: "Kaloum, Conakry",
+              }),
+            }),
+            /does not deliver to the receiver/,
+        );
+      });
+
+  it("refuses delivery with no address to deliver to", async () => {
+    const businessId = "freight-delivery-no-address-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightDestinationDeliveryAvailable: true,
+      freightDestinationDeliveryFee: 15,
+    }, {merge: true});
+    await assert.rejects(
+        () => functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            destinationDelivery: true,
+            receiverAddress: "   ",
+          }),
+        }),
+        /delivery address is required/,
+    );
+  });
+
+  it("keeps the delivery fee whole when the weight is corrected",
+      async () => {
+        // Delivering to an address costs the same whatever the parcel
+        // weighs; settling without it would refund the delivery.
+        const businessId = "freight-delivery-settle-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId).set({
+          freightDestinationDeliveryAvailable: true,
+          freightDestinationDeliveryFee: 15,
+        }, {merge: true});
+        const manager = await seedFreightManager(businessId);
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            destinationDelivery: true,
+            receiverAddress: "Quartier Almamya, Conakry",
+          }),
+        });
+        const confirmed = await functions.confirmFreightShipmentWeight.run({
+          auth: manager,
+          data: {shipmentId: booking.shipmentId, verifiedWeightKg: 12},
+        });
+        // 12kg x $12.50 = $150, plus the unchanged $15 delivery = $165.
+        assert.equal(confirmed.finalTotal, 165);
+        assert.equal(confirmed.balanceDue, 25);
+      });
+
+  it("books pay-on-arrival without charging, when the business opted in",
+      async () => {
+        const businessId = "freight-pay-on-arrival-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId)
+            .set({freightPayOnArrival: true}, {merge: true});
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            paymentTiming: "arrival",
+          }),
+        });
+        assert.equal(booking.payOnArrival, true);
+        assert.equal(booking.cardChargeAmount, 0);
+
+        const shipment = await freightData(booking.shipmentId);
+        assert.equal(shipment.payOnArrival, true);
+        assert.equal(shipment.paymentTiming, "arrival");
+        // Nothing charged at booking - the card is saved and verified, and
+        // the estimate fields keep the price for display.
+        assert.equal(shipment.cardChargeAmountCents, 0);
+        assert.equal(shipment.paymentStatus, "card_saved");
+        assert.equal(shipment.status, "awaiting_weight_confirmation");
+        assert.equal(shipment.priceSettlementStatus, "awaiting_weight");
+        assert.equal(shipment.estimatedTotalCents, 12500);
+        assert.ok(shipment.stripePaymentMethodId);
+      });
+
+  it("refuses pay-on-arrival from a business that did not opt in",
+      async () => {
+        const businessId = "freight-no-arrival-optin-business";
+        await seedBusiness(businessId);
+        await assert.rejects(
+            () => functions.createFreightShipmentPaymentIntent.run({
+              auth: {uid: CUSTOMER_UID},
+              data: freightInput(businessId, {paymentTiming: "arrival"}),
+            }),
+            /does not accept payment on arrival/,
+        );
+      });
+
+  it("defers a pay-on-arrival balance to arrival, then charges the " +
+      "saved card and keeps the shipment arrived", async () => {
+    const businessId = "freight-arrival-charge-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId)
+        .set({freightPayOnArrival: true}, {merge: true});
+    const manager = await seedFreightManager(businessId);
+
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {
+        weightKg: 10,
+        paymentTiming: "arrival",
+      }),
+    });
+
+    // Weight confirmation must not charge: the whole verified price is
+    // owed, but the deal is payment on ARRIVAL, and fulfillment may
+    // progress unpaid.
+    const confirmed = await functions.confirmFreightShipmentWeight.run({
+      auth: manager,
+      data: {shipmentId: booking.shipmentId, verifiedWeightKg: 12},
+    });
+    assert.equal(confirmed.balanceDue, 150);
+    let shipment = await freightData(booking.shipmentId);
+    assert.equal(shipment.priceSettlementStatus, "due_on_arrival");
+    assert.equal(shipment.status, "pending");
+    assert.equal(shipment.balanceDueCents, 15000);
+    assert.notEqual(shipment.balancePaymentStatus, "succeeded");
+
+    // A repeated confirmation stays idempotent and still does not charge.
+    await functions.confirmFreightShipmentWeight.run({
+      auth: manager,
+      data: {shipmentId: booking.shipmentId, verifiedWeightKg: 12},
+    });
+    shipment = await freightData(booking.shipmentId);
+    assert.equal(shipment.priceSettlementStatus, "due_on_arrival");
+
+    // The business marks it arrived - the trigger flips the shipment to
+    // balance_due and charges the saved card off-session.
+    const shipmentRef = db.collection("freightShipments")
+        .doc(booking.shipmentId);
+    const before = {data: () => shipment};
+    await shipmentRef.update({status: "ready_for_pickup"});
+    const afterData = await freightData(booking.shipmentId);
+    await functions.chargeFreightPayOnArrival.run({
+      data: {
+        before,
+        after: {data: () => afterData, ref: shipmentRef},
+      },
+      params: {shipmentId: booking.shipmentId},
+    });
+
+    shipment = await freightData(booking.shipmentId);
+    assert.equal(shipment.priceSettlementStatus, "settled");
+    assert.equal(shipment.balancePaymentStatus, "succeeded");
+    assert.equal(shipment.price, 150);
+    assert.equal(shipment.balanceDueCents, 0);
+    // Settling the arrival charge must not un-arrive the shipment.
+    assert.equal(shipment.status, "ready_for_pickup");
+  });
+
   it("converges simultaneous freight balance payment requests",
       async () => {
         const businessId = "freight-concurrent-settlement-business";
@@ -767,8 +1197,11 @@ describe("freight service callable lifecycle", () => {
         assert.equal(shipment.balancePaymentStatus, "succeeded");
       });
 
-  it("refunds a lighter parcel card-first and restores wallet exactly once",
+  it("refunds a lighter parcel entirely to the card, never to a wallet",
       async () => {
+        // With the wallet retired nothing is ever paid from a balance, so an
+        // overpayment must come back the way it went out - on the card - and
+        // must not be parked as platform-held credit.
         const businessId = "freight-refund-settlement-business";
         await seedBusiness(businessId);
         const manager = await seedFreightManager(businessId);
@@ -782,7 +1215,6 @@ describe("freight service callable lifecycle", () => {
           auth: {uid: CUSTOMER_UID},
           data: freightInput(businessId, {
             weightKg: 10,
-            useWalletBalance: true,
           }),
         });
         const confirmed = await functions.confirmFreightShipmentWeight.run({
@@ -793,17 +1225,11 @@ describe("freight service callable lifecycle", () => {
         assert.equal(confirmed.refundDue, 112.5);
         const settlement = await db.collection("freightSettlements")
             .doc(confirmed.settlementId).get();
-        assert.equal(settlement.get("cardRefundedCents"), 10000);
-        assert.equal(settlement.get("walletRefundedCents"), 1250);
-        let wallet = await db.collection("wallets").doc(CUSTOMER_UID).get();
-        assert.equal(wallet.get("balanceCents"), 1250);
-
-        await functions.confirmFreightShipmentWeight.run({
-          auth: manager,
-          data: {shipmentId: booking.shipmentId, verifiedWeightKg: 1},
-        });
-        wallet = await db.collection("wallets").doc(CUSTOMER_UID).get();
-        assert.equal(wallet.get("balanceCents"), 1250);
+        assert.equal(settlement.get("cardRefundedCents"), 11250);
+        // No wallet leg at all - the field is simply never written.
+        assert.equal(settlement.get("walletRefundedCents") || 0, 0);
+        const wallet = await db.collection("wallets").doc(CUSTOMER_UID).get();
+        assert.equal(wallet.get("balanceCents"), 2500);
       });
 
   it("denies weight confirmation without the business freight permission",
@@ -1337,7 +1763,12 @@ describe("car transport service callable lifecycle", () => {
         const request = await transportRequestData(created.id);
         const quote = await transportQuoteData(created.id, businessId);
         assert.equal(request.quoteStatus, "selected");
-        assert.equal(request.status, "pending");
+        // Selection is a commitment, so it now charges: the job sits in
+        // pending_payment until the customer's card is secured, and only
+        // the payment completion opens it to the fulfilment machine.
+        assert.equal(request.status, "pending_payment");
+        assert.equal(request.paymentStatus, "pending");
+        assert.equal(request.totalCents, 145500);
         assert.equal(request.selectedQuoteId, quoteId);
         assert.equal(request.selectedBusinessId, businessId);
         assert.equal(request.businessId, businessId);
@@ -1345,6 +1776,38 @@ describe("car transport service callable lifecycle", () => {
         assert.equal(request.amountCents, 145500);
         assert.equal(request.price, 1455);
         assert.equal(quote.status, "selected");
+
+        await assert.rejects(
+            () => functions.createTransportJobPaymentIntent.run({
+              auth: {uid: OTHER_UID},
+              data: {requestId: created.id},
+            }),
+            /permission|denied/i,
+        );
+        const payment = await functions.createTransportJobPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {requestId: created.id},
+        });
+        assert.equal(payment.simulatedPayment, true);
+        const paid = await transportRequestData(created.id);
+        assert.equal(paid.paymentStatus, "succeeded");
+        assert.equal(paid.status, "pending");
+
+        // The capture scheduler re-runs the completion days later, when the
+        // carrier has usually already scheduled the job. The first live
+        // capture regressed status back to "pending" while
+        // fulfillmentStatus kept the truth - so the customer's view lied.
+        await functions.updateTransportFulfillmentStatus.run({
+          auth: manager,
+          data: {requestId: created.id, status: "scheduled", businessId},
+        });
+        await functions.completeTransportJobPayment.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {requestId: created.id},
+        });
+        const rerun = await transportRequestData(created.id);
+        assert.equal(rerun.status, "scheduled");
+        assert.equal(rerun.fulfillmentStatus, "scheduled");
       });
 
   it("allows only the selected provider to advance fulfillment",
@@ -1754,7 +2217,6 @@ describe("barrel shipping service callable lifecycle", () => {
             businessId,
             quantity: 1,
             pickupRequested: false,
-            useWalletBalance: false,
           },
         }),
         /not configured for barrel shipping/,
@@ -1775,7 +2237,6 @@ describe("barrel shipping service callable lifecycle", () => {
             businessId,
             quantity: 2,
             pickupRequested: false,
-            useWalletBalance: false,
           },
         });
         const shipment = await db.collection("barrelShipments")
@@ -1849,7 +2310,19 @@ describe("barrel shipping service callable lifecycle", () => {
   it("books pickup from a resolved address without trusting the client zone",
       async () => {
         const businessId = "barrel-any-address-pickup";
-        await seedBusiness(businessId);
+        // Pickup now belongs to the business: without a pickupPlan the
+        // callable refuses with barrel_pickup_unavailable (decision #9).
+        await seedBusiness(businessId, {
+          pickupPlan: {
+            version: 1,
+            shared: {
+              enabled: true,
+              mode: "borough",
+              boroughPrices: {Brooklyn: 108, Bronx: 40},
+            },
+            services: {},
+          },
+        });
         const pickupDateTime = futureIso();
         const created = await functions.createBarrelShipmentPaymentIntent.run({
           auth: {uid: CUSTOMER_UID},
@@ -1864,7 +2337,6 @@ describe("barrel shipping service callable lifecycle", () => {
             pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
             pickupBorough: "Albany",
             pickupDateTime,
-            useWalletBalance: false,
           },
         });
         const shipment = await db.collection("barrelShipments")
@@ -1902,7 +2374,6 @@ describe("barrel shipping service callable lifecycle", () => {
               pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
               pickupBorough: "Bronx",
               pickupDateTime: futureIso(),
-              useWalletBalance: false,
               ...overrides,
             },
           });
@@ -1953,7 +2424,6 @@ describe("barrel shipping service callable lifecycle", () => {
         businessId,
         quantity: 1,
         pickupRequested: false,
-        useWalletBalance: false,
       },
     });
     const shipment = await db.collection("barrelShipments")
@@ -1993,7 +2463,6 @@ describe("barrel shipping service callable lifecycle", () => {
             businessId,
             quantity: 1,
             pickupRequested: false,
-            useWalletBalance: false,
           },
         });
         await assert.rejects(attempt, /multiple office locations/);
@@ -2010,7 +2479,6 @@ describe("barrel shipping service callable lifecycle", () => {
                 quantity: 1,
                 pickupRequested: false,
                 officeLocationId: "not-a-real-location",
-                useWalletBalance: false,
               },
             }),
             /Select a valid office location/,
@@ -2027,7 +2495,6 @@ describe("barrel shipping service callable lifecycle", () => {
             quantity: 1,
             pickupRequested: false,
             officeLocationId: "manhattan",
-            useWalletBalance: false,
           },
         });
         const shipment = await db.collection("barrelShipments")
@@ -2058,7 +2525,6 @@ describe("barrel shipping service callable lifecycle", () => {
           data: {
             senderName: "Multi Destination Sender",
             pickupRequested: false,
-            useWalletBalance: false,
             lines: [
               {
                 destinationCountryId: COUNTRY_ID,
@@ -2101,7 +2567,17 @@ describe("barrel shipping service callable lifecycle", () => {
   it("charges shared pickup once for every independent order line",
       async () => {
         const businessId = "barrel-order-shared-pickup";
-        const businessRef = await seedBusiness(businessId);
+        const businessRef = await seedBusiness(businessId, {
+          pickupPlan: {
+            version: 1,
+            shared: {
+              enabled: true,
+              mode: "borough",
+              boroughPrices: {Brooklyn: 108, Bronx: 40},
+            },
+            services: {},
+          },
+        });
         await businessRef.collection("destinationCountries").doc("gh").set({
           countryId: "gh",
           name: "Ghana",
@@ -2120,7 +2596,6 @@ describe("barrel shipping service callable lifecycle", () => {
             pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
             pickupBorough: "Brooklyn",
             pickupDateTime,
-            useWalletBalance: false,
             lines: [
               {
                 destinationCountryId: COUNTRY_ID,
@@ -2168,7 +2643,17 @@ describe("barrel shipping service callable lifecycle", () => {
   it("preserves independent pickup and drop-off details per order line",
       async () => {
         const businessId = "barrel-order-line-pickups";
-        const businessRef = await seedBusiness(businessId);
+        const businessRef = await seedBusiness(businessId, {
+          pickupPlan: {
+            version: 1,
+            shared: {
+              enabled: true,
+              mode: "borough",
+              boroughPrices: {Brooklyn: 108, Bronx: 40},
+            },
+            services: {},
+          },
+        });
         await businessRef.collection("destinationCountries").doc("gh").set({
           countryId: "gh",
           name: "Ghana",
@@ -2183,7 +2668,6 @@ describe("barrel shipping service callable lifecycle", () => {
           auth: {uid: CUSTOMER_UID},
           data: {
             senderName: "Line Pickup Sender",
-            useWalletBalance: false,
             lines: [
               {
                 destinationCountryId: COUNTRY_ID,
@@ -2231,7 +2715,7 @@ describe("barrel shipping service callable lifecycle", () => {
               // (no configured office locations, so it falls back to the
               // business's main address) instead of the old shared global
               // pricing-doc placeholder.
-              "100 Test Avenue, Bronx",
+              "100 Test Avenue, Bronx, NY",
             ],
         );
         assert.deepEqual(
@@ -2304,72 +2788,26 @@ describe("car parking service callable lifecycle", () => {
   });
 });
 
-describe("wallet refund lifecycle", () => {
-  it("moves funds to pending and restores or completes them exactly once",
-      async () => {
-        const walletRef = db.collection("wallets").doc(OTHER_UID);
-        await walletRef.set({
-          customerUid: OTHER_UID,
-          currency: "usd",
-          balanceCents: 5000,
-          balance: 50,
-          pendingRefundCents: 0,
-          pendingRefund: 0,
-        });
+describe("the retired wallet", () => {
+  it("exposes no callable that can move a stored balance", async () => {
+    // The wallet is removed (docs/PLAN-2026-08-backlog.md #3). The stored
+    // documents stay - deleting data is not reversible - but nothing on the
+    // server can read, spend, or return them any more.
+    const walletRef = db.collection("wallets").doc(OTHER_UID);
+    await walletRef.set({
+      customerUid: OTHER_UID,
+      currency: "usd",
+      balanceCents: 5000,
+      balance: 50,
+    });
 
-        const first = await functions.requestWalletCardRefund.run({
-          auth: {uid: OTHER_UID},
-          data: {},
-        });
-        let wallet = await walletRef.get();
-        assert.equal(wallet.get("balanceCents"), 0);
-        assert.equal(wallet.get("pendingRefundCents"), 5000);
-        await assert.rejects(
-            () => functions.requestWalletCardRefund.run({
-              auth: {uid: OTHER_UID},
-              data: {},
-            }),
-            /no wallet balance to return/,
-        );
+    assert.equal(functions.requestWalletCardRefund, undefined);
+    assert.equal(functions.reviewWalletRefundRequest, undefined);
+    assert.equal(functions.notifyWalletRefundStatus, undefined);
 
-        await functions.reviewWalletRefundRequest.run({
-          auth: {uid: FINANCE_UID},
-          data: {
-            requestId: first.refundRequestId,
-            decision: "rejected",
-            note: "External card return was not available.",
-          },
-        });
-        wallet = await walletRef.get();
-        assert.equal(wallet.get("balanceCents"), 5000);
-        assert.equal(wallet.get("pendingRefundCents"), 0);
-
-        const second = await functions.requestWalletCardRefund.run({
-          auth: {uid: OTHER_UID},
-          data: {},
-        });
-        await functions.reviewWalletRefundRequest.run({
-          auth: {uid: FINANCE_UID},
-          data: {
-            requestId: second.refundRequestId,
-            decision: "completed",
-            note: "External card return confirmed.",
-          },
-        });
-        wallet = await walletRef.get();
-        assert.equal(wallet.get("balanceCents"), 0);
-        assert.equal(wallet.get("pendingRefundCents"), 0);
-        await assert.rejects(
-            () => functions.reviewWalletRefundRequest.run({
-              auth: {uid: FINANCE_UID},
-              data: {
-                requestId: second.refundRequestId,
-                decision: "completed",
-              },
-            }),
-            /Only pending refund requests can be reviewed/,
-        );
-      });
+    const wallet = await walletRef.get();
+    assert.equal(wallet.get("balanceCents"), 5000);
+  });
 });
 
 describe("car sales service callable lifecycle", () => {
@@ -2549,8 +2987,15 @@ describe("car sales service callable lifecycle", () => {
     let viewing = await db.collection("carPurchases")
         .doc(created.purchaseId).get();
     assert.equal(viewing.get("paymentType"), "viewing_reservation");
-    assert.equal(viewing.get("purchaseStatus"), "viewing_scheduled");
     assert.equal(viewing.get("paymentStatus"), "not_required");
+    // Asking for a viewing opens a negotiation; it does not book the slot.
+    // The business has to accept or counter before anything is agreed, so
+    // there is deliberately no appointmentStart yet.
+    assert.equal(viewing.get("purchaseStatus"), "viewing_requested");
+    assert.equal(viewing.get("proposedBy"), "customer");
+    assert.equal(viewing.get("proposedSlots").length, 1);
+    assert.equal(viewing.get("appointmentStart"), undefined);
+    assert.ok(viewing.get("respondByAt"));
 
     const rescheduledAt = futureIso(72);
     await functions.updateCarViewingReservation.run({
@@ -2562,6 +3007,29 @@ describe("car sales service callable lifecycle", () => {
       },
     });
     viewing = await viewing.ref.get();
+    // Moving a viewing is also a proposal - the customer cannot set the time
+    // unilaterally, so the new time lands in proposedSlots, not on the
+    // appointment.
+    assert.equal(viewing.get("purchaseStatus"), "viewing_requested");
+    assert.equal(
+        viewing.get("proposedSlots")[0].startAtMs,
+        Date.parse(rescheduledAt),
+    );
+
+    // The business accepting is what actually schedules it.
+    const sales = await seedFreightManager(businessId, {
+      permissions: ["purchases"],
+    });
+    await functions.actOnCarViewing.run({
+      auth: {uid: sales.uid},
+      data: {
+        purchaseId: created.purchaseId,
+        action: "accept",
+        slots: [{startAt: rescheduledAt, label: "Saturday afternoon"}],
+      },
+    });
+    viewing = await viewing.ref.get();
+    assert.equal(viewing.get("purchaseStatus"), "viewing_scheduled");
     assert.equal(
         viewing.get("appointmentStart").toMillis(),
         Date.parse(rescheduledAt),

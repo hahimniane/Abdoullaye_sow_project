@@ -92,7 +92,19 @@ describe("payment runtime configuration", () => {
     });
     assert.deepEqual(JSON.parse(output), [
       "STRIPE_WEBHOOK_SECRET",
+      // The six handled events span two Stripe destination scopes, and Stripe
+      // signs each destination with its own secret. account.updated - which
+      // refreshes a business's payouts/charges status after Connect
+      // onboarding - only arrives on a connected-accounts destination, so its
+      // secret has to be bound too or every one of those deliveries is
+      // rejected as an invalid signature.
+      "STRIPE_CONNECT_WEBHOOK_SECRET",
       "STRIPE_SECRET_KEY",
+      // Twilio: the webhook sends the customer their SMS receipt when a
+      // payment settles, so it needs the sender credentials bound.
+      "TWILIO_ACCOUNT_SID",
+      "TWILIO_AUTH_TOKEN",
+      "TWILIO_FROM_NUMBER",
     ]);
 
     const source = fs.readFileSync(
@@ -283,7 +295,13 @@ describe("payment runtime configuration", () => {
         "utf8",
     );
     const serviceFeesReads = source.match(/doc\("serviceFees"\)/g) || [];
-    assert.match(source, /DEFAULT_PLATFORM_SERVICE_FEE_PCT = 0\.1/);
+    // The default moved into platform_fees.js when fee resolution was
+    // extracted; index.js still has to READ the pricing document.
+    const feesSource = fs.readFileSync(
+        path.join(__dirname, "..", "platform_fees.js"),
+        "utf8",
+    );
+    assert.match(feesSource, /DEFAULT_PLATFORM_SERVICE_FEE_PCT = 0\.1/);
     assert.ok(serviceFeesReads.length >= 3);
     assert.match(source, /pricingDoc\.data\(\)/);
     assert.match(source, /"carDepositPlatformFeePct"/);
@@ -296,13 +314,20 @@ describe("payment runtime configuration", () => {
         path.join(__dirname, "..", "index.js"),
         "utf8",
     );
-    assert.match(source, /function businessPlatformFeePctFromBusiness/);
-    assert.match(source, /business\?\.platformFeePct/);
-    assert.match(source, /function servicePlatformFeePctForBusiness/);
-    assert.match(
-        source,
-        /businessPlatformFeePctFromBusiness\(business\) \?\?/,
+    // Resolution itself lives in platform_fees.js (unit-tested there);
+    // index.js must still route every charge through it.
+    const feesSource = fs.readFileSync(
+        path.join(__dirname, "..", "platform_fees.js"),
+        "utf8",
     );
+    assert.match(feesSource, /function businessPlatformFeePctFromBusiness/);
+    assert.match(feesSource, /business\?\.platformFeePct/);
+    assert.match(feesSource, /function servicePlatformFeePctForBusiness/);
+    // Precedence: this business's rate for THIS service, then its blanket
+    // rate, then the platform's rate for the service.
+    assert.match(feesSource, /source: "business_service"/);
+    assert.match(feesSource, /businessPlatformFeePctFromBusiness\(business\)/);
+    assert.match(source, /require\("\.\/platform_fees"\)/);
     assert.match(source, /servicePlatformFeePctForBusiness\(/);
     assert.match(
         source,
@@ -447,5 +472,46 @@ describe("payment runtime configuration", () => {
         source,
         /platformCommissionRate:\s*SHARED_BARREL_PLATFORM_COMMISSION_RATE/,
     );
+  });
+});
+
+describe("saving a card without charging it", () => {
+  it("returns the customer to the page that actually exists", () => {
+    // A hand-written /pay sent them to a 403 with their card already
+    // saved. The return page is at /pay/return/, and one helper already
+    // knows that - so this flow uses it rather than composing its own.
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    const start = source.indexOf("payOnArrival === true &&");
+    assert.ok(start > 0, "the pay-on-arrival checkout branch is missing");
+    const branch = source.slice(start, start + 1600);
+    assert.match(branch, /customerCheckoutReturnUrls\(/);
+    assert.doesNotMatch(branch, /\/pay\?/);
+  });
+
+  it("states the currency a setup session cannot go out without", () => {
+  // A setup session charges nothing, so Stripe has no line item to infer a
+  // currency from and refuses the call with "Missing required param:
+  // currency". Nothing local catches it - the tests mock Stripe - so the
+  // first sign was a customer being told their booking could not be
+  // started. This pins the params that call cannot go out without.
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    const start = source.indexOf(
+        "async function createStripeSetupCheckoutSession(",
+    );
+    assert.ok(start > 0, "the setup-session helper is missing");
+    const body = source.slice(start, start + 1200);
+    for (const param of ["mode", "currency", "customer", "success_url"]) {
+      assert.match(
+          body,
+          new RegExp(`body\\.set\\("${param}"`),
+          `a setup session must send ${param}`,
+      );
+    }
   });
 });

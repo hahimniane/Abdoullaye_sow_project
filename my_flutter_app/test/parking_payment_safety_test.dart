@@ -101,6 +101,8 @@ void main() {
     );
     expect('completePaymentFlowSafely'.allMatches(parkingSource), hasLength(1));
     expect('completePaymentFlowSafely'.allMatches(carSource), hasLength(2));
-    expect('completePaymentFlowSafely'.allMatches(freightSource), hasLength(1));
+    // Two freight branches: pay-now (PaymentIntent) and pay-on-arrival
+    // (SetupIntent card save) - both must keep the safe phase ordering.
+    expect('completePaymentFlowSafely'.allMatches(freightSource), hasLength(2));
   });
 }

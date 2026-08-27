@@ -7,182 +7,39 @@ import '../l10n/app_localizations.dart';
 import '../models/car_purchase.dart';
 import '../providers/auth_provider.dart';
 import '../services/car_purchase_service.dart';
+import '../services/car_viewing_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/car_viewing_negotiation.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 
+/// Which queue this screen is showing.
+///
+/// A viewing is an appointment, not a purchase - nothing is bought and no
+/// money moves - so buyers reach them from their own destination. One widget
+/// serves both so the two lists cannot drift apart.
+enum PurchaseListScope { purchases, viewings }
+
 class MyPurchasesScreen extends StatelessWidget {
-  const MyPurchasesScreen({super.key, this.showBackButton = false});
+  const MyPurchasesScreen({
+    super.key,
+    this.showBackButton = false,
+    this.scope = PurchaseListScope.purchases,
+  });
 
   final bool showBackButton;
+  final PurchaseListScope scope;
 
-  Future<void> _showEditViewingSheet(
-    BuildContext context,
-    CarPurchase purchase,
-  ) async {
-    final l10n = AppLocalizations.of(context)!;
-    final slots = _EditableViewingSlot.available();
-    _EditableViewingSlot? selectedSlot;
-    var isSubmitting = false;
+  bool get _isViewings => scope == PurchaseListScope.viewings;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            l10n.editViewingReservation,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: isSubmitting
-                              ? null
-                              : () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.viewingEditCutoff,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.lightMuted,
-                        height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: slots.map((slot) {
-                        final isSelected = selectedSlot == slot;
-                        return ChoiceChip(
-                          selected: isSelected,
-                          avatar: Icon(
-                            Icons.schedule,
-                            size: 18,
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.brandRed,
-                          ),
-                          label: Text(slot.label),
-                          selectedColor: AppColors.brandRed,
-                          labelStyle: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.lightOnSurface,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          onSelected: isSubmitting
-                              ? null
-                              : (_) => setModalState(() => selectedSlot = slot),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 22),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton.icon(
-                        onPressed: isSubmitting
-                            ? null
-                            : () async {
-                                final slot = selectedSlot;
-                                if (slot == null) return;
-                                setModalState(() => isSubmitting = true);
-                                try {
-                                  await CarPurchaseService()
-                                      .updateViewingReservation(
-                                        purchaseId: purchase.id,
-                                        appointmentStart: slot.start,
-                                        appointmentLabel: slot.label,
-                                      );
-                                  if (!context.mounted) return;
-                                  Navigator.pop(context);
-                                  showSuccessSnackBar(
-                                    context,
-                                    l10n.viewingReservationUpdated,
-                                  );
-                                } catch (_) {
-                                  if (!context.mounted) return;
-                                  showErrorSnackBar(
-                                    context,
-                                    l10n.cannotEditViewingReservation,
-                                  );
-                                } finally {
-                                  if (context.mounted) {
-                                    setModalState(() => isSubmitting = false);
-                                  }
-                                }
-                              },
-                        icon: isSubmitting
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.event_repeat_outlined),
-                        label: Text(l10n.changeViewingTime),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _cancelViewingReservation(
-    BuildContext context,
-    CarPurchase purchase,
-  ) async {
-    final l10n = AppLocalizations.of(context)!;
-    final confirmed = await confirmMajorAction(
-      context,
-      title: l10n.cancelViewingQuestion,
-      message: l10n.cancelViewingConfirmMessage,
-      confirmLabel: l10n.cancelViewingReservation,
-      icon: Icons.event_busy_outlined,
-      destructive: true,
-    );
-    if (!confirmed || !context.mounted) return;
-    try {
-      await CarPurchaseService().cancelViewingReservation(
-        purchaseId: purchase.id,
-      );
-      if (!context.mounted) return;
-      showSuccessSnackBar(context, l10n.viewingReservationCancelled);
-    } catch (error) {
-      if (!context.mounted) return;
-      showErrorSnackBar(context, l10n.operationFailed('$error'));
-    }
-  }
+  /// The viewing negotiation lives in [CarViewingNegotiationPanel], which both
+  /// sides of the conversation share. There is deliberately no "edit viewing"
+  /// here any more: moving an appointment is a proposal the seller has to
+  /// answer, not something a buyer does to a record on their own.
 
   Future<void> _requestHoldExtension(
     BuildContext context,
@@ -285,7 +142,7 @@ class MyPurchasesScreen extends StatelessWidget {
           if (snapshot.hasError) {
             return SafeArea(
               child: _EmptyPurchasesState(
-                title: l10n.myPurchases,
+                title: _isViewings ? l10n.myCarViewings : l10n.myPurchases,
                 message: l10n.purchaseHistoryUnavailable,
                 icon: Icons.lock_outline,
                 showBackButton: showBackButton,
@@ -296,13 +153,21 @@ class MyPurchasesScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           final purchases =
-              snapshot.data!.docs.map(CarPurchase.fromFirestore).toList()
+              snapshot.data!.docs
+                  .map(CarPurchase.fromFirestore)
+                  .where(
+                    (purchase) =>
+                        purchase.isViewingReservation == _isViewings,
+                  )
+                  .toList()
                 ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           if (purchases.isEmpty) {
             return SafeArea(
               child: _EmptyPurchasesState(
-                title: l10n.myPurchases,
-                message: l10n.noPurchasesYet,
+                title: _isViewings ? l10n.myCarViewings : l10n.myPurchases,
+                message: _isViewings
+                    ? l10n.noCarViewingsYet
+                    : l10n.noPurchasesYet,
                 showBackButton: showBackButton,
               ),
             );
@@ -311,7 +176,7 @@ class MyPurchasesScreen extends StatelessWidget {
             child: Column(
               children: [
                 _PurchasesHeader(
-                  title: l10n.myPurchases,
+                  title: _isViewings ? l10n.myCarViewings : l10n.myPurchases,
                   showBackButton: showBackButton,
                 ),
                 Expanded(
@@ -323,12 +188,6 @@ class MyPurchasesScreen extends StatelessWidget {
                       final purchase = purchases[index];
                       return _PurchaseCard(
                         purchase: purchase,
-                        onEditViewing: purchase.canEditViewingReservation
-                            ? () => _showEditViewingSheet(context, purchase)
-                            : null,
-                        onCancelViewing: purchase.isActiveViewingReservation
-                            ? () => _cancelViewingReservation(context, purchase)
-                            : null,
                         onRequestExtension: purchase.canRequestHoldExtension
                             ? () => _requestHoldExtension(context, purchase)
                             : null,
@@ -446,15 +305,11 @@ class _EmptyPurchasesState extends StatelessWidget {
 class _PurchaseCard extends StatelessWidget {
   const _PurchaseCard({
     required this.purchase,
-    this.onEditViewing,
-    this.onCancelViewing,
     this.onRequestExtension,
     this.onPayExtension,
   });
 
   final CarPurchase purchase;
-  final VoidCallback? onEditViewing;
-  final VoidCallback? onCancelViewing;
   final VoidCallback? onRequestExtension;
   final VoidCallback? onPayExtension;
 
@@ -493,11 +348,22 @@ class _PurchaseCard extends StatelessWidget {
                 purchase.paymentStatus,
               ),
             ),
-            if (purchase.appointmentStart != null) ...[
+            // Only for a paid hold or a purchase. A viewing's appointment is
+            // the negotiation's business: the panel below says whether it is
+            // agreed, still being argued over, or gone.
+            if (purchase.appointmentStart != null &&
+                !purchase.isViewingReservation) ...[
               const SizedBox(height: 4),
               Text(
                 '${l10n.selectViewingTime}: '
                 '${purchase.appointmentLabel ?? DateFormat.yMMMd().add_jm().format(purchase.appointmentStart!)}',
+              ),
+            ],
+            if (purchase.isViewingReservation) ...[
+              const SizedBox(height: 10),
+              CarViewingNegotiationPanel(
+                purchase: purchase,
+                party: ViewingParty.customer,
               ),
             ],
             if (purchase.holdUntilDate != null) ...[
@@ -538,30 +404,12 @@ class _PurchaseCard extends StatelessWidget {
                 ),
               ),
             ],
-            if (onEditViewing != null ||
-                onCancelViewing != null ||
-                onRequestExtension != null ||
-                onPayExtension != null) ...[
+            if (onRequestExtension != null || onPayExtension != null) ...[
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  if (onEditViewing != null)
-                    OutlinedButton.icon(
-                      onPressed: onEditViewing,
-                      icon: const Icon(Icons.event_repeat_outlined),
-                      label: Text(l10n.editViewingReservation),
-                    ),
-                  if (onCancelViewing != null)
-                    OutlinedButton.icon(
-                      onPressed: onCancelViewing,
-                      icon: const Icon(Icons.event_busy_outlined),
-                      label: Text(l10n.cancelViewingReservation),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.errorRed,
-                      ),
-                    ),
                   if (onRequestExtension != null)
                     OutlinedButton.icon(
                       onPressed: onRequestExtension,
@@ -575,14 +423,6 @@ class _PurchaseCard extends StatelessWidget {
                       label: Text(l10n.payExtension),
                     ),
                 ],
-              ),
-            ] else if (purchase.isViewingReservation) ...[
-              const SizedBox(height: 8),
-              Text(
-                l10n.viewingEditCutoff,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.lightMuted),
               ),
             ],
             const SizedBox(height: 8),
@@ -605,9 +445,11 @@ class _PurchaseCard extends StatelessWidget {
   }
 
   String _statusLabel(AppLocalizations l10n) {
-    if (purchase.isViewingReservation &&
-        purchase.purchaseStatus != 'cancelled') {
-      return l10n.viewingScheduled;
+    // A viewing wears its negotiation status, not a blanket "scheduled": the
+    // whole point of the flow is that a requested viewing and a confirmed one
+    // are different things to the person reading the card.
+    if (purchase.isViewingReservation) {
+      return viewingStatusLabel(l10n, purchase.purchaseStatus);
     }
     switch (purchase.purchaseStatus) {
       case 'hold_review_required':
@@ -647,38 +489,5 @@ class _StatusPill extends StatelessWidget {
       backgroundColor: AppColors.brandRed.withValues(alpha: 0.1),
       labelStyle: const TextStyle(color: AppColors.brandRed),
     );
-  }
-}
-
-class _EditableViewingSlot {
-  const _EditableViewingSlot({required this.start, required this.label});
-
-  final DateTime start;
-  final String label;
-
-  static List<_EditableViewingSlot> available() {
-    final now = DateTime.now();
-    final earliest = now.add(const Duration(hours: 2));
-    final dateFormat = DateFormat('EEE, MMM d');
-    final timeFormat = DateFormat.jm();
-    final slots = <_EditableViewingSlot>[];
-    var day = DateTime(now.year, now.month, now.day);
-
-    while (slots.length < 8) {
-      day = day.add(const Duration(days: 1));
-      if (day.weekday == DateTime.sunday) continue;
-      for (final hour in const [10, 12, 14, 16]) {
-        final start = DateTime(day.year, day.month, day.day, hour);
-        if (start.isBefore(earliest)) continue;
-        slots.add(
-          _EditableViewingSlot(
-            start: start,
-            label: '${dateFormat.format(start)} - ${timeFormat.format(start)}',
-          ),
-        );
-        if (slots.length == 8) break;
-      }
-    }
-    return slots;
   }
 }

@@ -60,16 +60,16 @@ const customerServiceCatalog = <CustomerService>[
     route: '/my-purchases',
   ),
   CustomerService(
+    id: 'viewings',
+    label: 'Car viewings',
+    icon: Icons.event_available_outlined,
+    route: '/my-viewings',
+  ),
+  CustomerService(
     id: 'tracking',
     label: 'Tracking',
     icon: Icons.route_outlined,
     route: '/tracking',
-  ),
-  CustomerService(
-    id: 'wallet',
-    label: 'Wallet',
-    icon: Icons.account_balance_wallet_outlined,
-    route: '/wallet',
   ),
 ];
 

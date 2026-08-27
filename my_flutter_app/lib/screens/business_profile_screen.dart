@@ -24,6 +24,7 @@ import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/pickup_plan_editor.dart';
 
 class BusinessProfileScreen extends StatefulWidget {
   const BusinessProfileScreen({super.key});
@@ -79,6 +80,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     for (final borough in kNycBoroughs) borough: TextEditingController(),
   };
   final _featureBlurbController = TextEditingController();
+  final _pickupPlanKey = GlobalKey<PickupPlanEditorState>();
   final _selectedServices = <String>{};
   final _sectionErrors = <_BusinessProfileSectionKey, String>{};
   String _holdPricingMode = 'flat';
@@ -442,25 +444,11 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     });
   }
 
-  /// Returns a localized error when the freight pickup section is enabled but
-  /// misconfigured, or null when it's fine (free pickup is allowed).
-  String? _validateFreightPickup() {
-    final l10n = AppLocalizations.of(context)!;
-    if (_freightPickupModel == 'borough') {
-      final hasAnyBoroughPrice = _freightPickupBoroughControllers.values.any(
-        (c) => (double.tryParse(c.text.trim()) ?? 0) > 0,
-      );
-      if (!hasAnyBoroughPrice) {
-        return l10n.freightPickupBoroughPriceRequired;
-      }
-    }
-    return null;
-  }
-
   Future<void> _save(BusinessProfile business) async {
     final l10n = AppLocalizations.of(context)!;
     final sectionErrors = <_BusinessProfileSectionKey, String>{};
-    if (!_formKey.currentState!.validate()) {
+    final formState = _formKey.currentState;
+    if (formState != null && !formState.validate()) {
       sectionErrors[_BusinessProfileSectionKey.details] =
           l10n.businessProfileDetailsSectionError;
     }
@@ -513,12 +501,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       sectionErrors[_BusinessProfileSectionKey.parkingCapacity] =
           l10n.enterValidParkingCapacity;
     }
-    if (_freightPickupAvailable) {
-      final freightError = _validateFreightPickup();
-      if (freightError != null) {
-        showErrorSnackBar(context, freightError);
-        return;
-      }
+    final pickupPlanError = _pickupPlanKey.currentState?.validate(l10n);
+    if (pickupPlanError != null) {
+      showErrorSnackBar(context, pickupPlanError);
+      return;
     }
     if (sectionErrors.isNotEmpty) {
       _showValidationErrors(sectionErrors);
@@ -599,6 +585,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
             if ((double.tryParse(entry.value.text.trim()) ?? 0) > 0)
               entry.key: double.parse(entry.value.text.trim()),
         },
+        pickupPlan: _pickupPlanKey.currentState?.buildPlan(),
       );
       if (!mounted) return;
       setState(() {
@@ -659,9 +646,17 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   business.enabledServices,
                   BusinessServiceKey.carTransport,
                 );
-            return ListView(
+            // NOT a ListView: this screen's children own user-typed state
+            // (the Form itself, and the pickup editor's controllers). A lazy
+            // list disposes them once they scroll out of view, which made
+            // _formKey.currentState null by the time the Save button at the
+            // bottom was reachable - Save then threw on its first line and
+            // died silently - and silently discarded typed pickup edits.
+            return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 128),
-              children: [
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 Row(
                   children: [
                     Expanded(
@@ -716,9 +711,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   parkingWeeklyRateController: _parkingWeeklyRateController,
                   parkingMonthlyRateController: _parkingMonthlyRateController,
                   parkingMinimumDaysController: _parkingMinimumDaysController,
-                  parkingPickupFeeController: _parkingPickupFeeController,
                   parkingInstructionsController: _parkingInstructionsController,
-                  parkingPickupAvailable: _parkingPickupAvailable,
                   onHoldPricingModeChanged: (value) {
                     setState(() => _holdPricingMode = value);
                   },
@@ -737,9 +730,6 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   },
                   onAddressCityChanged: (value) {
                     setState(() => _cityController.text = value ?? '');
-                  },
-                  onParkingPickupChanged: (value) {
-                    setState(() => _parkingPickupAvailable = value);
                   },
                   onParkingCountryChanged: (value) {
                     setState(() {
@@ -768,26 +758,19 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                     });
                   },
                 ),
-                if (hasBusinessService(
-                  business.enabledServices,
-                  BusinessServiceKey.freight,
+                if (_selectedServices.any(
+                  kPickupServiceByBusinessService.containsKey,
                 )) ...[
                   const SizedBox(height: 18),
-                  _FreightPickupPanel(
-                    canEdit: canEdit,
-                    isNewYorkBased: business.isNewYorkBased,
-                    available: _freightPickupAvailable,
-                    model: _freightPickupModel,
-                    originController: _freightPickupOriginController,
-                    baseFeeController: _freightPickupBaseFeeController,
-                    perKmController: _freightPickupPerKmController,
-                    minFeeController: _freightPickupMinFeeController,
-                    maxKmController: _freightPickupMaxKmController,
-                    boroughControllers: _freightPickupBoroughControllers,
-                    onAvailableChanged: (value) =>
-                        setState(() => _freightPickupAvailable = value),
-                    onModelChanged: (value) =>
-                        setState(() => _freightPickupModel = value),
+                  _Panel(
+                    title: l10n.pickupPlanSectionTitle,
+                    child: PickupPlanEditor(
+                      key: _pickupPlanKey,
+                      canEdit: canEdit,
+                      isNewYorkBased: business.isNewYorkBased,
+                      initialPlan: business.pickupPlan,
+                      enabledServices: _selectedServices.toList(),
+                    ),
                   ),
                 ],
                 if (offersDestinationShipping) ...[
@@ -835,7 +818,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                 ],
                 const SizedBox(height: 18),
                 TeamPanel(businessId: business.id, canAddStaff: canEdit),
-              ],
+                ],
+              ),
             );
           },
         ),
@@ -1423,14 +1407,11 @@ class _BusinessForm extends StatelessWidget {
     required this.parkingWeeklyRateController,
     required this.parkingMonthlyRateController,
     required this.parkingMinimumDaysController,
-    required this.parkingPickupFeeController,
     required this.parkingInstructionsController,
-    required this.parkingPickupAvailable,
     required this.onHoldPricingModeChanged,
     required this.onAddressCountryChanged,
     required this.onAddressStateChanged,
     required this.onAddressCityChanged,
-    required this.onParkingPickupChanged,
     required this.onParkingCountryChanged,
     required this.onParkingStateChanged,
     required this.onParkingCityChanged,
@@ -1470,14 +1451,11 @@ class _BusinessForm extends StatelessWidget {
   final TextEditingController parkingWeeklyRateController;
   final TextEditingController parkingMonthlyRateController;
   final TextEditingController parkingMinimumDaysController;
-  final TextEditingController parkingPickupFeeController;
   final TextEditingController parkingInstructionsController;
-  final bool parkingPickupAvailable;
   final ValueChanged<String> onHoldPricingModeChanged;
   final ValueChanged<String?> onAddressCountryChanged;
   final ValueChanged<String?> onAddressStateChanged;
   final ValueChanged<String?> onAddressCityChanged;
-  final ValueChanged<bool> onParkingPickupChanged;
   final ValueChanged<String?> onParkingCountryChanged;
   final ValueChanged<String?> onParkingStateChanged;
   final ValueChanged<String?> onParkingCityChanged;
@@ -1847,31 +1825,6 @@ class _BusinessForm extends StatelessWidget {
                     ),
                   ),
                 ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: parkingPickupAvailable,
-                  onChanged: canEdit
-                      ? (value) {
-                          onSectionEdited(
-                            _BusinessProfileSectionKey.parkingCapacity,
-                          );
-                          onParkingPickupChanged(value);
-                        }
-                      : null,
-                  title: Text(l10n.pickupAvailable),
-                  subtitle: Text(l10n.pickupAvailableSubtitle),
-                ),
-                if (parkingPickupAvailable)
-                  _BusinessProfileField(
-                    controller: parkingPickupFeeController,
-                    enabled: canEdit,
-                    label: l10n.pickupFee,
-                    icon: Icons.local_shipping_outlined,
-                    keyboardType: TextInputType.number,
-                    onChanged: () => onSectionEdited(
-                      _BusinessProfileSectionKey.parkingCapacity,
-                    ),
-                  ),
                 _BusinessProfileField(
                   controller: parkingInstructionsController,
                   enabled: canEdit,
@@ -2131,6 +2084,9 @@ class _BusinessProfileDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
       key: ValueKey<String>('$label-$value-${values.join('|')}'),
+      // Long option labels ("United States Minor Outlying Islands") overflow
+      // the row without this, which paints a debug stripe over the field.
+      isExpanded: true,
       initialValue: value != null && values.contains(value) ? value : null,
       decoration: InputDecoration(
         labelText: label,
@@ -2232,191 +2188,6 @@ class _ServiceChoiceCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Business-facing editor for freight home-pickup pricing. A business enables
-/// pickup and chooses a model: distance (any country) or NYC borough flat fees
-/// (New York businesses only). Free pickup is allowed (leave rates at zero).
-class _FreightPickupPanel extends StatelessWidget {
-  const _FreightPickupPanel({
-    required this.canEdit,
-    required this.isNewYorkBased,
-    required this.available,
-    required this.model,
-    required this.originController,
-    required this.baseFeeController,
-    required this.perKmController,
-    required this.minFeeController,
-    required this.maxKmController,
-    required this.boroughControllers,
-    required this.onAvailableChanged,
-    required this.onModelChanged,
-  });
-
-  final bool canEdit;
-  final bool isNewYorkBased;
-  final bool available;
-  final String model;
-  final TextEditingController originController;
-  final TextEditingController baseFeeController;
-  final TextEditingController perKmController;
-  final TextEditingController minFeeController;
-  final TextEditingController maxKmController;
-  final Map<String, TextEditingController> boroughControllers;
-  final ValueChanged<bool> onAvailableChanged;
-  final ValueChanged<String> onModelChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final effectiveModel =
-        model == 'borough' && isNewYorkBased ? 'borough' : 'distance';
-    return _Panel(
-      title: l10n.freightPickupSectionTitle,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.freightPickupSectionSubtitle,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).hintColor,
-            ),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: available,
-            onChanged: canEdit ? onAvailableChanged : null,
-            title: Text(l10n.freightPickupOfferToggle),
-          ),
-          if (available) ...[
-            if (isNewYorkBased) ...[
-              const SizedBox(height: 4),
-              SegmentedButton<String>(
-                segments: [
-                  ButtonSegment(
-                    value: 'distance',
-                    label: Text(l10n.freightPickupModelDistance),
-                    icon: const Icon(Icons.route_outlined),
-                  ),
-                  ButtonSegment(
-                    value: 'borough',
-                    label: Text(l10n.freightPickupModelBorough),
-                    icon: const Icon(Icons.location_city_outlined),
-                  ),
-                ],
-                selected: {effectiveModel},
-                onSelectionChanged: canEdit
-                    ? (selection) => onModelChanged(selection.first)
-                    : null,
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (effectiveModel == 'distance')
-              ..._distanceFields(context, l10n)
-            else
-              ..._boroughFields(context, l10n),
-          ],
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _distanceFields(BuildContext context, AppLocalizations l10n) {
-    return [
-      Text(
-        l10n.freightPickupDistanceHint,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).hintColor,
-        ),
-      ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: originController,
-        enabled: canEdit,
-        decoration: InputDecoration(
-          labelText: l10n.freightPickupOriginAddress,
-          helperText: l10n.freightPickupOriginAddressHelper,
-          prefixIcon: const Icon(Icons.store_outlined),
-        ),
-      ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: _numberField(
-              controller: baseFeeController,
-              label: l10n.freightPickupBaseFee,
-              icon: Icons.attach_money,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _numberField(
-              controller: perKmController,
-              label: l10n.freightPickupPerKm,
-              icon: Icons.straighten_outlined,
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: _numberField(
-              controller: minFeeController,
-              label: l10n.freightPickupMinFee,
-              icon: Icons.south_outlined,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _numberField(
-              controller: maxKmController,
-              label: l10n.freightPickupMaxKm,
-              icon: Icons.social_distance_outlined,
-            ),
-          ),
-        ],
-      ),
-    ];
-  }
-
-  List<Widget> _boroughFields(BuildContext context, AppLocalizations l10n) {
-    return [
-      Text(
-        l10n.freightPickupBoroughHint,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).hintColor,
-        ),
-      ),
-      const SizedBox(height: 12),
-      for (final borough in kNycBoroughs) ...[
-        _numberField(
-          controller: boroughControllers[borough]!,
-          label: borough,
-          icon: Icons.attach_money,
-        ),
-        const SizedBox(height: 12),
-      ],
-    ];
-  }
-
-  Widget _numberField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-  }) {
-    return TextField(
-      controller: controller,
-      enabled: canEdit,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
       ),
     );
   }

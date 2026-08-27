@@ -16,7 +16,11 @@ void main() {
       expect(source, isNot(contains(customerRoute)));
     }
     expect(source, contains('https://business.laawoldigital.com/'));
-    expect(source, contains('AsyncActionButton.filled'));
+    // The console is still the one sanctioned way off this screen, but it is
+    // no longer the loudest thing on it: it is occasional and it leaves the
+    // app, so it is outlined and the daily in-app action is filled.
+    expect(source, contains('AsyncActionButton.outlined'));
+    expect(source, isNot(contains('AsyncActionButton.filled')));
   });
 
   test('business activity feed includes freight and localized role copy', () {

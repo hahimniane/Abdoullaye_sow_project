@@ -17,8 +17,13 @@ const indexSource = fs.readFileSync(
 // payments for that flow fail with "The client_secret provided does not match
 // any associated PaymentIntent on this account" while web keeps working.
 test("every client secret returned to a client carries its account", () => {
+  // Payment intents and setup intents alike: a pay-on-arrival booking hands
+  // the native sheet a SETUP client secret, which fails against the wrong
+  // account exactly the way a payment secret does.
   const secretReturns = (
     indexSource.match(/clientSecret: paymentIntent\.client_secret/g) || []
+  ).length + (
+    indexSource.match(/setupClientSecret: setupIntent\.client_secret/g) || []
   ).length;
   const accountReturns = (
     indexSource.match(

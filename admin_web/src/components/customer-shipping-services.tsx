@@ -4,7 +4,6 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   collection,
   doc,
-  getDoc,
   onSnapshot,
   query,
   where,
@@ -29,18 +28,33 @@ import {
 } from "lucide-react";
 
 import {
-  AddressAutocomplete,
+  StructuredAddressFields,
   type AddressSuggestion,
 } from "@/components/address-autocomplete";
+import { FieldInfo } from "@/components/field-info";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
+import { PaymentHoldNotice } from "@/components/payment-hold-notice";
+import { RecipientNameField } from "@/components/recipient-name-field";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import { SearchableSelect } from "@/components/searchable-select";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import {
+  canonicalMake,
+  canonicalModel,
+  getMakes,
+  getModels,
+  getYears,
+} from "@/lib/car-catalog";
+import {
+  EMPTY_STRUCTURED_ADDRESS,
+  composeAddressLine,
+  type StructuredAddress,
+} from "@/lib/address-fields";
+import {
+  applyStructuredAddress,
   barrelDestinationCountries,
   barrelOrderTotals,
-  barrelPickupPricingFromData,
   barrelProvidersForCountry,
   barrelShipmentEstimate,
   buildBarrelOrderPayload,
@@ -51,18 +65,43 @@ import {
   freightShippingEstimate,
   freightSettlementIsPayable,
   localDateTimeInputValue,
-  DEFAULT_BARREL_PICKUP_PRICING,
-  NYC_PICKUP_BOROUGHS,
   nycBoroughFromAddress,
   pickupDetailsAreComplete,
+  pickupStructuredAddress,
   shippingOptionIsEligible,
   shippingCountryDisplayName,
   shippingProviderRate,
-  type BarrelPickupPricing,
   type BarrelPickupQuote,
+  type BarrelPickupQuoteResult,
   type PickupDetails,
 } from "@/lib/customer-shipping";
 import { marketplaceDisclosure } from "@/lib/disclosures";
+import {
+  freightCategoryById,
+  freightCategoryOptionsFrom,
+  freightCoverageComparisonLine,
+  freightCoveragePolicyFrom,
+} from "@/lib/freight-categories";
+import {
+  freightQuoteErrorMessage,
+  freightQuoteCoverageLine,
+  validateFreightQuoteRequest,
+} from "@/lib/freight-quote";
+import {
+  MAX_RECEIVER_ADDRESS_LENGTH,
+  deliveryChoiceIsComplete,
+  deliveryFeeFor,
+  freightDeliveryPolicy,
+  type DeliveryArea,
+} from "@/lib/freight-delivery";
+import {
+  SERVICE_SORT_LABELS,
+  defaultSortForService,
+  shouldOfferServiceSort,
+  sortServiceOptions,
+  sortsForService,
+  type ServiceSort,
+} from "@/lib/service-ranking.ts";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import { currentWebLanguage } from "@/lib/language";
@@ -71,12 +110,31 @@ import {
   receiverPhoneIsDifferentCountry,
   validateReceiverPhone,
 } from "@/lib/receiver-phone-rules";
+import {
+  OTHER_ITEM_ID,
+  freightItemChoicesFor,
+  freightItemPricing,
+  freightPaybackFor,
+  providerQualifiesForItem,
+} from "@/lib/freight-payback";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
 const CALL_TIMEOUT_MS = 30_000;
 
 type ShippingService = "barrel" | "freight" | "transport";
+
+/**
+ * This screen names its services for the customer ("barrel"); the platform
+ * names them for the business ("barrelShipping"). The ranking rules are
+ * declared against the platform ids, so translate once here rather than
+ * teaching the ranking module a second vocabulary.
+ */
+const BUSINESS_SERVICE_BY_SHIPPING_SERVICE: Record<ShippingService, string> = {
+  barrel: "barrelShipping",
+  freight: "freight",
+  transport: "carTransport",
+};
 
 type DeliveryEstimateService = "barrelShipping" | "freightAir" | "freightSea";
 
@@ -116,6 +174,18 @@ type DestinationOption = {
   businessStatus?: string;
   freightPickupAvailable?: boolean;
   freightPickupModel?: "borough" | "distance";
+  // What this business charges for each kind of goods, and whether it pays
+  // for a parcel it loses. Both arrive unvalidated from the callable, so they
+  // are read through the normalizers rather than trusted as typed.
+  freightCategories?: unknown;
+  freightCoverage?: unknown;
+  freightPaybackTable?: unknown;
+  freightPayOnArrival?: boolean;
+  // Whether the receiver can have the parcel brought to their own address
+  // instead of collecting it, and the flat fee for that.
+  freightDestinationDeliveryAvailable?: boolean;
+  freightDestinationDeliveryFee?: number;
+  freightDestinationDeliveryAreas?: unknown;
   country: DestinationCountry;
 };
 
@@ -376,6 +446,28 @@ export function CustomerShippingServices({
   const [transportOptionsError, setTransportOptionsError] = useState("");
   const [optionsReloadKey, setOptionsReloadKey] = useState(0);
 
+  // The catalogs come from callables that answer once, so a business turning
+  // a service or pickup off could not reach an open page (backlog item 2).
+  // The server bumps publicCatalog/services on every such change; skipping
+  // the snapshot that merely delivers the current value, each later bump
+  // re-asks the callables.
+  useEffect(() => {
+    let first = true;
+    return onSnapshot(
+      doc(db, "publicCatalog", "services"),
+      () => {
+        if (first) {
+          first = false;
+          return;
+        }
+        setOptionsReloadKey((current) => current + 1);
+      },
+      () => {
+        // A read failure only costs live freshness; the page still works.
+      },
+    );
+  }, []);
+
   useEffect(() => {
     let active = true;
 
@@ -429,6 +521,31 @@ export function CustomerShippingServices({
       active = false;
     };
   }, [optionsReloadKey]);
+
+  // These catalogs come from callables, which answer once - so a business
+  // switching a service or pickup off stayed visible until the customer
+  // reloaded the page (docs/PLAN-2026-08-backlog.md #2). The server bumps
+  // publicCatalog/services on every such change; re-ask whenever it does.
+  // The document carries no business data, only a revision counter.
+  useEffect(() => {
+    let first = true;
+    return onSnapshot(
+      doc(db, "publicCatalog", "services"),
+      () => {
+        // The listener fires immediately with the current value; the initial
+        // load above already covers that, so only later bumps matter.
+        if (first) {
+          first = false;
+          return;
+        }
+        setOptionsReloadKey((current) => current + 1);
+      },
+      () => {
+        // A customer who cannot read the signal simply keeps the behaviour
+        // they have today rather than seeing an error for a freshness hint.
+      },
+    );
+  }, []);
 
   const barrelOptions = useMemo(
     () =>
@@ -587,12 +704,11 @@ function BarrelShipmentForm({
     address: "",
     borough: "",
   });
-  const [pickupPricing, setPickupPricing] =
-    useState<BarrelPickupPricing | null>(null);
-  const [pickupPricingLoading, setPickupPricingLoading] = useState(true);
-  const [pickupPricingError, setPickupPricingError] = useState("");
-  const [pickupPricingReloadKey, setPickupPricingReloadKey] = useState(0);
-  const [useWalletBalance, setUseWalletBalance] = useState(false);
+  const [pickupQuote, setPickupQuote] = useState<BarrelPickupQuote | null>(
+    null,
+  );
+  const [pickupQuoteLoading, setPickupQuoteLoading] = useState(false);
+  const [pickupQuoteError, setPickupQuoteError] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -601,10 +717,27 @@ function BarrelShipmentForm({
     () => barrelDestinationCountries(options),
     [options],
   );
-  const providers = useMemo(
-    () => barrelProvidersForCountry(options, destinationCountryId),
-    [destinationCountryId, options],
+  const [providerSort, setProviderSort] = useState<ServiceSort>(
+    defaultSortForService("barrelShipping") as ServiceSort,
   );
+  // Ranked on what the customer has said so far. The quantity field sits
+  // below this picker, so a first pass compares one barrel each - which is
+  // still a fair comparison, and re-ranks as soon as they change it.
+  const providers = useMemo(
+    () =>
+      sortServiceOptions(
+        barrelProvidersForCountry(options, destinationCountryId),
+        { quantity, service: "barrelShipping", sort: providerSort },
+      ),
+    [destinationCountryId, options, providerSort, quantity],
+  );
+  // Only one business serves this country: choosing from a list of one is
+  // busywork, and freight already behaves this way (item 6).
+  useEffect(() => {
+    if (!destinationOptionId && providers.length === 1) {
+      setDestinationOptionId(providers[0].id);
+    }
+  }, [destinationOptionId, providers]);
   const selectedCountry = countries.find(
     (country) => country.id === destinationCountryId,
   );
@@ -636,7 +769,8 @@ function BarrelShipmentForm({
     ? barrelShipmentEstimate({
         country: destination.country,
         pickupBorough: pickup.borough,
-        pickupPricing,
+        pickupPricing: null,
+        pickupQuote: pickupQuote?.fee,
         pickupRequested: pickup.requested,
         quantity,
       })
@@ -661,43 +795,47 @@ function BarrelShipmentForm({
     destination?.businessAddress ??
     "the business office";
 
+  // The business's plan prices pickup on the server; re-quote whenever the
+  // provider changes so one business's fee never shows against another.
   useEffect(() => {
-    let active = true;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    setPickupPricingLoading(true);
-    setPickupPricingError("");
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error("Pickup pricing request timed out.")),
-        15_000,
+    setPickupQuote(null);
+    setPickupQuoteError("");
+  }, [destinationOptionId]);
+
+  async function quotePickup(addressOverride?: string) {
+    const pickupAddress = (addressOverride ?? pickup.address).trim();
+    if (!pickupAddress || !destination) return;
+    setPickupQuoteLoading(true);
+    setPickupQuoteError("");
+    setPickupQuote(null);
+    try {
+      const quote = await callFunction<BarrelPickupQuoteResult>(
+        "quoteBarrelPickup",
+        {
+          businessId: destination.businessId,
+          pickupAddress,
+        },
       );
-    });
-    void Promise.race([
-      getDoc(doc(db, "shipmentPricing", "barrelPickup")),
-      timeout,
-    ])
-      .then((snapshot) => {
-        if (active) {
-          setPickupPricing(barrelPickupPricingFromData(snapshot.data()));
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setPickupPricing(null);
-          setPickupPricingError(
-            "Pickup pricing could not be loaded. Try again or choose office drop-off.",
-          );
-        }
-      })
-      .finally(() => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (active) setPickupPricingLoading(false);
-      });
-    return () => {
-      active = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [pickupPricingReloadKey]);
+      if (quote.available) {
+        setPickup((current) => ({
+          ...current,
+          address: quote.normalizedAddress,
+          borough: quote.borough,
+        }));
+        setPickupQuote(quote);
+      } else {
+        setPickupQuoteError(
+          "This business does not offer home pickup yet. Choose office drop-off or another provider.",
+        );
+      }
+    } catch {
+      setPickupQuoteError(
+        "Pickup is not available for this address. Check the address or choose office drop-off.",
+      );
+    } finally {
+      setPickupQuoteLoading(false);
+    }
+  }
 
   const valid =
     Boolean(
@@ -711,7 +849,7 @@ function BarrelShipmentForm({
     phoneValidation.valid &&
     pickupDetailsAreComplete(pickup) &&
     (!pickup.requested ||
-      (!pickupPricingLoading && !pickupPricingError && pickupFee !== null)) &&
+      (!pickupQuoteLoading && !pickupQuoteError && pickupFee !== null)) &&
     accepted;
 
   async function submit() {
@@ -740,7 +878,6 @@ function BarrelShipmentForm({
               }),
             },
             officeLocationId,
-            useWalletBalance,
           },
           marketplaceDisclosure(accepted),
         ),
@@ -821,13 +958,8 @@ function BarrelShipmentForm({
             label="Pickup"
             value={pickup.requested ? pickup.address : "Drop off"}
           />
-          {authenticated && (
-            <ReviewDetail
-              label="Wallet"
-              value={useWalletBalance ? "Use available balance" : "Do not use"}
-            />
-          )}
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+          <PaymentHoldNotice />
         </ReviewGrid>
       }
       submitLabel={
@@ -896,6 +1028,12 @@ function BarrelShipmentForm({
               <p aria-live="polite" className="sr-only">
                 {providers.length} approved businesses available
               </p>
+              <ServiceSortChips
+                onChange={setProviderSort}
+                options={providers}
+                service="barrelShipping"
+                value={providerSort}
+              />
               {providers.map((option) => {
                 const rate = shippingProviderRate(option.country, "barrel");
                 return (
@@ -970,14 +1108,16 @@ function BarrelShipmentForm({
                   value={senderName}
                 />
               </label>
-              <label>
-                Receiver name
-                <input
-                  onChange={(event) => setReceiverName(event.target.value)}
-                  required
-                  value={receiverName}
-                />
-              </label>
+              <RecipientNameField
+                id="barrel-receiver-name"
+                onChange={setReceiverName}
+                onSelect={(recipient) => {
+                  setReceiverPhone(recipient.phone);
+                  setReceiverPhoneIsWhatsappOnly(recipient.whatsappOnly);
+                  setReceiverPhoneTouched(true);
+                }}
+                value={receiverName}
+              />
               <CustomerPhoneField
                 error={phoneError}
                 id="barrel-receiver-phone"
@@ -1033,42 +1173,32 @@ function BarrelShipmentForm({
                 </label>
               )}
               <PickupFields
-                lockDetectedBorough
                 officeAddress={officeAddress}
                 officeLocations={officeLocations.locations}
                 officeLocationsLoading={officeLocations.loading}
                 selectedOfficeLocationId={officeLocationId}
                 onOfficeLocationChange={setOfficeLocationId}
+                onAddressBlur={() => void quotePickup()}
+                onAddressSelected={(suggestion) =>
+                  void quotePickup(
+                    suggestion.formattedAddress || suggestion.description,
+                  )
+                }
+                onPickupChanged={() => {
+                  setPickupQuote(null);
+                  setPickupQuoteError("");
+                }}
                 pickup={pickup}
                 setPickup={setPickup}
                 suggestionsEnabled={authenticated}
               />
-              {pickup.requested && pickupPricingLoading && (
-                <div
-                  aria-live="polite"
-                  className="customer-inline-note customer-form-span"
-                >
-                  <span className="loading-spinner" />
-                  Loading pickup pricing...
-                </div>
-              )}
-              {pickup.requested && pickupPricingError && (
-                <div
-                  className="customer-inline-note customer-form-span error"
-                  role="alert"
-                >
-                  <span>{pickupPricingError}</span>
-                  <button
-                    className="secondary-button"
-                    disabled={pickupPricingLoading}
-                    onClick={() =>
-                      setPickupPricingReloadKey((current) => current + 1)
-                    }
-                    type="button"
-                  >
-                    Retry pickup pricing
-                  </button>
-                </div>
+              {pickup.requested && (
+                <PickupAvailability
+                  error={pickupQuoteError}
+                  onRetry={() => void quotePickup()}
+                  quote={pickupQuote}
+                  quoting={pickupQuoteLoading}
+                />
               )}
               {pricing && (
                 <ShippingPriceSummary
@@ -1093,8 +1223,8 @@ function BarrelShipmentForm({
                   note={
                     pickup.requested
                       ? estimatedTotal === null
-                        ? "Enter a valid New York City pickup address to see the complete total."
-                        : "Pickup pricing is based on the selected New York City borough."
+                        ? "Enter a valid pickup address to see the complete total."
+                        : "Pickup pricing is confirmed from the pickup address."
                       : (
                           <>
                             <span>Bring the barrel to</span> {officeAddress}.
@@ -1111,23 +1241,6 @@ function BarrelShipmentForm({
                         : "Estimated shipping"
                   }
                 />
-              )}
-              {authenticated && (
-                <label className="customer-choice-row customer-form-span">
-                  <input
-                    checked={useWalletBalance}
-                    onChange={(event) =>
-                      setUseWalletBalance(event.target.checked)
-                    }
-                    type="checkbox"
-                  />
-                  <span>
-                    <strong>Use my available wallet balance</strong>
-                    <small>
-                      Any remaining amount continues to secure payment.
-                    </small>
-                  </span>
-                </label>
               )}
               <div className="customer-form-span">
                 <DisclosureCheckbox
@@ -1186,14 +1299,8 @@ function BarrelOrderForm({
   const [sharedPickupQuote, setSharedPickupQuote] =
     useState<BarrelPickupQuote | null>(null);
   const [differentPickups, setDifferentPickups] = useState(false);
-  const [pickupPricing, setPickupPricing] =
-    useState<BarrelPickupPricing | null>(null);
-  const [pickupPricingLoading, setPickupPricingLoading] = useState(true);
-  const [pickupPricingError, setPickupPricingError] = useState("");
-  const [pickupPricingReloadKey, setPickupPricingReloadKey] = useState(0);
   const [quotingPickupId, setQuotingPickupId] = useState("");
   const [pickupQuoteError, setPickupQuoteError] = useState("");
-  const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -1201,10 +1308,27 @@ function BarrelOrderForm({
     () => barrelDestinationCountries(options),
     [options],
   );
-  const providers = useMemo(
-    () => barrelProvidersForCountry(options, destinationCountryId),
-    [destinationCountryId, options],
+  const [providerSort, setProviderSort] = useState<ServiceSort>(
+    defaultSortForService("barrelShipping") as ServiceSort,
   );
+  // Ranked on what the customer has said so far. The quantity field sits
+  // below this picker, so a first pass compares one barrel each - which is
+  // still a fair comparison, and re-ranks as soon as they change it.
+  const providers = useMemo(
+    () =>
+      sortServiceOptions(
+        barrelProvidersForCountry(options, destinationCountryId),
+        { quantity, service: "barrelShipping", sort: providerSort },
+      ),
+    [destinationCountryId, options, providerSort, quantity],
+  );
+  // Only one business serves this country: choosing from a list of one is
+  // busywork, and freight already behaves this way (item 6).
+  useEffect(() => {
+    if (!destinationOptionId && providers.length === 1) {
+      setDestinationOptionId(providers[0].id);
+    }
+  }, [destinationOptionId, providers]);
   const selectedCountry = countries.find(
     (country) => country.id === destinationCountryId,
   );
@@ -1318,44 +1442,6 @@ function BarrelOrderForm({
   );
   const valid = readyForReview && accepted;
 
-  useEffect(() => {
-    let active = true;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    setPickupPricingLoading(true);
-    setPickupPricingError("");
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error("Pickup pricing request timed out.")),
-        15_000,
-      );
-    });
-    void Promise.race([
-      getDoc(doc(db, "shipmentPricing", "barrelPickup")),
-      timeout,
-    ])
-      .then((snapshot) => {
-        if (active) {
-          setPickupPricing(barrelPickupPricingFromData(snapshot.data()));
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setPickupPricing(null);
-          setPickupPricingError(
-            "Pickup pricing could not be loaded. Try again or choose office drop-off.",
-          );
-        }
-      })
-      .finally(() => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (active) setPickupPricingLoading(false);
-      });
-    return () => {
-      active = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [pickupPricingReloadKey]);
-
   function resetEditor() {
     setEditingIndex(null);
     setDestinationCountryId("");
@@ -1417,16 +1503,28 @@ function BarrelOrderForm({
   async function requestPickupQuote(
     pickup: PickupDetails,
     id: string,
+    businessId: string,
     addressOverride?: string,
   ) {
     const pickupAddress = (addressOverride ?? pickup.address).trim();
-    if (!pickupAddress || quotingPickupId) return null;
+    if (!pickupAddress || !businessId || quotingPickupId) return null;
     setQuotingPickupId(id);
     setPickupQuoteError("");
     try {
-      return await callFunction<BarrelPickupQuote>("quoteBarrelPickup", {
-        pickupAddress,
-      });
+      const quote = await callFunction<BarrelPickupQuoteResult>(
+        "quoteBarrelPickup",
+        {
+          businessId,
+          pickupAddress,
+        },
+      );
+      if (!quote.available) {
+        setPickupQuoteError(
+          "This business does not offer home pickup yet. Choose office drop-off or another provider.",
+        );
+        return null;
+      }
+      return quote;
     } catch {
       setPickupQuoteError(
         "We couldn’t check pickup availability. Check the address and try again.",
@@ -1438,9 +1536,14 @@ function BarrelOrderForm({
   }
 
   async function quoteSharedPickup(addressOverride?: string) {
+    // A shared pickup is priced per line business on the server; the first
+    // line's business gives the representative quote shown here.
+    const sharedBusinessId =
+      lines[0]?.option.businessId ?? destination?.businessId ?? "";
     const quote = await requestPickupQuote(
       sharedPickup,
       "shared",
+      sharedBusinessId,
       addressOverride,
     );
     if (!quote) return;
@@ -1458,6 +1561,7 @@ function BarrelOrderForm({
     const quote = await requestPickupQuote(
       line.pickup,
       lineId,
+      line.option.businessId,
       addressOverride,
     );
     if (!quote) return;
@@ -1521,7 +1625,6 @@ function BarrelOrderForm({
               },
             }),
             useDifferentPickupDetails: usesDifferentPickups,
-            useWalletBalance,
           },
           marketplaceDisclosure(accepted),
         ),
@@ -1596,13 +1699,8 @@ function BarrelOrderForm({
             label="Estimated total"
             value={formatMoney(totals.total)}
           />
-          {authenticated && (
-            <ReviewDetail
-              label="Wallet"
-              value={useWalletBalance ? "Use available balance" : "Do not use"}
-            />
-          )}
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+          <PaymentHoldNotice />
         </ReviewGrid>
       }
       submitLabel={
@@ -1761,6 +1859,12 @@ function BarrelOrderForm({
             {selectedCountry && (
               <fieldset className="customer-barrel-providers">
                 <legend>Choose a shipping business</legend>
+                <ServiceSortChips
+                  onChange={setProviderSort}
+                  options={providers}
+                  service="barrelShipping"
+                  value={providerSort}
+                />
                 {providers.map((option) => {
                   const rate = shippingProviderRate(option.country, "barrel");
                   return (
@@ -1796,14 +1900,16 @@ function BarrelOrderForm({
             )}
             {destination && (
               <div className="customer-form-grid customer-shipping-form-grid">
-                <label>
-                  Receiver name
-                  <input
-                    onChange={(event) => setReceiverName(event.target.value)}
-                    required
-                    value={receiverName}
-                  />
-                </label>
+                <RecipientNameField
+                  id="barrel-order-receiver-name"
+                  onChange={setReceiverName}
+                  onSelect={(recipient) => {
+                    setReceiverPhone(recipient.phone);
+                    setReceiverPhoneIsWhatsappOnly(recipient.whatsappOnly);
+                    setReceiverPhoneTouched(true);
+                  }}
+                  value={receiverName}
+                />
                 <CustomerPhoneField
                   error={phoneError}
                   id="barrel-order-receiver-phone"
@@ -1924,7 +2030,6 @@ function BarrelOrderForm({
               <div className="customer-form-grid customer-shipping-form-grid">
                 <PickupFields
                   idSuffix="shared-order"
-                  lockDetectedBorough
                   officeAddress={sharedOfficeAddress}
                   officeLocations={sharedOfficeLocations.locations}
                   officeLocationsLoading={sharedOfficeLocations.loading}
@@ -2003,27 +2108,6 @@ function BarrelOrderForm({
                 ))}
               </div>
             )}
-            {pickupPricingLoading && (
-              <div className="customer-inline-note" aria-live="polite">
-                <span className="loading-spinner" />
-                Loading pickup pricing...
-              </div>
-            )}
-            {pickupPricingError && (
-              <div className="customer-inline-note error" role="alert">
-                <span>{pickupPricingError}</span>
-                <button
-                  className="secondary-button"
-                  disabled={pickupPricingLoading}
-                  onClick={() =>
-                    setPickupPricingReloadKey((current) => current + 1)
-                  }
-                  type="button"
-                >
-                  Retry pickup pricing
-                </button>
-              </div>
-            )}
             <ShippingPriceSummary
               details={[
                 {
@@ -2056,21 +2140,6 @@ function BarrelOrderForm({
               total={pickupReady ? formatMoney(totals.total) : "—"}
               totalLabel={pickupReady ? "Estimated total" : "Total pending"}
             />
-            {authenticated && (
-              <label className="customer-choice-row">
-                <input
-                  checked={useWalletBalance}
-                  onChange={(event) =>
-                    setUseWalletBalance(event.target.checked)
-                  }
-                  type="checkbox"
-                />
-                <span>
-                  <strong>Use wallet balance</strong>
-                  <small>Available balance will be applied first.</small>
-                </span>
-              </label>
-            )}
           </section>
         )}
       </div>
@@ -2125,7 +2194,6 @@ function BarrelOrderLinePickup({
       <div className="customer-form-grid customer-shipping-form-grid">
         <PickupFields
           idSuffix={line.id}
-          lockDetectedBorough
           officeAddress={officeAddress}
           officeLocations={officeLocations.locations}
           officeLocationsLoading={officeLocations.loading}
@@ -2240,6 +2308,20 @@ function FreightShipmentForm({
   const [destinationCountryId, setDestinationCountryId] = useState("");
   const [destinationOptionId, setDestinationOptionId] = useState("");
   const [weightKg, setWeightKg] = useState(1);
+  const [itemCategoryId, setItemCategoryId] = useState("");
+  const [itemId, setItemId] = useState("");
+  // How the parcel ends its journey. Collection is the default because it is
+  // what a business does without opting in to anything.
+  const [wantsDelivery, setWantsDelivery] = useState(false);
+  const [receiverAddress, setReceiverAddress] = useState("");
+  const [deliveryAreaId, setDeliveryAreaId] = useState("");
+  // When the chosen business accepts payment after arrival, the customer
+  // picks WHEN they pay. "now" is the only value a business that has not
+  // opted in ever submits.
+  const [paymentTiming, setPaymentTiming] = useState<"now" | "arrival">("now");
+  const [providerSort, setProviderSort] = useState<ServiceSort>(
+    defaultSortForService("freight") as ServiceSort,
+  );
   const [pickup, setPickup] = useState<PickupDetails>({
     requested: false,
     address: "",
@@ -2249,7 +2331,6 @@ function FreightShipmentForm({
     useState<AddressSuggestion | null>(null);
   const [quote, setQuote] = useState<FreightQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
-  const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -2265,7 +2346,71 @@ function FreightShipmentForm({
       ),
     [availableOptions, destinationCountryId],
   );
+  // The funnel: country, then WHAT is being sent, then the businesses that
+  // can take it. Category choices are the union across every provider on the
+  // route - deliberately without prices, because at this stage no business
+  // has been chosen and every price would be a guess about a decision the
+  // customer has not made yet.
+  //
+  // Every category on the route is offered. Nothing here can dead-end any
+  // more: a category nobody has priced leads to a request the businesses
+  // answer with a number, which is a better answer than hiding the row.
+  const funnelCategories = useMemo(() => {
+    const seen = new Map<string, {id: string; label: string; hint: string}>();
+    for (const option of providerOptions) {
+      for (const category of freightCategoryOptionsFrom(
+        option.freightCategories,
+      )) {
+        if (!seen.has(category.id)) {
+          seen.set(category.id, {
+            id: category.id,
+            label: category.label,
+            hint: category.hint,
+          });
+        }
+      }
+    }
+    return [...seen.values()];
+  }, [providerOptions]);
+  // The stored answers, unless a data refresh withdrew them from the offered
+  // lists - then they count as unanswered rather than dangling.
+  const activeCategoryId = funnelCategories.some((c) => c.id === itemCategoryId)
+    ? itemCategoryId
+    : "";
+  const funnelItems = useMemo(
+    () =>
+      activeCategoryId
+        ? freightItemChoicesFor(
+            providerOptions as Array<{freightPaybackTable?: unknown}>,
+            activeCategoryId,
+          )
+        : [],
+    [activeCategoryId, providerOptions],
+  );
+  const activeItemId = funnelItems.some((i) => i.id === itemId) ? itemId : "";
+  // The funnel is answered only by an actual item choice. Every offered
+  // category has at least one - "Something else" stands in for catch-alls
+  // and legacy businesses - so there is no empty-items shortcut.
+  const itemStepSatisfied = Boolean(activeCategoryId) && Boolean(activeItemId);
+  const qualifiedProviderOptions = useMemo(
+    () =>
+      itemStepSatisfied
+        ? providerOptions.filter((option) =>
+            providerQualifiesForItem(
+              option as {freightPaybackTable?: unknown},
+              activeCategoryId,
+              activeItemId,
+            ),
+          )
+        : [],
+    [activeCategoryId, activeItemId, itemStepSatisfied, providerOptions],
+  );
   const destination = selectedOption(providerOptions, destinationOptionId);
+  // The choice only survives while the chosen business actually offers it -
+  // switching to a business that has not opted in submits "now", whatever
+  // the select said before the switch.
+  const payOnArrivalChosen =
+    destination?.freightPayOnArrival === true && paymentTiming === "arrival";
   const selectedCountry = countries.find(
     (country) => country.id === destinationCountryId,
   );
@@ -2289,15 +2434,121 @@ function FreightShipmentForm({
             ? "Include the country calling code for a WhatsApp number."
             : "Enter a valid international phone number."
       : "";
+  const categories = useMemo(
+    () => freightCategoryOptionsFrom(destination?.freightCategories),
+    [destination],
+  );
+  const coveragePolicy = useMemo(
+    () => freightCoveragePolicyFrom(destination?.freightCoverage),
+    [destination],
+  );
+  const selectedCategory = freightCategoryById(categories, activeCategoryId);
+  // Protection is one yes/no from the business, and it is free: the business
+  // priced each item for what it is worth to carry, so the risk already sits
+  // in the shipping rate. There is no figure per item to read here.
+  const paybackTable = (destination as unknown as {
+    freightPaybackTable?: Record<string, unknown>;
+  } | null)?.freightPaybackTable;
+  const usesItemPricing = Boolean(
+    paybackTable && Object.keys(paybackTable).length > 0,
+  );
+  const resolvedItemId = activeItemId === OTHER_ITEM_ID ? "" : activeItemId;
+  const itemLookup = usesItemPricing
+    ? freightPaybackFor({
+        table: paybackTable,
+        categoryId: activeCategoryId,
+        itemId: resolvedItemId,
+      })
+    : null;
+  // How this business charges for the thing that was picked. A known object
+  // has one published price and the customer is never asked to guess what it
+  // weighs; goods that vary are weighed at this business's rate for the route.
+  const itemPricing = freightItemPricing({
+    table: paybackTable,
+    categoryId: activeCategoryId,
+    itemId: resolvedItemId,
+  });
+  const setPrice = itemPricing.mode === "flat";
+  // Nobody here has a number for this parcel, so there is no price to show
+  // and nothing to book. The customer asks, and the businesses answer.
+  const needsPriceRequest =
+    itemStepSatisfied &&
+    (qualifiedProviderOptions.length === 0 ||
+      (destination !== null && !itemPricing.priced));
+  // A set price still needs the route's rate resolved: it is what any weight
+  // beyond the allowance is charged at, and it is quoted here so the
+  // customer reads it before paying rather than after the scale.
   const pricing = destination
     ? freightShippingEstimate({
         country: destination.country,
         mode,
         pickupQuote: quote?.fee,
         pickupRequested: pickup.requested,
-        weightKg,
+        weightKg: setPrice ? 1 : weightKg,
       })
     : null;
+  const coversLoss = coveragePolicy?.coversLoss === true;
+  // A promise is only worth stating about a parcel this business will take:
+  // a row it does not list goes to a price request, where cover is answered
+  // on the quote instead.
+  const coversThisParcel = coversLoss && itemLookup?.listed === true;
+  const deliveryPolicy = freightDeliveryPolicy(destination);
+  const deliveryChosen = deliveryPolicy.offered && wantsDelivery;
+  // Where the parcel is going decides the fee wherever the business named
+  // its places, so the fee follows the pick rather than the country.
+  const deliveryFee = deliveryChosen
+    ? deliveryFeeFor(deliveryPolicy, deliveryAreaId)
+    : 0;
+  const deliveryArea = deliveryPolicy.areas.find(
+    (area) => area.id === deliveryAreaId,
+  );
+  // Ranked on the parcel as described so far. The weight and category fields
+  // sit below this picker, so a first pass ranks on the per-kg rate and the
+  // cover; filling them in re-ranks on the real quote.
+  const sortedProviderOptions = useMemo(
+    () =>
+      sortServiceOptions(qualifiedProviderOptions, {
+        itemCategoryId: activeCategoryId,
+        itemId: activeItemId,
+        mode,
+        service: "freight",
+        sort: providerSort,
+        weightKg,
+      }),
+    [
+      activeCategoryId,
+      activeItemId,
+      mode,
+      qualifiedProviderOptions,
+      providerSort,
+      weightKg,
+    ],
+  );
+  // The subtotal the customer is shown has to be the one the server charges:
+  // a published price stands on its own, and a by-weight row is the route's
+  // rate times the weight and nothing else.
+  const shippingSubtotal = setPrice
+    ? itemPricing.flatPrice
+    : (pricing?.subtotal ?? 0);
+  const estimatedTotal =
+    pricing === null || pricing.total === null
+      ? null
+      : shippingSubtotal + (pricing.pickupFee ?? 0) + deliveryFee;
+
+  // Deliberately NO effect guarding itemCategoryId against the destination's
+  // category list. The funnel owns the category now - it is chosen from the
+  // union across providers BEFORE any provider is picked, and picking one
+  // resets the provider, which briefly empties `categories`. The old guard
+  // fired on exactly that reset and snapped every choice back to "general":
+  // the customer picked Electronics and watched it revert.
+
+  // Delivery is one business's offer, not a property of the parcel: keeping
+  // the answer across a change of business would book a delivery the new one
+  // never agreed to, which the server refuses at the payment step.
+  useEffect(() => {
+    setWantsDelivery(false);
+    setReceiverAddress("");
+  }, [destination?.businessId]);
   const officeLocations = useOfficeLocations(destination?.businessId ?? "");
   const [officeLocationId, setOfficeLocationId] = useState("");
   useEffect(() => {
@@ -2338,17 +2589,30 @@ function FreightShipmentForm({
       setSelectionNotice(
         "That business is not available for this freight mode. Choose another business.",
       );
+      return;
+    }
+    // Only one business can take this item: choosing from a list of one is
+    // busywork, so make the choice for them - but never before the funnel's
+    // questions are answered. Auto-selecting off the raw route list chose a
+    // provider while "What are you sending?" still said Choose a category,
+    // and the whole rest of the form followed it onto the screen.
+    if (
+      !destinationOptionId &&
+      itemStepSatisfied &&
+      qualifiedProviderOptions.length === 1
+    ) {
+      setDestinationOptionId(qualifiedProviderOptions[0].id);
     }
   }, [
     countries,
     destinationCountryId,
     destinationOptionId,
+    itemStepSatisfied,
+    qualifiedProviderOptions,
     providerOptions,
   ]);
 
   const pickupAllowed = destination?.freightPickupAvailable !== false;
-  const pickupUsesBoroughPricing =
-    destination?.freightPickupModel === "borough";
   const quoteReady =
     !pickup.requested ||
     (pickupAllowed &&
@@ -2359,20 +2623,31 @@ function FreightShipmentForm({
       senderName.trim() &&
         receiverName.trim() &&
         destination &&
-        Number.isFinite(weightKg) &&
-        weightKg > 0,
+        // A price this business never set is not one to check out against.
+        itemPricing.priced &&
+        // A set-price item is never weighed by the customer, so there is no
+        // weight for the form to hold the booking on.
+        (!itemPricing.needsWeightAtBooking ||
+          (Number.isFinite(weightKg) && weightKg > 0)),
     ) &&
+    // The funnel's answers, in the funnel's order: a booking without a
+    // category (and an item, when any provider lists one) never reaches
+    // the server.
+    itemStepSatisfied &&
     phoneValidation.valid &&
     quoteReady &&
+    // A delivery without somewhere to take it is refused by the server, so
+    // the form refuses it here rather than letting the payment step do it.
+    deliveryChoiceIsComplete({
+      wantsDelivery: deliveryChosen,
+      receiverAddress,
+      areas: deliveryPolicy.areas,
+      areaId: deliveryAreaId,
+    }) &&
     accepted;
 
   async function requestQuote() {
-    if (
-      quoting ||
-      !destination ||
-      !pickup.address.trim() ||
-      (pickupUsesBoroughPricing && !pickup.borough.trim())
-    ) {
+    if (quoting || !destination || !pickup.address.trim()) {
       return;
     }
     setQuoting(true);
@@ -2429,7 +2704,21 @@ function FreightShipmentForm({
             destinationCountryId: destination.country.id,
             businessId: destination.businessId,
             mode,
-            weightKg,
+            // A set price covers the parcel at whatever it weighs, so no
+            // weight is sent: the server prices the published row, and the
+            // business puts it on the scale only when the price has an
+            // allowance to check it against.
+            weightKg: itemPricing.needsWeightAtBooking ? weightKg : 0,
+            itemCategoryId: activeCategoryId,
+            paymentTiming: payOnArrivalChosen ? "arrival" : "now",
+            ...(usesItemPricing && {
+              itemId: activeItemId === OTHER_ITEM_ID ? "" : activeItemId,
+            }),
+            ...(deliveryChosen && {
+              destinationDelivery: true,
+              receiverAddress,
+              ...(deliveryPolicy.areas.length > 0 && {deliveryAreaId}),
+            }),
             pickup: {
               ...pickup,
               ...(pickup.dateTime && {
@@ -2437,7 +2726,6 @@ function FreightShipmentForm({
               }),
             },
             officeLocationId,
-            useWalletBalance,
           },
           marketplaceDisclosure(accepted),
         ),
@@ -2487,6 +2775,7 @@ function FreightShipmentForm({
         />
       ) : (
         <ServiceRequestForm
+          footerVisible={Boolean(destination) && itemPricing.priced}
           canReview={valid}
           error={error}
           intro="Choose air or sea freight. The approved business verifies the final weight before settlement."
@@ -2497,6 +2786,8 @@ function FreightShipmentForm({
             setDestinationOptionId("");
             setReceiverPhoneIsWhatsappOnly(false);
             setReceiverPhoneTouched(false);
+            setWantsDelivery(false);
+            setReceiverAddress("");
             setAccepted(false);
           }}
           onSubmit={submit}
@@ -2513,28 +2804,62 @@ function FreightShipmentForm({
                 label="Destination"
                 value={destination ? optionLabel(destination) : ""}
               />
+              {selectedCategory && (
+                <ReviewDetail
+                  label="What you are sending"
+                  value={selectedCategory.label}
+                />
+              )}
               {pricing && (
                 <>
-                  <ReviewDetail
-                    label="Rate per kg"
-                    value={formatMoney(pricing.rate)}
-                  />
+                  {setPrice ? (
+                    <ReviewDetail
+                      label="Set price"
+                      value={formatMoney(itemPricing.flatPrice)}
+                    />
+                  ) : (
+                    <ReviewDetail
+                      label="Rate per kg"
+                      value={formatMoney(pricing.rate)}
+                    />
+                  )}
                   <ReviewDetail
                     label="Estimated freight"
-                    value={formatMoney(pricing.subtotal)}
+                    value={formatMoney(shippingSubtotal)}
                   />
-                  {pricing.total !== null && (
+                  {estimatedTotal !== null && (
                     <ReviewDetail
                       label="Estimated total"
-                      value={formatMoney(pricing.total)}
+                      value={formatMoney(estimatedTotal)}
                     />
                   )}
                 </>
               )}
-              <ReviewDetail
-                label="Estimated weight"
-                value={`${weightKg} kg`}
-              />
+              {setPrice ? (
+                itemPricing.includedKg > 0 && (
+                  <>
+                    <ReviewDetail
+                      label="Covers up to"
+                      value={`${itemPricing.includedKg} kg`}
+                    />
+                    <ReviewDetail
+                      label="Over that, per kg"
+                      value={formatMoney(pricing?.rate ?? 0)}
+                    />
+                  </>
+                )
+              ) : (
+                <ReviewDetail
+                  label="Estimated weight"
+                  value={`${weightKg} kg`}
+                />
+              )}
+              {coversThisParcel && (
+                <ReviewDetail
+                  label="If it is lost"
+                  value={`${destination?.businessName ?? "The business"} pays you back`}
+                />
+              )}
               <ReviewDetail
                 label="Pickup"
                 value={pickup.requested ? pickup.address : "Drop off"}
@@ -2545,16 +2870,76 @@ function FreightShipmentForm({
                   value={formatMoney(quote.fee, quote.currency || "USD")}
                 />
               )}
-              <div className="customer-inline-note">
-                The weight you enter is an estimate. If the business confirms
-                a different weight after pickup, Laawol will try to
-                automatically charge the card you use today for any
-                additional amount due. If that charge doesn&rsquo;t go
-                through, you&rsquo;ll need to open the app to complete
-                payment before your shipment can continue. If your shipment
-                weighs less, you&rsquo;ll be refunded automatically.
-              </div>
+              <ReviewDetail
+                label="At the destination"
+                value={
+                  deliveryChosen
+                    ? // The place is what the fee below was priced on, so it
+                      // is named beside the address it was picked for.
+                      [deliveryArea?.name, receiverAddress]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "The receiver collects it"
+                }
+              />
+              {deliveryChosen && (
+                <ReviewDetail
+                  label="Delivery to the receiver"
+                  value={formatMoney(deliveryFee)}
+                />
+              )}
+              {destination && !coversLoss && (
+                <div className="customer-inline-note">
+                  <strong>{destination.businessName}</strong>{" "}
+                  <span>does not pay for a lost parcel.</span>{" "}
+                  <span>
+                    Nothing is charged for protection, and nothing is owed if
+                    the parcel goes missing.
+                  </span>
+                </div>
+              )}
+              {payOnArrivalChosen ? (
+                <div className="customer-inline-note">
+                  You pay when it arrives. Nothing is charged today - your
+                  card is saved and verified now, and charged automatically
+                  for the confirmed price when the business marks your
+                  shipment arrived. If that charge doesn&rsquo;t go through,
+                  you&rsquo;ll be asked to complete payment in the app.
+                </div>
+              ) : setPrice ? (
+                itemPricing.includedKg > 0 ? (
+                  <div className="customer-inline-note">
+                    This item has a set price that covers up to{" "}
+                    {itemPricing.includedKg} kg. The business weighs the
+                    parcel at drop-off, and if it comes in heavier, Laawol
+                    will try to automatically charge the card you use today
+                    for the extra kilos at{" "}
+                    {formatMoney(pricing?.rate ?? 0)} / kg. If that charge
+                    doesn&rsquo;t go through, you&rsquo;ll need to open the
+                    app to complete payment before your shipment can
+                    continue.
+                  </div>
+                ) : (
+                  <div className="customer-inline-note">
+                    This item has a set price that covers the parcel whatever
+                    it weighs. Nothing is weighed and nothing is settled
+                    afterwards - what you pay today is the whole price.
+                  </div>
+                )
+              ) : (
+                <div className="customer-inline-note">
+                  The weight you enter is an estimate. If the business
+                  confirms a different weight after pickup, Laawol will try
+                  to automatically charge the card you use today for any
+                  additional amount due. If that charge doesn&rsquo;t go
+                  through, you&rsquo;ll need to open the app to complete
+                  payment before your shipment can continue. If your
+                  shipment weighs less, you&rsquo;ll be refunded
+                  automatically.
+                </div>
+              )}
               <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+              {!payOnArrivalChosen && <PaymentHoldNotice />}
             </ReviewGrid>
           }
           submitLabel={
@@ -2562,7 +2947,9 @@ function FreightShipmentForm({
               ? "Sign in to save & continue"
               : pickup.requested && !quote
                 ? "Calculate pickup & continue"
-                : "Continue to secure payment"
+                : payOnArrivalChosen
+                  ? "Continue to save your card"
+                  : "Continue to secure payment"
           }
           submitting={submitting}
           title="Send freight"
@@ -2592,6 +2979,8 @@ function FreightShipmentForm({
               listLabel="Destination country options"
               onChange={(value) => {
                 setDestinationCountryId(value);
+                setItemCategoryId("");
+                setItemId("");
                 setDestinationOptionId("");
                 setReceiverPhoneIsWhatsappOnly(false);
                 setReceiverPhoneTouched(false);
@@ -2606,7 +2995,80 @@ function FreightShipmentForm({
               placeholder="Search or choose a country"
               value={destinationCountryId}
             />
-            {destinationCountryId && (
+            {destinationCountryId && funnelCategories.length > 0 && (
+              <label className="customer-form-span">
+                What are you sending?
+                <select
+                  onChange={(event) => {
+                    setItemCategoryId(event.target.value);
+                    setItemId("");
+                    setDestinationOptionId("");
+                    setQuote(null);
+                    setSelectionNotice("");
+                  }}
+                  required
+                  value={activeCategoryId}
+                >
+                  <option value="">Choose a category</option>
+                  {funnelCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+                {activeCategoryId && (
+                  <small>
+                    {funnelCategories.find(
+                      (category) => category.id === activeCategoryId,
+                    )?.hint ?? ""}
+                  </small>
+                )}
+              </label>
+            )}
+            {activeCategoryId && funnelItems.length > 0 && (
+              <label className="customer-form-span">
+                What is the item?
+                <select
+                  onChange={(event) => {
+                    setItemId(event.target.value);
+                    setDestinationOptionId("");
+                    setQuote(null);
+                    setSelectionNotice("");
+                  }}
+                  required
+                  value={activeItemId}
+                >
+                  <option value="">Choose the item</option>
+                  {funnelItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {needsPriceRequest && (
+              <FreightPriceRequest
+                authenticated={authenticated}
+                customerUid={text(profile.id, "")}
+                destinationCountryId={destinationCountryId}
+                destinationCountryName={
+                  selectedCountry
+                    ? shippingCountryDisplayName(selectedCountry, language)
+                    : ""
+                }
+                itemCategoryId={activeCategoryId}
+                itemLabel={
+                  funnelItems.find((item) => item.id === activeItemId)?.label ??
+                  ""
+                }
+                mode={mode}
+                onAuthenticationRequired={onAuthenticationRequired}
+              />
+            )}
+            {/* Kept alongside a price request: a business that has priced
+                this is still a choice the customer can make today. */}
+            {itemStepSatisfied && qualifiedProviderOptions.length > 0 && (
               <DestinationPicker
                 label="Choose a shipping business"
                 onChange={(value) => {
@@ -2614,20 +3076,56 @@ function FreightShipmentForm({
                   setQuote(null);
                   setSelectionNotice("");
                 }}
+                itemCategoryId={activeCategoryId}
+                itemId={activeItemId}
                 mode={mode}
-                options={providerOptions}
+                onSortChange={setProviderSort}
+                options={sortedProviderOptions}
                 service="freight"
+                sort={providerSort}
                 value={destinationOptionId}
               />
             )}
-            <label>
-              Receiver name
-              <input
-                onChange={(event) => setReceiverName(event.target.value)}
-                required
-                value={receiverName}
-              />
-            </label>
+            {/* Nothing below exists until a business is chosen AND it has a
+                price for this parcel: a receiver, a weight and a pickup all
+                describe a booking WITH someone, at a number. Without both
+                there is nothing to fill this in for. */}
+            {destination && itemPricing.priced && (<>
+            {destination.freightPayOnArrival === true && (
+              <label className="customer-form-span">
+                When do you pay?
+                <select
+                  onChange={(event) =>
+                    setPaymentTiming(
+                      event.target.value === "arrival" ? "arrival" : "now",
+                    )
+                  }
+                  value={paymentTiming}
+                >
+                  <option value="now">Pay now</option>
+                  <option value="arrival">
+                    Pay when it arrives
+                  </option>
+                </select>
+                {paymentTiming === "arrival" && (
+                  <small>
+                    Nothing is charged today. Your card is saved and
+                    verified now, and charged automatically when{" "}
+                    {destination.businessName} marks your shipment arrived.
+                  </small>
+                )}
+              </label>
+            )}
+            <RecipientNameField
+              id="freight-receiver-name"
+              onChange={setReceiverName}
+              onSelect={(recipient) => {
+                setReceiverPhone(recipient.phone);
+                setReceiverPhoneIsWhatsappOnly(recipient.whatsappOnly);
+                setReceiverPhoneTouched(true);
+              }}
+              value={receiverName}
+            />
             <CustomerPhoneField
               error={phoneError}
               id="freight-receiver-phone"
@@ -2668,23 +3166,70 @@ function FreightShipmentForm({
                 </span>
               </label>
             )}
-            <label>
-              Estimated weight (kg)
-              <input
-                min="0.1"
-                onChange={(event) =>
-                  setWeightKg(Number(event.target.value || 0))
-                }
-                required
-                step="0.1"
-                type="number"
-                value={weightKg}
+            {itemPricing.needsWeightAtBooking ? (
+              <label>
+                Estimated weight (kg)
+                <input
+                  min="0.1"
+                  onChange={(event) =>
+                    setWeightKg(Number(event.target.value || 0))
+                  }
+                  required
+                  step="0.1"
+                  type="number"
+                  value={weightKg}
+                />
+              </label>
+            ) : (
+              /* A published price for a known object. Asking what an
+                 iPhone weighs would be asking the customer to guess at a
+                 number that changes nothing. */
+              <div className="customer-inline-note customer-form-span">
+                <strong>{formatMoney(itemPricing.flatPrice)}</strong>{" "}
+                <span>
+                  {itemLookup?.label
+                    ? `is the set price for ${itemLookup.label}.`
+                    : "is the set price for this item."}
+                </span>{" "}
+                {itemPricing.includedKg > 0 ? (
+                  <span>
+                    It covers up to {itemPricing.includedKg} kg. The business
+                    weighs it at drop-off, and anything over that is charged
+                    at {formatMoney(pricing?.rate ?? 0)} / kg.
+                  </span>
+                ) : (
+                  <span>It covers the parcel whatever it weighs.</span>
+                )}
+              </div>
+            )}
+            {destination && (
+              <FreightProtectionNote
+                businessName={destination.businessName}
+                covered={coversLoss}
+                covers={coversThisParcel}
               />
-            </label>
+            )}
+            {destination && deliveryPolicy.offered && (
+              <FreightDestinationDeliveryField
+                address={receiverAddress}
+                areaId={deliveryAreaId}
+                areas={deliveryPolicy.areas}
+                fee={deliveryPolicy.fee}
+                onAddressChange={setReceiverAddress}
+                onAreaChange={setDeliveryAreaId}
+                onChoose={(next) => {
+                  setWantsDelivery(next);
+                  if (!next) {
+                    setReceiverAddress("");
+                    setDeliveryAreaId("");
+                  }
+                }}
+                wantsDelivery={wantsDelivery}
+              />
+            )}
             <PickupFields
               disabled={Boolean(destination && !pickupAllowed)}
               idSuffix="freight"
-              lockDetectedBorough={!pickupUsesBoroughPricing}
               officeAddress={officeAddress}
               officeLocations={officeLocations.locations}
               officeLocationsLoading={officeLocations.loading}
@@ -2719,11 +3264,7 @@ function FreightShipmentForm({
                   <button
                     className="secondary-button"
                     data-loading={quoting}
-                    disabled={
-                      quoting ||
-                      !pickup.address.trim() ||
-                      (pickupUsesBoroughPricing && !pickup.borough.trim())
-                    }
+                    disabled={quoting || !pickup.address.trim()}
                     onClick={() => void requestQuote()}
                     type="button"
                   >
@@ -2741,18 +3282,60 @@ function FreightShipmentForm({
             {destination && pricing && (
               <ShippingPriceSummary
                 details={[
-                  {
-                    label: mode === "air" ? "Air freight rate" : "Sea freight rate",
-                    value: `${formatMoney(pricing.rate)} / kg`,
-                  },
-                  {
-                    label: "Estimated weight",
-                    value: `${pricing.weightKg} kg`,
-                  },
+                  setPrice
+                    ? {
+                        label: "Set price",
+                        value: formatMoney(itemPricing.flatPrice),
+                      }
+                    : {
+                        label:
+                          mode === "air"
+                            ? "Air freight rate"
+                            : "Sea freight rate",
+                        value: `${formatMoney(pricing.rate)} / kg`,
+                      },
+                  ...(selectedCategory
+                    ? [
+                        {
+                          label: "What you are sending",
+                          value: selectedCategory.label,
+                        },
+                      ]
+                    : []),
+                  ...(setPrice
+                    ? itemPricing.includedKg > 0
+                      ? [
+                          {
+                            label: "Covers up to",
+                            value: `${itemPricing.includedKg} kg`,
+                          },
+                          {
+                            label: "Over that, per kg",
+                            value: formatMoney(pricing.rate),
+                          },
+                        ]
+                      : []
+                    : [
+                        {
+                          label: "Estimated weight",
+                          value: `${pricing.weightKg} kg`,
+                        },
+                      ]),
                   {
                     label: "Shipping subtotal",
-                    value: formatMoney(pricing.subtotal),
+                    value: formatMoney(shippingSubtotal),
                   },
+                  ...(coversThisParcel
+                    ? [
+                        {
+                          // Insurance language, not loss-talk: the promise
+                          // reads as something the customer has, and the
+                          // price column says outright that it is free.
+                          label: "Protection included · paid back if lost",
+                          value: "Free",
+                        },
+                      ]
+                    : []),
                   ...(pricing.pickupFee !== null && pricing.pickupFee > 0
                     ? [
                         {
@@ -2761,41 +3344,607 @@ function FreightShipmentForm({
                         },
                       ]
                     : []),
+                  ...(deliveryChosen
+                    ? [
+                        {
+                          label: "Delivery to the receiver",
+                          value: formatMoney(deliveryFee),
+                        },
+                      ]
+                    : []),
                 ]}
                 note={
                   pricing.pickupPending
                     ? "Pickup quote pending. Sign in to calculate the full estimate."
-                    : "Final weight is verified by the selected business before settlement."
+                    : setPrice
+                      ? itemPricing.includedKg > 0
+                        ? "The business weighs it at drop-off and charges per kg for anything over the included weight."
+                        : "This price is final for this item."
+                      : "Final weight is verified by the selected business before settlement."
                 }
                 provider={destination.businessName}
-                total={formatMoney(pricing.total ?? pricing.subtotal)}
+                total={formatMoney(estimatedTotal ?? shippingSubtotal)}
                 totalLabel={
-                  pricing.total === null ? "Shipping subtotal" : "Estimated total"
+                  estimatedTotal === null
+                    ? "Shipping subtotal"
+                    : "Estimated total"
                 }
               />
-            )}
-            {authenticated && (
-              <label className="customer-choice-row customer-form-span">
-                <input
-                  checked={useWalletBalance}
-                  onChange={(event) =>
-                    setUseWalletBalance(event.target.checked)
-                  }
-                  type="checkbox"
-                />
-                <span>
-                  <strong>Use my available wallet balance</strong>
-                  <small>Any remaining amount continues to secure payment.</small>
-                </span>
-              </label>
             )}
             <div className="customer-form-span">
               <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
             </div>
+            </>)}
           </div>
         </ServiceRequestForm>
       )}
       {authenticated && <FreightSettlements shipments={freightShipments} />}
+    </div>
+  );
+}
+
+/**
+ * Whether this business stands behind the parcel if it goes missing.
+ *
+ * It is on the screen rather than behind an "i": UI convention 1 forbids
+ * hiding anything the reader needs to avoid a mistake, and choosing between
+ * two businesses without knowing which one stands behind the parcel is
+ * exactly that. The business that stands behind nothing says so here, while
+ * the parcel is still in the room.
+ *
+ * `covered` is the business's standing answer and `covers` narrows it to this
+ * parcel: a row this business does not list is not one it has promised
+ * anything about, and it is heading for a price request anyway.
+ */
+function FreightProtectionNote({
+  businessName,
+  covered,
+  covers,
+}: {
+  businessName: string;
+  covered: boolean;
+  covers: boolean;
+}) {
+  if (!covered) {
+    return (
+      <div className="customer-inline-note customer-form-span">
+        <strong>{businessName}</strong>{" "}
+        <span>does not pay for a lost parcel.</span>{" "}
+        <span>
+          Nothing is charged for protection, and nothing is owed if the parcel
+          goes missing.
+        </span>
+      </div>
+    );
+  }
+  if (!covers) return null;
+  return (
+    <div className="customer-quote-row customer-form-span">
+      <div>
+        <strong>Protection included</strong>
+        <small>
+          <span>If this is lost,</span> {businessName}{" "}
+          <span>
+            pays you back for it. The business pays you, not Laawol.
+          </span>
+        </small>
+      </div>
+      <span className="customer-quote-value">Free</span>
+    </div>
+  );
+}
+
+/**
+ * Where the parcel ends up at the destination.
+ *
+ * Collection is the default because it is what a business does without
+ * opting in to anything, and because the fee only becomes real once someone
+ * asks for delivery.
+ *
+ * The address is a free-text line rather than the structured US fields used
+ * for pickup: Conakry, Dakar and Bamako are addressed by neighbourhood and
+ * landmark, and a form demanding a state and a ZIP would be unanswerable.
+ */
+function FreightDestinationDeliveryField({
+  address,
+  areaId,
+  areas,
+  fee,
+  onAddressChange,
+  onAreaChange,
+  onChoose,
+  wantsDelivery,
+}: {
+  address: string;
+  areaId: string;
+  areas: readonly DeliveryArea[];
+  fee: number;
+  onAddressChange: (value: string) => void;
+  onAreaChange: (value: string) => void;
+  onChoose: (wantsDelivery: boolean) => void;
+  wantsDelivery: boolean;
+}) {
+  // A business that named its places charges a different fee for each, so
+  // the choice above cannot quote one: the place picker below does.
+  const pricedByArea = areas.length > 0;
+  return (
+    <>
+      <label className="customer-form-span">
+        Where does the receiver get it?
+        <select
+          onChange={(event) => onChoose(event.target.value === "delivery")}
+          value={wantsDelivery ? "delivery" : "collect"}
+        >
+          <option value="collect">The receiver collects it</option>
+          <option value="delivery">
+            {pricedByArea
+              ? "Deliver it to their address"
+              : `Deliver it to their address · ${formatMoney(fee)}`}
+          </option>
+        </select>
+        <small>
+          {wantsDelivery
+            ? "The business takes the parcel to the receiver once it arrives."
+            : "The receiver picks the parcel up from the business at the destination."}
+        </small>
+      </label>
+      {wantsDelivery && pricedByArea && (
+        <label className="customer-form-span">
+          Where is it being delivered to?
+          <select
+            onChange={(event) => onAreaChange(event.target.value)}
+            required
+            value={areaId}
+          >
+            <option value="">Choose a place</option>
+            {areas.map((area) => (
+              <option key={area.id} value={area.id}>
+                {`${area.name} · ${formatMoney(area.fee)}`}
+              </option>
+            ))}
+          </select>
+          <small>
+            The business delivers to these places, and each has its own fee.
+          </small>
+        </label>
+      )}
+      {wantsDelivery && (
+        <label className="customer-form-span">
+          Receiver&rsquo;s address
+          <textarea
+            maxLength={MAX_RECEIVER_ADDRESS_LENGTH}
+            onChange={(event) => onAddressChange(event.target.value)}
+            required
+            rows={3}
+            value={address}
+          />
+          <small>
+            Include the neighbourhood and a landmark nearby, so the driver can
+            find it by asking.
+          </small>
+        </label>
+      )}
+    </>
+  );
+}
+
+type FreightQuoteRequestRow = FirestoreRow & {
+  trackingCode?: string;
+  description?: string;
+  weightKg?: number;
+  itemLabel?: string;
+  destinationCountryName?: string;
+  mode?: string;
+  quoteStatus?: string;
+  quoteCount?: number;
+  eligibleBusinessCount?: number;
+  selectedQuoteId?: string;
+  selectedBusinessName?: string;
+  selectedAmountCents?: number;
+};
+
+type FreightQuoteRow = FirestoreRow & {
+  requestId?: string;
+  businessId?: string;
+  businessName?: string;
+  amountCents?: number;
+  coversLoss?: boolean;
+  currency?: string;
+  terms?: string;
+  status?: string;
+  expiresAt?: unknown;
+};
+
+function useCustomerFreightQuoteRequests(
+  customerUid: string,
+  enabled: boolean,
+) {
+  const [rows, setRows] = useState<FreightQuoteRequestRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!enabled || !customerUid) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(
+      query(
+        collection(db, "freightQuoteRequests"),
+        where("customerUid", "==", customerUid),
+      ),
+      (snapshot) => {
+        setRows(
+          snapshot.docs
+            .map((item): FreightQuoteRequestRow => ({
+              id: item.id,
+              ...item.data(),
+            }))
+            .sort(
+              (left, right) =>
+                transportTimestamp(right.updatedAt ?? right.createdAt) -
+                transportTimestamp(left.updatedAt ?? left.createdAt),
+            ),
+        );
+        setLoading(false);
+        setError("");
+      },
+      () => {
+        setRows([]);
+        setLoading(false);
+        setError("We couldn’t load your price requests. Try again.");
+      },
+    );
+  }, [customerUid, enabled]);
+
+  return { rows, loading, error };
+}
+
+function useFreightQuotes(requestId: string, enabled: boolean) {
+  const [rows, setRows] = useState<FreightQuoteRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!enabled || !requestId) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(
+      query(
+        collection(db, "freightQuotes"),
+        where("requestId", "==", requestId),
+      ),
+      (snapshot) => {
+        setRows(
+          snapshot.docs
+            .map((item): FreightQuoteRow => ({id: item.id, ...item.data()}))
+            .sort(
+              (left, right) =>
+                Number(left.amountCents ?? Number.MAX_SAFE_INTEGER) -
+                Number(right.amountCents ?? Number.MAX_SAFE_INTEGER),
+            ),
+        );
+        setLoading(false);
+        setError("");
+      },
+      () => {
+        setLoading(false);
+        setError("Some prices could not be loaded. Try again.");
+      },
+    );
+  }, [enabled, requestId]);
+
+  return { rows, loading, error };
+}
+
+/**
+ * Asking the businesses on this route what they charge.
+ *
+ * A price nobody set is not a price, so this screen never invents one. The
+ * customer describes the parcel, every approved business on the route is
+ * asked, and each answers with its own number AND what it pays back if it
+ * loses it - the two things the customer is choosing between.
+ */
+function FreightPriceRequest({
+  authenticated,
+  customerUid,
+  destinationCountryId,
+  destinationCountryName,
+  itemCategoryId,
+  itemLabel,
+  mode,
+  onAuthenticationRequired,
+}: {
+  authenticated: boolean;
+  customerUid: string;
+  destinationCountryId: string;
+  destinationCountryName: string;
+  itemCategoryId: string;
+  itemLabel: string;
+  mode: "air" | "sea";
+  onAuthenticationRequired?: () => void;
+}) {
+  const [description, setDescription] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [createdId, setCreatedId] = useState("");
+  const requests = useCustomerFreightQuoteRequests(
+    authenticated ? customerUid : "",
+    authenticated,
+  );
+  // The one just sent, or the newest open one - a customer who reloads the
+  // page is still waiting for the same answers.
+  const activeRequest =
+    requests.rows.find((row) => row.id === createdId) ??
+    requests.rows.find(
+      (row) =>
+        text(row.itemCategoryId, "") === itemCategoryId &&
+        text(row.destinationCountryId, "") === destinationCountryId &&
+        text(row.quoteStatus, "") !== "cancelled",
+    ) ??
+    null;
+
+  async function submit() {
+    if (submitting) return;
+    if (!authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
+    const validated = validateFreightQuoteRequest({
+      destinationCountryId,
+      mode,
+      description,
+      weightKg,
+      itemCategoryId,
+      itemLabel,
+    });
+    if (!validated.ok) {
+      setError(freightQuoteErrorMessage(validated.error));
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await callFunction<{
+        id: string;
+        trackingCode: string;
+        eligibleBusinessCount: number;
+      }>("createFreightQuoteRequest", {...validated.request});
+      setCreatedId(result.id);
+      setDescription("");
+      setWeightKg("");
+    } catch (caught) {
+      setError(
+        caught instanceof Error && caught.message
+          ? caught.message
+          : "The price request could not be sent. Try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="customer-form-span customer-freight-price-request">
+      <div className="customer-inline-note">
+        <strong>Ask for a price</strong>{" "}
+        <span>No business on this route has priced this parcel.</span>{" "}
+        <span>
+          Describe it and every approved business on this route can answer
+          with what it charges and whether it covers it if it is lost.
+        </span>
+        {destinationCountryName && (
+          <span className="customer-quote-value">
+            {destinationCountryName}
+          </span>
+        )}
+      </div>
+      {error && (
+        <div className="customer-inline-note error" role="alert">
+          {error}
+        </div>
+      )}
+      <label className="customer-form-span">
+        What are you sending?
+        <textarea
+          maxLength={2000}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="Describe the parcel: what it is, how many, how it is packed."
+          rows={3}
+          value={description}
+        />
+        <small>
+          The more the business knows, the closer the price it can give you.
+        </small>
+      </label>
+      <label>
+        Weight (kg), if you know it
+        <input
+          inputMode="decimal"
+          min="0"
+          onChange={(event) => setWeightKg(event.target.value)}
+          placeholder="Leave blank if you are not sure"
+          step="0.1"
+          type="number"
+          value={weightKg}
+        />
+      </label>
+      <div className="customer-form-span">
+        <button
+          className="primary-button"
+          data-loading={submitting}
+          // Signing in comes first, so it is not held behind a description
+          // the customer would have to retype after the round trip.
+          disabled={submitting || (authenticated && !description.trim())}
+          onClick={() => void submit()}
+          type="button"
+        >
+          {!authenticated
+            ? "Sign in to ask for a price"
+            : submitting
+              ? "Sending your request..."
+              : "Ask for a price"}
+        </button>
+      </div>
+      {authenticated && activeRequest && (
+        <CustomerFreightQuotes request={activeRequest} />
+      )}
+      {requests.error && (
+        <div className="customer-inline-note error" role="alert">
+          {requests.error}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The answers, side by side.
+ *
+ * Price and cover sit on the same card because they are one decision: a
+ * cheaper business that pays nothing back and a dearer one that makes good
+ * are not comparable on price alone, and the customer has to be able to see
+ * both before choosing either.
+ */
+function CustomerFreightQuotes({
+  request,
+}: {
+  request: FreightQuoteRequestRow;
+}) {
+  const quotes = useFreightQuotes(request.id, true);
+  const [busyId, setBusyId] = useState("");
+  const [error, setError] = useState("");
+  const selectedQuoteId = text(request.selectedQuoteId, "");
+  const chosen = selectedQuoteId !== "";
+  const open = quotes.rows.filter((quote) => quote.status !== "withdrawn");
+
+  async function accept(quote: FreightQuoteRow) {
+    if (busyId) return;
+    const amount = formatMoney(
+      Number(quote.amountCents ?? 0) / 100,
+      text(quote.currency, "USD"),
+    );
+    const confirmed = await confirmImportantAction(
+      `Accept ${text(quote.businessName, "this business")} at ${amount}? ` +
+        "The other businesses are told their price was not chosen.",
+      `Accepter ${text(quote.businessName, "cette entreprise")} à ${amount} ? ` +
+        "Les autres entreprises sont informées que leur prix n’a pas été retenu.",
+    );
+    if (!confirmed) return;
+    setBusyId(quote.id);
+    setError("");
+    try {
+      await callFunction("selectFreightQuote", {
+        requestId: request.id,
+        quoteId: quote.id,
+      });
+    } catch (caught) {
+      setError(
+        caught instanceof Error && caught.message
+          ? caught.message
+          : "That price could not be accepted. Try again.",
+      );
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  return (
+    <div className="customer-freight-quotes">
+      <div className="customer-quote-row">
+        <div>
+          <strong>
+            {chosen ? "You chose a price" : "Waiting for prices"}
+          </strong>
+          <small>
+            Reference {text(request.trackingCode, request.id)} ·{" "}
+            {text(request.description, "Your parcel")}
+          </small>
+        </div>
+        <span className="customer-quote-value">{open.length}</span>
+      </div>
+      {(error || quotes.error) && (
+        <div className="customer-inline-note error" role="alert">
+          {error || quotes.error}
+        </div>
+      )}
+      {open.length === 0 ? (
+        <div className="customer-inline-note">
+          <Clock3 aria-hidden="true" size={17} />{" "}
+          <span>
+            The businesses on this route have your request. Each one that
+            answers appears here, and you will be told when a price arrives.
+          </span>
+        </div>
+      ) : (
+        <div className="customer-freight-quote-grid">
+          {open.map((quote) => {
+            const selected = quote.id === selectedQuoteId;
+            const paysBack = quote.coversLoss === true;
+            return (
+              <article
+                className={`customer-freight-quote-card${selected ? " selected" : ""}`}
+                key={quote.id}
+              >
+                <header>
+                  <strong>{text(quote.businessName, "Approved business")}</strong>
+                  {selected && <span className="lst-badge ok">Chosen</span>}
+                </header>
+                <div className="customer-transport-quote-price">
+                  <small>Price to send it</small>
+                  <strong>
+                    {formatMoney(
+                      Number(quote.amountCents ?? 0) / 100,
+                      text(quote.currency, "USD"),
+                    )}
+                  </strong>
+                </div>
+                {/* Price and promise on one card: a cheaper business that
+                    pays nothing back is not cheaper in the way that matters,
+                    and the customer can only see that if both are here. The
+                    promise is the same sentence a published item's card uses,
+                    so cover reads as one thing wherever it is met. */}
+                <p className={paysBack ? "quote-payback" : "quote-payback none"}>
+                  {paysBack ? (
+                    <ShieldCheck aria-hidden="true" size={15} />
+                  ) : (
+                    <XCircle aria-hidden="true" size={15} />
+                  )}{" "}
+                  <span>{freightQuoteCoverageLine(quote.coversLoss)}</span>
+                </p>
+                {text(quote.terms, "") && (
+                  <p className="customer-transport-quote-terms">
+                    {text(quote.terms, "")}
+                  </p>
+                )}
+                <button
+                  className={selected ? "secondary-button" : "primary-button"}
+                  data-loading={busyId === quote.id}
+                  disabled={Boolean(busyId) || (chosen && !selected)}
+                  onClick={() => void accept(quote)}
+                  type="button"
+                >
+                  {busyId === quote.id
+                    ? "Accepting..."
+                    : selected
+                      ? "Chosen"
+                      : chosen
+                        ? "Not chosen"
+                        : "Accept this price"}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -2880,6 +4029,9 @@ type CustomerTransportRequest = FirestoreRow & {
   trackingCode?: string;
   status?: string;
   quoteStatus?: string;
+  paymentStatus?: string;
+  totalCents?: number;
+  currency?: string;
   pickupArea?: string;
   pickupAddress?: string;
   destinationCountryName?: string;
@@ -3028,7 +4180,13 @@ function TransportRequestForm({
   const [ownerName, setOwnerName] = useState(text(profile.fullName, ""));
   const [customerPhone, setCustomerPhone] = useState(text(profile.phone, ""));
   const [pickupArea, setPickupArea] = useState("");
-  const [pickupAddress, setPickupAddress] = useState("");
+  // Car transport takes an optional exact address. It is split into the same
+  // named fields as every other customer address so the apartment/unit is
+  // captured instead of being lost in one opaque suggestion string.
+  const [pickupAddressParts, setPickupAddressParts] = useState<StructuredAddress>(
+    EMPTY_STRUCTURED_ADDRESS,
+  );
+  const pickupAddress = composeAddressLine(pickupAddressParts);
   const [destinationCountryId, setDestinationCountryId] = useState("");
   const [carMake, setCarMake] = useState("");
   const [carModel, setCarModel] = useState("");
@@ -3091,7 +4249,7 @@ function TransportRequestForm({
 
   function clearForm() {
     setPickupArea("");
-    setPickupAddress("");
+    setPickupAddressParts(EMPTY_STRUCTURED_ADDRESS);
     setDestinationCountryId("");
     setCarMake("");
     setCarModel("");
@@ -3239,18 +4397,13 @@ function TransportRequestForm({
                       placeholder="Search or choose a country"
                       value={destinationCountryId}
                     />
-                    <AddressAutocomplete
-                      id="customer-transport-pickup"
-                      label="Exact pickup address (optional)"
-                      onChange={setPickupAddress}
-                      onSelect={(suggestion) =>
-                        setPickupAddress(
-                          suggestion.formattedAddress || suggestion.description,
-                        )
-                      }
+                    <StructuredAddressFields
+                      idPrefix="customer-transport-pickup"
+                      onChange={setPickupAddressParts}
                       required={false}
+                      streetLabel="Exact pickup street address (optional)"
                       suggestionsEnabled
-                      value={pickupAddress}
+                      value={pickupAddressParts}
                     />
                   </div>
                   {pickupArea.trim().length >= 2 &&
@@ -3279,32 +4432,61 @@ function TransportRequestForm({
                   <div className="customer-form-grid customer-shipping-form-grid">
                     <label>
                       Car make
-                      <input
-                        onChange={(event) => setCarMake(event.target.value)}
-                        placeholder="For example, Toyota"
+                      {/* Cascading catalog pickers, never free text: typed
+                          makes re-introduce "toyta"/"Toyota " as separate
+                          values and break search, matching and quoting. */}
+                      <select
+                        onChange={(event) => {
+                          // Model and year belong to the previous make.
+                          setCarMake(event.target.value);
+                          setCarModel("");
+                          setCarYear("");
+                        }}
                         required
-                        value={carMake}
-                      />
+                        value={canonicalMake(carMake) || carMake}
+                      >
+                        <option value="">Select a make</option>
+                        {getMakes().map((make) => (
+                          <option key={make} value={make}>
+                            {make}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label>
                       Car model
-                      <input
-                        onChange={(event) => setCarModel(event.target.value)}
-                        placeholder="For example, RAV4"
+                      <select
+                        disabled={!carMake}
+                        onChange={(event) => {
+                          setCarModel(event.target.value);
+                          setCarYear("");
+                        }}
                         required
-                        value={carModel}
-                      />
+                        value={canonicalModel(carMake, carModel) || carModel}
+                      >
+                        <option value="">Select a model</option>
+                        {getModels(carMake).map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label>
                       Car year
-                      <input
-                        max={currentYear + 1}
-                        min={1900}
+                      <select
+                        disabled={!carModel}
                         onChange={(event) => setCarYear(event.target.value)}
                         required
-                        type="number"
                         value={carYear}
-                      />
+                      >
+                        <option value="">Select a year</option>
+                        {getYears(carMake, carModel).map((year) => (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label>
                       VIN number (optional)
@@ -3568,9 +4750,12 @@ function CustomerTransportQuotes({
 
   async function selectQuote(quote: TransportQuote) {
     if (!activeRequest || busyAction) return;
-    const confirmed = confirmImportantAction(
-      "Choose this carrier and quoted total?",
-      "Choisir ce transporteur et ce montant ?",
+    const confirmed = await confirmImportantAction(
+      "Choose this carrier and pay the quoted total? The amount is held on " +
+        "your card, not charged, and cancelling while it is held is free.",
+      "Choisir ce transporteur et payer le montant du devis ? Le montant " +
+        "est réservé sur votre carte, pas débité, et l’annulation pendant " +
+        "la réservation est gratuite.",
     );
     if (!confirmed) return;
     setBusyAction(`select:${quote.id}`);
@@ -3580,16 +4765,34 @@ function CustomerTransportQuotes({
         requestId: activeRequest.id,
         quoteId: quote.id,
       });
+      // Selection holds the job at pending_payment; the money is the next
+      // step, not a later one. startCheckout navigates away on success.
+      await startCheckout("transportJob", {requestId: activeRequest.id});
     } catch {
-      setActionError("The carrier could not be selected. Try again.");
+      setActionError(
+        "The carrier was selected but payment could not be started. Use " +
+          "Pay now below to finish.",
+      );
     } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function payForJob() {
+    if (!activeRequest || busyAction) return;
+    setBusyAction("pay");
+    setActionError("");
+    try {
+      await startCheckout("transportJob", {requestId: activeRequest.id});
+    } catch {
+      setActionError("The payment could not be started. Try again.");
       setBusyAction("");
     }
   }
 
   async function cancelRequest() {
     if (!activeRequest || busyAction) return;
-    const confirmed = confirmImportantAction(
+    const confirmed = await confirmImportantAction(
       "Cancel this quote request? Businesses will no longer be able to submit or revise quotes.",
       "Annuler cette demande de devis ? Les entreprises ne pourront plus envoyer ni réviser de devis.",
     );
@@ -3681,6 +4884,32 @@ function CustomerTransportQuotes({
         </div>
       )}
 
+      {requestSelected && !requestCancelled &&
+        text(activeRequest.paymentStatus, "") !== "succeeded" && (
+        <div className="customer-transport-pay-note" role="status">
+          <div>
+            <strong>Pay to confirm your carrier</strong>
+            <span>
+              {formatMoney(
+                Number(activeRequest.totalCents ?? 0) / 100,
+                text(activeRequest.currency, "USD"),
+              )}{" "}
+              is held on your card — not charged — and the carrier can only
+              start once it is secured. Cancelling while held is free.
+            </span>
+          </div>
+          <button
+            aria-busy={busyAction === "pay"}
+            className="primary-button"
+            disabled={Boolean(busyAction)}
+            onClick={() => void payForJob()}
+            type="button"
+          >
+            {busyAction === "pay" ? "Opening secure payment..." : "Pay now"}
+          </button>
+        </div>
+      )}
+
       {quotes.loading ? (
         <div className="customer-transport-quote-grid" aria-live="polite">
           {[0, 1].map((item) => (
@@ -3735,7 +4964,7 @@ function CustomerTransportQuotes({
                       text(quote.currency, "USD"),
                     )}
                   </strong>
-                  <span>No payment due until the next confirmed step.</span>
+                  <span>Held on your card when you accept — cancelling while held is free.</span>
                 </div>
                 <dl>
                   <div>
@@ -3804,21 +5033,86 @@ function CustomerTransportQuotes({
   );
 }
 
-function DestinationPicker({
-  label,
-  mode = "air",
+/**
+ * The row of chips a customer orders businesses with.
+ *
+ * Which chips appear is declared per service in service-ranking.ts, so a
+ * service that can only be ordered one way shows nothing rather than a
+ * control with a single choice.
+ */
+function ServiceSortChips({
   onChange,
   options,
   service,
   value,
 }: {
+  onChange: (value: ServiceSort) => void;
+  options: readonly unknown[];
+  service: string;
+  value: ServiceSort;
+}) {
+  if (!shouldOfferServiceSort(options, service)) return null;
+
+  return (
+    <div
+      aria-label="Order businesses by"
+      className="service-segments service-sort-segments"
+      role="tablist"
+    >
+      {/* Spans rather than buttons: choosing an order changes what you are
+          looking at, not what gets saved, and these pickers sit inside
+          fieldsets that go disabled while a booking submits. */}
+      {sortsForService(service).map((sort) => (
+        <span
+          aria-selected={value === sort}
+          className={`segment ${value === sort ? "active" : ""}`}
+          key={sort}
+          onClick={() => onChange(sort)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            onChange(sort);
+          }}
+          role="tab"
+          tabIndex={0}
+        >
+          {SERVICE_SORT_LABELS[sort]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function DestinationPicker({
+  itemCategoryId = "",
+  itemId = "",
+  label,
+  mode = "air",
+  onChange,
+  onSortChange,
+  options,
+  service,
+  sort,
+  value,
+}: {
+  /**
+   * Freight only. The funnel asks what is being sent before this list
+   * renders, so each card can state the protection this business publishes
+   * for that exact item instead of a range the customer cannot act on.
+   */
+  itemCategoryId?: string;
+  itemId?: string;
   label: string;
   mode?: "air" | "sea";
   onChange: (value: string) => void;
+  onSortChange?: (value: ServiceSort) => void;
   options: DestinationOption[];
   service: ShippingService;
+  sort?: ServiceSort;
   value: string;
 }) {
+  const businessService = BUSINESS_SERVICE_BY_SHIPPING_SERVICE[service];
+
   return (
     <fieldset className="customer-destination-picker customer-form-span">
       <legend>{label}</legend>
@@ -3826,6 +5120,14 @@ function DestinationPicker({
         Choose an approved provider. Each rate comes directly from that
         business.
       </p>
+      {onSortChange && sort && (
+        <ServiceSortChips
+          onChange={onSortChange}
+          options={options}
+          service={businessService}
+          value={sort}
+        />
+      )}
       {options.length === 0 && (
         <div aria-live="polite" className="customer-inline-note">
           No approved businesses currently have a rate for this freight mode.
@@ -3928,6 +5230,23 @@ function DestinationPicker({
                   )}
                 </span>
               )}
+              {service === "freight" && (
+                // Before the choice, not after. A customer comparing two
+                // businesses has to be able to see that one stands behind the
+                // parcel and the other does not - and the one that does not
+                // has to say so while the parcel is still in the room.
+                <span className="customer-destination-coverage">
+                  <ShieldCheck aria-hidden="true" size={14} />
+                  <span>
+                    <small>Protection</small>
+                    <strong>
+                      {freightCoverageComparisonLine(
+                        freightCoveragePolicyFrom(option.freightCoverage),
+                      )}
+                    </strong>
+                  </span>
+                </span>
+              )}
               {service !== "transport" && (
                 <span className="customer-destination-logistics">
                   {service === "barrel" && (
@@ -4019,7 +5338,6 @@ function ShippingPriceSummary({
 function PickupFields({
   disabled = false,
   idSuffix = "default",
-  lockDetectedBorough = false,
   officeAddress = "the business office",
   officeLocations = [],
   officeLocationsLoading = false,
@@ -4034,7 +5352,6 @@ function PickupFields({
 }: {
   disabled?: boolean;
   idSuffix?: string;
-  lockDetectedBorough?: boolean;
   officeAddress?: string;
   officeLocations?: OfficeLocationOption[];
   officeLocationsLoading?: boolean;
@@ -4120,59 +5437,34 @@ function PickupFields({
       </fieldset>
       {pickup.requested && (
         <>
-          <AddressAutocomplete
-            id={`customer-pickup-address-${idSuffix}`}
+          <StructuredAddressFields
+            disabled={disabled}
+            idPrefix={`customer-pickup-address-${idSuffix}`}
             onBlur={onAddressBlur}
-            suggestionsEnabled={suggestionsEnabled}
-            onChange={(address) => {
+            onChange={(parts, suggestion) => {
+              const applied = applyStructuredAddress(pickup, parts);
               setPickup({
-                ...pickup,
-                address,
-                borough: nycBoroughFromAddress(address) || "",
-              });
-              onPickupChanged?.();
-            }}
-            onSelect={(suggestion) => {
-              const address =
-                suggestion.formattedAddress || suggestion.description;
-              setPickup({
-                ...pickup,
-                address,
+                ...applied,
+                // The server-derived borough beats the text sniff when the
+                // customer picked a suggestion; typing falls back to the sniff.
                 borough:
-                  suggestion.borough ||
-                  nycBoroughFromAddress(address) ||
+                  suggestion?.borough ||
+                  nycBoroughFromAddress(applied.address) ||
                   "",
               });
               onPickupChanged?.();
-              onAddressSelected?.(suggestion);
+              if (suggestion) onAddressSelected?.(suggestion);
             }}
-            value={pickup.address}
+            streetLabel="Pickup street address"
+            suggestionsEnabled={suggestionsEnabled}
+            value={pickupStructuredAddress(pickup)}
           />
-          {lockDetectedBorough && pickup.borough ? (
+          {pickup.borough ? (
             <div className="customer-detected-borough">
               <small>Service area</small>
               <strong>{pickup.borough}</strong>
               <span>Confirmed from the pickup address.</span>
             </div>
-          ) : !lockDetectedBorough ? (
-            <label>
-              Pickup borough
-              <select
-                onChange={(event) => {
-                  setPickup({ ...pickup, borough: event.target.value });
-                  onPickupChanged?.();
-                }}
-                required
-                value={pickup.borough}
-              >
-                <option value="">Select borough</option>
-                {NYC_PICKUP_BOROUGHS.map((borough) => (
-                  <option key={borough} value={borough}>
-                    {borough}
-                  </option>
-                ))}
-              </select>
-            </label>
           ) : null}
           <label>
             Pickup date and time

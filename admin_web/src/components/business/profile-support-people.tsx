@@ -3,6 +3,7 @@
 import {
   type ChangeEvent,
   type FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -14,12 +15,14 @@ import {
   Building2,
   Car,
   Check,
+  Clock,
   FileText,
   ImageUp,
   LifeBuoy,
   Package,
   ParkingCircle,
   Plane,
+  Plus,
   RefreshCw,
   Save,
   Send,
@@ -28,9 +31,22 @@ import {
   Upload,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 
+import { FieldInfo } from "@/components/field-info";
 import { SearchableSelect } from "@/components/searchable-select";
+import {
+  accessInvitationDeliveryNote,
+  accessInvitationExpiryLine,
+  accessInvitationRowsFrom,
+  accessInvitationSentLine,
+  accessInvitationStatusLabel,
+  accessInvitationStatusTone,
+  canActOnAccessInvitation,
+  type AccessInvitationLine,
+  type AccessInvitationRow,
+} from "@/lib/access-invitations";
 import {
   buildBusinessVerificationChecklist,
   businessServiceLabel,
@@ -48,10 +64,39 @@ import {
   businessServiceSettingsFromRow,
   isNewYorkState,
   NYC_BOROUGHS,
+  PICKUP_PLAN_SERVICES,
+  PICKUP_SERVICE_BY_BUSINESS_SERVICE,
+  PICKUP_SERVICE_LABELS,
+  pickupPlanFieldErrors,
+  pickupPlanSummary,
+  pickupServiceState,
   validateBusinessServiceSettings,
+  type BusinessServiceId,
   type BusinessServiceSettingsDraft,
+  type PickupConfigDraft,
+  type PickupMode,
+  type PickupPlanServiceId,
+  type PickupServiceChoice,
 } from "@/lib/business-service-settings";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
+import {
+  MAX_CUSTOM_FREIGHT_CATEGORIES,
+  STANDARD_FREIGHT_CATEGORIES,
+  type FreightPaybackCategoryDraft,
+  type FreightPaybackItemDraft,
+  type FreightPaybackPricingMode,
+  resolvedFreightCategoryId,
+  emptyFreightCustomCategory,
+  emptyFreightPaybackCategory,
+  emptyFreightPaybackItem,
+  type FreightCustomCategoryDraft,
+  type FreightSettingsDraft,
+} from "@/lib/freight-categories";
+import {
+  MAX_INCLUDED_KG,
+  MAX_ITEM_FLAT_PRICE,
+  STANDARD_FREIGHT_ITEMS,
+} from "@/lib/freight-payback";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
@@ -240,7 +285,7 @@ export function BusinessProfilePanel({
   const [draft, setDraft] = useState<ProfileDraft>(() => profileDraftFromBusiness(business));
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [documentFilesById, setDocumentFilesById] = useState<Record<string, File | null>>({});
-  const {busy, busyLabel, error, run} = useActionFeedback(runAction, toast);
+  const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
 
   useEffect(() => {
     setDraft(profileDraftFromBusiness(business));
@@ -366,6 +411,7 @@ export function BusinessProfilePanel({
       </header>
 
       {error && <div className="error-box">{error}</div>}
+      {success && !error && <div className="success-box">{success}</div>}
       {!businessId && <div className="error-box">Business account is not configured.</div>}
 
       <form className="bp-card" id="business-profile-form" onSubmit={submit}>
@@ -433,7 +479,7 @@ export function BusinessServicesPanel({
   const [draft, setDraft] = useState<BusinessServiceSettingsDraft>(() =>
     businessServiceSettingsFromRow(business),
   );
-  const {busy, busyLabel, error, run} = useActionFeedback(runAction, toast);
+  const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
   const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const visibleServiceOptions = sharedBarrelsEnabled
     ? serviceOptions
@@ -475,12 +521,96 @@ export function BusinessServicesPanel({
     });
   }
 
-  function updateBoroughPrice(borough: string, value: string) {
+  function updatePickupShared(patch: Partial<PickupConfigDraft>) {
     setDraft((current) => ({
       ...current,
-      freightPickupBoroughPrices: {
-        ...current.freightPickupBoroughPrices,
-        [borough]: value,
+      pickupShared: {...current.pickupShared, ...patch},
+    }));
+  }
+
+  function updatePickupSharedBorough(borough: string, value: string) {
+    setDraft((current) => ({
+      ...current,
+      pickupShared: {
+        ...current.pickupShared,
+        boroughPrices: {
+          ...current.pickupShared.boroughPrices,
+          [borough]: value,
+        },
+      },
+    }));
+  }
+
+  function updatePickupServiceChoice(
+    service: PickupPlanServiceId,
+    choice: PickupServiceChoice,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      pickupServices: {
+        ...current.pickupServices,
+        [service]: {...current.pickupServices[service], choice},
+      },
+    }));
+  }
+
+  function updatePickupServiceConfig(
+    service: PickupPlanServiceId,
+    patch: Partial<PickupConfigDraft>,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      pickupServices: {
+        ...current.pickupServices,
+        [service]: {
+          ...current.pickupServices[service],
+          config: {...current.pickupServices[service].config, ...patch},
+        },
+      },
+    }));
+  }
+
+  function updatePickupServiceBorough(
+    service: PickupPlanServiceId,
+    borough: string,
+    value: string,
+  ) {
+    setDraft((current) => {
+      const entry = current.pickupServices[service];
+      return {
+        ...current,
+        pickupServices: {
+          ...current.pickupServices,
+          [service]: {
+            ...entry,
+            config: {
+              ...entry.config,
+              boroughPrices: {
+                ...entry.config.boroughPrices,
+                [borough]: value,
+              },
+            },
+          },
+        },
+      };
+    });
+  }
+
+  function updateFreight(patch: Partial<FreightSettingsDraft>) {
+    setDraft((current) => ({...current, freight: {...current.freight, ...patch}}));
+  }
+
+  function updateCustomCategory(
+    index: number,
+    patch: Partial<FreightCustomCategoryDraft>,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      freight: {
+        ...current.freight,
+        customCategories: current.freight.customCategories.map((row, position) =>
+          position === index ? {...row, ...patch} : row,
+        ),
       },
     }));
   }
@@ -516,8 +646,52 @@ export function BusinessServicesPanel({
   const activeServiceCount = draft.enabledServices.length;
   const activeServiceSummary = `${activeServiceCount} of 6 services active`;
   const offersCarSales = draft.enabledServices.includes("carSales");
-  const offersFreight = draft.enabledServices.includes("freight");
   const offersParking = draft.enabledServices.includes("carParking");
+  const offersFreight = draft.enabledServices.includes("freight");
+  const businessIsNewYork = isNewYorkState(business?.state);
+  const enabledPickupServices = PICKUP_PLAN_SERVICES.filter((service) =>
+    draft.enabledServices.some(
+      (id) =>
+        PICKUP_SERVICE_BY_BUSINESS_SERVICE[id as BusinessServiceId] ===
+        service,
+    ),
+  );
+  const offersPickup = enabledPickupServices.length > 0;
+  const pickupSummary = pickupPlanSummary(draft, enabledPickupServices);
+  const pickupErrors = pickupPlanFieldErrors(draft, {
+    isNewYorkBusiness: businessIsNewYork,
+  });
+
+  // Built from what the business offers, so a tab never appears for a service
+  // that is switched off, and turning one on makes its rules reachable without
+  // anything else changing.
+  const ruleTabs = useMemo(() => {
+    const tabs: Array<{id: string; label: string; hint: string}> = [];
+    if (offersCarSales) {
+      tabs.push({id: "carSales", label: "Car sales", hint: "Paid holds"});
+    }
+    if (offersFreight) {
+      tabs.push({id: "freight", label: "Freight", hint: "What you carry"});
+    }
+    if (offersParking) {
+      tabs.push({id: "parking", label: "Car parking", hint: "Facility"});
+    }
+    if (offersPickup) {
+      tabs.push({id: "pickup", label: "Home pickup", hint: "All services"});
+    }
+    return tabs;
+  }, [offersCarSales, offersFreight, offersParking, offersPickup]);
+
+  const [activeRuleTab, setActiveRuleTab] = useState("");
+  // Keep the selection valid: a business that turns off the service it was
+  // looking at would otherwise be left staring at an empty panel.
+  useEffect(() => {
+    if (ruleTabs.length === 0) return;
+    if (!ruleTabs.some((tab) => tab.id === activeRuleTab)) {
+      setActiveRuleTab(ruleTabs[0].id);
+    }
+  }, [ruleTabs, activeRuleTab]);
+
   const parkingIsUnitedStates =
     draft.parkingCountry.trim() === "United States";
   const language = currentWebLanguage() === "fr" ? "fr" : "en";
@@ -574,6 +748,7 @@ export function BusinessServicesPanel({
       </header>
 
       {error && <div className="error-box">{error}</div>}
+      {success && !error && <div className="success-box">{success}</div>}
       {!canManage && (
         <div className="customer-inline-note">
           You can review these settings. Only the business owner can change
@@ -581,9 +756,13 @@ export function BusinessServicesPanel({
         </div>
       )}
 
+      {/* noValidate: native browser validation on hidden/other sections
+          (e.g. parking min=1) blocks submit with only a transient bubble;
+          validateBusinessServiceSettings surfaces real, visible errors. */}
       <form
         className="service-settings-form"
         id="business-service-settings-form"
+        noValidate
         onSubmit={submit}
       >
         <div className="service-settings-summary">
@@ -627,7 +806,7 @@ export function BusinessServicesPanel({
             })}
           </div>
 
-          {(offersCarSales || offersFreight || offersParking) && (
+          {(offersCarSales || offersPickup || offersParking || offersFreight) && (
             <div className="service-settings-summary service-rules-summary">
               <div>
                 <strong>Service rules</strong>
@@ -640,8 +819,46 @@ export function BusinessServicesPanel({
             </div>
           )}
 
+          {/* One group at a time. These four cards used to stack into a single
+              scroll, so a business changing its freight prices scrolled past
+              hold fees, pickup rules and parking capacity to reach them - and
+              the card it wanted was the one furthest down. Tabs are built from
+              what the business actually offers, so a service that is switched
+              off never shows one. */}
+          <div
+            aria-label="Service rules"
+            className="service-segments service-rule-tabs"
+            role="tablist"
+          >
+            {/* Spans rather than buttons, for the same reason FieldInfo uses
+                one: this panel wraps its form in a disabled fieldset for
+                read-only viewers, and a disabled fieldset disables every
+                descendant form control. As buttons these tabs stopped working
+                for exactly the people who can only read - leaving them worse
+                off than the single scroll this replaced. Choosing what to look
+                at is navigation, not editing. */}
+            {ruleTabs.map((tab) => (
+              <span
+                aria-selected={activeRuleTab === tab.id}
+                className={`segment ${activeRuleTab === tab.id ? "active" : ""}`}
+                key={tab.id}
+                onClick={() => setActiveRuleTab(tab.id)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setActiveRuleTab(tab.id);
+                }}
+                role="tab"
+                tabIndex={0}
+              >
+                <span>{tab.label}</span>
+                <small>{tab.hint}</small>
+              </span>
+            ))}
+          </div>
+
           <div className="service-config-grid">
-            {offersCarSales && (
+            {offersCarSales && activeRuleTab === "carSales" && (
               <article className="service-config-card">
                 <header className="service-config-card-head">
                   <span className="service-config-icon"><Car size={21} /></span>
@@ -712,172 +929,191 @@ export function BusinessServicesPanel({
               </article>
             )}
 
-            {offersFreight && (
-              <article className="service-config-card">
+            {offersPickup && activeRuleTab === "pickup" && (
+              <article className="service-config-card service-config-card-wide">
                 <header className="service-config-card-head">
-                  <span className="service-config-icon"><Plane size={21} /></span>
+                  <span className="service-config-icon"><Truck size={21} /></span>
                   <div>
-                    <strong>Freight · customer pickup</strong>
+                    <strong>Home pickup</strong>
                     <span>
-                      Offer collection from a customer address and calculate
-                      the fee consistently.
+                      Collecting items from the customer&rsquo;s address
+                      instead of them bringing it to you. Each service either
+                      follows your shared plan or sets its own.
                     </span>
                   </div>
-                  <button
-                    aria-pressed={draft.freightPickupAvailable}
-                    className={`service-rule-toggle ${draft.freightPickupAvailable ? "active" : ""}`}
-                    onClick={() =>
-                      update(
-                        "freightPickupAvailable",
-                        !draft.freightPickupAvailable,
-                      )
-                    }
-                    type="button"
-                  >
-                    {draft.freightPickupAvailable ? "Pickup on" : "Pickup off"}
-                  </button>
                 </header>
-                {draft.freightPickupAvailable ? (
-                  <div className="lst-form-grid service-config-fields">
-                    {isNewYorkState(business?.state) && (
-                      <label className="lst-field wide">
-                        <span>Pickup pricing model</span>
-                        <select
-                          value={draft.freightPickupModel}
-                          onChange={(event) =>
-                            update(
-                              "freightPickupModel",
-                              event.target.value === "borough"
-                                ? "borough"
-                                : "distance",
-                            )
-                          }
-                        >
-                          <option value="distance">By distance</option>
-                          <option value="borough">By borough</option>
-                        </select>
-                      </label>
-                    )}
-                    {draft.freightPickupModel === "borough" &&
-                    isNewYorkState(business?.state) ? (
+
+                {/* What the server will actually do, stated once. Working it
+                    out otherwise means cross-referencing the shared toggle
+                    against four dropdowns - and getting it wrong in the one
+                    direction that matters, since a service with its own
+                    settings keeps taking pickups whatever the shared plan
+                    says. */}
+                <div className="lst-form-grid service-config-fields">
+                  <p className="customer-inline-note wide">
+                    {pickupSummary.taking.length > 0 ? (
                       <>
-                        <p className="service-config-note wide">
-                          Set one flat pickup fee for every borough you serve.
-                        </p>
-                        {NYC_BOROUGHS.map((borough) => (
-                          <label className="lst-field" key={borough}>
-                            <span>{borough} (USD)</span>
-                            <input
-                              inputMode="decimal"
-                              min="0"
-                              onChange={(event) =>
-                                updateBoroughPrice(
-                                  borough,
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="0"
-                              type="number"
-                              value={
-                                draft.freightPickupBoroughPrices[borough] ?? ""
-                              }
-                            />
-                          </label>
-                        ))}
+                        <strong>Taking pickups:</strong>{" "}
+                        {pickupSummary.taking.join(", ")}.{" "}
                       </>
                     ) : (
                       <>
-                        <p className="service-config-note wide">
-                          Fee = base fee + per-kilometre rate × driving
-                          distance. Zero rates mean free pickup.
-                        </p>
-                        <label className="lst-field wide">
-                          <span>Pickup origin address</span>
-                          <input
-                            onChange={(event) =>
-                              update(
-                                "freightPickupOriginAddress",
-                                event.target.value,
-                              )
-                            }
-                            placeholder="Defaults to your business address"
-                            value={draft.freightPickupOriginAddress}
-                          />
-                        </label>
-                        <label className="lst-field">
-                          <span>Base fee (USD)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            onChange={(event) =>
-                              update(
-                                "freightPickupBaseFee",
-                                event.target.value,
-                              )
-                            }
-                            type="number"
-                            value={draft.freightPickupBaseFee}
-                          />
-                        </label>
-                        <label className="lst-field">
-                          <span>Per km (USD)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            onChange={(event) =>
-                              update(
-                                "freightPickupPerKm",
-                                event.target.value,
-                              )
-                            }
-                            type="number"
-                            value={draft.freightPickupPerKm}
-                          />
-                        </label>
-                        <label className="lst-field">
-                          <span>Minimum fee (USD)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            onChange={(event) =>
-                              update(
-                                "freightPickupMinFee",
-                                event.target.value,
-                              )
-                            }
-                            type="number"
-                            value={draft.freightPickupMinFee}
-                          />
-                        </label>
-                        <label className="lst-field">
-                          <span>Maximum distance (km)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            onChange={(event) =>
-                              update(
-                                "freightPickupMaxKm",
-                                event.target.value,
-                              )
-                            }
-                            placeholder="0 = no limit"
-                            type="number"
-                            value={draft.freightPickupMaxKm}
-                          />
-                        </label>
+                        <strong>No service is taking pickups.</strong>{" "}
+                        Customers bring everything to you.{" "}
                       </>
                     )}
-                  </div>
-                ) : (
-                  <p className="service-config-empty">
-                    Customers bring freight to your business. Turn pickup on to
-                    configure collection pricing.
+                    {pickupSummary.notTaking.length > 0 && (
+                      <>
+                        Customers bring these to you:{" "}
+                        {pickupSummary.notTaking.join(", ")}.
+                      </>
+                    )}
                   </p>
-                )}
+                </div>
+
+                <div className="lst-form-grid service-config-fields">
+                  <div className="wide">
+                    <label className="customer-choice-row">
+                      <input
+                        checked={draft.pickupEnabled}
+                        onChange={() =>
+                          update("pickupEnabled", !draft.pickupEnabled)
+                        }
+                        type="checkbox"
+                      />
+                      <span>
+                        <strong>Use one shared plan</strong>
+                        <small>
+                          Services set to &ldquo;follow the shared
+                          plan&rdquo; below are priced by these settings.
+                        </small>
+                      </span>
+                    </label>
+                  </div>
+                  {draft.pickupEnabled && (
+                    <>
+                      <PickupConfigEditor
+                        config={draft.pickupShared}
+                        isNewYork={businessIsNewYork}
+                        onBorough={updatePickupSharedBorough}
+                        onChange={updatePickupShared}
+                      />
+                      {pickupErrors.shared && (
+                        <p className="customer-inline-note error wide">
+                          {pickupErrors.shared}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="lst-form-grid service-config-fields">
+                  <p className="service-config-note wide">
+                    Each service, one at a time
+                  </p>
+                  {enabledPickupServices.map((service) => {
+                    const entry = draft.pickupServices[service];
+                    const state = pickupServiceState(draft, service);
+                    return (
+                      <div
+                        className="lst-form-grid wide pickup-service-block"
+                        key={service}
+                      >
+                        <label className="lst-field">
+                          <span>{PICKUP_SERVICE_LABELS[service]}</span>
+                          <select
+                            onChange={(event) =>
+                              updatePickupServiceChoice(
+                                service,
+                                event.target.value === "custom"
+                                  ? "custom"
+                                  : event.target.value === "off"
+                                    ? "off"
+                                    : "inherit",
+                              )
+                            }
+                            value={entry.choice}
+                          >
+                            <option value="inherit">
+                              Follow the shared plan
+                            </option>
+                            <option value="custom">
+                              Set its own pickup fees
+                            </option>
+                            <option value="off">
+                              No pickup for this service
+                            </option>
+                          </select>
+                          {/* Following a plan that is switched off reads as
+                              "configured" but means no pickup at all. */}
+                          {state.reason === "shared-plan-off" && (
+                            <small className="field-error">
+                              No pickup: the shared plan above is off. Turn
+                              it on, or give this service its own fees.
+                            </small>
+                          )}
+                          {state.reason === "own-settings" &&
+                            !draft.pickupEnabled && (
+                            <small>
+                              Takes pickups on these fees, whether or not the
+                              shared plan is on.
+                            </small>
+                          )}
+                        </label>
+                        {entry.choice === "custom" && (
+                          <>
+                            <PickupConfigEditor
+                              config={entry.config}
+                              isNewYork={businessIsNewYork}
+                              onBorough={(borough, value) =>
+                                updatePickupServiceBorough(
+                                  service,
+                                  borough,
+                                  value,
+                                )
+                              }
+                              onChange={(patch) =>
+                                updatePickupServiceConfig(service, patch)
+                              }
+                            />
+                            {pickupErrors.services[service] && (
+                              <p className="customer-inline-note error wide">
+                                {pickupErrors.services[service]}
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </article>
             )}
 
-            {offersParking && (
+            {offersFreight && activeRuleTab === "freight" && (
+              <FreightGoodsEditor
+                draft={draft.freight}
+                onAddCategory={() =>
+                  updateFreight({
+                    customCategories: [
+                      ...draft.freight.customCategories,
+                      emptyFreightCustomCategory(),
+                    ],
+                  })
+                }
+                onChange={updateFreight}
+                onCustomCategory={updateCustomCategory}
+                onRemoveCategory={(index) =>
+                  updateFreight({
+                    customCategories: draft.freight.customCategories.filter(
+                      (_, position) => position !== index,
+                    ),
+                  })
+                }
+              />
+            )}
+
+            {offersParking && activeRuleTab === "parking" && (
               <article className="service-config-card service-config-card-wide">
                 <header className="service-config-card-head">
                   <span className="service-config-icon">
@@ -890,21 +1126,6 @@ export function BusinessServicesPanel({
                       together.
                     </span>
                   </div>
-                  <button
-                    aria-pressed={draft.parkingPickupAvailable}
-                    className={`service-rule-toggle ${draft.parkingPickupAvailable ? "active" : ""}`}
-                    onClick={() =>
-                      update(
-                        "parkingPickupAvailable",
-                        !draft.parkingPickupAvailable,
-                      )
-                    }
-                    type="button"
-                  >
-                    {draft.parkingPickupAvailable
-                      ? "Vehicle pickup on"
-                      : "Vehicle pickup off"}
-                  </button>
                 </header>
                 <div className="lst-form-grid service-config-fields">
                   <label className="lst-field wide">
@@ -1056,20 +1277,6 @@ export function BusinessServicesPanel({
                       value={draft.parkingMonthlyRate}
                     />
                   </label>
-                  {draft.parkingPickupAvailable && (
-                    <label className="lst-field">
-                      <span>Vehicle pickup fee (USD)</span>
-                      <input
-                        inputMode="decimal"
-                        min="0"
-                        onChange={(event) =>
-                          update("parkingPickupFee", event.target.value)
-                        }
-                        type="number"
-                        value={draft.parkingPickupFee}
-                      />
-                    </label>
-                  )}
                   <label className="lst-field wide">
                     <span>Parking instructions</span>
                     <textarea
@@ -1088,6 +1295,638 @@ export function BusinessServicesPanel({
         </fieldset>
       </form>
     </section>
+  );
+}
+
+/**
+ * What a business charges for each kind of goods, and whether it pays for a
+ * parcel it loses.
+ *
+ * Two settings, one card, because they answer the same question for the owner:
+ * "what am I willing to carry, and at what price." They stay separate for the
+ * customer - the category says what is in the box, cover says whether this
+ * business stands behind it - but an owner sets them in one sitting.
+ */
+function FreightGoodsEditor({
+  draft,
+  onAddCategory,
+  onChange,
+  onCustomCategory,
+  onRemoveCategory,
+}: {
+  draft: FreightSettingsDraft;
+  onAddCategory: () => void;
+  onChange: (patch: Partial<FreightSettingsDraft>) => void;
+  onCustomCategory: (
+    index: number,
+    patch: Partial<FreightCustomCategoryDraft>,
+  ) => void;
+  onRemoveCategory: (index: number) => void;
+}) {
+  const roomForMore =
+    draft.customCategories.length < MAX_CUSTOM_FREIGHT_CATEGORIES;
+
+  return (
+    <article className="service-config-card service-config-card-wide">
+      <header className="service-config-card-head">
+        <span className="service-config-icon"><Package size={21} /></span>
+        <div>
+          <strong>Freight · what you carry</strong>
+          <span>
+            Price each kind of goods, and say whether you pay for a parcel you
+            lose.
+          </span>
+        </div>
+      </header>
+      <div className="lst-form-grid service-config-fields">
+        <p className="service-config-note wide">
+          <span className="label-with-info">
+            Item categories
+            <FieldInfo label="how item categories work">
+              <p>
+                Categories are how a customer finds the thing they are
+                sending. The list is the platform&rsquo;s, so a customer can
+                compare you with another business on the same words.
+              </p>
+              <p>
+                What each thing costs is set on the item itself, under
+                &ldquo;What you carry, and what it costs&rdquo; below.
+              </p>
+            </FieldInfo>
+          </span>
+        </p>
+        <p className="service-config-note wide">
+          <span className="label-with-info">
+            Your own categories
+            <FieldInfo label="when to add a category of your own">
+              <p>
+                Add one only for goods the standard list genuinely misses -
+                auto parts, building materials, live plants.
+              </p>
+              <p>
+                Customers see your extra rows after the standard ones. Up to 6.
+              </p>
+            </FieldInfo>
+          </span>
+        </p>
+        {draft.customCategories.map((row, index) => (
+          <div className="lst-form-grid wide" key={`custom-${index}`}>
+            <label className="lst-field">
+              <span>Category name</span>
+              <input
+                maxLength={60}
+                onChange={(event) =>
+                  onCustomCategory(index, {label: event.target.value})
+                }
+                placeholder="e.g. Auto parts"
+                type="text"
+                value={row.label}
+              />
+            </label>
+            <label className="lst-field wide">
+              <span>What it covers</span>
+              <input
+                maxLength={120}
+                onChange={(event) =>
+                  onCustomCategory(index, {hint: event.target.value})
+                }
+                placeholder="Shown to the customer under the name"
+                type="text"
+                value={row.hint}
+              />
+            </label>
+            <div className="lst-field wide">
+              <button
+                className="ghost-button"
+                onClick={() => onRemoveCategory(index)}
+                type="button"
+              >
+                Remove this category
+              </button>
+            </div>
+          </div>
+        ))}
+        <div className="lst-field wide">
+          <button
+            className="secondary-button"
+            disabled={!roomForMore}
+            onClick={onAddCategory}
+            type="button"
+          >
+            <Plus size={15} /> Add a category
+          </button>
+          {!roomForMore && (
+            <small>You can add up to 6 categories of your own.</small>
+          )}
+        </div>
+
+        <p className="service-config-note wide">
+          <span className="label-with-info">
+            If a parcel is lost
+            <FieldInfo label="how cover for a lost parcel works">
+              <p>
+                Nothing extra is charged for this. You price each item above
+                according to what it is worth to carry, so the risk is
+                already in your rate.
+              </p>
+              <p>
+                If you cover parcels and one goes missing, you make good on
+                it with the customer. If you do not cover them, the customer
+                gets nothing back, and they are told so before they book.
+              </p>
+            </FieldInfo>
+          </span>
+        </p>
+        {draft.coversLoss && (
+          <div className="customer-inline-note wide">
+            You make good on the parcel, not Laawol, and the policy in force
+            on the day the customer booked is the one that is judged.
+          </div>
+        )}
+        <label className="lst-field">
+          <span>Do you pay for a lost parcel?</span>
+          <select
+            onChange={(event) =>
+              onChange({coversLoss: event.target.value === "yes"})
+            }
+            value={draft.coversLoss ? "yes" : "no"}
+          >
+            <option value="no">No, parcels are not covered</option>
+            <option value="yes">Yes, I cover a parcel I lose</option>
+          </select>
+        </label>
+        <label className="lst-field wide">
+          <span className="label-with-info">
+            Do customers pay you before shipping, or after arrival?
+            <FieldInfo label="how pay-on-arrival works">
+              <p>
+                If you accept payment on arrival, customers of yours can
+                choose it at booking. Their card is saved and verified up
+                front - nothing is charged that day.
+              </p>
+              <p>
+                When you mark the shipment arrived, Laawol charges that card
+                automatically for the confirmed price. If the charge does
+                not go through, the customer is told to pay in the app, and
+                you decide whether to hand over the parcel before they do.
+              </p>
+            </FieldInfo>
+          </span>
+          <select
+            onChange={(event) =>
+              onChange({payOnArrival: event.target.value === "yes"})
+            }
+            value={draft.payOnArrival ? "yes" : "no"}
+          >
+            <option value="no">Before shipping only</option>
+            <option value="yes">They may also pay on arrival</option>
+          </select>
+        </label>
+        <div className="wide">
+          <p className="service-config-note">
+            <span className="label-with-info">
+              What you carry, and what it costs
+              <FieldInfo label="how the item list works">
+                <p>
+                  Each row says what you charge to carry that thing. An item
+                  you have not listed cannot be booked instantly; the
+                  customer asks you for a quote instead.
+                </p>
+                <p>
+                  A known object can have a set price - &ldquo;iPhone 16,
+                  $50&rdquo; - and the customer is never asked what it
+                  weighs. Goods that vary every time are priced by weight at
+                  your rate for the destination.
+                </p>
+                <p>
+                  A row you list but never price behaves the same way as one
+                  you never listed: the customer asks you for a price, and
+                  you answer it under Price requests.
+                </p>
+                <p>
+                  Cover is a separate question, answered once above for every
+                  parcel you carry. The customer is charged nothing for it,
+                  so price each row for what it is worth to you to carry.
+                </p>
+              </FieldInfo>
+            </span>
+          </p>
+          <FreightPaybackEditor draft={draft} onChange={onChange} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/**
+ * How this business charges for one row.
+ *
+ * Two ways to charge, and the business picks per row because only it knows
+ * which of its goods are which. A known object gets one price and never sees
+ * a scale; goods that vary are weighed, and the weigh-and-confirm settlement
+ * runs exactly as it does for every other parcel.
+ *
+ * `unpricedLabel` adds a third answer for a row that may legitimately have
+ * none - the category catch-all, which exists only once someone prices it.
+ * An item row is not offered it: the business added that row on purpose.
+ */
+function FreightRowPricingFields({
+  onPatch,
+  row,
+  unpricedLabel,
+}: {
+  onPatch: (patch: {
+    pricingMode?: FreightPaybackPricingMode;
+    flatPrice?: string;
+    includedKg?: string;
+  }) => void;
+  row: {
+    pricingMode: FreightPaybackPricingMode;
+    flatPrice: string;
+    includedKg: string;
+  };
+  unpricedLabel?: string;
+}) {
+  // By weight is the business's own per-kg rate for the route, so choosing it
+  // leaves nothing else to fill in.
+  const flat = row.pricingMode === "flat";
+  const selected = unpricedLabel
+    ? row.pricingMode
+    : flat
+      ? "flat"
+      : "per_kg";
+  return (
+    <div className="payback-pricing-row">
+      <label className="lst-field">
+        <span>How is this priced?</span>
+        <select
+          onChange={(event) => {
+            const value = event.target.value;
+            onPatch({
+              pricingMode:
+                value === "flat"
+                  ? "flat"
+                  : value === "per_kg"
+                    ? "per_kg"
+                    : "",
+            });
+          }}
+          value={selected}
+        >
+          {unpricedLabel && <option value="">{unpricedLabel}</option>}
+          <option value="flat">A set price</option>
+          <option value="per_kg">By weight</option>
+        </select>
+      </label>
+      {flat ? (
+        <>
+          <label className="lst-field">
+            <span>Price (USD)</span>
+            <input
+              inputMode="decimal"
+              max={MAX_ITEM_FLAT_PRICE}
+              min="0"
+              onChange={(event) => onPatch({flatPrice: event.target.value})}
+              placeholder="e.g. 50"
+              step="0.01"
+              type="number"
+              value={row.flatPrice}
+            />
+          </label>
+          <label className="lst-field">
+            <span className="label-with-info">
+              Covers up to (kg)
+              <FieldInfo label="what the included weight does">
+                <p>
+                  Leave this blank and your price covers the parcel however
+                  heavy it is.
+                </p>
+                <p>
+                  Give a weight and you weigh it at drop-off: anything over
+                  that is charged at your per-kg rate for the destination, on
+                  top of the price.
+                </p>
+              </FieldInfo>
+            </span>
+            <input
+              inputMode="decimal"
+              max={MAX_INCLUDED_KG}
+              min="0"
+              onChange={(event) => onPatch({includedKg: event.target.value})}
+              placeholder="Any weight"
+              step="0.1"
+              type="number"
+              value={row.includedKg}
+            />
+          </label>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The item list: per category, the things this business carries and what each
+ * costs. The same rows double as the customer's item picker, so an empty list
+ * here is an item nobody can instant-book.
+ */
+function FreightPaybackEditor({
+  draft,
+  onChange,
+}: {
+  draft: FreightSettingsDraft;
+  onChange: (patch: Partial<FreightSettingsDraft>) => void;
+}) {
+  const categories = [
+    ...STANDARD_FREIGHT_CATEGORIES.map((category) => ({
+      id: category.id,
+      label: category.label,
+    })),
+    ...draft.customCategories
+      .filter((row) => row.label.trim())
+      .map((row) => ({
+        id: resolvedFreightCategoryId(row),
+        label: row.label.trim(),
+      })),
+  ];
+
+  function patchCategory(
+    categoryId: string,
+    patch: Partial<FreightPaybackCategoryDraft>,
+  ) {
+    const current =
+      draft.payback[categoryId] ?? emptyFreightPaybackCategory();
+    onChange({
+      payback: {
+        ...draft.payback,
+        [categoryId]: {...current, ...patch},
+      },
+    });
+  }
+
+  return (
+    <div className="payback-editor">
+      {categories.map((category) => {
+        const entry =
+          draft.payback[category.id] ?? emptyFreightPaybackCategory();
+        const suggestions = (STANDARD_FREIGHT_ITEMS[category.id] ?? []).filter(
+          (suggestion) =>
+            !entry.items.some((item) => item.id === suggestion.id),
+        );
+        return (
+          <details className="payback-category" key={category.id}>
+            <summary>
+              {category.label}
+              <span>
+                {entry.items.length > 0
+                  ? `${entry.items.length} item${entry.items.length === 1 ? "" : "s"}`
+                  : "No items yet"}
+              </span>
+            </summary>
+            {entry.items.map((item, index) => {
+              function patchItem(patch: Partial<FreightPaybackItemDraft>) {
+                const items = [...entry.items];
+                items[index] = {...item, ...patch};
+                patchCategory(category.id, {items});
+              }
+              return (
+                <div className="payback-item" key={`${category.id}-${index}`}>
+                  <div className="payback-item-row">
+                    <label className="payback-item-field">
+                      <span>What it is</span>
+                      <input
+                        onChange={(event) =>
+                          patchItem({label: event.target.value})
+                        }
+                        placeholder="e.g. iPhone"
+                        value={item.label}
+                      />
+                    </label>
+                    <button
+                      aria-label={`Remove ${item.label || "item"}`}
+                      className="lst-icon-btn"
+                      onClick={() =>
+                        patchCategory(category.id, {
+                          items: entry.items.filter((_, i) => i !== index),
+                        })
+                      }
+                      type="button"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <FreightRowPricingFields onPatch={patchItem} row={item} />
+                </div>
+              );
+            })}
+            <div className="payback-category-actions">
+              <button
+                className="lst-btn ghost"
+                onClick={() =>
+                  patchCategory(category.id, {
+                    items: [...entry.items, emptyFreightPaybackItem()],
+                  })
+                }
+                type="button"
+              >
+                Add an item
+              </button>
+              {suggestions.map((suggestion) => (
+                <button
+                  className="lst-btn ghost"
+                  key={suggestion.id}
+                  onClick={() =>
+                    patchCategory(category.id, {
+                      items: [
+                        ...entry.items,
+                        emptyFreightPaybackItem(
+                          suggestion.id,
+                          suggestion.label,
+                        ),
+                      ],
+                    })
+                  }
+                  type="button"
+                >
+                  + {suggestion.label}
+                </button>
+              ))}
+            </div>
+            <div className="payback-other">
+              <p className="service-config-note">
+                <span className="label-with-info">
+                  Anything else in this category
+                  <FieldInfo label="what the catch-all row does">
+                    <p>
+                      Price it and everything in this category you did not
+                      name is bookable at that price.
+                    </p>
+                    <p>
+                      Leave it unpriced and a customer sending something you
+                      did not list asks you for a price instead, and you
+                      answer it under Price requests.
+                    </p>
+                  </FieldInfo>
+                </span>
+              </p>
+              <FreightRowPricingFields
+                onPatch={(patch) =>
+                  patchCategory(category.id, {
+                    ...(patch.pricingMode !== undefined && {
+                      otherPricingMode: patch.pricingMode,
+                    }),
+                    ...(patch.flatPrice !== undefined && {
+                      otherFlatPrice: patch.flatPrice,
+                    }),
+                    ...(patch.includedKg !== undefined && {
+                      otherIncludedKg: patch.includedKg,
+                    }),
+                  })
+                }
+                row={{
+                  pricingMode: entry.otherPricingMode,
+                  flatPrice: entry.otherFlatPrice,
+                  includedKg: entry.otherIncludedKg,
+                }}
+                unpricedLabel="Ask me for a price"
+              />
+            </div>
+          </details>
+        );
+      })}
+    </div>
+  );
+}
+
+function PickupConfigEditor({
+  config,
+  isNewYork,
+  onBorough,
+  onChange,
+}: {
+  config: PickupConfigDraft;
+  isNewYork: boolean;
+  onBorough: (borough: string, value: string) => void;
+  onChange: (patch: Partial<PickupConfigDraft>) => void;
+}) {
+  return (
+    <>
+      <label className="lst-field">
+        <span>Pricing mode</span>
+        <select
+          onChange={(event) =>
+            onChange({mode: event.target.value as PickupMode})
+          }
+          value={config.mode}
+        >
+          <option value="flat">Flat fee</option>
+          <option value="distance">By distance</option>
+          {isNewYork && <option value="borough">By borough (NYC)</option>}
+        </select>
+      </label>
+      {config.mode !== "borough" && (
+        <label className="lst-field">
+          <span>Maximum pickup distance (miles) — required</span>
+          <input
+            inputMode="decimal"
+            min="0"
+            onChange={(event) =>
+              onChange({maxPickupMiles: event.target.value})
+            }
+            placeholder="e.g. 25"
+            type="number"
+            value={config.maxPickupMiles}
+          />
+        </label>
+      )}
+      {config.mode === "flat" && (
+        <>
+          <p className="service-config-note wide">
+            One price for any pickup within your maximum distance. Addresses
+            beyond it are refused, never surcharged.
+          </p>
+          <label className="lst-field">
+            <span>Flat pickup fee (USD)</span>
+            <input
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onChange({flatFee: event.target.value})}
+              type="number"
+              value={config.flatFee}
+            />
+          </label>
+        </>
+      )}
+      {config.mode === "distance" && (
+        <>
+          <p className="service-config-note wide">
+            Fee = base fee + per-mile rate × driving distance, never below
+            your minimum. Addresses beyond your maximum distance are refused.
+          </p>
+          <label className="lst-field wide">
+            <span>Pickup origin address</span>
+            <input
+              onChange={(event) =>
+                onChange({originAddress: event.target.value})
+              }
+              placeholder="Where your pickups start from"
+              value={config.originAddress}
+            />
+          </label>
+          <label className="lst-field">
+            <span>Base fee (USD)</span>
+            <input
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onChange({baseFee: event.target.value})}
+              type="number"
+              value={config.baseFee}
+            />
+          </label>
+          <label className="lst-field">
+            <span>Per mile (USD)</span>
+            <input
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onChange({perMileFee: event.target.value})}
+              type="number"
+              value={config.perMileFee}
+            />
+          </label>
+          <label className="lst-field">
+            <span>Minimum fee (USD)</span>
+            <input
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onChange({minimumFee: event.target.value})}
+              type="number"
+              value={config.minimumFee}
+            />
+          </label>
+        </>
+      )}
+      {config.mode === "borough" && (
+        <>
+          <p className="service-config-note wide">
+            One flat fee per borough you serve. Leave a borough blank to not
+            serve it — the customer&apos;s address decides which fee applies.
+          </p>
+          {NYC_BOROUGHS.map((borough) => (
+            <label className="lst-field" key={borough}>
+              <span>{borough} (USD)</span>
+              <input
+                inputMode="decimal"
+                min="0"
+                onChange={(event) => onBorough(borough, event.target.value)}
+                placeholder="Not served"
+                type="number"
+                value={config.boroughPrices[borough] ?? ""}
+              />
+            </label>
+          ))}
+        </>
+      )}
+    </>
   );
 }
 
@@ -1278,7 +2117,7 @@ export function BusinessSupportPanel({
   const [responseById, setResponseById] = useState<Record<string, string>>({});
   const [statusById, setStatusById] = useState<Record<string, string>>({});
   const [formOpen, setFormOpen] = useState(false);
-  const {busy, busyLabel, error, run} = useActionFeedback(runAction, toast);
+  const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
 
   function update(patch: Partial<SupportDraft>) {
     setDraft((current) => ({...current, ...patch}));
@@ -1452,8 +2291,9 @@ export function BusinessPeoplePanel({
 }: BusinessPeoplePanelProps) {
   const [draft, setDraft] = useState<StaffDraft>(emptyStaffDraft);
   const [formOpen, setFormOpen] = useState(false);
-  const {busy, busyLabel, error, run} = useActionFeedback(runAction, toast);
+  const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
   const businessName = text(business?.name, businessId || "this business");
+  const invitations = useBusinessInvitations(businessId);
 
   function update(patch: Partial<StaffDraft>) {
     setDraft((current) => ({...current, ...patch}));
@@ -1489,6 +2329,41 @@ export function BusinessPeoplePanel({
           "Envoyer cette invitation d’employé avec les autorisations sélectionnées ?",
       },
     );
+    // Whether it went out or not, the pending list is now stale: a sent
+    // invitation must appear, and a refused one must not linger.
+    invitations.refresh();
+  }
+
+  async function resendInvitation(row: AccessInvitationRow) {
+    await run(
+      "Invitation resent",
+      async () => {
+        await httpsCallable(functions, "resendAccessInvitation")({
+          invitationId: row.invitationId,
+        });
+      },
+      {
+        confirm: `Send ${row.email} a new invitation link?`,
+        confirmFr: `Envoyer à ${row.email} un nouveau lien d’invitation ?`,
+      },
+    );
+    invitations.refresh();
+  }
+
+  async function cancelInvitation(row: AccessInvitationRow) {
+    await run(
+      "Invitation cancelled",
+      async () => {
+        await httpsCallable(functions, "cancelAccessInvitation")({
+          invitationId: row.invitationId,
+        });
+      },
+      {
+        confirm: `Cancel the invitation for ${row.email}? Their link stops working.`,
+        confirmFr: `Annuler l’invitation de ${row.email} ? Son lien cessera de fonctionner.`,
+      },
+    );
+    invitations.refresh();
   }
 
   async function saveStaffPermissions(row: FirestoreRow) {
@@ -1528,15 +2403,37 @@ export function BusinessPeoplePanel({
       </header>
 
       {(error || rowsError) && <div className="error-box">{error || rowsError}</div>}
+      {invitations.error && <div className="error-box">{invitations.error}</div>}
 
       {loading && <div className="lst-empty"><p>Loading…</p></div>}
-      {!loading && rows.length === 0 && (
+      {!loading && rows.length === 0 && invitations.rows.length === 0 && (
         <div className="lst-empty">
           <div className="lst-empty-icon"><Users size={30} /></div>
           <h3>No team members yet</h3>
           <p>Invite staff and choose what each person can manage.</p>
           {canManageStaff && <button className="lst-add" type="button" disabled={!businessId} onClick={() => setFormOpen(true)}><UserPlus size={16} /> Invite staff</button>}
         </div>
+      )}
+
+      {invitations.rows.length > 0 && (
+        <>
+          <div className="lst-form-section">
+            Invitations sent — waiting for the person to set a password
+          </div>
+          <div className="pur-grid">
+            {invitations.rows.map((invitation) => (
+              <PendingInvitationRow
+                key={invitation.invitationId}
+                busy={busy}
+                canManageStaff={canManageStaff}
+                cancelInvitation={cancelInvitation}
+                resendInvitation={resendInvitation}
+                row={invitation}
+              />
+            ))}
+          </div>
+          <div className="lst-form-section">Team members</div>
+        </>
       )}
 
       <div className="pur-grid">
@@ -1605,6 +2502,146 @@ export function BusinessPeoplePanel({
         </div>
       )}
     </section>
+  );
+}
+
+// An invitation lives in `accessInvitations`, which the security rules close
+// to every client - it carries the pending authority of an account that does
+// not exist yet. So the pending list arrives through a callable scoped to
+// this business rather than a Firestore listener, and is re-read after every
+// action instead of streaming.
+function useBusinessInvitations(businessId: string) {
+  const [rows, setRows] = useState<AccessInvitationRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [token, setToken] = useState(0);
+
+  useEffect(() => {
+    const scopedBusinessId = businessId.trim();
+    if (!scopedBusinessId) {
+      setRows([]);
+      setError("");
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    httpsCallable(functions, "listBusinessInvitations")({businessId: scopedBusinessId})
+      .then((result) => {
+        if (!active) return;
+        const payload = result.data as {invitations?: unknown};
+        setRows(accessInvitationRowsFrom(payload?.invitations));
+        setError("");
+      })
+      .catch((loadError: unknown) => {
+        if (!active) return;
+        setRows([]);
+        // A staff member without the People permission is refused by the
+        // callable; that is not an error worth shouting about in a panel
+        // they can still read.
+        const message =
+          loadError instanceof Error ? loadError.message : String(loadError);
+        setError(
+          /permission-denied|not allowed/i.test(message)
+            ? ""
+            : "Pending invitations could not be loaded.",
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [businessId, token]);
+
+  const refresh = useCallback(() => setToken((value) => value + 1), []);
+  return {rows, loading, error, refresh};
+}
+
+function PendingInvitationRow({
+  row,
+  busy,
+  canManageStaff,
+  resendInvitation,
+  cancelInvitation,
+}: {
+  row: AccessInvitationRow;
+  busy: boolean;
+  canManageStaff: boolean;
+  resendInvitation: (row: AccessInvitationRow) => Promise<void>;
+  cancelInvitation: (row: AccessInvitationRow) => Promise<void>;
+}) {
+  const deliveryNote = accessInvitationDeliveryNote(row);
+  return (
+    <article className="pur-card">
+      <div className="pur-head">
+        <div className="pur-title">
+          <strong>{row.fullName || row.email}</strong>
+          <span className="pur-kind">{row.email}</span>
+        </div>
+        <span className={`lst-badge ${accessInvitationStatusTone(row)}`}>
+          {accessInvitationStatusLabel(row)}
+        </span>
+      </div>
+      <div className="pur-reliability">
+        <InvitationLine line={accessInvitationSentLine(row, formatDate)} />
+      </div>
+      <div className="pur-reliability">
+        <Clock size={13} />{" "}
+        <InvitationLine line={accessInvitationExpiryLine(row, formatDate)} />
+      </div>
+      {deliveryNote && <div className="pur-reliability">{deliveryNote}</div>}
+      <div className="lst-form-section" style={{ marginTop: 0 }}>Invited to manage</div>
+      <div className="lst-chips">
+        {row.businessPermissions.length === 0 ? (
+          <span className="pur-kind">No sections selected</span>
+        ) : (
+          row.businessPermissions.map((permission) => (
+            <span className="lst-chip on" key={permission}>
+              {businessPermissionLabel(permission)}
+            </span>
+          ))
+        )}
+      </div>
+      {canManageStaff && canActOnAccessInvitation(row) && (
+        <div className="pur-actions">
+          <button
+            className="lst-btn"
+            disabled={busy}
+            onClick={() => resendInvitation(row)}
+            type="button"
+          >
+            <Send size={14} /> Resend invitation
+          </button>
+          <button
+            className="lst-btn ghost danger"
+            disabled={busy}
+            onClick={() => cancelInvitation(row)}
+            type="button"
+          >
+            Cancel invitation
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+// The label and its value stay in separate text nodes so the runtime French
+// dictionary, which matches whole nodes, can translate the label without the
+// date or the sender's name defeating the match.
+function InvitationLine({line}: {line: AccessInvitationLine}) {
+  return (
+    <>
+      <span>{line.label}</span>
+      {line.detail ? <span> · {line.detail}</span> : null}
+    </>
+  );
+}
+
+function businessPermissionLabel(id: string) {
+  return (
+    businessPermissionOptions.find((option) => option.id === id)?.label ?? id
   );
 }
 
@@ -1717,6 +2754,7 @@ function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   async function run(
     label: string,
@@ -1727,15 +2765,31 @@ function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {
     setBusy(true);
     setBusyLabel(label);
     setError("");
+    setSuccess("");
     try {
       if (runAction) {
+        // runAction owns confirmation and feedback (and returns silently on
+        // a cancelled confirm), so no local success banner here.
         await runAction(label, action, options);
       } else {
+        // Deliberately NOT window.confirm here: a native modal blocks the
+        // main thread on submit (it froze the tab under automation and
+        // reads as a hang). The options-provided confirm text is unused in
+        // this path until a non-blocking dialog exists.
         await action();
         toast?.("success", label);
+        // A panel without a toast host still owes the user visible proof
+        // the save happened - silent success looks identical to a hang.
+        setSuccess(label);
       }
     } catch (rawError) {
-      const message = rawError instanceof Error ? rawError.message : String(rawError);
+      let message = rawError instanceof Error ? rawError.message : String(rawError);
+      if (/unauthenticated/i.test(message)) {
+        // Raw callable text; the usual cause is a failed App Check token
+        // (e.g. reCAPTCHA blocked at load), which a reload repairs.
+        message =
+          "Your session could not be verified. Reload the page and try again.";
+      }
       setError(message);
       toast?.("error", message);
     } finally {
@@ -1744,7 +2798,7 @@ function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {
     }
   }
 
-  return {busy, busyLabel, error, run};
+  return {busy, busyLabel, error, success, run};
 }
 
 function optionalBusinessText(value: unknown) {

@@ -9,6 +9,7 @@ Future<MarketplaceDisclosureAcceptance?> confirmMarketplaceTransaction(
   required String providerNames,
   required String transactionSummary,
   String? additionalBody,
+  bool showHoldNotice = false,
 }) async {
   return showDialog<MarketplaceDisclosureAcceptance>(
     context: context,
@@ -17,6 +18,7 @@ Future<MarketplaceDisclosureAcceptance?> confirmMarketplaceTransaction(
       providerNames: providerNames,
       transactionSummary: transactionSummary,
       additionalBody: additionalBody,
+      showHoldNotice: showHoldNotice,
     ),
   );
 }
@@ -26,11 +28,18 @@ class _MarketplaceTransactionDisclosureDialog extends StatefulWidget {
     required this.providerNames,
     required this.transactionSummary,
     this.additionalBody,
+    this.showHoldNotice = false,
   });
 
   final String providerNames;
   final String transactionSummary;
   final String? additionalBody;
+
+  /// Booking payments hold the money instead of charging it. The customer
+  /// has to hear that before they pay - on the screen, not behind an "i" -
+  /// so hold flows turn this on and pay-now flows (settlement, extensions)
+  /// leave it off.
+  final bool showHoldNotice;
 
   @override
   State<_MarketplaceTransactionDisclosureDialog> createState() =>
@@ -71,6 +80,13 @@ class _MarketplaceTransactionDisclosureDialogState
             Text(l10n.marketplacePaymentFlowBody),
             const SizedBox(height: 10),
             Text(l10n.marketplaceNoGuaranteeBody),
+            if (widget.showHoldNotice) ...[
+              const SizedBox(height: 10),
+              Text(
+                l10n.paymentHoldNotice,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
             if (widget.additionalBody != null &&
                 widget.additionalBody!.trim().isNotEmpty) ...[
               const SizedBox(height: 10),

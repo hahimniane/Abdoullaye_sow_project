@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Regenerating the Laawol Business Manual</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  :root{
+    --ink:#0f172a; --muted:#64748b; --rule:#d7e7e5; --brand:#0d9488;
+    --brand-strong:#0b3b38; --paper-soft:#f8fafc; --warn:#92400e; --warn-bg:#fdf4e3;
+  }
+  *{box-sizing:border-box}
+  body{font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       color:var(--ink);margin:0}
+  h1,h2,h3{line-height:1.25;margin:0 0 .4em}
+  h1{font-size:30px;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:19px;font-weight:800;color:var(--brand-strong);margin-top:1.7em;
+     padding-bottom:.3em;border-bottom:2px solid var(--rule);page-break-after:avoid}
+  h3{font-size:15px;font-weight:700;margin-top:1.3em;page-break-after:avoid}
+  p{margin:0 0 .85em}
+  ul,ol{margin:0 0 .9em;padding-left:1.4em}
+  li{margin-bottom:.4em}
+  code{font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+       background:var(--paper-soft);border:1px solid var(--rule);
+       border-radius:4px;padding:1px 5px}
+  pre{background:#0b3b38;color:#e8f5f2;border-radius:9px;padding:14px 16px;
+      overflow:visible;white-space:pre-wrap;word-break:break-word;
+      font:11.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+      margin:.8em 0;page-break-inside:avoid}
+  pre .c{color:#7fc9bb}
+  .cover{page-break-after:always;padding-top:74mm;text-align:center}
+  .cover .mark{display:inline-block;background:var(--brand);color:#fff;
+    font-weight:800;letter-spacing:.16em;font-size:12px;padding:7px 16px;
+    border-radius:999px}
+  .cover h1{font-size:36px;margin:22px 0 8px}
+  .cover .sub{font-size:15.5px;color:var(--muted)}
+  .cover .meta{margin-top:44px;font-size:12.5px;color:var(--muted)}
+  .callout{background:var(--paper-soft);border:1px solid var(--rule);
+    border-left:4px solid var(--brand);border-radius:0 8px 8px 0;
+    padding:12px 15px;margin:1em 0;page-break-inside:avoid}
+  .callout.warn{background:var(--warn-bg);border-color:#f5d9a8;
+    border-left-color:#d97706;color:var(--warn)}
+  .callout p:last-child{margin-bottom:0}
+  table{width:100%;border-collapse:collapse;margin:1em 0;font-size:13px;
+        page-break-inside:avoid}
+  th,td{border:1px solid var(--rule);padding:7px 10px;text-align:left;
+        vertical-align:top}
+  th{background:var(--paper-soft);font-weight:700;font-size:12px;
+     text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .step{display:inline-block;background:var(--brand);color:#fff;font-weight:800;
+    font-size:11px;padding:3px 9px;border-radius:999px;letter-spacing:.06em;
+    margin-right:8px;vertical-align:middle}
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <span class="mark">LAAWOL DIGITAL</span>
+  <h1>Regenerating the Business Manual</h1>
+  <p class="sub">How the onboarding guide is built, and how to rebuild it</p>
+  <p class="meta">Internal · August 2026</p>
+</section>
+
+<h1>Regenerating the manual</h1>
+<p>
+  <code>Laawol-Business-Onboarding.pdf</code> is the guide handed to businesses
+  when they join. Its screenshots come from the <strong>live console</strong>,
+  so it needs regenerating whenever the console changes materially.
+</p>
+<p>Everything lives in <code>docs/manual/</code>:</p>
+<table>
+  <tr><th>File</th><th>What it is</th></tr>
+  <tr><td><code>business-onboarding.html</code></td>
+      <td>The manual's source. Edit this to change wording or structure.</td></tr>
+  <tr><td><code>capture-console.mjs</code></td>
+      <td>Captures every console section as a PNG.</td></tr>
+  <tr><td><code>capture-extra.mjs</code></td>
+      <td>Captures sub-sections the section pass misses — see step 2b.</td></tr>
+  <tr><td><code>screenshots/</code></td>
+      <td>Captured images. <code>web-*</code> console, <code>app-*</code> mobile.</td></tr>
+  <tr><td><code>Laawol-Business-Onboarding.pdf</code></td>
+      <td>The rendered output — the file you send to businesses.</td></tr>
+</table>
+
+<h2><span class="step">STEP 1</span>Copy a signed-in Chrome profile</h2>
+<p>
+  The console requires a sign-in, so the capture reuses an existing session. It
+  runs against a <strong>copy</strong> of the profile — that way the session
+  carries over without holding a lock on the profile Chrome is using, and you
+  can keep working while it runs.
+</p>
+<pre><span class="c"># Skip the caches, or the copy is well over a gigabyte</span>
+SRC="$HOME/Library/Application Support/Google/Chrome"
+DST=/tmp/chrome-capture-profile
+rm -rf "$DST" &amp;&amp; mkdir -p "$DST/Profile 1"
+cp "$SRC/Local State" "$DST/"
+rsync -a --exclude 'Cache' --exclude 'Code Cache' --exclude 'GPUCache' \
+      --exclude 'Service Worker/CacheStorage' --exclude 'blob_storage' \
+      "$SRC/Profile 1/" "$DST/Profile 1/"</pre>
+<p>
+  Check that <code>Local Storage</code>, <code>IndexedDB</code>, and
+  <code>Cookies</code> made it into the copy — those carry the session. If the
+  capture comes out showing a sign-in page, one of them is missing.
+</p>
+
+<h2><span class="step">STEP 2</span>Capture the console</h2>
+<pre>node docs/manual/capture-console.mjs \
+  /tmp/chrome-capture-profile \
+  docs/manual/screenshots</pre>
+<p>
+  It launches headless Chrome, clicks each sidebar section in turn, waits for
+  Firestore rows to stream in, and writes one PNG per section. Roughly two
+  minutes for twelve sections.
+</p>
+<div class="callout">
+  <p>
+    <strong>Capture from an account with real data.</strong> A fresh business
+    has empty queues, and a manual full of empty panels teaches nothing. The
+    current screenshots come from an account with live shipments, listings, and
+    reviews.
+  </p>
+</div>
+
+<h2><span class="step">STEP 2B</span>Capture the sub-sections</h2>
+<pre>node docs/manual/capture-extra.mjs \
+  /tmp/chrome-capture-profile \
+  docs/manual/screenshots</pre>
+<p>
+  Step 2 clicks a sidebar item and shoots the viewport, so it only ever captures
+  the <strong>top</strong> of a long page. <em>Services &amp; coverage</em> is
+  really four stacked sections — services, rules, locations, coverage — and only
+  the first is above the fold. This pass scrolls to each one by its heading and
+  captures it.
+</p>
+<div class="callout warn">
+  <p>
+    <strong>Scroll by the smallest matching element, not the first.</strong>
+    <code>&lt;body&gt;</code> contains every heading's text, and so does the
+    sidebar, so "first element containing the text" scrolls nowhere. The script
+    filters to the element with no matching child. If a capture comes back
+    showing the top of the page, that filter stopped matching — the heading
+    text changed.
+  </p>
+</div>
+
+<h2><span class="step">STEP 3</span>Capture the mobile app</h2>
+<p>Boot a simulator with the app installed and signed in as a customer:</p>
+<pre>xcrun simctl list devices | grep Booted
+xcrun simctl io &lt;UDID&gt; screenshot docs/manual/screenshots/app-01-home.png</pre>
+<p>
+  This reads the simulator's framebuffer directly, so it needs no screen-recording
+  permission and never captures anything outside the simulator.
+</p>
+
+<h2><span class="step">STEP 4</span>Render the PDF</h2>
+<pre>cd docs/manual
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless=new --disable-gpu --no-pdf-header-footer \
+  --virtual-time-budget=20000 \
+  --user-data-dir=/tmp/pdfprof \
+  --print-to-pdf="$PWD/Laawol-Business-Onboarding.pdf" \
+  "file://$PWD/business-onboarding.html"</pre>
+<div class="callout warn">
+  <p>
+    <strong>Chrome writes the PDF and then does not exit.</strong> The file is
+    complete before it hangs — wait for it to appear, then kill the process.
+    Don't take the hang as a failure and rerun; you'll just hang again.
+  </p>
+</div>
+
+<h2>Why it is scripted rather than screenshotted by hand</h2>
+<p>Two problems make manual capture the wrong approach, and both bit during authoring.</p>
+<h3>A screen grab photographs whatever is on screen</h3>
+<p>
+  <code>screencapture</code> captures what is genuinely visible, so it depends on
+  the right tab being frontmost and will happily include other windows,
+  notifications, or private content. During authoring it caught an unrelated
+  browser tab, the desktop, and a password prompt — three captures that had to
+  be deleted. Headless capture makes that impossible: nothing outside the page
+  is ever in frame.
+</p>
+<h3>The console has no URL routing for tabs</h3>
+<p>
+  The active section is React state, not a URL. So a one-shot
+  <code>--screenshot</code> against a URL can only ever produce the
+  <em>Today</em> tab, no matter which section you want.
+  <code>capture-console.mjs</code> drives Chrome over the DevTools Protocol
+  instead: it clicks each sidebar item and captures what renders. Node 22 ships
+  a WebSocket, so this needs no dependencies.
+</p>
+
+<h2>Changing the manual's content</h2>
+<p>
+  Edit <code>business-onboarding.html</code> and re-run step 4. You only need
+  steps 1–3 when the console's appearance has actually changed.
+</p>
+<p>
+  The guide is deliberately written in <strong>setup order</strong> — approval,
+  verification, services, destinations, payouts, staff — because that is the
+  sequence a new business experiences, and each step genuinely depends on the
+  one before it. The operational sections come afterwards and use the populated
+  account so the screenshots show something real. Keep that shape if you extend it.
+</p>
+
+<h2>Known gaps</h2>
+<ul>
+  <li><strong>Parking has no screenshot.</strong> The captured business doesn't
+      offer it, so the console correctly shows "Not offered". The guide covers
+      parking in text only. To screenshot it, enable Car parking in
+      <em>Services &amp; coverage</em> on the capture account first.</li>
+  <li><strong>Shared barrels is deliberately absent.</strong> The panel is
+      gated on <code>appConfig/client.sharedBarrelsEnabled</code>
+      (<code>lib/feature-flags.ts</code>), which is not set in production — so
+      the feature is off for <em>every</em> business, not just the capture
+      account. It stays out of the guide until that flag ships. The
+      <em>Destinations</em> tab is reachable only from inside that same gated
+      block, which is why country coverage is documented from the
+      <em>4 · Coverage</em> section of Services &amp; coverage instead.</li>
+  <li><strong>This is the business half.</strong> A customer-facing guide would
+      be a separate document; the <code>app-*</code> screenshots already
+      captured would carry over to it.</li>
+</ul>
+
+</body>
+</html>

@@ -2444,6 +2444,24 @@ abstract class AppLocalizations {
   /// **'My Purchases'**
   String get myPurchases;
 
+  /// No description provided for @hubViewingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Appointments to see a car'**
+  String get hubViewingsSubtitle;
+
+  /// No description provided for @myCarViewings.
+  ///
+  /// In en, this message translates to:
+  /// **'Car viewings'**
+  String get myCarViewings;
+
+  /// No description provided for @noCarViewingsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No car viewings yet. Ask to see a car from its listing.'**
+  String get noCarViewingsYet;
+
   /// No description provided for @noPurchasesYet.
   ///
   /// In en, this message translates to:
@@ -4595,7 +4613,7 @@ abstract class AppLocalizations {
   /// No description provided for @destinationChangeCredited.
   ///
   /// In en, this message translates to:
-  /// **'Shipment updated. {amount} credited to your wallet.'**
+  /// **'Shipment updated. {amount} is on its way back to your card.'**
   String destinationChangeCredited(Object amount);
 
   /// No description provided for @shipmentDestinationUpdated.
@@ -6506,6 +6524,108 @@ abstract class AppLocalizations {
   /// **'Sea delivery: {minimum}-{maximum} days'**
   String freightSeaDeliveryEstimateDays(int minimum, int maximum);
 
+  /// No description provided for @cancelOrderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this order?'**
+  String get cancelOrderTitle;
+
+  /// No description provided for @cancelOrderHeldBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your card was never charged — the hold is released and you pay nothing.'**
+  String get cancelOrderHeldBody;
+
+  /// No description provided for @cancelOrderCapturedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your payment is refunded minus the card processing fee, as stated at checkout.'**
+  String get cancelOrderCapturedBody;
+
+  /// No description provided for @cancelWholeOrderHeldBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipment was paid together with the rest of its order, so the whole order is cancelled. Your card was never charged — you pay nothing.'**
+  String get cancelWholeOrderHeldBody;
+
+  /// No description provided for @cancelWholeOrderCapturedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipment was paid together with the rest of its order, so the whole order is cancelled. Your payment is refunded minus the card processing fee.'**
+  String get cancelWholeOrderCapturedBody;
+
+  /// No description provided for @keepOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep order'**
+  String get keepOrder;
+
+  /// No description provided for @cancelOrderConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel order'**
+  String get cancelOrderConfirm;
+
+  /// No description provided for @cancelOrderFreeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel order (free)'**
+  String get cancelOrderFreeAction;
+
+  /// No description provided for @cancelOrderRefundAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel order (refund minus card fee)'**
+  String get cancelOrderRefundAction;
+
+  /// No description provided for @orderCancelledFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Order cancelled. Your card was never charged.'**
+  String get orderCancelledFree;
+
+  /// No description provided for @orderRefunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Order cancelled. Your refund is on its way, minus the card fee.'**
+  String get orderRefunded;
+
+  /// No description provided for @genericError.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get genericError;
+
+  /// No description provided for @paymentHoldNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'No charge today — the amount is reserved on your card and charged when the reservation window ends (5–7 days for most cards). Cancelling before then is free; after that, refunds lose the card processing fee.'**
+  String get paymentHoldNotice;
+
+  /// No description provided for @freightSortBestRated.
+  ///
+  /// In en, this message translates to:
+  /// **'Best rated'**
+  String get freightSortBestRated;
+
+  /// No description provided for @freightSortCheapest.
+  ///
+  /// In en, this message translates to:
+  /// **'Cheapest'**
+  String get freightSortCheapest;
+
+  /// No description provided for @freightSortBestCover.
+  ///
+  /// In en, this message translates to:
+  /// **'Best cover'**
+  String get freightSortBestCover;
+
+  /// No description provided for @freightSortFastest.
+  ///
+  /// In en, this message translates to:
+  /// **'Fastest'**
+  String get freightSortFastest;
+
   /// No description provided for @searchBusinessOrCountry.
   ///
   /// In en, this message translates to:
@@ -6619,6 +6739,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Drop off your parcel at the business location. The business will confirm the weight after drop-off.'**
   String get freightNextDropOffAtBusiness;
+
+  /// No description provided for @freightNextDropOffAtProviderSetPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop off your parcel at {businessName}. The price for this item is set, so there is nothing left to pay.'**
+  String freightNextDropOffAtProviderSetPrice(Object businessName);
+
+  /// No description provided for @freightNextDropOffAtBusinessSetPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop off your parcel at the business location. The price for this item is set, so there is nothing left to pay.'**
+  String get freightNextDropOffAtBusinessSetPrice;
 
   /// No description provided for @freightNextWeightReview.
   ///
@@ -6767,7 +6899,7 @@ abstract class AppLocalizations {
   /// No description provided for @freightDropOffNote.
   ///
   /// In en, this message translates to:
-  /// **'Drop your parcel at the business location. Pickup coming soon.'**
+  /// **'Drop your parcel at the business location.'**
   String get freightDropOffNote;
 
   /// No description provided for @freightDropOffAddress.
@@ -6989,8 +7121,32 @@ abstract class AppLocalizations {
   /// No description provided for @confirmTransportQuoteMessage.
   ///
   /// In en, this message translates to:
-  /// **'Choose {businessName} for {price}? This closes the request to other businesses.'**
+  /// **'Choose {businessName} for {price}? The amount is held on your card, not charged, and cancelling while it is held is free. This closes the request to other businesses.'**
   String confirmTransportQuoteMessage(Object businessName, Object price);
+
+  /// No description provided for @transportPaymentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay to confirm your carrier'**
+  String get transportPaymentTitle;
+
+  /// No description provided for @transportPaymentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{price} is held on your card — not charged — and the carrier can only start once it is secured. Cancelling while held is free.'**
+  String transportPaymentBody(Object price);
+
+  /// No description provided for @transportPayNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now'**
+  String get transportPayNow;
+
+  /// No description provided for @transportPaymentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment could not be completed. Nothing was charged — try again.'**
+  String get transportPaymentFailed;
 
   /// No description provided for @keepComparing.
   ///
@@ -7484,17 +7640,17 @@ abstract class AppLocalizations {
   /// **'Good evening'**
   String get goodEvening;
 
-  /// No description provided for @signInToYourWallet.
+  /// No description provided for @signInToYourAccount.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to your wallet'**
-  String get signInToYourWallet;
+  /// **'Sign in to your account'**
+  String get signInToYourAccount;
 
-  /// No description provided for @walletSignInSubtitle.
+  /// No description provided for @accountSignInSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Track orders, balances and refunds.'**
-  String get walletSignInSubtitle;
+  /// **'Track your orders and shipments.'**
+  String get accountSignInSubtitle;
 
   /// No description provided for @shippingBusinessUnavailable.
   ///
@@ -7589,8 +7745,32 @@ abstract class AppLocalizations {
   /// No description provided for @businessOperationsWebNote.
   ///
   /// In en, this message translates to:
-  /// **'Manage freight, barrels, transport, parking, destinations, staff, and payouts in the secure business console. This avoids entering a customer booking or payment flow by mistake.'**
+  /// **'Opens the secure business console in your browser, where staff, payouts and destinations live.'**
   String get businessOperationsWebNote;
+
+  /// No description provided for @businessServiceOverviewUnpaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid'**
+  String get businessServiceOverviewUnpaid;
+
+  /// No description provided for @businessServiceOverviewOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get businessServiceOverviewOpen;
+
+  /// No description provided for @businessServiceOverviewShowAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all activity'**
+  String get businessServiceOverviewShowAll;
+
+  /// No description provided for @businessServiceOverviewEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No services are switched on for your account yet.'**
+  String get businessServiceOverviewEmpty;
 
   /// No description provided for @businessCarsMobileNote.
   ///
@@ -7615,6 +7795,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not open the business console. Visit business.laawoldigital.com in your browser.'**
   String get businessConsoleOpenFailed;
+
+  /// No description provided for @businessAssistantTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Assistant'**
+  String get businessAssistantTitle;
+
+  /// No description provided for @businessAssistantOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the assistant'**
+  String get businessAssistantOpen;
+
+  /// No description provided for @businessAssistantEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How can I help today?'**
+  String get businessAssistantEmptyTitle;
+
+  /// No description provided for @businessAssistantEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'I can answer questions about your operations and record work for you. Try asking me to:'**
+  String get businessAssistantEmptyHint;
+
+  /// No description provided for @businessAssistantCapabilityParkedCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Check which cars are parked right now'**
+  String get businessAssistantCapabilityParkedCars;
+
+  /// No description provided for @businessAssistantCapabilityWalkUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a walk-up parking entry'**
+  String get businessAssistantCapabilityWalkUp;
+
+  /// No description provided for @businessAssistantCapabilityTracking.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a shipment tracking update'**
+  String get businessAssistantCapabilityTracking;
+
+  /// No description provided for @businessAssistantInputHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Message the assistant...'**
+  String get businessAssistantInputHint;
+
+  /// No description provided for @businessAssistantSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get businessAssistantSend;
+
+  /// No description provided for @businessAssistantConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get businessAssistantConfirm;
+
+  /// No description provided for @businessAssistantCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get businessAssistantCancel;
+
+  /// No description provided for @businessAssistantConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed'**
+  String get businessAssistantConfirmed;
+
+  /// No description provided for @businessAssistantDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Declined'**
+  String get businessAssistantDeclined;
+
+  /// No description provided for @businessAssistantError.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get businessAssistantError;
 
   /// No description provided for @businessChangesRequestedBanner.
   ///
@@ -9672,6 +9936,216 @@ abstract class AppLocalizations {
   /// **'Paid destination change'**
   String get marketplaceDestinationChangeSummary;
 
+  /// No description provided for @pickupBusinessUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This business does not offer home pickup yet. Choose office drop-off or another provider.'**
+  String get pickupBusinessUnavailable;
+
+  /// No description provided for @pickupAddressQuoteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup is not available for this address. Check the address or choose office drop-off.'**
+  String get pickupAddressQuoteFailed;
+
+  /// No description provided for @pickupPlanSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Home pickup'**
+  String get pickupPlanSectionTitle;
+
+  /// No description provided for @pickupPlanSectionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Collecting items from the customer\'s address instead of them bringing it to you. Each service either follows your shared plan or sets its own.'**
+  String get pickupPlanSectionSubtitle;
+
+  /// No description provided for @pickupPlanOfferToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use one shared plan'**
+  String get pickupPlanOfferToggle;
+
+  /// No description provided for @pickupPlanDisabledHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Services set to “follow the shared plan” below are priced by these settings.'**
+  String get pickupPlanDisabledHint;
+
+  /// No description provided for @pickupPlanModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pricing mode'**
+  String get pickupPlanModeLabel;
+
+  /// No description provided for @pickupPlanModeFlat.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat fee'**
+  String get pickupPlanModeFlat;
+
+  /// No description provided for @pickupPlanModeDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'By distance'**
+  String get pickupPlanModeDistance;
+
+  /// No description provided for @pickupPlanModeBorough.
+  ///
+  /// In en, this message translates to:
+  /// **'By borough (NYC)'**
+  String get pickupPlanModeBorough;
+
+  /// No description provided for @pickupPlanMaxMiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Max pickup distance (miles)'**
+  String get pickupPlanMaxMiles;
+
+  /// No description provided for @pickupPlanFlatHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One price for any pickup within your maximum distance. Addresses beyond it are refused, never surcharged.'**
+  String get pickupPlanFlatHint;
+
+  /// No description provided for @pickupPlanFlatFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat pickup fee (USD)'**
+  String get pickupPlanFlatFee;
+
+  /// No description provided for @pickupPlanDistanceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fee = base fee + per-mile rate × driving distance, never below your minimum. Addresses beyond your maximum distance are refused.'**
+  String get pickupPlanDistanceHint;
+
+  /// No description provided for @pickupPlanOriginAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup origin address'**
+  String get pickupPlanOriginAddress;
+
+  /// No description provided for @pickupPlanOriginHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Where your pickups start from'**
+  String get pickupPlanOriginHelper;
+
+  /// No description provided for @pickupPlanBaseFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Base fee (USD)'**
+  String get pickupPlanBaseFee;
+
+  /// No description provided for @pickupPlanPerMile.
+  ///
+  /// In en, this message translates to:
+  /// **'Per mile (USD)'**
+  String get pickupPlanPerMile;
+
+  /// No description provided for @pickupPlanMinFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum fee (USD)'**
+  String get pickupPlanMinFee;
+
+  /// No description provided for @pickupPlanBoroughHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One flat fee per borough you serve. Leave a borough blank to not serve it — the customer\'s address decides which fee applies.'**
+  String get pickupPlanBoroughHint;
+
+  /// No description provided for @pickupPlanPerServiceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Each service, one at a time'**
+  String get pickupPlanPerServiceHint;
+
+  /// No description provided for @pickupPlanChoiceInherit.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow the shared plan'**
+  String get pickupPlanChoiceInherit;
+
+  /// No description provided for @pickupPlanChoiceCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Set its own pickup fees'**
+  String get pickupPlanChoiceCustom;
+
+  /// No description provided for @pickupPlanChoiceOff.
+  ///
+  /// In en, this message translates to:
+  /// **'No pickup for this service'**
+  String get pickupPlanChoiceOff;
+
+  /// No description provided for @pickupPlanSharedSectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'the shared pickup plan'**
+  String get pickupPlanSharedSectionLabel;
+
+  /// No description provided for @pickupPlanServiceBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel shipping'**
+  String get pickupPlanServiceBarrels;
+
+  /// No description provided for @pickupPlanServiceFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight'**
+  String get pickupPlanServiceFreight;
+
+  /// No description provided for @pickupPlanServiceParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Car parking'**
+  String get pickupPlanServiceParking;
+
+  /// No description provided for @pickupPlanServiceCarTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Car transport'**
+  String get pickupPlanServiceCarTransport;
+
+  /// No description provided for @pickupPlanErrorCapRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the maximum pickup distance in miles for {section}.'**
+  String pickupPlanErrorCapRequired(Object section);
+
+  /// No description provided for @pickupPlanErrorFlatFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the flat pickup fee for {section}.'**
+  String pickupPlanErrorFlatFee(Object section);
+
+  /// No description provided for @pickupPlanErrorDistanceFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the base, per-mile, and minimum fees for {section}.'**
+  String pickupPlanErrorDistanceFees(Object section);
+
+  /// No description provided for @pickupPlanErrorOrigin.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the pickup origin address for {section}.'**
+  String pickupPlanErrorOrigin(Object section);
+
+  /// No description provided for @pickupPlanErrorBoroughPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a pickup fee for at least one borough for {section}.'**
+  String pickupPlanErrorBoroughPrice(Object section);
+
+  /// No description provided for @pickupPlanErrorBoroughRequiresNewYork.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup by borough is only available to New York businesses ({section}).'**
+  String pickupPlanErrorBoroughRequiresNewYork(Object section);
+
   /// No description provided for @freightPickupSectionTitle.
   ///
   /// In en, this message translates to:
@@ -10445,6 +10919,1932 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The verification email could not be sent. Please try again.'**
   String get invitationVerificationEmailFailed;
+
+  /// No description provided for @editTransportRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit request'**
+  String get editTransportRequest;
+
+  /// No description provided for @editTransportRequestTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit your request'**
+  String get editTransportRequestTitle;
+
+  /// No description provided for @editTransportRequestSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You can change your request until you choose a quote.'**
+  String get editTransportRequestSubtitle;
+
+  /// No description provided for @transportEditContactSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact and pickup'**
+  String get transportEditContactSection;
+
+  /// No description provided for @transportEditVehicleSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle and destination'**
+  String get transportEditVehicleSection;
+
+  /// No description provided for @transportEditQuoteWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This will reset your quotes'**
+  String get transportEditQuoteWarningTitle;
+
+  /// No description provided for @transportEditQuoteWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Businesses priced their quotes on your current details. Changing the vehicle, pickup area, transport method or destination clears the quotes you already have, and businesses will be asked to quote again.'**
+  String get transportEditQuoteWarningMessage;
+
+  /// No description provided for @transportEditKeepEditing.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get transportEditKeepEditing;
+
+  /// No description provided for @transportEditSaveAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and reset quotes'**
+  String get transportEditSaveAnyway;
+
+  /// No description provided for @transportEditSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Request updated'**
+  String get transportEditSaved;
+
+  /// No description provided for @transportEditSavedRequote.
+  ///
+  /// In en, this message translates to:
+  /// **'Request updated. Businesses will send new quotes.'**
+  String get transportEditSavedRequote;
+
+  /// No description provided for @transportEditNoChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing changed'**
+  String get transportEditNoChanges;
+
+  /// No description provided for @couldNotUpdateTransportRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update this request. Please try again.'**
+  String get couldNotUpdateTransportRequest;
+
+  /// No description provided for @transportEditDestinationMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request now goes to businesses serving the new destination.'**
+  String get transportEditDestinationMoved;
+
+  /// No description provided for @notes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get notes;
+
+  /// No description provided for @vehicleOperable.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle is drivable'**
+  String get vehicleOperable;
+
+  /// No description provided for @transportEditNeedsPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'I need pickup from an address'**
+  String get transportEditNeedsPickup;
+
+  /// No description provided for @addressApartmentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Apartment, suite, or unit (optional)'**
+  String get addressApartmentLabel;
+
+  /// No description provided for @addressApartmentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Apt 4B'**
+  String get addressApartmentHint;
+
+  /// No description provided for @addressApartmentHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Apartment numbers are rarely in the suggestion — add yours here.'**
+  String get addressApartmentHelper;
+
+  /// No description provided for @addressCityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get addressCityLabel;
+
+  /// No description provided for @addressStateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'State or region'**
+  String get addressStateLabel;
+
+  /// No description provided for @addressPostalCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'ZIP or postal code'**
+  String get addressPostalCodeLabel;
+
+  /// No description provided for @addressCountryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get addressCountryLabel;
+
+  /// No description provided for @recordAParkedCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a parked car'**
+  String get recordAParkedCar;
+
+  /// No description provided for @recordTheCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Record the car'**
+  String get recordTheCar;
+
+  /// No description provided for @recordingParkedCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording...'**
+  String get recordingParkedCar;
+
+  /// No description provided for @parkedCarRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked car recorded'**
+  String get parkedCarRecorded;
+
+  /// No description provided for @printReceiptOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Print a receipt only'**
+  String get printReceiptOnly;
+
+  /// No description provided for @howDoesThisParkingGetPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'How does this parking get paid?'**
+  String get howDoesThisParkingGetPaid;
+
+  /// No description provided for @customerPaysUsDirectly.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer pays us directly (Zelle/cash)'**
+  String get customerPaysUsDirectly;
+
+  /// No description provided for @sendTheCustomerAPaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the customer a payment link'**
+  String get sendTheCustomerAPaymentLink;
+
+  /// No description provided for @directPaymentExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'We record what the customer owes you and take no cut. You mark it received when the money arrives.'**
+  String get directPaymentExplainer;
+
+  /// No description provided for @paymentLinkExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'We bill the customer for you and send you the rest.'**
+  String get paymentLinkExplainer;
+
+  /// No description provided for @paymentLinkShareHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Send this link to the customer so they can pay. It stays valid until they use it.'**
+  String get paymentLinkShareHint;
+
+  /// No description provided for @directPaymentResultHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer pays your business directly. We record the amount and never bill it. Mark the payment received once the money arrives.'**
+  String get directPaymentResultHint;
+
+  /// No description provided for @paymentLinkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link'**
+  String get paymentLinkLabel;
+
+  /// No description provided for @copyPaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy payment link'**
+  String get copyPaymentLink;
+
+  /// No description provided for @sharePaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Share payment link'**
+  String get sharePaymentLink;
+
+  /// No description provided for @paymentLinkShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the share sheet'**
+  String get paymentLinkShareFailed;
+
+  /// No description provided for @paymentLinkShareMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} parked your {car}. Tracking {code}. Amount due {amount}. Pay here: {link}'**
+  String paymentLinkShareMessage(
+    String business,
+    String car,
+    String code,
+    String amount,
+    String link,
+  );
+
+  /// No description provided for @paymentLinkCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link copied'**
+  String get paymentLinkCopied;
+
+  /// No description provided for @amountDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due'**
+  String get amountDue;
+
+  /// No description provided for @amountRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount recorded'**
+  String get amountRecorded;
+
+  /// No description provided for @paymentStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment status'**
+  String get paymentStatusLabel;
+
+  /// No description provided for @receivedVia.
+  ///
+  /// In en, this message translates to:
+  /// **'Received via'**
+  String get receivedVia;
+
+  /// No description provided for @markPaymentReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark payment received'**
+  String get markPaymentReceived;
+
+  /// No description provided for @markPaymentReceivedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record this payment?'**
+  String get markPaymentReceivedTitle;
+
+  /// No description provided for @markPaymentReceivedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Record this parking as paid to your business? This cannot be undone here.'**
+  String get markPaymentReceivedMessage;
+
+  /// No description provided for @paymentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment recorded.'**
+  String get paymentRecorded;
+
+  /// No description provided for @parkingAlreadyMarkedPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'This parking was already marked paid.'**
+  String get parkingAlreadyMarkedPaid;
+
+  /// No description provided for @paymentCouldNotBeRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment could not be recorded.'**
+  String get paymentCouldNotBeRecorded;
+
+  /// No description provided for @carCouldNotBeRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'The car could not be recorded.'**
+  String get carCouldNotBeRecorded;
+
+  /// No description provided for @paymentLinkCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment link could not be copied. Select and copy it manually.'**
+  String get paymentLinkCopyFailed;
+
+  /// No description provided for @awaitingPaymentToTheBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting payment to the business'**
+  String get awaitingPaymentToTheBusiness;
+
+  /// No description provided for @paidToTheBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid to the business'**
+  String get paidToTheBusiness;
+
+  /// No description provided for @paymentLinkSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link sent'**
+  String get paymentLinkSent;
+
+  /// No description provided for @paymentLinkPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link paid'**
+  String get paymentLinkPaid;
+
+  /// No description provided for @nothingToCollect.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to collect'**
+  String get nothingToCollect;
+
+  /// No description provided for @receivedViaZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle transfer'**
+  String get receivedViaZelle;
+
+  /// No description provided for @receivedViaCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash payment'**
+  String get receivedViaCash;
+
+  /// No description provided for @receivedViaCashApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash App'**
+  String get receivedViaCashApp;
+
+  /// No description provided for @receivedViaVenmo.
+  ///
+  /// In en, this message translates to:
+  /// **'Venmo'**
+  String get receivedViaVenmo;
+
+  /// No description provided for @receivedViaCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper check'**
+  String get receivedViaCheck;
+
+  /// No description provided for @receivedViaCardInPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Card in person'**
+  String get receivedViaCardInPerson;
+
+  /// No description provided for @receivedViaOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Another method'**
+  String get receivedViaOther;
+
+  /// No description provided for @parkingErrorBusinessRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a business before recording a car.'**
+  String get parkingErrorBusinessRequired;
+
+  /// No description provided for @parkingErrorCustomerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the customer\'s name.'**
+  String get parkingErrorCustomerName;
+
+  /// No description provided for @parkingErrorCustomerPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the customer\'s phone number.'**
+  String get parkingErrorCustomerPhone;
+
+  /// No description provided for @parkingErrorCustomerEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address.'**
+  String get parkingErrorCustomerEmail;
+
+  /// No description provided for @parkingErrorPaymentLinkContact.
+  ///
+  /// In en, this message translates to:
+  /// **'A payment link needs a phone number or an email address.'**
+  String get parkingErrorPaymentLinkContact;
+
+  /// No description provided for @parkingErrorCarMake.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the car make.'**
+  String get parkingErrorCarMake;
+
+  /// No description provided for @parkingErrorCarModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the car model.'**
+  String get parkingErrorCarModel;
+
+  /// No description provided for @parkingErrorCarYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the car year.'**
+  String get parkingErrorCarYear;
+
+  /// No description provided for @parkingErrorCarYearInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a valid car year.'**
+  String get parkingErrorCarYearInvalid;
+
+  /// No description provided for @parkingErrorStartDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the day the car arrives.'**
+  String get parkingErrorStartDate;
+
+  /// No description provided for @parkingErrorEndDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the day the car leaves.'**
+  String get parkingErrorEndDate;
+
+  /// No description provided for @parkingErrorEndBeforeStart.
+  ///
+  /// In en, this message translates to:
+  /// **'The end date cannot be before the start date.'**
+  String get parkingErrorEndBeforeStart;
+
+  /// No description provided for @notPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Not paid'**
+  String get notPaid;
+
+  /// No description provided for @parkingPaymentLinkAlreadyUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'This link was already used to pay. Nothing further is owed.'**
+  String get parkingPaymentLinkAlreadyUsed;
+
+  /// No description provided for @cancelPaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel payment link'**
+  String get cancelPaymentLink;
+
+  /// No description provided for @cancelPaymentLinkConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this payment link? The customer will no longer be able to pay with it.'**
+  String get cancelPaymentLinkConfirm;
+
+  /// No description provided for @paymentLinkCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link cancelled.'**
+  String get paymentLinkCancelled;
+
+  /// No description provided for @parkingPaymentLinkCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment link was cancelled.'**
+  String get parkingPaymentLinkCancelled;
+
+  /// No description provided for @paymentLinkCouldNotBeCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment link could not be cancelled.'**
+  String get paymentLinkCouldNotBeCancelled;
+
+  /// No description provided for @parkingPrintReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Print receipt'**
+  String get parkingPrintReceipt;
+
+  /// No description provided for @parkingPrintInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Print invoice'**
+  String get parkingPrintInvoice;
+
+  /// No description provided for @parkingDocumentCouldNotBeOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'The document could not be opened.'**
+  String get parkingDocumentCouldNotBeOpened;
+
+  /// No description provided for @resendPaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend payment link'**
+  String get resendPaymentLink;
+
+  /// No description provided for @parkingPaymentLinkEmailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link emailed to the customer.'**
+  String get parkingPaymentLinkEmailed;
+
+  /// No description provided for @parkingPaymentLinkTexted.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link texted to the customer.'**
+  String get parkingPaymentLinkTexted;
+
+  /// No description provided for @parkingPaymentLinkEmailedAndTexted.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link emailed and texted to the customer.'**
+  String get parkingPaymentLinkEmailedAndTexted;
+
+  /// No description provided for @parkingPaymentLinkNotDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'The link could not be emailed or texted. Copy it and send it to the customer yourself.'**
+  String get parkingPaymentLinkNotDelivered;
+
+  /// No description provided for @parkingPaymentLinkCouldNotBeResent.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment link could not be resent.'**
+  String get parkingPaymentLinkCouldNotBeResent;
+
+  /// No description provided for @parkingPaymentLinkReissued.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount changed, so a new payment link was issued.'**
+  String get parkingPaymentLinkReissued;
+
+  /// No description provided for @parkingPaidCannotBeEdited.
+  ///
+  /// In en, this message translates to:
+  /// **'This parking has been paid for and can no longer be edited.'**
+  String get parkingPaidCannotBeEdited;
+
+  /// No description provided for @parkingNothingChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was changed.'**
+  String get parkingNothingChanged;
+
+  /// No description provided for @parkingRecordCouldNotBeUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'The parking record could not be updated.'**
+  String get parkingRecordCouldNotBeUpdated;
+
+  /// No description provided for @parkedBetween.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked between'**
+  String get parkedBetween;
+
+  /// No description provided for @dateFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get dateFrom;
+
+  /// No description provided for @dateTo.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get dateTo;
+
+  /// No description provided for @anyDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Any date'**
+  String get anyDate;
+
+  /// No description provided for @clearDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear dates'**
+  String get clearDates;
+
+  /// No description provided for @vinNumberOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN (optional)'**
+  String get vinNumberOptional;
+
+  /// No description provided for @checkPaymentStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Check payment status'**
+  String get checkPaymentStatus;
+
+  /// No description provided for @checkingPaymentStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking...'**
+  String get checkingPaymentStatus;
+
+  /// No description provided for @parkingPaymentConfirmedWithStripe.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment confirmed with Stripe and recorded.'**
+  String get parkingPaymentConfirmedWithStripe;
+
+  /// No description provided for @parkingPaymentAlreadyRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Already recorded as paid.'**
+  String get parkingPaymentAlreadyRecorded;
+
+  /// No description provided for @parkingPaymentNotReceivedYet.
+  ///
+  /// In en, this message translates to:
+  /// **'Stripe has not received this payment yet.'**
+  String get parkingPaymentNotReceivedYet;
+
+  /// No description provided for @parkingPaymentStatusCouldNotBeChecked.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment status could not be checked.'**
+  String get parkingPaymentStatusCouldNotBeChecked;
+
+  /// No description provided for @parkingPaymentLinkAlreadyCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment link was already cancelled.'**
+  String get parkingPaymentLinkAlreadyCancelled;
+
+  /// No description provided for @parkingEnds.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends'**
+  String get parkingEnds;
+
+  /// No description provided for @parkingEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Ended'**
+  String get parkingEnded;
+
+  /// No description provided for @parkingStatusUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking status updated.'**
+  String get parkingStatusUpdated;
+
+  /// No description provided for @parkingStatusCouldNotBeUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'The parking status could not be updated.'**
+  String get parkingStatusCouldNotBeUpdated;
+
+  /// No description provided for @searchParkedCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Search tracking, owner, car, VIN…'**
+  String get searchParkedCars;
+
+  /// No description provided for @noParkingRecordsMatchFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'No parking records match this filter.'**
+  String get noParkingRecordsMatchFilter;
+
+  /// No description provided for @parkedCarRecordedWithCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked car recorded. Tracking number: {trackingCode}'**
+  String parkedCarRecordedWithCode(Object trackingCode);
+
+  /// No description provided for @businessServiceOverviewNeedsYou.
+  ///
+  /// In en, this message translates to:
+  /// **'need you'**
+  String get businessServiceOverviewNeedsYou;
+
+  /// No description provided for @businessTransportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport bids & jobs'**
+  String get businessTransportTitle;
+
+  /// No description provided for @businessTransportSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote the requests you were invited to, then move the jobs you won.'**
+  String get businessTransportSubtitle;
+
+  /// No description provided for @businessTransportOpenToBid.
+  ///
+  /// In en, this message translates to:
+  /// **'Open to bid'**
+  String get businessTransportOpenToBid;
+
+  /// No description provided for @businessTransportQuoted.
+  ///
+  /// In en, this message translates to:
+  /// **'Your quotes'**
+  String get businessTransportQuoted;
+
+  /// No description provided for @businessTransportWonJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'Won jobs'**
+  String get businessTransportWonJobs;
+
+  /// No description provided for @businessTransportNoOpportunities.
+  ///
+  /// In en, this message translates to:
+  /// **'No transport request is open for a bid right now.'**
+  String get businessTransportNoOpportunities;
+
+  /// No description provided for @businessTransportNoQuotes.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no live quotes. Bid on an open request to get one.'**
+  String get businessTransportNoQuotes;
+
+  /// No description provided for @businessTransportNoJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'No customer has chosen your quote yet.'**
+  String get businessTransportNoJobs;
+
+  /// No description provided for @businessTransportQuoteDeadline.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote deadline'**
+  String get businessTransportQuoteDeadline;
+
+  /// No description provided for @businessTransportWindowClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'The quote window has closed.'**
+  String get businessTransportWindowClosed;
+
+  /// No description provided for @businessTransportRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Route'**
+  String get businessTransportRoute;
+
+  /// No description provided for @businessTransportVehicleOperable.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs and drives'**
+  String get businessTransportVehicleOperable;
+
+  /// No description provided for @businessTransportVehicleNotOperable.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs assistance'**
+  String get businessTransportVehicleNotOperable;
+
+  /// No description provided for @businessTransportPreferredPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred pickup'**
+  String get businessTransportPreferredPickup;
+
+  /// No description provided for @businessTransportFlexibleDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Flexible'**
+  String get businessTransportFlexibleDates;
+
+  /// No description provided for @businessTransportSendQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Send quote'**
+  String get businessTransportSendQuote;
+
+  /// No description provided for @businessTransportSendingQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending quote…'**
+  String get businessTransportSendingQuote;
+
+  /// No description provided for @businessTransportReviseQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Revise quote'**
+  String get businessTransportReviseQuote;
+
+  /// No description provided for @businessTransportRevisingQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving revision…'**
+  String get businessTransportRevisingQuote;
+
+  /// No description provided for @businessTransportReviseNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have a quote on this request. Sending again replaces it — one business has one quote per request.'**
+  String get businessTransportReviseNotice;
+
+  /// No description provided for @businessTransportCurrentQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your current quote'**
+  String get businessTransportCurrentQuote;
+
+  /// No description provided for @businessTransportRevisionNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Revision {revision}'**
+  String businessTransportRevisionNumber(Object revision);
+
+  /// No description provided for @businessTransportWithdrawQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw quote'**
+  String get businessTransportWithdrawQuote;
+
+  /// No description provided for @businessTransportWithdrawingQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdrawing…'**
+  String get businessTransportWithdrawingQuote;
+
+  /// No description provided for @businessTransportWithdrawTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw this quote?'**
+  String get businessTransportWithdrawTitle;
+
+  /// No description provided for @businessTransportWithdrawMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer will no longer be able to choose it. The request goes back to open, so you can bid again.'**
+  String get businessTransportWithdrawMessage;
+
+  /// No description provided for @businessTransportQuoteWithdrawn.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote withdrawn. The request is open for a new bid.'**
+  String get businessTransportQuoteWithdrawn;
+
+  /// No description provided for @businessTransportWithdrawFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The quote could not be withdrawn. Try again.'**
+  String get businessTransportWithdrawFailed;
+
+  /// No description provided for @businessTransportQuoteSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote sent to the customer.'**
+  String get businessTransportQuoteSent;
+
+  /// No description provided for @businessTransportQuoteRevised.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote revised. The customer now sees revision {revision}.'**
+  String businessTransportQuoteRevised(Object revision);
+
+  /// No description provided for @businessTransportQuoteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The quote could not be sent. Try again.'**
+  String get businessTransportQuoteFailed;
+
+  /// No description provided for @businessTransportAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your transport price (USD)'**
+  String get businessTransportAmountLabel;
+
+  /// No description provided for @businessTransportAmountHint.
+  ///
+  /// In en, this message translates to:
+  /// **'For example, 1250.00'**
+  String get businessTransportAmountHint;
+
+  /// No description provided for @businessTransportAmountHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'The transport leg only. Laawol adds your pickup fee on top.'**
+  String get businessTransportAmountHelp;
+
+  /// No description provided for @businessTransportPickupLeg.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup leg'**
+  String get businessTransportPickupLeg;
+
+  /// No description provided for @businessTransportPickupPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Priced from your pickup plan when this quote is sent.'**
+  String get businessTransportPickupPending;
+
+  /// No description provided for @businessTransportPickupNotCharged.
+  ///
+  /// In en, this message translates to:
+  /// **'No separate pickup fee — include collection in your price.'**
+  String get businessTransportPickupNotCharged;
+
+  /// No description provided for @businessTransportCustomerTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer pays'**
+  String get businessTransportCustomerTotal;
+
+  /// No description provided for @businessTransportCustomerTotalPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Your price plus the pickup fee, once it is priced.'**
+  String get businessTransportCustomerTotalPending;
+
+  /// No description provided for @businessTransportTermsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms and inclusions (optional)'**
+  String get businessTransportTermsLabel;
+
+  /// No description provided for @businessTransportTermsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'What is included, timing assumptions, and any conditions.'**
+  String get businessTransportTermsHint;
+
+  /// No description provided for @businessTransportQuoteExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get businessTransportQuoteExpired;
+
+  /// No description provided for @transportQuoteAmountRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your transport price.'**
+  String get transportQuoteAmountRequired;
+
+  /// No description provided for @transportQuoteAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the price as a number, for example 1250.00.'**
+  String get transportQuoteAmountInvalid;
+
+  /// No description provided for @transportQuoteAmountFractional.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices are in whole cents — two decimal places at most.'**
+  String get transportQuoteAmountFractional;
+
+  /// No description provided for @transportQuoteAmountNotPositive.
+  ///
+  /// In en, this message translates to:
+  /// **'A quote has to be more than zero.'**
+  String get transportQuoteAmountNotPositive;
+
+  /// No description provided for @transportQuoteAmountAboveCap.
+  ///
+  /// In en, this message translates to:
+  /// **'A quote cannot be more than 1,000,000 USD.'**
+  String get transportQuoteAmountAboveCap;
+
+  /// No description provided for @transportQuoteCurrencyNotSupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport quotes must be in US dollars.'**
+  String get transportQuoteCurrencyNotSupported;
+
+  /// No description provided for @transportQuoteMethodNotSupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose open or enclosed transport.'**
+  String get transportQuoteMethodNotSupported;
+
+  /// No description provided for @transportQuoteDatesIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Give both estimates or neither.'**
+  String get transportQuoteDatesIncomplete;
+
+  /// No description provided for @transportQuotePickupNotInFuture.
+  ///
+  /// In en, this message translates to:
+  /// **'The estimated pickup date has to be in the future.'**
+  String get transportQuotePickupNotInFuture;
+
+  /// No description provided for @transportQuoteDeliveryBeforePickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery cannot be before pickup.'**
+  String get transportQuoteDeliveryBeforePickup;
+
+  /// No description provided for @transportQuoteTermsTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms must be 1000 characters or fewer.'**
+  String get transportQuoteTermsTooLong;
+
+  /// No description provided for @transportStatusScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled'**
+  String get transportStatusScheduled;
+
+  /// No description provided for @transportJobMoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move this job'**
+  String get transportJobMoveTitle;
+
+  /// No description provided for @transportJobStatusUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'This job is on {status}, which the transport workflow did not set — no transport action applies here.'**
+  String transportJobStatusUnknown(Object status);
+
+  /// No description provided for @transportJobNothingLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'This job is finished. There is nothing left to move.'**
+  String get transportJobNothingLeft;
+
+  /// No description provided for @transportJobStatusUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport updated.'**
+  String get transportJobStatusUpdated;
+
+  /// No description provided for @transportJobStatusAlready.
+  ///
+  /// In en, this message translates to:
+  /// **'This job was already {status}.'**
+  String transportJobStatusAlready(Object status);
+
+  /// No description provided for @transportJobStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The transport status could not be updated. Try again.'**
+  String get transportJobStatusFailed;
+
+  /// No description provided for @transportJobContainerRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the container number before marking this transport in transit.'**
+  String get transportJobContainerRequired;
+
+  /// No description provided for @transportJobTransitionNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'A transport cannot move from {from} to {to}.'**
+  String transportJobTransitionNotAllowed(Object from, Object to);
+
+  /// No description provided for @transportJobContainerOnFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {number}'**
+  String transportJobContainerOnFile(Object number);
+
+  /// No description provided for @transportJobAcceptedQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted quote'**
+  String get transportJobAcceptedQuote;
+
+  /// No description provided for @requestViewing.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a viewing'**
+  String get requestViewing;
+
+  /// No description provided for @manageViewing.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage viewing'**
+  String get manageViewing;
+
+  /// No description provided for @requestViewingSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Propose a time to come and see this vehicle. The seller confirms it or offers other times.'**
+  String get requestViewingSummary;
+
+  /// No description provided for @requestViewingQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Send viewing request?'**
+  String get requestViewingQuestion;
+
+  /// No description provided for @requestViewingConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The seller will confirm this time or offer other times. Nothing is charged.'**
+  String get requestViewingConfirmMessage;
+
+  /// No description provided for @viewingRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing request sent. The seller will confirm it or offer other times.'**
+  String get viewingRequestSent;
+
+  /// No description provided for @viewingConversationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your viewing for this car'**
+  String get viewingConversationTitle;
+
+  /// No description provided for @viewingStatusRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing requested'**
+  String get viewingStatusRequested;
+
+  /// No description provided for @viewingStatusCountered.
+  ///
+  /// In en, this message translates to:
+  /// **'Other times offered'**
+  String get viewingStatusCountered;
+
+  /// No description provided for @viewingStatusDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing declined'**
+  String get viewingStatusDeclined;
+
+  /// No description provided for @viewingStatusExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Proposal expired'**
+  String get viewingStatusExpired;
+
+  /// No description provided for @viewingStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing cancelled'**
+  String get viewingStatusCancelled;
+
+  /// No description provided for @viewingYourTurn.
+  ///
+  /// In en, this message translates to:
+  /// **'Your turn'**
+  String get viewingYourTurn;
+
+  /// No description provided for @viewingWaitingOnBuyer.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on the buyer'**
+  String get viewingWaitingOnBuyer;
+
+  /// No description provided for @viewingWaitingOnSeller.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on the seller'**
+  String get viewingWaitingOnSeller;
+
+  /// No description provided for @viewingProposedByYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You proposed'**
+  String get viewingProposedByYou;
+
+  /// No description provided for @viewingProposedByBuyer.
+  ///
+  /// In en, this message translates to:
+  /// **'The buyer proposed'**
+  String get viewingProposedByBuyer;
+
+  /// No description provided for @viewingProposedBySeller.
+  ///
+  /// In en, this message translates to:
+  /// **'The seller offered'**
+  String get viewingProposedBySeller;
+
+  /// No description provided for @viewingTimesOnTable.
+  ///
+  /// In en, this message translates to:
+  /// **'Times on the table'**
+  String get viewingTimesOnTable;
+
+  /// No description provided for @viewingConfirmedFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed for {time}'**
+  String viewingConfirmedFor(Object time);
+
+  /// No description provided for @viewingRespondBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply by {time}'**
+  String viewingRespondBy(Object time);
+
+  /// No description provided for @viewingAcceptTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept this time'**
+  String get viewingAcceptTime;
+
+  /// No description provided for @viewingOfferOtherTimes.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer other times'**
+  String get viewingOfferOtherTimes;
+
+  /// No description provided for @viewingProposeAnotherTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Propose another time'**
+  String get viewingProposeAnotherTime;
+
+  /// No description provided for @viewingDeclineRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get viewingDeclineRequest;
+
+  /// No description provided for @viewingDeclineQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline this viewing?'**
+  String get viewingDeclineQuestion;
+
+  /// No description provided for @viewingDeclineConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The buyer will be told you cannot show the car at these times.'**
+  String get viewingDeclineConfirmMessage;
+
+  /// No description provided for @viewingDeclinedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing declined.'**
+  String get viewingDeclinedMessage;
+
+  /// No description provided for @viewingConfirmedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing confirmed for {time}.'**
+  String viewingConfirmedMessage(Object time);
+
+  /// No description provided for @viewingTimesSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Your times were sent.'**
+  String get viewingTimesSent;
+
+  /// No description provided for @viewingActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That could not be done right now. Try again.'**
+  String get viewingActionFailed;
+
+  /// No description provided for @viewingProposalExpiredNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody answered in time, so this proposal expired.'**
+  String get viewingProposalExpiredNotice;
+
+  /// No description provided for @viewingNoMoreCounters.
+  ///
+  /// In en, this message translates to:
+  /// **'This has gone back and forth enough - accept a time, decline, or cancel.'**
+  String get viewingNoMoreCounters;
+
+  /// No description provided for @viewingClosedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This viewing is closed. Nothing on it can be changed.'**
+  String get viewingClosedNotice;
+
+  /// No description provided for @viewingHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What has happened so far'**
+  String get viewingHistoryTitle;
+
+  /// No description provided for @viewingHistoryEntryLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{who} • {action} • {when}'**
+  String viewingHistoryEntryLine(Object who, Object action, Object when);
+
+  /// No description provided for @viewingActorYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get viewingActorYou;
+
+  /// No description provided for @viewingActorBuyer.
+  ///
+  /// In en, this message translates to:
+  /// **'The buyer'**
+  String get viewingActorBuyer;
+
+  /// No description provided for @viewingActorSeller.
+  ///
+  /// In en, this message translates to:
+  /// **'The seller'**
+  String get viewingActorSeller;
+
+  /// No description provided for @viewingHistoryActionProposed.
+  ///
+  /// In en, this message translates to:
+  /// **'proposal'**
+  String get viewingHistoryActionProposed;
+
+  /// No description provided for @viewingHistoryActionAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'acceptance'**
+  String get viewingHistoryActionAccepted;
+
+  /// No description provided for @viewingHistoryActionDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'decline'**
+  String get viewingHistoryActionDeclined;
+
+  /// No description provided for @viewingHistoryActionCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'cancellation'**
+  String get viewingHistoryActionCancelled;
+
+  /// No description provided for @viewingProposalSheetTitleCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Propose a viewing time'**
+  String get viewingProposalSheetTitleCustomer;
+
+  /// No description provided for @viewingProposalSheetTitleBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer viewing times'**
+  String get viewingProposalSheetTitleBusiness;
+
+  /// No description provided for @viewingProposalSheetMessageCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the time that suits you. The seller can accept it or offer other times.'**
+  String get viewingProposalSheetMessageCustomer;
+
+  /// No description provided for @viewingProposalSheetMessageBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer up to {count} times. The buyer picks one or comes back with another.'**
+  String viewingProposalSheetMessageBusiness(Object count);
+
+  /// No description provided for @viewingRescheduleNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Proposing a new time reopens the conversation, so the agreed appointment stops being confirmed.'**
+  String get viewingRescheduleNotice;
+
+  /// No description provided for @viewingChooseTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a viewing time.'**
+  String get viewingChooseTime;
+
+  /// No description provided for @viewingSlotsChosen.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {max} times chosen'**
+  String viewingSlotsChosen(Object count, Object max);
+
+  /// No description provided for @viewingSendProposal.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get viewingSendProposal;
+
+  /// No description provided for @whatIsTheItem.
+  ///
+  /// In en, this message translates to:
+  /// **'What is the item?'**
+  String get whatIsTheItem;
+
+  /// No description provided for @somethingElseInCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else in this category'**
+  String get somethingElseInCategory;
+
+  /// No description provided for @whenDoYouPay.
+  ///
+  /// In en, this message translates to:
+  /// **'When do you pay?'**
+  String get whenDoYouPay;
+
+  /// No description provided for @payNowOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now'**
+  String get payNowOption;
+
+  /// No description provided for @payOnArrivalOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay when it arrives'**
+  String get payOnArrivalOption;
+
+  /// No description provided for @payOnArrivalExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is charged today. Your card is saved and verified now, and charged automatically when {business} marks your shipment arrived. If that charge doesn\'t go through, you\'ll be asked to complete payment in the app.'**
+  String payOnArrivalExplainer(Object business);
+
+  /// No description provided for @saveCardAndBook.
+  ///
+  /// In en, this message translates to:
+  /// **'Save card & book'**
+  String get saveCardAndBook;
+
+  /// No description provided for @freightCategoryQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s in the parcel?'**
+  String get freightCategoryQuestion;
+
+  /// No description provided for @freightCategoryHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Businesses charge more for what costs more to replace.'**
+  String get freightCategoryHelp;
+
+  /// No description provided for @freightCategoryGeneral.
+  ///
+  /// In en, this message translates to:
+  /// **'General goods'**
+  String get freightCategoryGeneral;
+
+  /// No description provided for @freightCategoryGeneralHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Household items, gifts, anything not listed below'**
+  String get freightCategoryGeneralHint;
+
+  /// No description provided for @freightCategoryClothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Clothes and fabric'**
+  String get freightCategoryClothing;
+
+  /// No description provided for @freightCategoryClothingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Clothing, shoes, cloth, bedding'**
+  String get freightCategoryClothingHint;
+
+  /// No description provided for @freightCategoryFood.
+  ///
+  /// In en, this message translates to:
+  /// **'Food'**
+  String get freightCategoryFood;
+
+  /// No description provided for @freightCategoryFoodHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Dry and packaged food only'**
+  String get freightCategoryFoodHint;
+
+  /// No description provided for @freightCategoryDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get freightCategoryDocuments;
+
+  /// No description provided for @freightCategoryDocumentsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Papers, certificates, printed matter'**
+  String get freightCategoryDocumentsHint;
+
+  /// No description provided for @freightCategoryCosmetics.
+  ///
+  /// In en, this message translates to:
+  /// **'Cosmetics and liquids'**
+  String get freightCategoryCosmetics;
+
+  /// No description provided for @freightCategoryCosmeticsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Creams, perfumes, hair products'**
+  String get freightCategoryCosmeticsHint;
+
+  /// No description provided for @freightCategoryElectronics.
+  ///
+  /// In en, this message translates to:
+  /// **'Electronics'**
+  String get freightCategoryElectronics;
+
+  /// No description provided for @freightCategoryElectronicsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Phones, laptops, tablets, chargers'**
+  String get freightCategoryElectronicsHint;
+
+  /// No description provided for @freightCategoryFragile.
+  ///
+  /// In en, this message translates to:
+  /// **'Fragile items'**
+  String get freightCategoryFragile;
+
+  /// No description provided for @freightCategoryFragileHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Glass, ceramics, anything breakable'**
+  String get freightCategoryFragileHint;
+
+  /// No description provided for @freightCoverageNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No coverage'**
+  String get freightCoverageNone;
+
+  /// No description provided for @freightCoverageCoversLoss.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers loss'**
+  String get freightCoverageCoversLoss;
+
+  /// No description provided for @freightCoverageSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'If it goes missing'**
+  String get freightCoverageSectionTitle;
+
+  /// No description provided for @freightCoveragePaysForLoss.
+  ///
+  /// In en, this message translates to:
+  /// **'{businessName} pays you back if this parcel is lost.'**
+  String freightCoveragePaysForLoss(Object businessName);
+
+  /// No description provided for @freightCoverageNoExtraCharge.
+  ///
+  /// In en, this message translates to:
+  /// **'Included in the price, at no extra charge.'**
+  String get freightCoverageNoExtraCharge;
+
+  /// No description provided for @freightCoverageWhoPays.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol records this agreement. {businessName} is the business that pays.'**
+  String freightCoverageWhoPays(Object businessName);
+
+  /// No description provided for @freightCoverageNotOffered.
+  ///
+  /// In en, this message translates to:
+  /// **'{businessName} does not cover lost parcels. If this parcel goes missing, nothing is paid back.'**
+  String freightCoverageNotOffered(Object businessName);
+
+  /// No description provided for @freightDestinationDeliveryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How the receiver gets it'**
+  String get freightDestinationDeliveryTitle;
+
+  /// No description provided for @freightDestinationDeliveryCollect.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver collects it'**
+  String get freightDestinationDeliveryCollect;
+
+  /// No description provided for @freightDestinationDeliveryCollectHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'They pick the parcel up from {businessName} at the destination.'**
+  String freightDestinationDeliveryCollectHelp(Object businessName);
+
+  /// No description provided for @freightDestinationDeliveryToAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Deliver to their address · {amount}'**
+  String freightDestinationDeliveryToAddress(Object amount);
+
+  /// No description provided for @freightSetPriceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Price for this item'**
+  String get freightSetPriceTitle;
+
+  /// No description provided for @freightSetPriceLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} set price'**
+  String freightSetPriceLine(Object amount);
+
+  /// No description provided for @freightSetPriceCoversUpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers up to {kilograms} kg, then {rate} per kg over'**
+  String freightSetPriceCoversUpTo(String kilograms, String rate);
+
+  /// No description provided for @freightSetPriceCoversAnyWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers this item whatever it weighs'**
+  String get freightSetPriceCoversAnyWeight;
+
+  /// No description provided for @freightSetPriceFinal.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the full price for this item.'**
+  String get freightSetPriceFinal;
+
+  /// No description provided for @freightSetPriceOverAllowanceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The business weighs the parcel at drop-off and charges for any weight over what this price covers.'**
+  String get freightSetPriceOverAllowanceNote;
+
+  /// No description provided for @freightDestinationDeliveryFeeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery at destination'**
+  String get freightDestinationDeliveryFeeLabel;
+
+  /// No description provided for @freightReceiverAddressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver\'s address'**
+  String get freightReceiverAddressLabel;
+
+  /// No description provided for @freightReceiverAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Neighbourhood, landmark, city'**
+  String get freightReceiverAddressHint;
+
+  /// No description provided for @freightReceiverAddressHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Include the neighbourhood and a landmark nearby, so the driver can find it.'**
+  String get freightReceiverAddressHelper;
+
+  /// No description provided for @freightReceiverAddressRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the address where the parcel should be delivered.'**
+  String get freightReceiverAddressRequired;
+
+  /// No description provided for @freightReceiverAddressTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That address is too long. Keep it to the neighbourhood, a landmark and the city.'**
+  String get freightReceiverAddressTooLong;
+
+  /// No description provided for @outForDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Out for delivery'**
+  String get outForDelivery;
+
+  /// No description provided for @freightNextOutForDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Your parcel has arrived and is on its way to the receiver\'s address.'**
+  String get freightNextOutForDelivery;
+
+  /// No description provided for @pickupPlanTakingPickups.
+  ///
+  /// In en, this message translates to:
+  /// **'Taking pickups: {services}.'**
+  String pickupPlanTakingPickups(String services);
+
+  /// No description provided for @pickupPlanNoPickups.
+  ///
+  /// In en, this message translates to:
+  /// **'No service is taking pickups. Customers bring everything to you.'**
+  String get pickupPlanNoPickups;
+
+  /// No description provided for @pickupPlanBringToYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers bring these to you: {services}.'**
+  String pickupPlanBringToYou(String services);
+
+  /// No description provided for @pickupPlanSharedOffWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'No pickup: the shared plan above is off. Turn it on, or give this service its own fees.'**
+  String get pickupPlanSharedOffWarning;
+
+  /// No description provided for @pickupPlanOwnFeesNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Takes pickups on these fees, whether or not the shared plan is on.'**
+  String get pickupPlanOwnFeesNote;
+
+  /// No description provided for @freightDestinationDeliveryToAddressByArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Deliver to their address'**
+  String get freightDestinationDeliveryToAddressByArea;
+
+  /// No description provided for @freightDeliveryAreaLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Where is it going?'**
+  String get freightDeliveryAreaLabel;
+
+  /// No description provided for @freightNoPriceForItemTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No set price for this'**
+  String get freightNoPriceForItemTitle;
+
+  /// No description provided for @freightNoBusinessPricedItem.
+  ///
+  /// In en, this message translates to:
+  /// **'No business shipping to {country} has set a price for this. Describe it and they can each answer with their own.'**
+  String freightNoBusinessPricedItem(String country);
+
+  /// No description provided for @freightBusinessHasNotPricedItem.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} has not set a price for this item. Ask, and it will answer with one.'**
+  String freightBusinessHasNotPricedItem(String business);
+
+  /// No description provided for @freightAskForPriceCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for a price'**
+  String get freightAskForPriceCta;
+
+  /// No description provided for @freightAskForPriceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for a price'**
+  String get freightAskForPriceTitle;
+
+  /// No description provided for @freightAskForPriceIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe what you are sending to {country}. Every business on this route can answer with its own price and say what it pays back if the parcel is lost.'**
+  String freightAskForPriceIntro(String country);
+
+  /// No description provided for @freightAskForPriceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not committing to anything. You choose which price to take, or none of them.'**
+  String get freightAskForPriceNote;
+
+  /// No description provided for @freightQuoteDescriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What are you sending?'**
+  String get freightQuoteDescriptionLabel;
+
+  /// No description provided for @freightQuoteDescriptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Two suitcases of clothes and a small microwave'**
+  String get freightQuoteDescriptionHint;
+
+  /// No description provided for @freightQuoteDescriptionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe what you are sending'**
+  String get freightQuoteDescriptionRequired;
+
+  /// No description provided for @freightQuoteWeightLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight in kg'**
+  String get freightQuoteWeightLabel;
+
+  /// No description provided for @freightQuoteWeightHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional. A weight helps a business answer faster.'**
+  String get freightQuoteWeightHelper;
+
+  /// No description provided for @freightQuoteSendRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for a price'**
+  String get freightQuoteSendRequest;
+
+  /// No description provided for @freightQuoteSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get freightQuoteSending;
+
+  /// No description provided for @freightQuoteRequestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request could not be sent. Try again.'**
+  String get freightQuoteRequestFailed;
+
+  /// No description provided for @freightQuotesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices for your parcel'**
+  String get freightQuotesTitle;
+
+  /// No description provided for @freightQuotesIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Each price is one business\'s own. Choose the one you want to send with.'**
+  String get freightQuotesIntro;
+
+  /// No description provided for @freightQuoteRequestReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Request {code}'**
+  String freightQuoteRequestReference(String code);
+
+  /// No description provided for @freightQuoteAskedBusinesses.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 business can answer} other{{count} businesses can answer}}'**
+  String freightQuoteAskedBusinesses(int count);
+
+  /// No description provided for @waitingForFreightQuotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for prices'**
+  String get waitingForFreightQuotes;
+
+  /// No description provided for @waitingForFreightQuotesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The businesses on this route can see your parcel now. Prices appear here as they answer.'**
+  String get waitingForFreightQuotesSubtitle;
+
+  /// No description provided for @freightQuoteCoversLoss.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} pays you back if this parcel is lost'**
+  String freightQuoteCoversLoss(String business);
+
+  /// No description provided for @freightQuoteDoesNotCoverLoss.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} does not cover lost parcels'**
+  String freightQuoteDoesNotCoverLoss(String business);
+
+  /// No description provided for @selectFreightQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose this price'**
+  String get selectFreightQuote;
+
+  /// No description provided for @selectingFreightQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Choosing…'**
+  String get selectingFreightQuote;
+
+  /// No description provided for @confirmFreightQuoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send with {business}?'**
+  String confirmFreightQuoteTitle(String business);
+
+  /// No description provided for @confirmFreightQuoteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} charges {price} to send this parcel.'**
+  String confirmFreightQuoteMessage(String business, String price);
+
+  /// No description provided for @couldNotSelectFreightQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'That price could not be chosen. Try again.'**
+  String get couldNotSelectFreightQuote;
+
+  /// No description provided for @couldNotLoadFreightQuotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices could not be loaded.'**
+  String get couldNotLoadFreightQuotes;
+
+  /// No description provided for @freightQuoteChosenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Price chosen'**
+  String get freightQuoteChosenTitle;
+
+  /// No description provided for @freightQuoteChosenMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} will send your parcel for {price}.'**
+  String freightQuoteChosenMessage(String business, String price);
 }
 
 class _AppLocalizationsDelegate

@@ -28,13 +28,33 @@ class FreightShipmentService {
     required String destinationCountryId,
     required String businessId,
     required String mode,
-    required double weightKg,
+    /// What the parcel weighs, when the business charges this item by weight.
+    /// A set-price item is quoted from the business's published row, so there
+    /// is nothing to weigh and nothing to send - the server asks for a weight
+    /// only when the item it resolves is priced by the scale.
+    double weightKg = 0,
+    /// What is in the parcel. The server re-derives the multiplier from the
+    /// business's own settings; sending nothing prices the parcel exactly as
+    /// freight was priced before categories existed.
+    String? itemCategoryId,
+    String? itemId,
+    /// The receiver has the parcel brought to their own address at the
+    /// destination instead of collecting it. Only true for a business that
+    /// publishes the offer; the server re-prices the flat fee from the live
+    /// business document and refuses a delivery nobody offered.
+    bool destinationDelivery = false,
+    String? deliveryAreaId,
+    String? receiverAddress,
     bool useWalletBalance = false,
     bool pickupRequested = false,
     String? pickupAddress,
     String? pickupBorough,
     String? pickupDateTime,
     String? officeLocationId,
+    /// 'arrival' books without charging: the card is saved and verified via
+    /// a SetupIntent, and the server charges it when the business marks the
+    /// shipment arrived. Only businesses that opted in accept it.
+    String? paymentTiming,
     required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final response = await _functions
@@ -46,13 +66,25 @@ class FreightShipmentService {
           'destinationCountryId': destinationCountryId,
           'businessId': businessId,
           'mode': mode,
-          'weightKg': weightKg,
+          if (weightKg > 0) 'weightKg': weightKg,
+          if ((itemCategoryId ?? '').trim().isNotEmpty)
+            'itemCategoryId': itemCategoryId!.trim(),
+          // Present-but-empty means "the category catch-all": the server
+          // resolves '' to the business's catch-all row for the category.
+          if (itemId != null) 'itemId': itemId.trim(),
+          if (destinationDelivery) 'destinationDelivery': true,
+          if (destinationDelivery &&
+              deliveryAreaId != null &&
+              deliveryAreaId.trim().isNotEmpty)
+            'deliveryAreaId': deliveryAreaId.trim(),
+          'receiverAddress': ?receiverAddress,
           'pickupRequested': pickupRequested,
           'pickupAddress': ?pickupAddress,
           'pickupBorough': ?pickupBorough,
           'pickupDateTime': ?pickupDateTime,
           if (!pickupRequested && officeLocationId != null)
             'officeLocationId': officeLocationId,
+          if (paymentTiming == 'arrival') 'paymentTiming': 'arrival',
           'useWalletBalance': useWalletBalance,
           'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         });
@@ -64,7 +96,39 @@ class FreightShipmentService {
     }
 
     final simulatedPayment = data['simulatedPayment'] == true;
-    if (!simulatedPayment) {
+    final setupClientSecret = data['setupClientSecret'] as String?;
+    if (!simulatedPayment && setupClientSecret != null &&
+        setupClientSecret.isNotEmpty) {
+      // Pay-on-arrival: the sheet verifies and saves the card via a
+      // SetupIntent - nothing is charged today. The server charges the saved
+      // card when the business marks the shipment arrived.
+      await StripeConfigService.ensureConfigured();
+      await withStripeConnectedAccount(
+        (data['stripeConnectedAccountId'] as String?) ?? '',
+        () async {
+          await Stripe.instance.initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              setupIntentClientSecret: setupClientSecret,
+              merchantDisplayName: 'Laawol',
+              style: ThemeMode.light,
+            ),
+          );
+          await completePaymentFlowSafely(
+            presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+            completeTransaction: () async {
+              await _functions
+                  .httpsCallable('completeFreightShipmentCardSave')
+                  .call({'shipmentId': shipmentId});
+            },
+            cancelPendingTransaction: () async {
+              await _functions
+                  .httpsCallable('cancelPendingFreightShipment')
+                  .call({'shipmentId': shipmentId});
+            },
+          );
+        },
+      );
+    } else if (!simulatedPayment) {
       final clientSecret = data['clientSecret'] as String?;
       if (clientSecret == null || clientSecret.isEmpty) {
         throw Exception('Payment could not be initialized.');

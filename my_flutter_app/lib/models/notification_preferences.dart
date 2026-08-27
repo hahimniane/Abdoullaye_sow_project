@@ -5,7 +5,6 @@ class NotificationPreferences {
     this.smsNotifications = false,
     this.carActivity = true,
     this.shipmentActivity = true,
-    this.walletActivity = true,
     this.businessActivity = true,
     this.reviewActivity = true,
     this.supportActivity = true,
@@ -19,7 +18,6 @@ class NotificationPreferences {
   final bool smsNotifications;
   final bool carActivity;
   final bool shipmentActivity;
-  final bool walletActivity;
   final bool businessActivity;
   final bool reviewActivity;
   final bool supportActivity;
@@ -37,7 +35,6 @@ class NotificationPreferences {
       smsNotifications: data['smsNotifications'] == true,
       carActivity: data['carActivity'] != false,
       shipmentActivity: data['shipmentActivity'] != false,
-      walletActivity: data['walletActivity'] != false,
       businessActivity: data['businessActivity'] != false,
       reviewActivity: data['reviewActivity'] != false,
       supportActivity: data['supportActivity'] != false,
@@ -59,7 +56,6 @@ class NotificationPreferences {
       'smsNotifications': smsNotifications,
       'carActivity': carActivity,
       'shipmentActivity': shipmentActivity,
-      'walletActivity': walletActivity,
       'businessActivity': businessActivity,
       'reviewActivity': reviewActivity,
       'supportActivity': supportActivity,
@@ -75,7 +71,6 @@ class NotificationPreferences {
     bool? smsNotifications,
     bool? carActivity,
     bool? shipmentActivity,
-    bool? walletActivity,
     bool? businessActivity,
     bool? reviewActivity,
     bool? supportActivity,
@@ -89,7 +84,6 @@ class NotificationPreferences {
       smsNotifications: smsNotifications ?? this.smsNotifications,
       carActivity: carActivity ?? this.carActivity,
       shipmentActivity: shipmentActivity ?? this.shipmentActivity,
-      walletActivity: walletActivity ?? this.walletActivity,
       businessActivity: businessActivity ?? this.businessActivity,
       reviewActivity: reviewActivity ?? this.reviewActivity,
       supportActivity: supportActivity ?? this.supportActivity,

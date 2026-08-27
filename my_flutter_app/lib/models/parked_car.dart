@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../services/business_parking_entry.dart';
+
 class ParkedCar {
   final String id;
   final String trackingCode;
@@ -13,6 +15,12 @@ class ParkedCar {
   final DateTime? parkingEndDate;
   final double? totalCost;
 
+  /// Server-owned fields for a walk-up the lot entered itself
+  /// (docs/PLAN-2026-08-backlog.md item 5). They are read here and never
+  /// written back: `createBusinessParkingEntry` and `markBusinessParkingPaid`
+  /// own them, and a client that echoed them could contradict Stripe.
+  final Map<String, dynamic> paymentFields;
+
   ParkedCar({
     required this.id,
     required this.trackingCode,
@@ -25,7 +33,22 @@ class ParkedCar {
     this.status = 'active',
     this.parkingEndDate,
     this.totalCost,
+    this.paymentFields = const <String, dynamic>{},
   });
+
+  /// True when the lot entered this car itself rather than a customer booking
+  /// it.
+  bool get isBusinessEntered => isBusinessEnteredParking(paymentFields);
+
+  /// True when "Mark payment received" applies - a direct entry still waiting
+  /// on off-platform money.
+  bool get awaitsDirectPayment => canMarkBusinessParkingPaid(paymentFields);
+
+  /// What this entry recorded, in dollars.
+  double get amountDue => businessParkingAmountDue(paymentFields);
+
+  /// The hosted Stripe Checkout page for a payment-link entry, or "".
+  String get checkoutUrl => (paymentFields['checkoutUrl'] ?? '').toString();
 
   factory ParkedCar.fromFirestore(DocumentSnapshot doc) {
     Map data = doc.data() as Map<String, dynamic>;
@@ -45,6 +68,7 @@ class ParkedCar {
           ? (data['parkingEndDate'] as Timestamp).toDate()
           : null,
       totalCost: (data['totalCost'] as num?)?.toDouble(),
+      paymentFields: Map<String, dynamic>.from(data),
     );
   }
 
@@ -80,6 +104,7 @@ class ParkedCar {
     String? status,
     DateTime? parkingEndDate,
     double? totalCost,
+    Map<String, dynamic>? paymentFields,
   }) {
     return ParkedCar(
       id: id ?? this.id,
@@ -93,6 +118,7 @@ class ParkedCar {
       status: status ?? this.status,
       parkingEndDate: parkingEndDate ?? this.parkingEndDate,
       totalCost: totalCost ?? this.totalCost,
+      paymentFields: paymentFields ?? this.paymentFields,
     );
   }
 }

@@ -1,6 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
@@ -20,7 +18,7 @@ String _greeting(AppLocalizations l10n) {
   return l10n.goodEvening;
 }
 
-/// Home tab — greeting, live wallet balance, and a few quick actions.
+/// Home tab — greeting and a few quick actions.
 class HomeTab extends StatelessWidget {
   const HomeTab({super.key});
 
@@ -200,12 +198,15 @@ class ActivityTab extends StatelessWidget {
                     AppColors.cobaltMid,
                     '/orders',
                   ),
+                  // Its own row rather than a filter inside My orders: a
+                  // viewing needs answering, sometimes today, and burying it
+                  // among barrels and freight is how a proposal goes stale.
                   _HubItem(
-                    l10n.walletTitle,
-                    l10n.hubWalletSubtitle,
-                    Icons.account_balance_wallet_outlined,
+                    l10n.myCarViewings,
+                    l10n.hubViewingsSubtitle,
+                    Icons.event_available_outlined,
                     AppColors.sage,
-                    '/wallet',
+                    '/my-viewings',
                   ),
                 ],
               ),
@@ -376,6 +377,9 @@ class _GreetingHeader extends StatelessWidget {
   }
 }
 
+/// Signed-out visitors still get a sign-in prompt here. The wallet balance
+/// this card used to show is gone with the wallet itself
+/// (docs/PLAN-2026-08-backlog.md #3).
 class _BalanceCard extends StatelessWidget {
   const _BalanceCard({required this.auth});
 
@@ -389,151 +393,7 @@ class _BalanceCard extends StatelessWidget {
         onTap: () => Navigator.pushNamed(context, '/login'),
       );
     }
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('wallets')
-          .doc(user.uid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data();
-        final currencyCode =
-            (data?['currency'] as String?)?.toUpperCase() ?? 'USD';
-        final balance =
-            (data?['balance'] as num?)?.toDouble() ??
-            (((data?['balanceCents'] as num?)?.toDouble() ?? 0) / 100);
-        final currency = NumberFormat.simpleCurrency(name: currencyCode);
-        return _BalanceCardBody(balanceLabel: currency.format(balance));
-      },
-    );
-  }
-}
-
-class _BalanceCardBody extends StatelessWidget {
-  const _BalanceCardBody({required this.balanceLabel});
-
-  final String balanceLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: () => Navigator.pushNamed(context, '/wallet'),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: AppColors.headerGradient,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.cobaltDeep.withValues(alpha: 0.28),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      AppLocalizations.of(context)!.availableBalance,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                    Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: Colors.white.withValues(alpha: 0.9),
-                      size: 20,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  balanceLabel,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _BalanceAction(
-                        icon: Icons.add,
-                        label: AppLocalizations.of(context)!.addMoney,
-                        onTap: () => Navigator.pushNamed(context, '/wallet'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _BalanceAction(
-                        icon: Icons.receipt_long_outlined,
-                        label: AppLocalizations.of(context)!.myOrders,
-                        onTap: () => Navigator.pushNamed(context, '/orders'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BalanceAction extends StatelessWidget {
-  const _BalanceAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.16),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 11),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 18),
-              const SizedBox(width: 7),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return const SizedBox.shrink();
   }
 }
 
@@ -571,7 +431,7 @@ class _SignInPromptCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        AppLocalizations.of(context)!.signInToYourWallet,
+                        AppLocalizations.of(context)!.signInToYourAccount,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 17,
@@ -580,7 +440,7 @@ class _SignInPromptCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        AppLocalizations.of(context)!.walletSignInSubtitle,
+                        AppLocalizations.of(context)!.accountSignInSubtitle,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.85),
                           fontSize: 13,

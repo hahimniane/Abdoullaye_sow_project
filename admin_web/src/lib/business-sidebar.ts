@@ -3,6 +3,7 @@ export type BusinessTab =
   | "profile"
   | "listings"
   | "purchases"
+  | "viewings"
   | "barrels"
   | "freight"
   | "transport"
@@ -42,6 +43,11 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   {id: "people", label: "People", description: "Owners and staff", group: "business", permission: "people"},
   {id: "listings", label: "Listings", description: "Vehicles for sale", group: "sales", service: "carSales", permission: "listings"},
   {id: "purchases", label: "Purchases", description: "Holds and buyers", group: "sales", service: "carSales", permission: "purchases"},
+  // A viewing is an appointment, not a sale: no money moves and nothing is
+  // bought. It shares the purchases permission because it is the same record
+  // and the same staff work it, but it gets its own queue so "someone wants to
+  // see a car" is not buried among holds and deposits.
+  {id: "viewings", label: "Viewings", description: "Appointment requests", group: "sales", service: "carSales", permission: "purchases"},
   {id: "barrels", label: "Barrels", description: "Shipping queue", group: "transport", service: "barrelShipping", permission: "barrels"},
   {id: "freight", label: "Freight", description: "Parcel shipping queue", group: "transport", service: "freight", permission: "freight"},
   {id: "transport", label: "Transport", description: "Vehicle moves", group: "transport", service: "carTransport", permission: "transport"},

@@ -27,6 +27,7 @@ describe("customer Checkout routing", () => {
       "freightShipment",
       "holdExtension",
       "parking",
+      "transportJob",
     ]);
   });
 

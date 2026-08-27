@@ -11,6 +11,7 @@ export const CUSTOMER_CHECKOUT_ORDER_TYPES = [
   "carDeposit",
   "carPurchase",
   "holdExtension",
+  "transportJob",
 ] as const;
 
 export type CustomerCheckoutOrderType =
@@ -92,6 +93,7 @@ const RETURN_STATUS_FIELDS: Record<CustomerCheckoutOrderType, string[]> = {
     "checkoutStatus",
     "extensionRequestStatus",
   ],
+  transportJob: ["paymentStatus", "checkoutStatus", "status"],
 };
 
 export function isCustomerCheckoutOrderType(
@@ -111,9 +113,10 @@ export function paymentReturnState(
   );
   if (
     values.some((value) =>
-      ["succeeded", "paid", "completed", "applied", "reserved"].includes(
-        value,
-      ),
+      // card_saved: a pay-on-arrival booking's terminal success - the card
+      // is verified and saved, and nothing is charged until arrival.
+      ["succeeded", "paid", "completed", "applied", "reserved", "card_saved"]
+          .includes(value),
     )
   ) {
     return "success";

@@ -28,7 +28,6 @@ describe("notification settings helpers", () => {
           smsNotifications: true,
           carActivity: true,
           shipmentActivity: true,
-          walletActivity: true,
           businessActivity: true,
           reviewActivity: true,
           supportActivity: false,

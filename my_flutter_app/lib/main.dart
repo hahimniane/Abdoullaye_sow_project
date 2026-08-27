@@ -45,7 +45,6 @@ import 'screens/phone_verification_screen.dart';
 import 'screens/business_management_screen.dart';
 import 'screens/business_profile_screen.dart';
 import 'screens/business_registration_screen.dart';
-import 'screens/wallet_screen.dart';
 import 'screens/favorite_cars_screen.dart';
 import 'screens/support_inbox_screen.dart';
 import 'screens/support_thread_screen.dart';
@@ -218,6 +217,13 @@ class MyApp extends StatelessWidget {
               },
               '/my-purchases': (context) =>
                   const MyPurchasesScreen(showBackButton: true),
+              // A viewing is an appointment, not a purchase, so buyers reach
+              // it from its own destination rather than through a list of
+              // money they have paid.
+              '/my-viewings': (context) => const MyPurchasesScreen(
+                showBackButton: true,
+                scope: PurchaseListScope.viewings,
+              ),
               '/orders': (context) => const OrdersScreen(showBackButton: true),
               '/leave-review': (context) {
                 final args =
@@ -238,7 +244,6 @@ class MyApp extends StatelessWidget {
                   returnToSharedBarrels: args?.returnToSharedBarrels ?? false,
                 );
               },
-              '/wallet': (context) => const WalletScreen(),
               '/favorite-cars': (context) => const FavoriteCarsScreen(),
               '/businesses': (context) => const BusinessManagementScreen(),
               '/business-profile': (context) => const BusinessProfileScreen(),

@@ -19,7 +19,6 @@ import 'review_composer_screen.dart';
 import 'business_management_screen.dart';
 import 'business_profile_screen.dart';
 import 'add_staff_screen.dart';
-import 'wallet_screen.dart';
 import 'favorite_cars_screen.dart';
 import 'account_profile_screen.dart';
 import 'destination_countries_screen.dart';
@@ -71,6 +70,16 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
     case '/my-purchases':
       page = const MyPurchasesScreen(showBackButton: true);
       break;
+    // Registered here as well as in main.dart for the same reason as
+    // /leave-review below: a route pushed from inside the tab navigator is
+    // resolved by this table, and an unknown one falls through to the tab
+    // root - which reads as "tapping my viewing took me back to Activity".
+    case '/my-viewings':
+      page = const MyPurchasesScreen(
+        showBackButton: true,
+        scope: PurchaseListScope.viewings,
+      );
+      break;
     case '/orders':
       page = const OrdersScreen(showBackButton: true);
       break;
@@ -85,9 +94,6 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
       if (reviewArgs is ReviewComposerArguments) {
         page = ReviewComposerScreen(arguments: reviewArgs);
       }
-      break;
-    case '/wallet':
-      page = const WalletScreen();
       break;
     case '/favorite-cars':
       page = const FavoriteCarsScreen();
@@ -173,7 +179,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       default:
         return Builder(
           builder: (context) => SettingsScreen(
-            onOpenWallet: () => Navigator.of(context).pushNamed('/wallet'),
             onOpenAccountProfile: () =>
                 Navigator.of(context).pushNamed('/account-profile'),
           ),

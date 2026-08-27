@@ -91,12 +91,54 @@ void main() {
       expect(route, isNull);
     });
 
-    test('routes a wallet refund update to Wallet', () {
+    test('does not route a retired wallet refund update', () {
+      // The wallet is retired (docs/PLAN-2026-08-backlog.md #3): the backend
+      // never sends this type and /wallet is not a registered route, so it
+      // must resolve to null rather than a tap that goes nowhere.
       final route = routeForNotificationData({
         'type': 'wallet_refund_status',
       });
 
-      expect(route?.name, '/wallet');
+      expect(route, isNull);
+    });
+
+    test('routes a car viewing update to its own destination', () {
+      // Deliberately not /my-purchases: a buyer opening a notification about
+      // an appointment should not land in a list of money they have paid.
+      final route = routeForNotificationData({'type': 'car_viewing_status'});
+
+      expect(route?.name, '/my-viewings');
+    });
+
+    test('still routes a car purchase update to My Purchases', () {
+      final route = routeForNotificationData({'type': 'car_purchase_status'});
+
+      expect(route?.name, '/my-purchases');
+    });
+
+    test('routes a support case update to the support thread', () {
+      final route = routeForNotificationData({
+        'type': 'support_case_update',
+        'caseId': 'case-123',
+      });
+
+      expect(route?.name, '/support-thread');
+      expect(route?.arguments, 'case-123');
+    });
+
+    test('does not route a support case update with no case id', () {
+      final route = routeForNotificationData({'type': 'support_case_update'});
+
+      expect(route, isNull);
+    });
+
+    test('routes a shipment tracking update to Tracking', () {
+      final route = routeForNotificationData({
+        'type': 'shipment_tracking_update',
+        'shipmentId': 'ship-9',
+      });
+
+      expect(route?.name, '/tracking');
     });
 
     test('routes a business application update to Business registration',

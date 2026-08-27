@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -639,12 +640,73 @@ class _BarrelShipmentDetailsScreenState
         context,
       )!.destinationChangePaid(currency.format(result.amountDue));
     }
-    if (result.walletCredit > 0) {
+    if (result.cardRefund > 0) {
       return AppLocalizations.of(
         context,
-      )!.destinationChangeCredited(currency.format(result.walletCredit));
+      )!.destinationChangeCredited(currency.format(result.cardRefund));
     }
     return AppLocalizations.of(context)!.shipmentDestinationUpdated;
+  }
+
+  /// Whether this customer can still walk away from a PAID shipment: theirs,
+  /// paid, and the business has not started on it.
+  bool _canCancelSecured(AuthProvider auth) =>
+      _isShipmentOwner(auth) &&
+      !auth.hasBusinessDashboardAccess &&
+      _currentShipment.status == 'pending' &&
+      _currentShipment.paymentStatus == 'succeeded';
+
+  Future<void> _cancelSecuredOrder() async {
+    final l10n = AppLocalizations.of(context)!;
+    final held = _currentShipment.paymentHoldStatus == 'held';
+    final partOfOrder = (_currentShipment.orderId ?? '').isNotEmpty;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.cancelOrderTitle),
+        content: Text(
+          partOfOrder
+              ? (held
+                    ? l10n.cancelWholeOrderHeldBody
+                    : l10n.cancelWholeOrderCapturedBody)
+              : (held
+                    ? l10n.cancelOrderHeldBody
+                    : l10n.cancelOrderCapturedBody),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.keepOrder),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(l10n.cancelOrderConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await _shipmentService.cancelSecuredOrder(
+        orderType: partOfOrder ? 'barrelOrder' : 'barrelShipment',
+        recordId: partOfOrder
+            ? _currentShipment.orderId!
+            : _currentShipment.id,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(held ? l10n.orderCancelledFree : l10n.orderRefunded),
+        ),
+      );
+      Navigator.pop(context);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      // The server's refusals are written to be read by a person.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message ?? l10n.genericError)),
+      );
+    }
   }
 
   Future<void> _reprintReceipt() async {
@@ -1076,6 +1138,27 @@ class _BarrelShipmentDetailsScreenState
                                   icon: const Icon(Icons.receipt_long),
                                   label: Text(l10n.reprintReceipt),
                                 ),
+                                if (_canCancelSecured(auth)) ...[
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    onPressed: _cancelSecuredOrder,
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.red.shade700,
+                                      minimumSize: const Size.fromHeight(52),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.cancel_outlined),
+                                    label: Text(
+                                      _currentShipment.paymentHoldStatus ==
+                                              'held'
+                                          ? l10n.cancelOrderFreeAction
+                                          : l10n.cancelOrderRefundAction,
+                                    ),
+                                  ),
+                                ],
                                 if (isOwner && !canEditDetails && !_isCompleted)
                                   const Padding(
                                     padding: EdgeInsets.only(top: 16),

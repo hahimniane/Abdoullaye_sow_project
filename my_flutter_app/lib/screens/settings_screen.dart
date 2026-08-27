@@ -16,13 +16,11 @@ import '../widgets/app_back_button.dart';
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
-    this.onOpenWallet,
     this.onOpenAccountProfile,
     this.showBackButton = false,
     this.onBack,
   });
 
-  final VoidCallback? onOpenWallet;
   final VoidCallback? onOpenAccountProfile;
   final bool showBackButton;
   final VoidCallback? onBack;
@@ -260,15 +258,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: l10n.favoriteCarsSubtitle,
                           onTap: () =>
                               Navigator.pushNamed(context, '/favorite-cars'),
-                        ),
-                        const Divider(height: 1),
-                        _SettingRow(
-                          icon: Icons.account_balance_wallet_outlined,
-                          title: l10n.walletTitle,
-                          subtitle: l10n.walletSubtitle,
-                          onTap:
-                              widget.onOpenWallet ??
-                              () => Navigator.pushNamed(context, '/wallet'),
                         ),
                         if (authProvider.isAuthenticated)
                           const Divider(height: 1),

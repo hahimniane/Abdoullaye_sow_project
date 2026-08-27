@@ -7,8 +7,27 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import '../models/barrel_shipment.dart';
 import '../models/barrel_order.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
+import '../models/structured_address.dart';
 import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
+
+/// Result of quoteBarrelPickup: a priced quote, or a refusal when the
+/// business has not configured home pickup.
+class BarrelPickupQuote {
+  const BarrelPickupQuote({
+    required this.available,
+    this.fee = 0,
+    this.borough = '',
+    this.normalizedAddress = '',
+    this.reason = '',
+  });
+
+  final bool available;
+  final double fee;
+  final String borough;
+  final String normalizedAddress;
+  final String reason;
+}
 
 class BarrelAddressSuggestion {
   const BarrelAddressSuggestion({
@@ -19,6 +38,12 @@ class BarrelAddressSuggestion {
     this.formattedAddress,
     this.latitude,
     this.longitude,
+    this.streetLine,
+    this.apartment,
+    this.city,
+    this.state,
+    this.stateCode,
+    this.country,
   });
 
   final String description;
@@ -28,6 +53,15 @@ class BarrelAddressSuggestion {
   final String? formattedAddress;
   final double? latitude;
   final double? longitude;
+  // Named parts from suggestPickupAddresses. Nullable so an app build newer
+  // than the deployed callable degrades to the single line instead of
+  // emptying the form.
+  final String? streetLine;
+  final String? apartment;
+  final String? city;
+  final String? state;
+  final String? stateCode;
+  final String? country;
 
   factory BarrelAddressSuggestion.fromMap(Map<String, dynamic> data) {
     return BarrelAddressSuggestion(
@@ -38,6 +72,42 @@ class BarrelAddressSuggestion {
       formattedAddress: data['formattedAddress'] as String?,
       latitude: (data['latitude'] as num?)?.toDouble(),
       longitude: (data['longitude'] as num?)?.toDouble(),
+      streetLine: data['streetLine'] as String?,
+      apartment: data['apartment'] as String?,
+      city: data['city'] as String?,
+      state: data['state'] as String?,
+      stateCode: data['stateCode'] as String?,
+      country: data['country'] as String?,
+    );
+  }
+
+  /// Populates the form's separate fields from this suggestion.
+  ///
+  /// An apartment the customer already typed in [current] wins: Google
+  /// autocompletes buildings, not units, so its subpremise is nearly always
+  /// empty and letting it win would silently erase the unit number — the
+  /// exact bug this replaces.
+  StructuredAddress toStructuredAddress({
+    StructuredAddress current = StructuredAddress.empty,
+  }) {
+    String part(String? value) => StructuredAddress.cleanPart(value);
+    return StructuredAddress(
+      // An older callable sends only the line; it becomes the street field so
+      // the customer can break it apart by hand rather than facing a blank
+      // form.
+      streetLine: part(streetLine).isNotEmpty
+          ? part(streetLine)
+          : (part(formattedAddress).isNotEmpty
+                ? part(formattedAddress)
+                : part(description)),
+      apartment: part(current.apartment).isNotEmpty
+          ? current.apartment
+          : part(apartment),
+      city: part(city).isNotEmpty ? part(city) : part(borough),
+      // The abbreviation is what belongs on an envelope and in the state box.
+      state: part(stateCode).isNotEmpty ? part(stateCode) : part(state),
+      postalCode: part(postalCode),
+      country: part(country),
     );
   }
 }
@@ -74,6 +144,49 @@ class BarrelShipmentService {
         )
         .where((item) => item.description.isNotEmpty)
         .toList();
+  }
+
+  /// Asks the server what this business charges to pick up from an address.
+  /// Pickup belongs to the business: the geocoded address decides the fee,
+  /// and a business without a configured plan is a refusal, not a default.
+  Future<BarrelPickupQuote> quoteBarrelPickup({
+    required String businessId,
+    required String pickupAddress,
+  }) async {
+    final response = await _functions.httpsCallable('quoteBarrelPickup').call({
+      'businessId': businessId,
+      'pickupAddress': pickupAddress.trim(),
+    });
+    final data = Map<String, dynamic>.from(response.data as Map);
+    if (data['available'] != true) {
+      return BarrelPickupQuote(
+        available: false,
+        reason: data['reason']?.toString() ?? '',
+      );
+    }
+    return BarrelPickupQuote(
+      available: true,
+      fee: (data['fee'] as num?)?.toDouble() ?? 0,
+      borough: data['borough']?.toString() ?? '',
+      normalizedAddress: data['normalizedAddress']?.toString() ?? '',
+    );
+  }
+
+  /// Cancels a PAID shipping order. The server decides the money outcome:
+  /// a still-held payment is released for free; a captured one is refunded
+  /// minus the card fee, exactly as disclosed at checkout.
+  Future<Map<String, dynamic>> cancelSecuredOrder({
+    required String orderType,
+    required String recordId,
+  }) async {
+    await _refreshAuthTokenIfAvailable();
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('cancelSecuredCustomerOrder')
+        .call<Map<String, dynamic>>({
+      'orderType': orderType,
+      'recordId': recordId,
+    });
+    return Map<String, dynamic>.from(result.data);
   }
 
   Future<BarrelShipment> payForShipment({
@@ -426,7 +539,7 @@ class BarrelDestinationChangeResult {
     required this.trackingCode,
     required this.difference,
     required this.amountDue,
-    required this.walletCredit,
+    required this.cardRefund,
     required this.simulatedPayment,
     required this.requiresPayment,
     required this.changeRequestId,
@@ -439,7 +552,11 @@ class BarrelDestinationChangeResult {
   final String trackingCode;
   final double difference;
   final double amountDue;
-  final double walletCredit;
+
+  /// Money returned to the card the shipment was paid on when a destination
+  /// change makes it cheaper. This used to arrive as `walletCredit`; wallets
+  /// are retired, so the difference goes back the way it came.
+  final double cardRefund;
   final bool simulatedPayment;
   final bool requiresPayment;
   final String changeRequestId;
@@ -457,7 +574,7 @@ class BarrelDestinationChangeResult {
       trackingCode: (data['trackingCode'] ?? '') as String,
       difference: (data['difference'] as num?)?.toDouble() ?? 0,
       amountDue: (data['amountDue'] as num?)?.toDouble() ?? 0,
-      walletCredit: (data['walletCredit'] as num?)?.toDouble() ?? 0,
+      cardRefund: (data['cardRefund'] as num?)?.toDouble() ?? 0,
       simulatedPayment: data['simulatedPayment'] == true,
       requiresPayment: data['requiresPayment'] == true,
       changeRequestId: (data['changeRequestId'] as String?) ?? '',

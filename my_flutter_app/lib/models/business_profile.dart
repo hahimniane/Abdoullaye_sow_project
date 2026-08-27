@@ -58,6 +58,7 @@ class BusinessProfile {
     this.freightPickupOriginLat,
     this.freightPickupOriginLng,
     this.freightPickupBoroughPrices = const {},
+    this.pickupPlan,
   });
 
   static const defaultBusinessId = 'keren_auto_sales';
@@ -119,6 +120,10 @@ class BusinessProfile {
   final double? freightPickupOriginLat;
   final double? freightPickupOriginLng;
   final Map<String, double> freightPickupBoroughPrices;
+
+  /// Business-owned pickup plan shared across services (docs/PLAN-business-
+  /// pickup.md). Kept as raw data: the server owns validation and pricing.
+  final Map<String, dynamic>? pickupPlan;
 
   bool get isApproved => status == 'approved';
 
@@ -210,6 +215,9 @@ class BusinessProfile {
       freightPickupBoroughPrices: _parseBoroughPrices(
         data['freightPickupBoroughPrices'],
       ),
+      pickupPlan: data['pickupPlan'] is Map
+          ? Map<String, dynamic>.from(data['pickupPlan'] as Map)
+          : null,
     );
   }
 

@@ -54,8 +54,43 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Freight · customer pickup": "Fret · collecte chez le client",
   "Offer collection from a customer address and calculate the fee consistently.":
     "Proposez la collecte à l’adresse du client et calculez les frais de manière cohérente.",
-  "Pickup on": "Collecte activée",
-  "Pickup off": "Collecte désactivée",
+  "Home pickup · all services": "Collecte à domicile · tous les services",
+  "Collecting items from the customer’s address instead of them bringing it to you. Each service either follows your shared plan or sets its own.":
+    "Enlever les articles à l’adresse du client au lieu qu’il vous les apporte. Chaque service suit votre plan partagé ou définit le sien.",
+  "Use one shared plan": "Utiliser un plan partagé",
+  "Services set to “follow the shared plan” below are priced by these settings.":
+    "Les services réglés sur « suivre le plan partagé » ci-dessous sont tarifés selon ces réglages.",
+  "Each service, one at a time": "Chaque service, un par un",
+  "Taking pickups:": "Collectes assurées :",
+  "No service is taking pickups.": "Aucun service n’assure de collecte.",
+  "Customers bring everything to you.":
+    "Les clients vous apportent tout sur place.",
+  "Customers bring these to you:": "Les clients vous apportent ceux-ci :",
+  "Follow the shared plan": "Suivre le plan partagé",
+  "Set its own pickup fees": "Définir ses propres frais de collecte",
+  "No pickup for this service": "Pas de collecte pour ce service",
+  "No pickup: the shared plan above is off. Turn it on, or give this service its own fees.":
+    "Pas de collecte : le plan partagé ci-dessus est désactivé. Activez-le ou donnez à ce service ses propres frais.",
+  "Takes pickups on these fees, whether or not the shared plan is on.":
+    "Assure les collectes à ces frais, que le plan partagé soit activé ou non.",
+  "Use shared plan": "Utiliser le plan partagé",
+  "Custom settings": "Réglages personnalisés",
+  "No pickup": "Pas de collecte",
+  "By borough (NYC)": "Par arrondissement (NYC)",
+  "Maximum pickup distance (miles) — required":
+    "Distance maximale de collecte (miles) — obligatoire",
+  "e.g. 25": "p. ex. 25",
+  "e.g. MSKU1234567": "ex. MSKU1234567",
+  "One price for any pickup within your maximum distance. Addresses beyond it are refused, never surcharged.":
+    "Un prix unique pour toute collecte dans votre distance maximale. Les adresses au-delà sont refusées, jamais surfacturées.",
+  "Flat pickup fee (USD)": "Frais fixes de collecte (USD)",
+  "Fee = base fee + per-mile rate × driving distance, never below your minimum. Addresses beyond your maximum distance are refused.":
+    "Frais = frais de base + tarif au mile × distance routière, jamais en dessous de votre minimum. Les adresses au-delà de votre distance maximale sont refusées.",
+  "Where your pickups start from": "Point de départ de vos collectes",
+  "Per mile (USD)": "Par mile (USD)",
+  "One flat fee per borough you serve. Leave a borough blank to not serve it — the customer's address decides which fee applies.":
+    "Un tarif fixe par arrondissement desservi. Laissez un arrondissement vide pour ne pas le desservir — l’adresse du client détermine le tarif appliqué.",
+  "Not served": "Non desservi",
   "Set one flat pickup fee for every borough you serve.":
     "Définissez un tarif de collecte fixe pour chaque arrondissement desservi.",
   "Fee = base fee + per-kilometre rate × driving distance. Zero rates mean free pickup.":
@@ -247,6 +282,18 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Ajoutez chaque destination, entreprise, destinataire et quantité de barils à une seule commande.",
   "Add to order": "Ajouter à la commande",
   "Address suggestions": "Suggestions d’adresses",
+  // Split customer address fields (docs/PLAN-2026-08-backlog.md item 1).
+  "Street address": "Adresse (rue)",
+  "Pickup street address": "Adresse de collecte (rue)",
+  "Exact pickup street address (optional)":
+    "Adresse exacte de collecte (facultatif)",
+  "Apartment, suite, or unit (optional)":
+    "Appartement, bureau ou unité (facultatif)",
+  "Apartment numbers are rarely in the suggestion — add yours here.":
+    "Les numéros d’appartement figurent rarement dans la suggestion — ajoutez le vôtre ici.",
+  "ZIP or postal code": "Code postal",
+  "Select a state": "Sélectionnez un État",
+  "Select a country": "Sélectionnez un pays",
   "locations available — choose one":
     "lieux disponibles — choisissez-en un",
   "Address suggestions are unavailable. Enter the complete address to continue.":
@@ -301,7 +348,6 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Aucune adresse correspondante. Continuez à saisir ou entrez l’adresse complète.",
   "Total barrels": "Nombre total de barils",
   "Total pending": "Total en attente",
-  "Use wallet balance": "Utiliser le solde du portefeuille",
   "Available balance will be applied first.":
     "Le solde disponible sera appliqué en premier.",
   "We couldn’t check pickup availability. Check the address and try again.":
@@ -354,6 +400,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Save your parking request": "Enregistrez votre demande de stationnement",
   "Save your shared-barrel request":
     "Enregistrez votre demande de baril partagé",
+  "Saved recipients": "Destinataires enregistrés",
   "Securing your account and restoring the request...":
     "Sécurisation de votre compte et restauration de la demande...",
   "Sign in or create a free account to save this request and continue. Your details will stay here.":
@@ -455,7 +502,6 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Request pickup": "Demander la collecte",
   "Choose an address and appointment time.":
     "Choisissez une adresse et une heure de rendez-vous.",
-  "Use my available wallet balance": "Utiliser le solde disponible du portefeuille",
   "Any remaining amount continues to secure payment.":
     "Tout montant restant sera réglé par paiement sécurisé.",
   "Continue to secure payment": "Continuer vers le paiement sécurisé",
@@ -627,6 +673,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Comparez l’offre complète avant de choisir une entreprise.",
   "Quote request": "Demande de devis",
   "Choose quote request": "Choisir une demande de devis",
+  "Time to offer": "Horaire à proposer",
   "Pickup area not provided": "Zone de collecte non indiquée",
   "Destination not provided": "Destination non indiquée",
   "quote received": "devis reçu",
@@ -773,7 +820,23 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "No accepted jobs match this search.":
     "Aucun transport accepté ne correspond à cette recherche.",
   "Accepted quote": "Devis accepté",
+  "Container on file": "Conteneur enregistré",
   "Update job status": "Mettre à jour le statut du transport",
+  // The console offers only the moves the transition table allows, so these
+  // sentences describe why nothing is on offer rather than reporting a
+  // refusal after the fact.
+  "This job is on a status the transport workflow did not set, so no transport action applies here.":
+    "Cette mission est à un statut qui ne vient pas du transport : aucune action de transport ne s’applique ici.",
+  "This job is finished. There is nothing left to move.":
+    "Cette mission est terminée. Il n’y a plus rien à faire avancer.",
+  "That is not a status a transport job can be moved to.":
+    "Ce n’est pas un statut vers lequel un transport peut être déplacé.",
+  "A transport job cannot move between those two statuses.":
+    "Un transport ne peut pas passer de l’un à l’autre de ces deux statuts.",
+  "Add the container number before marking this transport in transit.":
+    "Ajoutez le numéro de conteneur avant de mettre ce transport en transit.",
+  "This job was already on that status.":
+    "Cette mission était déjà à ce statut.",
   "Structured quote": "Devis structuré",
   "Revise transport quote": "Réviser le devis de transport",
   "Send transport quote": "Envoyer un devis de transport",
@@ -797,7 +860,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Le devis n’a pas pu être envoyé. Vérifiez les informations et réessayez.",
   "The transport status could not be updated. Try again.":
     "Le statut du transport n’a pas pu être mis à jour. Réessayez.",
-  "Return wallet balance": "Rembourser le solde du portefeuille",
   "Return to card": "Retour vers la carte",
   "Move your available balance back to your payment card.":
     "Renvoyez votre solde disponible vers votre carte de paiement.",
@@ -813,7 +875,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   " to the original card?": " vers la carte d’origine ?",
   "Requesting return...": "Demande de retour...",
   "Confirm card return": "Confirmer le retour vers la carte",
-  "Keep in wallet": "Conserver dans le portefeuille",
   "Copy tracking number": "Copier le numéro de suivi",
   "Tracking number copied": "Numéro de suivi copié",
   "Open carrier tracking": "Ouvrir le suivi du transporteur",
@@ -1107,7 +1168,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Listings from approved businesses": "Annonces d’entreprises approuvées",
   "Orders & tracking": "Commandes et suivi",
   "Shipping and vehicle services": "Expédition et services automobiles",
-  "Wallet": "Portefeuille",
   "Balance and transactions": "Solde et transactions",
   "Profile": "Profil",
   "Account and security": "Compte et sécurité",
@@ -1117,10 +1177,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "View orders": "Voir les commandes",
   "Open orders": "Commandes en cours",
   "All activity": "Toute l’activité",
-  "Account access": "Accès au compte",
-  "Web + mobile": "Web + mobile",
-  "New service requests and web payments are being added service by service. Your existing orders, purchases, tracking, wallet, and account remain shared with the mobile app.":
-    "Les nouvelles demandes de service et les paiements web sont ajoutés service par service. Vos commandes, achats, suivis, portefeuille et compte existants restent partagés avec l’application mobile.",
   "Loading car listings...": "Chargement des annonces de voitures...",
   "Car listings could not be loaded.": "Les annonces de voitures n’ont pas pu être chargées.",
   "No active car listings are available right now.":
@@ -1129,10 +1185,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Loading your activity...": "Chargement de votre activité...",
   "You do not have any activity here yet.": "Vous n’avez encore aucune activité ici.",
   "Freight shipment": "Expédition de fret",
-  "Wallet activity": "Activité du portefeuille",
-  "Loading wallet...": "Chargement du portefeuille...",
-  "Wallet could not be loaded.": "Le portefeuille n’a pas pu être chargé.",
-  "No wallet transactions yet.": "Aucune transaction de portefeuille pour le moment.",
   "Available balance": "Solde disponible",
   "Transactions": "Transactions",
   "Account": "Compte",
@@ -1320,8 +1372,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Mark this paid hold as sold?":
     "Marquer cette réservation payée comme vendue ?",
   "Mark this purchase as completed?": "Marquer cet achat comme terminé ?",
-  "Mark this refund request completed?":
-    "Marquer cette demande de remboursement comme terminée ?",
   "Mark this shared barrel balance as collected?":
     "Marquer ce solde de baril partagé comme encaissé ?",
   "Mark sold": "Marquer vendu",
@@ -1597,7 +1647,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Shared barrel pools": "Barils partagés",
   "Shared pools need one active priced destination before you can start one.":
     "Les barils partagés nécessitent une destination active avec tarif avant de pouvoir commencer.",
-  "Shared barrel refund": "Remboursement de baril partagé",
   "Shared barrel refund due": "Remboursement de baril partagé à traiter",
   "Shared barrel balance": "Solde de baril partagé",
   "Shared barrel balance collected": "Solde de baril partagé encaissé",
@@ -1937,6 +1986,18 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Des modifications ont été demandées pour cette entreprise. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
   "This business is currently pending. Complete Stripe setup and any requested profile details while it waits for platform approval.":
     "Cette entreprise est en attente. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
+  "This business is currently changes requested. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.":
+    "Des modifications ont été demandées pour cette entreprise. La configuration Stripe est terminée. Ouvrez Entreprise pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
+  "This business is currently pending. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.":
+    "Cette entreprise est en attente. La configuration Stripe est terminée. Ouvrez Entreprise pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
+  "This business is currently rejected. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.":
+    "Cette entreprise a été refusée. La configuration Stripe est terminée. Ouvrez Entreprise pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
+  "This business is currently changes requested. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.":
+    "Des modifications ont été demandées pour cette entreprise. La configuration Stripe et vos documents sont enregistrés : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
+  "This business is currently pending. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.":
+    "Cette entreprise est en attente. La configuration Stripe et vos documents sont enregistrés : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
+  "This business is currently rejected. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.":
+    "Cette entreprise a été refusée. La configuration Stripe et vos documents sont enregistrés : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
   "This business is currently rejected. Complete Stripe setup and any requested profile details while it waits for platform approval.":
     "Cette entreprise a été refusée. Consultez les informations demandées et contactez l’assistance Laawol si vous avez besoin d’aide.",
   "Upgrade to Pro to unlock the advisor.":
@@ -1975,10 +2036,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Car purchase": "Achat de voiture",
   "Car purchase status emails": "Emails de statut d’achat de voiture",
   "Car purchases": "Achats de voitures",
-  "Card return": "Retour de carte",
-  "Card return request": "Demande de retour de carte",
-  "Card return requests": "Demandes de retour de carte",
-  "Card returns": "Retours de carte",
   "Cars you list appear in the marketplace once approved.":
     "Les voitures que vous publiez apparaissent dans la marketplace après approbation.",
   "Cars, parking, transport, and shipping support for customers moving between the U.S. and West Africa.":
@@ -2003,8 +2060,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Code: "Code",
   "Collection note (optional)": "Note d’encaissement (facultatif)",
   Complete: "Terminé",
-  "Completing refund request...":
-    "Finalisation de la demande de remboursement...",
   Condition: "État",
   "Configure how the console works. Create roles, decide what each one can see and do, and limit them to specific services.":
     "Configurez le fonctionnement de la console. Créez des rôles, décidez ce que chacun peut voir et faire, puis limitez-les à des services précis.",
@@ -2031,7 +2086,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Customer email": "Email du client",
   "Customer name": "Nom du client",
   "Customer phone": "Téléphone du client",
-  "Customer wallet balance": "Solde du portefeuille client",
   Customers: "Clients",
   "Customers and help": "Clients et aide",
   Reviews: "Avis",
@@ -2192,8 +2246,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Marked no-show.": "Marqué absent.",
   "Message sent": "Message envoyé",
   Mileage: "Kilométrage",
-  "Monitor wallet balance return requests and finance readiness.":
-    "Surveillez les demandes de retour de solde portefeuille et la préparation finance.",
   "Needs your attention": "Requiert votre attention",
   Network: "Réseau",
   "Network health": "Santé du réseau",
@@ -2217,10 +2269,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Aucune entreprise ne correspond à cette recherche.",
   "No car listings are currently loaded.":
     "Aucune annonce de voiture n’est actuellement chargée.",
-  "No card return requests for this business.":
-    "Aucune demande de retour de carte pour cette entreprise.",
-  "No refund requests for this business.":
-    "Aucune demande de remboursement pour cette entreprise.",
   "No contact-only references match this search.":
     "Aucune référence contact uniquement ne correspond à cette recherche.",
   "No customer accounts match this search.":
@@ -2242,8 +2290,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Aucune annonce de cette entreprise ne correspond aux filtres actuels.",
   "No listings match the current marketplace filters.":
     "Aucune annonce ne correspond aux filtres marketplace actuels.",
-  "No open approvals, shipments, purchases, or refunds are currently loaded.":
-    "Aucune approbation, expédition, achat ou remboursement ouvert n’est actuellement chargé.",
+  "No open approvals, shipments, or purchases are currently loaded.":
+    "Aucune approbation, expédition ou achat ouvert n’est actuellement chargé.",
   "No owner assigned": "Aucun propriétaire affecté",
   "No phone": "Aucun téléphone",
   "No photo": "Aucune photo",
@@ -2262,9 +2310,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Aucun dossier de service n’est actuellement chargé.",
   "No show": "Absent",
   "No staff assigned.": "Aucun membre du personnel affecté.",
-  "No wallet account loaded": "Aucun compte portefeuille chargé",
-  "No wallet card return requests are loaded.":
-    "Aucune demande de retour de carte portefeuille n’est chargée.",
   "No-show": "Absence",
   None: "Aucun",
   "Not confirmed": "Non confirmé",
@@ -2393,13 +2438,10 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Payments: "Paiements",
   "Pending amount": "Montant en attente",
   "Pending document review": "Vérification des documents en attente",
-  "Pending in wallets": "En attente dans les portefeuilles",
   "Pending payment": "Paiement en attente",
   "Pending purchases": "Achats en attente",
   "Pending refund amount": "Montant de remboursement en attente",
   "Pending refunds": "Remboursements en attente",
-  "Pending return": "Retour en attente",
-  "Wallet available": "Portefeuille disponible",
   "awaiting payout": "en attente de versement",
   "card return": "retour de carte",
   "Pending seal": "En attente de scellement",
@@ -2455,20 +2497,11 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Refresh: "Actualiser",
   "Refresh Auth": "Actualiser Auth",
   "Refund decision emails": "Emails de décision de remboursement",
-  "Refund queue": "File de remboursements",
-  "Refund request": "Demande de remboursement",
-  "Refund request completed": "Demande de remboursement terminée",
-  "Refund request rejected": "Demande de remboursement rejetée",
-  "Refund requests": "Demandes de remboursement",
   "Refund pending": "Remboursement en attente",
   Refunded: "Remboursé",
-  Refunds: "Remboursements",
-  "Refunds to pay": "Remboursements à payer",
-  "Rejecting refund request...": "Rejet de la demande de remboursement...",
   "Related:": "Associé :",
   "Remove to customer": "Retourner au client",
   "Reply to support requests": "Répondre aux demandes d’assistance",
-  "Request amount": "Montant demandé",
   Requested: "Demandé",
   "All pool statuses": "Tous les statuts de baril partagé",
   "Add an active barrel destination with a price before starting a shared pool.":
@@ -2621,15 +2654,10 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Require business address": "Exiger l’adresse de l’entreprise",
   "Require business documents": "Exiger les documents de l’entreprise",
   "Require phone number": "Exiger le numéro de téléphone",
-  "Resolve refund": "Résoudre le remboursement",
-  "Return this pending amount to the customer's wallet?":
-    "Retourner ce montant en attente dans le portefeuille du client ?",
   "Review business": "Examiner l’entreprise",
   "Review each business first, then inspect and control the listings that business published.":
     "Examinez d’abord chaque entreprise, puis inspectez et contrôlez les annonces qu’elle a publiées.",
   "Review note": "Note d’examen",
-  "Review the customer account and wallet balance before action. Complete after the external card return is done. Reject moves the pending amount back to the customer's wallet.":
-    "Examinez le compte client et le solde du portefeuille avant d’agir. Terminez après le retour externe de la carte. Le rejet remet le montant en attente dans le portefeuille du client.",
   Reviewed: "Examiné",
   "Role name": "Nom du rôle",
   Roles: "Rôles",
@@ -2814,9 +2842,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Viewing: "Visite",
   "Viewing scheduled": "Visite planifiée",
   Viewings: "Visites",
-  "Wallet balance": "Solde portefeuille",
-  "Wallet card return requests": "Demandes de retour de carte portefeuille",
-  "Wallet transaction": "Transaction portefeuille",
   "Website contact saved": "Contact du site enregistré",
   "Website content saved": "Contenu du site enregistré",
   "What needs you now": "Ce qui vous attend maintenant",
@@ -3060,7 +3085,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Réservez l’espace disponible et envoyez votre acompte en toute sécurité.",
   "Your shares": "Vos parts",
   "Shares requested": "Parts demandées",
-  "Use wallet first, then card": "Utiliser d’abord le portefeuille, puis la carte",
   "Secure card payment": "Paiement sécurisé par carte",
   "All content and shared-liability acknowledgements confirmed":
     "Tous les engagements relatifs au contenu et à la responsabilité partagée sont confirmés",
@@ -3072,8 +3096,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Describe what will be placed in your share":
     "Décrivez ce qui sera placé dans votre part",
   "Shares you keep": "Parts que vous conservez",
-  "Use my available wallet balance first":
-    "Utiliser d’abord le solde disponible de mon portefeuille",
   "Required acknowledgements": "Engagements obligatoires",
   "My contents description is complete and accurate.":
     "Ma description du contenu est complète et exacte.",
@@ -3269,6 +3291,29 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Une invitation est déjà en attente pour cette personne. Renvoyez-la ou annulez-la au lieu d’en envoyer une nouvelle.",
   "The invitation could not be sent. Try again.":
     "L’invitation n’a pas pu être envoyée. Réessayez.",
+  "Invitations sent — waiting for the person to set a password":
+    "Invitations envoyées — en attente de la création du mot de passe",
+  "Team members": "Membres de l’équipe",
+  "Awaiting reply": "En attente de réponse",
+  // "Expired" is already carried above for listing badges; a second entry
+  // here would break the dictionary's no-duplicate-keys rule.
+  "Invitation expired": "Invitation expirée",
+  "The link no longer works. Resend it to issue a new one.":
+    "Le lien ne fonctionne plus. Renvoyez-le pour en générer un nouveau.",
+  "Link expires": "Le lien expire le",
+  "Link expired — resend to renew":
+    "Lien expiré — renvoyez-le pour le renouveler",
+  "No expiry recorded": "Aucune expiration enregistrée",
+  "Send date not reported": "Date d’envoi non indiquée",
+  "Invited to manage": "Invité à gérer",
+  "No sections selected": "Aucune section sélectionnée",
+  "Pending invitations could not be loaded.":
+    "Les invitations en attente n’ont pas pu être chargées.",
+  "Sent with the plain Firebase template — connect an email sender for the branded invitation.":
+    "Envoyée avec le modèle Firebase brut — connectez un expéditeur de courriel pour l’invitation personnalisée.",
+  "The invitation email could not be delivered. Resend it.":
+    "Le courriel d’invitation n’a pas pu être remis. Renvoyez-le.",
+  "Invitation cancelled": "Invitation annulée",
   "Loading more...": "Chargement en cours…",
   "Load more people": "Afficher plus de personnes",
   "More people could not be loaded. Try again.":
@@ -3297,7 +3342,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Shipment updates": "Mises à jour des expéditions",
   "Barrel and freight shipment status":
     "État des expéditions de barils et de fret",
-  "Wallet updates": "Mises à jour du portefeuille",
   "Refund and balance changes": "Remboursements et changements de solde",
   "Business updates": "Mises à jour de l’entreprise",
   "Application, verification, and account status":
@@ -3343,14 +3387,697 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Could not start tracking.": "Impossible de démarrer le suivi.",
 };
 
+// Pickup-plan validation errors are "<section label>: <message>" strings, so
+// the exact-match table needs every combination.
+// Business-entered parking (docs/PLAN-2026-08-backlog.md item 5). Proper
+// nouns that are written the same in both languages - Zelle, Venmo, Cash App -
+// are deliberately absent: an identity entry translates to itself and would
+// break the convergence guarantee this file's test enforces.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Record a parked car": "Enregistrer une voiture stationnée",
+  "Record the car": "Enregistrer la voiture",
+  "Parked car recorded": "Voiture stationnée enregistrée",
+  "Recording...": "Enregistrement en cours...",
+  "Amount due": "Montant dû",
+  "Amount recorded": "Montant enregistré",
+  "Payment status": "Statut du paiement",
+  "Payment link": "Lien de paiement",
+  "Copy payment link": "Copier le lien de paiement",
+  "Link copied": "Lien copié",
+  "Received via": "Reçu par",
+  "Mark payment received": "Marquer le paiement comme reçu",
+  "Payment recorded.": "Paiement enregistré.",
+  "This parking was already marked paid.":
+    "Ce stationnement était déjà marqué comme payé.",
+  "The payment could not be recorded.":
+    "Le paiement n’a pas pu être enregistré.",
+  "The car could not be recorded.": "La voiture n’a pas pu être enregistrée.",
+  "The payment link could not be copied. Select and copy it manually.":
+    "Le lien de paiement n’a pas pu être copié. Sélectionnez-le et copiez-le manuellement.",
+  "Done": "Terminé",
+  "Customer email (optional)": "Email du client (facultatif)",
+  "VIN (optional)": "VIN (facultatif)",
+  "Select a make": "Sélectionnez une marque",
+  "Select a model": "Sélectionnez un modèle",
+  "Select a year": "Sélectionnez une année",
+  "How does this parking get paid?":
+    "Comment ce stationnement est-il payé ?",
+  "Customer pays us directly (Zelle/cash)":
+    "Le client nous paie directement (Zelle/espèces)",
+  "Send the customer a payment link":
+    "Envoyer un lien de paiement au client",
+  "We record what the customer owes you and take no cut. You mark it received when the money arrives.":
+    "Nous enregistrons ce que le client vous doit et ne prenons aucune commission. Vous le marquez comme reçu à l’arrivée de l’argent.",
+  "We bill the customer for you and send you the rest.":
+    "Nous facturons le client pour vous et vous versons le reste.",
+  "Send this link to the customer so they can pay. It stays valid until they use it.":
+    "Envoyez ce lien au client pour qu’il puisse payer. Il reste valide jusqu’à son utilisation.",
+  "The customer pays your business directly. We record the amount and never bill it. Use Mark payment received once the money arrives.":
+    "Le client paie votre entreprise directement. Nous enregistrons le montant sans jamais le facturer. Utilisez Marquer le paiement comme reçu à l’arrivée de l’argent.",
+  "Awaiting payment to the business": "En attente du paiement à l’entreprise",
+  "Paid to the business": "Payé à l’entreprise",
+  "Payment link sent": "Lien de paiement envoyé",
+  "Payment link paid": "Lien de paiement payé",
+  "Nothing to collect": "Rien à encaisser",
+  "Zelle transfer": "Virement Zelle",
+  "Cash payment": "Paiement en espèces",
+  "Paper check": "Chèque papier",
+  "Card in person": "Carte en personne",
+  "Another method": "Une autre méthode",
+  "Choose a business before recording a car.":
+    "Choisissez une entreprise avant d’enregistrer une voiture.",
+  "Enter the customer's name.": "Saisissez le nom du client.",
+  "Enter the customer's phone number.":
+    "Saisissez le numéro de téléphone du client.",
+  "Enter a valid email address.": "Saisissez une adresse email valide.",
+  "A payment link needs a phone number or an email address.":
+    "Un lien de paiement nécessite un numéro de téléphone ou une adresse email.",
+  "Choose how this parking gets paid.":
+    "Choisissez comment ce stationnement est payé.",
+  "Select the car make.": "Sélectionnez la marque de la voiture.",
+  "Select the car model.": "Sélectionnez le modèle de la voiture.",
+  "Select the car year.": "Sélectionnez l’année de la voiture.",
+  "Select a valid car year.":
+    "Sélectionnez une année de voiture valide.",
+  "Choose the day the car arrives.":
+    "Choisissez le jour d’arrivée de la voiture.",
+  "Choose the day the car leaves.":
+    "Choisissez le jour de départ de la voiture.",
+  "The end date cannot be before the start date.":
+    "La date de fin ne peut pas précéder la date de début.",
+});
+
+// Business assistant chat panel (assistant-panel.tsx). "Assistant" is spelled
+// the same in both languages, so it is deliberately absent - an identity entry
+// would break the convergence guarantee this file's test enforces.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Chat help for daily operations":
+    "Aide par chat pour les opérations quotidiennes",
+  Declined: "Refusé",
+  "What the assistant can do": "Ce que l’assistant peut faire",
+  "Check which cars are parked and their payment status.":
+    "Vérifiez quelles voitures sont stationnées et le statut de leur paiement.",
+  "Record a walk-up parking entry for a customer.":
+    "Enregistrez un stationnement sans réservation pour un client.",
+  "Mark a parking as paid or re-check a payment link.":
+    "Marquez un stationnement comme payé ou revérifiez un lien de paiement.",
+  "Add tracking updates to a shipment.":
+    "Ajoutez des mises à jour de suivi à une expédition.",
+  "Every change is shown here for your confirmation before it runs.":
+    "Chaque modification est affichée ici pour votre confirmation avant d’être exécutée.",
+  "The assistant is typing...": "L’assistant écrit...",
+  "Ends": "Se termine le",
+  "Cancel payment link": "Annuler le lien de paiement",
+  "Payment link cancelled.": "Lien de paiement annulé.",
+  "This payment link was already cancelled.": "Ce lien de paiement était déjà annulé.",
+  "The payment link could not be cancelled.": "Le lien de paiement n’a pas pu être annulé.",
+  "Paid records cannot be edited": "Les enregistrements payés ne peuvent pas être modifiés",
+  // Server-returned assistant errors reach the bubble verbatim, so they need
+  // entries here too or a French user reads an English failure.
+  "The assistant is not configured yet": "L’assistant n’est pas encore configuré",
+  "The assistant is unavailable": "L’assistant est indisponible",
+  "Paid": "Payé",
+  "Not paid": "Non payé",
+  "This link was already used to pay. Nothing further is owed.":
+    "Ce lien a déjà servi au paiement. Plus rien n’est dû.",
+  "The assistant could not reply. Try again.":
+    "L’assistant n’a pas pu répondre. Réessayez.",
+  "The assistant is unavailable in preview mode.":
+    "L’assistant est indisponible en mode aperçu.",
+  // Floating assistant bubble (assistant-widget.tsx). Its header title is the
+  // bare word "Assistant", which is identical in French, so it stays out of
+  // this dictionary; the subtitle reuses "Chat help for daily operations"
+  // above rather than adding a second wording for the same idea.
+  "Open the assistant": "Ouvrir l’assistant",
+  "Close the assistant": "Fermer l’assistant",
+  // Parked cars: printable paper, and the one filter that answers both
+  // "where is this car" and "have we been paid". "Paid", "Not paid" and
+  // "Payment" are already above — repeating them here would be a duplicate
+  // key, not a second entry.
+  "Parking status": "Statut du stationnement",
+  "Print receipt": "Imprimer le reçu",
+  "Print invoice": "Imprimer la facture",
+  "Preparing...": "Préparation en cours...",
+  "Open the document": "Ouvrir le document",
+  "The document could not be prepared.":
+    "Le document n’a pas pu être préparé.",
+  "The document is not ready yet. Try again in a moment.":
+    "Le document n’est pas encore prêt. Réessayez dans un instant.",
+  "Your browser blocked the document window. Allow pop-ups for this site, or use the link on the card.":
+    "Votre navigateur a bloqué la fenêtre du document. Autorisez les fenêtres contextuelles pour ce site ou utilisez le lien sur la fiche.",
+  // Full edit of a walk-up parking, and re-sending a link that never landed.
+  // "Start date", "End date", "Payment link", "Customer email", "Customer
+  // phone", "Owner name" and "Save changes" are already in the dictionary
+  // above — repeating them here would be a duplicate key, not a second entry.
+  "Payment method": "Mode de paiement",
+  "Direct payment (Zelle or cash)": "Paiement direct (Zelle ou espèces)",
+  "Resend link": "Renvoyer le lien",
+  "Nobody was contacted: this customer has no email address or phone number on file. Add one, then re-send.":
+    "Personne n'a été contacté : ce client n'a ni adresse e-mail ni numéro de téléphone enregistré. Ajoutez-en un, puis renvoyez le lien.",
+  "Payment link re-sent by email.": "Lien de paiement renvoyé par courriel.",
+  "Payment link re-sent by text.": "Lien de paiement renvoyé par SMS.",
+  "Payment link re-sent by email and text.":
+    "Lien de paiement renvoyé par courriel et par SMS.",
+  "The payment link could not be re-sent.":
+    "Le lien de paiement n’a pas pu être renvoyé.",
+  "The parking record could not be updated.":
+    "Le dossier de stationnement n’a pas pu être mis à jour.",
+  "Open a parking record to edit it.":
+    "Ouvrez un dossier de stationnement pour le modifier.",
+  "This parking has been paid for and can no longer be edited.":
+    "Ce stationnement a été payé et ne peut plus être modifié.",
+  "The amount changed, so a new payment link was issued and the customer was notified of the new amount.":
+    "Le montant a changé : un nouveau lien de paiement a été émis et le client a été informé du nouveau montant.",
+  "The amount is recalculated from your parking rates when you save. If it changes on a payment-link parking, we issue a new link and tell the customer.":
+    "Le montant est recalculé à partir de vos tarifs de stationnement lors de l’enregistrement. S’il change sur un stationnement avec lien de paiement, nous émettons un nouveau lien et prévenons le client.",
+});
+
+// Per-service platform commission overrides in the admin console
+// (src/lib/business-service-fees.ts). The three source labels are the three
+// levels functions/platform_fees.js resolves through, so they have to read as
+// clearly distinct in French too - an admin who confuses them edits the wrong
+// level.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Per-service commission overrides": "Commissions spécifiques par service",
+  "Inherit every service": "Hériter pour tous les services",
+  "A rate set here applies to one service only. Every other service keeps the blanket rate for this business, and services with no rate of their own fall back to the platform default.":
+    "Un taux défini ici s’applique à un seul service. Tous les autres services conservent le taux global de cette entreprise, et les services sans taux propre reviennent à la valeur par défaut de la plateforme.",
+  "Leave a box empty to inherit": "Laissez une case vide pour hériter",
+  "An empty box removes the override; 0% is a real rate that takes nothing.":
+    "Une case vide supprime la dérogation ; 0 % est un taux réel qui ne prélève rien.",
+  "Select a business to review and edit its per-service commissions.":
+    "Sélectionnez une entreprise pour consulter et modifier ses commissions par service.",
+  "No businesses match your search.":
+    "Aucune entreprise ne correspond à votre recherche.",
+  "Business options": "Options d’entreprise",
+  "Search or choose a business": "Rechercher ou choisir une entreprise",
+  "Effective rate": "Taux effectif",
+  "In force": "Niveau appliqué",
+  "Override (%)": "Dérogation (%)",
+  "Service override": "Dérogation par service",
+  "Business rate": "Taux de l’entreprise",
+  "Platform default": "Valeur par défaut de la plateforme",
+  "Inherited from": "Hérité de",
+  Inherit: "Hériter",
+  "commission override percent": "pourcentage de la commission spécifique",
+  "Car deposit": "Acompte de voiture",
+  "Hold extension": "Prolongation de blocage",
+  "Enter a commission of at least 0% and under 100%, or leave it empty to inherit.":
+    "Saisissez une commission d’au moins 0 % et inférieure à 100 %, ou laissez le champ vide pour hériter.",
+  "Service commission saved": "Commission du service enregistrée",
+  "Service commission cleared": "Commission du service supprimée",
+  "Per-service commissions cleared": "Commissions par service supprimées",
+});
+
+// Platform commission summary on the admin Finance page. The page used to show
+// only gross, customer-facing amounts, so the owner could not tell what the
+// platform itself had made; these are the strings that finally say it.
+// "Business", "Service", "Pending", "Records", "Unassigned business" and the
+// five service names are already in the dictionary above — repeating them here
+// would be duplicate keys, not second entries.
+Object.assign(TEXT_TRANSLATIONS, {
+  "What the platform has earned, and anything waiting on a decision.":
+    "Ce que la plateforme a gagné, et ce qui attend une décision.",
+  "Commission & returns": "Commissions et remboursements",
+  "Businesses earning": "Entreprises génératrices",
+  "Show everything again": "Tout réafficher",
+  "Show every business again": "Réafficher toutes les entreprises",
+  "Show every service again": "Réafficher tous les services",
+  "Platform commission": "Commission de la plateforme",
+  "Commission earned": "Commission encaissée",
+  "Commission pending": "Commission en attente",
+  "Gross volume": "Volume brut",
+  "Not commissionable": "Sans commission",
+  "Collected from orders the customer has paid":
+    "Encaissée sur les commandes déjà payées par le client",
+  "Expected once these customers pay":
+    "Attendue une fois que ces clients auront payé",
+  "What customers were charged, not platform income":
+    "Ce qui a été facturé aux clients, et non les revenus de la plateforme",
+  "Direct and Zelle payments the platform never bills":
+    "Paiements directs et Zelle que la plateforme ne facture jamais",
+  "Direct and Zelle payments are recorded so the business has paper, but the platform never bills them and takes no cut, so they are counted here and nowhere else.":
+    "Les paiements directs et Zelle sont enregistrés pour que l’entreprise ait une trace, mais la plateforme ne les facture jamais et ne prend aucune commission : ils sont comptés ici et nulle part ailleurs.",
+  "No commission has been recorded yet. Once a business takes a paid order, what the platform earned appears here.":
+    "Aucune commission n’a encore été enregistrée. Dès qu’une entreprise reçoit une commande payée, ce que la plateforme a gagné apparaît ici.",
+  "Commission over time": "Commission dans le temps",
+  "Commission by business": "Commission par entreprise",
+  "Commission by service": "Commission par service",
+  "Commission share": "Part de la commission",
+  Earned: "Encaissé",
+  // "Per day" is already in the dictionary above.
+  "Per month": "Par mois",
+  "No periods": "Aucune période",
+  "No dated records yet, so there is nothing to chart.":
+    "Aucun dossier daté pour l’instant : il n’y a rien à représenter.",
+  "Show these numbers as a table": "Afficher ces chiffres sous forme de tableau",
+  "Commission earned and pending per period":
+    "Commission encaissée et en attente par période",
+  "No business has produced a commissionable record yet.":
+    "Aucune entreprise n’a encore produit de dossier donnant lieu à commission.",
+  "No service has produced a commissionable record yet.":
+    "Aucun service n’a encore produit de dossier donnant lieu à commission.",
+  // Prefixed at runtime by a record count, so only the fixed tail is a key.
+  "records carry no usable date, so they are in the totals above but not in this chart.":
+    "dossiers ne portent aucune date exploitable : ils figurent dans les totaux ci-dessus mais pas dans ce graphique.",
+});
+
+// Car-viewing negotiation (functions/car_viewing.js + the two consoles). Both
+// halves are here: the strings the consoles render themselves, and the
+// sentences `actOnCarViewing` throws — those come back from the server already
+// written for the reader and are shown verbatim, so they need French too or a
+// French user gets an English refusal. "Viewing scheduled" and "Cancelled" are
+// already in the dictionary above; repeating them would be duplicate keys.
+Object.assign(TEXT_TRANSLATIONS, {
+  // Statuses and who owes the reply.
+  "Viewing requested": "Visite demandée",
+  "Other times offered": "Autres horaires proposés",
+  "Viewing declined": "Visite refusée",
+  "Viewing request expired": "Demande de visite expirée",
+  "Viewing appointment": "Rendez-vous de visite",
+  "Viewing status": "Statut de la visite",
+  "Agreed time": "Horaire convenu",
+  "Waiting on": "En attente de",
+  "Waiting on the seller": "En attente du vendeur",
+  "Waiting on the buyer": "En attente de l’acheteur",
+  "Your reply is needed": "Votre réponse est attendue",
+  "Reply by": "Répondre avant le",
+  // The times on the table, and the boxes for offering others.
+  "Pick a time to accept": "Choisissez un horaire à accepter",
+  "Times on the table": "Horaires proposés",
+  "Too soon": "Trop proche",
+  "Add another time": "Ajouter un autre horaire",
+  "Time you would like": "Horaire souhaité",
+  "Send these times": "Envoyer ces horaires",
+  "Send this time": "Envoyer cet horaire",
+  "Discard these times": "Abandonner ces horaires",
+  "Discard this time": "Abandonner cet horaire",
+  // Actions.
+  "Accept this time": "Accepter cet horaire",
+  "Offer other times": "Proposer d’autres horaires",
+  "Offer a different time": "Proposer un autre horaire",
+  "Propose a new time": "Proposer un nouvel horaire",
+  Decline: "Refuser",
+  "Viewing done": "Visite effectuée",
+  "Cancel viewing": "Annuler la visite",
+  "Negotiation history": "Historique des échanges",
+  // The audit trail. Buyer and seller rather than you and them, because both
+  // consoles read the same lines.
+  "Buyer proposed a time": "L’acheteur a proposé un horaire",
+  "Buyer accepted a time": "L’acheteur a accepté un horaire",
+  "Buyer cancelled the viewing": "L’acheteur a annulé la visite",
+  "Seller offered other times": "Le vendeur a proposé d’autres horaires",
+  "Seller accepted a time": "Le vendeur a accepté un horaire",
+  "Seller declined the request": "Le vendeur a refusé la demande",
+  "Seller cancelled the viewing": "Le vendeur a annulé la visite",
+  "Viewing updated": "Visite mise à jour",
+  // What the consoles say after an action.
+  "Viewing confirmed.": "Visite confirmée.",
+  "Viewing cancelled.": "Visite annulée.",
+  "Viewing declined.": "Visite refusée.",
+  "Viewing marked completed.": "Visite marquée comme terminée.",
+  "Times sent to the buyer.": "Horaires envoyés à l’acheteur.",
+  "Your time was sent to the seller.": "Votre horaire a été envoyé au vendeur.",
+  "The viewing could not be updated. Try again.":
+    "La visite n’a pas pu être mise à jour. Réessayez.",
+  // Why fewer actions than usual are on offer.
+  "This viewing is closed. Nothing more can be arranged on it.":
+    "Cette visite est close. Plus rien ne peut y être organisé.",
+  "Nobody answered in time, so this proposal can no longer be used.":
+    "Personne n’a répondu à temps : cette proposition n’est plus utilisable.",
+  "This listing is no longer active, so no new time can be agreed. Cancelling is still possible.":
+    "Cette annonce n’est plus active : aucun nouvel horaire ne peut être convenu. L’annulation reste possible.",
+  "Viewings cannot be changed within an hour of the appointment.":
+    "Une visite ne peut pas être modifiée dans l’heure qui précède le rendez-vous.",
+  "You have offered as many times as this booking allows. Take one of the times on the table, or cancel the viewing.":
+    "Vous avez proposé autant d’horaires que cette réservation le permet. Retenez l’un des horaires proposés ou annulez la visite.",
+  // Refusals thrown by actOnCarViewing, shown to the user exactly as they
+  // arrive. The wording matches VIEWING_ERROR_MESSAGES on the server.
+  "This record is not a viewing appointment":
+    "Ce dossier n’est pas un rendez-vous de visite",
+  "This viewing is already closed": "Cette visite est déjà close",
+  "This proposal has expired. Please propose a new time":
+    "Cette proposition a expiré. Proposez un nouvel horaire",
+  "You are waiting on the other party to respond":
+    "Vous attendez la réponse de l’autre partie",
+  "You cannot take that action on this viewing":
+    "Vous ne pouvez pas effectuer cette action sur cette visite",
+  "Choose one of the times that was offered":
+    "Choisissez l’un des horaires proposés",
+  "Viewing times must be more than an hour away":
+    "Les horaires de visite doivent être à plus d’une heure",
+  "Viewings cannot be changed within an hour of the appointment":
+    "Une visite ne peut pas être modifiée dans l’heure qui précède le rendez-vous",
+  "This car is no longer available to view":
+    "Cette voiture n’est plus disponible à la visite",
+  "This has gone back and forth enough - accept a time, decline, or cancel":
+    "Les échanges ont assez duré : acceptez un horaire, refusez ou annulez",
+  "Too many times offered at once": "Trop d’horaires proposés à la fois",
+  "Choose a viewing time": "Choisissez un horaire de visite",
+  "That viewing time is not valid": "Cet horaire de visite n’est pas valide",
+  "Unknown action": "Action inconnue",
+  "Action not allowed": "Action non autorisée",
+  "Viewing not found": "Visite introuvable",
+  "Viewing and action are required": "La visite et l’action sont obligatoires",
+});
+
+// What is in the parcel, what it is worth, and who stands behind it. Three
+// screens share these strings: the business's own settings, the freight
+// booking form, and the card a customer compares businesses on. The category
+// names and hints come back from the server (functions/freight_categories.js)
+// and are rendered verbatim, so they need French here or a French customer
+// picks from an English list.
+Object.assign(TEXT_TRANSLATIONS, {
+  // The platform's category list, as both consoles show it.
+  "General goods": "Marchandises générales",
+  "Household items, gifts, anything not listed below":
+    "Articles ménagers, cadeaux, tout ce qui n’est pas listé ci-dessous",
+  "Clothes and fabric": "Vêtements et tissus",
+  "Clothing, shoes, cloth, bedding":
+    "Vêtements, chaussures, tissu, literie",
+  Food: "Alimentation",
+  "Dry and packaged food only":
+    "Aliments secs et emballés uniquement",
+  "Papers, certificates, printed matter":
+    "Papiers, certificats, imprimés",
+  "Cosmetics and liquids": "Cosmétiques et liquides",
+  "Creams, perfumes, hair products":
+    "Crèmes, parfums, produits capillaires",
+  Electronics: "Électronique",
+  "Phones, laptops, tablets, chargers":
+    "Téléphones, ordinateurs portables, tablettes, chargeurs",
+  "Fragile items": "Objets fragiles",
+  "Glass, ceramics, anything breakable":
+    "Verre, céramique, tout ce qui est cassable",
+  // The business's settings card.
+  "Freight · what you carry": "Fret · ce que vous transportez",
+  "Price each kind of goods, and say whether you pay for a parcel you lose.":
+    "Tarifez chaque type de marchandise et indiquez si vous remboursez un colis perdu.",
+  "Item categories": "Catégories d’articles",
+  "Categories are how a customer finds the thing they are sending. The list is the platform’s, so a customer can compare you with another business on the same words.":
+    "Les catégories permettent au client de retrouver ce qu’il envoie. La liste appartient à la plateforme, afin qu’un client puisse vous comparer à une autre entreprise avec les mêmes mots.",
+  "What each thing costs is set on the item itself, under “What you carry, and what it costs” below.":
+    "Le prix de chaque chose se règle sur l’article lui-même, sous « Ce que vous transportez, et ce que cela coûte » ci-dessous.",
+  "Your own categories": "Vos propres catégories",
+  "Add one only for goods the standard list genuinely misses - auto parts, building materials, live plants.":
+    "N’en ajoutez que pour des marchandises que la liste standard oublie vraiment : pièces auto, matériaux de construction, plantes vivantes.",
+  "Customers see your extra rows after the standard ones. Up to 6.":
+    "Les clients voient vos lignes supplémentaires après les lignes standard. Jusqu’à 6.",
+  "Category name": "Nom de la catégorie",
+  "What it covers": "Ce qu’elle couvre",
+  "Remove this category": "Supprimer cette catégorie",
+  "Add a category": "Ajouter une catégorie",
+  "If a parcel is lost": "Si un colis est perdu",
+  "Nothing extra is charged for this. You price each item above according to what it is worth to carry, so the risk is already in your rate.":
+    "Rien n’est facturé en plus pour cela. Vous fixez le prix de chaque article ci-dessus selon ce qu’il vaut à transporter : le risque est donc déjà dans votre tarif.",
+  "If you cover parcels and one goes missing, you make good on it with the customer. If you do not cover them, the customer gets nothing back, and they are told so before they book.":
+    "Si vous couvrez les colis et que l’un d’eux disparaît, vous dédommagez le client. Si vous ne les couvrez pas, le client ne reçoit rien, et il en est informé avant de réserver.",
+  "You make good on the parcel, not Laawol, and the policy in force on the day the customer booked is the one that is judged.":
+    "C’est vous qui dédommagez pour le colis, pas Laawol, et c’est la politique en vigueur le jour de la réservation du client qui fait foi.",
+  "Do you pay for a lost parcel?": "Remboursez-vous un colis perdu ?",
+  "No, parcels are not covered": "Non, les colis ne sont pas couverts",
+  "Yes, I cover a parcel I lose": "Oui, je couvre un colis que je perds",
+  // Delivering the parcel to the receiver's own address at the destination.
+  "Do you deliver to the receiver at the destination?":
+    "Livrez-vous au destinataire à l’arrivée ?",
+  "By default the receiver collects the parcel from you at the destination. If you deliver, customers of yours can choose that at booking and give the receiver’s address.":
+    "Par défaut, le destinataire récupère le colis chez vous à l’arrivée. Si vous livrez, vos clients peuvent le choisir à la réservation et indiquer l’adresse du destinataire.",
+  "Each fee is flat - the same wherever in that place you take it - and is added to what the customer pays at booking. It is not recalculated when you confirm the weight.":
+    "Chaque tarif est forfaitaire — le même où que vous alliez dans cet endroit — et s’ajoute à ce que le client paie à la réservation. Il n’est pas recalculé lorsque vous confirmez le poids.",
+  "The receiver collects it from us": "Le destinataire le récupère chez nous",
+  "We can deliver to their address": "Nous pouvons livrer à son adresse",
+  // The places a business delivers to at one destination, priced one by one.
+  "Places you deliver to, and what each costs":
+    "Les endroits où vous livrez, et le prix de chacun",
+  "List the quartiers you serve and the fee for each: Cosa $20, Koloma $10. The customer picks one at booking and pays that fee.":
+    "Listez les quartiers que vous desservez et le tarif de chacun : Cosa 20 $, Koloma 10 $. Le client en choisit un à la réservation et paie ce tarif.",
+  "Leave the list empty to charge one price anywhere in this country instead.":
+    "Laissez la liste vide pour appliquer un seul tarif partout dans ce pays.",
+  "Place name": "Nom de l’endroit",
+  "Delivery fee (USD)": "Frais de livraison (USD)",
+  "Add a place": "Ajouter un endroit",
+  "Delivery fee anywhere in this country (USD)":
+    "Frais de livraison partout dans ce pays (USD)",
+  "Add somewhere you deliver to, or turn delivery off.":
+    "Ajoutez un endroit où vous livrez, ou désactivez la livraison.",
+  "A delivery fee must be between $0 and $500.":
+    "Des frais de livraison doivent être compris entre 0 $ et 500 $.",
+  "Every place you deliver to needs a name.":
+    "Chaque endroit où vous livrez a besoin d’un nom.",
+  "You can list up to 40 places.":
+    "Vous pouvez lister jusqu’à 40 endroits.",
+  "Two places on the list share the same name.":
+    "Deux endroits de la liste portent le même nom.",
+  "Choose where the parcel is being delivered to.":
+    "Choisissez où le colis est livré.",
+  // Refusals the settings form raises before the server can.
+  "You can add up to 6 categories of your own.":
+    "Vous pouvez ajouter jusqu’à 6 catégories qui vous sont propres.",
+  "Give every item category you add a name.":
+    "Donnez un nom à chaque catégorie d’articles que vous ajoutez.",
+  "A category you add cannot reuse the name of a standard category.":
+    "Une catégorie que vous ajoutez ne peut pas reprendre le nom d’une catégorie standard.",
+  "Two of the categories you added have the same name. Give each one its own.":
+    "Deux des catégories que vous avez ajoutées portent le même nom. Donnez-en un propre à chacune.",
+  // Each row: what this business carries, and what it costs.
+  "What you carry, and what it costs":
+    "Ce que vous transportez, et ce que cela coûte",
+  "Each row says what you charge to carry that thing. An item you have not listed cannot be booked instantly; the customer asks you for a quote instead.":
+    "Chaque ligne indique ce que vous facturez pour transporter cette chose. Un article que vous n’avez pas listé ne peut pas être réservé immédiatement ; le client vous demande alors un devis.",
+  "A known object can have a set price - “iPhone 16, $50” - and the customer is never asked what it weighs. Goods that vary every time are priced by weight at your rate for the destination.":
+    "Un objet connu peut avoir un prix fixe — « iPhone 16, 50 $ » — et on ne demande jamais au client ce qu’il pèse. Les marchandises qui varient à chaque fois sont tarifées au poids, à votre tarif pour la destination.",
+  "Cover is a separate question, answered once above for every parcel you carry. The customer is charged nothing for it, so price each row for what it is worth to you to carry.":
+    "La couverture est une question à part, à laquelle vous répondez une seule fois ci-dessus pour tous les colis que vous transportez. Le client ne paie rien pour cela, alors tarifez chaque ligne selon ce qu’elle vaut à transporter pour vous.",
+  "A row you list but never price behaves the same way as one you never listed: the customer asks you for a price, and you answer it under Price requests.":
+    "Une ligne que vous listez sans jamais la tarifer se comporte comme une ligne jamais listée : le client vous demande un prix, et vous y répondez sous Demandes de prix.",
+  "How is this priced?": "Comment est-ce tarifé ?",
+  "A set price": "Un prix fixe",
+  "By weight": "Au poids",
+  "Price (USD)": "Prix (USD)",
+  "Covers up to (kg)": "Couvre jusqu’à (kg)",
+  "Leave this blank and your price covers the parcel however heavy it is.":
+    "Laissez ce champ vide et votre prix couvre le colis quel que soit son poids.",
+  "Give a weight and you weigh it at drop-off: anything over that is charged at your per-kg rate for the destination, on top of the price.":
+    "Indiquez un poids et vous le pesez au dépôt : tout ce qui dépasse est facturé à votre tarif au kilo pour la destination, en plus du prix.",
+  "Any weight": "Quel que soit le poids",
+  "Anything else in this category": "Tout le reste de cette catégorie",
+  "Price it and everything in this category you did not name is bookable at that price.":
+    "Tarifez-le et tout ce que vous n’avez pas nommé dans cette catégorie devient réservable à ce prix.",
+  "Leave it unpriced and a customer sending something you did not list asks you for a price instead, and you answer it under Price requests.":
+    "Laissez-le sans tarif et un client qui envoie une chose que vous n’avez pas listée vous demande un prix, auquel vous répondez sous Demandes de prix.",
+  "Ask me for a price": "Demandez-moi un prix",
+  "What it is": "Ce que c'est",
+  "Add an item": "Ajouter un article",
+  "No items yet": "Aucun article pour l’instant",
+  // The freight booking form.
+  "What are you sending?": "Qu’envoyez-vous ?",
+  "does not pay for a lost parcel.": "ne rembourse pas un colis perdu.",
+  "Nothing is charged for protection, and nothing is owed if the parcel goes missing.":
+    "Rien n’est facturé pour la protection, et rien n’est dû si le colis disparaît.",
+  "If this is lost,": "En cas de perte,",
+  "pays you back for it. The business pays you, not Laawol.":
+    "vous rembourse pour celui-ci. C’est l’entreprise qui vous paie, pas Laawol.",
+  "What you are sending": "Ce que vous envoyez",
+  // A known object has one published price, so no weight is ever asked for.
+  "Set price": "Prix fixe",
+  "is the set price for this item.": "est le prix fixe pour cet article.",
+  // The same sentence when the row has a name the business typed.
+  "is the set price for": "est le prix fixe pour",
+  "It covers up to": "Il couvre jusqu’à",
+  "kg. The business weighs it at drop-off, and anything over that is charged at":
+    "kg. L’entreprise le pèse au dépôt, et tout ce qui dépasse est facturé à",
+  "It covers the parcel whatever it weighs.":
+    "Il couvre le colis quel que soit son poids.",
+  "Covers up to": "Couvre jusqu’à",
+  "Over that, per kg": "Au-delà, par kg",
+  "This price is final for this item.":
+    "Ce prix est définitif pour cet article.",
+  "The business weighs it at drop-off and charges per kg for anything over the included weight.":
+    "L’entreprise le pèse au dépôt et facture au kilo tout ce qui dépasse le poids inclus.",
+  "This item has a set price that covers up to":
+    "Cet article a un prix fixe qui couvre jusqu’à",
+  "kg. The business weighs the parcel at drop-off, and if it comes in heavier, Laawol will try to automatically charge the card you use today for the extra kilos at":
+    "kg. L’entreprise pèse le colis au dépôt, et s’il est plus lourd, Laawol tentera de débiter automatiquement la carte utilisée aujourd’hui pour les kilos supplémentaires à",
+  "/ kg. If that charge doesn’t go through, you’ll need to open the app to complete payment before your shipment can continue.":
+    "/ kg. Si ce débit échoue, vous devrez ouvrir l’application pour finaliser le paiement avant que votre expédition puisse continuer.",
+  "This item has a set price that covers the parcel whatever it weighs. Nothing is weighed and nothing is settled afterwards - what you pay today is the whole price.":
+    "Cet article a un prix fixe qui couvre le colis quel que soit son poids. Rien n’est pesé et rien n’est régularisé ensuite : ce que vous payez aujourd’hui est le prix complet.",
+  // Where the parcel ends up at the destination.
+  "Where does the receiver get it?": "Où le destinataire le récupère-t-il ?",
+  "The receiver collects it": "Le destinataire le récupère",
+  "Deliver it to their address": "Le livrer à son adresse",
+  "The business takes the parcel to the receiver once it arrives.":
+    "L’entreprise apporte le colis au destinataire dès son arrivée.",
+  "The receiver picks the parcel up from the business at the destination.":
+    "Le destinataire récupère le colis auprès de l’entreprise à l’arrivée.",
+  "Where is it being delivered to?": "Où est-il livré ?",
+  "Choose a place": "Choisissez un endroit",
+  "The business delivers to these places, and each has its own fee.":
+    "L’entreprise livre à ces endroits, et chacun a son propre tarif.",
+  "Receiver’s address": "Adresse du destinataire",
+  "Include the neighbourhood and a landmark nearby, so the driver can find it by asking.":
+    "Indiquez le quartier et un point de repère proche, pour que le chauffeur puisse le trouver en demandant.",
+  "At the destination": "À l’arrivée",
+  "Delivery to the receiver": "Livraison au destinataire",
+  "Deliver to the receiver": "Livrer au destinataire",
+  "Address not provided": "Adresse non fournie",
+  "collected at booking": "encaissé à la réservation",
+  "Out for delivery": "En cours de livraison",
+  "Landed, and on its way to the receiver's address":
+    "Arrivé, et en route vers l’adresse du destinataire",
+  "Delivered to the receiver's address":
+    "Livré à l’adresse du destinataire",
+  // The one line that lets a customer compare cover before choosing.
+  "Protection": "Protection",
+  "Protection included": "Protection incluse",
+  "Pays you back if it is lost": "Vous rembourse en cas de perte",
+  "This business does not pay for a lost parcel":
+    "Cette entreprise ne rembourse pas un colis perdu",
+  "Free": "Offert",
+  // The item picker's last row, and the one that always leads somewhere.
+  "What is the item?": "Quel est l’article ?",
+  "Choose the item": "Choisissez l’article",
+  "Something else": "Autre chose",
+  // Asking the businesses on the route what they charge, when nobody has
+  // published a price for this parcel.
+  "Ask for a price": "Demander un prix",
+  "No business on this route has priced this parcel.":
+    "Aucune entreprise sur cet itinéraire n’a tarifé ce colis.",
+  "Describe it and every approved business on this route can answer with what it charges and whether it covers it if it is lost.":
+    "Décrivez-le et chaque entreprise approuvée sur cet itinéraire peut répondre avec son tarif et si elle le couvre en cas de perte.",
+  "The more the business knows, the closer the price it can give you.":
+    "Plus l’entreprise en sait, plus le prix qu’elle vous donne sera juste.",
+  "Weight (kg), if you know it": "Poids (kg), si vous le connaissez",
+  "Sign in to ask for a price": "Connectez-vous pour demander un prix",
+  "Sending your request...": "Envoi de votre demande...",
+  "The price request could not be sent. Try again.":
+    "La demande de prix n’a pas pu être envoyée. Réessayez.",
+  "We couldn’t load your price requests. Try again.":
+    "Nous n’avons pas pu charger vos demandes de prix. Réessayez.",
+  "Some prices could not be loaded. Try again.":
+    "Certains prix n’ont pas pu être chargés. Réessayez.",
+  "You chose a price": "Vous avez choisi un prix",
+  "Waiting for prices": "En attente de prix",
+  Reference: "Référence",
+  "Your parcel": "Votre colis",
+  "The businesses on this route have your request. Each one that answers appears here, and you will be told when a price arrives.":
+    "Les entreprises de cet itinéraire ont votre demande. Chacune qui répond apparaît ici, et vous serez prévenu dès qu’un prix arrive.",
+  "Price to send it": "Prix pour l’envoyer",
+  "Accept this price": "Accepter ce prix",
+  "Accepting...": "Acceptation...",
+  Chosen: "Choisi",
+  "Not chosen": "Non retenu",
+  "That price could not be accepted. Try again.":
+    "Ce prix n’a pas pu être accepté. Réessayez.",
+  // The business side of the same conversation.
+  "Booked shipments": "Expéditions réservées",
+  "Price requests": "Demandes de prix",
+  "No one is waiting on a price": "Personne n’attend de prix",
+  "When a customer asks what you charge for something you have not listed, it arrives here and you answer with a number.":
+    "Quand un client demande votre tarif pour une chose que vous n’avez pas listée, la demande arrive ici et vous répondez par un montant.",
+  "You answered": "Vous avez répondu",
+  "Waiting on you": "En attente de votre réponse",
+  Category: "Catégorie",
+  "Weight given": "Poids indiqué",
+  "Not given": "Non indiqué",
+  Asked: "Demandé le",
+  "No description given": "Aucune description fournie",
+  "What you charge (USD)": "Ce que vous facturez (USD)",
+  "Do you cover this parcel if it is lost?":
+    "Couvrez-vous ce colis en cas de perte ?",
+  "No, I do not cover this parcel": "Non, je ne couvre pas ce colis",
+  "Yes, I cover this parcel": "Oui, je couvre ce colis",
+  "This parcel is not in your item list, so this price carries its own promise. Say no and the customer is told plainly that you do not cover it.":
+    "Ce colis ne figure pas dans votre liste d’articles, donc ce prix porte son propre engagement. Répondez non et le client est clairement informé que vous ne le couvrez pas.",
+  "The customer is charged nothing for it, so price the parcel for what it is worth to you to carry.":
+    "Le client ne paie rien pour cela, alors tarifez le colis selon ce qu’il vaut à transporter pour vous.",
+  "Note for the customer (optional)": "Note pour le client (facultatif)",
+  "Send your price": "Envoyer votre prix",
+  "Change your price": "Modifier votre prix",
+  "Sending your price...": "Envoi de votre prix...",
+  "Your price was sent to the customer.":
+    "Votre prix a été envoyé au client.",
+  "The price could not be sent. Try again.":
+    "Le prix n’a pas pu être envoyé. Réessayez.",
+  // What the callable refuses a quote for, in the same words it uses.
+  "Enter what you charge to send this":
+    "Saisissez ce que vous facturez pour envoyer cela",
+  "That price is outside what this platform handles":
+    "Ce prix dépasse ce que cette plateforme traite",
+  "Say whether you cover this parcel if it is lost":
+    "Indiquez si vous couvrez ce colis en cas de perte",
+  "Keep the note under 1000 characters":
+    "Limitez la note à 1000 caractères",
+  "Describe what is being sent": "Décrivez ce qui est envoyé",
+  "Keep the description under 2000 characters":
+    "Limitez la description à 2000 caractères",
+  "That request could not be read":
+    "Cette demande n’a pas pu être lue",
+});
+
+// The refusals a priced row raises. The row name is
+// whatever the business typed into it, so only the sentence around the name
+// is known ahead of time and substring translation carries the rest.
+Object.assign(TEXT_TRANSLATIONS, {
+  "enter a set price between $0.01 and $10,000.":
+    "saisissez un prix fixe entre 0,01 $ et 10 000 $.",
+  "the weight the price covers must be between 0 and 200 kg.":
+    "le poids couvert par le prix doit être compris entre 0 et 200 kg.",
+  "anything else": "tout le reste",
+  // The fulfillment queue, where a set-price parcel never meets a scale.
+  Pricing: "Tarification",
+  "This shipment has a set price. Fulfillment unlocks once payment settles.":
+    "Cette expédition a un prix fixe. Le traitement se débloque dès que le paiement est régularisé.",
+});
+
+const PICKUP_ERROR_LABELS: Record<string, string> = {
+  "Shared pickup plan": "Plan de collecte partagé",
+  "Barrel shipping pickup": "Collecte expédition de barils",
+  "Freight pickup": "Collecte fret",
+  "Car parking pickup": "Collecte stationnement",
+  "Car transport pickup": "Collecte transport de voitures",
+};
+const PICKUP_ERROR_MESSAGES: Record<string, string> = {
+  "pickup by borough is only available to New York businesses.":
+    "la collecte par arrondissement n’est disponible que pour les entreprises de New York.",
+  "set a pickup fee for at least one borough.":
+    "définissez un tarif de collecte pour au moins un arrondissement.",
+  "the maximum pickup distance (miles) is required.":
+    "la distance maximale de collecte (miles) est obligatoire.",
+  "enter the flat pickup fee.": "saisissez le tarif fixe de collecte.",
+  "enter the base fee.": "saisissez les frais de base.",
+  "enter the per-mile fee.": "saisissez le tarif au mile.",
+  "enter the minimum fee.": "saisissez les frais minimum.",
+  "enter the pickup origin address.":
+    "saisissez l’adresse de départ de la collecte.",
+};
+for (const [label, frLabel] of Object.entries(PICKUP_ERROR_LABELS)) {
+  for (const [message, frMessage] of Object.entries(PICKUP_ERROR_MESSAGES)) {
+    TEXT_TRANSLATIONS[`${label}: ${message}`] = `${frLabel} : ${frMessage}`;
+  }
+}
+
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
+  "17 characters": "17 caractères",
   "Add a photo by URL": "Ajouter une photo par URL",
+  "Apt 4B": "App. 4B",
   "Choose quote request": "Choisir une demande de devis",
   "City, state or province, postal code":
     "Ville, État ou province, code postal",
   "Collapse navigation": "Réduire la navigation",
+  "Copy payment link": "Copier le lien de paiement",
   "Copy tracking code": "Copier le code de suivi",
+  "Customer name": "Nom du client",
   "Delivery status": "Statut de livraison",
+  "Describe the parcel: what it is, how many, how it is packed.":
+    "Décrivez le colis : ce que c’est, combien, comment il est emballé.",
+  "Email address": "Adresse courriel",
+  "what cover on a quote means":
+    "ce que signifie la couverture sur un devis",
+  "what the catch-all row does":
+    "à quoi sert la ligne fourre-tout",
+  "Leave blank if you are not sure": "Laissez vide si vous n’êtes pas sûr",
+  "Note for the customer": "Note pour le client",
   "Explain missing documents, expiry issues, or why a document is not applicable.":
     "Expliquez les documents manquants, les problèmes d’expiration ou pourquoi un document est sans objet.",
   "Expand navigation": "Développer la navigation",
@@ -3358,7 +4085,10 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
     "Expliquez ce qui est inclus, les hypothèses de délai et les éventuelles conditions.",
   "Filter business sections": "Filtrer les sections entreprise",
   "Filter services...": "Filtrer les services...",
+  "Message the assistant": "Écrivez à l’assistant",
+  "Message the assistant...": "Écrivez à l’assistant...",
   "No-show note (optional)": "Note d’absence (facultatif)",
+  "Phone number": "Numéro de téléphone",
   Pin: "Épingler",
   "Search car, buyer, phone, status…":
     "Rechercher voiture, acheteur, téléphone, statut…",
@@ -3378,6 +4108,8 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Signed-in account": "Compte connecté",
   Unpin: "Désépingler",
   "Verification document summary": "Résumé des documents de vérification",
+  "What is included, how long it takes":
+    "Ce qui est inclus, le délai",
   "What your business is known for…":
     "Ce pour quoi votre entreprise est connue…",
 };
@@ -3463,7 +4195,9 @@ function translateTextNode(node: Node) {
 }
 
 function translateAttributes(element: Element) {
-  ["placeholder", "title", "aria-label", "alt"].forEach((name) => {
+  // `label` is how an <optgroup> names a group of options — text the user
+  // reads that lives nowhere in the DOM as a text node.
+  ["placeholder", "title", "aria-label", "alt", "label"].forEach((name) => {
     const value = element.getAttribute(name);
     if (!value) return;
     const translated = translateValue(value, currentLang());

@@ -10,6 +10,8 @@ type ServiceRequestFormProps = {
   review: ReactNode;
   canReview: boolean;
   canSubmit?: boolean;
+  /** Hide Cancel/Review entirely while earlier steps are unanswered. */
+  footerVisible?: boolean;
   submitting: boolean;
   error: string;
   submitLabel: string;
@@ -24,6 +26,7 @@ export function ServiceRequestForm({
   review,
   canReview,
   canSubmit = true,
+  footerVisible = true,
   submitting,
   error,
   submitLabel,
@@ -49,6 +52,7 @@ export function ServiceRequestForm({
       <div className="customer-form-body">
         {step === "details" ? children : review}
       </div>
+      {footerVisible && (
       <div className="customer-form-actions">
         <button
           className="secondary-button"
@@ -80,6 +84,7 @@ export function ServiceRequestForm({
           </button>
         )}
       </div>
+      )}
     </section>
   );
 }

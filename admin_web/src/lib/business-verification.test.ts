@@ -198,3 +198,26 @@ test("editing verification drafts does not trigger their reset effect", () => {
     /\[baseVerification\.items,\s*business,\s*verificationVersion\]/,
   );
 });
+
+test("a submitted document is our work, not the business's", () => {
+  // The status banner keys off missing + needsChanges, never approvalReady:
+  // a document sitting in review is waiting on us, and telling the business
+  // to go upload it again would be its own kind of wrong.
+  const source = readFileSync("src/components/business-console.tsx", "utf8");
+  assert.match(
+    source,
+    /summary\.missing > 0 \|\| summary\.needsChanges > 0/,
+  );
+});
+
+test("the pending banner never claims Stripe is the last step", () => {
+  // Stripe going green does not mean approved: the platform still requires a
+  // document per service. The banner must not say "nothing more is needed"
+  // on the strength of Stripe alone.
+  const source = readFileSync("src/components/business-console.tsx", "utf8");
+  assert.match(source, /documentsOutstanding\s*\)/);
+  assert.doesNotMatch(
+    source,
+    /Stripe setup is complete, so nothing more is needed/,
+  );
+});

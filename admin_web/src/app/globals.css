@@ -1110,6 +1110,302 @@ button[data-loading="true"]::before {
   align-items: start;
 }
 
+/* Platform commission summary — what the platform earned, above the ledger
+   that shows what customers were charged. */
+.commission-summary {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.commission-headline {
+  gap: 14px;
+}
+
+.commission-headline .metric strong {
+  font-size: 26px;
+  margin-top: 12px;
+}
+
+.commission-headline .metric small {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 8px;
+  text-transform: none;
+}
+
+.commission-explainer {
+  margin: 0;
+}
+
+.commission-breakdown-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.commission-chart-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+  padding: 16px 18px;
+}
+
+.commission-chart-card .chart-head {
+  margin-bottom: 10px;
+  /* On a phone the title wraps, and a baseline-aligned total lands inside the
+     wrapped words ("Commission over $0.00 time"). Keep them on separate rows
+     once there is no room to sit side by side. */
+  column-gap: 12px;
+  flex-wrap: wrap;
+}
+
+.commission-chart-card .chart-head h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.commission-chart-card .chart-head .chart-total {
+  flex: 0 0 auto;
+}
+
+.commission-chart-card .empty-state {
+  margin: 0 0 12px;
+}
+
+.commission-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.commission-legend li {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  font-weight: 650;
+  gap: 7px;
+}
+
+.commission-legend li b {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.commission-legend .dot {
+  border-radius: 3px;
+  flex: 0 0 auto;
+  height: 11px;
+  width: 11px;
+}
+
+/* Scales uniformly (no preserveAspectRatio override) so the period labels
+   inside the SVG are not stretched wide on a broad console. */
+.commission-chart {
+  display: block;
+  height: auto;
+  max-height: 240px;
+  width: 100%;
+}
+
+.commission-data {
+  margin-top: 10px;
+}
+
+.commission-data > summary {
+  color: var(--brand-strong);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.commission-table {
+  border-collapse: collapse;
+  font-size: 13.5px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.commission-table caption {
+  text-align: left;
+}
+
+.commission-table th,
+.commission-table td {
+  border-bottom: 1px solid var(--rule);
+  padding: 7px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Headers wrap: the French labels ("Part de la commission", "En attente") are
+   far longer than the English ones and would otherwise run into each other. */
+.commission-table thead th {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  vertical-align: bottom;
+  white-space: normal;
+}
+
+.commission-table tbody th[scope="row"],
+.commission-table thead th:first-child {
+  color: var(--ink);
+  font-weight: 700;
+  max-width: 220px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+/* Fixed layout so a long business name ellipsizes instead of shoving the
+   record count off the edge of the card. */
+.commission-bar-table {
+  margin-top: 0;
+  table-layout: fixed;
+}
+
+.commission-bar-table th:nth-child(2),
+.commission-bar-table td:nth-child(2) {
+  width: 24%;
+}
+
+.commission-bar-table th:nth-child(3),
+.commission-bar-table td:nth-child(3),
+.commission-bar-table th:nth-child(4),
+.commission-bar-table td:nth-child(4) {
+  width: 17%;
+}
+
+.commission-bar-table th:nth-child(5),
+.commission-bar-table td:nth-child(5) {
+  width: 12%;
+}
+
+.commission-data .commission-table th:not(:first-child),
+.commission-data .commission-table td:not(:first-child) {
+  width: 24%;
+}
+
+.commission-bar-cell {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* Picking a row narrows every other figure in the section to it. The button
+   fills its cell so the whole name is the target, not just the glyph. */
+.commission-pick {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  font-weight: inherit;
+  overflow: hidden;
+  padding: 4px 6px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.commission-pick:hover {
+  background: rgba(13, 148, 136, 0.1);
+}
+
+.commission-pick:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 1px;
+}
+
+.commission-bar-table tr.is-selected {
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.commission-bar-table tr.is-selected .commission-pick {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.commission-focus-bar {
+  align-items: center;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+
+.commission-focus-label {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .commission-pick:hover {
+    background: rgba(45, 212, 191, 0.16);
+  }
+
+  .commission-bar-table tr.is-selected {
+    background: rgba(45, 212, 191, 0.12);
+  }
+
+  .commission-bar-table tr.is-selected .commission-pick,
+  .commission-focus-label {
+    color: #5eead4;
+  }
+}
+
+.commission-bar {
+  display: block;
+  height: 10px;
+  width: 100%;
+}
+
+.commission-note {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+@media (max-width: 1080px) {
+  .commission-breakdown-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .commission-headline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .commission-headline {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .commission-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
 .finance-ledger-row .finance-account-main > strong {
   font-weight: 650;
 }
@@ -1900,6 +2196,15 @@ button[data-loading="true"]::before {
   border-color: rgba(220, 38, 38, 0.22);
   color: var(--danger);
   margin: 0;
+}
+
+.success-box {
+  background: rgba(13, 148, 136, 0.1);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  border-radius: 8px;
+  color: #0b5e56;
+  margin: 0;
+  padding: 12px;
 }
 
 .stripe-setup-banner {
@@ -4792,6 +5097,64 @@ button[data-loading="true"]::before {
   font-size: 13px;
   padding: 12px 16px;
 }
+.service-fee-list {
+  display: grid;
+}
+.service-fee-head,
+.service-fee-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  /* The action column is a fixed width rather than `auto` so the header and
+     the rows resolve the same track sizes and stay in line. */
+  grid-template-columns: minmax(140px, 1fr) 88px 150px 116px 172px;
+  padding: 10px 16px;
+}
+.service-fee-head {
+  border-top: 1px solid rgba(13, 148, 136, 0.12);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.service-fee-row {
+  border-top: 1px solid rgba(13, 148, 136, 0.12);
+  min-height: 62px;
+}
+.service-fee-name {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.service-fee-name small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.service-fee-rate {
+  font-size: 15px;
+}
+.service-fee-input {
+  background: var(--paper-soft);
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  color: var(--ink);
+  font-size: 15px;
+  min-height: 42px;
+  padding: 10px 12px;
+  width: 100%;
+}
+.service-fee-input:focus {
+  background: #fff;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.14);
+  outline: none;
+}
+.service-fee-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .provider-setup-grid {
   border-top: 1px solid rgba(13, 148, 136, 0.1);
   display: grid;
@@ -5153,6 +5516,11 @@ button[data-loading="true"]::before {
   .commission-override {
     grid-column: 2;
   }
+  .service-fee-head { display: none; }
+  .service-fee-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .service-fee-actions { grid-column: 1 / -1; justify-self: start; }
   .dest-editor-head { display: none; }
   .dest-editor-row { grid-template-columns: 1fr 1fr; }
   .website-panel-footer {
@@ -5288,6 +5656,17 @@ button[data-loading="true"]::before {
   padding: 11px 13px;
 }
 .lst-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* A plain either/or question inside a console form (parking payment method).
+   Radios rather than a select: the two answers mean different things to the
+   customer's money and both have to be readable at a glance. */
+.lst-fieldset { border: 1.5px solid var(--rule); border-radius: 14px; padding: 14px 16px; margin-top: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lst-fieldset legend { font-size: 13px; font-weight: 800; color: var(--ink); padding: 0 6px; }
+.lst-radio { display: flex; align-items: flex-start; gap: 10px; font-size: 14.5px; color: var(--ink); cursor: pointer; line-height: 1.35; }
+.lst-radio input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--brand); cursor: pointer; flex: 0 0 auto; }
+.lst-hint { font-size: 13px; color: var(--muted); line-height: 1.45; margin: 6px 0 0; }
+.lst-modal-body > .lst-hint { margin-bottom: 12px; }
+
 .lst-field { display: flex; flex-direction: column; gap: 6px; }
 .lst-field.wide { grid-column: 1 / -1; }
 .lst-field span,
@@ -5717,6 +6096,7 @@ button[data-loading="true"]::before {
 .pur-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(11,59,56,.05), 0 12px 28px rgba(11,59,56,.06); }
 .pur-card.alert { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(245,158,11,.16), 0 12px 28px rgba(11,59,56,.06); }
 .pur-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.pur-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .pur-title { display: flex; flex-direction: column; gap: 3px; }
 .pur-title strong { font-size: 15.5px; font-weight: 800; color: var(--ink); line-height: 1.25; }
 .pur-kind { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
@@ -5732,6 +6112,25 @@ button[data-loading="true"]::before {
 .pur-actions { padding-top: 12px; }
 .lst-btn.danger { color: var(--danger); }
 .lst-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+/* Car-viewing negotiation. Layout only, and shared by both consoles: the
+   business card and the customer order drawer show the same times, the same
+   counter-offer boxes and the same trail, each keeping its own buttons. */
+.viewing-slots { display: flex; flex-direction: column; gap: 6px; }
+.viewing-slots > small { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.viewing-slot { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.viewing-slot input { flex: 0 0 auto; margin: 0; }
+.viewing-slot svg { flex: 0 0 auto; color: var(--muted); }
+.viewing-counter-fields { display: flex; flex-direction: column; gap: 6px; }
+.viewing-counter-fields input { border: 1.5px solid var(--rule); border-radius: 10px; font: inherit; font-size: 13px; padding: 8px 11px; }
+.viewing-counter-fields input:focus { border-color: var(--brand); outline: none; }
+.viewing-history { color: var(--muted); font-size: 12px; }
+.viewing-history summary { cursor: pointer; font-weight: 700; }
+.viewing-history ol { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 0; padding-left: 18px; }
+.viewing-history li { display: flex; flex-direction: column; }
+.viewing-history b { color: var(--ink); font-weight: 700; }
+.customer-viewing { display: flex; flex-direction: column; gap: 12px; }
+.customer-viewing h3 { font-size: 15px; font-weight: 800; margin: 0; }
 
 /* Vehicle transport marketplace — quote opportunities stay separate from jobs. */
 .transport-marketplace-panel { display: grid; gap: 16px; }
@@ -5861,6 +6260,12 @@ button[data-loading="true"]::before {
   outline: none;
 }
 .transport-job-card .pur-info b { overflow-wrap: anywhere; }
+/* The status control is a set of buttons, one per legal next status, rather
+   than a list of every status the server would then reject. */
+.transport-job-move { align-items: stretch; flex-direction: column; gap: 10px; }
+.transport-job-move-title { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+.transport-job-move-note { color: var(--muted); font-size: 13px; line-height: 1.45; margin: 0; }
+.transport-job-move-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pur-note { flex: 1 1 140px; min-width: 120px; padding: 8px 11px; border: 1.5px solid var(--rule); border-radius: 10px; font: inherit; font-size: 13px; }
 .pur-note:focus { outline: none; border-color: var(--brand); }
 @media (max-width: 560px) { .pur-grid { grid-template-columns: 1fr; } }
@@ -6040,20 +6445,143 @@ button[data-loading="true"]::before {
   outline: 0;
 }
 
-.phase5-tracking-grid {
+.customer-orders-tabs {
+  background: #eef4f3;
+  border: 1px solid var(--rule, #dceae7);
+  border-radius: 12px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  width: fit-content;
+}
+.customer-orders-tabs button {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 9px;
+  color: #45615e;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  gap: 7px;
+  padding: 8px 14px;
+}
+.customer-orders-tabs button.active {
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(18, 48, 45, 0.09);
+  color: #12302d;
+}
+.customer-orders-tabs button span {
+  background: rgba(13, 148, 136, 0.12);
+  border-radius: 999px;
+  color: #0f766e;
+  font-size: 11.5px;
+  padding: 1px 8px;
+}
+
+.payback-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.payback-category {
+  background: #fff;
+  border: 1px solid var(--rule, #dceae7);
+  border-radius: 11px;
+  padding: 0 14px;
+}
+.payback-category summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 13.5px;
+  font-weight: 700;
+  justify-content: space-between;
+  padding: 11px 0;
+}
+.payback-category summary span {
+  color: var(--muted, #64748b);
+  font-size: 12px;
+  font-weight: 600;
+}
+.payback-item {
+  border-bottom: 1px solid var(--rule, #dceae7);
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
+.payback-item:last-of-type { border-bottom: 0; }
+.payback-item-row {
   display: grid;
-  gap: 14px;
+  gap: 8px;
+  /* The name takes the width; the remove button is sized to the icon so it
+     never reads as a field the business has to fill in. */
+  grid-template-columns: 1fr 34px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+.payback-item-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.payback-item-field > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.payback-pricing-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+@media (max-width: 640px) {
+  .payback-pricing-row { grid-template-columns: 1fr; }
+}
+.payback-category-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 4px 0 10px;
+}
+.payback-other {
+  margin-bottom: 12px;
+}
+
+.customer-phone-prompt {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  justify-content: space-between;
+}
+.customer-phone-prompt .secondary-button { flex-shrink: 0; }
+
+.phase5-tracking-grid {
+  /* Each card is as tall as its own contents. Without this the grid stretches
+     every card in a row to match the tallest, so one shipment with a long
+     history padded its cancelled neighbours with hundreds of pixels of
+     nothing. */
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  /* 300px is the narrowest column that still fits the four stage names on one
+     line at 11px; below it "On its way" wraps and every card in the row grows
+     a line. */
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
 }
 
 .phase5-tracking-card {
+  align-content: start;
   background: linear-gradient(160deg, #fff, #fbfefd);
   border: 1px solid #dceae7;
-  border-radius: 17px;
-  box-shadow: 0 10px 26px rgba(18, 48, 45, 0.055);
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(18, 48, 45, 0.05);
   display: grid;
-  gap: 11px;
-  padding: 17px;
+  gap: 8px;
+  padding: 13px 14px;
 }
 
 .phase5-tracking-topline,
@@ -7121,6 +7649,33 @@ button[data-loading="true"]::before {
   margin-top: 0;
 }
 
+/* Each business's loss policy, on the card the customer chooses from. It sits
+   full width rather than in the two-column rate grid because "no coverage" is
+   the thing a reader must not miss while comparing, and a half-width cell
+   beside a price reads as a footnote. */
+.customer-destination-coverage {
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  color: var(--brand-strong);
+  display: flex;
+  gap: 7px;
+  padding: 8px;
+}
+.customer-destination-coverage > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.customer-destination-coverage small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.customer-destination-coverage strong {
+  font-size: 12px;
+}
+
 .customer-approved-label {
   align-items: center;
   color: var(--brand-strong);
@@ -7243,6 +7798,16 @@ button[data-loading="true"]::before {
   line-height: 1.5;
   padding: 11px;
   resize: vertical;
+}
+
+/* A hint under a field - what a chosen item category covers, or the ceiling a
+   business puts on declared value. Without this it inherits the label's weight
+   and reads as a second label rather than as the explanation of the first. */
+.customer-shipping-form-grid > label > small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
 }
 
 .customer-shipping-form-grid select:focus,
@@ -7429,6 +7994,21 @@ button[data-loading="true"]::before {
 .customer-address-control input {
   border: 0 !important;
   box-shadow: none !important;
+}
+
+/* Receiver-name input that offers remembered recipients. Laid out like the
+   plain form labels it replaced, but positioned so the suggestion list can
+   overlay the fields below it. */
+.customer-recipient-field {
+  display: grid;
+  gap: 6px;
+  position: relative;
+}
+
+.customer-recipient-field > label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .customer-address-suggestions {
@@ -7927,6 +8507,32 @@ button[data-loading="true"]::before {
   min-height: 42px;
   padding: 0 34px 0 11px;
 }
+
+.customer-transport-pay-note {
+  align-items: center;
+  background: rgba(13, 148, 136, 0.07);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+.customer-transport-pay-note > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 240px;
+}
+.customer-transport-pay-note strong { color: var(--brand-strong); }
+.customer-transport-pay-note span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.customer-transport-pay-note .primary-button { flex-shrink: 0; }
 
 .customer-transport-request-summary {
   align-items: center;
@@ -8511,6 +9117,12 @@ button[data-loading="true"]::before {
 .destination-delivery-cell span {
   color: var(--muted);
   font-size: 11px;
+}
+.destination-delivery-area {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 120px 34px;
+  margin-bottom: 8px;
 }
 .destination-delivery-row {
   align-items: baseline;
@@ -9141,6 +9753,26 @@ button[data-loading="true"]::before {
 }
 .service-config-fields {
   padding: 16px;
+}
+/* A row inside a service card that spans both columns - a nested group of
+   fields, an on-screen warning, or a heading for the block below it. Without
+   this it silently renders half-width and the block reads as one column of
+   two unrelated things. */
+.service-config-fields > .wide,
+.service-config-fields .lst-form-grid > .wide {
+  grid-column: 1 / -1;
+}
+/* One service's pickup settings, visibly owned by that service. Rendered
+   flat, a service's own fees sat at the same indent as the shared plan's
+   and read as global settings - so a business editing barrel-only fees
+   believed it was pricing pickup for everything. */
+.pickup-service-block {
+  border-left: 2px solid var(--border);
+  padding-left: 14px;
+  margin-bottom: 6px;
+}
+.pickup-service-block:last-child {
+  margin-bottom: 0;
 }
 .service-config-note,
 .service-config-empty {
@@ -10900,6 +11532,16 @@ button[data-loading="true"]::before {
     flex-direction: column;
     width: 100%;
   }
+  /* Tracking journey: two rows of two on a phone. Each row's track has to
+     stop at its own last dot rather than appear to jump the gap. */
+  .trk-journey { grid-template-columns: repeat(2, 1fr); gap: 14px 6px; }
+  .trk-step:nth-child(2)::before {
+    border-radius: 3px;
+    right: auto;
+    width: 8px;
+  }
+  .trk-step:nth-child(3)::before { border-radius: 3px 0 0 3px; }
+
 }
 
 /* People & access — unified master/detail workspace */
@@ -11524,3 +12166,510 @@ button[data-loading="true"]::before {
   .people-invite-fields { grid-template-columns: minmax(0,1fr); }
   .people-invite-fields label:first-child { grid-column: auto; }
 }
+
+/* Action confirmation dialog — the in-page replacement for window.confirm.
+   Sits above every other overlay (listings modal 200, account drawer 40,
+   toast host 1000) because it can be raised from inside any of them. */
+.action-confirm-overlay {
+  align-items: center;
+  backdrop-filter: blur(3px);
+  background: rgba(8, 47, 45, 0.5);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 3000;
+}
+
+.action-confirm {
+  background: var(--paper);
+  border-radius: 20px;
+  box-shadow: 0 40px 90px rgba(8, 47, 45, 0.42);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: auto minmax(0, 1fr);
+  max-width: 460px;
+  padding: 24px;
+  width: 100%;
+}
+
+.action-confirm-mark {
+  align-items: center;
+  background: #fef3c7;
+  border-radius: 12px;
+  color: var(--warning);
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.action-confirm-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.action-confirm-copy h2 {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.action-confirm-copy p {
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.action-confirm-actions {
+  display: flex;
+  gap: 10px;
+  grid-column: 2;
+  justify-content: flex-end;
+}
+
+@media (max-width: 480px) {
+  .action-confirm { grid-template-columns: minmax(0, 1fr); }
+  .action-confirm-mark { display: none; }
+  .action-confirm-actions { flex-direction: column-reverse; grid-column: 1; }
+  .action-confirm-actions button { width: 100%; }
+}
+
+.phase5-tracking-card-focused {
+  animation: tracking-focus-fade 6s ease-out;
+  border-color: rgba(13, 148, 136, 0.9);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
+}
+
+@keyframes tracking-focus-fade {
+  from { background: rgba(13, 148, 136, 0.12); }
+  to { background: transparent; }
+}
+
+/* ===== Business assistant chat (assistant-panel.tsx) ===== */
+.assistant-chat { display: flex; flex-direction: column; gap: 10px; min-height: 320px; max-height: 60vh; overflow-y: auto; border: 1px solid var(--rule); border-radius: 14px; padding: 14px; background: var(--paper); }
+.assistant-hint { margin: auto; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 8px; align-items: center; max-width: 460px; }
+.assistant-hint strong { color: var(--ink); font-size: 14px; }
+.assistant-hint ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.assistant-hint small { font-size: 12px; }
+.assistant-typing .bubble-text { color: var(--muted); font-style: italic; }
+.assistant-error { align-self: stretch; }
+.assistant-action-card { align-self: flex-start; max-width: 88%; border: 1px solid var(--rule); border-left: 3px solid var(--brand); border-radius: 12px; padding: 10px 12px; background: #f8fafc; display: flex; flex-direction: column; gap: 8px; }
+.assistant-action-card strong { font-size: 14px; color: var(--ink); }
+.assistant-action-params { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+.assistant-action-params > div { display: contents; }
+.assistant-action-params dt { color: var(--muted); }
+.assistant-action-params dd { margin: 0; color: var(--ink); word-break: break-word; }
+.assistant-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.assistant-action-card .status-pill { align-self: flex-start; }
+.assistant-composer { margin-top: 12px; }
+.assistant-composer textarea { min-height: 60px; }
+
+/* ===== Business assistant floating widget (assistant-widget.tsx) ===== */
+/* Mirrors the customer widget on the public marketing site: a fixed
+   bottom-right bubble with a small panel anchored above it. It sits under the
+   modal overlays (z-index 200) so a dialog still covers it. */
+/* Sits ABOVE the language toggle (fixed at bottom:16px, right:16px), which
+   the bubble used to land straight on top of. */
+/* The floating stack, bottom-right: the language toggle sits at
+   bottom:16px and is ~38px tall, so the bubble starts above it. Anything
+   that changes either number should keep them from colliding - there is a
+   test asserting the clearance. */
+.assistant-widget { position: fixed; right: 18px; bottom: 74px; z-index: 90; }
+
+/* A fixed bubble covers whatever page content happens to be beneath it, and
+   a covered button cannot be clicked. Reserving the height of the whole
+   floating stack at the end of the scroll area means any control can always
+   be scrolled out from under it, rather than being permanently unreachable. */
+.has-floating-assistant .content { padding-bottom: 150px; }
+
+/* Bottom padding alone only clears the END of the page - mid-scroll the
+   bubble still passed over controls (measured: it covered "Start Stripe
+   registration"). Where there is width to spare, reserve the bubble's own
+   column so no content is ever under it and nothing can be un-clickable.
+   Below this width the screen is too narrow to give up a gutter, and the
+   bubble behaves like any mobile action button. */
+@media (min-width: 1100px) {
+  .has-floating-assistant .content { padding-right: 96px; }
+}
+.assistant-widget-launcher { align-items: center; background: var(--brand); border: 0; border-radius: 50%; box-shadow: 0 14px 34px rgba(13, 148, 136, 0.45); color: #fff; cursor: pointer; display: flex; height: 58px; justify-content: center; transition: transform 0.25s ease, background 0.2s ease; width: 58px; }
+.assistant-widget-launcher:hover { background: var(--brand-mid); transform: translateY(-3px) scale(1.05); }
+.assistant-widget-launcher.open { background: var(--brand-strong); }
+.assistant-widget-panel { background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; bottom: 74px; box-shadow: var(--shadow-raised); display: flex; flex-direction: column; opacity: 0; overflow: hidden; pointer-events: none; position: absolute; right: 0; transform: translateY(14px) scale(0.98); transition: opacity 0.28s ease, transform 0.28s ease; width: min(360px, calc(100vw - 44px)); }
+.assistant-widget-panel.open { opacity: 1; pointer-events: auto; transform: none; }
+.assistant-widget-head { align-items: center; background: var(--brand-strong); color: #fff; display: flex; gap: 12px; justify-content: space-between; padding: 14px 16px; }
+.assistant-widget-head b { display: block; font-size: 15.5px; }
+.assistant-widget-head small { font-size: 12px; opacity: 0.75; }
+.assistant-widget-close { background: none; border: 0; color: #fff; cursor: pointer; display: flex; opacity: 0.8; padding: 2px 6px; }
+.assistant-widget-close:hover { opacity: 1; }
+.assistant-widget-body { display: flex; flex-direction: column; min-height: 0; padding: 12px; }
+.assistant-widget-body .assistant-panel { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+/* The transcript scrolls inside the widget, so a long conversation never
+   stretches the panel or the page behind it. */
+.assistant-widget-body .assistant-chat { background: var(--bg); border: 0; border-radius: 12px; height: 320px; max-height: none; min-height: 0; padding: 12px; }
+.assistant-widget-body .assistant-hint { max-width: none; }
+.assistant-widget-body .assistant-composer { margin-top: 0; }
+@media (max-width: 640px) {
+  .assistant-widget { bottom: 68px; right: 14px; }
+  .assistant-widget-panel { bottom: 70px; }
+  .assistant-widget-body .assistant-chat { height: 46vh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-widget-launcher,
+  .assistant-widget-panel { transition: none; }
+}
+
+/* Detail on demand: an "i" beside a label, and the explanation it reveals.
+   See components/field-info.tsx for when to reach for this instead of a
+   permanent banner. */
+.field-info {
+  display: inline-flex;
+  position: relative;
+  vertical-align: middle;
+}
+
+.field-info-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(15, 118, 110, 0.35);
+  border-radius: 999px;
+  color: #0f766e;
+  cursor: pointer;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 0;
+  width: 20px;
+}
+
+.field-info-button:hover,
+.field-info-button.active {
+  background: rgba(15, 118, 110, 0.12);
+}
+
+.field-info-button:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+
+/* Positioned inline by field-info.tsx: rendered in a portal with fixed
+   coordinates so no ancestor's overflow can slice the explanation in half.
+   Only the looks live here. */
+.field-info-bubble {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  color: #334155;
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  max-width: min(320px, 78vw);
+  padding: 10px 12px;
+  width: max-content;
+  z-index: 1200;
+}
+
+.field-info-bubble p {
+  margin: 0 0 6px;
+}
+
+.field-info-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+/* One plain sentence above a form, replacing the amber banners that used to
+   explain fields in implementation terms. Detail lives behind .field-info. */
+.panel-lede {
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 14px 14px 0;
+}
+
+/* Keeps a field label and its "i" on one line, so the explanation opens
+   beside the label rather than on top of the input it describes. */
+.label-with-info {
+  align-items: center;
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* Service rules, one group at a time. Same segmented control the admin
+   settings and operations views use, so it reads as the same idea rather than
+   a new one. Wraps rather than scrolls: a business with five services should
+   see every tab without hunting for the rest. */
+/* Ordering the businesses on offer for any service. Sits on .service-segments for the
+   chip styling; only the sizing and the cursor differ, because the base class
+   dresses full service tiles rather than a row of small controls. */
+.service-sort-segments {
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.service-sort-segments .segment {
+  cursor: pointer;
+  font-size: 13.5px;
+  padding: 8px 14px;
+}
+
+.service-rule-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 14px 0;
+}
+
+.service-rule-tabs .segment {
+  align-items: flex-start;
+  cursor: pointer;
+  flex: 0 1 auto;
+}
+
+/* The description beside each label. .service-segments styles a <b> count
+   badge for the operations view; these carry words instead, so they need
+   toning down against the bold label they sit next to. */
+.service-rule-tabs .segment small {
+  font-size: 12.5px;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+/* ── Customer shipment tracking ─────────────────────────────────────────
+   The customer used to be shown the staff milestone list: an inline-styled
+   log headed "Tracking updates" that said "No updates yet". It answered a
+   question nobody asked. What a customer wants is where their barrel is, so
+   the card leads with a four-stage journey, then the latest event, then the
+   history. Tokens only - no new colours. */
+
+/* Card head: the number and its status share one line. */
+.trk-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  justify-content: space-between;
+}
+.trk-head h3 { font-size: 17px; letter-spacing: -0.01em; }
+
+.trk-where {
+  align-items: baseline;
+  color: #45615e;
+  display: flex;
+  font-size: 12.5px;
+  gap: 6px;
+  margin: 0;
+}
+.trk-where svg { flex-shrink: 0; position: relative; top: 2px; }
+.trk-where span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trk-where time { color: var(--muted); flex-shrink: 0; font-size: 11.5px; }
+
+/* Compact action row: these are secondary to the status above them, so they
+   stay small and inline instead of stacking full-width buttons. */
+.trk-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 1px;
+}
+.trk-actions .secondary-button {
+  align-items: center;
+  border-radius: 9px;
+  display: inline-flex;
+  font-size: 12.5px;
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.trk-more {
+  background: none;
+  border: 0;
+  color: var(--brand-strong);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 0 0 26px;
+  text-align: left;
+}
+.trk-more:hover { text-decoration: underline; }
+
+.trk-journey {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  list-style: none;
+  margin: 1px 0 2px;
+  padding: 0;
+}
+
+.trk-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+/* The connector sits behind the dots and stops at the last step, so the
+   line reads as a route rather than a border. */
+.trk-step::before {
+  background: var(--rule);
+  content: "";
+  height: 3px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 6px;
+}
+.trk-step:first-child::before { border-radius: 3px 0 0 3px; }
+/* The track ends AT the final dot, not at the edge of the column - a line
+   running past "Delivered" reads as though the journey continues. */
+.trk-step:last-child::before {
+  border-radius: 3px;
+  right: auto;
+  width: 8px;
+}
+.trk-step.done::before,
+.trk-step.current::before { background: var(--brand); }
+.trk-step.current::before {
+  background: linear-gradient(90deg, var(--brand) 55%, var(--rule) 55%);
+}
+
+.trk-step-dot {
+  align-items: center;
+  background: var(--paper);
+  border: 3px solid var(--rule);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  height: 15px;
+  justify-content: center;
+  position: relative;
+  width: 15px;
+  z-index: 1;
+}
+.trk-step.done .trk-step-dot {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.trk-step.current .trk-step-dot {
+  background: var(--paper);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.16);
+}
+
+.trk-step-text {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  /* "On its way" broke across two lines in a narrow column and pushed every
+     card in the row taller. The stage names are short enough to sit on one
+     line once the column has room for them. */
+  white-space: nowrap;
+}
+.trk-step.done .trk-step-text,
+.trk-step.current .trk-step-text { color: var(--ink); }
+
+.trk-journey-cancelled {
+  background: rgba(220, 38, 38, 0.06);
+  border-radius: 9px;
+  color: var(--danger);
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 10px;
+}
+
+.trk-headline {
+  align-items: center;
+  background: rgba(13, 148, 136, 0.06);
+  border-radius: 9px;
+  color: var(--brand-strong);
+  display: flex;
+  gap: 8px;
+  padding: 7px 10px;
+}
+.trk-headline.muted { background: #f6f8fa; color: var(--muted); }
+.trk-headline span { display: flex; flex-direction: column; gap: 1px; }
+.trk-headline strong { font-size: 13.5px; }
+.trk-headline small { color: var(--muted); font-size: 11.5px; }
+
+.trk-container {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  gap: 7px;
+}
+.trk-container strong { color: var(--ink); font-family: ui-monospace, monospace; }
+.trk-live {
+  background: rgba(13, 148, 136, 0.12);
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+.trk-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 1px 0 0;
+  padding: 0 0 0 4px;
+}
+
+.trk-event { display: flex; gap: 10px; position: relative; }
+/* The spine joins each dot to the next; the last event ends it. */
+.trk-event:not(:last-child)::before {
+  background: var(--rule);
+  content: "";
+  left: 10px;
+  position: absolute;
+  top: 21px;
+  bottom: -13px;
+  width: 2px;
+}
+
+.trk-event-icon {
+  align-items: center;
+  background: #f6f8fa;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 21px;
+  justify-content: center;
+  width: 21px;
+}
+.trk-event.latest .trk-event-icon {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.trk-event-body { display: flex; flex-direction: column; gap: 2px; }
+.trk-event-body strong { color: var(--ink); font-size: 13px; }
+.trk-event.latest .trk-event-body strong { color: var(--brand-strong); }
+.trk-event-detail { color: var(--muted); font-size: 12px; }
+.trk-event-when { color: var(--muted); font-size: 11px; }
+
+

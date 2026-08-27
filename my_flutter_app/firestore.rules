@@ -202,6 +202,14 @@ service cloud.firestore {
       return data.get('flowVersion', 1) != 2;
     }
 
+    function ownsFreightQuoteRequest(userId, requestId) {
+      return request.auth != null &&
+        request.auth.uid == userId &&
+        exists(/databases/$(database)/documents/freightQuoteRequests/$(requestId)) &&
+        get(/databases/$(database)/documents/freightQuoteRequests/$(requestId))
+          .data.customerUid == userId;
+    }
+
     function ownsTransportRequest(userId, requestId) {
       return request.auth != null &&
         request.auth.uid == userId &&
@@ -483,6 +491,15 @@ service cloud.firestore {
           request.auth.uid == userId;
       }
 
+      // People this customer has shipped to, so the next shipment can be
+      // completed from the name. Written by the server on each send; the
+      // owner may read them and delete ones they no longer want offered.
+      match /savedRecipients/{recipientId} {
+        allow read, delete: if request.auth != null &&
+          request.auth.uid == userId;
+        allow create, update: if false;
+      }
+
       match /barrelPools/{poolId} {
         allow read: if request.auth != null &&
           (request.auth.uid == userId || isAdmin(request.auth.uid));
@@ -603,9 +620,12 @@ service cloud.firestore {
         request.resource.data.diff(resource.data)
           .affectedKeys()
           .hasOnly([
+            // pickupAddress is deliberately NOT here: the pickup fee was
+            // priced from the address at checkout, and this rule pins the
+            // fee - so a post-payment address change would move the pickup
+            // without moving the price. Address changes go through support.
             'senderName',
             'senderAddress',
-            'pickupAddress',
             'pickupDateTime',
             'receiverName',
             'receiverPhone',
@@ -681,9 +701,12 @@ service cloud.firestore {
         request.resource.data.diff(resource.data)
           .affectedKeys()
           .hasOnly([
+            // pickupAddress is deliberately NOT here: the pickup fee was
+            // priced from the address at checkout, and this rule pins the
+            // fee - so a post-payment address change would move the pickup
+            // without moving the price. Address changes go through support.
             'senderName',
             'senderAddress',
-            'pickupAddress',
             'pickupDateTime',
             'receiverName',
             'receiverPhone',
@@ -821,6 +844,38 @@ service cloud.firestore {
             'transport'
           ) ||
           ownsTransportRequest(request.auth.uid, resource.data.requestId)
+        );
+      allow create, update, delete: if false;
+    }
+
+    // Asking what it costs to send something nobody has priced. Written only
+    // by callables, like every other quote collection - the price a business
+    // states and the one the customer is charged must be the same number.
+    match /freightQuoteRequests/{requestId} {
+      allow read: if request.auth != null &&
+        (
+          isAdmin(request.auth.uid) ||
+          request.auth.uid == resource.data.customerUid ||
+          // A business can read a request it was actually asked, and no
+          // other: the fan-out list is the permission.
+          (resource.data.eligibleBusinessIds is list &&
+           resource.data.eligibleBusinessIds.hasAny(
+             [userBusinessId(request.auth.uid)]
+           ))
+        );
+      allow create, update, delete: if false;
+    }
+
+    match /freightQuotes/{quoteId} {
+      allow read: if request.auth != null &&
+        (
+          isAdmin(request.auth.uid) ||
+          canManageBusinessSection(
+            request.auth.uid,
+            resource.data.businessId,
+            'freight'
+          ) ||
+          ownsFreightQuoteRequest(request.auth.uid, resource.data.requestId)
         );
       allow create, update, delete: if false;
     }
@@ -1029,6 +1084,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null &&
         hasAdminCapability(request.auth.uid, 'finance');
+    }
+
+    // A single revision counter customers subscribe to so that a business
+    // turning a service (or pickup) off reaches open customer screens
+    // without a reload. It carries no business data - only a bump - and is
+    // written by trusted server code, never by a client.
+    match /publicCatalog/{docId} {
+      allow read: if true;
+      allow write: if false;
     }
 
     match /wallets/{userId} {

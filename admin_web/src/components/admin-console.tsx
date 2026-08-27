@@ -1,5 +1,7 @@
 "use client";
 
+import { useConsoleDocumentTitle } from "@/lib/document-title";
+
 import {
   FormEvent,
   ReactNode,
@@ -61,6 +63,7 @@ import {
   SlidersHorizontal,
   Star,
   Store,
+  TrendingUp,
   Truck,
   UserCog,
   Users,
@@ -92,6 +95,17 @@ import {
   type VerificationStatus,
 } from "@/lib/business-verification";
 import {
+  SERVICE_FEE_KEYS,
+  SERVICE_FEE_LABELS,
+  SERVICE_PLATFORM_FEE_FIELD,
+  hasStoredServiceFeeOverride,
+  parseServiceFeePercent,
+  resolveServiceFeeForKey,
+  storedServiceFeeRate,
+  type PlatformFeeSource,
+  type ServiceFeeKey,
+} from "@/lib/business-service-fees";
+import {
   asDate,
   formatDate,
   formatMoney,
@@ -99,13 +113,29 @@ import {
   text,
 } from "@/lib/format";
 import {
+  centsToDollars,
+  summarizePlatformEarnings,
+  type PlatformEarningsBusinessRow,
+  type PlatformEarningsFocus,
+  type PlatformEarningsSeries,
+  type PlatformEarningsServiceRow,
+  type PlatformEarningsSummary,
+} from "@/lib/platform-earnings";
+import {
   canonicalDestinationServiceAvailability,
   destinationDepartureDays,
   destinationRateError,
   destinationServiceAvailability,
   type DestinationServiceAvailability,
 } from "@/lib/destination-pricing";
+import {
+  adminAreaIds,
+  roleCapabilityAreas,
+  roleEditableAreas,
+  type AdminCapability,
+} from "@/lib/admin-areas";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
+import { FieldInfo } from "@/components/field-info";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import {
   confirmImportantAction,
@@ -113,20 +143,9 @@ import {
   type ActionRunner,
 } from "@/lib/action-confirmation";
 
-const tabs = [
-  "today",
-  "businesses",
-  "people",
-  "marketplace",
-  "operations",
-  "finance",
-  "support",
-  "website",
-  "tools",
-  "settings",
-] as const;
+const tabs = adminAreaIds;
 
-type Tab = (typeof tabs)[number];
+type Tab = string;
 
 function tabForNotification(type: string): Tab {
   switch (type) {
@@ -205,49 +224,31 @@ function businessOffersService(
 // are stored in Firestore (platformConfig/permissions). Each role grants each
 // console SECTION an access level ("none" | "view" | "manage") AND may be
 // limited to a set of platform SERVICES. The backend reads the same config.
-type AdminCapability =
-  | "users"
-  | "businesses"
-  | "marketplace"
-  | "operations"
-  | "finance"
-  | "support"
-  | "website";
 type AccessLevel = "none" | "view" | "manage";
 
+// Derived, never hand-listed: a new area declared in admin-areas.ts becomes
+// something a role can be granted without anyone editing this file. Getting
+// that wrong shipped areas no role could ever reach.
 const EDITABLE_SECTIONS: Array<{
   tab: Tab;
   key: string;
   cap: AdminCapability;
   label: string;
-}> = [
-  { tab: "people", key: "people", cap: "users", label: "People & access" },
-  {
-    tab: "businesses",
-    key: "businesses",
-    cap: "businesses",
-    label: "Businesses",
-  },
-  {
-    tab: "marketplace",
-    key: "marketplace",
-    cap: "marketplace",
-    label: "Marketplace",
-  },
-  {
-    tab: "operations",
-    key: "operations",
-    cap: "operations",
-    label: "Operations",
-  },
-  { tab: "finance", key: "finance", cap: "finance", label: "Finance" },
-  { tab: "website", key: "website", cap: "website", label: "Website" },
-];
+}> = roleEditableAreas.map((area) => ({
+  tab: area.id,
+  key: area.id,
+  cap: area.cap as AdminCapability,
+  label: area.label,
+}));
 const EDITABLE_CAPS: Array<{
   key: string;
   cap: AdminCapability;
   label: string;
-}> = [{ key: "support", cap: "support", label: "Reply to support requests" }];
+}> = roleCapabilityAreas.map((area) => ({
+  key: area.id,
+  cap: area.cap as AdminCapability,
+  label: area.label,
+}));
 const ACCESS_LEVELS: AccessLevel[] = ["none", "view", "manage"];
 
 // Canonical platform services a role can be scoped to.
@@ -335,18 +336,7 @@ const DEFAULT_ROLES: Record<string, RoleConfig> = {
   },
 };
 
-const SUPER_ADMIN_TABS: Tab[] = [
-  "today",
-  "businesses",
-  "people",
-  "marketplace",
-  "operations",
-  "finance",
-  "support",
-  "website",
-  "tools",
-  "settings",
-];
+const SUPER_ADMIN_TABS: Tab[] = adminAreaIds;
 
 type Perms = {
   role: string;
@@ -660,10 +650,6 @@ function loadingActionLabel(label: string) {
     return "Sending phone code...";
   if (lower.includes("phone") && lower.includes("confirmed"))
     return "Confirming phone...";
-  if (lower.includes("refund") && lower.includes("completed"))
-    return "Completing refund request...";
-  if (lower.includes("refund") && lower.includes("rejected"))
-    return "Rejecting refund request...";
   if (lower.includes("deleted"))
     return value.replace(/deleted/i, "Deleting...");
   if (lower.includes("created"))
@@ -1004,58 +990,6 @@ const previewData = {
       businessName: "Keren Auto Sales",
     },
   ],
-  refunds: [
-    {
-      id: "RF-17",
-      customerUid: "customer-a",
-      customerEmail: "aissatou@example.com",
-      amount: 125,
-      amountCents: 12500,
-      currency: "USD",
-      status: "pending",
-      businessName: "Keren Auto Sales",
-    },
-  ],
-  wallets: [
-    {
-      id: "customer-a",
-      customerUid: "customer-a",
-      balance: 45,
-      balanceCents: 4500,
-      pendingRefund: 125,
-      pendingRefundCents: 12500,
-      currency: "USD",
-    },
-  ],
-  walletTransactions: [
-    {
-      id: "WT-1",
-      _parentId: "customer-a",
-      type: "debit",
-      reason: "card_refund_requested",
-      amount: 125,
-      amountCents: 12500,
-      currency: "USD",
-      status: "pending",
-      refundRequestId: "RF-17",
-      createdAt: "2026-06-20",
-      businessName: "Keren Auto Sales",
-      customerEmail: "aissatou@example.com",
-    },
-    {
-      id: "WT-2",
-      _parentId: "customer-a",
-      type: "credit",
-      reason: "shipment_adjustment",
-      amount: 45,
-      amountCents: 4500,
-      currency: "USD",
-      status: "completed",
-      createdAt: "2026-06-18",
-      businessName: "Keren Auto Sales",
-      customerEmail: "mamadou@example.com",
-    },
-  ],
   supportRequests: [
     {
       id: "SR-1",
@@ -1358,7 +1292,6 @@ function detailRows(rows: Array<[string, unknown]>) {
 }
 
 function urgencyRank(item: { kind: string; status: string }) {
-  if (item.kind === "refund") return 0;
   if (item.kind === "business") return 1;
   if (item.kind === "purchase") return 2;
   if (item.kind === "shipment") return 3;
@@ -1940,51 +1873,11 @@ function useAdminCollection(name: string, enabled: boolean, max = 150) {
   return { rows, loading, error };
 }
 
-function useAdminCollectionGroup(name: string, enabled: boolean, max = 500) {
-  const [rows, setRows] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!enabled) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-    setLoading(true);
-    const unsubscribe = onSnapshot(
-      query(collectionGroup(db, name), limit(max)),
-      (snapshot) => {
-        setRows(
-          snapshot.docs.map((item) => ({
-          id: item.id,
-          _path: item.ref.path,
-          _parentId: item.ref.parent.parent?.id ?? "",
-          _parentPath: item.ref.parent.parent?.path ?? "",
-          ...item.data(),
-          })),
-        );
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        setRows([]);
-        setError(snapshotError.message);
-        setLoading(false);
-      },
-    );
-    return unsubscribe;
-  }, [enabled, max, name]);
-
-  return { rows, loading, error };
-}
-
-// A plain collectionGroup("reviews") listen (as useAdminCollectionGroup
-// would do) is denied by firestore.rules: the {path=**}/reviews rule that
-// authorizes this collection-group query is only provable when the query
-// itself filters to moderationStatus == "flagged", so that filter has to be
-// baked into the query here rather than left to a generic caller.
+// A plain collectionGroup("reviews") listen is denied by firestore.rules: the
+// {path=**}/reviews rule that authorizes this collection-group query is only
+// provable when the query itself filters to moderationStatus == "flagged", so
+// that filter has to be baked into the query here rather than left to a
+// generic caller.
 function useFlaggedReviews(enabled: boolean, max = 300) {
   const [rows, setRows] = useState<FirestoreRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -2289,6 +2182,9 @@ export function AdminConsole() {
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("today");
+  // Same bundle serves every subdomain, so the tab title has to be set here
+  // rather than in layout metadata - otherwise all three consoles read alike.
+  useConsoleDocumentTitle("admin", tabLabel(activeTab));
   const [toast, setToast] = useState<Toast | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const actionSequence = useRef(0);
@@ -2363,25 +2259,10 @@ export function AdminConsole() {
     tabNeeds("today", "businesses", "operations", "finance", "support"),
     1000,
   );
-  const refunds = useAdminCollection(
-    "walletRefundRequests",
-    tabNeeds("today", "finance", "support"),
-    500,
-  );
   const barrelPoolBalances = useAdminCollection(
     "barrelPoolBalanceRequests",
     tabNeeds("today", "finance", "support"),
     500,
-  );
-  const wallets = useAdminCollection(
-    "wallets",
-    tabNeeds("today", "finance", "support"),
-    1000,
-  );
-  const walletTransactions = useAdminCollectionGroup(
-    "transactions",
-    tabNeeds("today", "finance", "support"),
-    1000,
   );
   const pricing = useAdminCollection(
     "shipmentPricing",
@@ -2432,13 +2313,8 @@ export function AdminConsole() {
     : transportRequests.rows;
   const parkedRows = previewMode ? previewData.parkedCars : parkedCars.rows;
   const purchaseRows = previewMode ? previewData.purchases : purchases.rows;
-  const refundRows = previewMode ? previewData.refunds : refunds.rows;
   const barrelPoolBalanceRows = previewMode ? [] : barrelPoolBalances.rows;
   const flaggedReviewRows = previewMode ? [] : flaggedReviews.rows;
-  const walletRows = previewMode ? previewData.wallets : wallets.rows;
-  const walletTransactionRows = previewMode
-    ? previewData.walletTransactions
-    : walletTransactions.rows;
   const pricingRows = previewMode ? previewData.pricing : pricing.rows;
   const destinationRows = previewMode
     ? previewData.destinations
@@ -2506,7 +2382,6 @@ export function AdminConsole() {
         transportRows,
         parkedRows,
         purchaseRows,
-        refundRows,
         supportRequestRows,
       ]);
   const businessRows = previewMode
@@ -2613,14 +2488,11 @@ export function AdminConsole() {
       action: () => Promise<unknown>,
       options: ActionConfirmationOptions = {},
     ) => {
-      if (
-        options.confirm &&
-        !confirmImportantAction(options.confirm, options.confirmFr)
-      ) {
-        return;
-      }
-      const id = actionSequence.current + 1;
-      actionSequence.current = id;
+      // Resolve the trigger before confirming: the confirmation dialog takes
+      // focus while it is open, so reading document.activeElement afterwards
+      // would find the dialog's own button instead of the control the user
+      // pressed.
+      //
       // Enter-to-submit from a text field leaves document.activeElement on
       // the input, not the button - fall back to the submit button inside
       // that same form so loading/disabled state doesn't silently no-op for
@@ -2635,6 +2507,14 @@ export function AdminConsole() {
               | HTMLButtonElement
               | null)) :
           null;
+      if (
+        options.confirm &&
+        !(await confirmImportantAction(options.confirm, options.confirmFr))
+      ) {
+        return;
+      }
+      const id = actionSequence.current + 1;
+      actionSequence.current = id;
       const triggerWasDisabled = trigger?.disabled ?? false;
       if (trigger) {
         trigger.dataset.loading = "true";
@@ -2674,7 +2554,7 @@ export function AdminConsole() {
       return;
     }
     if (
-      confirmImportantAction(
+      await confirmImportantAction(
         "Sign out? You will need to sign in again to continue.",
         "Se déconnecter ? Vous devrez vous reconnecter pour continuer.",
       )
@@ -2808,7 +2688,6 @@ export function AdminConsole() {
               transportRequests={transportRows}
               parkedCars={parkedRows}
               purchases={purchaseRows}
-              refunds={refundRows}
               applications={applicationRows}
               navigate={setActiveTab}
             />
@@ -2853,7 +2732,6 @@ export function AdminConsole() {
               transports={transportRows}
               parkedCars={parkedRows}
               purchases={purchaseRows}
-              refunds={refundRows}
               destinations={destinationRows}
               contactReferences={userRows.filter(isContactReference)}
               applications={applicationRows}
@@ -2890,14 +2768,11 @@ export function AdminConsole() {
           )}
           {activeTab === "finance" && (
             <FinanceView
-              refunds={refundRows}
               barrelPoolBalances={barrelPoolBalanceRows}
-              wallets={walletRows}
-              walletTransactions={walletTransactionRows}
               businesses={businessRows}
-              users={userRows}
               cars={carRows}
               shipments={shipmentRows}
+              freightShipments={freightRows}
               transports={transportRows}
               parkedCars={parkedRows}
               purchases={purchaseRows}
@@ -3083,7 +2958,6 @@ function Today(props: {
   transportRequests: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
-  refunds: FirestoreRow[];
   applications: FirestoreRow[];
   navigate: (tab: Tab) => void;
 }) {
@@ -3119,14 +2993,6 @@ function Today(props: {
     props.purchases,
     (item) => rowStatus(item, "purchaseStatus") === "pending",
   );
-  const pendingRefunds = props.refunds.filter(
-    (item) => rowStatus(item) === "pending",
-  );
-  const pendingRefundAmount = pendingRefunds.reduce(
-    (total, item) => total + numberValue(item.amount),
-    0,
-  );
-
   const queue = [
     ...props.businesses
       .filter((item) => item.status === "pending")
@@ -3154,22 +3020,6 @@ function Today(props: {
           .join(" • "),
         status: text(item.status, "pending"),
         cta: "Open application",
-      })),
-    ...props.refunds
-      .filter((item) => item.status === "pending")
-      .map((item) => ({
-        id: item.id,
-        kind: "refund" as const,
-        target: "finance" as Tab,
-        label: `${formatMoney(item.amount, text(item.currency, "USD"))} card return`,
-        meta: [
-          text(item.customerEmail, "Customer"),
-          text(item.businessName, ""),
-        ]
-          .filter(Boolean)
-          .join(" • "),
-        status: "pending",
-        cta: "Resolve refund",
       })),
     ...props.purchases
       .filter((item) => item.purchaseStatus === "pending")
@@ -3281,12 +3131,6 @@ function Today(props: {
       total: Math.max(props.purchases.length, 1),
       meta: `Open records: ${pendingPurchases} of ${props.purchases.length}`,
     },
-    {
-      label: "Card returns",
-      value: pendingRefunds.length,
-      total: Math.max(props.refunds.length, 1),
-      meta: `${formatMoney(pendingRefundAmount)} awaiting payout`,
-    },
   ];
 
   const kpis = [
@@ -3313,13 +3157,6 @@ function Today(props: {
       tone: "neutral" as const,
       meta: `Purchase records: ${props.purchases.length}`,
       target: "operations" as Tab,
-    },
-    {
-      label: "Refunds to pay",
-      value: pendingRefunds.length,
-      tone: "money" as const,
-      meta: formatMoney(pendingRefundAmount),
-      target: "finance" as Tab,
     },
   ];
 
@@ -3402,7 +3239,7 @@ function Today(props: {
                 )}
               </div>
             ) : (
-              <EmptyState text="No open approvals, shipments, purchases, or refunds are currently loaded." />
+              <EmptyState text="No open approvals, shipments, or purchases are currently loaded." />
             )}
           </Panel>
         </div>
@@ -4674,9 +4511,30 @@ function PersonDetailWorkspace({
             )}
           {kind === "invitation" && (
             <div className="people-invitation-access">
-              <strong>Invitation awaiting acceptance</strong>
+              <strong>
+                {text(user.invitationStatus, "") === "expired"
+                  ? "Invitation expired"
+                  : "Invitation awaiting acceptance"}
+              </strong>
               <span>
-                Access starts only after the recipient accepts the invitation.
+                {text(user.invitationStatus, "") === "expired"
+                  ? "The link no longer works. Resend it to issue a new one."
+                  : "Access starts only after the recipient accepts the invitation."}
+              </span>
+              {/* An operator chasing an unanswered invitation needs to know
+                  when it went out and when the link dies, not just that one
+                  exists. */}
+              <span>
+                {user.createdAt
+                  ? `Sent ${formatDate(user.createdAt)}`
+                  : "Send date not reported"}
+                {text(user.invitedByName, "") &&
+                  ` by ${text(user.invitedByName, "")}`}
+              </span>
+              <span>
+                {user.expiresAt
+                  ? `Link expires ${formatDate(user.expiresAt)}`
+                  : "No expiry recorded"}
               </span>
             </div>
           )}
@@ -5064,12 +4922,14 @@ function SettingsView({
   }
 
   const roleKeys = Object.keys(draft);
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSection>("access");
 
   return (
     <div className="stack">
       <SectionIntro
         title="Settings"
-        description="Configure how the console works. Create roles, decide what each one can see and do, and limit them to specific services."
+        description="Configure how the console works. Pick a group below - each one holds the settings that answer the same question."
         stats={[
           ["Roles", String(roleKeys.length + 1)],
           ["Services", String(PLATFORM_SERVICES.length)],
@@ -5077,6 +4937,27 @@ function SettingsView({
         ]}
       />
 
+      <div
+        className="service-segments"
+        role="tablist"
+        aria-label="Settings groups"
+      >
+        {settingsSections.map((entry) => (
+          <button
+            key={entry.id}
+            aria-selected={settingsSection === entry.id}
+            className={`segment ${settingsSection === entry.id ? "active" : ""}`}
+            onClick={() => setSettingsSection(entry.id)}
+            role="tab"
+            type="button"
+          >
+            <span>{entry.label}</span>
+            <small>{entry.hint}</small>
+          </button>
+        ))}
+      </div>
+
+      {settingsSection === "access" && (
       <Panel
         title="Roles & permissions"
         icon={<Shield size={18} />}
@@ -5242,8 +5123,10 @@ function SettingsView({
           })}
         </div>
       </Panel>
+      )}
 
       <MoreSettings
+        section={settingsSection}
         businesses={businesses}
         currentUserId={currentUserId}
         notificationDeliveries={notificationDeliveries}
@@ -5328,6 +5211,21 @@ function percentLabelFromRate(value: unknown) {
   return `${Math.round(rate * 10000) / 100}%`;
 }
 
+// Which of the three levels in functions/platform_fees.js decided a rate. An
+// admin who cannot see the level will "fix" a rate at the wrong one, so the
+// per-service editor labels every row with it.
+const PLATFORM_FEE_SOURCE_LABELS: Record<PlatformFeeSource, string> = {
+  business_service: "Service override",
+  business: "Business rate",
+  platform: "Platform default",
+};
+
+const PLATFORM_FEE_SOURCE_CLASSES: Record<PlatformFeeSource, string> = {
+  business_service: "commission-override",
+  business: "commission-status",
+  platform: "commission-default",
+};
+
 function businessCommissionRate(business: FirestoreRow) {
   const rate = Number(
     business.platformFeePct ?? business.platformCommissionPct,
@@ -5389,6 +5287,27 @@ function mergeGeneral(
   };
 }
 
+/**
+ * Settings used to be one continuous scroll of eleven unrelated panels -
+ * roles, rates, branding, notifications - about 1,700 lines of it, with the
+ * permissions matrix alone tall enough that everything after it was below a
+ * wall. Nothing here changes what any setting does; it groups them by the
+ * question being answered so one is in view at a time and new settings have an
+ * obvious home instead of the bottom of the page.
+ */
+type SettingsSection = "access" | "money" | "platform" | "notifications";
+
+const settingsSections: Array<{
+  id: SettingsSection;
+  label: string;
+  hint: string;
+}> = [
+  {id: "access", label: "Roles & access", hint: "Who can do what"},
+  {id: "money", label: "Fees & commission", hint: "What the platform takes"},
+  {id: "platform", label: "Platform", hint: "Branding, features, applications"},
+  {id: "notifications", label: "Notifications", hint: "Delivery and preferences"},
+];
+
 function MoreSettings({
   businesses,
   currentUserId,
@@ -5398,6 +5317,7 @@ function MoreSettings({
   pricing,
   previewMode,
   runAction,
+  section,
 }: {
   businesses: FirestoreRow[];
   currentUserId: string;
@@ -5407,6 +5327,7 @@ function MoreSettings({
   pricing: FirestoreRow[];
   previewMode: boolean;
   runAction: ActionRunner;
+  section: SettingsSection;
 }) {
   const [draft, setDraft] = useState<GeneralSettings>(() =>
     mergeGeneral(undefined),
@@ -5417,6 +5338,10 @@ function MoreSettings({
     STRIPE_FEE_MODE_PLATFORM_ABSORBS,
   );
   const [businessFeeSearch, setBusinessFeeSearch] = useState("");
+  const [serviceFeeBusinessId, setServiceFeeBusinessId] = useState("");
+  const [serviceFeeDrafts, setServiceFeeDrafts] = useState<
+    Record<string, string>
+  >({});
   const [deliverySearch, setDeliverySearch] = useState("");
   const [deliveryStatusFilter, setDeliveryStatusFilter] =
     useState("action_needed");
@@ -5446,6 +5371,22 @@ function MoreSettings({
   const selectedBusinesses = useMemo(
     () => eligibleBusinesses.filter((business) => selectedSet.has(business.id)),
     [eligibleBusinesses, selectedSet],
+  );
+  const serviceFeeBusiness = useMemo(
+    () =>
+      eligibleBusinesses.find(
+        (business) => business.id === serviceFeeBusinessId,
+      ) ?? null,
+    [eligibleBusinesses, serviceFeeBusinessId],
+  );
+  const serviceFeeBusinessOptions = useMemo(
+    () =>
+      eligibleBusinesses.map((business) => ({
+        value: business.id,
+        label: text(business.name ?? business.businessName, business.id),
+        keywords: businessSearchText(business),
+      })),
+    [eligibleBusinesses],
   );
   const sortedDeliveryRows = useMemo(
     () =>
@@ -5515,6 +5456,30 @@ function MoreSettings({
   useEffect(() => {
     setPlatformFeeDraft(percentInputFromRate(serviceFees?.platformFeePct));
   }, [serviceFees]);
+
+  // What is STORED for each service on the selected business, as percent-input
+  // strings ("" when the business has no override of its own). It is joined
+  // into one signature rather than depended on as an object so that a live
+  // snapshot touching an unrelated field on the business does not wipe what
+  // the admin is halfway through typing; the values are decimal strings or
+  // empty, so "|" can never appear inside one.
+  const serviceFeeStoredSignature = useMemo(
+    () =>
+      SERVICE_FEE_KEYS.map((key) => {
+        const stored = storedServiceFeeRate(serviceFeeBusiness, key);
+        return stored === null ? "" : percentInputFromRate(stored);
+      }).join("|"),
+    [serviceFeeBusiness],
+  );
+
+  useEffect(() => {
+    const values = serviceFeeStoredSignature.split("|");
+    setServiceFeeDrafts(
+      Object.fromEntries(
+        SERVICE_FEE_KEYS.map((key, index) => [key, values[index] ?? ""]),
+      ),
+    );
+  }, [serviceFeeBusinessId, serviceFeeStoredSignature]);
 
   useEffect(() => {
     setSelectedBusinessIds((current) => {
@@ -5634,6 +5599,59 @@ function MoreSettings({
     ));
   }
 
+  function setServiceFeeDraft(key: ServiceFeeKey, value: string) {
+    setServiceFeeDrafts((current) => ({ ...current, [key]: value }));
+  }
+
+  // "Inherit" has to REMOVE the field. Writing 0 would not mean "inherit" - 0
+  // is a real rate meaning the platform takes nothing - so this mirrors the
+  // blanket-rate reset above and deletes it.
+  async function clearBusinessServiceFee(
+    business: FirestoreRow,
+    key: ServiceFeeKey,
+  ) {
+    if (previewMode) return;
+    await updateDoc(doc(db, "businesses", business.id), {
+      [`${SERVICE_PLATFORM_FEE_FIELD}.${key}`]: deleteField(),
+      platformFeeUpdatedAt: serverTimestamp(),
+      platformFeeUpdatedBy: currentUserId,
+    });
+  }
+
+  async function clearAllBusinessServiceFees(business: FirestoreRow) {
+    if (previewMode) return;
+    await updateDoc(doc(db, "businesses", business.id), {
+      [SERVICE_PLATFORM_FEE_FIELD]: deleteField(),
+      platformFeeUpdatedAt: serverTimestamp(),
+      platformFeeUpdatedBy: currentUserId,
+    });
+  }
+
+  async function saveBusinessServiceFee(
+    business: FirestoreRow,
+    key: ServiceFeeKey,
+  ) {
+    const edit = parseServiceFeePercent(serviceFeeDrafts[key] ?? "");
+    // Refuse rather than store: the backend IGNORES an out-of-range rate and
+    // falls through to the next level, so a silent save would look like it
+    // worked and change nothing.
+    if (!edit.ok) throw new Error(edit.error);
+    if (edit.action === "clear") {
+      await clearBusinessServiceFee(business, key);
+      return;
+    }
+    if (previewMode) return;
+    await setDoc(
+      doc(db, "businesses", business.id),
+      {
+        [SERVICE_PLATFORM_FEE_FIELD]: { [key]: edit.rate },
+        platformFeeUpdatedAt: serverTimestamp(),
+        platformFeeUpdatedBy: currentUserId,
+      },
+      { merge: true },
+    );
+  }
+
   async function retryDelivery(row: FirestoreRow) {
     if (previewMode) return;
     await httpsCallable(functions, "retryNotificationDelivery")({
@@ -5658,6 +5676,7 @@ function MoreSettings({
 
   return (
     <>
+      {section === "platform" && (
       <Panel
         title="Feature availability"
         icon={<SlidersHorizontal size={18} />}
@@ -5690,7 +5709,9 @@ function MoreSettings({
           />
         </div>
       </Panel>
+      )}
 
+      {section === "money" && (
       <Panel
         title="Platform transaction fee"
         icon={<BadgeDollarSign size={18} />}
@@ -5711,14 +5732,22 @@ function MoreSettings({
           </button>
         }
       >
-        <div className="info-band">
-          This percentage is kept by the platform from each paid customer
-          transaction before calculating the business payout. It is saved to the
-          live payment pricing record used by backend checkout functions.
-        </div>
         <div className="settings-form narrow">
           <label>
-            Platform fee (%)
+            <span className="label-with-info">
+              Platform fee (%)
+              <FieldInfo label="what the platform fee does">
+              <p>
+                Your cut of every customer payment. A 10% fee on a $200 job
+                keeps $20 and pays the business $180.
+              </p>
+              <p>
+                Applies to every service unless a business or a service has its
+                own rate. Changing it affects payments from now on, not ones
+                already taken.
+              </p>
+              </FieldInfo>
+            </span>
             <input
               inputMode="decimal"
               min="0.01"
@@ -5732,7 +5761,9 @@ function MoreSettings({
           </label>
         </div>
       </Panel>
+      )}
 
+      {section === "money" && (
       <Panel
         title="Business commission overrides"
         icon={<Building2 size={18} />}
@@ -5755,13 +5786,20 @@ function MoreSettings({
           </div>
         }
       >
-        <div className="info-band">
-          <span>
-            Business overrides are used before the default platform transaction
-            fee.
-          </span>{" "}
-          <span>Current default</span>: <b>{defaultPlatformFeeLabel}</b>.
-        </div>
+        <p className="panel-lede">
+          Charge one business a different rate from everyone else. Default
+          today is <b>{defaultPlatformFeeLabel}</b>.
+          <FieldInfo label="how a business rate is chosen">
+            <p>
+              A business with its own rate uses it. Everyone else uses the
+              platform default.
+            </p>
+            <p>
+              A per-service rate, set below, beats both - so a business could
+              pay 8% on most work and 5% on parking.
+            </p>
+          </FieldInfo>
+        </p>
         <div className="commission-toolbar">
           <SearchBox
             value={businessFeeSearch}
@@ -5942,7 +5980,162 @@ function MoreSettings({
           )}
         </div>
       </Panel>
+      )}
 
+      {section === "money" && (
+      <Panel
+        title="Per-service commission overrides"
+        icon={<BadgeDollarSign size={18} />}
+        action={
+          <button
+            className="ghost-button"
+            type="button"
+            disabled={!serviceFeeBusiness}
+            onClick={() =>
+              serviceFeeBusiness &&
+              runAction(
+                "Per-service commissions cleared",
+                () => clearAllBusinessServiceFees(serviceFeeBusiness),
+                {
+                  confirm: `Remove every per-service commission for ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)}?`,
+                  confirmFr: `Supprimer toutes les commissions par service pour ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)} ?`,
+                },
+              )
+            }
+          >
+            Inherit every service
+          </button>
+        }
+      >
+        <p className="panel-lede">
+          Charge a different rate for one service. Leave a box empty to use the
+          business&apos;s usual rate. Default today is{" "}
+          <b>{defaultPlatformFeeLabel}</b>.
+          <FieldInfo label="how per-service rates work">
+            <p>
+              A rate here applies to that service only. Everything else keeps
+              the business&apos;s usual rate.
+            </p>
+            <p>
+              Empty is not the same as zero. Empty means &quot;use the usual
+              rate&quot;; <b>0% means you take nothing</b> on that service.
+            </p>
+          </FieldInfo>
+        </p>
+        <div className="commission-toolbar">
+          <SearchableSelect
+            emptyMessage="No businesses match your search."
+            label="Business"
+            listLabel="Business options"
+            onChange={setServiceFeeBusinessId}
+            options={serviceFeeBusinessOptions}
+            placeholder="Search or choose a business"
+            value={serviceFeeBusinessId}
+          />
+        </div>
+        {!serviceFeeBusiness ? (
+          <EmptyState text="Select a business to review and edit its per-service commissions." />
+        ) : (
+          <div className="service-fee-list">
+            <div className="service-fee-head">
+              <span>Service</span>
+              <span>Effective rate</span>
+              <span>In force</span>
+              <span>Override (%)</span>
+              <span />
+            </div>
+            {SERVICE_FEE_KEYS.map((key) => {
+              // Exactly what functions/platform_fees.js will decide for this
+              // business and service, and which of the three levels decided
+              // it.
+              const resolved = resolveServiceFeeForKey(
+                serviceFees,
+                serviceFeeBusiness,
+                key,
+              );
+              const inheritedFrom =
+                resolved.source === "business_service" && resolved.key !== key
+                  ? SERVICE_FEE_LABELS[resolved.key as ServiceFeeKey]
+                  : "";
+              const hasOverride = hasStoredServiceFeeOverride(
+                serviceFeeBusiness,
+                key,
+              );
+              const serviceLabel = SERVICE_FEE_LABELS[key];
+              return (
+                <div className="service-fee-row" key={key}>
+                  <span className="service-fee-name">
+                    <b>{serviceLabel}</b>
+                    {inheritedFrom ? (
+                      <small>
+                        <span>Inherited from</span> {inheritedFrom}
+                      </small>
+                    ) : null}
+                  </span>
+                  <b className="service-fee-rate">
+                    {percentLabelFromRate(resolved.pct)}
+                  </b>
+                  <span className={PLATFORM_FEE_SOURCE_CLASSES[resolved.source]}>
+                    {PLATFORM_FEE_SOURCE_LABELS[resolved.source]}
+                  </span>
+                  <input
+                    aria-label={`${serviceLabel} commission override percent`}
+                    className="service-fee-input"
+                    inputMode="decimal"
+                    min="0"
+                    max="99.99"
+                    step="0.01"
+                    type="number"
+                    value={serviceFeeDrafts[key] ?? ""}
+                    onChange={(event) =>
+                      setServiceFeeDraft(key, event.target.value)
+                    }
+                    placeholder="Inherit"
+                  />
+                  <span className="service-fee-actions">
+                    <button
+                      className="primary-button compact"
+                      type="button"
+                      onClick={() =>
+                        runAction(
+                          "Service commission saved",
+                          () => saveBusinessServiceFee(serviceFeeBusiness, key),
+                          {
+                            confirm: `Save the ${serviceLabel} commission for ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)}?`,
+                            confirmFr: `Enregistrer la commission ${serviceLabel} pour ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)} ?`,
+                          },
+                        )
+                      }
+                    >
+                      Save
+                    </button>
+                    <button
+                      className="ghost-button compact"
+                      type="button"
+                      disabled={!hasOverride}
+                      onClick={() =>
+                        runAction(
+                          "Service commission cleared",
+                          () => clearBusinessServiceFee(serviceFeeBusiness, key),
+                          {
+                            confirm: `Remove the ${serviceLabel} commission override for ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)}?`,
+                            confirmFr: `Supprimer la commission spécifique ${serviceLabel} pour ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)} ?`,
+                          },
+                        )
+                      }
+                    >
+                      Inherit
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
+      )}
+
+      {section === "platform" && (
       <Panel
         title="Internal platform branding"
         icon={<Store size={18} />}
@@ -6012,7 +6205,9 @@ function MoreSettings({
           </label>
         </div>
       </Panel>
+      )}
 
+      {section === "platform" && (
       <Panel
         title="Business application requirements"
         icon={<Building2 size={18} />}
@@ -6066,7 +6261,9 @@ function MoreSettings({
           />
         </div>
       </Panel>
+      )}
 
+      {section === "notifications" && (
       <Panel
         title="Notifications & email preferences"
         icon={<Send size={18} />}
@@ -6272,7 +6469,9 @@ function MoreSettings({
           />
         </div>
       </Panel>
+      )}
 
+      {section === "notifications" && (
       <Panel
         title="Notification delivery audit"
         icon={<ClipboardList size={18} />}
@@ -6411,6 +6610,7 @@ function MoreSettings({
           )}
         </div>
       </Panel>
+      )}
     </>
   );
 }
@@ -8042,7 +8242,6 @@ function BusinessesView({
   transports,
   parkedCars,
   purchases,
-  refunds,
   destinations,
   contactReferences,
   applications,
@@ -8057,7 +8256,6 @@ function BusinessesView({
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
-  refunds: FirestoreRow[];
   destinations: FirestoreRow[];
   contactReferences: FirestoreRow[];
   applications: FirestoreRow[];
@@ -8185,7 +8383,6 @@ function BusinessesView({
         belongsToBusiness(item, business),
       ),
       purchases: purchases.filter((item) => belongsToBusiness(item, business)),
-      refunds: refunds.filter((item) => belongsToBusiness(item, business)),
       destinations: destinations.filter((item) =>
         belongsToBusiness(item, business),
       ),
@@ -8212,7 +8409,6 @@ function BusinessesView({
         slices.purchases,
         (item) => rowStatus(item, "purchaseStatus") === "pending",
       ) +
-      countWhere(slices.refunds, (item) => rowStatus(item) === "pending") +
       slices.applications.length +
       businessVerificationActionCount(business) +
       countWhere(
@@ -9061,7 +9257,6 @@ function BusinessWorkspace({
   transports,
   parkedCars,
   purchases,
-  refunds,
   destinations,
   contactReferences,
   applications,
@@ -9079,7 +9274,6 @@ function BusinessWorkspace({
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
-  refunds: FirestoreRow[];
   destinations: FirestoreRow[];
   contactReferences: FirestoreRow[];
   applications: FirestoreRow[];
@@ -9156,10 +9350,6 @@ function BusinessWorkspace({
     purchases,
     (item) => rowStatus(item, "purchaseStatus") === "pending",
   );
-  const openRefunds = countWhere(
-    refunds,
-    (item) => rowStatus(item) === "pending",
-  );
   const activeListings = countWhere(
     cars,
     (item) => rowStatus(item) === "active",
@@ -9171,7 +9361,6 @@ function BusinessWorkspace({
     ["Transport", transports.length],
     ["Parking", parkedCars.length],
     ["Purchases", purchases.length],
-    ["Refunds", refunds.length],
     [
       "Destinations",
       destinations.filter((item) => item.isActive === true).length,
@@ -9206,17 +9395,6 @@ function BusinessWorkspace({
       id: `parking-${item.id}`,
       title: relatedRecordTitle(item, "Parked car"),
       subtitle: relatedRecordMeta(item),
-      badge: statusLabel(item.status),
-    })),
-    ...refunds.map((item) => ({
-      id: `refund-${item.id}`,
-      title: `${optionalMoney(item.amount, text(item.currency, "USD")) || "Card return"}`,
-      subtitle: [
-        text(item.customerEmail ?? item.customerName, ""),
-        relatedContactSummary(item),
-      ]
-        .filter(Boolean)
-        .join(" • "),
       badge: statusLabel(item.status),
     })),
     ...applications.map((item) => ({
@@ -9423,9 +9601,6 @@ function BusinessWorkspace({
         </span>
         <span>
           <b>{openPurchases}</b> open purchases
-        </span>
-        <span className={openRefunds > 0 ? "warn" : ""}>
-          <b>{openRefunds}</b> refunds to pay
         </span>
         <span>
           <b>{members.length}</b> people
@@ -9790,27 +9965,6 @@ function BusinessWorkspace({
                   rows={purchases}
                   statusField="purchaseStatus"
                 />
-                <div className="subsection">
-                  <h3>Refund requests</h3>
-                  <div className="row-list compact">
-                    {refunds.map((item) => (
-                      <DataRow
-                        key={item.id}
-                        title={`${optionalMoney(item.amount, text(item.currency, "USD")) || "Refund request"}`}
-                        subtitle={[
-                          text(item.customerEmail, "Customer"),
-                          formatDate(item.createdAt),
-                        ]
-                          .filter(Boolean)
-                          .join(" • ")}
-                        badge={statusLabel(item.status)}
-                      />
-                    ))}
-                    {refunds.length === 0 && (
-                      <EmptyState text="No refund requests for this business." />
-                    )}
-                  </div>
-                </div>
               </div>
             )}
 
@@ -11688,8 +11842,6 @@ function financeLedgerRow({
 }
 
 function buildFinanceLedgerRows({
-  walletTransactions,
-  refunds,
   barrelPoolBalances,
   shipments,
   transports,
@@ -11698,8 +11850,6 @@ function buildFinanceLedgerRows({
   cars,
   businesses,
 }: {
-  walletTransactions: FirestoreRow[];
-  refunds: FirestoreRow[];
   barrelPoolBalances: FirestoreRow[];
   shipments: FirestoreRow[];
   transports: FirestoreRow[];
@@ -11708,61 +11858,7 @@ function buildFinanceLedgerRows({
   cars: FirestoreRow[];
   businesses: FirestoreRow[];
 }) {
-  const refundById = new Map(refunds.map((refund) => [refund.id, refund]));
   const rows: FinanceLedgerRow[] = [];
-
-  walletTransactions.forEach((transaction) => {
-    const refund = refundById.get(optionalText(transaction.refundRequestId));
-    const merged = {
-      ...refund,
-      ...transaction,
-      customerUid:
-        transaction.customerUid ?? transaction._parentId ?? refund?.customerUid,
-      customerEmail: transaction.customerEmail ?? refund?.customerEmail,
-      customerName: transaction.customerName ?? refund?.customerName,
-      customerPhone: transaction.customerPhone ?? refund?.customerPhone,
-      businessId: transaction.businessId ?? refund?.businessId,
-      businessName: transaction.businessName ?? refund?.businessName,
-    };
-    const amount = amountFromRecord(
-      merged,
-      ["amountCents", "walletAppliedCents"],
-      ["amount", "walletAppliedAmount"],
-    );
-    rows.push(
-      financeLedgerRow({
-      row: merged,
-      source: "wallet",
-      sourceLabel: "Wallet transaction",
-      sourceCollection: "wallets/transactions",
-      title: firstText(merged, ["reason", "type"], "Wallet transaction"),
-      amount,
-      businesses,
-      }),
-    );
-  });
-
-  refunds.forEach((refund) => {
-    const amount = amountFromRecord(refund, ["amountCents"], ["amount"]);
-    const sharedBarrelRefund = text(refund.source, "") === "barrel_pool";
-    rows.push(
-      financeLedgerRow({
-      row: refund,
-      source: "refund",
-        sourceLabel: sharedBarrelRefund
-          ? "Shared barrel refund"
-          : "Card return",
-      sourceCollection: "walletRefundRequests",
-      title: firstText(
-        refund,
-        ["customerEmail", "customerName"],
-        sharedBarrelRefund ? "Shared barrel refund" : "Card return request",
-      ),
-      amount,
-      businesses,
-      }),
-    );
-  });
 
   barrelPoolBalances.forEach((balance) => {
     const amount = amountFromRecord(balance, ["amountCents"], ["amount"]);
@@ -11786,8 +11882,8 @@ function buildFinanceLedgerRows({
   shipments.forEach((shipment) => {
     const amount = amountFromRecord(
       shipment,
-      ["totalCents", "priceCents", "amountCents", "walletAppliedCents"],
-      ["total", "price", "amount", "walletAppliedAmount"],
+      ["totalCents", "priceCents", "amountCents"],
+      ["total", "price", "amount"],
     );
     rows.push(
       financeLedgerRow({
@@ -11904,182 +12000,382 @@ function supportDraftFromLedgerRow(row: FinanceLedgerRow): SupportDraft {
   };
 }
 
-function amountFromWallet(
-  wallet: FirestoreRow | undefined,
-  centsField: string,
-  amountField: string,
-) {
-  if (!wallet) return 0;
-  const cents = Number(wallet[centsField] ?? 0);
-  if (Number.isFinite(cents) && cents !== 0) return cents / 100;
-  const amount = Number(wallet[amountField] ?? 0);
-  return Number.isFinite(amount) ? amount : 0;
+const COMMISSION_EARNED_COLOR = "var(--money)";
+const COMMISSION_PENDING_COLOR = "var(--accent)";
+
+/** One breakdown line: a named thing and what it has produced for the platform. */
+type CommissionBreakdownRow = {
+  key: string;
+  name: string;
+  earnedCents: number;
+  pendingCents: number;
+  records: number;
+};
+
+function commissionMoney(cents: number) {
+  return formatMoney(centsToDollars(cents));
 }
 
-function refundCustomerId(item: FirestoreRow) {
-  return text(
-    item.customerUid ?? item.uid ?? item.userId ?? item.customerId,
-    "",
+/**
+ * Commission over time as an inline SVG column chart, with the same numbers in
+ * a table underneath. A chart on its own says nothing to a screen reader and
+ * nothing at all when the data is empty, so the table is not optional decoration
+ * — it is the accessible copy of the picture.
+ */
+function CommissionTrendChart({ series }: { series: PlatformEarningsSeries }) {
+  const points = series.points;
+  const width = 720;
+  const height = 170;
+  const paddingBottom = 22;
+  const plotHeight = height - paddingBottom;
+  const step = points.length > 0 ? width / points.length : width;
+  const barWidth = Math.max(1, Math.min(46, step - 3));
+  const max = Math.max(
+    1,
+    ...points.map((point) => point.earnedCents + point.pendingCents),
   );
-}
-
-function refundCustomerEmail(item: FirestoreRow) {
-  return text(item.customerEmail ?? item.email ?? item.buyerEmail, "");
-}
-
-function walletCustomerId(wallet: FirestoreRow) {
-  return text(wallet.customerUid ?? wallet.id, "");
-}
-
-function findWalletForRefund(item: FirestoreRow, wallets: FirestoreRow[]) {
-  const customerId = refundCustomerId(item);
-  if (!customerId) return undefined;
-  return wallets.find((wallet) => walletCustomerId(wallet) === customerId);
-}
-
-function findUserForRefund(item: FirestoreRow, users: FirestoreRow[]) {
-  const customerId = refundCustomerId(item);
-  const customerEmail = refundCustomerEmail(item).toLowerCase();
-  return users.find((user) => {
-    const userId = text(user.uid ?? user.id, "");
-    const email = text(user.email, "").toLowerCase();
-    return Boolean(
-      (customerId && userId === customerId) ||
-      (customerEmail && email === customerEmail),
-    );
-  });
-}
-
-function RefundRequestRow({
-  item,
-  wallet,
-  user,
-  canManage,
-  reviewRefund,
-  runAction,
-}: {
-  item: FirestoreRow;
-  wallet?: FirestoreRow;
-  user?: FirestoreRow;
-  canManage: boolean;
-  reviewRefund: (
-    requestId: string,
-    decision: "completed" | "rejected",
-    note: string,
-  ) => Promise<void>;
-  runAction: ActionRunner;
-}) {
-  const [note, setNote] = useState("");
-  const status = rowStatus(item);
-  const currency = text(item.currency, "USD");
-  const balance = amountFromWallet(wallet, "balanceCents", "balance");
-  const pending = amountFromWallet(
-    wallet,
-    "pendingRefundCents",
-    "pendingRefund",
-  );
-  const customerId = refundCustomerId(item);
-  const accountLabel = user
-    ? userDisplayName(user)
-    : refundCustomerEmail(item) || customerId || "Customer";
-  const walletLabel = wallet
-    ? `Wallet available ${formatMoney(balance, currency)} • Pending return ${formatMoney(pending, currency)}`
-    : "No wallet account loaded";
+  const totalEarned = points.reduce((sum, point) => sum + point.earnedCents, 0);
+  const totalPending = points.reduce((sum, point) => sum + point.pendingCents, 0);
+  const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+  const periodLabel = series.granularity === "day" ? "Per day" : "Per month";
 
   return (
-    <div className="data-row finance-row refund-account-row">
-      <div className="finance-account-main">
-        <strong>{formatMoney(item.amount, currency)}</strong>
-        <small>
-          {[
-            accountLabel,
-            refundCustomerEmail(item),
-            customerId ? `UID ${customerId}` : "",
-            formatDate(item.createdAt),
-          ]
-            .filter(Boolean)
-            .join(" • ")}
-        </small>
-        <div className="finance-account-grid">
-          <span>
-            Wallet balance <b>{formatMoney(balance, currency)}</b>
-          </span>
-          <span>
-            Pending return <b>{formatMoney(pending, currency)}</b>
-          </span>
-          <span>
-            Request amount <b>{formatMoney(item.amount, currency)}</b>
-          </span>
-          <span>{walletLabel}</span>
-        </div>
+    <article className="commission-chart-card">
+      <div className="chart-head">
+        <h3>Commission over time</h3>
+        <span className="chart-total">{commissionMoney(totalEarned)}</span>
       </div>
-      <span className={`status-pill ${status === "pending" ? "warning" : ""}`}>
-        {statusLabel(status)}
-      </span>
-      {status === "pending" && canManage ? (
-        <div className="finance-review-tools">
-          <input
-            aria-label={`Review note for ${accountLabel}`}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Review note"
-            value={note}
+      <ul className="commission-legend">
+        <li>
+          <span className="dot" style={{ background: COMMISSION_EARNED_COLOR }} />
+          Earned<b>{commissionMoney(totalEarned)}</b>
+        </li>
+        <li>
+          <span className="dot" style={{ background: COMMISSION_PENDING_COLOR }} />
+          Pending<b>{commissionMoney(totalPending)}</b>
+        </li>
+      </ul>
+      {points.length === 0 ? (
+        <EmptyState text="No dated records yet, so there is nothing to chart." />
+      ) : (
+        <svg
+          aria-hidden="true"
+          className="commission-chart"
+          focusable="false"
+          viewBox={`0 0 ${width} ${height}`}
+        >
+          <line
+            stroke="var(--rule)"
+            strokeWidth="1"
+            x1="0"
+            x2={width}
+            y1={plotHeight}
+            y2={plotHeight}
           />
-          <div className="row-actions">
-            <button
-              className="secondary-button"
-              onClick={() =>
-                runAction(
-                "Refund request completed",
-                () => reviewRefund(item.id, "completed", note),
-                {
-                    confirm: "Mark this refund request completed?",
-                  confirmFr:
-                    "Marquer cette demande de remboursement comme terminée ?",
-                },
-                )
+          {points.map((point, index) => {
+            const x = index * step + (step - barWidth) / 2;
+            const earnedHeight = (point.earnedCents / max) * (plotHeight - 6);
+            const pendingHeight = (point.pendingCents / max) * (plotHeight - 6);
+            return (
+              <g key={point.key}>
+                <rect
+                  fill={COMMISSION_PENDING_COLOR}
+                  height={pendingHeight}
+                  opacity="0.75"
+                  width={barWidth}
+                  x={x}
+                  y={plotHeight - earnedHeight - pendingHeight}
+                />
+                <rect
+                  fill={COMMISSION_EARNED_COLOR}
+                  height={earnedHeight}
+                  width={barWidth}
+                  x={x}
+                  y={plotHeight - earnedHeight}
+                />
+                {index % labelEvery === 0 && (
+                  <text
+                    fill="var(--muted)"
+                    fontSize="11"
+                    textAnchor="middle"
+                    x={x + barWidth / 2}
+                    y={height - 6}
+                  >
+                    {point.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      )}
+      <details className="commission-data">
+        <summary>Show these numbers as a table</summary>
+        <table className="commission-table">
+          <caption className="sr-only">Commission earned and pending per period</caption>
+          <thead>
+            <tr>
+              <th scope="col">{periodLabel}</th>
+              <th scope="col">Earned</th>
+              <th scope="col">Pending</th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((point) => (
+              <tr key={point.key}>
+                <th scope="row">{point.label}</th>
+                <td>{commissionMoney(point.earnedCents)}</td>
+                <td>{commissionMoney(point.pendingCents)}</td>
+              </tr>
+            ))}
+            {points.length === 0 && (
+              <tr>
+                <th scope="row">No periods</th>
+                <td>{commissionMoney(0)}</td>
+                <td>{commissionMoney(0)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </details>
+      {series.undatedRecords > 0 && (
+        <small className="commission-note">
+          {series.undatedRecords.toLocaleString()} records carry no usable date, so
+          they are in the totals above but not in this chart.
+        </small>
+      )}
+    </article>
+  );
+}
+
+/**
+ * A horizontal bar per row, drawn inside the table that carries the numbers.
+ * The bar and the figures are the same element, so there is no chart a screen
+ * reader can miss and no table that can drift out of step with the picture.
+ */
+function CommissionBreakdown({
+  title,
+  unitLabel,
+  rows,
+  emptyText,
+  selectedKey,
+  onSelect,
+  selectHint,
+}: {
+  title: string;
+  unitLabel: string;
+  rows: CommissionBreakdownRow[];
+  emptyText: string;
+  selectedKey: string;
+  onSelect: (key: string) => void;
+  selectHint: string;
+}) {
+  const max = Math.max(
+    1,
+    ...rows.map((row) => row.earnedCents + row.pendingCents),
+  );
+  const totalEarned = rows.reduce((sum, row) => sum + row.earnedCents, 0);
+
+  return (
+    <article className="commission-chart-card">
+      <div className="chart-head">
+        <h3>{title}</h3>
+        <span className="chart-total">{commissionMoney(totalEarned)}</span>
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState text={emptyText} />
+      ) : (
+        <table className="commission-table commission-bar-table">
+          <thead>
+            <tr>
+              <th scope="col">{unitLabel}</th>
+              <th scope="col">Commission share</th>
+              <th scope="col">Earned</th>
+              <th scope="col">Pending</th>
+              <th scope="col">Records</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const earnedWidth = (row.earnedCents / max) * 100;
+              const pendingWidth = (row.pendingCents / max) * 100;
+              const selected = selectedKey === row.key;
+              return (
+                <tr
+                  className={selected ? "is-selected" : undefined}
+                  key={row.key}
+                >
+                  <th scope="row">
+                    <button
+                      aria-pressed={selected}
+                      className="commission-pick"
+                      onClick={() => onSelect(selected ? "" : row.key)}
+                      title={selected ? selectHint : row.name}
+                      type="button"
+                    >
+                      {row.name}
+                    </button>
+                  </th>
+                  <td className="commission-bar-cell">
+                    <svg
+                      aria-hidden="true"
+                      className="commission-bar"
+                      focusable="false"
+                      preserveAspectRatio="none"
+                      viewBox="0 0 100 10"
+                    >
+                      <rect
+                        fill={COMMISSION_EARNED_COLOR}
+                        height="10"
+                        rx="2"
+                        width={Math.max(earnedWidth, earnedWidth > 0 ? 0.6 : 0)}
+                        x="0"
+                        y="0"
+                      />
+                      <rect
+                        fill={COMMISSION_PENDING_COLOR}
+                        height="10"
+                        opacity="0.75"
+                        rx="2"
+                        width={Math.max(pendingWidth, pendingWidth > 0 ? 0.6 : 0)}
+                        x={earnedWidth}
+                        y="0"
+                      />
+                    </svg>
+                  </td>
+                  <td>{commissionMoney(row.earnedCents)}</td>
+                  <td>{commissionMoney(row.pendingCents)}</td>
+                  <td>{row.records.toLocaleString()}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </article>
+  );
+}
+
+/**
+ * What the platform itself has made, above the transaction list.
+ *
+ * The list below shows gross, customer-facing amounts. This section answers the
+ * questions that number cannot: what has actually been collected, what is still
+ * expected, and which businesses and services it came from.
+ */
+function PlatformCommissionSummary({
+  summary,
+  businessRows,
+  serviceRows,
+  focus,
+  onFocusChange,
+  focusLabel,
+  hasRecords,
+}: {
+  summary: PlatformEarningsSummary;
+  businessRows: PlatformEarningsBusinessRow[];
+  serviceRows: PlatformEarningsServiceRow[];
+  focus: PlatformEarningsFocus;
+  onFocusChange: (next: PlatformEarningsFocus) => void;
+  focusLabel: string;
+  hasRecords: boolean;
+}) {
+  const { totals, series } = summary;
+  const focused = Boolean(focus.businessKey || focus.serviceId);
+
+  return (
+    <Panel title="Platform commission" icon={<TrendingUp size={18} />}>
+      {!hasRecords ? (
+        <EmptyState text="No commission has been recorded yet. Once a business takes a paid order, what the platform earned appears here." />
+      ) : (
+        <div className="commission-summary">
+          <div className="metric-grid commission-headline">
+            <article className="metric good">
+              <span>Commission earned</span>
+              <strong>{commissionMoney(totals.earnedCents)}</strong>
+              <small>Collected from orders the customer has paid</small>
+            </article>
+            <article className="metric attention">
+              <span>Commission pending</span>
+              <strong>{commissionMoney(totals.pendingCents)}</strong>
+              <small>Expected once these customers pay</small>
+            </article>
+            <article className="metric neutral">
+              <span>Gross volume</span>
+              <strong>{commissionMoney(totals.grossCents)}</strong>
+              <small>What customers were charged, not platform income</small>
+            </article>
+            <article className="metric neutral">
+              <span>Not commissionable</span>
+              <strong>{commissionMoney(totals.notCommissionableCents)}</strong>
+              <small>Direct and Zelle payments the platform never bills</small>
+            </article>
+          </div>
+          {focused ? (
+            <div className="commission-focus-bar">
+              <span className="commission-focus-label">{focusLabel}</span>
+              <button
+                className="ghost-button"
+                onClick={() => onFocusChange({})}
+                type="button"
+              >
+                Show everything again
+              </button>
+            </div>
+          ) : (
+            <div className="info-band commission-explainer">
+              Direct and Zelle payments are recorded so the business has paper, but the
+              platform never bills them and takes no cut, so they are counted here and
+              nowhere else.
+            </div>
+          )}
+          <CommissionTrendChart series={series} />
+          <div className="commission-breakdown-grid">
+            <CommissionBreakdown
+              emptyText="No business has produced a commissionable record yet."
+              onSelect={(key) =>
+                onFocusChange({ ...focus, businessKey: key })
               }
-            >
-              <Check size={15} />
-              Complete
-            </button>
-            <button
-              className="danger-button"
-              onClick={() =>
-                runAction(
-                "Refund request rejected",
-                () => reviewRefund(item.id, "rejected", note),
-                {
-                  confirm:
-                    "Return this pending amount to the customer's wallet?",
-                  confirmFr:
-                    "Renvoyer ce montant en attente dans le portefeuille du client ?",
-                },
-                )
-              }
-            >
-              <X size={15} />
-              Reject
-            </button>
+              rows={businessRows.map((row) => ({
+                key: row.key,
+                name: row.name,
+                earnedCents: row.earnedCents,
+                pendingCents: row.pendingCents,
+                records: row.records,
+              }))}
+              selectHint="Show every business again"
+              selectedKey={focus.businessKey ?? ""}
+              title="Commission by business"
+              unitLabel="Business"
+            />
+            <CommissionBreakdown
+              emptyText="No service has produced a commissionable record yet."
+              onSelect={(key) => onFocusChange({ ...focus, serviceId: key })}
+              rows={serviceRows.map((row) => ({
+                key: row.serviceId,
+                name: row.label,
+                earnedCents: row.earnedCents,
+                pendingCents: row.pendingCents,
+                records: row.records,
+              }))}
+              selectHint="Show every service again"
+              selectedKey={focus.serviceId ?? ""}
+              title="Commission by service"
+              unitLabel="Service"
+            />
           </div>
         </div>
-      ) : (
-        <span className="muted-action">
-          {status === "pending" ? "View only" : "Reviewed"}
-        </span>
       )}
-    </div>
+    </Panel>
   );
 }
 
 function FinanceView({
-  refunds,
   barrelPoolBalances,
-  wallets,
-  walletTransactions,
   businesses,
-  users,
   cars,
   shipments,
+  freightShipments,
   transports,
   parkedCars,
   purchases,
@@ -12088,14 +12384,11 @@ function FinanceView({
   canManage,
   canSendSupport,
 }: {
-  refunds: FirestoreRow[];
   barrelPoolBalances: FirestoreRow[];
-  wallets: FirestoreRow[];
-  walletTransactions: FirestoreRow[];
   businesses: FirestoreRow[];
-  users: FirestoreRow[];
   cars: FirestoreRow[];
   shipments: FirestoreRow[];
+  freightShipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
@@ -12104,6 +12397,9 @@ function FinanceView({
   canManage: boolean;
   canSendSupport: boolean;
 }) {
+  const [commissionFocus, setCommissionFocus] = useState<PlatformEarningsFocus>(
+    {},
+  );
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [businessFilter, setBusinessFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -12111,9 +12407,6 @@ function FinanceView({
   const [supportDraft, setSupportDraft] = useState<SupportDraft>(() =>
     emptySupportDraft(),
   );
-  const totalPending = refunds
-    .filter((item) => item.status === "pending")
-    .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
   const pendingBarrelBalanceCount = barrelPoolBalances.filter(
     (item) => item.status === "pending",
   ).length;
@@ -12123,20 +12416,9 @@ function FinanceView({
       (sum, item) => sum + amountFromRecord(item, ["amountCents"], ["amount"]),
       0,
     );
-  const walletBalanceTotal = wallets.reduce(
-    (sum, wallet) => sum + amountFromWallet(wallet, "balanceCents", "balance"),
-    0,
-  );
-  const pendingWalletTotal = wallets.reduce(
-    (sum, wallet) =>
-      sum + amountFromWallet(wallet, "pendingRefundCents", "pendingRefund"),
-    0,
-  );
   const ledgerRows = useMemo(
     () =>
       buildFinanceLedgerRows({
-    walletTransactions,
-    refunds,
     barrelPoolBalances,
     shipments,
     transports,
@@ -12146,8 +12428,6 @@ function FinanceView({
     businesses,
       }),
     [
-    walletTransactions,
-    refunds,
     barrelPoolBalances,
     shipments,
     transports,
@@ -12157,6 +12437,79 @@ function FinanceView({
     businesses,
     ],
   );
+  // The platform's own books, from the records this view already holds. No
+  // extra Firestore reads: the same arrays that build the ledger below.
+  const earningsRecords = useMemo(
+    () => ({
+      shipments,
+      freightShipments,
+      transports,
+      parkedCars,
+      purchases,
+      businesses,
+    }),
+    [
+      shipments,
+      freightShipments,
+      transports,
+      parkedCars,
+      purchases,
+      businesses,
+    ],
+  );
+  const platformEarnings = useMemo(
+    () => summarizePlatformEarnings(earningsRecords),
+    [earningsRecords],
+  );
+  // The two breakdowns cross-filter each other, so each is summarized against
+  // the *other* axis only. Picking a service re-ranks the businesses by what
+  // they earned on that service, and picking a business re-ranks its services,
+  // while both lists stay complete enough to change your mind from.
+  const commissionFocused = useMemo(
+    () =>
+      commissionFocus.businessKey || commissionFocus.serviceId
+        ? summarizePlatformEarnings({ ...earningsRecords, focus: commissionFocus })
+        : platformEarnings,
+    [earningsRecords, platformEarnings, commissionFocus],
+  );
+  const commissionBusinessRows = useMemo(
+    () =>
+      commissionFocus.serviceId
+        ? summarizePlatformEarnings({
+            ...earningsRecords,
+            focus: { serviceId: commissionFocus.serviceId },
+          }).byBusiness
+        : platformEarnings.byBusiness,
+    [earningsRecords, platformEarnings, commissionFocus.serviceId],
+  );
+  const commissionServiceRows = useMemo(
+    () =>
+      commissionFocus.businessKey
+        ? summarizePlatformEarnings({
+            ...earningsRecords,
+            focus: { businessKey: commissionFocus.businessKey },
+          }).byService
+        : platformEarnings.byService,
+    [earningsRecords, platformEarnings, commissionFocus.businessKey],
+  );
+  const commissionFocusLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (commissionFocus.businessKey) {
+      parts.push(
+        platformEarnings.byBusiness.find(
+          (row) => row.key === commissionFocus.businessKey,
+        )?.name ?? "",
+      );
+    }
+    if (commissionFocus.serviceId) {
+      parts.push(
+        platformEarnings.byService.find(
+          (row) => row.serviceId === commissionFocus.serviceId,
+        )?.label ?? "",
+      );
+    }
+    return parts.filter(Boolean).join(" - ");
+  }, [platformEarnings, commissionFocus]);
   const sourceOptions = useMemo(() => {
     const options = new Map<string, string>();
     ledgerRows.forEach((row) => options.set(row.source, row.sourceLabel));
@@ -12205,20 +12558,6 @@ function FinanceView({
     (business) => business._inferred !== true,
   );
 
-  async function reviewRefund(
-    requestId: string,
-    decision: "completed" | "rejected",
-    note: string,
-  ) {
-    await httpsCallable(
-      functions,
-      "reviewWalletRefundRequest",
-    )({
-      requestId,
-      decision,
-      note: note.trim(),
-    });
-  }
   async function markBalanceCollected(requestId: string, note: string) {
     await httpsCallable(
       functions,
@@ -12229,52 +12568,50 @@ function FinanceView({
     });
   }
 
+  // An empty queue carries no information, so it stays out of the header until
+  // there is something to act on. The page used to open with eight figures of
+  // which six were permanently zero, which buried the two that move.
+  const financeHeadlineStats = useMemo(() => {
+    const stats: Array<[string, string]> = [
+      [
+        "Commission earned",
+        commissionMoney(platformEarnings.totals.earnedCents),
+      ],
+      [
+        "Commission pending",
+        commissionMoney(platformEarnings.totals.pendingCents),
+      ],
+      ["Businesses earning", String(platformEarnings.byBusiness.length)],
+    ];
+    if (pendingBarrelBalanceCount > 0) {
+      stats.push([
+        "Shared balances due",
+        formatMoney(pendingBarrelBalanceTotal),
+      ]);
+    }
+    return stats;
+  }, [
+    platformEarnings,
+    pendingBarrelBalanceCount,
+    pendingBarrelBalanceTotal,
+  ]);
+
   return (
     <div className="stack">
       <SectionIntro
-        title="Finance queue"
-        description="Monitor wallet balance return requests and finance readiness."
-        stats={[
-          [
-            "Pending refunds",
-            String(refunds.filter((item) => item.status === "pending").length),
-          ],
-          ["Pending amount", formatMoney(totalPending)],
-          ["Shared balances due", String(pendingBarrelBalanceCount)],
-          ["Balance due amount", formatMoney(pendingBarrelBalanceTotal)],
-          ["Wallet balance", formatMoney(walletBalanceTotal)],
-          ["Pending in wallets", formatMoney(pendingWalletTotal)],
-          ["Ledger rows", String(ledgerRows.length)],
-          [
-            "Customers",
-            String(users.filter((item) => item.role === "customer").length),
-          ],
-        ]}
+        title="Finance"
+        description="What the platform has earned, and anything waiting on a decision."
+        stats={financeHeadlineStats}
       />
-      <div className="metric-grid">
-        <article className="metric money">
-          <span>Pending refund amount</span>
-          <strong>{formatMoney(totalPending)}</strong>
-        </article>
-        <article className="metric attention">
-          <span>Refund requests</span>
-          <strong>
-            {refunds.filter((item) => item.status === "pending").length}
-          </strong>
-        </article>
-        <article className="metric attention">
-          <span>Shared balances due</span>
-          <strong>{formatMoney(pendingBarrelBalanceTotal)}</strong>
-        </article>
-        <article className="metric good">
-          <span>Customer wallet balance</span>
-          <strong>{formatMoney(walletBalanceTotal)}</strong>
-        </article>
-        <article className="metric neutral">
-          <span>Pending in wallets</span>
-          <strong>{formatMoney(pendingWalletTotal)}</strong>
-        </article>
-      </div>
+      <PlatformCommissionSummary
+        businessRows={commissionBusinessRows}
+        focus={commissionFocus}
+        focusLabel={commissionFocusLabel}
+        hasRecords={platformEarnings.totals.records > 0}
+        onFocusChange={setCommissionFocus}
+        serviceRows={commissionServiceRows}
+        summary={commissionFocused}
+      />
       <Panel
         title="All business transactions"
         icon={<BadgeDollarSign size={18} />}
@@ -12400,34 +12737,6 @@ function FinanceView({
           ))}
           {supportRequests.length === 0 && (
             <EmptyState text="No business support requests have been sent yet." />
-          )}
-        </div>
-      </Panel>
-      <Panel
-        title="Wallet card return requests"
-        icon={<BadgeDollarSign size={18} />}
-      >
-        <div className="info-band">
-          Review the customer account and wallet balance before action. Complete
-          after the external card return is done. Reject moves the pending
-          amount back to the customer's wallet.
-        </div>
-        <div className="row-list">
-          {refunds.map((item) => (
-            <RefundRequestRow
-              key={item.id}
-              item={item}
-              wallet={findWalletForRefund(item, wallets)}
-              user={findUserForRefund(item, users)}
-              canManage={canManage}
-              reviewRefund={reviewRefund}
-              runAction={runAction}
-            />
-          ))}
-          {refunds.length === 0 && (
-            <div className="empty-state">
-              No wallet card return requests are loaded.
-            </div>
           )}
         </div>
       </Panel>
@@ -13014,7 +13323,7 @@ function tabHint(tab: Tab) {
     people: "Admins & customers",
     operations: "Barrels, freight, transport, parking",
     marketplace: "Listings by business",
-    finance: "Refund queue",
+    finance: "Commission & returns",
     support: "Escalated cases",
     website: "Site content",
     tools: "Setup utilities",

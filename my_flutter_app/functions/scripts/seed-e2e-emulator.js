@@ -251,8 +251,6 @@ async function main() {
     customerEmail: "e2e.customer@laawol.test",
     cardChargeAmount: 125,
     cardChargeAmountCents: 12500,
-    walletAppliedAmount: 0,
-    walletAppliedCents: 0,
     stripePaymentIntentId: "simulated_freight_e2e_balance",
     paymentStatus: "succeeded",
     platformFeePct: 0.1,
@@ -498,25 +496,6 @@ async function main() {
     createdAt: now,
     updatedAt: now,
   });
-  set("wallets/e2e-customer", {
-    customerUid: "e2e-customer",
-    currency: "USD",
-    balanceCents: 10000,
-    balance: 100,
-    pendingRefundCents: 0,
-    pendingRefund: 0,
-    updatedAt: now,
-  });
-  set("wallets/e2e-customer/transactions/e2e-credit", {
-    type: "credit",
-    reason: "e2e_test_credit",
-    status: "completed",
-    amountCents: 10000,
-    amount: 100,
-    currency: "USD",
-    createdAt: now,
-  });
-
   await batch.commit();
   process.stdout.write(JSON.stringify({
     projectId,

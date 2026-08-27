@@ -10,7 +10,6 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  Timestamp,
   where,
   type DocumentData,
   type QueryConstraint,
@@ -33,9 +32,11 @@ import {
   Pencil,
   Plane,
   Plus,
+  Printer,
   RefreshCw,
   RotateCcw,
   Save,
+  Send,
   Ship,
   Star,
   Truck,
@@ -44,6 +45,7 @@ import {
 } from "lucide-react";
 
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { FieldInfo } from "@/components/field-info";
 import { ContainerTrackingCard } from "@/components/business/container-tracking-card";
 import { TrackingUpdatesSection } from "@/components/business/tracking-updates-section";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -56,6 +58,31 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
+import {
+  BUSINESS_PARKING_ENTRY_MESSAGES,
+  BUSINESS_PARKING_RECEIVED_VIA_OPTIONS,
+  businessParkingAmountDue,
+  businessParkingEntryPayload,
+  businessParkingEntryResult,
+  businessParkingDocumentType,
+  businessParkingEndLabel,
+  businessParkingWithinRange,
+  businessParkingPaymentBadge,
+  businessParkingPaymentLabel,
+  businessParkingPaymentTone,
+  businessParkingResendMessage,
+  businessParkingUpdateChanges,
+  businessParkingUpdateResult,
+  canMarkBusinessParkingPaid,
+  canResendBusinessParkingLink,
+  emptyBusinessParkingEntryDraft,
+  isBusinessEnteredParking,
+  validateBusinessParkingEntryDraft,
+  type BusinessParkingEntryDraft,
+  type BusinessParkingEntryError,
+  type BusinessParkingEntryResult,
+  type BusinessParkingPaymentMethod,
+} from "@/lib/business-parking-entry";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import {
   sharedBarrelDeadlineIso,
@@ -75,8 +102,49 @@ import {
   type DestinationDepartureDay,
   type DestinationServiceAvailability,
 } from "@/lib/destination-pricing";
+import {
+  MAX_AREA_NAME_LENGTH,
+  MAX_DELIVERY_AREAS,
+  MAX_DESTINATION_DELIVERY_FEE,
+  deliveryAreaDraftsFrom,
+  deliveryAreasPayload,
+  deliverySettingsError,
+  emptyDeliveryArea,
+  type DeliveryAreaDraft,
+} from "@/lib/freight-delivery";
+import {
+  freightQuoteErrorMessage,
+  validateFreightQuote,
+} from "@/lib/freight-quote";
+import {
+  VIEWING_BLOCK_MESSAGES,
+  VIEWING_SLOT_ERROR_MESSAGES,
+  formatViewingSlot,
+  validateViewingSlots,
+  viewingActionAvailability,
+  viewingActionPayload,
+  viewingAwaitingParty,
+  viewingHistoryFrom,
+  viewingHistoryLabel,
+  viewingRecordFrom,
+  viewingSlotFromInput,
+  viewingSlotInputMin,
+  viewingWaitingLabel,
+  type ViewingAction,
+  type ViewingSlot,
+} from "@/lib/car-viewing";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
-import { getMakes, getModels, getYears } from "@/lib/car-catalog";
+import {
+  normalizeTransportContainerNumber,
+  transportFulfillmentErrorMessage,
+  transportFulfillmentNextStatuses,
+  transportFulfillmentPayload,
+  transportFulfillmentRequiresContainer,
+  transportFulfillmentStatusIsKnown,
+  transportJobCurrentStatus,
+  validateTransportFulfillmentChange,
+} from "@/lib/transport-fulfillment";
+import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/lib/car-catalog";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
@@ -110,6 +178,14 @@ type DestinationDraft = {
   freightSeaMaxDays: string;
   freightAirDepartureDays: DestinationDepartureDay[];
   freightSeaDepartureDays: DestinationDepartureDay[];
+  // Crossing Dakar and crossing Conakry are different jobs at different
+  // costs, and a business may do one and not the other - so the offer and
+  // its prices belong to the route, next to that route's rates. The named
+  // places are how this trade quotes it; the single fee is the answer for a
+  // business that charges the same anywhere in the country.
+  destinationDelivery: boolean;
+  destinationDeliveryAreas: DeliveryAreaDraft[];
+  destinationDeliveryFee: string;
   note: string;
   barrelShipping: boolean;
   freightAir: boolean;
@@ -154,16 +230,23 @@ type ListingDraft = {
 const MAX_LISTING_IMAGES = 12;
 type EditImage = { key: string; url?: string; file?: File; preview: string };
 
+// The parking edit form. Everything except `id` and `status` goes to
+// `updateBusinessParkingEntry`; the amount is absent on purpose - the server
+// recomputes it from the business's parking rates, so there is nothing here
+// for a staff member to type a price into.
 type ParkingDraft = {
   id: string;
   ownerName: string;
+  customerPhone: string;
+  customerEmail: string;
   carMake: string;
   carModel: string;
   carYear: string;
   vinNumber: string;
-  parkingDate: string;
+  startDate: string;
+  endDate: string;
+  paymentMethod: BusinessParkingPaymentMethod;
   status: string;
-  totalCost: string;
 };
 
 type TransportQuoteDraft = {
@@ -204,6 +287,51 @@ const colorOptions = ["black", "white", "silver", "gray", "red", "blue", "green"
 const featureOptions = ["backup_camera", "bluetooth", "leather_seats", "sunroof", "navigation", "heated_seats", "apple_carplay", "android_auto", "blind_spot", "third_row", "remote_start", "keyless_entry"];
 
 const ACRONYMS = new Set(["suv", "cvt", "vin", "fwd", "rwd", "awd", "4wd"]);
+/**
+ * What cancelling a paid booking does to the customer's money, in the words
+ * the business needs before they press it.
+ *
+ * Only "pending" (paid, work not started) can be cancelled here. The outcome
+ * is decided server-side by cancelSecuredBusinessOrder - this only has to
+ * describe it honestly, and the two cases are very different for the
+ * customer: a held payment was never charged, a captured one has to be
+ * refunded.
+ */
+export function businessCancelAction(row: FirestoreRow, collection:
+  "barrelShipments" | "freightShipments") {
+  const status = text(row.status, "");
+  const paymentStatus = text(row.paymentStatus, "");
+  if (status !== "pending" || paymentStatus !== "succeeded") return null;
+
+  const held = text(row.paymentHoldStatus, "") === "held";
+  const amount = formatMoney(row.price);
+  // A barrel shipment paid as part of a multi-destination order shares one
+  // payment with its siblings, so the whole order is what gets cancelled.
+  const orderId = collection === "barrelShipments" ?
+    text(row.orderId, "") :
+    "";
+  const orderType = orderId ?
+    "barrelOrder" :
+    (collection === "barrelShipments" ? "barrelShipment" : "freightShipment");
+
+  return {
+    orderType,
+    recordId: orderId || row.id,
+    label: held ? "Cancel — customer keeps their money" : "Cancel & refund",
+    confirmEn: held ?
+      "Cancel this booking? The customer was never charged, so nothing is " +
+      "refunded and it costs them nothing." :
+      `Cancel this booking? ${amount} is refunded to the customer in full, ` +
+      "and the platform commission is returned to you. You still pay the " +
+      "card processing fee.",
+    confirmFr: held ?
+      "Annuler cette réservation ? Le client n’a jamais été débité." :
+      `Annuler cette réservation ? ${amount} sera intégralement remboursé ` +
+      "au client et la commission vous sera restituée.",
+    wholeOrder: Boolean(orderId),
+  };
+}
+
 export function optionLabel(value: string) {
   const labels: Record<"en" | "fr", Record<string, string>> = {
     en: {
@@ -303,7 +431,6 @@ export function optionLabel(value: string) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
-const transportStatuses = ["pending", "scheduled", "in_transit", "delivered", "cancelled"];
 const parkingStatuses = ["active", "completed", "cancelled"];
 
 const emptyDestinationDraft: DestinationDraft = {
@@ -319,6 +446,9 @@ const emptyDestinationDraft: DestinationDraft = {
   freightSeaMaxDays: "",
   freightAirDepartureDays: [],
   freightSeaDepartureDays: [],
+  destinationDelivery: false,
+  destinationDeliveryAreas: [],
+  destinationDeliveryFee: "",
   note: "",
   barrelShipping: false,
   freightAir: false,
@@ -394,13 +524,16 @@ const emptyListingDraft: ListingDraft = {
 const emptyParkingDraft: ParkingDraft = {
   id: "",
   ownerName: "",
+  customerPhone: "",
+  customerEmail: "",
   carMake: "",
   carModel: "",
   carYear: "",
   vinNumber: "",
-  parkingDate: "",
+  startDate: "",
+  endDate: "",
+  paymentMethod: "direct",
   status: "active",
-  totalCost: "",
 };
 
 const emptyTransportQuoteDraft: TransportQuoteDraft = {
@@ -544,6 +677,11 @@ export function DestinationsPanel({
       freightSeaDepartureDays: destinationDepartureDays(
         row.freightSeaDepartureDays,
       ),
+      destinationDelivery: row.freightDestinationDeliveryAvailable === true,
+      destinationDeliveryAreas: deliveryAreaDraftsFrom(
+        row.freightDestinationDeliveryAreas,
+      ),
+      destinationDeliveryFee: numberString(row.freightDestinationDeliveryFee),
       note: text(row.destinationNote, ""),
       barrelShipping: availability.barrelShipping,
       freightAir: availability.freightAir,
@@ -607,6 +745,20 @@ export function DestinationsPanel({
       rates,
     );
     if (rateError) throw new Error(rateError);
+    // Delivery is a freight offer, so a route that carries no freight cannot
+    // publish one however the form was left before the switches moved.
+    const carriesFreight = availability.freightAir || availability.freightSea;
+    const deliveryAvailable = carriesFreight && draft.destinationDelivery;
+    const deliveryFee = Number(draft.destinationDeliveryFee || 0);
+    const deliveryError = deliverySettingsError({
+      available: deliveryAvailable,
+      areas: draft.destinationDeliveryAreas,
+      fee: deliveryFee,
+    });
+    if (deliveryError) throw new Error(deliveryError);
+    const deliveryAreas = deliveryAvailable
+      ? deliveryAreasPayload(draft.destinationDeliveryAreas)
+      : [];
     await setDoc(
       doc(db, "businesses", businessId, "destinationCountries", country.id),
       {
@@ -629,6 +781,14 @@ export function DestinationsPanel({
           ? draft.freightSeaDepartureDays
           : [],
         carTransportAvailable: availability.carTransport,
+        freightDestinationDeliveryAvailable: deliveryAvailable,
+        freightDestinationDeliveryAreas: deliveryAreas,
+        // A named list is what a booking is priced against, so the single
+        // price is stored only while the list is empty.
+        freightDestinationDeliveryFee:
+          deliveryAvailable && deliveryAreas.length === 0
+            ? Math.round(deliveryFee * 100) / 100
+            : 0,
         barrelShippingDeliveryEstimateMinDays: barrelEstimate
           ? barrelEstimate.minDays
           : deleteField(),
@@ -679,12 +839,31 @@ export function DestinationsPanel({
     );
   }
 
-  const visibleServiceCount = Object.values(
-    canonicalDestinationServiceAvailability(
-      enabledServices,
-      destinationDraftAvailability(draft),
-    ),
-  ).filter(Boolean).length;
+  const draftAvailability = canonicalDestinationServiceAvailability(
+    enabledServices,
+    destinationDraftAvailability(draft),
+  );
+  const visibleServiceCount =
+    Object.values(draftAvailability).filter(Boolean).length;
+  // Only a route that carries freight can be asked about delivering it.
+  const draftCarriesFreight =
+    draftAvailability.freightAir || draftAvailability.freightSea;
+  const deliveryFeeError = deliverySettingsError({
+    available: draftCarriesFreight && draft.destinationDelivery,
+    areas: draft.destinationDeliveryAreas,
+    fee: Number(draft.destinationDeliveryFee || 0),
+  });
+  const listedDeliveryAreas = draft.destinationDeliveryAreas.length;
+
+  function patchDeliveryArea(index: number, patch: Partial<DeliveryAreaDraft>) {
+    setDraft((value) => ({
+      ...value,
+      destinationDeliveryAreas: value.destinationDeliveryAreas.map(
+        (area, position) =>
+          position === index ? {...area, ...patch} : area,
+      ),
+    }));
+  }
 
   return (
     <section className="lst destination-coverage">
@@ -1038,6 +1217,148 @@ export function DestinationsPanel({
                     />
                   )}
                 </div>
+                {draftCarriesFreight && (
+                  <>
+                    <label className="lst-field wide">
+                      <span className="label-with-info">
+                        Do you deliver to the receiver at the destination?
+                        <FieldInfo label="how destination delivery works">
+                          <p>
+                            By default the receiver collects the parcel from
+                            you at the destination. If you deliver, customers
+                            of yours can choose that at booking and give the
+                            receiver&rsquo;s address.
+                          </p>
+                          <p>
+                            Each fee is flat - the same wherever in that
+                            place you take it - and is added to what the
+                            customer pays at booking. It is not recalculated
+                            when you confirm the weight.
+                          </p>
+                        </FieldInfo>
+                      </span>
+                      <select
+                        onChange={(event) =>
+                          setDraft((value) => ({
+                            ...value,
+                            destinationDelivery: event.target.value === "yes",
+                          }))
+                        }
+                        value={draft.destinationDelivery ? "yes" : "no"}
+                      >
+                        <option value="no">The receiver collects it from us</option>
+                        <option value="yes">We can deliver to their address</option>
+                      </select>
+                    </label>
+                    {draft.destinationDelivery && (
+                      <div className="lst-field wide">
+                        <span className="label-with-info">
+                          Places you deliver to, and what each costs
+                          <FieldInfo label="how delivery places are priced">
+                            <p>
+                              List the quartiers you serve and the fee for
+                              each: Cosa $20, Koloma $10. The customer picks
+                              one at booking and pays that fee.
+                            </p>
+                            <p>
+                              Leave the list empty to charge one price
+                              anywhere in this country instead.
+                            </p>
+                          </FieldInfo>
+                        </span>
+                        {draft.destinationDeliveryAreas.map((area, index) => (
+                          <div
+                            className="destination-delivery-area"
+                            key={`delivery-area-${index}`}
+                          >
+                            <input
+                              aria-label="Place name"
+                              maxLength={MAX_AREA_NAME_LENGTH}
+                              onChange={(event) =>
+                                patchDeliveryArea(index, {
+                                  name: event.target.value,
+                                })
+                              }
+                              placeholder="e.g. Cosa"
+                              value={area.name}
+                            />
+                            <input
+                              aria-label="Delivery fee (USD)"
+                              inputMode="decimal"
+                              max={MAX_DESTINATION_DELIVERY_FEE}
+                              min="0"
+                              onChange={(event) =>
+                                patchDeliveryArea(index, {
+                                  fee: event.target.value,
+                                })
+                              }
+                              placeholder="20"
+                              step="1"
+                              type="number"
+                              value={area.fee}
+                            />
+                            <button
+                              aria-label={`Remove ${area.name || "place"}`}
+                              className="lst-icon-btn"
+                              onClick={() =>
+                                setDraft((value) => ({
+                                  ...value,
+                                  destinationDeliveryAreas:
+                                    value.destinationDeliveryAreas.filter(
+                                      (_, position) => position !== index,
+                                    ),
+                                }))
+                              }
+                              type="button"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          className="lst-btn ghost"
+                          disabled={listedDeliveryAreas >= MAX_DELIVERY_AREAS}
+                          onClick={() =>
+                            setDraft((value) => ({
+                              ...value,
+                              destinationDeliveryAreas: [
+                                ...value.destinationDeliveryAreas,
+                                emptyDeliveryArea(),
+                              ],
+                            }))
+                          }
+                          type="button"
+                        >
+                          <Plus size={15} /> Add a place
+                        </button>
+                        {listedDeliveryAreas === 0 && (
+                          <label className="lst-field">
+                            <span>
+                              Delivery fee anywhere in this country (USD)
+                            </span>
+                            <input
+                              inputMode="decimal"
+                              max={MAX_DESTINATION_DELIVERY_FEE}
+                              min="0"
+                              onChange={(event) =>
+                                setDraft((value) => ({
+                                  ...value,
+                                  destinationDeliveryFee: event.target.value,
+                                }))
+                              }
+                              step="1"
+                              type="number"
+                              value={draft.destinationDeliveryFee}
+                            />
+                          </label>
+                        )}
+                        {deliveryFeeError && (
+                          <small className="field-error">{deliveryFeeError}</small>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
                 <label className="lst-field wide"><span>Customer route note (optional)</span>
                   <textarea rows={2} value={draft.note} onChange={(event) => setDraft((value) => ({ ...value, note: event.target.value }))} placeholder="e.g. Door-to-door delivery in Conakry included" />
                 </label>
@@ -2088,7 +2409,7 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     confirm?: string,
     confirmFr?: string,
   ) {
-    if (confirm && !confirmImportantAction(confirm, confirmFr)) return;
+    if (confirm && !(await confirmImportantAction(confirm, confirmFr))) return;
     setBusyId(id);
     setMessage("");
     try {
@@ -2160,7 +2481,7 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     });
     closeAdjustPool();
   }
-  function submitPoolAdjustment() {
+  async function submitPoolAdjustment() {
     try {
       if (!adjustingPool) throw new Error("Choose a shared barrel pool.");
       const totalShares = Number(adjustDraft.totalShares);
@@ -2178,10 +2499,10 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
       setMessage(error instanceof Error ? error.message : "Update failed.");
       return;
     }
-    if (!confirmImportantAction(
+    if (!(await confirmImportantAction(
       "Save this shared-barrel capacity adjustment?",
       "Enregistrer cet ajustement de capacité du baril partagé ?",
-    )) return;
+    ))) return;
     void run(
       `pool-adjust-${adjustingPool.id}`,
       "Pool capacity adjusted.",
@@ -2206,7 +2527,7 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     });
     closeRollPool();
   }
-  function submitPoolRollover() {
+  async function submitPoolRollover() {
     try {
       if (!rollingPool) throw new Error("Choose a shared barrel pool.");
       const maxJoiners = Number(rollDraft.maxJoiners);
@@ -2221,10 +2542,10 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
       setMessage(error instanceof Error ? error.message : "Update failed.");
       return;
     }
-    if (!confirmImportantAction(
+    if (!(await confirmImportantAction(
       "Roll this pool into business-held matching?",
       "Basculer ce baril vers la mise en relation gérée par l’entreprise ?",
-    )) return;
+    ))) return;
     void run(
       `pool-roll-${rollingPool.id}`,
       "Pool rolled into business-held matching.",
@@ -2306,10 +2627,10 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     if (poolCreateInFlight.current) return;
     poolCreateInFlight.current = true;
     if (
-      !confirmImportantAction(
+      !(await confirmImportantAction(
         "Open this shared barrel pool?",
         "Ouvrir ce baril partagé ?",
-      )
+      ))
     ) {
       poolCreateInFlight.current = false;
       return;
@@ -2902,6 +3223,32 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
                     {barrelStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
                   </select>
                 </label>
+                {(() => {
+                  const cancel = businessCancelAction(row, "barrelShipments");
+                  if (!cancel) return null;
+                  return (
+                    <button
+                      className="lst-btn ghost danger"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => run(
+                        row.id,
+                        "Booking cancelled and the customer refunded.",
+                        () => httpsCallable(
+                            functions, "cancelSecuredBusinessOrder",
+                        )({orderType: cancel.orderType,
+                          recordId: cancel.recordId}),
+                        cancel.confirmEn,
+                        cancel.confirmFr,
+                      )}
+                      title={cancel.wholeOrder ?
+                        "This shipment was paid with its order, so the whole " +
+                        "order is cancelled" : undefined}
+                    >
+                      {cancel.label}
+                    </button>
+                  );
+                })()}
               </div>
 
               <ContainerTrackingCard
@@ -2920,12 +3267,35 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
 }
 
 export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
-  const freight = useBusinessRows("freightShipments", businessId, Boolean(businessId && !previewMode), 500);
+  const enabled = Boolean(businessId && !previewMode);
+  const freight = useBusinessRows("freightShipments", businessId, enabled, 500);
+  const priceRequests = useFreightQuoteRequests(businessId, enabled);
+  const ownQuotes = useBusinessRows("freightQuotes", businessId, enabled, 500);
+  const [view, setView] = useState<"shipments" | "requests">("shipments");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
   const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
+  const [quoteDrafts, setQuoteDrafts] = useState<
+    Record<string, FreightQuoteDraft>
+  >({});
+
+  // Only the requests still taking prices. A request whose customer has
+  // chosen is finished business, and leaving it in the feed would invite a
+  // price the callable refuses.
+  const openPriceRequests = useMemo(
+    () =>
+      priceRequests.rows.filter(
+        (row) => text(row.quoteStatus, "collecting") === "collecting",
+      ),
+    [priceRequests.rows],
+  );
+  const quoteByRequestId = useMemo(
+    () =>
+      new Map(ownQuotes.rows.map((quote) => [text(quote.requestId, ""), quote])),
+    [ownQuotes.rows],
+  );
 
   const searched = useMemo(
     () => filterRows(freight.rows, search, ["trackingCode", "senderName", "receiverName", "receiverPhone", "destinationCountryName", "freightMode", "status", "paymentStatus"]),
@@ -2938,15 +3308,26 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
 
   async function updateStatus(row: FirestoreRow, status: string) {
     const versionTwo = Number(row.freightPricingVersion ?? 0) >= 2;
-    const settlementReady = !versionTwo || text(row.priceSettlementStatus, "") === "settled";
+    const settlement = text(row.priceSettlementStatus, "");
+    // due_on_arrival ships unpaid by the business's own choice: marking it
+    // arrived (ready_for_pickup) is what triggers the charge. Completing it
+    // still waits for settled - handing over before the money lands is a
+    // click the business should not make by accident.
+    const dueOnArrival = row.payOnArrival === true && settlement === "due_on_arrival";
+    const settlementReady = !versionTwo || settlement === "settled" ||
+      (dueOnArrival && ["in_transit", "ready_for_pickup"].includes(status));
     if (["in_transit", "ready_for_pickup", "completed"].includes(status) && !settlementReady) {
-      setMessage("Fulfillment is locked until the verified weight is settled.");
+      setMessage(
+        dueOnArrival
+          ? "Mark it arrived first - the customer's saved card is charged on arrival, and completion unlocks once it settles."
+          : "Fulfillment is locked until the verified weight is settled.",
+      );
       return;
     }
-    if (["completed", "cancelled"].includes(status) && !confirmImportantAction(
+    if (["completed", "cancelled"].includes(status) && !(await confirmImportantAction(
       `Change this freight shipment to ${statusLabel(status)}?`,
       `Passer cette expédition de fret au statut ${statusLabel(status)} ?`,
-    )) return;
+    ))) return;
     setBusyId(row.id);
     setMessage("");
     try {
@@ -2963,6 +3344,28 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
     }
   }
 
+  async function cancelBooking(
+      row: FirestoreRow,
+      cancel: NonNullable<ReturnType<typeof businessCancelAction>>,
+  ) {
+    if (!(await confirmImportantAction(cancel.confirmEn, cancel.confirmFr))) {
+      return;
+    }
+    setBusyId(row.id);
+    setMessage("");
+    try {
+      await httpsCallable(functions, "cancelSecuredBusinessOrder")({
+        orderType: cancel.orderType,
+        recordId: cancel.recordId,
+      });
+      setMessage("Booking cancelled and the customer refunded.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Cancel failed.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function confirmWeight(row: FirestoreRow) {
     const verifiedWeightKg = Number(weightDrafts[row.id] ?? "");
     if (!Number.isFinite(verifiedWeightKg) || verifiedWeightKg <= 0) {
@@ -2971,7 +3374,31 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
     }
     const rate = Number(row.pricePerKg ?? row.ratePerKg ?? 0);
     const pickup = Number(row.pickupFee ?? 0);
-    const finalTotal = verifiedWeightKg * rate + pickup;
+    // Everything the weight does not price rides through settlement
+    // unchanged. Leaving any of it out of this preview quotes an adjustment
+    // that refunds a fee the customer is still owed the service for, and the
+    // owner reads that number before agreeing to the charge. Coverage is
+    // read off the row rather than assumed: cover is free, so it is zero on
+    // anything booked per item and non-zero only on older shipments.
+    const coverage = Number(row.coverageFeeCents ?? 0) / 100;
+    const destinationDelivery =
+      Number(row.destinationDeliveryFeeCents ?? 0) / 100;
+    // A set-price parcel is not repriced by the scale. Its price is what the
+    // business published for that item; the scale only answers whether the
+    // parcel outgrew the weight that price covers, and the excess is charged
+    // at the route's rate for the extra mass and nothing else. Mirrors
+    // calculateFreightSettlement, which is what actually moves the money.
+    const flatPrice =
+      text(row.pricingMode, "") === "flat"
+        ? Number(row.itemFlatPrice ?? 0) || 0
+        : 0;
+    const includedKg = Number(row.itemIncludedKg ?? 0) || 0;
+    const shippingFee =
+      flatPrice > 0
+        ? flatPrice + Math.max(0, verifiedWeightKg - includedKg) * rate
+        : verifiedWeightKg * rate;
+    const finalTotal =
+      shippingFee + pickup + coverage + destinationDelivery;
     const estimatedTotal = Number(row.estimatedTotal ?? row.price ?? 0);
     const difference = finalTotal - estimatedTotal;
     const adjustment = Math.abs(difference) < 0.005
@@ -2979,10 +3406,10 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
       : difference > 0
         ? `Customer owes ${formatMoney(difference)}`
         : `Refund customer ${formatMoney(-difference)}`;
-    if (!confirmImportantAction(
+    if (!(await confirmImportantAction(
       `Confirm ${verifiedWeightKg.toLocaleString()} kg as the final weight? ${adjustment}. Financial adjustments may begin immediately.`,
       `Confirmer ${verifiedWeightKg.toLocaleString()} kg comme poids final ? ${difference > 0 ? `Le client doit payer ${formatMoney(difference)}` : difference < 0 ? `Rembourser ${formatMoney(-difference)} au client` : "Aucun changement de prix"}. Les ajustements financiers peuvent commencer immédiatement.`,
-    )) return;
+    ))) return;
     setBusyId(row.id);
     setMessage("");
     try {
@@ -2993,6 +3420,47 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
       setMessage("Verified weight and final price saved.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not confirm the weight. Try again.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  // What this business charges for a parcel it has never listed, and whether
+  // it stands behind that one. Both belong to the quote rather than to the
+  // catalogue: the catalogue has no row for this, which is the whole reason
+  // the customer had to ask.
+  async function sendQuote(request: FirestoreRow) {
+    const draft = quoteDrafts[request.id] ?? emptyFreightQuoteDraft();
+    const price = Number(draft.price);
+    const validated = validateFreightQuote({
+      amountCents: Number.isFinite(price) ? Math.round(price * 100) : Number.NaN,
+      coversLoss: draft.coversLoss,
+      terms: draft.terms,
+    });
+    if (!validated.ok) {
+      setMessage(freightQuoteErrorMessage(validated.error));
+      return;
+    }
+    setBusyId(`quote:${request.id}`);
+    setMessage("");
+    try {
+      await httpsCallable(functions, "submitFreightQuote")({
+        requestId: request.id,
+        businessId,
+        amountCents: validated.quote.amountCents,
+        coversLoss: validated.quote.coversLoss,
+        terms: validated.quote.terms,
+      });
+      setMessage("Your price was sent to the customer.");
+    } catch (error) {
+      // The callable names the reason - the request stopped taking prices,
+      // this business was not asked. A generic line sends the owner hunting
+      // through a form that is not the problem.
+      setMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "The price could not be sent. Try again.",
+      );
     } finally {
       setBusyId("");
     }
@@ -3011,7 +3479,50 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
         </div>
         <StatusText busy={Boolean(busyId)} message={message} />
       </header>
+      <div className="transport-marketplace-tabs" role="tablist">
+        <button
+          aria-selected={view === "shipments"}
+          className={view === "shipments" ? "active" : ""}
+          onClick={() => setView("shipments")}
+          role="tab"
+          type="button"
+        >
+          Booked shipments
+          <span>{freight.rows.length}</span>
+        </button>
+        <button
+          aria-selected={view === "requests"}
+          className={view === "requests" ? "active" : ""}
+          onClick={() => setView("requests")}
+          role="tab"
+          type="button"
+        >
+          Price requests
+          <span>{openPriceRequests.length}</span>
+        </button>
+      </div>
       {freight.error && <div className="error-box">{freight.error}</div>}
+      {view === "requests" && (
+        <FreightPriceRequestsFeed
+          busyId={busyId}
+          drafts={quoteDrafts}
+          error={priceRequests.error || ownQuotes.error}
+          loading={priceRequests.loading}
+          onDraft={(requestId, patch) =>
+            setQuoteDrafts((current) => ({
+              ...current,
+              [requestId]: {
+                ...(current[requestId] ?? emptyFreightQuoteDraft()),
+                ...patch,
+              },
+            }))
+          }
+          onSend={sendQuote}
+          quoteByRequestId={quoteByRequestId}
+          requests={openPriceRequests}
+        />
+      )}
+      {view === "shipments" && (<>
       <div className="lst-toolbar">
         <div className="lst-search"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search freight tracking, sender, receiver…" /></div>
         <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={filter} onChange={(event) => setFilter(event.target.value)}>
@@ -3036,22 +3547,48 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
           const settlementReady = !versionTwo || settlementStatus === "settled";
           const estimatedWeight = Number(row.estimatedWeightKg ?? row.weightKg ?? 0);
           const verifiedWeight = Number(row.verifiedWeightKg ?? 0);
+          // A set price with no weight allowance covers the parcel however
+          // heavy it is, so there is nothing a scale could change and the
+          // callable refuses one. Offering the action would be offering a
+          // button that only produces an error.
+          const weighs = row.weightVerificationRequired !== false;
           return (
             <article className="pur-card" key={row.id}>
               <div className="pur-head"><div className="pur-title"><strong>{text(row.trackingCode, row.id)}</strong><span className="pur-kind">{statusLabel(text(row.mode ?? row.freightMode, "freight"))}</span></div><span className={`lst-badge ${barrelTone(status)}`}>{statusLabel(status)}</span></div>
               <div className="pur-info">
                 <div><span>Sender</span><b>{text(row.senderName, "—")}</b></div><div><span>Receiver</span><b>{text(row.receiverName, "—")}</b></div>
                 <div><span>Receiver phone</span><b>{text(row.receiverPhone, "—")}</b></div><div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
-                <div><span>Estimated weight</span><b>{estimatedWeight.toLocaleString()} kg</b></div><div><span>Verified weight</span><b>{verifiedWeight > 0 ? `${verifiedWeight.toLocaleString()} kg` : "—"}</b></div>
+                {weighs
+                  ? (<><div><span>Estimated weight</span><b>{estimatedWeight.toLocaleString()} kg</b></div><div><span>Verified weight</span><b>{verifiedWeight > 0 ? `${verifiedWeight.toLocaleString()} kg` : "—"}</b></div></>)
+                  : (<><div><span>Pricing</span><b>Set price</b></div><div><span>Set price</span><b>{formatMoney(row.itemFlatPrice)}</b></div></>)}
                 <div><span>Rate locked at booking</span><b>{formatMoney(row.pricePerKg ?? row.ratePerKg)} / kg</b></div><div><span>Estimated total</span><b>{formatMoney(row.estimatedTotal ?? row.price ?? row.total)}</b></div>
                 <div><span>Final total</span><b>{row.finalTotal == null ? "—" : formatMoney(row.finalTotal)}</b></div><div><span>Settlement</span><b>{statusLabel(settlementStatus)}</b></div>
                 <div><span>Payment</span><b>{statusLabel(paymentStatus)}</b></div><div><span>Created</span><b>{formatDate(row.createdAt)}</b></div>
               </div>
+              {/* The customer paid for delivery at booking, so where it goes
+                  is part of fulfillment, not a note buried in the total. */}
+              {row.destinationDelivery === true && (
+                <div className="pur-notice"><Truck size={15} /> <span>Deliver to the receiver</span> · {text(row.receiverAddress, "Address not provided")} · {formatMoney(row.destinationDeliveryFee)} <span>collected at booking</span></div>
+              )}
               {!paymentReady && <div className="pur-notice warn"><AlertTriangle size={15} /> Fulfillment is locked until payment succeeds.</div>}
-              {paymentReady && !settlementReady && <div className="pur-notice warn"><AlertTriangle size={15} /> {settlementStatus === "balance_due" || settlementStatus === "balance_payment_pending" ? "Waiting for customer payment. Fulfillment remains locked." : settlementStatus === "needs_attention" ? "Settlement needs attention. Contact support before fulfillment." : "Confirm the parcel weight before fulfillment."}</div>}
+              {paymentReady && !settlementReady && <div className="pur-notice warn"><AlertTriangle size={15} /> {settlementStatus === "balance_due" || settlementStatus === "balance_payment_pending" ? "Waiting for customer payment. Fulfillment remains locked." : settlementStatus === "needs_attention" ? "Settlement needs attention. Contact support before fulfillment." : weighs ? "Confirm the parcel weight before fulfillment." : "This shipment has a set price. Fulfillment unlocks once payment settles."}</div>}
               <div className="pur-actions">
-                {versionTwo && verifiedWeight <= 0 && <label className="bar-field"><span>Enter verified weight</span><input aria-label="Enter verified weight" inputMode="decimal" value={weightDrafts[row.id] ?? ""} onChange={(event) => setWeightDrafts((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="0.0" /><button className="lst-btn primary" type="button" disabled={busy || !paymentReady} onClick={() => confirmWeight(row)}>Confirm weight and final price</button></label>}
+                {versionTwo && weighs && verifiedWeight <= 0 && <label className="bar-field"><span>Enter verified weight</span><input aria-label="Enter verified weight" inputMode="decimal" value={weightDrafts[row.id] ?? ""} onChange={(event) => setWeightDrafts((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="0.0" /><button className="lst-btn primary" type="button" disabled={busy || !paymentReady} onClick={() => confirmWeight(row)}>Confirm weight and final price</button></label>}
                 <label className="bar-field"><span>Update status</span><select value={status} disabled={busy || !paymentReady || !settlementReady} onChange={(event) => updateStatus(row, event.target.value)}>{["pending_payment", "awaiting_weight_confirmation", "awaiting_balance_payment", "settlement_processing", "pending", "in_transit", "ready_for_pickup", "completed", "cancelled"].map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}</select></label>
+                {(() => {
+                  const cancel = businessCancelAction(row, "freightShipments");
+                  if (!cancel) return null;
+                  return (
+                    <button
+                      className="lst-btn ghost danger"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => cancelBooking(row, cancel)}
+                    >
+                      {cancel.label}
+                    </button>
+                  );
+                })()}
               </div>
 
               {text(row.mode ?? row.freightMode, "") === "sea" && (
@@ -3067,7 +3604,178 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
           );
         })}
       </div>
+      </>)}
     </section>
+  );
+}
+
+/** What a business is offering for a parcel it has never listed. */
+type FreightQuoteDraft = {
+  price: string;
+  coversLoss: boolean;
+  terms: string;
+};
+
+function emptyFreightQuoteDraft(): FreightQuoteDraft {
+  return { price: "", coversLoss: false, terms: "" };
+}
+
+/**
+ * Customers asking this business what it charges.
+ *
+ * Everything here is a parcel with no row in this business's catalogue, so the
+ * price and the promise both come from the answer rather than from settings.
+ * A business that has already answered sees its own number and can change it:
+ * one price per request, revised, never stacked.
+ */
+function FreightPriceRequestsFeed({
+  busyId,
+  drafts,
+  error,
+  loading,
+  onDraft,
+  onSend,
+  quoteByRequestId,
+  requests,
+}: {
+  busyId: string;
+  drafts: Record<string, FreightQuoteDraft>;
+  error: string;
+  loading: boolean;
+  onDraft: (requestId: string, patch: Partial<FreightQuoteDraft>) => void;
+  onSend: (request: FirestoreRow) => void;
+  quoteByRequestId: Map<string, FirestoreRow>;
+  requests: FirestoreRow[];
+}) {
+  if (error) {
+    return <div className="error-box" role="alert">{error}</div>;
+  }
+  if (loading) return <LoadingState />;
+  if (requests.length === 0) {
+    return (
+      <div className="lst-empty">
+        <div className="lst-empty-icon"><Package size={30} /></div>
+        <h3>No one is waiting on a price</h3>
+        <p>
+          When a customer asks what you charge for something you have not
+          listed, it arrives here and you answer with a number.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pur-grid">
+      {requests.map((request) => {
+        const existing = quoteByRequestId.get(request.id);
+        const answered = Boolean(existing);
+        const draft = drafts[request.id] ?? {
+          price:
+            Number(existing?.amountCents ?? 0) > 0
+              ? String(Number(existing?.amountCents) / 100)
+              : "",
+          coversLoss: existing?.coversLoss === true,
+          terms: text(existing?.terms, ""),
+        };
+        const weightKg = Number(request.weightKg ?? 0);
+        const busy = busyId === `quote:${request.id}`;
+        return (
+          <article className="pur-card" key={request.id}>
+            <div className="pur-head">
+              <div className="pur-title">
+                <strong>{text(request.trackingCode, request.id)}</strong>
+                <span className="pur-kind">
+                  {statusLabel(text(request.mode, "freight"))}
+                </span>
+              </div>
+              <span className={`lst-badge ${answered ? "ok" : "warn"}`}>
+                {answered ? "You answered" : "Waiting on you"}
+              </span>
+            </div>
+            <div className="pur-info">
+              <div><span>Destination</span><b>{text(request.destinationCountryName, "—")}</b></div>
+              <div><span>Category</span><b>{text(request.itemLabel ?? request.itemCategoryId, "—")}</b></div>
+              <div>
+                <span>Weight given</span>
+                <b>{weightKg > 0 ? `${weightKg.toLocaleString()} kg` : "Not given"}</b>
+              </div>
+              <div><span>Asked</span><b>{formatDate(request.createdAt)}</b></div>
+            </div>
+            <div className="pur-notice">
+              <ClipboardList size={15} />{" "}
+              <span>{text(request.description, "No description given")}</span>
+            </div>
+            <div className="pur-actions">
+              <label className="bar-field">
+                <span>What you charge (USD)</span>
+                <input
+                  aria-label="What you charge (USD)"
+                  inputMode="decimal"
+                  onChange={(event) =>
+                    onDraft(request.id, { price: event.target.value })
+                  }
+                  placeholder="0.00"
+                  value={draft.price}
+                />
+              </label>
+              <label className="bar-field">
+                <span className="label-with-info">
+                  Do you cover this parcel if it is lost?
+                  <FieldInfo label="what cover on a quote means">
+                    <p>
+                      This parcel is not in your item list, so this price
+                      carries its own promise. Say no and the customer is
+                      told plainly that you do not cover it.
+                    </p>
+                    <p>
+                      The customer is charged nothing for it, so price the
+                      parcel for what it is worth to you to carry.
+                    </p>
+                  </FieldInfo>
+                </span>
+                <select
+                  aria-label="Do you cover this parcel if it is lost?"
+                  onChange={(event) =>
+                    onDraft(request.id, {
+                      coversLoss: event.target.value === "yes",
+                    })
+                  }
+                  value={draft.coversLoss ? "yes" : "no"}
+                >
+                  <option value="no">No, I do not cover this parcel</option>
+                  <option value="yes">Yes, I cover this parcel</option>
+                </select>
+              </label>
+              <label className="bar-field">
+                <span>Note for the customer (optional)</span>
+                <input
+                  aria-label="Note for the customer"
+                  maxLength={1000}
+                  onChange={(event) =>
+                    onDraft(request.id, { terms: event.target.value })
+                  }
+                  placeholder="What is included, how long it takes"
+                  value={draft.terms}
+                />
+              </label>
+              <button
+                className="lst-btn primary"
+                disabled={busy}
+                onClick={() => onSend(request)}
+                type="button"
+              >
+                <Send size={15} />{" "}
+                {busy
+                  ? "Sending your price..."
+                  : answered
+                    ? "Change your price"
+                    : "Send your price"}
+              </button>
+            </div>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -3091,6 +3799,10 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
   const [busyId, setBusyId] = useState("");
   const [draft, setDraft] = useState<TransportQuoteDraft>(emptyTransportQuoteDraft);
   const [quoteFormOpen, setQuoteFormOpen] = useState(false);
+  // Typed container numbers, per job. Asked for before `in_transit` rather
+  // than letting the server's refusal be how an operator finds out it was
+  // needed.
+  const [containerDrafts, setContainerDrafts] = useState<Record<string, string>>({});
   const focusedCardRef = useRef<HTMLElement | null>(null);
 
   // A notification points at one request. Show the view that contains it and
@@ -3112,9 +3824,23 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
       ),
     [businessQuotes.rows],
   );
+  // Only work a quote can still win. A won opportunity lives in Accepted
+  // jobs - showing it here too made every job appear twice - and a closed or
+  // cancelled one is finished business, not an opportunity. Split from the
+  // search filter so the tab count and the empty states describe THIS list,
+  // not the raw collection.
+  const openOpportunities = useMemo(
+    () =>
+      opportunities.rows.filter((row) => {
+        const status = text(row.status, "open");
+        return status !== "selected" && status !== "closed" &&
+          status !== "cancelled";
+      }),
+    [opportunities.rows],
+  );
   const filteredOpportunities = useMemo(
     () =>
-      filterRows(opportunities.rows, search, [
+      filterRows(openOpportunities, search, [
         "trackingCode",
         "carMake",
         "carModel",
@@ -3123,7 +3849,7 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
         "destinationCountryName",
         "status",
       ]),
-    [opportunities.rows, search],
+    [openOpportunities, search],
   );
 
   // The rows stream in from Firestore, so the target card usually does not
@@ -3174,30 +3900,58 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
     setQuoteFormOpen(true);
   }
 
+  // One path for every transport job, marketplace or legacy. There used to be
+  // a second: legacy records were written straight to `transportRequests`,
+  // because the callable refused anything without a selected quote. That
+  // fallback skipped the transition table AND the container-number gate, so a
+  // legacy car could be marked delivered from pending, or in transit with
+  // nothing to track it by. The callable now accepts legacy records on their
+  // own `businessId`, so the direct write is gone and the state machine has
+  // exactly one implementation.
   async function updateTransportStatus(row: FirestoreRow, status: string) {
-    setBusyId(row.id);
+    const currentStatus = transportJobCurrentStatus(row);
+    const submittedContainerNumber = containerDrafts[row.id] ?? "";
+    const errors = validateTransportFulfillmentChange({
+      currentStatus,
+      nextStatus: status,
+      existingContainerNumber: row.containerNumber,
+      submittedContainerNumber,
+    });
+    if (errors.length > 0) {
+      setMessage(transportFulfillmentErrorMessage(errors));
+      return;
+    }
+    setBusyId(`${row.id}:${status}`);
     setMessage("");
     try {
-      // flowVersion is the field the server actually writes and reads
-      // (functions/index.js). transportMarketplaceVersion was never written by
-      // anything, so this arm was dead and marketplace jobs could fall through
-      // to the legacy direct write below.
-      const isMarketplaceJob =
-        Boolean(row.selectedQuoteId) ||
-        text(row.quoteStatus, "") === "selected" ||
-        Number(row.flowVersion ?? 0) >= 2;
-      if (isMarketplaceJob) {
-        await httpsCallable(functions, "updateTransportFulfillmentStatus")({
+      const response = await httpsCallable(
+        functions,
+        "updateTransportFulfillmentStatus",
+      )(
+        transportFulfillmentPayload({
           requestId: row.id,
           status,
-        });
-      } else {
-        // The mobile app reads `fulfillmentStatus ?? status`, so writing only
-        // `status` here left it showing the stale fulfillmentStatus forever.
-        await setDoc(doc(db, "transportRequests", row.id), { businessId, status, fulfillmentStatus: status, updatedAt: serverTimestamp() }, { merge: true });
-      }
-      setMessage("Transport updated.");
+          containerNumber: submittedContainerNumber,
+          businessId,
+        }),
+      );
+      setContainerDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[row.id];
+        return next;
+      });
+      // Two people clicking the same status is a success, not a failure.
+      const alreadyUpdated =
+        (response.data as { alreadyUpdated?: boolean } | null)?.alreadyUpdated === true;
+      setMessage(
+        alreadyUpdated
+          ? "This job was already on that status."
+          : "Transport updated.",
+      );
     } catch (error) {
+      // The server's own sentence names the reason (wrong business, terminal
+      // status, missing container number). Replacing it with a generic line
+      // would throw away the only thing that says what to do next.
       setMessage(
         error instanceof Error && error.message
           ? error.message
@@ -3262,7 +4016,7 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
 
   async function withdrawQuote(opportunity: FirestoreRow) {
     const requestId = text(opportunity.requestId, opportunity.id);
-    const confirmed = confirmImportantAction(
+    const confirmed = await confirmImportantAction(
       "Withdraw this quote? The customer will no longer be able to select it.",
       "Retirer ce devis ? Le client ne pourra plus le sélectionner.",
     );
@@ -3304,7 +4058,7 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
           type="button"
         >
           Quote opportunities
-          <span>{opportunities.rows.length}</span>
+          <span>{openOpportunities.length}</span>
         </button>
         <button
           aria-selected={view === "jobs"}
@@ -3347,7 +4101,7 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
       {view === "opportunities" && (
         <>
           {(opportunities.loading || businessQuotes.loading) && <LoadingState />}
-          {!opportunities.loading && opportunities.rows.length === 0 && (
+          {!opportunities.loading && openOpportunities.length === 0 && (
             <div className="lst-empty">
               <div className="lst-empty-icon"><ClipboardList size={30} /></div>
               <h3>No quote opportunities right now</h3>
@@ -3355,7 +4109,7 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
             </div>
           )}
           {!opportunities.loading &&
-            opportunities.rows.length > 0 &&
+            openOpportunities.length > 0 &&
             filteredOpportunities.length === 0 && (
               <EmptyState text="No quote opportunities match this search." />
             )}
@@ -3463,8 +4217,26 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
             )}
           <div className="pur-grid">
             {filteredJobs.map((row) => {
-              const status = text(row.status, "pending");
-              const busyRow = busyId === row.id;
+              // What the server compares against its table: `fulfillmentStatus`
+              // when it has one, `status` otherwise. Reading `status` alone
+              // showed a stale value on every job the callable had moved.
+              const status = transportJobCurrentStatus(row);
+              const known = transportFulfillmentStatusIsKnown(status);
+              // A marketplace job is not workable until the customer's money
+              // is secured - the server refuses everything but cancelling, so
+              // offering more here would only manufacture refusals.
+              const awaitingPayment =
+                Number(row.flowVersion ?? 1) === 2 &&
+                text(row.quoteStatus, "") === "selected" &&
+                text(row.paymentStatus, "") !== "succeeded" &&
+                status !== "cancelled";
+              const nextStatuses = awaitingPayment
+                ? transportFulfillmentNextStatuses(status).filter(
+                    (next) => next === "cancelled",
+                  )
+                : transportFulfillmentNextStatuses(status);
+              const container = normalizeTransportContainerNumber(row.containerNumber);
+              const busyRow = busyId.startsWith(`${row.id}:`);
               const selectedAmountCents = Number(row.selectedAmountCents ?? 0);
               return (
                 <article className="pur-card transport-job-card" key={row.id}>
@@ -3473,7 +4245,15 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
                       <strong>{transportTitle(row)}</strong>
                       <span className="pur-kind">{text(row.trackingCode, "Transport")}</span>
                     </div>
-                    <span className={`lst-badge ${transportTone(status)}`}>{statusLabel(status)}</span>
+                    {/* An unrecognised status is SHOWN, not mapped onto the
+                        nearest transport status: the admin record path can
+                        write `active`, `in_progress`, `completed`, `sold`,
+                        `reserved` or `inactive` onto this same document, and
+                        labelling one of those "In transit" would be a claim
+                        nobody made. */}
+                    <span className={`lst-badge ${known ? transportTone(status) : "warn"}`}>
+                      {known ? statusLabel(status) : text(status, "Not provided")}
+                    </span>
                   </div>
                   <div className="pur-info">
                     <div><span>Owner</span><b>{text(row.ownerName ?? row.customerName, "—")}</b></div>
@@ -3482,14 +4262,72 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
                     <div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
                     <div><span>Accepted quote</span><b>{selectedAmountCents > 0 ? formatMoney(selectedAmountCents / 100) : formatMoney(row.price)}</b></div>
                     <div><span>Transport date</span><b>{formatDate(row.transportDate ?? row.estimatedPickupDate ?? row.createdAt)}</b></div>
+                    {container && (<div><span>Container on file</span><b>{container}</b></div>)}
                   </div>
-                  <div className="pur-actions">
-                    <label className="bar-field"><span>Update job status</span>
-                      <select value={status} disabled={busyRow} onChange={(event) => updateTransportStatus(row, event.target.value)}>
-                        {transportStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
-                      </select>
-                    </label>
+                  <div className="pur-actions transport-job-move">
+                    <span className="transport-job-move-title">Update job status</span>
+                    {awaitingPayment && (
+                      <p className="transport-job-move-note">
+                        The customer has accepted your quote and payment is
+                        being secured. You can schedule the job as soon as it
+                        is paid — you will get a notification.
+                      </p>
+                    )}
+                    {!known ? (
+                      <p className="transport-job-move-note">
+                        This job is on a status the transport workflow did not set, so no transport action applies here.
+                      </p>
+                    ) : nextStatuses.length === 0 ? (
+                      <p className="transport-job-move-note">
+                        This job is finished. There is nothing left to move.
+                      </p>
+                    ) : (
+                      <>
+                        {/* Shown only while a move that needs it is on offer,
+                            and only while the job does not already carry one. */}
+                        {nextStatuses.some(transportFulfillmentRequiresContainer) && !container && (
+                          <label className="bar-field">
+                            <span>Container / booking / BOL number</span>
+                            <input
+                              onChange={(event) =>
+                                setContainerDrafts((drafts) => ({ ...drafts, [row.id]: event.target.value }))
+                              }
+                              placeholder="e.g. MSKU1234567"
+                              value={containerDrafts[row.id] ?? ""}
+                            />
+                          </label>
+                        )}
+                        <div className="transport-job-move-actions">
+                          {nextStatuses.map((next) => (
+                            <button
+                              aria-busy={busyId === `${row.id}:${next}`}
+                              className={`lst-btn${next === "cancelled" ? " danger" : ""}`}
+                              disabled={busyRow}
+                              key={next}
+                              onClick={() => void updateTransportStatus(row, next)}
+                              type="button"
+                            >
+                              {busyId === `${row.id}:${next}` ? <RefreshCw className="spin" size={15} /> : null}
+                              {busyId === `${row.id}:${next}` ? "Updating..." : statusLabel(next)}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
+                  {/* A transported car gets the same milestone feed and
+                      carrier subscription as a barrel - the customer's
+                      journey card reads from exactly this. */}
+                  <ContainerTrackingCard
+                    relatedCollection="transportRequests"
+                    relatedId={row.id}
+                    containerNumber={container}
+                    trackingProvider={text(row.trackingProvider, "")}
+                  />
+                  <TrackingUpdatesSection
+                    relatedCollection="transportRequests"
+                    relatedId={row.id}
+                  />
                 </article>
               );
             })}
@@ -3547,10 +4385,51 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
   );
 }
 
+/** How long a row-level result stays in the panel header. */
+const ROW_MESSAGE_MS = 6000;
+
+/**
+ * A message setter for results that belong to one row rather than to the
+ * panel. "Already recorded as paid." is an answer to a click, not a state of
+ * the panel — left in the header it reads as a standing claim about a list the
+ * owner has since scrolled away from. This clears it.
+ *
+ * Panel-level errors keep the plain `setMessage`: a refusal that stops work
+ * must stay on screen until the work is done differently.
+ *
+ * @param setMessage The panel's own message setter.
+ * @param ms How long the message survives.
+ * @return A setter that clears itself, cancelling any message still pending.
+ */
+function useTransientMessage(setMessage: (value: string) => void, ms = ROW_MESSAGE_MS) {
+  const timer = useRef<number | null>(null);
+  // Without this, a click followed by a tab change fires setState on an
+  // unmounted panel six seconds later.
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      timer.current = null;
+    },
+    [],
+  );
+  return (value: string) => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    setMessage(value);
+    if (!value) return;
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      setMessage("");
+    }, ms);
+  };
+}
+
+// `businessName` is no longer destructured: the panel used to stamp it onto
+// the parkedCars document it wrote itself, and every write now goes through a
+// callable that reads the business record server-side.
 export function ParkingPanel({
   businessId,
   previewMode = false,
-  businessName = "",
 }: PanelProps) {
   const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
@@ -3559,76 +4438,162 @@ export function ParkingPanel({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  // The edit form is validated by the same rules as the create form, so it
+  // reports the same list of sentences.
+  const [editErrors, setEditErrors] = useState<BusinessParkingEntryError[]>([]);
+  // "Record a parked car" — the walk-up flow. Unlike the manual record above
+  // it goes through createBusinessParkingEntry, so the price, the tracking
+  // code, the space availability check and the platform's cut all come from
+  // the same server path a customer booking uses.
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [entryDraft, setEntryDraft] = useState<BusinessParkingEntryDraft>(emptyBusinessParkingEntryDraft);
+  const [entryErrors, setEntryErrors] = useState<BusinessParkingEntryError[]>([]);
+  const [entryBusy, setEntryBusy] = useState(false);
+  const [entryMessage, setEntryMessage] = useState("");
+  const [entryResult, setEntryResult] = useState<BusinessParkingEntryResult | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [receivedVia, setReceivedVia] = useState<Record<string, string>>({});
+  const [paidBusyId, setPaidBusyId] = useState("");
+  // Set only when window.open was blocked, so the card can offer the document
+  // as a plain link the browser will honour.
+  const [blockedDocument, setBlockedDocument] = useState<{ id: string; url: string } | null>(null);
+  const setRowMessage = useTransientMessage(setMessage);
   const searched = useMemo(
-    () => filterRows(parkedCars.rows, search, ["trackingCode", "ownerName", "carMake", "carModel", "carYear", "vinNumber", "status"]),
+    () => filterRows(parkedCars.rows, search, ["trackingCode", "ownerName", "customerName", "carMake", "carModel", "carYear", "vinNumber", "status"]),
     [parkedCars.rows, search],
   );
-  const filteredRows = useMemo(
-    () => (filter === "all" ? searched : searched.filter((row) => text(row.status, "") === filter)),
-    [searched, filter],
-  );
+  // One control, two questions: where the car is in its stay, and whether it
+  // has been paid for. A lot chasing money filters on the second and never
+  // learns the first is a separate dropdown.
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+
+  const filteredRows = useMemo(() => {
+    // The date window narrows first: "what was in the lot that week" is the
+    // question, and the status/payment filter refines it.
+    const inRange = (rangeFrom || rangeTo)
+      ? searched.filter((row) => businessParkingWithinRange(row, rangeFrom, rangeTo))
+      : searched;
+    if (filter === "all") return inRange;
+    if (filter === "payment:paid") {
+      return inRange.filter((row) => businessParkingPaymentTone(row) === "paid");
+    }
+    if (filter === "payment:unpaid") {
+      // "Not paid" is money still owed — a cancelled car or one with nothing
+      // to collect ("none") is not something to chase.
+      return inRange.filter((row) => businessParkingPaymentTone(row) === "awaiting");
+    }
+    return inRange.filter((row) => text(row.status, "") === filter);
+  }, [searched, filter, rangeFrom, rangeTo]);
   const activeCount = parkedCars.rows.filter((row) => text(row.status, "active") === "active").length;
 
-  function openNew() {
-    setDraft(emptyParkingDraft);
-    setMessage("");
-    setFormOpen(true);
-  }
   function closeForm() {
     setDraft(emptyParkingDraft);
+    setEditErrors([]);
     setFormOpen(false);
   }
   function editParking(row: FirestoreRow) {
     setDraft({
       id: row.id,
-      ownerName: text(row.ownerName, ""),
+      ownerName: text(row.customerName ?? row.ownerName, ""),
+      customerPhone: text(row.customerPhone, ""),
+      customerEmail: text(row.customerEmail, ""),
       carMake: text(row.carMake, ""),
       carModel: text(row.carModel, ""),
       carYear: text(row.carYear, ""),
       vinNumber: text(row.vinNumber, ""),
-      parkingDate: dateInputValue(row.parkingDate ?? row.createdAt),
+      startDate: dateInputValue(row.parkingDate ?? row.createdAt),
+      endDate: dateInputValue(row.parkingEndDate),
+      paymentMethod:
+        text(row.paymentMethod, "direct") === "payment_link" ? "payment_link" : "direct",
       status: text(row.status, "active"),
-      totalCost: numberString(row.totalCost),
     });
+    setEditErrors([]);
     setMessage("");
     setFormOpen(true);
   }
 
+  /**
+   * Everything the callable owns, as the callable's own draft shape. Keeping
+   * one shape means the edit form is validated by the same rules the create
+   * form is, rather than a second, drifting copy of them.
+   */
+  function editDraftAsEntry(): BusinessParkingEntryDraft {
+    return {
+      customerName: draft.ownerName,
+      customerPhone: draft.customerPhone,
+      customerEmail: draft.customerEmail,
+      carMake: draft.carMake,
+      carModel: draft.carModel,
+      carYear: draft.carYear,
+      vinNumber: draft.vinNumber,
+      startDate: draft.startDate,
+      endDate: draft.endDate,
+      paymentMethod: draft.paymentMethod,
+    };
+  }
+
+  // The edit no longer writes a parkedCars document from the browser. A
+  // client-side setDoc could change the dates a stay is billed on without the
+  // amount ever being recalculated - so the record's price and the days it
+  // covers stopped agreeing. updateBusinessParkingEntry recomputes the amount
+  // from the business's rates, reissues the customer's link when that amount
+  // moves, and refuses records whose money has already settled.
   async function saveParking() {
-    if (!businessId) throw new Error("Business ID is required.");
-    if (!draft.ownerName.trim()) throw new Error("Owner name is required.");
-    if (!draft.carMake.trim() || !draft.carModel.trim() || !draft.carYear.trim()) {
-      throw new Error("Car make, model, and year are required.");
+    if (!businessId) {
+      setMessage("Business ID is required.");
+      return;
+    }
+    if (!draft.id) {
+      setMessage("Open a parking record to edit it.");
+      return;
+    }
+    // Hiding the Edit button is the affordance; this is the guard. A paid
+    // record's amount has already been charged, split and paid out. The
+    // server refuses it too - this only saves the round trip.
+    const existing = parkedCars.rows.find((row) => row.id === draft.id);
+    if (existing && businessParkingPaymentTone(existing) === "paid") {
+      setMessage("This parking has been paid for and can no longer be edited.");
+      return;
     }
 
-    const targetRef = draft.id ? doc(db, "parkedCars", draft.id) : doc(collection(db, "parkedCars"));
-    const totalCost = Number(draft.totalCost);
-    const parkingDate = draft.parkingDate ? new Date(`${draft.parkingDate}T12:00:00`) : new Date();
-    const payload = {
-        businessId,
-        businessName,
-        ownerName: draft.ownerName.trim(),
-        carMake: draft.carMake.trim(),
-        carModel: draft.carModel.trim(),
-        carYear: draft.carYear.trim(),
-        vinNumber: draft.vinNumber.trim().toUpperCase(),
-        parkingDate: Timestamp.fromDate(parkingDate),
-        status: draft.status,
-        ...(Number.isFinite(totalCost) && totalCost >= 0 ? {totalCost} : {}),
-        ...(draft.status === "completed" ? {parkingEndDate: serverTimestamp()} : {}),
-        updatedAt: serverTimestamp(),
-        ...(draft.id ? {} : {createdAt: serverTimestamp()}),
-    };
-    await setDoc(
-      targetRef,
-      {
-        ...payload,
-        ...(draft.id ? {} : {trackingCode: `PC-${targetRef.id.slice(0, 6).toUpperCase()}`}),
-      },
-      {merge: true},
-    );
-    closeForm();
-    setMessage(draft.id ? "Parking record updated." : "Parking record created.");
+    const entry = editDraftAsEntry();
+    const errors = validateBusinessParkingEntryDraft(entry, businessId);
+    setEditErrors(errors);
+    if (errors.length > 0) {
+      // The list under the form already names every one of these.
+      setMessage("");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "updateBusinessParkingEntry",
+      )({entryId: draft.id, changes: businessParkingUpdateChanges(entry)});
+      const result = businessParkingUpdateResult(response.data);
+      // Status is not the callable's business; it stays on the path that
+      // already owned it, and only moves when the staff member changed it.
+      if (existing && draft.status !== text(existing.status, "active")) {
+        await updateParkingStatus(existing, draft.status);
+      }
+      closeForm();
+      // A reissued link is the one outcome staff must not miss: the customer
+      // is now holding a link for a different amount than the one quoted.
+      setMessage(
+        result.relinked
+          ? "The amount changed, so a new payment link was issued and the customer was notified of the new amount."
+          : "Parking record updated.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "The parking record could not be updated.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function updateParkingStatus(row: FirestoreRow, status: string) {
@@ -3638,11 +4603,209 @@ export function ParkingPanel({
       {
         businessId,
         status,
-        ...(status === "completed" ? {parkingEndDate: serverTimestamp()} : {}),
+        // Deliberately does NOT touch parkingEndDate. Marking a car completed
+        // says it left the lot; it must not rewrite the window the server
+        // priced. Stamping "now" here made an early departure silently
+        // contradict the amount owed - and any invoice or payment link the
+        // customer is already holding. Changing what is owed is the edit
+        // flow's job, where the customer is re-quoted.
         updatedAt: serverTimestamp(),
       },
       {merge: true},
     );
+  }
+
+  function openEntry() {
+    setEntryDraft(emptyBusinessParkingEntryDraft);
+    setEntryErrors([]);
+    setEntryMessage("");
+    setEntryResult(null);
+    setLinkCopied(false);
+    setEntryOpen(true);
+  }
+
+  function closeEntry() {
+    setEntryOpen(false);
+    setEntryDraft(emptyBusinessParkingEntryDraft);
+    setEntryErrors([]);
+    setEntryMessage("");
+    setEntryResult(null);
+    setLinkCopied(false);
+  }
+
+  async function submitEntry() {
+    const errors = validateBusinessParkingEntryDraft(entryDraft, businessId);
+    setEntryErrors(errors);
+    if (errors.length > 0) {
+      // The list below the form already names every one of these; repeating
+      // them in the banner just doubles the same paragraph.
+      setEntryMessage("");
+      return;
+    }
+    setEntryBusy(true);
+    setEntryMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "createBusinessParkingEntry",
+      )(businessParkingEntryPayload(entryDraft, businessId));
+      setEntryResult(businessParkingEntryResult(response.data));
+    } catch (error) {
+      setEntryMessage(error instanceof Error ? error.message : "The car could not be recorded.");
+    } finally {
+      setEntryBusy(false);
+    }
+  }
+
+  async function copyCheckoutUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setEntryMessage("The payment link could not be copied. Select and copy it manually.");
+    }
+  }
+
+  // Money that has changed hands off-platform cannot be un-marked from here,
+  // so it goes through the shared confirmation like every other irreversible
+  // action — and it is awaited, which several older call sites in this file
+  // are not.
+  async function markPaid(row: FirestoreRow) {
+    const method = receivedVia[row.id] || "zelle";
+    const confirmed = await confirmImportantAction(
+      "Record this parking as paid to the business? This cannot be undone here.",
+      "Enregistrer ce stationnement comme payé à l’entreprise ? Cette action est irréversible ici.",
+    );
+    if (!confirmed) return;
+    setPaidBusyId(row.id);
+    setRowMessage("");
+    try {
+      const response = await httpsCallable(functions, "markBusinessParkingPaid")({
+        entryId: row.id,
+        receivedVia: method,
+      });
+      const data = (response.data ?? {}) as {alreadyPaid?: boolean};
+      setRowMessage(data.alreadyPaid ? "This parking was already marked paid." : "Payment recorded.");
+    } catch (error) {
+      setRowMessage(error instanceof Error ? error.message : "The payment could not be recorded.");
+    } finally {
+      setPaidBusyId("");
+    }
+  }
+
+  async function cancelPaymentLink(row: FirestoreRow) {
+    const confirmed = await confirmImportantAction(
+      "Cancel this payment link? The customer will no longer be able to pay with it.",
+      "Annuler ce lien de paiement ? Le client ne pourra plus payer avec.",
+    );
+    if (!confirmed) return;
+    setPaidBusyId(row.id);
+    setRowMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "cancelBusinessParkingPaymentLink",
+      )({entryId: row.id});
+      const data = (response.data ?? {}) as { alreadyCancelled?: boolean };
+      setRowMessage(
+        data.alreadyCancelled
+          ? "This payment link was already cancelled."
+          : "Payment link cancelled.",
+      );
+    } catch (error) {
+      setRowMessage(
+        error instanceof Error ? error.message : "The payment link could not be cancelled.",
+      );
+    } finally {
+      setPaidBusyId("");
+    }
+  }
+
+  // A link that was sent while the customer's phone was wrong, or that landed
+  // in a spam folder, is a space the lot cannot bill for. Re-sending costs
+  // nothing and does not change the amount.
+  async function resendPaymentLink(row: FirestoreRow) {
+    setPaidBusyId(row.id);
+    setRowMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "resendBusinessParkingPaymentLink",
+      )({entryId: row.id});
+      const data = (response.data ?? {}) as {emailed?: boolean; texted?: boolean};
+      setRowMessage(
+        businessParkingResendMessage(data.emailed === true, data.texted === true),
+      );
+    } catch (error) {
+      setRowMessage(
+        error instanceof Error ? error.message : "The payment link could not be re-sent.",
+      );
+    } finally {
+      setPaidBusyId("");
+    }
+  }
+
+  async function checkLinkPayment(row: FirestoreRow) {
+    setPaidBusyId(row.id);
+    setRowMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "refreshBusinessParkingPayment",
+      )({entryId: row.id});
+      const data = (response.data ?? {}) as {
+        paid?: boolean;
+        alreadyRecorded?: boolean;
+      };
+      setRowMessage(
+        data.paid
+          ? data.alreadyRecorded
+            ? "Already recorded as paid."
+            : "Payment confirmed with Stripe and recorded."
+          : "Stripe has not received this payment yet.",
+      );
+    } catch (error) {
+      setRowMessage(
+        error instanceof Error
+          ? error.message
+          : "The payment status could not be checked.",
+      );
+    } finally {
+      setPaidBusyId("");
+    }
+  }
+
+  // A lot handing a car back needs paper: a receipt once the money is in, an
+  // invoice while it is not. The server renders and brands the document; this
+  // only has to get the owner to it.
+  async function openParkingDocument(row: FirestoreRow) {
+    setPaidBusyId(row.id);
+    setRowMessage("");
+    setBlockedDocument(null);
+    try {
+      const response = await httpsCallable(
+        functions,
+        "getParkingDocumentUrl",
+      )({entryId: row.id});
+      const data = (response.data ?? {}) as {documentType?: string; url?: string};
+      const url = text(data.url, "");
+      if (!url) throw new Error("The document is not ready yet. Try again in a moment.");
+      // The callable is awaited, so this open is no longer inside the click's
+      // user gesture and a blocker can refuse it silently. A refusal must
+      // leave the owner a link, not a button that appears to do nothing.
+      const opened = window.open(url, "_blank", "noopener");
+      if (!opened) {
+        setBlockedDocument({id: row.id, url});
+        setRowMessage("Your browser blocked the document window. Allow pop-ups for this site, or use the link on the card.");
+      }
+    } catch (error) {
+      setRowMessage(
+        error instanceof Error ? error.message : "The document could not be prepared.",
+      );
+    } finally {
+      setPaidBusyId("");
+    }
   }
 
   return (
@@ -3654,7 +4817,12 @@ export function ParkingPanel({
         </div>
         <div className="lst-head-actions">
           <StatusText busy={busy} message={message} />
-          <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> New parking</button>
+          {/* "New parking" used to sit here. It wrote a parkedCars document
+              straight from the browser: no server-issued tracking code, no
+              amount due, no space check, no payment plan - a record the
+              payment system could not settle. "Record a parked car" goes
+              through createBusinessParkingEntry and does all of it. */}
+          <button className="lst-add" type="button" onClick={openEntry}><Plus size={17} /> Record a parked car</button>
         </div>
       </header>
 
@@ -3666,8 +4834,25 @@ export function ParkingPanel({
         </div>
         <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={filter} onChange={(event) => setFilter(event.target.value)}>
           <option value="all">All statuses</option>
-          {parkingStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+          <optgroup label="Parking status">
+            {parkingStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+          </optgroup>
+          <optgroup label="Payment">
+            <option value="payment:paid">Paid</option>
+            <option value="payment:unpaid">Not paid</option>
+          </optgroup>
         </select>
+        {/* Which cars were in the lot during a window - overlapping, not
+            only those entirely inside it, or a long stay disappears. */}
+        <label className="bar-field" style={{ flex: "0 0 auto" }}><span>Parked between</span>
+          <input type="date" value={rangeFrom} onChange={(event) => setRangeFrom(event.target.value)} aria-label="Parked between start date" />
+        </label>
+        <label className="bar-field" style={{ flex: "0 0 auto" }}><span>and</span>
+          <input type="date" value={rangeTo} onChange={(event) => setRangeTo(event.target.value)} aria-label="Parked between end date" />
+        </label>
+        {(rangeFrom || rangeTo) && (
+          <button className="lst-btn ghost" type="button" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear dates</button>
+        )}
         <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("parking-receipts.csv", filteredRows, ["trackingCode", "ownerName", "carMake", "carModel", "carYear", "vinNumber", "parkingDate", "parkingEndDate", "totalCost", "status", "updatedAt"])}>
           <Download size={15} /> Export receipts
         </button>
@@ -3679,7 +4864,7 @@ export function ParkingPanel({
           <div className="lst-empty-icon"><ParkingCircle size={30} /></div>
           <h3>No parked cars yet</h3>
           <p>Add a car you're storing to start a parking record.</p>
-          <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> New parking</button>
+          <button className="lst-add" type="button" onClick={openEntry}><Plus size={17} /> Record a parked car</button>
         </div>
       )}
       {!parkedCars.loading && parkedCars.rows.length > 0 && filteredRows.length === 0 && (
@@ -3689,6 +4874,9 @@ export function ParkingPanel({
       <div className="pur-grid">
         {filteredRows.map((row) => {
           const status = text(row.status, "active");
+          const businessEntered = isBusinessEnteredParking(row);
+          const awaitingDirect = canMarkBusinessParkingPaid(row);
+          const rowBusy = paidBusyId === row.id;
           return (
             <article className="pur-card" key={row.id}>
               <div className="pur-head">
@@ -3696,22 +4884,141 @@ export function ParkingPanel({
                   <strong>{parkingTitle(row)}</strong>
                   <span className="pur-kind">{text(row.trackingCode, "Parking")}</span>
                 </div>
-                <span className={`lst-badge ${status === "active" ? "warn" : status === "completed" ? "ok" : "muted"}`}>{statusLabel(status)}</span>
+                <span className="pur-badges">
+                  {businessEntered && businessParkingPaymentBadge(row) && (
+                    <span className={`lst-badge ${businessParkingPaymentTone(row) === "paid" ? "ok" : "warn"}`}>
+                      {businessParkingPaymentBadge(row)}
+                    </span>
+                  )}
+                  <span className={`lst-badge ${status === "active" ? "warn" : status === "completed" ? "ok" : "muted"}`}>{statusLabel(status)}</span>
+                </span>
               </div>
               <div className="pur-info">
-                <div><span>Owner</span><b>{text(row.ownerName, "—")}</b></div>
+                <div><span>Owner</span><b>{text(row.customerName ?? row.ownerName, "—")}</b></div>
                 <div><span>VIN</span><b>{text(row.vinNumber, "—")}</b></div>
                 <div><span>Parked</span><b>{formatDate(row.parkingDate ?? row.createdAt)}</b></div>
-                <div><span>Total cost</span><b>{formatMoney(row.totalCost)}</b></div>
-                {Boolean(row.parkingEndDate) && <div><span>Ended</span><b>{formatDate(row.parkingEndDate)}</b></div>}
+                {/* The platform records what a direct entry owes; it never
+                    bills it, so the amount is labelled as recorded, not paid. */}
+                <div><span>{businessEntered ? "Amount recorded" : "Total cost"}</span><b>{formatMoney(businessEntered ? businessParkingAmountDue(row) : row.totalCost)}</b></div>
+                {businessEntered && <div><span>Payment status</span><b>{businessParkingPaymentLabel(row)}</b></div>}
+                {Boolean(row.parkingEndDate) && <div><span>{businessParkingEndLabel(row)}</span><b>{formatDate(row.parkingEndDate)}</b></div>}
               </div>
+              {businessEntered && text(row.paymentMethod, "") === "payment_link" && Boolean(text(row.checkoutUrl, "")) && (
+                <div className="pur-info">
+                  <div style={{gridColumn: "1 / -1", minWidth: 0}}>
+                    <span>Payment link</span>
+                    {/* Once the customer has paid, the link leads to Stripe's
+                        "already completed" page. Offering to copy it there
+                        reads as a broken link rather than a finished sale. */}
+                    {businessParkingPaymentTone(row) === "paid" ? (
+                      <em className="lst-hint">This link was already used to pay. Nothing further is owed.</em>
+                    ) : (
+                      // paymentLinkUrl is the durable Laawol link; a Stripe
+                      // session URL dies within 24 hours, so it is only the
+                      // fallback for records created before this existed.
+                      <button className="lst-btn ghost" type="button" onClick={() => copyCheckoutUrl(text(row.paymentLinkUrl ?? row.checkoutUrl, ""))} title="Copy payment link">
+                        <Copy size={14} /> Copy payment link
+                      </button>
+                    )}
+                    {/* A webhook can be late or lost; the lot should never be
+                        stuck guessing whether a car has been paid for. Once it
+                        is paid there is nothing left to ask Stripe, so the
+                        button goes — same rule as the cancel button below. */}
+                    {businessParkingPaymentTone(row) !== "paid" && (
+                      <button
+                        className="lst-btn ghost"
+                        type="button"
+                        disabled={paidBusyId === row.id}
+                        onClick={() => void checkLinkPayment(row)}
+                        title="Check payment status"
+                      >
+                        <RefreshCw size={14} />
+                        {paidBusyId === row.id ? "Checking..." : "Check payment status"}
+                      </button>
+                    )}
+                    {/* Same gate as Cancel below: a paid link has nothing
+                        left to collect, and a cancelled one must not be
+                        quietly brought back to life by a re-send. */}
+                    {canResendBusinessParkingLink(row) && (
+                      <button
+                        className="lst-btn ghost"
+                        type="button"
+                        disabled={paidBusyId === row.id}
+                        onClick={() => void resendPaymentLink(row)}
+                        title="Resend link"
+                      >
+                        <Send size={14} /> Resend link
+                      </button>
+                    )}
+                    {/* The other half of the rule: a link stays good until
+                        the customer pays it or the lot kills it here. */}
+                    {canResendBusinessParkingLink(row) && (
+                      <button
+                        className="lst-btn ghost"
+                        type="button"
+                        disabled={paidBusyId === row.id}
+                        onClick={() => void cancelPaymentLink(row)}
+                        title="Cancel payment link"
+                      >
+                        <X size={14} /> Cancel payment link
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="pur-actions">
                 <label className="bar-field"><span>Update status</span>
                   <select value={status} disabled={busy} onChange={(event) => runPanelAction(setBusy, setMessage, "Parking status updated.", () => updateParkingStatus(row, event.target.value))}>
                     {parkingStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
                   </select>
                 </label>
-                <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editParking(row)}><Pencil size={14} /> Edit</button>
+                {awaitingDirect && (
+                  <label className="bar-field"><span>Received via</span>
+                    <select value={receivedVia[row.id] || "zelle"} disabled={rowBusy} onChange={(event) => setReceivedVia((current) => ({...current, [row.id]: event.target.value}))}>
+                      {BUSINESS_PARKING_RECEIVED_VIA_OPTIONS.map((option) => (<option key={option.value} value={option.value}>{option.label}</option>))}
+                    </select>
+                  </label>
+                )}
+                {awaitingDirect && (
+                  <button className="lst-btn" type="button" disabled={rowBusy} aria-busy={rowBusy} onClick={() => markPaid(row)}>
+                    {rowBusy ? <RefreshCw className="spin" size={14} /> : <CircleDollarSign size={14} />}
+                    {rowBusy ? "Recording..." : "Mark payment received"}
+                  </button>
+                )}
+                {/* Paper for the owner: a receipt once the money is in, an
+                    invoice while it is still owed. The document itself is
+                    server-rendered and print-optimised. */}
+                {businessEntered && (
+                  <button
+                    className="lst-btn ghost"
+                    type="button"
+                    disabled={rowBusy}
+                    aria-busy={rowBusy}
+                    onClick={() => void openParkingDocument(row)}
+                    title={businessParkingDocumentType(row) === "receipt" ? "Print receipt" : "Print invoice"}
+                  >
+                    {rowBusy ? <RefreshCw className="spin" size={14} /> : <Printer size={14} />}
+                    {rowBusy
+                      ? "Preparing..."
+                      : businessParkingDocumentType(row) === "receipt"
+                        ? "Print receipt"
+                        : "Print invoice"}
+                  </button>
+                )}
+                {blockedDocument?.id === row.id && (
+                  <a className="lst-btn ghost" href={blockedDocument.url} target="_blank" rel="noopener noreferrer">
+                    <Printer size={14} /> Open the document
+                  </a>
+                )}
+                {/* A paid record is settled money: the amount was charged,
+                    the platform fee taken and the payout sent. Editing it
+                    here would rewrite the price of a completed sale with no
+                    server check and no audit trail, so it is not offered. */}
+                {businessParkingPaymentTone(row) === "paid" ? (
+                  <span className="lst-hint">Paid records cannot be edited</span>
+                ) : (
+                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editParking(row)}><Pencil size={14} /> Edit</button>
+                )}
               </div>
             </article>
           );
@@ -3724,7 +5031,7 @@ export function ParkingPanel({
         }}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
-              <h3>{draft.id ? "Edit parking" : "New parking"}</h3>
+              <h3>Edit parking</h3>
               <button className="lst-icon-btn" type="button" disabled={busy} onClick={closeForm} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
@@ -3733,23 +5040,50 @@ export function ParkingPanel({
                 <label className="lst-field wide"><span>Owner name</span>
                   <input value={draft.ownerName} onChange={(event) => setDraft((value) => ({ ...value, ownerName: event.target.value }))} placeholder="Customer name" />
                 </label>
+                <label className="lst-field"><span>Customer phone</span>
+                  <input value={draft.customerPhone} onChange={(event) => setDraft((value) => ({ ...value, customerPhone: event.target.value }))} placeholder="Phone number" />
+                </label>
+                {/* Email is what a re-sent payment link travels on, so it is
+                    editable here rather than frozen at the moment of intake. */}
+                <label className="lst-field"><span>Customer email</span>
+                  <input value={draft.customerEmail} onChange={(event) => setDraft((value) => ({ ...value, customerEmail: event.target.value }))} placeholder="Email address" />
+                </label>
+                {/* Catalog pickers, not free text - this file already uses
+                    them for listings; the parking form was the last holdout. */}
                 <label className="lst-field"><span>Make</span>
-                  <input value={draft.carMake} onChange={(event) => setDraft((value) => ({ ...value, carMake: event.target.value }))} placeholder="Toyota" />
+                  <select value={canonicalMake(draft.carMake) || draft.carMake} onChange={(event) => setDraft((value) => ({ ...value, carMake: event.target.value, carModel: "", carYear: "" }))}>
+                    <option value="">Select a make</option>
+                    {getMakes().map((make) => (<option key={make} value={make}>{make}</option>))}
+                  </select>
                 </label>
                 <label className="lst-field"><span>Model</span>
-                  <input value={draft.carModel} onChange={(event) => setDraft((value) => ({ ...value, carModel: event.target.value }))} placeholder="Camry" />
+                  <select disabled={!draft.carMake} value={canonicalModel(draft.carMake, draft.carModel) || draft.carModel} onChange={(event) => setDraft((value) => ({ ...value, carModel: event.target.value, carYear: "" }))}>
+                    <option value="">Select a model</option>
+                    {getModels(draft.carMake).map((model) => (<option key={model} value={model}>{model}</option>))}
+                  </select>
                 </label>
                 <label className="lst-field"><span>Year</span>
-                  <input inputMode="numeric" value={draft.carYear} onChange={(event) => setDraft((value) => ({ ...value, carYear: event.target.value }))} placeholder="2019" />
+                  <select disabled={!draft.carModel} value={draft.carYear} onChange={(event) => setDraft((value) => ({ ...value, carYear: event.target.value }))}>
+                    <option value="">Select a year</option>
+                    {getYears(draft.carMake, draft.carModel).map((year) => (<option key={year} value={year}>{year}</option>))}
+                  </select>
                 </label>
                 <label className="lst-field"><span>VIN</span>
                   <input value={draft.vinNumber} onChange={(event) => setDraft((value) => ({ ...value, vinNumber: event.target.value }))} placeholder="17 characters" />
                 </label>
-                <label className="lst-field"><span>Parking date</span>
-                  <input type="date" value={draft.parkingDate} onChange={(event) => setDraft((value) => ({ ...value, parkingDate: event.target.value }))} />
+                {/* Both ends of the stay: the server re-prices from these, so
+                    a corrected pick-up day changes what is owed. */}
+                <label className="lst-field"><span>Start date</span>
+                  <input type="date" value={draft.startDate} onChange={(event) => setDraft((value) => ({ ...value, startDate: event.target.value }))} />
                 </label>
-                <label className="lst-field"><span>Total cost (USD)</span>
-                  <input inputMode="decimal" value={draft.totalCost} onChange={(event) => setDraft((value) => ({ ...value, totalCost: event.target.value }))} placeholder="0.00" />
+                <label className="lst-field"><span>End date</span>
+                  <input type="date" value={draft.endDate} onChange={(event) => setDraft((value) => ({ ...value, endDate: event.target.value }))} />
+                </label>
+                <label className="lst-field"><span>Payment method</span>
+                  <select value={draft.paymentMethod} onChange={(event) => setDraft((value) => ({ ...value, paymentMethod: event.target.value === "payment_link" ? "payment_link" : "direct" }))}>
+                    <option value="direct">Direct payment (Zelle or cash)</option>
+                    <option value="payment_link">Payment link</option>
+                  </select>
                 </label>
                 <label className="lst-field"><span>Status</span>
                   <select value={draft.status} onChange={(event) => setDraft((value) => ({ ...value, status: event.target.value }))}>
@@ -3757,13 +5091,137 @@ export function ParkingPanel({
                   </select>
                 </label>
               </div>
+              {/* No amount input, deliberately: the server recalculates the
+                  price from the business's parking rates every time, so a
+                  typed total would only ever be overwritten - or believed. */}
+              <p className="lst-hint">The amount is recalculated from your parking rates when you save. If it changes on a payment-link parking, we issue a new link and tell the customer.</p>
+              {editErrors.length > 0 && (
+                <ul className="lst-form-error" role="alert">
+                  {editErrors.map((code) => (<li key={code}>{BUSINESS_PARKING_ENTRY_MESSAGES[code]}</li>))}
+                </ul>
+              )}
             </div>
             <footer className="lst-modal-foot">
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, draft.id ? "Parking record updated." : "Parking record created.", saveParking)}>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void saveParking()}>
                 {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
-                {busy ? "Saving..." : draft.id ? "Save changes" : "Create parking"}
+                {busy ? "Saving..." : "Save changes"}
               </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {entryOpen && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
+          if (!entryBusy) closeEntry();
+        }}>
+          <div className="lst-modal" style={{ maxWidth: 640 }} onClick={(event) => event.stopPropagation()}>
+            <header className="lst-modal-head">
+              <h3>{entryResult ? "Parked car recorded" : "Record a parked car"}</h3>
+              <button className="lst-icon-btn" type="button" disabled={entryBusy} onClick={closeEntry} aria-label="Close"><X size={18} /></button>
+            </header>
+
+            {entryResult ? (
+              <div className="lst-modal-body">
+                <div className="pur-info">
+                  <div><span>Tracking code</span><b>{entryResult.trackingCode || "—"}</b></div>
+                  <div><span>Amount due</span><b>{formatMoney(entryResult.amountDue)}</b></div>
+                </div>
+                {entryResult.paymentMethod === "payment_link" ? (
+                  <>
+                    <p className="lst-hint">Send this link to the customer so they can pay. It stays valid until they use it.</p>
+                    <div className="lst-form-grid">
+                      <label className="lst-field wide"><span>Payment link</span>
+                        <input readOnly value={entryResult.checkoutUrl} onFocus={(event) => event.currentTarget.select()} />
+                      </label>
+                    </div>
+                    <button className="lst-btn ghost" type="button" disabled={!entryResult.checkoutUrl} onClick={() => copyCheckoutUrl(entryResult.checkoutUrl)}>
+                      <Copy size={15} /> {linkCopied ? "Link copied" : "Copy payment link"}
+                    </button>
+                  </>
+                ) : (
+                  <p className="lst-hint">The customer pays your business directly. We record the amount and never bill it. Use Mark payment received once the money arrives.</p>
+                )}
+                {entryMessage && <div className="lst-form-error" role="alert">{entryMessage}</div>}
+              </div>
+            ) : (
+              <div className="lst-modal-body">
+                {entryMessage && <div className="lst-form-error" role="alert">{entryMessage}</div>}
+                <div className="lst-form-grid">
+                  <label className="lst-field wide"><span>Customer name</span>
+                    <input value={entryDraft.customerName} onChange={(event) => setEntryDraft((value) => ({...value, customerName: event.target.value}))} placeholder="Customer name" />
+                  </label>
+                  <label className="lst-field"><span>Customer phone</span>
+                    <input value={entryDraft.customerPhone} onChange={(event) => setEntryDraft((value) => ({...value, customerPhone: event.target.value}))} placeholder="Phone number" />
+                  </label>
+                  <label className="lst-field"><span>Customer email (optional)</span>
+                    <input value={entryDraft.customerEmail} onChange={(event) => setEntryDraft((value) => ({...value, customerEmail: event.target.value}))} placeholder="Email address" />
+                  </label>
+                  {/* Catalog pickers, never free text — a typed make breaks
+                      search, filters and every later match on this record. */}
+                  <label className="lst-field"><span>Make</span>
+                    <select value={canonicalMake(entryDraft.carMake) || entryDraft.carMake} onChange={(event) => setEntryDraft((value) => ({...value, carMake: event.target.value, carModel: "", carYear: ""}))}>
+                      <option value="">Select a make</option>
+                      {getMakes().map((make) => (<option key={make} value={make}>{make}</option>))}
+                    </select>
+                  </label>
+                  <label className="lst-field"><span>Model</span>
+                    <select disabled={!entryDraft.carMake} value={canonicalModel(entryDraft.carMake, entryDraft.carModel) || entryDraft.carModel} onChange={(event) => setEntryDraft((value) => ({...value, carModel: event.target.value, carYear: ""}))}>
+                      <option value="">Select a model</option>
+                      {getModels(entryDraft.carMake).map((model) => (<option key={model} value={model}>{model}</option>))}
+                    </select>
+                  </label>
+                  <label className="lst-field"><span>Year</span>
+                    <select disabled={!entryDraft.carModel} value={entryDraft.carYear} onChange={(event) => setEntryDraft((value) => ({...value, carYear: event.target.value}))}>
+                      <option value="">Select a year</option>
+                      {getYears(entryDraft.carMake, entryDraft.carModel).map((year) => (<option key={year} value={year}>{year}</option>))}
+                    </select>
+                  </label>
+                  <label className="lst-field"><span>VIN (optional)</span>
+                    <input value={entryDraft.vinNumber} onChange={(event) => setEntryDraft((value) => ({...value, vinNumber: event.target.value}))} placeholder="17 characters" />
+                  </label>
+                  <label className="lst-field"><span>Start date</span>
+                    <input type="date" value={entryDraft.startDate} onChange={(event) => setEntryDraft((value) => ({...value, startDate: event.target.value}))} />
+                  </label>
+                  <label className="lst-field"><span>End date</span>
+                    <input type="date" value={entryDraft.endDate} onChange={(event) => setEntryDraft((value) => ({...value, endDate: event.target.value}))} />
+                  </label>
+                </div>
+
+                <fieldset className="lst-fieldset">
+                  <legend>How does this parking get paid?</legend>
+                  <label className="lst-radio">
+                    <input type="radio" name="parking-payment-method" value="direct" checked={entryDraft.paymentMethod === "direct"} onChange={() => setEntryDraft((value) => ({...value, paymentMethod: "direct"}))} />
+                    <span>Customer pays us directly (Zelle/cash)</span>
+                  </label>
+                  <label className="lst-radio">
+                    <input type="radio" name="parking-payment-method" value="payment_link" checked={entryDraft.paymentMethod === "payment_link"} onChange={() => setEntryDraft((value) => ({...value, paymentMethod: "payment_link"}))} />
+                    <span>Send the customer a payment link</span>
+                  </label>
+                  <p className="lst-hint">
+                    {entryDraft.paymentMethod === "direct"
+                      ? "We record what the customer owes you and take no cut. You mark it received when the money arrives."
+                      : "We bill the customer for you and send you the rest."}
+                  </p>
+                </fieldset>
+
+                {entryErrors.length > 0 && (
+                  <ul className="lst-form-error" role="alert">
+                    {entryErrors.map((code) => (<li key={code}>{BUSINESS_PARKING_ENTRY_MESSAGES[code]}</li>))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <footer className="lst-modal-foot">
+              <button className="lst-btn ghost" type="button" disabled={entryBusy} onClick={closeEntry}>{entryResult ? "Done" : "Cancel"}</button>
+              {!entryResult && (
+                <button className="lst-add" type="button" disabled={entryBusy} aria-busy={entryBusy} onClick={submitEntry}>
+                  {entryBusy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
+                  {entryBusy ? "Recording..." : "Record the car"}
+                </button>
+              )}
             </footer>
           </div>
         </div>
@@ -3783,28 +5241,328 @@ function purchaseKindLabel(kind: ReturnType<typeof purchaseKind>) {
   return kind === "hold" ? "Paid hold" : kind === "viewing" ? "Viewing" : "Purchase";
 }
 function purchaseNeedsAction(row: FirestoreRow) {
-  return Boolean(row.holdReviewRequiredAt) || row.extensionRequestStatus === "pending";
+  // A viewing request nobody has answered is the same kind of "somebody is
+  // waiting on us" as a hold review, and it expires if it is left alone, so it
+  // carries the same alert border and the same Needs action filter.
+  return Boolean(row.holdReviewRequiredAt) ||
+    row.extensionRequestStatus === "pending" ||
+    viewingAwaitingParty(text(row.purchaseStatus, "")) === "business";
 }
 function purchaseTone(status: string) {
   switch (status) {
     case "completed": return "ok";
-    case "reserved": case "hold_review_required": case "viewing_scheduled": return "warn";
-    case "cancelled": case "refunded": case "no_show": case "forfeited": return "muted";
+    case "reserved": case "hold_review_required": case "viewing_requested": return "warn";
+    case "viewing_scheduled": return "ok";
+    case "cancelled": case "refunded": case "no_show": case "forfeited":
+    case "viewing_declined": case "viewing_expired": return "muted";
     default: return "navy";
   }
 }
 
-export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) {
-  const purchases = useBusinessRows("carPurchases", businessId, Boolean(businessId && !previewMode), 250);
+/**
+ * The negotiation half of a viewing card.
+ *
+ * A viewing is an appointment two people have to agree on, so the card has to
+ * show what is on the table, who owes the reply and by when — none of which a
+ * hold or a purchase has. It sits inline rather than behind a modal because a
+ * business working through ten of these should not have to open ten dialogs.
+ *
+ * Which buttons exist comes from `viewingActionAvailability`, the console's
+ * copy of the server's own rules, so the panel never offers an action
+ * `actOnCarViewing` would refuse.
+ */
+function ViewingNegotiation({
+  row,
+  carStatus,
+  nowMs,
+  busy,
+  onAct,
+  onComplete,
+}: {
+  row: FirestoreRow;
+  carStatus: string;
+  nowMs: number;
+  busy: boolean;
+  onAct: (
+    action: ViewingAction,
+    slots: ViewingSlot[],
+    label: string,
+    confirm: string,
+    confirmFr: string,
+  ) => void;
+  onComplete: () => void;
+}) {
+  const record = viewingRecordFrom(row);
+  const available = viewingActionAvailability({ record, actor: "business", nowMs, carStatus });
+  const history = viewingHistoryFrom(row);
+  const [chosenSlotMs, setChosenSlotMs] = useState(0);
+  const [countering, setCountering] = useState(false);
+  const [counterSlots, setCounterSlots] = useState<string[]>([""]);
+  const [slotError, setSlotError] = useState("");
+
+  const waiting = viewingWaitingLabel(record.purchaseStatus, "business");
+  const selected =
+    available.acceptableSlots.find((slot) => slot.startAtMs === chosenSlotMs) ??
+    available.acceptableSlots[0];
+
+  function sendCounter() {
+    const slots = counterSlots
+      .map(viewingSlotFromInput)
+      .filter((slot): slot is ViewingSlot => slot !== null);
+    const error = validateViewingSlots(slots, nowMs, available.maxSlots);
+    if (error) {
+      setSlotError(VIEWING_SLOT_ERROR_MESSAGES[error]);
+      return;
+    }
+    setSlotError("");
+    setCountering(false);
+    setCounterSlots([""]);
+    onAct(
+      "propose",
+      slots,
+      "Times sent to the buyer.",
+      "Offer these times to the buyer?",
+      "Proposer ces horaires à l’acheteur ?",
+    );
+  }
+
+  return (
+    <>
+      {(waiting || record.respondByAtMs != null) && (
+        <div className="pur-info">
+          {waiting && <div><span>Waiting on</span><b>{waiting}</b></div>}
+          {record.respondByAtMs != null && (
+            <div><span>Reply by</span><b>{formatViewingSlot(record.respondByAtMs)}</b></div>
+          )}
+        </div>
+      )}
+
+      {available.blockedReason !== "" && available.blockedReason !== "closed" && (
+        <div className="pur-notice warn">
+          <AlertTriangle size={15} /> {VIEWING_BLOCK_MESSAGES[available.blockedReason]}
+        </div>
+      )}
+      {available.open && available.proposalsLeft === 0 && (
+        <div className="pur-notice">
+          <Clock3 size={15} /> This has gone back and forth enough - accept a time, decline, or cancel
+        </div>
+      )}
+
+      {record.proposedSlots.length > 0 && available.blockedReason !== "closed" && (
+        <div className="viewing-slots">
+          <span className="pur-kind">{available.canAccept ? "Pick a time to accept" : "Times on the table"}</span>
+          {record.proposedSlots.map((slot) => {
+            const acceptable = available.acceptableSlots.some(
+              (item) => item.startAtMs === slot.startAtMs,
+            );
+            return (
+              <label className="viewing-slot" key={slot.startAtMs}>
+                {available.canAccept ? (
+                  <input
+                    checked={selected?.startAtMs === slot.startAtMs}
+                    disabled={busy || !acceptable}
+                    name={`viewing-slot-${row.id}`}
+                    onChange={() => setChosenSlotMs(slot.startAtMs)}
+                    type="radio"
+                  />
+                ) : (
+                  <Clock3 size={14} />
+                )}
+                <span>{formatViewingSlot(slot.startAtMs)}</span>
+                {/* A slot inside the edit floor stays visible but cannot be
+                    agreed — hiding it would make the buyer's offer look
+                    smaller than it was. */}
+                {!acceptable && <span className="lst-badge muted">Too soon</span>}
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      {countering && (
+        <div className="viewing-counter-fields">
+          {counterSlots.map((value, index) => (
+            <input
+              aria-label="Time to offer"
+              key={index}
+              min={viewingSlotInputMin(nowMs)}
+              onChange={(event) =>
+                setCounterSlots((values) =>
+                  values.map((item, position) => (position === index ? event.target.value : item)),
+                )
+              }
+              type="datetime-local"
+              value={value}
+            />
+          ))}
+          {counterSlots.length < available.maxSlots && (
+            <button className="lst-btn ghost" type="button" onClick={() => setCounterSlots((values) => [...values, ""])}>
+              <Plus size={14} /> Add another time
+            </button>
+          )}
+          {slotError && <div className="lst-form-error" role="alert">{slotError}</div>}
+        </div>
+      )}
+
+      {history.length > 0 && (
+        <details className="viewing-history">
+          <summary>Negotiation history</summary>
+          <ol>
+            {history.map((entry) => (
+              <li key={`${entry.atMs}-${entry.actor}-${entry.action}`}>
+                <b>{viewingHistoryLabel(entry)}</b>
+                {entry.slots.length > 0 && (
+                  <span>{entry.slots.map((slot) => formatViewingSlot(slot.startAtMs)).join(" · ")}</span>
+                )}
+                <small>{formatViewingSlot(entry.atMs)}</small>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+
+      {available.open && (
+        <div className="pur-actions">
+          {countering ? (
+            <>
+              <button className="lst-btn" type="button" disabled={busy} onClick={sendCounter}>
+                <Send size={15} /> Send these times
+              </button>
+              <button
+                className="lst-btn ghost"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setCountering(false);
+                  setCounterSlots([""]);
+                  setSlotError("");
+                }}
+              >
+                Discard these times
+              </button>
+            </>
+          ) : (
+            <>
+              {available.canAccept && (
+                <button
+                  className="lst-btn"
+                  type="button"
+                  disabled={busy || !selected}
+                  onClick={() => selected && onAct(
+                    "accept",
+                    [selected],
+                    "Viewing confirmed.",
+                    "Confirm this viewing time?",
+                    "Confirmer cet horaire de visite ?",
+                  )}
+                >
+                  <CheckCircle2 size={15} /> Accept this time
+                </button>
+              )}
+              {available.canPropose && (
+                <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => setCountering(true)}>
+                  <Clock3 size={14} />
+                  {record.purchaseStatus === "viewing_scheduled" ? "Propose a new time" : "Offer other times"}
+                </button>
+              )}
+              {available.canDecline && (
+                <button
+                  className="lst-btn ghost danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onAct(
+                    "decline",
+                    [],
+                    "Viewing declined.",
+                    "Decline this viewing request?",
+                    "Refuser cette demande de visite ?",
+                  )}
+                >
+                  <XCircle size={15} /> Decline
+                </button>
+              )}
+              {record.purchaseStatus === "viewing_scheduled" && (
+                <button className="lst-btn" type="button" disabled={busy} onClick={onComplete}>
+                  <CheckCircle2 size={15} /> Viewing done
+                </button>
+              )}
+              {/* Last, and always present while the viewing is open — the one
+                  action neither an inactive listing nor a used-up round cap
+                  takes away. */}
+              {available.canCancel && (
+                <button
+                  className="lst-btn ghost danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onAct(
+                    "cancel",
+                    [],
+                    "Viewing cancelled.",
+                    "Cancel this viewing?",
+                    "Annuler cette visite ?",
+                  )}
+                >
+                  <RotateCcw size={14} /> Cancel viewing
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+export function PurchasesPanel({
+  businessId,
+  previewMode = false,
+  scope = "purchases",
+}: PanelProps & {scope?: "purchases" | "viewings"}) {
+  const enabled = Boolean(businessId && !previewMode);
+  const purchases = useBusinessRows("carPurchases", businessId, enabled, 250);
+  // Read for one field: a viewing on a listing that is no longer active can
+  // only be cancelled, and the purchase record does not carry the listing's
+  // status. Knowing it here is what lets the panel say so instead of letting
+  // the callable's refusal be how an operator finds out.
+  const cars = useBusinessRows("cars", businessId, enabled, 250);
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  // A filter picked on one queue must not survive into the other, where it
+  // would match nothing and read as an empty queue rather than a stale filter.
+  useEffect(() => {
+    setFilter("all");
+  }, [scope]);
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
+  // One clock for the whole panel. Every viewing window is measured against
+  // the hour before an appointment, so a card left open has to stop offering
+  // an action when that hour arrives rather than waiting for a refresh.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const carStatusById = useMemo(
+    () => new Map(cars.rows.map((car) => [car.id, text(car.status, "")])),
+    [cars.rows],
+  );
+
+  // A viewing is an appointment, not a sale. Splitting here rather than at
+  // render keeps search, the filters and the needs-action count talking about
+  // the queue in front of the operator instead of the whole collection.
+  const scopedRows = useMemo(
+    () => purchases.rows.filter((row) =>
+      scope === "viewings" ?
+        purchaseKind(row) === "viewing" :
+        purchaseKind(row) !== "viewing",
+    ),
+    [purchases.rows, scope],
+  );
 
   const searched = useMemo(
-    () => filterRows(purchases.rows, search, ["carTitle", "buyerName", "buyerEmail", "buyerPhone", "customerName", "purchaseStatus", "paymentStatus", "destinationCountryName"]),
-    [purchases.rows, search],
+    () => filterRows(scopedRows, search, ["carTitle", "buyerName", "buyerEmail", "buyerPhone", "customerName", "purchaseStatus", "paymentStatus", "destinationCountryName"]),
+    [scopedRows, search],
   );
   const filteredRows = useMemo(() => {
     if (filter === "all") return searched;
@@ -3814,7 +5572,7 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
     return searched.filter((row) => text(row.purchaseStatus, "") === filter);
   }, [searched, filter]);
 
-  const actionCount = useMemo(() => purchases.rows.filter(purchaseNeedsAction).length, [purchases.rows]);
+  const actionCount = useMemo(() => scopedRows.filter(purchaseNeedsAction).length, [scopedRows]);
 
   async function runHold(
     purchaseId: string,
@@ -3823,7 +5581,7 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
     confirm?: string,
     confirmFr?: string,
   ) {
-    if (confirm && !confirmImportantAction(confirm, confirmFr)) return;
+    if (confirm && !(await confirmImportantAction(confirm, confirmFr))) return;
     setBusyId(purchaseId);
     setMessage("");
     try {
@@ -3844,7 +5602,35 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
     return (res.data as { refundQueued?: boolean })?.refundQueued ?? false;
   }
 
-  const statusFilters = ["all", "needs_action", "holds", "viewings", "reserved", "hold_review_required", "viewing_scheduled", "completed", "cancelled", "refunded", "no_show", "forfeited"];
+  // Every viewing transition — accept, counter, decline, cancel — goes through
+  // the one callable, which re-decides the move inside its own transaction. A
+  // refusal from it is already a sentence for the operator, so it is shown as
+  // it arrives rather than replaced with a generic failure line.
+  function runViewing(
+    purchaseId: string,
+    action: ViewingAction,
+    slots: ViewingSlot[],
+    label: string,
+    confirm: string,
+    confirmFr: string,
+  ) {
+    void runHold(
+      purchaseId,
+      label,
+      () => httpsCallable(functions, "actOnCarViewing")(
+        viewingActionPayload({ purchaseId, action, slots }),
+      ),
+      confirm,
+      confirmFr,
+    );
+  }
+
+  // Each queue offers only filters that can actually match it. Leaving the
+  // viewing statuses on the purchases tab - or the hold ones on viewings -
+  // gives an operator options that silently return nothing.
+  const statusFilters = scope === "viewings" ?
+    ["all", "needs_action", "viewing_requested", "viewing_countered", "viewing_scheduled", "viewing_declined", "viewing_expired", "completed", "cancelled", "no_show"] :
+    ["all", "needs_action", "holds", "reserved", "hold_review_required", "completed", "cancelled", "refunded", "no_show", "forfeited"];
 
   return (
     <section className="lst">
@@ -3935,6 +5721,30 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
                 </div>
               )}
 
+              {/* A viewing is negotiated, not finalized: it brings its own
+                  actions, so the completed / cancel-and-refund pair below —
+                  which is about money that a viewing never took — stays out
+                  of its way. */}
+              {kind === "viewing" && (
+                <ViewingNegotiation
+                  busy={busy}
+                  carStatus={carStatusById.get(text(row.carId, "")) ?? ""}
+                  nowMs={nowMs}
+                  onAct={(action, slots, label, confirm, confirmFr) =>
+                    runViewing(row.id, action, slots, label, confirm, confirmFr)
+                  }
+                  onComplete={() => runHold(
+                    row.id,
+                    "Viewing marked completed.",
+                    () => finalize(row.id, "completed", note),
+                    "Mark this viewing as completed?",
+                    "Marquer cette visite comme terminée ?",
+                  )}
+                  row={row}
+                />
+              )}
+
+              {kind !== "viewing" && (
               <div className="pur-actions">
                 {holdActive ? (
                   <>
@@ -4037,6 +5847,7 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
                   </>
                 )}
               </div>
+              )}
             </article>
           );
         })}
@@ -4086,6 +5897,50 @@ function useBusinessRows(
       },
     );
   }, [businessId, collectionName, enabled, maxRows]);
+
+  return { rows, loading, error };
+}
+
+/**
+ * The price requests this business was asked to answer.
+ *
+ * Only the fan-out field is queried; whether a request is still taking prices
+ * is decided in the panel. Pairing the two in one query would demand a
+ * composite index for a list this small, and an index a deploy forgot is an
+ * empty feed nobody can explain.
+ */
+function useFreightQuoteRequests(businessId: string, enabled: boolean) {
+  const [rows, setRows] = useState<FirestoreRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const scopedBusinessId = businessId.trim();
+    if (!enabled || !scopedBusinessId) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(
+      query(
+        collection(db, "freightQuoteRequests"),
+        where("eligibleBusinessIds", "array-contains", scopedBusinessId),
+        limit(200),
+      ),
+      (snapshot) => {
+        setRows(sortByUpdated(snapshot.docs.map((item) => rowFromSnapshot(item))));
+        setLoading(false);
+        setError("");
+      },
+      (snapshotError) => {
+        setRows([]);
+        setLoading(false);
+        setError(snapshotError.message);
+      },
+    );
+  }, [businessId, enabled]);
 
   return { rows, loading, error };
 }
@@ -4413,6 +6268,10 @@ function statusLabel(value: unknown) {
       sealed: "Sealed",
       sold: "Sold",
       unknown: "Unknown",
+      viewing_countered: "Other times offered",
+      viewing_declined: "Viewing declined",
+      viewing_expired: "Viewing request expired",
+      viewing_requested: "Viewing requested",
       viewing_scheduled: "Viewing scheduled",
       waiting_on_platform: "Waiting on platform",
     },
@@ -4467,6 +6326,10 @@ function statusLabel(value: unknown) {
       sealed: "Scellé",
       sold: "Vendu",
       unknown: "Inconnu",
+      viewing_countered: "Autres horaires proposés",
+      viewing_declined: "Visite refusée",
+      viewing_expired: "Demande de visite expirée",
+      viewing_requested: "Visite demandée",
       viewing_scheduled: "Visite planifiée",
       waiting_on_platform: "En attente de la plateforme",
     },

@@ -8,7 +8,6 @@ import {
   buildSupportCaseIdPayload,
   buildSupportMessagePayload,
   buildSupportTypingPayload,
-  buildWalletCardRefundPayload,
   safeCustomerTrackingUrl,
   trackingCodeFor,
 } from "./phase5-customer-actions.ts";
@@ -46,10 +45,6 @@ test("phase 5 support builders preserve the mobile callable contracts", () => {
   });
 });
 
-test("wallet refund payload stays empty so the server derives the full balance", () => {
-  assert.deepEqual(buildWalletCardRefundPayload(), {});
-});
-
 test("tracking follows the mobile Maersk handoff and rejects unsafe URLs", () => {
   assert.equal(MAERSK_TRACKING_URL, "https://www.maersk.com/tracking");
   assert.equal(safeCustomerTrackingUrl("javascript:alert(1)"), MAERSK_TRACKING_URL);
@@ -69,14 +64,12 @@ test("tracking follows the mobile Maersk handoff and rejects unsafe URLs", () =>
 
 test("phase 5 components use exact callables and ownership-scoped support reads", () => {
   const support = readFileSync("src/components/customer-support.tsx", "utf8");
-  const wallet = readFileSync("src/components/customer-wallet-actions.tsx", "utf8");
   assert.match(support, /where\("customerUid", "==", uid\)/);
   assert.match(support, /"createOrOpenSupportCase"/);
   assert.match(support, /"sendSupportMessage"/);
   assert.match(support, /"markSupportCaseRead"/);
   assert.match(support, /"setSupportTyping"/);
   assert.match(support, /"uploadSupportAttachmentMetadata"/);
-  assert.match(wallet, /"requestWalletCardRefund"/);
 });
 
 test("the shared public-site script adds a clear customer login without duplicates", () => {

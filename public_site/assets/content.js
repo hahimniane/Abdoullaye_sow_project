@@ -106,10 +106,14 @@
     });
   }
 
+  // Writes data-mailto rather than action: a mailto: action makes Chrome
+  // label the form insecure and switch off autofill for all its fields.
+  // mailto.js reads this attribute and performs the handoff itself.
   function setMailtoAction(selector, value) {
     if (!value) return;
     document.querySelectorAll(selector).forEach(function (node) {
-      node.setAttribute("action", "mailto:" + String(value));
+      node.setAttribute("data-mailto", String(value));
+      node.removeAttribute("action");
     });
   }
 

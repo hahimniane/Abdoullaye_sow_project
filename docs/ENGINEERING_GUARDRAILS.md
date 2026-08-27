@@ -29,6 +29,117 @@ A change is **not done** until all of the following are true:
 State plainly what you ran and what the result was. If you skipped a step, say
 so. Never report "done" on unverified work.
 
+## 1b. Machine prerequisites (a missing one blocks deploys silently)
+
+Two things must exist on a machine before it can deploy. Neither fails with a
+message that names itself, which is how both have already cost a day.
+
+### Java — required for ANY Cloud Functions deploy
+
+`firebase.json` runs `npm run lint` and `npm test` as a **predeploy** hook, and
+part of that suite drives the Firestore emulator, which is a Java process. With
+no Java on PATH the deploy dies locally, before anything reaches Google:
+
+```
+Error: Process `java -version` has exited with code 1.
+Error: functions predeploy error: Command terminated with non-zero exit code 1
+```
+
+That text arrives several screens into unrelated passing test output, so it
+reads like a flaky test rather than a hard stop. Install it:
+
+```bash
+brew install openjdk
+export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"   # add to your shell profile
+java -version                                        # must print a version
+```
+
+**Why this matters more than it looks:** the failure is per-machine and total.
+Functions stay at whatever revision last deployed successfully while the code,
+the commits, and every local test say the change shipped. Short tracking codes
+were committed, correct, tested, and *not live* for exactly this reason — the
+symptom was a customer-facing code still in the old long format days later.
+
+**So: never treat a function change as shipped because the commit landed.**
+Confirm the deploy printed `Successful update operation` for the specific
+function you changed, then confirm the behaviour in the product.
+
+### The App Check site key — required for any static console deploy
+
+`NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY` must be **exported** in the
+deploy command's environment; preflight reads `process.env` directly and
+`admin_web/.env.local` is never consulted. Missing it fails two checks that
+look unrelated (see §2 and the deploy runbook). Recover the deployed value:
+
+```bash
+curl -s https://business.laawoldigital.com/ \
+  | grep -oE '/_next/static/chunks/[^"]+\.js' | sort -u \
+  | while read -r u; do
+      curl -s "https://business.laawoldigital.com$u" \
+        | LC_ALL=C grep -aoE '6L[A-Za-z0-9_-]{38,}' | head -1
+    done | head -1
+```
+
+It is a public key (it ships to every visitor), so keeping it in a local file
+such as `~/.laawol/appcheck.key` is fine and survives session restarts.
+
+### App Check on the iOS simulator — every callable fails without this
+
+A debug build activates `AppleDebugProvider` (`lib/main.dart`). With no
+registered debug token the app still runs and Firestore reads still work —
+**rules do not enforce App Check, callables do** — so the app looks signed in
+and healthy while every `onCall` function rejects the request as
+`[firebase_functions/unauthenticated] Unauthenticated`.
+
+This is not an auth bug and no amount of re-signing-in fixes it. It cost a
+full mobile test run: the tester correctly reported "nothing on the business
+profile saves", which was true of the simulator and false of the product.
+
+The token the simulator generates is printed on every launch:
+
+```bash
+xcrun simctl spawn booted log show --last 30m \
+  --predicate 'eventMessage CONTAINS "App Check debug token"' | tail -1
+```
+
+Register that value once in Firebase Console → App Check → Apps → the iOS app
+→ **Manage debug tokens**. It persists for that simulator device. A *different*
+simulator, an erased device, or a reinstalled app can mint a new one — re-read
+the log rather than assuming.
+
+Before calling a mobile callable failure a product bug, check this first.
+
+### Never run two function deploys at once
+
+Each `firebase deploy --only functions:x` runs the predeploy hook, which
+starts the Firestore and Auth emulators on fixed ports. A second deploy
+launched while the first is still running fails with
+
+```
+Error: Could not start Authentication Emulator, port taken.
+Error: functions predeploy error: Command terminated with non-zero exit code 1
+```
+
+and **zero test failures** — so it reads like a mysterious broken build when
+nothing is wrong with the code. Deploy functions strictly one at a time, and
+wait for the previous command to exit before starting the next.
+
+The same clash happens between a deploy and **anything else running the
+emulator suite** — a parallel agent running `npm test`, or a bare
+`node --test` against a live emulator. The deploy dies with
+
+```
+⚠  firestore: Fatal error occurred:
+Error: functions predeploy error: Command terminated with non-zero exit code 1
+```
+
+again with zero failing tests. Before deploying, check the ports are free:
+
+```bash
+lsof -ti :8080 :9099    # empty means no emulator is running
+```
+
+
 ## 2. Deployment gate — non-negotiable
 
 Production deploys go through the preflight, which now enforces:
@@ -240,6 +351,102 @@ Rules:
 If the thing you need is not in this table and is reference data or a reusable
 component, add it as a canonical source **and register it here** so the next
 agent finds it.
+
+### Testing means driving the interface (MANDATORY)
+
+Use the **tester** agent (`.claude/agents/tester.md`) before reporting that
+anything user-facing works. Do not self-certify.
+
+None of the following is a test, and none may be offered as evidence a feature
+works: it compiles, `flutter analyze`/`tsc` is clean, unit tests pass, the
+deploy went green, an endpoint answered a probe, or the UI rendered. A form
+that appears on screen and a form whose save silently fails are the same
+screenshot.
+
+A test drives the real interface as the real role: reach the feature the way a
+user reaches it, perform the action, then verify the effect survived a reload
+and landed where it should. Check the console and network for errors the UI
+swallowed. Test both clients when both are affected.
+
+This rule exists because it was broken. The transport edit drawer was reported
+working while every save failed on a rejected `requestId` envelope, and a
+cancel button was reported done while pointing at a callable name that did not
+exist - both would have been caught by one real click. Unit tests passed for
+both.
+
+"Blocked" and "not verified" are acceptable outcomes and must be stated
+plainly. Reporting a pass you did not observe is not.
+
+### Scout before you build (MANDATORY first step)
+
+Before writing a component, a picker, a catalog, or a helper, **search the
+codebase for it first**. Most of what a new feature needs already exists — the
+registry above lists the reference data, and `lib/widgets/` and
+`src/components/` hold the shared UI. Reuse it, or extend it without changing
+behaviour for its existing callers.
+
+Building a parallel version is not a shortcut, it is a defect: a second
+country list drifts from the first, a free-text field re-introduces the dirty
+data the shared picker was written to prevent, and the bug then has to be
+fixed twice. This has already happened here — a transport edit form shipped
+with free-text make/model and no country selector while
+`DestinationCountryField` and `CarCatalog` were sitting in the same repo, one
+of them already imported by that very screen.
+
+If reuse genuinely does not fit, say why in the commit message. "I did not
+look" is not a reason.
+
+### Both clients, every time (MANDATORY)
+
+Laawol ships a Flutter app and web consoles against one backend. Before you
+start, decide whether the change is user-facing on both — it almost always is —
+and if so, **implement it on both in the same piece of work**.
+
+This applies to fixes as much as features. A customer who can edit a request on
+the web but not in the app, or cancel in the app but not on the web, has hit a
+bug, and it reads as the product being unfinished. Both of those exact gaps
+have occurred here.
+
+Practical checks before calling a change done:
+- Does the mobile screen and the console panel for this flow both exist? Both
+  are updated.
+- Does a new callable get exposed in both clients, or is one half unreachable?
+- Do the two forms accept the same fields, use the same pickers, and enforce
+  the same window?
+
+State the parity decision in the commit message: which clients were touched,
+and if only one, why the other genuinely does not apply.
+
+### Form input rules (apply on BOTH clients)
+
+These apply to every customer- and business-facing form, in the mobile app and
+in the consoles. A form that follows them on one client and not the other is a
+bug, not a difference in taste.
+
+1. **If a canonical source exists, the input is a picker — never free text.**
+   Make/model/year, countries, states, and cities all have catalogs in the
+   registry above. Free text re-introduces "toyta", "Toyota " and "TOYOTA" as
+   three different makes and quietly breaks search, filters, and matching.
+   Cascading pickers must clear their dependents: changing the make clears the
+   model and year, or the form keeps an impossible combination.
+
+2. **A stored value that is not in the catalog must still be shown.** Records
+   predate catalogs. Fold the current value into the options rather than
+   rendering an empty picker, which silently looks like data loss and, on a
+   Flutter `DropdownButton`, throws when the value is not among its items.
+
+3. **Ask before you reveal.** Optional flows — pickup being the standard case —
+   start with the question ("Do you need pickup?"), and the dependent fields
+   appear only after the answer. Showing a pickup address to someone dropping
+   off themselves invites them to fill in a field that changes their price.
+   When the answer flips back to no, clear the dependent values; do not submit
+   an address for a request with no pickup.
+
+4. **Every field the backend accepts should be reachable in the UI.** If a
+   callable supports editing a field, the form exposes it. A capability that
+   ships server-side and never appears on screen reads to the user as a missing
+   feature — this happened with the transport destination, which the server
+   could re-match from the day it shipped while neither client offered it.
 
 ## 5. Localization — translate every user-facing string
 

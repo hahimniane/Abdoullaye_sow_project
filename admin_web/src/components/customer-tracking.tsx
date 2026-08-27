@@ -1,11 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Clipboard, MapPin, PackageSearch, Search, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Check,
+  Clipboard,
+  MapPin,
+  PackageSearch,
+  ReceiptText,
+  Search,
+  Star,
+} from "lucide-react";
 
 import { formatDate, text } from "@/lib/format";
 import { trackingCodeFor } from "@/lib/phase5-customer-actions";
-import { TrackingUpdatesSection } from "@/components/business/tracking-updates-section";
+import { useTrackingEvents } from "@/components/business/tracking-updates-section";
+import { statusLabel } from "@/lib/tracking-journey";
+import {
+  ContainerLine,
+  JourneyProgress,
+  TrackingHeadline,
+  TrackingTimeline,
+} from "@/components/customer-tracking-journey";
 import {
   ReviewComposerDrawer,
   useReviewedOrderKeys,
@@ -36,7 +51,7 @@ function CopyTrackingNumber({ code }: { code: string }) {
 
   if (!code) return null;
   return (
-    <div className="phase5-tracking-actions">
+    <>
       <button
         aria-label="Copy tracking number"
         className="secondary-button"
@@ -45,22 +60,81 @@ function CopyTrackingNumber({ code }: { code: string }) {
         onClick={() => void copyTrackingCode()}
         type="button"
       >
-        {copied ? <Check size={16} /> : <Clipboard size={16} />}
-        {copied ? "Tracking number copied" : "Copy tracking number"}
+        {copied ? <Check size={15} /> : <Clipboard size={15} />}
+        {/* Short on purpose: "Copy tracking number" pushed this button and
+            "Order details" onto separate lines in a card column, costing a
+            row of height on every shipment. The full phrase stays in the
+            aria-label, and the number it copies is the card's heading. */}
+        {copied ? "Copied" : "Copy number"}
       </button>
       {copyError && <small className="phase5-inline-error">{copyError}</small>}
-    </div>
+    </>
+  );
+}
+
+/**
+ * One card's live milestone feed. Split out so each card owns its own
+ * subscription and the list re-renders independently.
+ */
+function ShipmentUpdates({
+  record,
+  relatedCollection,
+}: {
+  record: FirestoreRow;
+  relatedCollection: "barrelShipments" | "freightShipments" | "transportRequests";
+}) {
+  const events = useTrackingEvents(relatedCollection, record.id);
+  const latest = events.rows[0] ?? null;
+  // A cancelled shipment has no next update to wait for and no journey left
+  // to narrate. Showing it a headline and an empty feed made a dead card as
+  // tall as a live one.
+  if (text(record.status, "") === "cancelled") return null;
+  return (
+    <>
+      <TrackingHeadline row={record} latest={latest} />
+      <TrackingTimeline events={events.rows} />
+    </>
   );
 }
 
 export function CustomerTracking({
+  focusedRecordId = "",
+  onFocusConsumed,
+  onOpenDetails,
   records,
   uid,
 }: {
+  focusedRecordId?: string;
+  onFocusConsumed?: () => void;
+  /**
+   * Opens this shipment's order drawer, where paying, cancelling and
+   * reviewing live. Optional so the panel still renders on its own.
+   */
+  onOpenDetails?: (record: FirestoreRow) => void;
   records: FirestoreRow[];
   uid: string;
 }) {
   const [search, setSearch] = useState("");
+  // A notification deep-link names one shipment: scroll it into view and
+  // hold a highlight on it long enough to be seen.
+  const [highlightId, setHighlightId] = useState("");
+  useEffect(() => {
+    if (!focusedRecordId) return;
+    if (!records.some((record) => record.id === focusedRecordId)) return;
+    setHighlightId(focusedRecordId);
+    onFocusConsumed?.();
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(`tracking-${focusedRecordId}`)
+        ?.scrollIntoView({behavior: "smooth", block: "center"});
+    });
+    const timer = setTimeout(() => setHighlightId(""), 6000);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedRecordId, records]);
   const [reviewTarget, setReviewTarget] = useState<FirestoreRow | null>(null);
   const reviewedKeys = useReviewedOrderKeys(uid);
 
@@ -97,7 +171,13 @@ export function CustomerTracking({
         />
       </label>
       {filtered.length === 0 ? (
-        <div className="empty-state">No tracked shipments match your search.</div>
+        // Blaming an empty result on a search the customer never typed reads
+        // as though their shipments had gone missing.
+        <div className="empty-state">
+          {search.trim()
+            ? "No tracked shipments match your search."
+            : "Nothing to track yet. Your barrels and freight appear here once they are booked."}
+        </div>
       ) : (
         <div className="phase5-tracking-grid">
           {filtered.map((record) => {
@@ -108,38 +188,72 @@ export function CustomerTracking({
             );
             const relatedCollection = text(record.relatedCollection, "") as
               | "barrelShipments"
-              | "freightShipments";
+              | "freightShipments"
+              | "transportRequests";
+            const isTransport = relatedCollection === "transportRequests";
+            // The transport machine reads fulfillmentStatus first; status can
+            // trail it (and did, before the capture re-run fix).
+            const journeyStatus = isTransport
+              ? text(record.fulfillmentStatus, "") || text(record.status, "")
+              : text(record.status, "");
             const isCompleted = text(record.status, "") === "completed";
             const reviewKey = `${relatedCollection}_${record.id}`;
             const reviewed = reviewedKeys.has(reviewKey);
             return (
-              <article className="phase5-tracking-card" key={record.id}>
-                <div className="phase5-tracking-topline">
-                  <span className="section-kicker">Tracking number</span>
+              <article
+                className={`phase5-tracking-card${record.id === highlightId ? " phase5-tracking-card-focused" : ""}`}
+                id={`tracking-${record.id}`}
+                key={record.id}
+              >
+                {/* The tracking number and its status on one line: the
+                    "Tracking number" kicker cost a whole row to label a
+                    value the Copy button already names. */}
+                <div className="trk-head">
+                  <h3>{code}</h3>
                   <span className="status-pill compact">
-                    {text(record.status, "Pending")}
+                    {statusLabel(
+                      isTransport
+                        ? text(record.fulfillmentStatus, "") ||
+                            text(record.status, "")
+                        : text(record.status, ""),
+                      record.destinationDelivery === true,
+                    )}
                   </span>
                 </div>
-                <h3>{code}</h3>
-                <p>
-                  <MapPin size={15} aria-hidden="true" />
-                  {destination}
+                <p className="trk-where">
+                  <MapPin size={14} aria-hidden="true" />
+                  <span>
+                    {destination} · {text(record.businessName, "Service provider")}
+                  </span>
+                  <time>{formatDate(record.updatedAt ?? record.createdAt)}</time>
                 </p>
-                <div className="phase5-tracking-meta">
-                  <span>{text(record.businessName, "Service provider")}</span>
-                  <span>{formatDate(record.updatedAt ?? record.createdAt)}</span>
-                </div>
-                <CopyTrackingNumber code={trackingCodeFor(record)} />
+                <JourneyProgress
+                  destinationDelivery={record.destinationDelivery === true}
+                  service={isTransport ? "transport" : "shipment"}
+                  status={journeyStatus}
+                />
+                <ContainerLine row={record} />
                 {relatedCollection && (
-                  <TrackingUpdatesSection
-                    canEdit={false}
+                  <ShipmentUpdates
+                    record={record}
                     relatedCollection={relatedCollection}
-                    relatedId={record.id}
                   />
                 )}
-                {isCompleted && (
-                  <div style={{ marginTop: 10 }}>
-                    {reviewed ? (
+                {/* Actions sit at the foot so the card reads status first and
+                    the buttons do not split it in half. */}
+                <div className="trk-actions">
+                  <CopyTrackingNumber code={trackingCodeFor(record)} />
+                  {onOpenDetails && (
+                    <button
+                      className="secondary-button"
+                      onClick={() => onOpenDetails(record)}
+                      type="button"
+                    >
+                      <ReceiptText size={15} /> Order details
+                    </button>
+                  )}
+                  {isCompleted &&
+                    (reviewed ? (
                       <span className="status-pill compact">Review submitted</span>
                     ) : (
                       <button
@@ -149,9 +263,8 @@ export function CustomerTracking({
                       >
                         <Star size={15} /> Leave a review
                       </button>
-                    )}
-                  </div>
-                )}
+                    ))}
+                </div>
               </article>
             );
           })}

@@ -113,13 +113,6 @@ test("translates dynamic finance summaries without leaving English fragments", (
     ),
     "Affichage 10 sur 10 lignes financières • montant visible $37,670.00",
   );
-  assert.equal(
-    translateValue(
-      "Wallet available $45.00 • Pending return $125.00",
-      "fr",
-    ),
-    "Portefeuille disponible $45.00 • Retour en attente $125.00",
-  );
 });
 
 test("translates dynamic admin overview summaries without English fragments", () => {
@@ -233,5 +226,25 @@ test("translating a large realistic payload stays within the time budget", () =>
     `Translating ${blobs.length} fragments took ${elapsedMs.toFixed(1)}ms ` +
       `(budget 250ms). A regression here means per-node translation cost has ` +
       `grown — the class of bug that froze the admin console.`,
+  );
+});
+
+test("translates both post-Stripe variants of the business notice", () => {
+  // Stripe going green does not mean the business is done: the platform still
+  // wants a document per service. Both outcomes need French, or they fall
+  // back to English on the one screen a new partner reads most carefully.
+  assert.equal(
+    translateValue(
+      "This business is currently pending. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.",
+      "fr",
+    ),
+    "Cette entreprise est en attente. La configuration Stripe est terminée. Ouvrez Entreprise pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
+  );
+  assert.equal(
+    translateValue(
+      "This business is currently pending. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.",
+      "fr",
+    ),
+    "Cette entreprise est en attente. La configuration Stripe et vos documents sont enregistrés : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
   );
 });

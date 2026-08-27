@@ -30,6 +30,7 @@ class BarrelShipment {
     this.pricingPendingReview = false,
     this.pickupDateTime,
     this.paymentStatus = 'not_required',
+    this.paymentHoldStatus = '',
     this.stripePaymentIntentId,
     this.orderId,
     this.platformFeeCents = 0,
@@ -72,6 +73,10 @@ class BarrelShipment {
   final bool pricingPendingReview;
   final DateTime? pickupDateTime;
   final String paymentStatus;
+
+  /// "held" while the money is only reserved on the card; cancelling then is
+  /// free. Empty or "captured" once charged.
+  final String paymentHoldStatus;
   final String? stripePaymentIntentId;
   final String? orderId;
   final int platformFeeCents;
@@ -128,6 +133,7 @@ class BarrelShipment {
       paymentStatus: (data['paymentStatus'] ?? 'not_required') as String,
       stripePaymentIntentId: data['stripePaymentIntentId'] as String?,
       orderId: data['orderId'] as String?,
+      paymentHoldStatus: (data['paymentHoldStatus'] as String?) ?? '',
       platformFeeCents: (data['platformFeeCents'] as num?)?.toInt() ?? 0,
       businessPayoutCents:
           (data['businessPayoutCents'] as num?)?.toInt() ??

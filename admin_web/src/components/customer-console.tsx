@@ -1,5 +1,7 @@
 "use client";
 
+import { useConsoleDocumentTitle } from "@/lib/document-title";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   EmailAuthProvider,
@@ -22,29 +24,31 @@ import {
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import {
-  Car,
-  CircleAlert,
-  CircleDollarSign,
-  ClipboardList,
-  Home,
-  Headphones,
-  LogOut,
-  Menu,
-  PackageSearch,
-  Settings,
-  Ship,
-  ShieldCheck,
-  Star,
-  Truck,
-  UserRound,
-  WalletCards,
-} from "lucide-react";
+  canonicalMake,
+  canonicalModel,
+  getMakes,
+  getModels,
+  getYears,
+} from "@/lib/car-catalog";
+import { DESTINATION_COUNTRIES } from "@/lib/destination-countries";
+import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
+import {
+  STATUS_BUCKETS,
+  type StatusBucket,
+  statusBucket,
+  statusLabel,
+} from "@/lib/tracking-journey";
+import {
+  carPurchaseIsViewing,
+  viewingStatusLabel,
+} from "@/lib/car-viewing";
 import { customerCarListingIsEligible } from "@/lib/customer-service-eligibility";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
+import { CustomerCarViewing } from "@/components/customer-car-viewing";
 import { CustomerCars } from "@/components/customer-cars";
 import { NotificationBell } from "@/components/notification-bell";
 import { ToggleRow } from "@/components/toggle-row";
@@ -61,7 +65,6 @@ import {
   ReviewComposerDrawer,
   useReviewedOrderKeys,
 } from "@/components/customer-review-composer";
-import { CustomerWalletActions } from "@/components/customer-wallet-actions";
 import { OrderDetailDrawer } from "@/components/order-detail-drawer";
 import { isValidE164, isValidPhone, normalizePhone } from "@/lib/phone";
 import { phoneVerificationErrorMessage } from "@/lib/phone-verification";
@@ -72,8 +75,8 @@ type CustomerTab =
   | "services"
   | "parkingPools"
   | "cars"
+  | "viewings"
   | "orders"
-  | "wallet"
   | "support"
   | "profile";
 
@@ -118,28 +121,54 @@ const tabs: Array<{
   { id: "services", label: "Shipping services", description: "Barrels, freight, and car transport", icon: Ship },
   { id: "parkingPools", label: "Parking & shared barrels", description: "Reserve space or join a pool", icon: PackageSearch },
   { id: "cars", label: "Browse cars", description: "Listings from approved businesses", icon: Car },
+  { id: "viewings", label: "Car viewings", description: "Appointments to see a car", icon: CalendarClock },
   { id: "orders", label: "Orders & tracking", description: "Shipping and vehicle services", icon: ClipboardList },
-  { id: "wallet", label: "Wallet", description: "Balance and transactions", icon: WalletCards },
   { id: "support", label: "Support", description: "Messages about your orders", icon: Headphones },
   { id: "profile", label: "Profile", description: "Account and security", icon: UserRound },
 ];
 
-function tabForNotification(type: string): CustomerTab {
+type NotificationTarget = {
+  tab: CustomerTab;
+  focus?: {collection: string; id: string};
+};
+
+/**
+ * Where a clicked notification should LAND - the tab plus, when the payload
+ * names a record, that exact record. "It just takes me to Home" was mostly
+ * unmapped types (shipment_tracking_update above all) falling through.
+ */
+function targetForNotification(
+  data: Record<string, string>,
+): NotificationTarget {
+  const type = data.type ?? "";
+  const relatedId = data.relatedId ?? data.shipmentId ?? "";
+  const focus = relatedId
+    ? {collection: data.relatedCollection ?? "", id: relatedId}
+    : undefined;
   switch (type) {
-    case "wallet_refund_status":
-      return "wallet";
     case "support_message":
     case "support_escalated":
-      return "support";
+      return {tab: "support"};
+    case "car_viewing_status":
+      // Viewings are not purchases and no longer live under Orders. Without
+      // this case the type fell through to the default and landed on Home.
+      return {tab: "viewings", focus};
     case "car_purchase_status":
     case "barrel_shipment_status":
     case "freight_shipment_status":
     case "freight_balance_due":
     case "freight_refund_issued":
     case "parking_reservation_status":
-      return "orders";
+    case "shipment_tracking_update":
+    case "review_request":
+    case "deposit_refund_due":
+      return {tab: "orders", focus};
+    case "barrel_pool_deposit":
+    case "barrel_pool_join":
+    case "barrel_pool_balance_due":
+      return {tab: "parkingPools", focus};
     default:
-      return "home";
+      return {tab: "home"};
   }
 }
 
@@ -148,9 +177,24 @@ export function CustomerConsole({
   profile,
   onSignOut,
 }: CustomerConsoleProps) {
-  const [activeTab, setActiveTab] = useState<CustomerTab>(() =>
-    firebaseUser.phoneNumber ? "home" : "profile",
+  // Always Home. This used to open on Profile whenever the Auth user had no
+  // phoneNumber - which is every customer who signed up with an email and
+  // never did SMS verification, i.e. nearly all of them. It fired on every
+  // page load and on the return from Stripe, so paying for a barrel dropped
+  // the customer on an account form. A verified phone is a precondition for
+  // shared barrels, and that feature asks for it where it is needed; it is
+  // not a reason to withhold the rest of the console.
+  const [activeTab, setActiveTab] = useState<CustomerTab>("home");
+  useConsoleDocumentTitle(
+    "customer",
+    tabs.find((item) => item.id === activeTab)?.label,
   );
+  // The record a clicked notification points at; cleared once shown so a
+  // later manual visit to Orders does not re-scroll.
+  const [focusedRecord, setFocusedRecord] = useState<{
+    collection: string;
+    id: string;
+  } | null>(null);
   const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -162,7 +206,7 @@ export function CustomerConsole({
   const parking = useCustomerParkingRecords(firebaseUser.uid);
   const purchases = useCustomerCarPurchases(firebaseUser.uid);
   const cars = usePublicCars(activeTab === "cars");
-  const wallet = useWallet(firebaseUser.uid, activeTab === "wallet" || activeTab === "home");
+
 
   const allOrders = useMemo(
     () => [
@@ -173,6 +217,18 @@ export function CustomerConsole({
       ...tagRows(purchases.rows, "Car purchase", "carPurchases", CircleDollarSign),
     ].sort((a, b) => rowTime(b.row) - rowTime(a.row)),
     [freight.rows, parking.rows, purchases.rows, shipments.rows, transports.rows],
+  );
+
+  // A viewing is an appointment, not a purchase: nothing is bought and no
+  // money moves. Mixing the two put "arrange to see a car" in the same list as
+  // "money you have paid", which read as though a viewing were an order.
+  const viewingOrders = useMemo(
+    () => allOrders.filter((order) => carPurchaseIsViewing(order.row)),
+    [allOrders],
+  );
+  const nonViewingOrders = useMemo(
+    () => allOrders.filter((order) => !carPurchaseIsViewing(order.row)),
+    [allOrders],
   );
 
   const dataLoading = [shipments, freight, transports, parking, purchases].some(
@@ -234,7 +290,11 @@ export function CustomerConsole({
           </div>
           <NotificationBell
             enabled={Boolean(firebaseUser.uid)}
-            onSelect={(data) => setActiveTab(tabForNotification(data.type ?? ""))}
+            onSelect={(data) => {
+              const target = targetForNotification(data);
+              setActiveTab(target.tab);
+              setFocusedRecord(target.focus ?? null);
+            }}
             uid={firebaseUser.uid}
           />
           <button
@@ -303,9 +363,10 @@ export function CustomerConsole({
               customerName={text(profile.fullName, "there")}
               loading={dataLoading}
               orders={allOrders}
-              walletBalance={wallet.balance}
+              needsPhoneVerification={profile?.phoneVerified !== true}
               onOpenCars={() => setActiveTab("cars")}
               onOpenOrders={() => setActiveTab("orders")}
+              onOpenProfile={() => setActiveTab("profile")}
               uid={firebaseUser.uid}
             />
           )}
@@ -328,10 +389,20 @@ export function CustomerConsole({
               profile={profile}
             />
           )}
+          {activeTab === "viewings" && (
+            <OrderPanel
+              loading={dataLoading}
+              orders={viewingOrders}
+              title="Car viewings"
+              uid={firebaseUser.uid}
+            />
+          )}
           {activeTab === "orders" && (
             <OrdersView
+              focusedRecord={focusedRecord}
+              onFocusConsumed={() => setFocusedRecord(null)}
               loading={dataLoading}
-              orders={allOrders}
+              orders={nonViewingOrders}
               trackedShipments={[
                 ...shipments.rows.map((row) => ({
                   ...row,
@@ -341,11 +412,18 @@ export function CustomerConsole({
                   ...row,
                   relatedCollection: "freightShipments",
                 })),
+                // A transported car is tracked exactly like a barrel: same
+                // journey card, same trackingEvents feed, same carrier
+                // integration - the backend has carried transportRequests in
+                // its tracking section map all along.
+                ...transports.rows.map((row) => ({
+                  ...row,
+                  relatedCollection: "transportRequests",
+                })),
               ]}
               uid={firebaseUser.uid}
             />
           )}
-          {activeTab === "wallet" && <WalletView state={wallet} />}
           {activeTab === "support" && (
             <CustomerSupport
               references={allOrders.map(({ collectionName, label, row }) => ({
@@ -368,18 +446,21 @@ export function CustomerConsole({
 function CustomerHome({
   customerName,
   loading,
+  needsPhoneVerification,
   orders,
-  walletBalance,
   onOpenCars,
   onOpenOrders,
+  onOpenProfile,
   uid,
 }: {
   customerName: string;
   loading: boolean;
+  /** Phone not yet verified, so shared barrels would refuse this account. */
+  needsPhoneVerification: boolean;
   orders: TaggedRow[];
-  walletBalance: number;
   onOpenCars: () => void;
   onOpenOrders: () => void;
+  onOpenProfile: () => void;
   uid: string;
 }) {
   const openOrders = orders.filter(({ row }) => !isFinalStatus(text(row.status, ""))).length;
@@ -400,79 +481,318 @@ function CustomerHome({
           </button>
         </div>
       </section>
+      {/* Phone verification stays discoverable without hijacking navigation:
+          it is offered here, on the page the customer asked for, instead of
+          replacing it with the account form on every single load. */}
+      {needsPhoneVerification && (
+        <section className="info-band customer-phone-prompt">
+          <span>
+            Verify your phone number to join shared barrels and get delivery
+            updates by SMS.
+          </span>
+          <button className="secondary-button" onClick={onOpenProfile} type="button">
+            <UserRound size={15} /> Verify phone
+          </button>
+        </section>
+      )}
       <div className="metric-grid">
         <Metric label="Open orders" value={loading ? "…" : String(openOrders)} />
         <Metric label="All activity" value={loading ? "…" : String(orders.length)} />
-        <Metric label="Wallet balance" value={formatMoney(walletBalance)} />
-        <Metric label="Account access" value="Web + mobile" />
       </div>
       <OrderPanel loading={loading} orders={orders.slice(0, 5)} title="Recent activity" uid={uid} />
-      <section className="info-band customer-parity-note">
-        New service requests and web payments are being added service by service. Your existing orders,
-        purchases, tracking, wallet, and account remain shared with the mobile app.
-      </section>
     </div>
   );
 }
 
 function OrdersView({
+  focusedRecord,
+  onFocusConsumed,
   loading,
   orders,
   trackedShipments,
   uid,
 }: {
+  focusedRecord: {collection: string; id: string} | null;
+  onFocusConsumed: () => void;
   loading: boolean;
   orders: TaggedRow[];
   trackedShipments: FirestoreRow[];
   uid: string;
 }) {
+  // A barrel used to appear twice on this page: once as a row here and once
+  // as a tracking card below, under the same BS- number. One shipment is one
+  // thing, so it gets one card - and that card opens this panel's drawer for
+  // the actions (pay, cancel, review) the row used to carry.
+  const [openKey, setOpenKey] = useState("");
+  const untracked = useMemo(
+    () => orders.filter((order) => !TRACKED_COLLECTIONS.has(order.collectionName)),
+    [orders],
+  );
+
+  // One tab per service, so a customer with barrels AND a car in transit is
+  // not reading both interleaved. Tabs a customer has nothing in do not
+  // render - an empty "Freight" tab is noise, not navigation.
+  const barrels = useMemo(
+    () =>
+      trackedShipments.filter(
+        (row) => text(row.relatedCollection, "") === "barrelShipments",
+      ),
+    [trackedShipments],
+  );
+  const freight = useMemo(
+    () =>
+      trackedShipments.filter(
+        (row) => text(row.relatedCollection, "") === "freightShipments",
+      ),
+    [trackedShipments],
+  );
+  const transportJobs = useMemo(
+    () =>
+      trackedShipments.filter(
+        (row) => text(row.relatedCollection, "") === "transportRequests",
+      ),
+    [trackedShipments],
+  );
+  const tabs = useMemo(
+    () =>
+      [
+        {id: "barrels" as const, label: "Barrels", count: barrels.length},
+        {id: "freight" as const, label: "Freight", count: freight.length},
+        {
+          id: "transport" as const,
+          label: "Car transport",
+          count: transportJobs.length,
+        },
+        {
+          id: "cars" as const,
+          label: "Cars & parking",
+          count: untracked.length,
+        },
+      ].filter((tab) => tab.count > 0),
+    [barrels.length, freight.length, transportJobs.length, untracked.length],
+  );
+  const [activeTab, setActiveTab] = useState<
+    "barrels" | "freight" | "transport" | "cars"
+  >("barrels");
+  const [bucket, setBucket] = useState<"all" | StatusBucket>("all");
+  const shownTab = tabs.some((tab) => tab.id === activeTab)
+    ? activeTab
+    : tabs[0]?.id ?? "barrels";
+
+  // A notification deep-link names one record; it must land on the tab that
+  // record lives in, with no filter hiding it.
+  useEffect(() => {
+    if (!focusedRecord) return;
+    setBucket("all");
+    if (focusedRecord.collection === "barrelShipments") setActiveTab("barrels");
+    else if (focusedRecord.collection === "freightShipments") {
+      setActiveTab("freight");
+    } else if (focusedRecord.collection === "transportRequests") {
+      setActiveTab("transport");
+    } else setActiveTab("cars");
+  }, [focusedRecord]);
+
+  const tabRecords =
+    shownTab === "barrels"
+      ? barrels
+      : shownTab === "freight"
+        ? freight
+        : shownTab === "transport"
+          ? transportJobs
+          : [];
+  const bucketMatches = (status: string) =>
+    bucket === "all" || statusBucket(status) === bucket;
+  const shownRecords = tabRecords.filter((row) =>
+    bucketMatches(text(row.status, "")),
+  );
+  const shownOrders = untracked.filter((order) =>
+    bucketMatches(
+      text(order.row.status ?? order.row.purchaseStatus, ""),
+    ),
+  );
+  // Chips only for buckets that exist on this tab: a chip that always shows
+  // an empty list is a dead end, not a filter.
+  const presentBuckets = new Set(
+    (shownTab === "cars"
+      ? untracked.map((order) =>
+          text(order.row.status ?? order.row.purchaseStatus, ""),
+        )
+      : tabRecords.map((row) => text(row.status, ""))
+    ).map(statusBucket),
+  );
+
   return (
     <div className="stack">
-      <OrderPanel loading={loading} orders={orders} title="Orders & tracking" uid={uid} />
-      {!loading && <CustomerTracking records={trackedShipments} uid={uid} />}
+      {tabs.length > 0 && (
+        <div className="customer-orders-tabs" role="tablist">
+          {tabs.map((tab) => (
+            <button
+              aria-selected={shownTab === tab.id}
+              className={shownTab === tab.id ? "active" : ""}
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setBucket("all");
+              }}
+              role="tab"
+              type="button"
+            >
+              {tab.label}
+              <span>{tab.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Same segment pills the services screen sorts providers with -
+          one design for "narrow what I'm looking at" everywhere. Always
+          visible when the tab has records: a filter that hides itself
+          when it would show one chip is a filter nobody learns exists. */}
+      {tabs.length > 0 &&
+        (shownTab === "cars" ? untracked : tabRecords).length > 0 && (
+        <div
+          aria-label="Filter by status"
+          className="service-segments service-sort-segments"
+          role="tablist"
+        >
+          {[{id: "all" as const, label: "All"},
+            ...STATUS_BUCKETS.filter((item) => presentBuckets.has(item.id)),
+          ].map((item) => (
+            <span
+              aria-selected={bucket === item.id}
+              className={`segment ${bucket === item.id ? "active" : ""}`}
+              key={item.id}
+              onClick={() => setBucket(item.id)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                setBucket(item.id);
+              }}
+              role="tab"
+              tabIndex={0}
+            >
+              {item.label}
+            </span>
+          ))}
+        </div>
+      )}
+      <OrderPanel
+        loading={loading}
+        onOpenHandled={() => setOpenKey("")}
+        openKey={openKey}
+        orders={orders}
+        title="Cars, transport & parking"
+        uid={uid}
+        visibleOrders={shownTab === "cars" ? shownOrders : []}
+      />
+      {!loading && shownTab !== "cars" && (
+        <CustomerTracking
+          focusedRecordId={focusedRecord?.id ?? ""}
+          onFocusConsumed={onFocusConsumed}
+          onOpenDetails={(record) =>
+            setOpenKey(`${text(record.relatedCollection, "")}:${record.id}`)
+          }
+          records={shownRecords}
+          uid={uid}
+        />
+      )}
     </div>
   );
 }
 
+// The collections that render as tracking cards, and so must not also be
+// listed as plain order rows on the same page.
+const TRACKED_COLLECTIONS = new Set([
+  "barrelShipments",
+  "freightShipments",
+  "transportRequests",
+]);
+
 function OrderPanel({
   loading,
+  onOpenHandled,
+  openKey = "",
   orders,
   title,
   uid,
+  visibleOrders,
 }: {
   loading: boolean;
+  /** Called once an externally requested `openKey` has been opened. */
+  onOpenHandled?: () => void;
+  /** An order to open from outside the panel, e.g. from a tracking card. */
+  openKey?: string;
+  /** Every order the drawer may need to look up, listed or not. */
   orders: TaggedRow[];
   title: string;
   uid: string;
+  /**
+   * The subset to list, when something else on the page already shows the
+   * rest. The panel hides itself entirely rather than render an empty box:
+   * a customer whose only activity is barrels should not be told they have
+   * no parking.
+   */
+  visibleOrders?: TaggedRow[];
 }) {
-  const [selected, setSelected] = useState<TaggedRow | null>(null);
+  // The open record is held by key and looked up from the live rows, never
+  // kept as a snapshot: a car viewing changes status while its drawer is open
+  // - the seller counters, the customer accepts - and a copy frozen at open
+  // time would keep offering the action that was just taken.
+  const [selectedKey, setSelectedKey] = useState("");
   const [reviewing, setReviewing] = useState(false);
-  const cancelAction = selected ? pendingOrderCancellation(selected) : null;
+  const [editing, setEditing] = useState(false);
+  // A tracking card asks for its own order by key. Consumed immediately so a
+  // later manual close does not reopen it.
+  useEffect(() => {
+    if (!openKey) return;
+    setSelectedKey(openKey);
+    setReviewing(false);
+    onOpenHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openKey]);
+  const selected = useMemo(
+    () => orders.find((order) => orderKey(order) === selectedKey) ?? null,
+    [orders, selectedKey],
+  );
+  const cancelAction = selected
+    ? (pendingOrderCancellation(selected) ?? securedOrderCancellation(selected))
+    : null;
   const reviewedKeys = useReviewedOrderKeys(uid);
 
   async function cancelSelectedOrder() {
     if (!selected || !cancelAction) return;
+    // Secured cancellations move money, so they say what will happen and ask
+    // first; pending ones never charged anything and keep the old one-click.
+    if ("confirm" in cancelAction && cancelAction.confirm &&
+        !window.confirm(cancelAction.confirm)) {
+      return;
+    }
     await httpsCallable(functions, cancelAction.callable)(cancelAction.payload);
   }
 
+  const listed = visibleOrders ?? orders;
+  // The drawer must stay mounted even when the list is hidden - a tracking
+  // card can open an order whose row is not rendered here at all.
+  const showSection = visibleOrders === undefined || listed.length > 0;
+
   return (
     <>
+      {showSection && (
       <section className="panel">
         <div className="panel-header"><div><ClipboardList size={18} /><h2>{title}</h2></div></div>
         {loading && <div className="empty-state">Loading your activity...</div>}
-        {!loading && orders.length === 0 && (
+        {!loading && listed.length === 0 && (
           <div className="empty-state">You do not have any activity here yet.</div>
         )}
         <div className="row-list">
-          {orders.map((order) => {
+          {listed.map((order) => {
             const { row, label, icon: Icon } = order;
             return (
               <button
                 aria-label="Open order details"
                 className="data-row customer-order-row customer-order-button"
-                key={`${label}-${row.id}`}
+                key={orderKey(order)}
                 onClick={() => {
-                  setSelected(order);
+                  setSelectedKey(orderKey(order));
                   setReviewing(false);
                 }}
                 type="button"
@@ -483,7 +803,7 @@ function OrderPanel({
                   <small>{text(row.trackingCode ?? row.trackingNumber ?? row.id)}</small>
                 </div>
                 <div>
-                  <span className="status-pill compact">{text(row.status ?? row.purchaseStatus, "Pending")}</span>
+                  <span className="status-pill compact">{orderStatusLabel(order)}</span>
                   <small>{formatDate(row.updatedAt ?? row.createdAt)}</small>
                 </div>
               </button>
@@ -491,10 +811,15 @@ function OrderPanel({
           })}
         </div>
       </section>
+      )}
       <OrderDetailDrawer
+        cancelLabel={
+          (cancelAction && "label" in cancelAction && cancelAction.label) ||
+          "Cancel request"
+        }
         onCancelOrder={cancelAction ? cancelSelectedOrder : undefined}
         onClose={() => {
-          setSelected(null);
+          setSelectedKey("");
           setReviewing(false);
         }}
         open={Boolean(selected)}
@@ -511,13 +836,7 @@ function OrderPanel({
                     selected.row.id,
                 )}
               />
-              <OrderFact
-                label="Status"
-                value={text(
-                  selected.row.status ?? selected.row.purchaseStatus,
-                  "Pending",
-                )}
-              />
+              <OrderFact label="Status" value={orderStatusLabel(selected)} />
               <OrderFact
                 label="Service provider"
                 value={text(selected.row.businessName, "Not set")}
@@ -558,6 +877,19 @@ function OrderPanel({
                 )}
               />
             </div>
+            {selected.collectionName === "carPurchases" &&
+              carPurchaseIsViewing(selected.row) && (
+                <CustomerCarViewing row={selected.row} />
+              )}
+            {transportEditWindowOpen(selected) && (
+              <button
+                className="secondary-button"
+                onClick={() => setEditing(true)}
+                type="button"
+              >
+                <Pencil size={15} /> Edit request
+              </button>
+            )}
             {isReviewEligibleStatus(
               text(selected.row.status ?? selected.row.purchaseStatus, ""),
             ) &&
@@ -576,6 +908,13 @@ function OrderPanel({
           </>
         )}
       </OrderDetailDrawer>
+      {selected && transportEditWindowOpen(selected) && (
+        <TransportEditDrawer
+          onClose={() => setEditing(false)}
+          open={editing}
+          row={selected.row}
+        />
+      )}
       {selected && (
         <ReviewComposerDrawer
           businessId={text(selected.row.businessId, "")}
@@ -607,7 +946,120 @@ function OrderFact({ label, value }: { label: string; value: string }) {
   );
 }
 
+// A car transport request stays editable until the customer selects a quote.
+// No business "accepts" in this marketplace - they quote - so quote selection
+// is the cutoff, not any business-side status.
+function transportEditWindowOpen(order: TaggedRow) {
+  return (
+    order.collectionName === "transportRequests" &&
+    // Must match the server's own precondition, or the button appears on a
+    // request the callable will refuse: marketplace flow, still collecting,
+    // and not yet past the quote deadline.
+    Number(order.row.flowVersion ?? 1) === 2 &&
+    text(order.row.quoteStatus, "") === "collecting" &&
+    text(order.row.status, "") === "quote_requested"
+  );
+}
+
+// Fields a quote was priced against. Editing one of these makes every quote
+// already given a quote for a different job.
+const TRANSPORT_QUOTED_FIELDS = [
+  "carMake",
+  "carModel",
+  "carYear",
+  "pickupArea",
+  "vehicleOperable",
+  "requestedTransportMethod",
+  "destinationCountryId",
+] as const;
+
+/**
+ * Cancellation for an order that is already PAID (secured), shipping flows
+ * only. The money outcome is decided server-side by cancelSecuredCustomerOrder:
+ * still-held payments release for free; captured ones refund minus the card
+ * fee. The label and confirm copy here mirror those two outcomes so the
+ * customer knows which one they are choosing before they press anything.
+ */
+function securedOrderCancellation(order: TaggedRow) {
+  const status = text(order.row.status, "").toLowerCase();
+  const paymentStatus = text(order.row.paymentStatus, "").toLowerCase();
+  if (status !== "pending" || paymentStatus !== "succeeded") return null;
+
+  const held = text(order.row.paymentHoldStatus, "") === "held";
+  const copy = held
+    ? {
+        label: "Cancel order (free)",
+        confirm:
+          "Cancel this order? Your card was never charged - the hold is " +
+          "released and you pay nothing.",
+      }
+    : {
+        label: "Cancel order (refund minus card fee)",
+        confirm:
+          "Cancel this order? Your payment is refunded minus the card " +
+          "processing fee, as stated at checkout.",
+      };
+
+  switch (order.collectionName) {
+    case "freightShipments":
+      return {
+        callable: "cancelSecuredCustomerOrder",
+        payload: { orderType: "freightShipment", recordId: order.row.id },
+        ...copy,
+      };
+    case "transportRequests":
+      // Paid transport uses the same secured path as shipping: "pending"
+      // here means paid-but-not-scheduled. Once the carrier moves the job
+      // to scheduled the status changes and this window closes, exactly as
+      // the server enforces.
+      return {
+        callable: "cancelSecuredCustomerOrder",
+        payload: { orderType: "transportJob", recordId: order.row.id },
+        ...copy,
+      };
+    case "barrelShipments": {
+      // A shipment born from a multi-destination order shares one payment
+      // with its siblings, so the cancellable unit is the whole order.
+      const orderId = text(order.row.orderId, "");
+      if (orderId) {
+        return {
+          callable: "cancelSecuredCustomerOrder",
+          payload: { orderType: "barrelOrder", recordId: orderId },
+          label: held
+            ? "Cancel whole order (free)"
+            : "Cancel whole order (refund minus card fee)",
+          confirm:
+            "This shipment was paid together with the rest of its order, " +
+            "so the whole order is cancelled. " +
+            (held
+              ? "Your card was never charged - you pay nothing."
+              : "Your payment is refunded minus the card processing fee."),
+        };
+      }
+      return {
+        callable: "cancelSecuredCustomerOrder",
+        payload: { orderType: "barrelShipment", recordId: order.row.id },
+        ...copy,
+      };
+    }
+    default:
+      return null;
+  }
+}
+
 function pendingOrderCancellation(order: TaggedRow) {
+  // A marketplace transport request sits at "quote_requested", not "pending",
+  // so the generic status gate below never matched it and the web console
+  // offered no way to cancel - while the app did. Same callable, same window
+  // (collecting quotes) as cancelTransportRequest enforces server-side.
+  if (order.collectionName === "transportRequests") {
+    return transportEditWindowOpen(order)
+      ? {
+          callable: "cancelTransportQuoteRequest",
+          payload: { requestId: order.row.id },
+        }
+      : null;
+  }
   const status = text(
     order.row.paymentStatus ?? order.row.purchaseStatus ?? order.row.status,
     "",
@@ -640,38 +1092,6 @@ function pendingOrderCancellation(order: TaggedRow) {
     default:
       return null;
   }
-}
-
-function WalletView({ state }: { state: WalletState }) {
-  return (
-    <div className="stack">
-      <div className="metric-grid">
-        <Metric label="Available balance" value={formatMoney(state.balance, state.currency)} />
-        <Metric label="Transactions" value={state.loading ? "…" : String(state.transactions.length)} />
-      </div>
-      <section className="panel">
-        <div className="panel-header"><div><WalletCards size={18} /><h2>Wallet activity</h2></div></div>
-        {state.loading && <div className="empty-state">Loading wallet...</div>}
-        {state.error && <div className="error-box">Wallet could not be loaded. {state.error}</div>}
-        {!state.loading && state.transactions.length === 0 && (
-          <div className="empty-state">No wallet transactions yet.</div>
-        )}
-        <div className="row-list">
-          {state.transactions.map((transaction) => (
-            <div className="data-row" key={transaction.id}>
-              <div><strong>{text(transaction.description ?? transaction.type, "Wallet transaction")}</strong><small>{formatDate(transaction.createdAt)}</small></div>
-              <strong>{formatMoney(transaction.amount, state.currency)}</strong>
-            </div>
-          ))}
-        </div>
-      </section>
-      <CustomerWalletActions
-        balance={state.balance}
-        currency={state.currency}
-        pendingRefund={state.pendingRefund}
-      />
-    </div>
-  );
 }
 
 function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: UserProfile }) {
@@ -1086,53 +1506,40 @@ export function usePublicCars(enabled: boolean): CustomerCollection {
   return state;
 }
 
-type WalletState = {
-  balance: number;
-  currency: string;
-  pendingRefund: number;
-  transactions: FirestoreRow[];
-  loading: boolean;
-  error: string;
-};
-
-function useWallet(uid: string, enabled: boolean): WalletState {
-  const [wallet, setWallet] = useState({
-    balance: 0,
-    currency: "USD",
-    pendingRefund: 0,
-    error: "",
-  });
-  const [transactions, setTransactions] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (!enabled) return undefined;
-    setLoading(true);
-    const unsubscribeWallet = onSnapshot(doc(db, "wallets", uid), (snapshot) => {
-      const data = snapshot.data();
-      setWallet({
-        balance: Number(data?.balance ?? 0),
-        currency: text(data?.currency, "USD"),
-        pendingRefund: Number(data?.pendingRefund ?? 0),
-        error: "",
-      });
-      setLoading(false);
-    }, (error) => { setWallet((current) => ({ ...current, error: error.message })); setLoading(false); });
-    const transactionQuery = query(collection(db, "wallets", uid, "transactions"), orderBy("createdAt", "desc"), limit(100));
-    const unsubscribeTransactions = onSnapshot(transactionQuery, (snapshot) => {
-      setTransactions(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-      setLoading(false);
-    }, (error) => { setWallet((current) => ({ ...current, error: error.message })); setLoading(false); });
-    return () => { unsubscribeWallet(); unsubscribeTransactions(); };
-  }, [enabled, uid]);
-  return { ...wallet, transactions, loading };
-}
-
 type TaggedRow = {
   row: FirestoreRow;
   label: string;
   collectionName: string;
   icon: typeof Car;
 };
+
+// Identity of one activity row across renders. The collection is part of it
+// because two collections can hand out the same document id.
+function orderKey(order: TaggedRow) {
+  return `${order.collectionName}:${order.row.id}`;
+}
+
+// A status a customer can read. Only viewings are mapped: they are the one
+// activity whose raw status words - viewing_countered, viewing_expired - say
+// nothing to the person waiting on them. Everything else keeps the value it
+// has always shown.
+function orderStatusLabel(order: TaggedRow) {
+  const status = text(order.row.status ?? order.row.purchaseStatus, "Pending");
+  if (order.collectionName === "carPurchases") {
+    return viewingStatusLabel(status) || status;
+  }
+  // Shipments already have customer-facing wording for every status they can
+  // reach; without this the order list prints the raw enum ("in_transit")
+  // while the tracking card below says "On its way" about the same barrel.
+  // Deliberately not applied to the other collections: their statuses are a
+  // different vocabulary, and "completed" means delivered for a shipment but
+  // not for a parking booking.
+  if (order.collectionName === "barrelShipments" ||
+      order.collectionName === "freightShipments") {
+    return statusLabel(status, order.row.destinationDelivery === true);
+  }
+  return status;
+}
 
 function tagRows(
   rows: FirestoreRow[],
@@ -1153,4 +1560,319 @@ function rowTime(row: FirestoreRow) {
 
 function isFinalStatus(status: string) {
   return ["completed", "cancelled", "refunded", "sold", "delivered"].includes(status.toLowerCase());
+}
+
+
+/**
+ * Lets a customer revise an open transport request from the web console -
+ * the same window and the same warning as the mobile app.
+ *
+ * Only changed fields are sent: the server treats an unchanged resubmission
+ * as a no-op, and posting the whole form back would void every quote on a
+ * save that altered nothing.
+ */
+function TransportEditDrawer({
+  onClose,
+  open,
+  row,
+}: {
+  onClose: () => void;
+  open: boolean;
+  row: Record<string, unknown>;
+}) {
+  const [form, setForm] = useState(() => ({
+    customerPhone: text(row.customerPhone, ""),
+    pickupAddress: text(row.pickupAddress, ""),
+    pickupArea: text(row.pickupArea, ""),
+    notes: text(row.notes, ""),
+    // Seed from the catalog's spelling when the stored value only differs by
+    // case, so the dependent pickers populate and saving cleans the record.
+    carMake: canonicalMake(text(row.carMake, "")) || text(row.carMake, ""),
+    carModel:
+      canonicalModel(text(row.carMake, ""), text(row.carModel, "")) ||
+      text(row.carModel, ""),
+    carYear: text(row.carYear, ""),
+    destinationCountryId: text(row.destinationCountryId, ""),
+    requestedTransportMethod: text(row.requestedTransportMethod, "open"),
+    vehicleOperable: row.vehicleOperable !== false,
+  }));
+  // Pickup fields only make sense once the customer says they want pickup,
+  // so they stay hidden until then rather than sitting there unexplained.
+  const [wantsPickup, setWantsPickup] = useState(
+    () => text(row.pickupAddress, "").trim() !== "",
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState(false);
+
+  const quoteCount = Number(row.quoteCount ?? 0);
+
+  const withCurrent = (options: string[], current: string) =>
+    current && !options.includes(current) ? [current, ...options] : options;
+  const carMakeOptions = withCurrent(getMakes(), form.carMake);
+  const carModelOptions = withCurrent(
+    form.carMake ? getModels(form.carMake) : [],
+    form.carModel,
+  );
+  const carYearOptions = withCurrent(
+    form.carMake && form.carModel ? getYears(form.carMake, form.carModel) : [],
+    form.carYear,
+  );
+
+  function changedFields() {
+    const patch: Record<string, unknown> = {};
+    const put = (key: string, next: unknown, before: unknown) => {
+      if (String(next ?? "").trim() !== String(before ?? "").trim()) {
+        patch[key] = next;
+      }
+    };
+    put("customerPhone", form.customerPhone.trim(), row.customerPhone);
+    put(
+      "pickupAddress",
+      wantsPickup ? form.pickupAddress.trim() : "",
+      row.pickupAddress,
+    );
+    put(
+      "destinationCountryId",
+      form.destinationCountryId,
+      row.destinationCountryId,
+    );
+    put("pickupArea", form.pickupArea.trim(), row.pickupArea);
+    put("notes", form.notes.trim(), row.notes);
+    put("carMake", form.carMake.trim(), row.carMake);
+    put("carModel", form.carModel.trim(), row.carModel);
+    put("carYear", form.carYear.trim(), row.carYear);
+    put(
+      "requestedTransportMethod",
+      form.requestedTransportMethod,
+      row.requestedTransportMethod,
+    );
+    if (form.vehicleOperable !== (row.vehicleOperable !== false)) {
+      patch.vehicleOperable = form.vehicleOperable;
+    }
+    return patch;
+  }
+
+  async function save(patch: Record<string, unknown>) {
+    setBusy(true);
+    setError("");
+    try {
+      await httpsCallable(
+        functions,
+        "updateTransportRequestDetails",
+      )({ requestId: row.id, ...patch });
+      setConfirming(false);
+      onClose();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not update this request. Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function attemptSave() {
+    const patch = changedFields();
+    if (Object.keys(patch).length === 0) {
+      onClose();
+      return;
+    }
+    const affectsQuotes = TRANSPORT_QUOTED_FIELDS.some((f) => f in patch);
+    // Warn BEFORE saving: the customer watched these quotes arrive, and
+    // clearing them silently would read as losing them.
+    if (affectsQuotes && quoteCount > 0) {
+      setConfirming(true);
+      return;
+    }
+    void save(patch);
+  }
+
+  if (!open) return null;
+
+  return (
+    <OrderDetailDrawer onClose={onClose} open={open} title="Edit your request">
+      <p className="drawer-note">
+        You can change your request until you choose a quote.
+      </p>
+      <div className="settings-form">
+        <label>
+          Phone
+          <input
+            onChange={(e) => setForm({ ...form, customerPhone: e.target.value })}
+            value={form.customerPhone}
+          />
+        </label>
+        <label>
+          Do you need pickup?
+          <select
+            onChange={(e) => setWantsPickup(e.target.value === "yes")}
+            value={wantsPickup ? "yes" : "no"}
+          >
+            <option value="no">No, I will drop the vehicle off</option>
+            <option value="yes">Yes, collect it from an address</option>
+          </select>
+        </label>
+        {wantsPickup && (
+          <label>
+            Pickup address
+            <input
+              onChange={(e) =>
+                setForm({ ...form, pickupAddress: e.target.value })
+              }
+              value={form.pickupAddress}
+            />
+          </label>
+        )}
+        <label>
+          Pickup area
+          <input
+            onChange={(e) => setForm({ ...form, pickupArea: e.target.value })}
+            value={form.pickupArea}
+          />
+        </label>
+        <label>
+          Destination
+          <select
+            onChange={(e) =>
+              setForm({ ...form, destinationCountryId: e.target.value })
+            }
+            value={form.destinationCountryId}
+          >
+            {!form.destinationCountryId && <option value="">Select a country</option>}
+            {DESTINATION_COUNTRIES.map((country) => (
+              <option key={country.id} value={country.id}>
+                {country.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="wide-field">
+          Notes
+          <textarea
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            rows={2}
+            value={form.notes}
+          />
+        </label>
+        <label>
+          Make
+          <select
+            onChange={(e) =>
+              // Model and year belong to the previous make, so clear them
+              // rather than leave an impossible combination behind.
+              setForm({
+                ...form,
+                carMake: e.target.value,
+                carModel: "",
+                carYear: "",
+              })
+            }
+            value={form.carMake}
+          >
+            {!form.carMake && <option value="">Select a make</option>}
+            {carMakeOptions.map((make) => (
+              <option key={make} value={make}>
+                {make}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Model
+          <select
+            disabled={!form.carMake}
+            onChange={(e) =>
+              setForm({ ...form, carModel: e.target.value, carYear: "" })
+            }
+            value={form.carModel}
+          >
+            {!form.carModel && <option value="">Select a model</option>}
+            {carModelOptions.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Year
+          <select
+            disabled={!form.carModel}
+            onChange={(e) => setForm({ ...form, carYear: e.target.value })}
+            value={form.carYear}
+          >
+            {!form.carYear && <option value="">Select a year</option>}
+            {carYearOptions.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Transport method
+          <select
+            onChange={(e) =>
+              setForm({ ...form, requestedTransportMethod: e.target.value })
+            }
+            value={form.requestedTransportMethod}
+          >
+            <option value="open">Open</option>
+            <option value="enclosed">Enclosed</option>
+          </select>
+        </label>
+        <label>
+          Vehicle is drivable
+          <select
+            onChange={(e) =>
+              setForm({ ...form, vehicleOperable: e.target.value === "yes" })
+            }
+            value={form.vehicleOperable ? "yes" : "no"}
+          >
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+      </div>
+      {error && <div className="form-msg err">{error}</div>}
+      {confirming ? (
+        <div className="info-band">
+          <b>This will reset your quotes.</b> Businesses priced their quotes on
+          your current details. Saving clears the {quoteCount} quote
+          {quoteCount === 1 ? "" : "s"} you already have, and businesses will be
+          asked to quote again.
+          <div className="drawer-actions">
+            <button
+              className="secondary-button"
+              disabled={busy}
+              onClick={() => setConfirming(false)}
+              type="button"
+            >
+              Keep editing
+            </button>
+            <button
+              className="primary-button"
+              disabled={busy}
+              onClick={() => void save(changedFields())}
+              type="button"
+            >
+              {busy ? "Saving..." : "Save and reset quotes"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="primary-button"
+          disabled={busy}
+          onClick={attemptSave}
+          type="button"
+        >
+          {busy ? "Saving..." : "Save changes"}
+        </button>
+      )}
+    </OrderDetailDrawer>
+  );
 }

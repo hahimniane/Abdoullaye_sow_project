@@ -109,23 +109,23 @@ describe("shared barrel helpers", () => {
         },
     );
 
+    // Nothing to charge means nothing is owed. There is no longer a
+    // "covered by a wallet balance" case (docs/PLAN-2026-08-backlog.md #3).
     assert.equal(
         sharedPoolPaymentFields({
           poolId: "pool_a",
           uid: "customer-a",
           amountCents: 0,
-          totalDepositCents: 3000,
           type: "barrel_pool_deposit",
           simulatePayments: false,
         }).paymentStatus,
-        "succeeded",
+        "not_required",
     );
     assert.equal(
         sharedPoolPaymentFields({
           poolId: "pool_a",
           uid: "customer-a",
           amountCents: 0,
-          totalDepositCents: 0,
           type: "barrel_pool_deposit",
         }).paymentStatus,
         "not_required",

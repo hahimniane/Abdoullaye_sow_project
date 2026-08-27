@@ -1,12 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_gate_provider.dart';
@@ -16,21 +11,26 @@ import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
 import '../models/barrel_order.dart';
 import '../models/destination_country.dart';
+import '../models/structured_address.dart';
 import '../services/barrel_pricing_service.dart';
 import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
+import '../services/service_ranking.dart';
 import '../services/payment_flow_safety.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/nyc_borough.dart';
 import '../utils/receiver_phone_rules.dart';
 import '../widgets/business_reviews_sheet.dart';
 import '../widgets/rating_summary_badge.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/recipient_name_field.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/destination_country_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 import '../widgets/office_location_picker.dart';
+import '../widgets/structured_address_fields.dart';
 import '../theme/app_colors.dart';
 
 class SendBarrelScreen extends StatefulWidget {
@@ -46,7 +46,10 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _senderNameController = TextEditingController();
+  // Street line only. The rest of the address lives in _pickupAddress; the
+  // composed line is what reaches the callables.
   final _pickupAddressController = TextEditingController();
+  StructuredAddress _pickupAddress = StructuredAddress.empty;
   final _shipmentService = BarrelShipmentService();
   final List<BarrelOrderLine> _orderLines = [];
   BarrelPickupPricing _pickupPricing = BarrelPickupPricing.defaultPricing;
@@ -56,11 +59,15 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   // the first destination's business — the common single-business order.
   String _sharedOfficeLocationId = '';
   bool _isSubmitting = false;
-  bool _pricingLoaded = false;
   String _pickupBorough = 'Bronx';
   DateTime? _pickupDateTime;
-  bool _useWalletBalance = false;
-  double _walletBalance = 0;
+  // Server-quoted shared pickup fee (per line). Null = not quoted yet, which
+  // keeps the pay button disabled - the client never invents a fee.
+  double? _sharedPickupQuotedFee;
+  bool _sharedPickupQuoting = false;
+  String? _sharedPickupQuoteError;
+  Timer? _sharedPickupDebounce;
+  int _sharedPickupQuoteId = 0;
   bool _prefilledSenderName = false;
   late final AnimationController _heroController;
 
@@ -87,12 +94,12 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     if (!mounted) return;
     setState(() {
       _pickupPricing = pricing;
-      _pricingLoaded = true;
     });
   }
 
   @override
   void dispose() {
+    _sharedPickupDebounce?.cancel();
     _heroController.dispose();
     _senderNameController.dispose();
     _pickupAddressController.dispose();
@@ -109,25 +116,96 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   bool get _usesDifferentPickupDetails =>
       _canUseDifferentPickupDetails && _useDifferentPickupDetails;
   double get _sharedPickupFee =>
-      _pickupRequested ? _pickupPricing.pickupFeeForBorough(_pickupBorough) : 0;
+      _pickupRequested ? (_sharedPickupQuotedFee ?? 0) : 0;
   double get _pickupFee => _usesDifferentPickupDetails
       ? _orderLines.fold(0, (total, line) => total + line.pickupFee)
       : _sharedPickupFee * _billableLineCount;
   double get _estimatedTotal => _shippingFee + _pickupFee;
   bool get _needsPriceReview =>
-      !_pricingLoaded ||
       _shippingFee <= 0 ||
       (_usesDifferentPickupDetails
           ? _orderLines.any(
               (line) => line.pickupRequested && line.pickupFee <= 0,
             )
-          : (_pickupRequested && _sharedPickupFee <= 0));
+          : (_pickupRequested &&
+                (_sharedPickupQuoting ||
+                    _sharedPickupQuoteError != null ||
+                    _sharedPickupQuotedFee == null)));
   bool get _canPay => _orderLines.isNotEmpty && !_needsPriceReview;
 
-  void _handlePickupAddressChanged(String address) {
-    final borough = _NycAddressSuggestions.detectBorough(address);
-    if (borough != null && borough != _pickupBorough) {
-      setState(() => _pickupBorough = borough);
+  void _handlePickupAddressChanged(
+    StructuredAddress address,
+    BarrelAddressSuggestion? suggestion,
+  ) {
+    // The borough shown here is a hint only; the server's geocoded answer in
+    // the quote still overrides it, because whoever supplies the borough
+    // chooses the price.
+    final borough =
+        suggestion?.borough ?? nycBoroughFromAddress(address.composeLine());
+    setState(() {
+      _pickupAddress = address;
+      if (borough != null && borough.isNotEmpty) _pickupBorough = borough;
+    });
+    _scheduleSharedPickupQuote();
+  }
+
+  /// Debounced server quote for the shared pickup address. The business's
+  /// plan prices the pickup; the client only displays the result.
+  void _scheduleSharedPickupQuote() {
+    _sharedPickupDebounce?.cancel();
+    _sharedPickupQuoteId++;
+    final address = _pickupAddress.composeLine();
+    if (!_pickupRequested || _usesDifferentPickupDetails || address.isEmpty) {
+      setState(() {
+        _sharedPickupQuotedFee = null;
+        _sharedPickupQuoting = false;
+        _sharedPickupQuoteError = null;
+      });
+      return;
+    }
+    setState(() {
+      _sharedPickupQuoting = true;
+      _sharedPickupQuoteError = null;
+      _sharedPickupQuotedFee = null;
+    });
+    _sharedPickupDebounce = Timer(
+      const Duration(milliseconds: 700),
+      _requestSharedPickupQuote,
+    );
+  }
+
+  Future<void> _requestSharedPickupQuote() async {
+    final businessId = _orderLines.isNotEmpty
+        ? _orderLines.first.business.businessId
+        : '';
+    final address = _pickupAddress.composeLine();
+    final l10n = AppLocalizations.of(context)!;
+    if (businessId.isEmpty || address.isEmpty) {
+      setState(() => _sharedPickupQuoting = false);
+      return;
+    }
+    final quoteId = ++_sharedPickupQuoteId;
+    try {
+      final quote = await _shipmentService.quoteBarrelPickup(
+        businessId: businessId,
+        pickupAddress: address,
+      );
+      if (!mounted || quoteId != _sharedPickupQuoteId) return;
+      setState(() {
+        _sharedPickupQuoting = false;
+        if (quote.available) {
+          _sharedPickupQuotedFee = quote.fee;
+          if (quote.borough.isNotEmpty) _pickupBorough = quote.borough;
+        } else {
+          _sharedPickupQuoteError = l10n.pickupBusinessUnavailable;
+        }
+      });
+    } catch (_) {
+      if (!mounted || quoteId != _sharedPickupQuoteId) return;
+      setState(() {
+        _sharedPickupQuoting = false;
+        _sharedPickupQuoteError = l10n.pickupAddressQuoteFailed;
+      });
     }
   }
 
@@ -156,6 +234,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         _useDifferentPickupDetails = false;
       }
     });
+    _scheduleSharedPickupQuote();
   }
 
   void _removeDestinationLine(int index) {
@@ -165,6 +244,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         _useDifferentPickupDetails = false;
       }
     });
+    _scheduleSharedPickupQuote();
   }
 
   Future<void> _submit() async {
@@ -216,6 +296,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
       context,
       providerNames: providerNames,
       transactionSummary: l10n.sendBarrels,
+      showHoldNotice: true,
     );
     if (marketplaceAcceptance == null || !mounted) return;
 
@@ -238,7 +319,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         pickupAddress: _usesDifferentPickupDetails
             ? null
             : (_pickupRequested
-                  ? _pickupAddressController.text.trim()
+                  ? _pickupAddress.composeLine()
                   : _pickupPricing.officeAddress),
         pickupBorough: _usesDifferentPickupDetails
             ? null
@@ -246,7 +327,6 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         pickupDateTime: _usesDifferentPickupDetails
             ? null
             : (_pickupRequested ? _pickupDateTime : null),
-        useWalletBalance: _useWalletBalance,
         marketplaceAcceptance: marketplaceAcceptance,
       );
       final receiptOpened = await runBestEffortPostPaymentAction(
@@ -276,12 +356,12 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         _pickupAddressController.clear();
         _prefillSenderName();
         setState(() {
+          _pickupAddress = StructuredAddress.empty;
           _orderLines.clear();
           _pickupRequested = true;
           _useDifferentPickupDetails = false;
           _pickupDateTime = null;
           _pickupBorough = 'Bronx';
-          _useWalletBalance = false;
         });
       }
     } catch (e) {
@@ -585,24 +665,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                         pickupFee: _pickupFee,
                                         lineCount: _billableLineCount,
                                         total: _estimatedTotal,
-                                        useWalletBalance: _useWalletBalance,
-                                        walletBalance: _walletBalance,
                                         needsReview: _needsPriceReview,
-                                      ),
-                                      _WalletPaymentOption(
-                                        total: _estimatedTotal,
-                                        selected: _useWalletBalance,
-                                        onBalanceChanged: (balance) {
-                                          if (_walletBalance == balance) return;
-                                          setState(() {
-                                            _walletBalance = balance;
-                                          });
-                                        },
-                                        onChanged: (value) {
-                                          setState(
-                                            () => _useWalletBalance = value,
-                                          );
-                                        },
                                       ),
                                     ],
                                   ],
@@ -649,6 +712,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                             setState(
                                               () => _pickupRequested = value,
                                             );
+                                            _scheduleSharedPickupQuote();
                                             _formKey.currentState?.validate();
                                           },
                                         ),
@@ -665,13 +729,17 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                                     'shared-pickup',
                                                   ),
                                                   children: [
-                                                    _AddressAutocompleteField(
+                                                    StructuredAddressFields(
                                                       controller:
                                                           _pickupAddressController,
-                                                      service: _shipmentService,
+                                                      value: _pickupAddress,
+                                                      fetchSuggestions:
+                                                          _shipmentService
+                                                              .addressSuggestions,
                                                       onChanged:
                                                           _handlePickupAddressChanged,
-                                                      validator: (value) {
+                                                      showLocateMe: true,
+                                                      streetValidator: (value) {
                                                         if (_usesDifferentPickupDetails ||
                                                             !_pickupRequested) {
                                                           return null;
@@ -683,16 +751,50 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                                           return l10n
                                                               .pleaseEnterPickupAddress;
                                                         }
-                                                        if (_NycAddressSuggestions.detectBorough(
-                                                              value,
-                                                            ) ==
-                                                            null) {
-                                                          return l10n
-                                                              .pleaseIncludeNycBoroughZip;
-                                                        }
+                                                        // The server quote
+                                                        // decides coverage;
+                                                        // no NYC-only rule.
                                                         return null;
                                                       },
                                                     ),
+                                                    if (_sharedPickupQuoting) ...[
+                                                      const SizedBox(
+                                                        height: 8,
+                                                      ),
+                                                      Row(
+                                                        children: [
+                                                          const SizedBox(
+                                                            width: 14,
+                                                            height: 14,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                          Text(
+                                                            l10n.freightPickupCalculating,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ] else if (_sharedPickupQuoteError !=
+                                                        null) ...[
+                                                      const SizedBox(
+                                                        height: 8,
+                                                      ),
+                                                      Text(
+                                                        _sharedPickupQuoteError!,
+                                                        style: const TextStyle(
+                                                          color: AppColors
+                                                              .errorRed,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ],
                                                     const SizedBox(height: 14),
                                                     _PickupDateTimeTile(
                                                       value: _pickupDateTime,
@@ -1010,7 +1112,6 @@ class _FormSection extends StatelessWidget {
   }
 }
 
-
 class _InlineNotice extends StatelessWidget {
   const _InlineNotice({required this.message});
 
@@ -1047,7 +1148,7 @@ class _InlineNotice extends StatelessWidget {
   }
 }
 
-class _BusinessOptionSelector extends StatelessWidget {
+class _BusinessOptionSelector extends StatefulWidget {
   const _BusinessOptionSelector({
     required this.countryId,
     required this.value,
@@ -1057,6 +1158,28 @@ class _BusinessOptionSelector extends StatelessWidget {
   final String countryId;
   final BusinessDestinationOption? value;
   final ValueChanged<BusinessDestinationOption?> onChanged;
+
+  @override
+  State<_BusinessOptionSelector> createState() =>
+      _BusinessOptionSelectorState();
+}
+
+class _BusinessOptionSelectorState extends State<_BusinessOptionSelector> {
+  // Which order the businesses are shown in. Held here rather than passed
+  // down, because it changes what the customer is looking at and nothing else.
+  ServiceSort _sort = kDefaultServiceSort;
+
+  String get countryId => widget.countryId;
+  BusinessDestinationOption? get value => widget.value;
+  ValueChanged<BusinessDestinationOption?> get onChanged => widget.onChanged;
+
+  static String _sortLabel(AppLocalizations l10n, ServiceSort sort) =>
+      switch (sort) {
+        ServiceSort.cheapest => l10n.freightSortCheapest,
+        ServiceSort.coverage => l10n.freightSortBestCover,
+        ServiceSort.fastest => l10n.freightSortFastest,
+        ServiceSort.rated => l10n.freightSortBestRated,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -1072,7 +1195,13 @@ class _BusinessOptionSelector extends StatelessWidget {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final options = snapshot.data!;
+        // Ranked on one barrel each: the quantity field sits further down the
+        // form, and one apiece is still a fair comparison between businesses.
+        final options = sortServiceOptions(
+          snapshot.data!,
+          service: 'barrelShipping',
+          sort: _sort,
+        );
         if (options.isEmpty) {
           return _InlineNotice(
             message: l10n.noApprovedBusinessShippingDestination,
@@ -1082,6 +1211,13 @@ class _BusinessOptionSelector extends StatelessWidget {
             value != null && options.any((option) => option.id == value!.id)
             ? value
             : null;
+        // One business serves this country: choosing from a list of one is
+        // busywork, so make the choice for them.
+        if (selectedOption == null && options.length == 1) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            onChanged(options.first);
+          });
+        }
 
         return FormField<BusinessDestinationOption>(
           key: ValueKey('business-options-$countryId-${selectedOption?.id}'),
@@ -1099,6 +1235,27 @@ class _BusinessOptionSelector extends StatelessWidget {
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 8),
+                if (shouldOfferServiceSort(options, 'barrelShipping'))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final sort in sortsForService('barrelShipping'))
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(_sortLabel(l10n, sort)),
+                                selected: _sort == sort,
+                                onSelected: (_) =>
+                                    setState(() => _sort = sort),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 for (final option in options) ...[
                   _BusinessOptionCard(
                     option: option,
@@ -1520,373 +1677,6 @@ class _PickupScopeChoice extends StatelessWidget {
   }
 }
 
-class _AddressAutocompleteField extends StatefulWidget {
-  const _AddressAutocompleteField({
-    required this.controller,
-    required this.service,
-    required this.onChanged,
-    required this.validator,
-  });
-
-  final TextEditingController controller;
-  final BarrelShipmentService service;
-  final ValueChanged<String> onChanged;
-  final String? Function(String?) validator;
-
-  @override
-  State<_AddressAutocompleteField> createState() =>
-      _AddressAutocompleteFieldState();
-}
-
-class _AddressAutocompleteFieldState extends State<_AddressAutocompleteField> {
-  late final FocusNode _focusNode;
-  // Version counter for stale-request detection inside _buildOptions.
-  // NOT tied to setState — mutations here never trigger a rebuild, which is
-  // intentional: we pass _buildOptions as a method tearoff so that
-  // RawAutocomplete.didUpdateWidget sees oldWidget.optionsBuilder ==
-  // widget.optionsBuilder and skips _updateOptions(), breaking the loop where
-  // every setState call re-triggered a new suggestion fetch.
-  var _optionsVersion = 0;
-  bool _isLocating = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode = FocusNode();
-  }
-
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  // ─── Suggestions (FutureOr — no setState, no infinite loop) ──────────────
-
-  Future<Iterable<BarrelAddressSuggestion>> _buildOptions(
-    TextEditingValue value,
-  ) async {
-    final query = value.text.trim();
-    if (query.isEmpty) return const [];
-
-    final version = ++_optionsVersion;
-    // Debounce: wait for the user to pause typing.
-    await Future.delayed(const Duration(milliseconds: 380));
-    if (version != _optionsVersion) return const [];
-
-    // 1. Firebase Function (Google Places) — works when user is signed in.
-    try {
-      final remote = await widget.service.addressSuggestions(query);
-      if (version != _optionsVersion) return const [];
-      if (remote.isNotEmpty) {
-        return remote;
-      }
-    } catch (_) {}
-
-    // 2. Nominatim (OpenStreetMap) — free, real addresses, no key needed.
-    try {
-      final results = await _nominatimSuggestions(query);
-      if (version != _optionsVersion) return const [];
-      return results;
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  Future<List<BarrelAddressSuggestion>> _nominatimSuggestions(
-    String query,
-  ) async {
-    final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
-      'q': '$query, New York',
-      'format': 'jsonv2',
-      'limit': '6',
-      'countrycodes': 'us',
-      'addressdetails': '1',
-    });
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 7);
-    try {
-      final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.userAgentHeader, 'Laawol-App/1.0');
-      req.headers.set(HttpHeaders.acceptLanguageHeader, 'en-US,en;q=0.9');
-      final res = await req.close();
-      if (res.statusCode != 200) return const [];
-      final body = await res.transform(utf8.decoder).join();
-      final data = jsonDecode(body) as List<dynamic>;
-      return data
-          .whereType<Map<String, dynamic>>()
-          .map(_formatNominatim)
-          .whereType<BarrelAddressSuggestion>()
-          .take(5)
-          .toList();
-    } finally {
-      client.close();
-    }
-  }
-
-  BarrelAddressSuggestion? _formatNominatim(Map<String, dynamic> result) {
-    final addr = (result['address'] as Map?)?.cast<String, dynamic>();
-    if (addr == null) return null;
-    final houseNo = addr['house_number'] as String? ?? '';
-    final road = addr['road'] as String? ?? '';
-    final postcode = addr['postcode'] as String? ?? '';
-    final borough =
-        _NycAddressSuggestions.detectBorough(
-          [
-            addr['borough'] as String? ?? '',
-            addr['city_district'] as String? ?? '',
-            addr['county'] as String? ?? '',
-            postcode,
-          ].where((s) => s.isNotEmpty).join(', '),
-        ) ??
-        _NycAddressSuggestions.detectBorough(
-          result['display_name'] as String? ?? '',
-        );
-    if (houseNo.isEmpty || road.isEmpty || borough == null) return null;
-    final street = [houseNo, road].where((s) => s.isNotEmpty).join(' ');
-    final description = [
-      street,
-      borough,
-      'NY',
-      postcode,
-    ].where((s) => s.isNotEmpty).join(', ');
-    final lat = double.tryParse(result['lat'] as String? ?? '');
-    final lon = double.tryParse(result['lon'] as String? ?? '');
-    return BarrelAddressSuggestion(
-      description: description,
-      placeId: result['place_id']?.toString() ?? '',
-      borough: borough,
-      postalCode: postcode.isEmpty ? null : postcode,
-      formattedAddress: result['display_name'] as String?,
-      latitude: lat,
-      longitude: lon,
-    );
-  }
-
-  // ─── GPS locate ──────────────────────────────────────────────────────────
-
-  Future<void> _locateMe() async {
-    setState(() => _isLocating = true);
-    try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.deniedForever) {
-        if (mounted) await Geolocator.openAppSettings();
-        return;
-      }
-      if (permission == LocationPermission.denied) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context)!.locationPermissionDenied,
-              ),
-            ),
-          );
-        }
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-      final placemarks = await Geocoding().placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-      if (placemarks.isEmpty || !mounted) return;
-
-      final p = placemarks.first;
-      final address = [
-        if (p.street?.isNotEmpty == true) p.street!,
-        if (p.subLocality?.isNotEmpty == true) p.subLocality!,
-        if (p.locality?.isNotEmpty == true) p.locality!,
-        if (p.administrativeArea?.isNotEmpty == true) p.administrativeArea!,
-        if (p.postalCode?.isNotEmpty == true) p.postalCode!,
-      ].join(', ');
-
-      widget.controller.text = address;
-      widget.onChanged(address);
-      _focusNode.requestFocus();
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.couldNotGetLocation),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isLocating = false);
-    }
-  }
-
-  // ─── Build ────────────────────────────────────────────────────────────────
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        RawAutocomplete<BarrelAddressSuggestion>(
-          textEditingController: widget.controller,
-          focusNode: _focusNode,
-          displayStringForOption: (option) => option.description,
-          // Method tearoff — equal across rebuilds so didUpdateWidget never
-          // spuriously re-triggers _updateOptions and restarts the fetch.
-          optionsBuilder: _buildOptions,
-          onSelected: (selection) {
-            widget.controller.text = selection.description;
-            widget.onChanged(selection.description);
-            _focusNode.requestFocus();
-          },
-          fieldViewBuilder:
-              (context, textEditingController, focusNode, onFieldSubmitted) {
-                return TextFormField(
-                  controller: textEditingController,
-                  focusNode: focusNode,
-                  validator: widget.validator,
-                  onChanged: widget.onChanged,
-                  keyboardType: TextInputType.streetAddress,
-                  decoration: InputDecoration(
-                    labelText: l10n.pickupAddressInNyc,
-                    hintText: l10n.pickupAddressNycHint,
-                    prefixIcon: const Icon(Icons.location_on_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: AppColors.rule),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: AppColors.brandRed,
-                        width: 2,
-                      ),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: AppColors.errorRed),
-                    ),
-                    filled: true,
-                    fillColor: AppColors.lightSurfaceVariant,
-                  ),
-                );
-              },
-          optionsViewBuilder: (context, onSelected, options) {
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(8),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxHeight: 240,
-                    maxWidth: 420,
-                  ),
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    itemCount: options.length,
-                    itemBuilder: (context, index) {
-                      final option = options.elementAt(index);
-                      return ListTile(
-                        dense: true,
-                        leading: const Icon(
-                          Icons.place_outlined,
-                          size: 20,
-                          color: AppColors.cobaltDeep,
-                        ),
-                        title: Text(option.description),
-                        subtitle: option.borough == null
-                            ? null
-                            : Text(
-                                AppLocalizations.of(
-                                  context,
-                                )!.boroughPickupAddress(option.borough!),
-                              ),
-                        onTap: () => onSelected(option),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-        _LocateMeButton(isLocating: _isLocating, onTap: _locateMe),
-      ],
-    );
-  }
-}
-
-class _LocateMeButton extends StatelessWidget {
-  const _LocateMeButton({required this.isLocating, required this.onTap});
-
-  final bool isLocating;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: isLocating ? null : onTap,
-        borderRadius: BorderRadius.circular(8),
-        splashColor: AppColors.cobaltDeep.withValues(alpha: 0.08),
-        highlightColor: AppColors.cobaltDeep.withValues(alpha: 0.05),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.cobaltDeep.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: AppColors.cobaltDeep.withValues(alpha: 0.18),
-            ),
-          ),
-          child: Row(
-            children: [
-              if (isLocating)
-                const SizedBox(
-                  width: 17,
-                  height: 17,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(AppColors.cobaltDeep),
-                  ),
-                )
-              else
-                const Icon(
-                  Icons.my_location,
-                  size: 17,
-                  color: AppColors.cobaltDeep,
-                ),
-              const SizedBox(width: 10),
-              Text(
-                isLocating
-                    ? AppLocalizations.of(context)!.gettingYourLocation
-                    : AppLocalizations.of(context)!.useMyCurrentLocation,
-                style: const TextStyle(
-                  color: AppColors.cobaltDeep,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _PickupDateTimeTile extends FormField<DateTime> {
   _PickupDateTimeTile({
     required DateTime? value,
@@ -2199,8 +1989,6 @@ class _PriceEstimateCard extends StatelessWidget {
     required this.pickupFee,
     required this.lineCount,
     required this.total,
-    required this.useWalletBalance,
-    required this.walletBalance,
     required this.needsReview,
   });
 
@@ -2208,18 +1996,13 @@ class _PriceEstimateCard extends StatelessWidget {
   final double pickupFee;
   final int lineCount;
   final double total;
-  final bool useWalletBalance;
-  final double walletBalance;
   final bool needsReview;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final currency = NumberFormat.simpleCurrency();
-    final walletApplied = useWalletBalance
-        ? walletBalance.clamp(0, total).toDouble()
-        : 0.0;
-    final amountDue = (total - walletApplied).clamp(0, double.infinity);
+    final amountDue = total;
 
     Widget row(String label, String value) {
       return Padding(
@@ -2284,7 +2067,7 @@ class _PriceEstimateCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  useWalletBalance ? l10n.amountDueNow : l10n.estimatedCost,
+                  l10n.estimatedCost,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -2350,13 +2133,6 @@ class _PriceEstimateCard extends StatelessWidget {
                     ],
                   ),
                 ],
-                if (useWalletBalance) ...[
-                  const Divider(height: 18),
-                  row(l10n.originalEstimatedCost, currency.format(total)),
-                  row(l10n.walletCredit, '-${currency.format(walletApplied)}'),
-                  const Divider(height: 18),
-                  row(l10n.cardPaymentDue, currency.format(amountDue)),
-                ],
               ],
             ),
           ),
@@ -2373,165 +2149,6 @@ class _PriceEstimateCard extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _WalletPaymentOption extends StatelessWidget {
-  const _WalletPaymentOption({
-    required this.total,
-    required this.selected,
-    required this.onBalanceChanged,
-    required this.onChanged,
-  });
-
-  final double total;
-  final bool selected;
-  final ValueChanged<double> onBalanceChanged;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final auth = context.watch<AuthProvider>();
-    final user = auth.user;
-    if (user == null || total <= 0 || auth.hasBusinessDashboardAccess) {
-      return const SizedBox.shrink();
-    }
-
-    final currency = NumberFormat.simpleCurrency();
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('wallets')
-          .doc(user.uid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data() as Map<String, dynamic>?;
-        final balance =
-            (data?['balance'] as num?)?.toDouble() ??
-            (((data?['balanceCents'] as num?)?.toDouble() ?? 0) / 100);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) onBalanceChanged(balance);
-        });
-        if (balance <= 0) {
-          if (selected) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (context.mounted) onChanged(false);
-            });
-          }
-          return const SizedBox.shrink();
-        }
-
-        final applied = balance > total ? total : balance;
-        final cardRemainder = (total - applied).clamp(0, double.infinity);
-        return Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: InkWell(
-            onTap: () => onChanged(!selected),
-            borderRadius: BorderRadius.circular(8),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.cobalt.withValues(alpha: 0.1)
-                    : AppColors.paper,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: selected ? AppColors.cobalt : AppColors.rule,
-                  width: selected ? 1.5 : 1,
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Checkbox(
-                    value: selected,
-                    onChanged: (value) => onChanged(value ?? false),
-                    activeColor: AppColors.cobalt,
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.cobalt.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: AppColors.cobaltDeep,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.useWalletCredit,
-                          style: const TextStyle(
-                            color: AppColors.ink,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          selected
-                              ? '${currency.format(applied)} from wallet • ${currency.format(cardRemainder)} remaining'
-                              : '${currency.format(balance)} available',
-                          style: const TextStyle(
-                            color: AppColors.muted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _NycAddressSuggestions {
-  static String? detectBorough(String value) {
-    final lower = value.toLowerCase();
-    if (lower.contains('bronx') || _zipInRange(lower, 10400, 10499)) {
-      return 'Bronx';
-    }
-    if (lower.contains('manhattan') ||
-        lower.contains('new york, ny') ||
-        _zipInRange(lower, 10000, 10299)) {
-      return 'Manhattan';
-    }
-    if (lower.contains('brooklyn') || _zipInRange(lower, 11200, 11299)) {
-      return 'Brooklyn';
-    }
-    if (lower.contains('queens') ||
-        lower.contains('jamaica') ||
-        lower.contains('flushing') ||
-        _zipInRange(lower, 11000, 11199) ||
-        _zipInRange(lower, 11300, 11699)) {
-      return 'Queens';
-    }
-    if (lower.contains('staten island') || _zipInRange(lower, 10300, 10399)) {
-      return 'Staten Island';
-    }
-    return null;
-  }
-
-  static bool _zipInRange(String value, int start, int end) {
-    final matches = RegExp(r'\b\d{5}\b').allMatches(value);
-    for (final match in matches) {
-      final zip = int.tryParse(match.group(0)!);
-      if (zip != null && zip >= start && zip <= end) return true;
-    }
-    return false;
   }
 }
 
@@ -2683,6 +2300,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
   late final TextEditingController _receiverNameController;
   late final TextEditingController _receiverPhoneController;
   late final TextEditingController _pickupAddressController;
+  StructuredAddress _pickupAddress = StructuredAddress.empty;
   DestinationCountry? _country;
   BusinessDestinationOption? _business;
   int _quantity = 1;
@@ -2691,19 +2309,37 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
   String _pickupBorough = 'Bronx';
   DateTime? _pickupDateTime;
   String _officeLocationId = '';
+  // Server-quoted per-line pickup fee. Null = not quoted; the sheet refuses
+  // to save a pickup line without a server price.
+  double? _quotedPickupFee;
+  bool _pickupQuoting = false;
+  String? _pickupQuoteError;
+  Timer? _pickupQuoteDebounce;
+  int _pickupQuoteId = 0;
 
   @override
   void initState() {
     super.initState();
     final initial = widget.initial;
+    _quotedPickupFee =
+        (widget.initial?.hasPickupOverride ?? false) &&
+            (widget.initial?.pickupRequested ?? false) &&
+            (widget.initial?.pickupFee ?? 0) > 0
+        ? widget.initial!.pickupFee
+        : null;
     _receiverNameController = TextEditingController(
       text: initial?.receiverName ?? '',
     );
     _receiverPhoneController = TextEditingController(
       text: initial?.receiverPhone ?? '',
     );
+    // A saved line only kept the composed string, so it reopens as the street
+    // line the customer can split by hand — better than a blank form.
     _pickupAddressController = TextEditingController(
       text: initial?.pickupAddress ?? '',
+    );
+    _pickupAddress = StructuredAddress(
+      streetLine: initial?.pickupAddress ?? '',
     );
     _country = initial?.country;
     _business = initial?.business;
@@ -2720,6 +2356,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
 
   @override
   void dispose() {
+    _pickupQuoteDebounce?.cancel();
     _receiverNameController.dispose();
     _receiverPhoneController.dispose();
     _pickupAddressController.dispose();
@@ -2733,13 +2370,81 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
 
   double get _lineFee => (_country?.barrelShippingPrice ?? 0) * _quantity;
   double get _pickupFee => widget.collectPickupDetails && _pickupRequested
-      ? widget.pickupPricing.pickupFeeForBorough(_pickupBorough)
+      ? (_quotedPickupFee ?? 0)
       : 0;
 
-  void _handlePickupAddressChanged(String address) {
-    final borough = _NycAddressSuggestions.detectBorough(address);
-    if (borough != null && borough != _pickupBorough) {
-      setState(() => _pickupBorough = borough);
+  void _handlePickupAddressChanged(
+    StructuredAddress address,
+    BarrelAddressSuggestion? suggestion,
+  ) {
+    // A hint only: the server's quote overrides the borough, because whoever
+    // supplies the borough chooses the price.
+    final borough =
+        suggestion?.borough ?? nycBoroughFromAddress(address.composeLine());
+    setState(() {
+      _pickupAddress = address;
+      if (borough != null && borough.isNotEmpty) _pickupBorough = borough;
+    });
+    _schedulePickupQuote();
+  }
+
+  /// Debounced server quote against this line's business.
+  void _schedulePickupQuote() {
+    _pickupQuoteDebounce?.cancel();
+    _pickupQuoteId++;
+    final address = _pickupAddress.composeLine();
+    if (!widget.collectPickupDetails ||
+        !_pickupRequested ||
+        _business == null ||
+        address.isEmpty) {
+      setState(() {
+        _quotedPickupFee = null;
+        _pickupQuoting = false;
+        _pickupQuoteError = null;
+      });
+      return;
+    }
+    setState(() {
+      _pickupQuoting = true;
+      _pickupQuoteError = null;
+      _quotedPickupFee = null;
+    });
+    _pickupQuoteDebounce = Timer(
+      const Duration(milliseconds: 700),
+      _requestPickupQuote,
+    );
+  }
+
+  Future<void> _requestPickupQuote() async {
+    final business = _business;
+    final address = _pickupAddress.composeLine();
+    if (business == null || address.isEmpty) {
+      setState(() => _pickupQuoting = false);
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final quoteId = ++_pickupQuoteId;
+    try {
+      final quote = await widget.shipmentService.quoteBarrelPickup(
+        businessId: business.businessId,
+        pickupAddress: address,
+      );
+      if (!mounted || quoteId != _pickupQuoteId) return;
+      setState(() {
+        _pickupQuoting = false;
+        if (quote.available) {
+          _quotedPickupFee = quote.fee;
+          if (quote.borough.isNotEmpty) _pickupBorough = quote.borough;
+        } else {
+          _pickupQuoteError = l10n.pickupBusinessUnavailable;
+        }
+      });
+    } catch (_) {
+      if (!mounted || quoteId != _pickupQuoteId) return;
+      setState(() {
+        _pickupQuoting = false;
+        _pickupQuoteError = l10n.pickupAddressQuoteFailed;
+      });
     }
   }
 
@@ -2802,6 +2507,18 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
     final country = _country;
     final business = _business;
     if (country == null || business == null) return;
+    if (widget.collectPickupDetails &&
+        _pickupRequested &&
+        (_pickupQuoting || _quotedPickupFee == null)) {
+      // No server price, no save - the client never invents a pickup fee.
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_pickupQuoteError ?? l10n.pickupAddressQuoteFailed),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).pop(
       BarrelOrderLine(
         country: country,
@@ -2813,7 +2530,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
         quantity: _quantity,
         pickupRequested: _pickupRequested,
         pickupAddress: _pickupRequested
-            ? _pickupAddressController.text.trim()
+            ? _pickupAddress.composeLine()
             : widget.pickupPricing.officeAddress,
         pickupBorough: _pickupRequested ? _pickupBorough : 'Office drop-off',
         pickupFee: _pickupFee,
@@ -2904,17 +2621,28 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                         _BusinessOptionSelector(
                           countryId: _country!.id,
                           value: _business,
-                          onChanged: (option) => setState(() {
-                            _business = option;
-                            _officeLocationId = '';
-                          }),
+                          onChanged: (option) {
+                            setState(() {
+                              _business = option;
+                              _officeLocationId = '';
+                            });
+                            // A different business means a different pickup
+                            // plan, so the old quote no longer applies.
+                            _schedulePickupQuote();
+                          },
                         ),
                       ],
                       const SizedBox(height: 14),
-                      BarrelTextFormField(
-                        label: l10n.receiverName,
+                      RecipientNameField(
                         controller: _receiverNameController,
-                        icon: Icons.person_pin_outlined,
+                        labelText: l10n.receiverName,
+                        onRecipientSelected: (recipient) {
+                          setState(() {
+                            _receiverPhoneController.text = recipient.phone;
+                            _receiverPhoneIsWhatsappOnly =
+                                recipient.whatsappOnly;
+                          });
+                        },
                         validator: (value) =>
                             (value == null || value.trim().isEmpty)
                             ? l10n.pleaseEnterReceiverName
@@ -2994,6 +2722,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                           officeAddress: widget.pickupPricing.officeAddress,
                           onChanged: (value) {
                             setState(() => _pickupRequested = value);
+                            _schedulePickupQuote();
                             _formKey.currentState?.validate();
                           },
                         ),
@@ -3006,26 +2735,49 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                               ? Column(
                                   key: const ValueKey('line-pickup'),
                                   children: [
-                                    _AddressAutocompleteField(
+                                    StructuredAddressFields(
                                       controller: _pickupAddressController,
-                                      service: widget.shipmentService,
+                                      value: _pickupAddress,
+                                      fetchSuggestions: widget
+                                          .shipmentService
+                                          .addressSuggestions,
                                       onChanged: _handlePickupAddressChanged,
-                                      validator: (value) {
+                                      streetValidator: (value) {
                                         if (!_pickupRequested) return null;
                                         if (value == null ||
                                             value.trim().isEmpty) {
                                           return l10n.pleaseEnterPickupAddress;
                                         }
-                                        if (_NycAddressSuggestions.detectBorough(
-                                              value,
-                                            ) ==
-                                            null) {
-                                          return l10n
-                                              .pleaseIncludeNycBoroughZip;
-                                        }
+                                        // The server quote decides coverage;
+                                        // no NYC-only rule.
                                         return null;
                                       },
                                     ),
+                                    if (_pickupQuoting) ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(l10n.freightPickupCalculating),
+                                        ],
+                                      ),
+                                    ] else if (_pickupQuoteError != null) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        _pickupQuoteError!,
+                                        style: const TextStyle(
+                                          color: AppColors.errorRed,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(height: 14),
                                     _PickupDateTimeTile(
                                       value: _pickupDateTime,

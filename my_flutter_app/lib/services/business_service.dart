@@ -30,6 +30,17 @@ class BusinessService {
   Stream<List<BusinessDestinationOption>> activeDestinationOptions() async* {
     try {
       yield await _destinationOptionsFromFunction();
+      // The callable answers once, so an open screen would keep showing a
+      // service a business has since switched off. publicCatalog/services is
+      // bumped by the server on every such change - re-ask on each bump.
+      await for (final _
+          in _firestore
+              .collection('publicCatalog')
+              .doc('services')
+              .snapshots()
+              .skip(1)) {
+        yield await _destinationOptionsFromFunction();
+      }
       return;
     } on FirebaseException {
       // Fall through to direct Firestore reads for local/dev projects where the

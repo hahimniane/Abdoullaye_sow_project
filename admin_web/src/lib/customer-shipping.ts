@@ -1,3 +1,9 @@
+import {
+  EMPTY_STRUCTURED_ADDRESS,
+  type StructuredAddress,
+  composeAddressLine,
+} from "./address-fields.ts";
+
 export type MarketplaceDisclosurePayload = {
   accepted: true;
   version: string;
@@ -6,10 +12,56 @@ export type MarketplaceDisclosurePayload = {
 
 export type PickupDetails = {
   requested: boolean;
+  // The composed single line. Quoting, checkout, and the business's copy of
+  // the order all read this, so it is kept in sync with the parts below on
+  // every edit and always carries the apartment.
   address: string;
   borough: string;
   dateTime?: string;
+  // Separate, customer-editable parts (backlog item 1). Optional because a
+  // pickup captured before this change has only the composed line.
+  streetLine?: string;
+  apartment?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
 };
+
+/**
+ * The named parts behind a pickup address. A pickup saved before addresses
+ * were split has only the composed line, so it becomes the street line and
+ * the customer can break it apart by hand.
+ */
+export function pickupStructuredAddress(
+  pickup: PickupDetails,
+): StructuredAddress {
+  return {
+    ...EMPTY_STRUCTURED_ADDRESS,
+    streetLine: pickup.streetLine ?? pickup.address,
+    apartment: pickup.apartment ?? "",
+    city: pickup.city ?? "",
+    state: pickup.state ?? "",
+    postalCode: pickup.postalCode ?? "",
+    country: pickup.country ?? "",
+  };
+}
+
+/**
+ * Writes edited parts back onto a pickup, recomposing the single line the
+ * callables receive. Recomposing on every edit is what keeps the apartment
+ * from being dropped between the form and checkout.
+ */
+export function applyStructuredAddress(
+  pickup: PickupDetails,
+  parts: StructuredAddress,
+): PickupDetails {
+  return {
+    ...pickup,
+    ...parts,
+    address: composeAddressLine(parts),
+  };
+}
 
 export const NYC_PICKUP_BOROUGHS = [
   "Bronx",
@@ -31,11 +83,17 @@ export type BarrelPickupQuote = {
   normalizedAddress: string;
   serviceArea: string;
   borough: string;
-  model: "borough" | "distance";
+  model: "flat" | "borough" | "distance";
   distanceMiles: number | null;
   fee: number;
   currency: string;
 };
+
+/** What quoteBarrelPickup actually returns: a quote, or a refusal when the
+ * business has not configured pickup (pickup belongs to the business now). */
+export type BarrelPickupQuoteResult =
+  | BarrelPickupQuote
+  | { available: false; reason: string };
 
 export const DEFAULT_BARREL_PICKUP_PRICING: BarrelPickupPricing = {
   officeAddress: "Bronx, NY",
@@ -59,7 +117,6 @@ export type BarrelShipmentFields = {
   // Which of the business's office locations to drop off at, when the
   // business has more than one and the customer chose "bring to office".
   officeLocationId?: string;
-  useWalletBalance: boolean;
 };
 
 export type BarrelOrderLineFields = {
@@ -77,7 +134,6 @@ export type BarrelOrderFields = {
   lines: BarrelOrderLineFields[];
   sharedPickup?: PickupDetails;
   useDifferentPickupDetails: boolean;
-  useWalletBalance: boolean;
 };
 
 export type FreightShipmentFields = {
@@ -90,7 +146,19 @@ export type FreightShipmentFields = {
   weightKg: number;
   pickup: PickupDetails;
   officeLocationId?: string;
-  useWalletBalance: boolean;
+  // What is in the parcel. Both optional: a client that sends neither is
+  // priced exactly as freight was without categories, which is what makes
+  // them safe to add here.
+  itemCategoryId?: string;
+  itemId?: string;
+  // "arrival" only when the chosen business opted in to being paid after
+  // the parcel lands; the server refuses it from anyone else.
+  paymentTiming?: "now" | "arrival";
+  // How the parcel ends its journey. The server re-prices delivery from the
+  // business document and refuses it from a business that does not offer it,
+  // so these carry the customer's choice, never a fee.
+  destinationDelivery?: boolean;
+  receiverAddress?: string;
 };
 
 export type TransportRequestFields = {
@@ -522,7 +590,6 @@ export function buildBarrelOrderPayload(
     ...(!fields.useDifferentPickupDetails &&
       fields.sharedPickup &&
       pickupPayload(fields.sharedPickup)),
-    useWalletBalance: fields.useWalletBalance,
     marketplaceDisclosure: disclosure,
   };
 }
@@ -603,7 +670,6 @@ export function buildBarrelShipmentPayload(
     ...pickupPayload(fields.pickup),
     ...(!fields.pickup.requested &&
       fields.officeLocationId && { officeLocationId: fields.officeLocationId }),
-    useWalletBalance: fields.useWalletBalance,
     marketplaceDisclosure: disclosure,
   };
 }
@@ -620,10 +686,26 @@ export function buildFreightShipmentPayload(
     businessId: trimmed(fields.businessId),
     mode: fields.mode,
     weightKg: fields.weightKg,
+    ...(fields.itemCategoryId?.trim() && {
+      itemCategoryId: trimmed(fields.itemCategoryId),
+    }),
+    // The business's payback row, when one was picked - the server prices
+    // protection from its own table and refuses to trust anything else.
+    ...(fields.itemId?.trim() && {itemId: trimmed(fields.itemId)}),
+    // Sent only when the customer asked for delivery to the receiver, so
+    // "the receiver collects it" stays what the server assumes from silence.
+    // The address rides with it because a delivery without one is refused.
+    ...(fields.destinationDelivery === true && {
+      destinationDelivery: true,
+      receiverAddress: trimmed(fields.receiverAddress ?? ""),
+    }),
+    // Sent only when the customer chose to pay after arrival - "pay now"
+    // is the default the server assumes from silence, same as every client
+    // built before this choice existed.
+    ...(fields.paymentTiming === "arrival" && {paymentTiming: "arrival"}),
     ...pickupPayload(fields.pickup),
     ...(!fields.pickup.requested &&
       fields.officeLocationId && { officeLocationId: fields.officeLocationId }),
-    useWalletBalance: fields.useWalletBalance,
     marketplaceDisclosure: disclosure,
   };
 }

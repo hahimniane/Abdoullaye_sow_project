@@ -32,6 +32,8 @@ class CustomerTrackingShipment {
     this.priceSettlementStatus = '',
     this.balanceDue = 0,
     this.refundDue = 0,
+    this.destinationDelivery = false,
+    this.weighsAtDropOff = true,
     this.barrelShipment,
   });
 
@@ -55,6 +57,17 @@ class CustomerTrackingShipment {
   final String priceSettlementStatus;
   final double balanceDue;
   final double refundDue;
+
+  /// The business is taking this parcel to the receiver's own address at the
+  /// destination. Drives the copy at the far end: a shipment on its way to an
+  /// address is not one waiting to be collected.
+  final bool destinationDelivery;
+
+  /// The business puts this parcel on the scale at the counter. A set price
+  /// with no weight allowance is settled the moment it is paid, so promising
+  /// a weight confirmation would describe a step this parcel never reaches.
+  /// Absent on a shipment booked by weight, which is why it defaults to true.
+  final bool weighsAtDropOff;
   final BarrelShipment? barrelShipment;
 
   bool get isFreight => type == CustomerTrackingType.freight;
@@ -122,6 +135,11 @@ class CustomerTrackingShipment {
       priceSettlementStatus: text('priceSettlementStatus'),
       balanceDue: (data['balanceDue'] as num?)?.toDouble() ?? 0,
       refundDue: (data['refundDue'] as num?)?.toDouble() ?? 0,
+      destinationDelivery: data['destinationDelivery'] == true,
+      // Only the server writes this, and only when it decided the parcel is
+      // not weighed - so anything else means the scale is still part of the
+      // journey, exactly as it is for every shipment booked by weight.
+      weighsAtDropOff: data['weightVerificationRequired'] != false,
     );
   }
 }
@@ -247,7 +265,11 @@ class CustomerOrder {
       currency: _str(d, 'depositCurrency', 'usd'),
       status: normalizeStatus(statusRaw),
       createdAt: _date(d, 'createdAt'),
-      detailRoute: '/my-purchases',
+      // A viewing no longer lives in My Purchases, so sending it there would
+      // open a list that deliberately excludes it.
+      detailRoute: _str(d, 'paymentType') == 'viewing_reservation'
+          ? '/my-viewings'
+          : '/my-purchases',
     );
   }
 

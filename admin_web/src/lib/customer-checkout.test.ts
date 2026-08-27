@@ -11,10 +11,13 @@ import {
   paymentReturnShouldRedirect,
 } from "./customer-checkout.ts";
 
-test("customer checkout covers all 12 server-paid rails", () => {
-  assert.equal(CUSTOMER_CHECKOUT_ORDER_TYPES.length, 12);
+test("customer checkout covers all 13 server-paid rails", () => {
+  assert.equal(CUSTOMER_CHECKOUT_ORDER_TYPES.length, 13);
   assert.ok(CUSTOMER_CHECKOUT_ORDER_TYPES.includes("barrelPoolJoin"));
   assert.ok(CUSTOMER_CHECKOUT_ORDER_TYPES.includes("holdExtension"));
+  // Transport joined when accepting a quote started charging - the last
+  // service whose money moved outside the platform.
+  assert.ok(CUSTOMER_CHECKOUT_ORDER_TYPES.includes("transportJob"));
 });
 
 test("checkout request preserves the exact server payload without prices", () => {
@@ -113,4 +116,23 @@ test("payment return recovers the Checkout session and automatically returns", (
   assert.match(component, /window\.location\.replace\("\/"\)/);
   assert.match(component, /const timeoutId = setTimeout/);
   assert.doesNotMatch(component, /console\.(?:log|warn|error).*sessionId/);
+});
+
+test("a transport job's return state reads the request's own fields", () => {
+  assert.equal(
+    paymentReturnState("transportJob", { paymentStatus: "succeeded" }),
+    "success",
+  );
+  // pending_payment is the between state - neither success nor failure.
+  assert.equal(
+    paymentReturnState("transportJob", {
+      paymentStatus: "pending",
+      status: "pending_payment",
+    }),
+    "pending",
+  );
+  assert.equal(
+    paymentReturnState("transportJob", { paymentStatus: "cancelled" }),
+    "cancelled",
+  );
 });

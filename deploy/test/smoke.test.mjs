@@ -98,6 +98,21 @@ test("SSH deploy publishes the customer console to its dedicated document root",
     /"domains\/customer\.laawoldigital\.com\/public_html"/,
   );
   assert.match(source, /const customerDest =/);
-  assert.match(source, /\$\{customerDest\}\//);
+  // The invariant, not the call shape: the customer console is published to
+  // its own document root and never as a subdirectory of the main one.
+  assert.match(source, /publishConsole\([^)]*customerDest/);
   assert.doesNotMatch(source, /\$\{dest\}\/customer\//);
+});
+
+test("SSH deploy publishes hashed assets before the HTML naming them", () => {
+  const source = readFileSync(new URL("../ssh-static-deploy.mjs", import.meta.url), "utf8");
+  // A transfer that dies between the two passes leaves the previous build
+  // serving intact. One pass let a drop publish an index.html whose chunk
+  // was still uploading, 404ing the console for every visitor.
+  const assetPass = source.indexOf("_next/static/`,");
+  const htmlPass = source.indexOf("...common, `${ADMIN_DIR}/`, `${target}/`");
+  assert.ok(assetPass > 0, "assets are published in their own pass");
+  assert.ok(htmlPass > assetPass, "the HTML pass follows the asset pass");
+  assert.match(source, /function rsyncWithRetry/);
+  assert.match(source, /ServerAliveInterval=15/);
 });

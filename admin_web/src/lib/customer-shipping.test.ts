@@ -103,7 +103,6 @@ test("barrel payload matches the mobile callable and omits pickup details when d
           address: "ignored",
           borough: "ignored",
         },
-        useWalletBalance: true,
       },
       disclosure,
     ),
@@ -115,7 +114,6 @@ test("barrel payload matches the mobile callable and omits pickup details when d
       businessId: "business-1",
       quantity: 2,
       pickupRequested: false,
-      useWalletBalance: true,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -137,7 +135,6 @@ test("barrel payload preserves an arbitrary pickup address without inventing a p
           borough: "",
           dateTime: "2030-01-02T15:00:00.000Z",
         },
-        useWalletBalance: false,
       },
       disclosure,
     ),
@@ -152,7 +149,6 @@ test("barrel payload preserves an arbitrary pickup address without inventing a p
       pickupAddress: "500 Market Street, Newark, NJ 07105",
       pickupBorough: "",
       pickupDateTime: "2030-01-02T15:00:00.000Z",
-      useWalletBalance: false,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -175,7 +171,6 @@ test("freight payload preserves the server-authoritative mode, weight, and picku
           borough: " Bronx ",
           dateTime: "2030-01-02T15:00:00.000Z",
         },
-        useWalletBalance: false,
       },
       disclosure,
     ),
@@ -191,10 +186,108 @@ test("freight payload preserves the server-authoritative mode, weight, and picku
       pickupAddress: "123 Main St",
       pickupBorough: "Bronx",
       pickupDateTime: "2030-01-02T15:00:00.000Z",
-      useWalletBalance: false,
       marketplaceDisclosure: disclosure,
     },
   );
+});
+
+test("pay-on-arrival travels only when chosen, and pay-now stays silent", () => {
+  // Silence means "now" to the server - the same thing every client built
+  // before this choice existed says. Sending paymentTiming: "now" would
+  // make old and new bookings distinguishable for no reason.
+  const base = {
+    senderName: "A",
+    receiverName: "B",
+    receiverPhone: "+12025550123",
+    destinationCountryId: "ca",
+    businessId: "business-2",
+    mode: "air" as const,
+    weightKg: 5,
+    pickup: {requested: false, address: "", borough: ""},
+  };
+  assert.equal(
+    "paymentTiming" in buildFreightShipmentPayload(base, disclosure),
+    false,
+  );
+  assert.equal(
+    "paymentTiming" in
+      buildFreightShipmentPayload(
+        {...base, paymentTiming: "now"},
+        disclosure,
+      ),
+    false,
+  );
+  assert.equal(
+    buildFreightShipmentPayload(
+      {...base, paymentTiming: "arrival"},
+      disclosure,
+    ).paymentTiming,
+    "arrival",
+  );
+});
+
+test("destination delivery travels with its address, or not at all", () => {
+  const base = {
+    senderName: "A",
+    receiverName: "B",
+    receiverPhone: "+12025550123",
+    destinationCountryId: "gn",
+    businessId: "business-2",
+    mode: "air" as const,
+    weightKg: 5,
+    pickup: {requested: false, address: "", borough: ""},
+  };
+  // Silence means "the receiver collects it", which is what every business
+  // does without opting in to anything.
+  const collected = buildFreightShipmentPayload(base, disclosure);
+  assert.equal("destinationDelivery" in collected, false);
+  assert.equal("receiverAddress" in collected, false);
+
+  // The server refuses a delivery with nowhere to take it, so the address is
+  // sent with the choice rather than as a separate optional field.
+  const delivered = buildFreightShipmentPayload(
+    {
+      ...base,
+      destinationDelivery: true,
+      receiverAddress: "  Kipé, behind the Total station, Conakry  ",
+    },
+    disclosure,
+  );
+  assert.equal(delivered.destinationDelivery, true);
+  assert.equal(
+    delivered.receiverAddress,
+    "Kipé, behind the Total station, Conakry",
+  );
+  // The fee is never client-supplied: the server re-prices it from the
+  // business document, so a payload carrying one would be ignored at best.
+  assert.equal("destinationDeliveryFee" in delivered, false);
+});
+
+test("the freight payload never carries what a parcel is worth", () => {
+  // A sender's own valuation priced nothing and promised nothing, and asking
+  // for it made the honest customer subsidise the optimistic one.
+  const payload = buildFreightShipmentPayload(
+    {
+      senderName: "A",
+      receiverName: "B",
+      receiverPhone: "+12025550123",
+      destinationCountryId: "gn",
+      businessId: "business-2",
+      mode: "air",
+      weightKg: 5,
+      itemCategoryId: "electronics",
+      itemId: "iphone",
+      pickup: {requested: false, address: "", borough: ""},
+    } as Parameters<typeof buildFreightShipmentPayload>[0] &
+      Record<string, unknown>,
+    disclosure,
+  );
+  assert.equal("declaredValue" in payload, false);
+  assert.equal("coverageFee" in payload, false);
+  // What the item is, on the other hand, is the whole input: the business's
+  // own published payback for that row is what a lost parcel pays.
+  assert.equal(payload.itemId, "iphone");
+  assert.equal(payload.itemCategoryId, "electronics");
 });
 
 test("transport and settlement builders use the exact callable keys", () => {
@@ -708,7 +801,6 @@ test("shared pickup stays top-level while every destination remains an independe
           dateTime: "2030-01-02T15:00:00.000Z",
         },
         useDifferentPickupDetails: false,
-        useWalletBalance: true,
       },
       disclosure,
     ),
@@ -734,7 +826,6 @@ test("shared pickup stays top-level while every destination remains an independe
       pickupAddress: "500 Market Street, Newark, NJ 07105",
       pickupBorough: "",
       pickupDateTime: "2030-01-02T15:00:00.000Z",
-      useWalletBalance: true,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -773,7 +864,6 @@ test("different pickup details serialize per line without shared pickup keys", (
           },
         ],
         useDifferentPickupDetails: true,
-        useWalletBalance: false,
       },
       disclosure,
     ),
@@ -802,7 +892,6 @@ test("different pickup details serialize per line without shared pickup keys", (
           pickupBorough: "Office drop-off",
         },
       ],
-      useWalletBalance: false,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -955,13 +1044,15 @@ test("shipping UI uses the canonical server option, quote, request, and checkout
     "listTransportBusinessOptions",
     "createTransportRequest",
   ].forEach((callable) => assert.match(source, new RegExp(`"${callable}"`)));
-  // Address entry is the shared AddressAutocomplete component (also used by
-  // the business console), which itself calls suggestPickupAddresses.
-  assert.match(source, /<AddressAutocomplete/);
+  // Address entry is the shared StructuredAddressFields component, which
+  // wraps AddressAutocomplete (also used on its own by the business console)
+  // and splits the chosen suggestion across named fields.
+  assert.match(source, /<StructuredAddressFields/);
   assert.match(
     source,
-    /import\s*\{[\s\S]*AddressAutocomplete[\s\S]*\}\s*from\s*"@\/components\/address-autocomplete"/,
+    /import\s*\{[\s\S]*StructuredAddressFields[\s\S]*\}\s*from\s*"@\/components\/address-autocomplete"/,
   );
+  assert.doesNotMatch(source, /<AddressAutocomplete/);
   const addressAutocompleteSource = readFileSync(
     new URL("../components/address-autocomplete.tsx", import.meta.url),
     "utf8",
@@ -1017,7 +1108,9 @@ test("pickup address entry automatically exposes an accessible searchable sugges
   }
 });
 
-test("barrel wallet choice keeps a compact checkbox and contained localized copy", () => {
+test("the retired wallet is offered nowhere in the shipping flows", () => {
+  // The platform no longer holds customer money (docs/PLAN-2026-08-backlog.md
+  // #3), so no flow may offer to spend a balance or send the old flag.
   const source = readFileSync(
     new URL("../components/customer-shipping-services.tsx", import.meta.url),
     "utf8",
@@ -1027,29 +1120,18 @@ test("barrel wallet choice keeps a compact checkbox and contained localized copy
     "utf8",
   );
 
-  assert.match(
-    source,
-    /<label className="customer-choice-row">[\s\S]*type="checkbox"[\s\S]*<strong>Use wallet balance<\/strong>[\s\S]*<small>Available balance will be applied first\.<\/small>/,
-  );
+  assert.doesNotMatch(source, /useWalletBalance/);
+  assert.doesNotMatch(source, /wallet balance/i);
+
+  // The shared choice-row styling still has to hold up for the checkboxes
+  // that remain (the marketplace disclosure).
   assert.doesNotMatch(
     styles,
     /\.customer-barrel-stage\s*>\s*label input\s*\{/,
   );
   assert.match(
     styles,
-    /\.customer-barrel-stage\s*>\s*label\s*>\s*input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\)/,
-  );
-  assert.match(
-    styles,
     /\.customer-choice-row > input\s*\{[\s\S]*height: 18px;[\s\S]*min-height: 0;[\s\S]*width: 18px;/,
-  );
-  assert.equal(
-    translateValue("Use wallet balance", "fr"),
-    "Utiliser le solde du portefeuille",
-  );
-  assert.equal(
-    translateValue("Available balance will be applied first.", "fr"),
-    "Le solde disponible sera appliqué en premier.",
   );
 });
 

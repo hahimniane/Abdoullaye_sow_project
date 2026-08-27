@@ -20,6 +20,10 @@ NotificationRoute? routeForNotificationData(Map<String, dynamic> data) {
   switch (type) {
     case 'car_purchase_status':
       return const NotificationRoute('/my-purchases');
+    case 'car_viewing_status':
+      // Viewings have their own destination: a buyer opening a notification
+      // about an appointment should not land in a list of purchases.
+      return const NotificationRoute('/my-viewings');
     case 'barrel_shipment_status':
     case 'freight_shipment_status':
     case 'freight_balance_due':
@@ -52,8 +56,24 @@ NotificationRoute? routeForNotificationData(Map<String, dynamic> data) {
           businessId: businessId,
         ),
       );
-    case 'wallet_refund_status':
-      return const NotificationRoute('/wallet');
+    // No wallet_refund_status case: the wallet is retired
+    // (docs/PLAN-2026-08-backlog.md #3). The backend never sends that type and
+    // /wallet is not a registered route, so it could only ever have been a tap
+    // that did nothing.
+    case 'support_case_update':
+      // Same payload and destination as support_message - the backend sends
+      // this on every case update (index.js:25176) and it had no route, so
+      // those taps silently went nowhere.
+      final supportCaseId = data['caseId']?.toString();
+      if (supportCaseId == null || supportCaseId.isEmpty) return null;
+      return NotificationRoute('/support-thread', arguments: supportCaseId);
+    case 'shipment_tracking_update':
+      return NotificationRoute(
+        '/tracking',
+        arguments: TrackingScreenArguments(
+          shipmentId: data['shipmentId']?.toString(),
+        ),
+      );
     case 'business_application_status':
       return const NotificationRoute('/business-register');
     case 'support_message':

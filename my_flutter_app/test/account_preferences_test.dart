@@ -11,7 +11,6 @@ void main() {
     expect(prefs.smsNotifications, isFalse);
     expect(prefs.carActivity, isTrue);
     expect(prefs.shipmentActivity, isTrue);
-    expect(prefs.walletActivity, isTrue);
     expect(prefs.businessActivity, isTrue);
     expect(prefs.reviewActivity, isTrue);
     expect(prefs.supportActivity, isTrue);
@@ -23,7 +22,6 @@ void main() {
   test('notification preferences serialize and preserve disabled values', () {
     final prefs = NotificationPreferences.defaults.copyWith(
       shipmentActivity: false,
-      walletActivity: false,
       smsNotifications: true,
     );
 
@@ -33,7 +31,6 @@ void main() {
       'smsNotifications': true,
       'carActivity': true,
       'shipmentActivity': false,
-      'walletActivity': false,
       'businessActivity': true,
       'reviewActivity': true,
       'supportActivity': true,
@@ -43,10 +40,6 @@ void main() {
     });
     expect(
       NotificationPreferences.fromMap(prefs.toMap()).shipmentActivity,
-      isFalse,
-    );
-    expect(
-      NotificationPreferences.fromMap(prefs.toMap()).walletActivity,
       isFalse,
     );
     expect(

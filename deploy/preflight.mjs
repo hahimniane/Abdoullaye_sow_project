@@ -29,6 +29,10 @@ import {
   assessPaymentFunctionDeployment,
   discoverStripeBoundFunctionNames,
 } from "./payment-functions-lib.mjs";
+import {
+  revisionCapacity,
+  safeDeployBatchSize,
+} from "./cloud-run-capacity-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -467,6 +471,71 @@ if (checksBackend) {
           functionsDryRun.ok ? "dry run completed" : "dry run failed",
     );
   }
+
+  // The dry run above proves the functions RESOLVE. It cannot prove they will
+  // FIT: it never creates a revision, so it never touches a Cloud Run quota. On
+  // 2026-08-07 it passed twice, minutes before deploys that exhausted one,
+  // stranded 30 and then 157 functions on revisions that could not serve, and
+  // took parking receipts and payment links down with them.
+  //
+  // The binding limit is Active Revisions per region (4,000). Cloud Run never
+  // collects revisions, this project had reached 4,605, and pruning to 410
+  // restored service on its own. Concurrent CPU during a rollout is the other
+  // one, and it is handled by deploying in batches rather than by a check -
+  // see backend-deploy.mjs.
+  let functionCount = 0;
+  try {
+    const source = fs.readFileSync(
+        path.join(ROOT, "my_flutter_app", "functions", "index.js"),
+        "utf8",
+    );
+    functionCount = new Set(
+        (source.match(/^exports\.[A-Za-z0-9_]+/gm) || [])
+            .map((line) => line.slice("exports.".length)),
+    ).size;
+  } catch {
+    functionCount = 0;
+  }
+  if (functionCount === 0) functionCount = paymentFunctionNames.length;
+
+  const revisions = run("gcloud", [
+    "run", "revisions", "list",
+    "--project", PROJECT_ID,
+    "--region", "us-central1",
+    "--format", "value(metadata.name)",
+  ]);
+  if (!revisions.ok) {
+    addCheck(
+        "Cloud Run revision headroom",
+        false,
+        "could not list Cloud Run revisions to count them",
+    );
+  } else {
+    const activeRevisions = revisions.stdout.split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean).length;
+    const verdict = revisionCapacity({
+      activeRevisions,
+      functionCount,
+      limit: Number(process.env.CLOUD_RUN_REVISION_LIMIT) || undefined,
+    });
+    addCheck(
+        "Cloud Run revision headroom",
+        verdict.fits,
+        verdict.fits ?
+          `${verdict.projected}/${verdict.limit} revisions after deploying ` +
+            `${functionCount} functions, ${verdict.headroom} spare` :
+          `${activeRevisions} revisions plus ${functionCount} incoming ` +
+            `exceeds ${verdict.limit}; ${verdict.remedy}`,
+    );
+  }
+
+  addCheck(
+      "Functions deploy in batches that fit concurrent CPU",
+      true,
+      `${safeDeployBatchSize()} functions per batch ` +
+        "(20 vCPU region ceiling; each rollout starts a container)",
+  );
 }
 
 const summary = checks.reduce(

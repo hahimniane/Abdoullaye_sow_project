@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../services/freight_categories.dart';
+import '../services/freight_coverage.dart';
+import '../utils/freight_delivery.dart';
 import 'business_profile.dart';
 import 'business_service.dart';
 import 'destination_country.dart';
@@ -19,7 +22,14 @@ class BusinessDestinationOption {
     this.serviceNote,
     this.businessStatus = 'approved',
     this.freightPickupAvailable = false,
+    this.freightPayOnArrival = false,
+    this.freightDestinationDeliveryAvailable = false,
+    this.freightDestinationDeliveryFee = 0,
+    this.freightDestinationDeliveryAreas = const [],
     this.freightPickupModel = 'distance',
+    this.freightCategories = const <FreightCategory>[],
+    this.freightCoverage,
+    this.freightPaybackTable,
     this.reviewCount = 0,
     this.reviewAverage = 0,
     this.reviewWeightedScore = 0,
@@ -49,6 +59,53 @@ class BusinessDestinationOption {
   /// pricing model (`'distance'` or `'borough'`), as computed server-side.
   final bool freightPickupAvailable;
   final String freightPickupModel;
+
+  /// Whether this business accepts being paid after the parcel reaches the
+  /// destination. When true, the booking form offers pay now / pay on
+  /// arrival; the server re-checks the business doc at booking regardless.
+  final bool freightPayOnArrival;
+
+  /// Whether the receiver can have the parcel brought to their own address at
+  /// the destination instead of collecting it, and the flat fee for that. Flat
+  /// rather than distance-priced: the addresses this serves do not geocode
+  /// well enough to price a radius from, so a number the business chose is one
+  /// it can actually honour. Read through [freightDelivery], which treats an
+  /// opted-in business with no fee as an unfinished setting.
+  final bool freightDestinationDeliveryAvailable;
+  final double freightDestinationDeliveryFee;
+
+  /// The quartiers this business delivers to on THIS route, priced. Per
+  /// destination because crossing Dakar and crossing Conakry are different
+  /// jobs at different costs.
+  final List<dynamic> freightDestinationDeliveryAreas;
+
+  /// What this business will carry and what each kind of parcel is worth to
+  /// it. Priced per business, not per destination: a business charges the same
+  /// for electronics wherever it is sending them. Empty when it does not offer
+  /// freight.
+  final List<FreightCategory> freightCategories;
+
+  /// Whether this business makes good on a parcel it loses. Null when it does
+  /// not offer freight - which is not the same as offering freight and
+  /// covering nothing.
+  final FreightCoveragePolicy? freightCoverage;
+
+  /// What the business carries and what it charges for each of those things:
+  /// the customer says what the item is and this catalogue says its price.
+  /// Raw wire shape; read through freight_payback.
+  final Map<String, dynamic>? freightPaybackTable;
+
+  /// The one line the option card shows about who stands behind the parcel.
+  FreightCoverageSummary get freightCoverageSummary =>
+      freightCoverageSummaryOf(freightCoverage);
+
+  /// This business's destination-delivery offer, with an unpriced opt-in
+  /// resolved to "not offered".
+  FreightDeliveryPolicy get freightDelivery => freightDeliveryPolicy(
+    available: freightDestinationDeliveryAvailable,
+    fee: freightDestinationDeliveryFee,
+    areas: freightDestinationDeliveryAreas,
+  );
 
   bool get isApprovedActive => businessStatus == 'approved' && country.isActive;
 
@@ -99,9 +156,23 @@ class BusinessDestinationOption {
       serviceNote: data['serviceNote'] as String?,
       businessStatus: (data['businessStatus'] ?? 'approved') as String,
       freightPickupAvailable: data['freightPickupAvailable'] == true,
+      freightPayOnArrival: data['freightPayOnArrival'] == true,
+      freightDestinationDeliveryAvailable:
+          data['freightDestinationDeliveryAvailable'] == true,
+      freightDestinationDeliveryAreas:
+          data['freightDestinationDeliveryAreas'] is List
+          ? data['freightDestinationDeliveryAreas'] as List<dynamic>
+          : const [],
+      freightDestinationDeliveryFee:
+          (data['freightDestinationDeliveryFee'] as num?)?.toDouble() ?? 0,
       freightPickupModel: (data['freightPickupModel'] as String?) == 'borough'
           ? 'borough'
           : 'distance',
+      freightCategories: FreightCategory.listFromWire(data['freightCategories']),
+      freightPaybackTable: data['freightPaybackTable'] is Map
+          ? Map<String, dynamic>.from(data['freightPaybackTable'] as Map)
+          : null,
+      freightCoverage: FreightCoveragePolicy.fromWire(data['freightCoverage']),
       reviewCount: (data['reviewCount'] as num?)?.toInt() ?? 0,
       reviewAverage: (data['reviewAverage'] as num?)?.toDouble() ?? 0,
       reviewWeightedScore:
@@ -182,6 +253,18 @@ class BusinessDestinationOption {
         (data['businessName'] as String?) ??
         (business['name'] as String?) ??
         BusinessProfile.defaultBusinessName;
+    final services = normalizeBusinessServices(
+      businessData == null ? data['enabledServices'] : business['enabledServices'],
+    );
+    // Categories and coverage are business-wide settings, so they are read off
+    // the business document when we have one. This path only runs where the
+    // callable is unavailable; it exists so those customers are quoted the
+    // same prices and shown the same promise as everyone else.
+    final freightSettings = businessData ?? data;
+    final offersFreight = hasBusinessService(
+      services,
+      BusinessServiceKey.freight,
+    );
 
     return BusinessDestinationOption(
       id: '${businessId}_${doc.id}',
@@ -207,11 +290,7 @@ class BusinessDestinationOption {
                 .whereType<String>()
                 .where((part) => part.trim().isNotEmpty)
                 .join(', '),
-      enabledServices: normalizeBusinessServices(
-        businessData == null
-            ? data['enabledServices']
-            : business['enabledServices'],
-      ),
+      enabledServices: services,
       serviceNote:
           data['serviceNote'] as String? ?? business['serviceNote'] as String?,
       businessStatus:
@@ -230,6 +309,12 @@ class BusinessDestinationOption {
             : business['freightPickupModel'],
         businessData == null ? data['state'] : business['state'],
       ),
+      freightCategories: offersFreight
+          ? freightCategoriesFromBusinessData(freightSettings)
+          : const <FreightCategory>[],
+      freightCoverage: offersFreight
+          ? FreightCoveragePolicy.fromBusinessData(freightSettings)
+          : null,
       reviewCount:
           ((businessData == null ? data['reviewCount'] : business['reviewCount'])
                   as num?)

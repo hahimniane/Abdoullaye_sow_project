@@ -52,24 +52,25 @@ function sharedBarrelBalanceCents(
   ));
 }
 
+// A deposit is either charged to the card or there is nothing to charge.
+// There used to be a third case - a deposit fully covered by wallet credit,
+// which settled without a charge - but the wallet is retired
+// (docs/PLAN-2026-08-backlog.md #3), so a zero amount now only ever means
+// nothing is owed.
 function sharedPoolPaymentFields({
   poolId,
   uid,
   amountCents,
-  totalDepositCents = amountCents,
   type,
   currency = DEFAULT_CURRENCY,
   simulatePayments = DEFAULT_SIMULATE_PAYMENTS,
 }) {
   const amount = dollarsFromCents(amountCents);
-  const walletFullyCovered = totalDepositCents > 0 && amountCents === 0;
   return {
     amount,
     amountCents,
     currency,
-    paymentStatus: walletFullyCovered ?
-      "succeeded" :
-      amountCents > 0 ?
+    paymentStatus: amountCents > 0 ?
       (simulatePayments ? "succeeded" : "pending") :
       "not_required",
     stripePaymentIntentIds: amountCents > 0 && simulatePayments ?
