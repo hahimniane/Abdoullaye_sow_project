@@ -64,15 +64,15 @@ export function GuestContactPanel({
   const disabled = submitting || busy;
 
   return (
-    <form className="guest-contact-panel" onSubmit={submit}>
+    <form className="login-card guest-contact-panel" onSubmit={submit}>
       <p className="guest-contact-intro">
         <ShieldCheck aria-hidden="true" size={16} />
         Book without an account. We use these details to send your receipt and
         tracking number, and to reach you about this shipment.
       </p>
 
-      <label className="field" htmlFor="guest-contact-name">
-        <span>Full name</span>
+      <label htmlFor="guest-contact-name">
+        Full name
         <input
           autoComplete="name"
           disabled={disabled}
@@ -90,8 +90,8 @@ export function GuestContactPanel({
         )}
       </label>
 
-      <label className="field" htmlFor="guest-contact-email">
-        <span>Email address</span>
+      <label htmlFor="guest-contact-email">
+        Email address
         <input
           autoComplete="email"
           disabled={disabled}

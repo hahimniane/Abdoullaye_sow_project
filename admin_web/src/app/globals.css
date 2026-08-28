@@ -12828,3 +12828,76 @@ button[data-loading="true"]::before {
 .trk-event-detail { color: var(--muted); font-size: 12px; }
 .trk-event-when { color: var(--muted); font-size: 11px; }
 
+
+/* Guest checkout: booking without an account.
+   The panel itself reuses .login-card so its fields match the sign-in form it
+   sits beside; only the surrounding choice, the divider and the two notes
+   need anything of their own. */
+.customer-auth-choice {
+  display: grid;
+  gap: 4px;
+}
+
+.guest-contact-panel {
+  padding: 20px 24px 8px;
+}
+
+.guest-contact-intro {
+  align-items: start;
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  gap: 8px;
+  grid-template-columns: auto 1fr;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.guest-contact-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.guest-contact-panel .primary-button {
+  justify-content: center;
+  width: 100%;
+}
+
+/* A plain rule with the word sitting in the gap, so the two ways to continue
+   read as alternatives rather than as steps. */
+.customer-auth-divider {
+  align-items: center;
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  gap: 12px;
+  grid-template-columns: 1fr auto 1fr;
+  padding: 4px 24px;
+  text-transform: uppercase;
+}
+
+.customer-auth-divider::before,
+.customer-auth-divider::after {
+  background: var(--border);
+  content: "";
+  height: 1px;
+}
+
+.customer-auth-account {
+  padding: 0 24px 20px;
+}
+
+.customer-auth-account > summary {
+  color: var(--brand-deep);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 0;
+}
+
+.customer-auth-account .login-card {
+  padding-left: 0;
+  padding-right: 0;
+}
