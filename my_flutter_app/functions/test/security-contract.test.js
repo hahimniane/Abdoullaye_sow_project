@@ -34,6 +34,11 @@ test("deployed callables enforce App Check", () => {
         /onCall\(\s*MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,/g,
     ) || []
   ).length;
+  const sharedGuestOptionUses = (
+    indexSource.match(
+        /onCall\(\s*GUEST_TRACKING_CALLABLE_OPTIONS,/g,
+    ) || []
+  ).length;
   const sharedPeopleOptionsPattern =
     /const MARKETPLACE_PEOPLE_CALLABLE_OPTIONS[\s\S]*?enforceAppCheck:\s*/;
   assert.match(
@@ -43,10 +48,29 @@ test("deployed callables enforce App Check", () => {
       ),
   );
   assert.equal(
-      appCheckCount - 1 + sharedPeopleOptionUses,
+      appCheckCount - 2 + sharedPeopleOptionUses + sharedGuestOptionUses,
       callableCount,
   );
 });
+
+test("guest tracking is public-transport callable with a private projection",
+    () => {
+      assert.match(
+          indexSource,
+          /const GUEST_TRACKING_CALLABLE_OPTIONS[\s\S]*?invoker:\s*"public"/,
+      );
+      const source = exportedFunctionSource(
+          "lookupGuestTracking",
+          "resolveSignInIdentifier",
+      );
+      assert.match(source, /enforceCallableRateLimit/);
+      assert.match(source, /findGuestTrackingRecord/);
+      assert.doesNotMatch(source, /request\.auth/);
+      assert.doesNotMatch(
+          source,
+          /receiverName|senderName|customerEmail|phone|address|price|payment/,
+      );
+    });
 
 test("administrator and staff permissions fail closed", () => {
   assert.match(

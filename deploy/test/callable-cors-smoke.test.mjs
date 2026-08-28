@@ -28,6 +28,7 @@ test("marketplace people manifest covers every browser access callable", () => {
   ]);
   assert.equal(new Set(MARKETPLACE_PEOPLE_CALLABLES).size,
       MARKETPLACE_PEOPLE_CALLABLES.length);
+  assert.ok(MARKETPLACE_PEOPLE_CALLABLES.includes("lookupGuestTracking"));
 });
 
 test("builds a browser-like callable OPTIONS request", () => {

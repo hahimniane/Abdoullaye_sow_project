@@ -28,6 +28,7 @@ import '../widgets/office_location_picker.dart';
 import '../widgets/rating_summary_badge.dart';
 import '../widgets/recipient_name_field.dart';
 import '../widgets/structured_address_fields.dart';
+import '../widgets/guest_checkout_sheet.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
@@ -546,8 +547,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     if (FirebaseAuth.instance.currentUser == null) {
-      Navigator.pushNamed(context, '/login');
-      return;
+      // A guest books from here without leaving the screen; anyone who would
+      // rather use an account still goes to the sign-in route.
+      final continued = await showGuestCheckoutSheet(
+        context,
+        onUseAccount: () => Navigator.pushNamed(context, '/login'),
+      );
+      if (!continued || !mounted) return;
     }
     final option = _selected;
     if (option == null) return;
@@ -721,10 +727,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   }
 
   /// Hands the parcel to the businesses on the route to price themselves.
-  void _askForPrice() {
+  Future<void> _askForPrice() async {
     if (FirebaseAuth.instance.currentUser == null) {
-      Navigator.pushNamed(context, '/login');
-      return;
+      final continued = await showGuestCheckoutSheet(
+        context,
+        onUseAccount: () => Navigator.pushNamed(context, '/login'),
+      );
+      if (!continued || !mounted) return;
     }
     final options = _countryOptions;
     final country =

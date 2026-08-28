@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/freight_quote.dart';
+import 'guest_checkout_service.dart';
 
 /// Asking businesses what they charge for a parcel none of them has priced.
 ///
@@ -36,6 +37,7 @@ class FreightQuoteService {
     final response = await _functions
         .httpsCallable('createFreightQuoteRequest')
         .call<Map<String, dynamic>>({
+          ...guestCheckout.payloadFields(),
           'destinationCountryId': destinationCountryId,
           'mode': mode,
           'description': description,

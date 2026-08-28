@@ -57,7 +57,11 @@ describe("tracking codes", () => {
     // Pre-existing codes must keep working - they are printed on receipts.
     assert.equal(
         normalizeTrackingCode("BS-MS9TTES1-OMVYTL"),
-        "BSMS9TTES1OMVYTL",
+        "BS-MS9TTES1-OMVYTL",
+    );
+    assert.equal(
+        normalizeTrackingCode("bsms9ttes1omvytl"),
+        "BS-MS9TTES1-OMVYTL",
     );
     assert.notEqual(normalizeTrackingCode("BS-MS9TTES1-OMVYTL"), "");
   });

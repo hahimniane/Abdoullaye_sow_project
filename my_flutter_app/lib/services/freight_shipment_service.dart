@@ -6,6 +6,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
+import 'guest_checkout_service.dart';
 
 /// Customer-side flow for parcel/box freight shipments (priced by weight,
 /// by air or sea). Mirrors [BarrelShipmentService].
@@ -60,6 +61,7 @@ class FreightShipmentService {
     final response = await _functions
         .httpsCallable('createFreightShipmentPaymentIntent')
         .call<Map<String, dynamic>>({
+          ...guestCheckout.payloadFields(),
           'senderName': senderName,
           'receiverName': receiverName,
           'receiverPhone': receiverPhone,

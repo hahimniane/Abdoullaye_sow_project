@@ -5,6 +5,7 @@ export const customerServices = [
   "parking",
   "shared-barrels",
   "cars",
+  "tracking",
 ] as const;
 
 export type CustomerService = (typeof customerServices)[number];

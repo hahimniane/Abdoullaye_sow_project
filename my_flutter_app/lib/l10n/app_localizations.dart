@@ -5156,6 +5156,180 @@ abstract class AppLocalizations {
   /// **'Sign in to see your barrel shipment requests, receipts, and pickup status.'**
   String get signInToTrackShipments;
 
+  /// No description provided for @guestTrackingIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'No account needed. Enter the number from your booking confirmation or receipt.'**
+  String get guestTrackingIntro;
+
+  /// No description provided for @guestTrackingIdentifierLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking or tracking number'**
+  String get guestTrackingIdentifierLabel;
+
+  /// No description provided for @guestTrackingIdentifierHint.
+  ///
+  /// In en, this message translates to:
+  /// **'For example, BS-K7M4P2'**
+  String get guestTrackingIdentifierHint;
+
+  /// No description provided for @guestTrackingRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your booking or tracking number.'**
+  String get guestTrackingRequired;
+
+  /// No description provided for @guestTrackingInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid booking or tracking number.'**
+  String get guestTrackingInvalid;
+
+  /// No description provided for @guestTrackingSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Track'**
+  String get guestTrackingSubmit;
+
+  /// No description provided for @guestTrackingLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking status…'**
+  String get guestTrackingLoading;
+
+  /// No description provided for @guestTrackingSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking found'**
+  String get guestTrackingSuccessTitle;
+
+  /// No description provided for @guestTrackingNotFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not find that number'**
+  String get guestTrackingNotFoundTitle;
+
+  /// No description provided for @guestTrackingNotFoundBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the number on your confirmation or receipt and try again.'**
+  String get guestTrackingNotFoundBody;
+
+  /// No description provided for @guestTrackingRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many checks were made. Please wait a few minutes and try again.'**
+  String get guestTrackingRateLimited;
+
+  /// No description provided for @guestTrackingUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking is temporarily unavailable. Please try again shortly.'**
+  String get guestTrackingUnavailable;
+
+  /// No description provided for @guestTrackingServiceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get guestTrackingServiceLabel;
+
+  /// No description provided for @guestTrackingStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get guestTrackingStatusLabel;
+
+  /// No description provided for @guestTrackingUpdatedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Last updated {date}'**
+  String guestTrackingUpdatedLabel(Object date);
+
+  /// No description provided for @guestTrackingPrivacyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'For privacy, guest tracking shows only the service status. Sign in to see private booking details and actions.'**
+  String get guestTrackingPrivacyNote;
+
+  /// No description provided for @guestTrackingTrackAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Track another number'**
+  String get guestTrackingTrackAnother;
+
+  /// No description provided for @guestTrackingSignInUpsell.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in for full details'**
+  String get guestTrackingSignInUpsell;
+
+  /// No description provided for @guestTrackingServiceBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel shipping'**
+  String get guestTrackingServiceBarrel;
+
+  /// No description provided for @guestTrackingServiceFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight'**
+  String get guestTrackingServiceFreight;
+
+  /// No description provided for @guestTrackingServiceTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Car transport'**
+  String get guestTrackingServiceTransport;
+
+  /// No description provided for @guestTrackingServiceParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Car parking'**
+  String get guestTrackingServiceParking;
+
+  /// No description provided for @guestTrackingServiceSharedBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared barrel'**
+  String get guestTrackingServiceSharedBarrel;
+
+  /// No description provided for @guestTrackingServiceFreightQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight quote request'**
+  String get guestTrackingServiceFreightQuote;
+
+  /// No description provided for @guestTrackingStageBooked.
+  ///
+  /// In en, this message translates to:
+  /// **'Booked'**
+  String get guestTrackingStageBooked;
+
+  /// No description provided for @guestTrackingStageInTransit.
+  ///
+  /// In en, this message translates to:
+  /// **'In transit'**
+  String get guestTrackingStageInTransit;
+
+  /// No description provided for @guestTrackingStageArrived.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived'**
+  String get guestTrackingStageArrived;
+
+  /// No description provided for @guestTrackingStageDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered'**
+  String get guestTrackingStageDelivered;
+
+  /// No description provided for @guestTrackingStageCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get guestTrackingStageCancelled;
+
   /// No description provided for @shipmentsLoadError.
   ///
   /// In en, this message translates to:
@@ -12693,7 +12867,7 @@ abstract class AppLocalizations {
   /// No description provided for @freightAskForPriceIntro.
   ///
   /// In en, this message translates to:
-  /// **'Describe what you are sending to {country}. Every business on this route can answer with its own price and say what it pays back if the parcel is lost.'**
+  /// **'Describe what you are sending to {country}. Every business on this route can answer with its own price and say whether it covers the parcel if it is lost.'**
   String freightAskForPriceIntro(String country);
 
   /// No description provided for @freightAskForPriceNote.
@@ -12845,6 +13019,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{business} will send your parcel for {price}.'**
   String freightQuoteChosenMessage(String business, String price);
+
+  /// No description provided for @guestCheckoutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Book without an account'**
+  String get guestCheckoutTitle;
+
+  /// No description provided for @guestCheckoutIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'We use these details to send your receipt and tracking number, and to reach you about this shipment.'**
+  String get guestCheckoutIntro;
+
+  /// No description provided for @guestCheckoutFullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get guestCheckoutFullName;
+
+  /// No description provided for @guestCheckoutEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email address'**
+  String get guestCheckoutEmail;
+
+  /// No description provided for @guestCheckoutPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone number'**
+  String get guestCheckoutPhone;
+
+  /// No description provided for @guestCheckoutNameError.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your full name'**
+  String get guestCheckoutNameError;
+
+  /// No description provided for @guestCheckoutEmailError.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address'**
+  String get guestCheckoutEmailError;
+
+  /// No description provided for @guestCheckoutPhoneError.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid phone number'**
+  String get guestCheckoutPhoneError;
+
+  /// No description provided for @guestCheckoutContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue as guest'**
+  String get guestCheckoutContinue;
+
+  /// No description provided for @guestCheckoutUseAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a Laawol account instead'**
+  String get guestCheckoutUseAccount;
+
+  /// No description provided for @guestCheckoutFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not continue. Check your connection and try again.'**
+  String get guestCheckoutFailed;
+
+  /// No description provided for @guestCheckoutNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your tracking number arrives by email. Keep it to follow this booking.'**
+  String get guestCheckoutNote;
+
+  /// No description provided for @guestCheckoutChoiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How would you like to continue?'**
+  String get guestCheckoutChoiceTitle;
 }
 
 class _AppLocalizationsDelegate

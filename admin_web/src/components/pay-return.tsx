@@ -65,6 +65,7 @@ function directPaymentPath(
 
 export function PayReturn() {
   const [state, setState] = useState<ReturnViewState>("pending");
+  const [trackingCode, setTrackingCode] = useState("");
   const [params, setParams] = useState<{
     orderType: CustomerCheckoutOrderType;
     recordId: string;
@@ -131,16 +132,19 @@ export function PayReturn() {
             });
         void confirm
           .then((response) => {
-            if (active && response.data.state === "success") {
-              setState("success");
-            }
+            if (!active) return;
+            const code = String(response.data.trackingCode ?? "").trim();
+            if (code) setTrackingCode(code);
+            if (response.data.state === "success") setState("success");
           })
           .catch(() => {
             // Keep the authoritative Firestore listener active. A delayed
             // webhook can still complete the order before the safety timeout.
           });
       }
-      const path = directPaymentPath(type, recordId, user.uid);
+      const path = user.isAnonymous
+        ? null
+        : directPaymentPath(type, recordId, user.uid);
       if (path) {
         stopSnapshot = onSnapshot(
           doc(db, ...path),
@@ -196,6 +200,10 @@ export function PayReturn() {
   }, [state]);
 
   const content = returnContent(state);
+  // A guest has no workspace, so the success screen hands them the tracking
+  // code and points at the public lookup instead of a console they cannot
+  // open.
+  const guestSuccess = state === "success" && Boolean(trackingCode);
   const Icon = content.icon;
   return (
     <main className="payment-return-screen">
@@ -205,15 +213,29 @@ export function PayReturn() {
         </div>
         <h1>{content.title}</h1>
         <p>{content.body}</p>
-        {params && (
-          <small>
-            Reference: {params.recordId}
-          </small>
+        {guestSuccess ? (
+          <p className="payment-return-tracking">
+            <span>Your tracking number</span>
+            <strong>{trackingCode}</strong>
+          </p>
+        ) : (
+          params && <small>Reference: {params.recordId}</small>
         )}
         <div className="button-row">
-          <a className="primary-button" href="/">
-            Return to customer workspace
-          </a>
+          {guestSuccess ? (
+            <a
+              className="primary-button"
+              href={`/?service=tracking&code=${encodeURIComponent(
+                trackingCode ?? "",
+              )}`}
+            >
+              Track this shipment
+            </a>
+          ) : (
+            <a className="primary-button" href="/">
+              Return to customer workspace
+            </a>
+          )}
           {(state === "failed" || state === "timeout") && (
             <a className="secondary-button" href={SUPPORT_URL}>
               Contact support

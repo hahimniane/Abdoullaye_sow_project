@@ -51,15 +51,18 @@ function buildTrackingCode(prefix, randomInt) {
  * @return {string} Canonical code, or "" when nothing usable was supplied.
  */
 function normalizeTrackingCode(input) {
-  const stripped = String(input || "")
-      .toUpperCase()
+  const raw = String(input || "").trim().toUpperCase();
+  const stripped = raw
       .replace(/[^A-Z0-9]/g, "");
   if (!stripped) return "";
-  // Legacy codes carry two segments and a base36 timestamp; leave anything
-  // that is not exactly prefix + short body alone so old codes still match.
+  // Reconstruct both printed generations. Firestore equality queries are
+  // separator-sensitive, so merely stripping an old printed code makes a
+  // valid receipt impossible to find.
   const body = `[${TRACKING_ALPHABET}]{${TRACKING_CODE_LENGTH}}`;
   const match = stripped.match(new RegExp(`^([A-Z]{2})(${body})$`));
-  return match ? `${match[1]}-${match[2]}` : stripped;
+  if (match) return `${match[1]}-${match[2]}`;
+  const legacy = stripped.match(/^([A-Z]{2})([A-Z0-9]{8})([A-Z0-9]{6})$/);
+  return legacy ? `${legacy[1]}-${legacy[2]}-${legacy[3]}` : stripped;
 }
 
 module.exports = {

@@ -1199,6 +1199,40 @@
   "paymentPending": "Paiement en attente",
   "paymentCancelled": "Paiement annulé",
   "signInToTrackShipments": "Connectez-vous pour voir vos demandes d’envoi de barils, vos reçus et le statut de collecte.",
+  "guestTrackingIntro": "Aucun compte n’est nécessaire. Saisissez le numéro figurant sur votre confirmation de réservation ou votre reçu.",
+  "guestTrackingIdentifierLabel": "Numéro de réservation ou de suivi",
+  "guestTrackingIdentifierHint": "Par exemple, BS-K7M4P2",
+  "guestTrackingRequired": "Saisissez votre numéro de réservation ou de suivi.",
+  "guestTrackingInvalid": "Saisissez un numéro de réservation ou de suivi valide.",
+  "guestTrackingSubmit": "Suivre",
+  "guestTrackingLoading": "Vérification du statut…",
+  "guestTrackingSuccessTitle": "Suivi trouvé",
+  "guestTrackingNotFoundTitle": "Nous n’avons pas trouvé ce numéro",
+  "guestTrackingNotFoundBody": "Vérifiez le numéro sur votre confirmation ou votre reçu, puis réessayez.",
+  "guestTrackingRateLimited": "Trop de vérifications ont été effectuées. Patientez quelques minutes, puis réessayez.",
+  "guestTrackingUnavailable": "Le suivi est temporairement indisponible. Veuillez réessayer bientôt.",
+  "guestTrackingServiceLabel": "Service",
+  "guestTrackingStatusLabel": "Statut",
+  "guestTrackingUpdatedLabel": "Dernière mise à jour : {date}",
+  "@guestTrackingUpdatedLabel": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "guestTrackingPrivacyNote": "Pour protéger votre vie privée, le suivi sans compte affiche uniquement le statut du service. Connectez-vous pour voir les détails privés et les actions de la réservation.",
+  "guestTrackingTrackAnother": "Suivre un autre numéro",
+  "guestTrackingSignInUpsell": "Se connecter pour tous les détails",
+  "guestTrackingServiceBarrel": "Expédition de barils",
+  "guestTrackingServiceFreight": "Fret",
+  "guestTrackingServiceTransport": "Transport de voiture",
+  "guestTrackingServiceParking": "Stationnement de voiture",
+  "guestTrackingServiceSharedBarrel": "Baril partagé",
+  "guestTrackingServiceFreightQuote": "Demande de devis de fret",
+  "guestTrackingStageBooked": "Réservé",
+  "guestTrackingStageInTransit": "En transit",
+  "guestTrackingStageArrived": "Arrivé",
+  "guestTrackingStageDelivered": "Livré",
+  "guestTrackingStageCancelled": "Annulé",
   "shipmentsLoadError": "Nous ne pouvons pas charger vos demandes d’envoi pour le moment. Veuillez réessayer bientôt.",
   "shipmentsAppearAfterPayment": "Vos demandes d’envoi de barils apparaîtront ici une fois le paiement terminé.",
   "registerYourBusiness": "Enregistrer votre entreprise",
@@ -3122,5 +3156,18 @@
         "type": "String"
       }
     }
-  }
+  },
+  "guestCheckoutTitle": "Réserver sans compte",
+  "guestCheckoutIntro": "Ces informations nous servent à vous envoyer votre reçu et votre numéro de suivi, et à vous joindre au sujet de cet envoi.",
+  "guestCheckoutFullName": "Nom complet",
+  "guestCheckoutEmail": "Adresse e-mail",
+  "guestCheckoutPhone": "Numéro de téléphone",
+  "guestCheckoutNameError": "Saisissez votre nom complet",
+  "guestCheckoutEmailError": "Saisissez une adresse e-mail valide",
+  "guestCheckoutPhoneError": "Saisissez un numéro de téléphone valide",
+  "guestCheckoutContinue": "Continuer en tant qu'invité",
+  "guestCheckoutUseAccount": "Utiliser plutôt un compte Laawol",
+  "guestCheckoutFailed": "Nous n'avons pas pu continuer. Vérifiez votre connexion et réessayez.",
+  "guestCheckoutNote": "Votre numéro de suivi arrive par e-mail. Conservez-le pour suivre cette réservation.",
+  "guestCheckoutChoiceTitle": "Comment souhaitez-vous continuer ?"
 }

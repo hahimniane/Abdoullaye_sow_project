@@ -2824,6 +2824,101 @@ class AppLocalizationsEn extends AppLocalizations {
       'Sign in to see your barrel shipment requests, receipts, and pickup status.';
 
   @override
+  String get guestTrackingIntro =>
+      'No account needed. Enter the number from your booking confirmation or receipt.';
+
+  @override
+  String get guestTrackingIdentifierLabel => 'Booking or tracking number';
+
+  @override
+  String get guestTrackingIdentifierHint => 'For example, BS-K7M4P2';
+
+  @override
+  String get guestTrackingRequired => 'Enter your booking or tracking number.';
+
+  @override
+  String get guestTrackingInvalid =>
+      'Enter a valid booking or tracking number.';
+
+  @override
+  String get guestTrackingSubmit => 'Track';
+
+  @override
+  String get guestTrackingLoading => 'Checking status…';
+
+  @override
+  String get guestTrackingSuccessTitle => 'Tracking found';
+
+  @override
+  String get guestTrackingNotFoundTitle => 'We could not find that number';
+
+  @override
+  String get guestTrackingNotFoundBody =>
+      'Check the number on your confirmation or receipt and try again.';
+
+  @override
+  String get guestTrackingRateLimited =>
+      'Too many checks were made. Please wait a few minutes and try again.';
+
+  @override
+  String get guestTrackingUnavailable =>
+      'Tracking is temporarily unavailable. Please try again shortly.';
+
+  @override
+  String get guestTrackingServiceLabel => 'Service';
+
+  @override
+  String get guestTrackingStatusLabel => 'Status';
+
+  @override
+  String guestTrackingUpdatedLabel(Object date) {
+    return 'Last updated $date';
+  }
+
+  @override
+  String get guestTrackingPrivacyNote =>
+      'For privacy, guest tracking shows only the service status. Sign in to see private booking details and actions.';
+
+  @override
+  String get guestTrackingTrackAnother => 'Track another number';
+
+  @override
+  String get guestTrackingSignInUpsell => 'Sign in for full details';
+
+  @override
+  String get guestTrackingServiceBarrel => 'Barrel shipping';
+
+  @override
+  String get guestTrackingServiceFreight => 'Freight';
+
+  @override
+  String get guestTrackingServiceTransport => 'Car transport';
+
+  @override
+  String get guestTrackingServiceParking => 'Car parking';
+
+  @override
+  String get guestTrackingServiceSharedBarrel => 'Shared barrel';
+
+  @override
+  String get guestTrackingServiceFreightQuote => 'Freight quote request';
+
+  @override
+  String get guestTrackingStageBooked => 'Booked';
+
+  @override
+  String get guestTrackingStageInTransit => 'In transit';
+
+  @override
+  String get guestTrackingStageArrived => 'Arrived';
+
+  @override
+  String get guestTrackingStageDelivered => 'Delivered';
+
+  @override
+  String get guestTrackingStageCancelled => 'Cancelled';
+
+  @override
   String get shipmentsLoadError =>
       'We could not load your shipment requests right now. Please try again shortly.';
 
@@ -7108,7 +7203,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String freightAskForPriceIntro(String country) {
-    return 'Describe what you are sending to $country. Every business on this route can answer with its own price and say what it pays back if the parcel is lost.';
+    return 'Describe what you are sending to $country. Every business on this route can answer with its own price and say whether it covers the parcel if it is lost.';
   }
 
   @override
@@ -7212,4 +7307,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String freightQuoteChosenMessage(String business, String price) {
     return '$business will send your parcel for $price.';
   }
+
+  @override
+  String get guestCheckoutTitle => 'Book without an account';
+
+  @override
+  String get guestCheckoutIntro =>
+      'We use these details to send your receipt and tracking number, and to reach you about this shipment.';
+
+  @override
+  String get guestCheckoutFullName => 'Full name';
+
+  @override
+  String get guestCheckoutEmail => 'Email address';
+
+  @override
+  String get guestCheckoutPhone => 'Phone number';
+
+  @override
+  String get guestCheckoutNameError => 'Enter your full name';
+
+  @override
+  String get guestCheckoutEmailError => 'Enter a valid email address';
+
+  @override
+  String get guestCheckoutPhoneError => 'Enter a valid phone number';
+
+  @override
+  String get guestCheckoutContinue => 'Continue as guest';
+
+  @override
+  String get guestCheckoutUseAccount => 'Use a Laawol account instead';
+
+  @override
+  String get guestCheckoutFailed =>
+      'We could not continue. Check your connection and try again.';
+
+  @override
+  String get guestCheckoutNote =>
+      'Your tracking number arrives by email. Keep it to follow this booking.';
+
+  @override
+  String get guestCheckoutChoiceTitle => 'How would you like to continue?';
 }

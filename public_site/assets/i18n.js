@@ -25,7 +25,7 @@
     "🅿️ Parking": "🅿️ Stationnement",
     "💳 Payments and refunds": "💳 Paiements et remboursements",
     "Never lose track of your order": "Ne perdez plus le fil de votre commande",
-    "Sign in to see the status, tracking number, and history of every service you've requested.": "Connectez-vous pour voir le statut, le numéro de suivi et l’historique de chaque service que vous avez demandé.",
+    "Enter your booking or tracking number to check the status without signing in. Sign in only for your receipts, payments, and complete history.": "Saisissez votre numéro de réservation ou de suivi pour voir le statut sans vous connecter. Connectez-vous seulement pour vos reçus, paiements et historique complet.",
     "Barrel shipping": "Expédition de barils",
     "Browse listings, photos, prices, and title information before preparing a viewing or purchase.": "Parcourez les annonces, photos, prix et informations de titre avant de préparer une visite ou un achat.",
     "Browse listings, photos, prices, and title information, then prepare a viewing, reservation, or purchase.": "Consultez les annonces, photos, prix et informations de titre, puis préparez une visite, une réservation ou un achat.",

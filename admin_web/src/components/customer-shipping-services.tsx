@@ -103,6 +103,7 @@ import {
   type ServiceSort,
 } from "@/lib/service-ranking.ts";
 import { db, functions } from "@/lib/firebase";
+import { withGuestContact } from "@/lib/guest-checkout";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import { currentWebLanguage } from "@/lib/language";
 import { isValidPhone } from "@/lib/phone";
@@ -218,6 +219,7 @@ type CustomerShippingServicesProps = {
   freightShipments?: FirestoreRow[];
   initialService?: ShippingService;
   authenticated?: boolean;
+  guestReady?: boolean;
   onAuthenticationRequired?: () => void;
   onTransportCreated?: (result: {
     id: string;
@@ -233,6 +235,10 @@ async function callFunction<TResult>(
     functions,
     name,
   );
+  // Requests that are not a checkout - asking a route for a price - reach the
+  // backend through here rather than through startCheckout, and a guest's
+  // details have to travel with them just the same.
+  data = withGuestContact(data);
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     const response = await Promise.race([
@@ -429,6 +435,7 @@ export function CustomerShippingServices({
   freightShipments = [],
   initialService = "barrel",
   authenticated = true,
+  guestReady = false,
   onAuthenticationRequired,
   onTransportCreated,
 }: CustomerShippingServicesProps) {
@@ -620,6 +627,7 @@ export function CustomerShippingServices({
           {service === "barrel" && (
             <BarrelOrderForm
               authenticated={authenticated}
+              guestReady={guestReady}
               onAuthenticationRequired={onAuthenticationRequired}
               options={barrelOptions}
               profile={profile}
@@ -628,6 +636,7 @@ export function CustomerShippingServices({
           {service === "freight" && (
             <FreightShipmentForm
               authenticated={authenticated}
+              guestReady={guestReady}
               freightShipments={freightShipments}
               onAuthenticationRequired={onAuthenticationRequired}
               options={destinationOptions}
@@ -637,6 +646,7 @@ export function CustomerShippingServices({
           {service === "transport" && (
             <TransportRequestForm
               authenticated={authenticated}
+              guestReady={guestReady}
               onAuthenticationRequired={onAuthenticationRequired}
               onCreated={onTransportCreated}
               options={transportOptions}
@@ -681,11 +691,13 @@ function ServiceTab({
 
 function BarrelShipmentForm({
   authenticated,
+  guestReady,
   onAuthenticationRequired,
   options,
   profile,
 }: {
   authenticated: boolean;
+  guestReady?: boolean;
   onAuthenticationRequired?: () => void;
   options: DestinationOption[];
   profile: UserProfile;
@@ -854,7 +866,7 @@ function BarrelShipmentForm({
 
   async function submit() {
     if (!valid || submitting || !destination) return;
-    if (!authenticated) {
+    if (!authenticated && !guestReady) {
       onAuthenticationRequired?.();
       return;
     }
@@ -965,7 +977,7 @@ function BarrelShipmentForm({
       submitLabel={
         authenticated
           ? "Continue to secure payment"
-          : "Sign in to save & continue"
+          : "Continue"
       }
       submitting={submitting}
       title="Send a barrel"
@@ -1270,11 +1282,13 @@ type BarrelOrderLine = {
 
 function BarrelOrderForm({
   authenticated,
+  guestReady,
   onAuthenticationRequired,
   options,
   profile,
 }: {
   authenticated: boolean;
+  guestReady?: boolean;
   onAuthenticationRequired?: () => void;
   options: DestinationOption[];
   profile: UserProfile;
@@ -1584,7 +1598,7 @@ function BarrelOrderForm({
 
   async function submit() {
     if (!valid || submitting) return;
-    if (!authenticated) {
+    if (!authenticated && !guestReady) {
       onAuthenticationRequired?.();
       return;
     }
@@ -1706,7 +1720,7 @@ function BarrelOrderForm({
       submitLabel={
         authenticated
           ? "Continue to secure payment"
-          : "Sign in to save & continue"
+          : "Continue"
       }
       submitting={submitting}
       title="Send barrels"
@@ -2283,12 +2297,14 @@ function PickupAvailability({
 
 function FreightShipmentForm({
   authenticated,
+  guestReady,
   freightShipments,
   onAuthenticationRequired,
   options,
   profile,
 }: {
   authenticated: boolean;
+  guestReady?: boolean;
   freightShipments: FirestoreRow[];
   onAuthenticationRequired?: () => void;
   options: DestinationOption[];
@@ -2677,7 +2693,7 @@ function FreightShipmentForm({
 
   async function submit() {
     if (submitting || !destination) return;
-    if (!authenticated) {
+    if (!authenticated && !guestReady) {
       onAuthenticationRequired?.();
       return;
     }
@@ -2944,7 +2960,7 @@ function FreightShipmentForm({
           }
           submitLabel={
             !authenticated
-              ? "Sign in to save & continue"
+              ? "Continue"
               : pickup.requested && !quote
                 ? "Calculate pickup & continue"
                 : payOnArrivalChosen
@@ -3050,6 +3066,7 @@ function FreightShipmentForm({
             {needsPriceRequest && (
               <FreightPriceRequest
                 authenticated={authenticated}
+              guestReady={guestReady}
                 customerUid={text(profile.id, "")}
                 destinationCountryId={destinationCountryId}
                 destinationCountryName={
@@ -3654,6 +3671,7 @@ function useFreightQuotes(requestId: string, enabled: boolean) {
  */
 function FreightPriceRequest({
   authenticated,
+  guestReady,
   customerUid,
   destinationCountryId,
   destinationCountryName,
@@ -3663,6 +3681,7 @@ function FreightPriceRequest({
   onAuthenticationRequired,
 }: {
   authenticated: boolean;
+  guestReady?: boolean;
   customerUid: string;
   destinationCountryId: string;
   destinationCountryName: string;
@@ -3694,7 +3713,7 @@ function FreightPriceRequest({
 
   async function submit() {
     if (submitting) return;
-    if (!authenticated) {
+    if (!authenticated && !guestReady) {
       onAuthenticationRequired?.();
       return;
     }
@@ -3788,7 +3807,7 @@ function FreightPriceRequest({
           type="button"
         >
           {!authenticated
-            ? "Sign in to ask for a price"
+            ? "Ask for a price"
             : submitting
               ? "Sending your request..."
               : "Ask for a price"}
@@ -4166,12 +4185,14 @@ function transportTimestamp(value: unknown) {
 
 function TransportRequestForm({
   authenticated,
+  guestReady,
   onAuthenticationRequired,
   onCreated,
   options,
   profile,
 }: {
   authenticated: boolean;
+  guestReady?: boolean;
   onAuthenticationRequired?: () => void;
   onCreated?: (result: { id: string; trackingCode: string }) => void;
   options: DestinationOption[];
