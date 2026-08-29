@@ -26917,7 +26917,8 @@ exports.businessFinalizeCarPurchase = onCall(
             !carPurchaseCanMarkCompleted(purchase)) {
           throw new HttpsError(
               "failed-precondition",
-              "This purchase cannot be marked sold until payment has succeeded.",
+              "This purchase cannot be marked sold until payment " +
+                "has succeeded.",
           );
         }
         const carRef = purchase.carId ?

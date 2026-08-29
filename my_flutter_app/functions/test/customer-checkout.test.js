@@ -431,24 +431,28 @@ describe("resuming an abandoned pay-now checkout", () => {
     );
   });
 
-  it("createCustomerCheckoutSession stamps customerUid for car deposits", () => {
-    const source = fs.readFileSync(
-        path.join(__dirname, "..", "index.js"),
-        "utf8",
-    );
-    const start = source.indexOf("exports.createCustomerCheckoutSession");
-    assert.ok(start > 0);
-    const body = source.slice(start, start + 12000);
-    assert.match(body, /customerUid: checkoutOwnerUid\(originalIntent\.metadata\)/);
-    const depositMeta = source.indexOf(
-        "holdUntilDate: holdQuote.holdDate.toISOString()",
-    );
-    assert.ok(depositMeta > 0);
-    assert.match(
-        source.slice(depositMeta - 250, depositMeta + 80),
-        /customerUid: buyerUid/,
-    );
-  });
+  it("createCustomerCheckoutSession stamps customerUid on car deposits",
+      () => {
+        const source = fs.readFileSync(
+            path.join(__dirname, "..", "index.js"),
+            "utf8",
+        );
+        const start = source.indexOf("exports.createCustomerCheckoutSession");
+        assert.ok(start > 0);
+        const body = source.slice(start, start + 12000);
+        assert.match(
+            body,
+            /customerUid: checkoutOwnerUid\(originalIntent\.metadata\)/,
+        );
+        const depositMeta = source.indexOf(
+            "holdUntilDate: holdQuote.holdDate.toISOString()",
+        );
+        assert.ok(depositMeta > 0);
+        assert.match(
+            source.slice(depositMeta - 250, depositMeta + 80),
+            /customerUid: buyerUid/,
+        );
+      });
 
   it("createCustomerCheckoutSession resumes before minting a record", () => {
     const source = fs.readFileSync(

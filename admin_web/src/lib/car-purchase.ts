@@ -25,13 +25,7 @@ const TERMINAL_PURCHASE_STATUSES = [
   "forfeited",
 ] as const;
 
-export type CarPurchaseRecord = {
-  paymentType?: unknown;
-  paymentStatus?: unknown;
-  purchaseStatus?: unknown;
-  appointmentStart?: unknown;
-  depositAmount?: unknown;
-};
+export type CarPurchaseRecord = Record<string, unknown>;
 
 export function isPaidHold(purchase: CarPurchaseRecord | undefined) {
   return String(purchase?.paymentType ?? "").trim() === "reservation_deposit";
