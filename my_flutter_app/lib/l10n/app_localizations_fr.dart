@@ -7504,4 +7504,7 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get freightQuoteChosenNext =>
       'Ajoutez le destinataire, l\'adresse et la façon dont le colis parvient à l\'entreprise. Vous payez à la fin, au prix que vous avez accepté.';
+
+  @override
+  String get orderTypePriceRequests => 'Demandes de prix';
 }

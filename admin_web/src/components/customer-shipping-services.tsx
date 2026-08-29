@@ -3578,7 +3578,7 @@ type FreightQuoteRow = FirestoreRow & {
   expiresAt?: unknown;
 };
 
-function useCustomerFreightQuoteRequests(
+export function useCustomerFreightQuoteRequests(
   customerUid: string,
   enabled: boolean,
 ) {

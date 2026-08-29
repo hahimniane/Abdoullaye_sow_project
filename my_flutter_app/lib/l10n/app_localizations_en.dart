@@ -7375,4 +7375,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get freightQuoteChosenNext =>
       'Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted.';
+
+  @override
+  String get orderTypePriceRequests => 'Price requests';
 }

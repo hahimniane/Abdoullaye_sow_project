@@ -3181,5 +3181,6 @@
     }
   },
   "continueToBooking": "Continue to booking",
-  "freightQuoteChosenNext": "Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted."
+  "freightQuoteChosenNext": "Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted.",
+  "orderTypePriceRequests": "Price requests"
 }

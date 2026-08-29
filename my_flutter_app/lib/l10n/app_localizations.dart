@@ -13127,6 +13127,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted.'**
   String get freightQuoteChosenNext;
+
+  /// No description provided for @orderTypePriceRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Price requests'**
+  String get orderTypePriceRequests;
 }
 
 class _AppLocalizationsDelegate

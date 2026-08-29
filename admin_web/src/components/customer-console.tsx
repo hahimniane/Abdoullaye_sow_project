@@ -31,7 +31,7 @@ import {
   getYears,
 } from "@/lib/car-catalog";
 import { DESTINATION_COUNTRIES } from "@/lib/destination-countries";
-import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
+import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, ReceiptText, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
@@ -58,7 +58,7 @@ import {
 } from "@/lib/notification-preferences";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { CustomerParkingPools } from "@/components/customer-parking-pools";
-import { CustomerShippingServices } from "@/components/customer-shipping-services";
+import { CustomerShippingServices , useCustomerFreightQuoteRequests } from "@/components/customer-shipping-services";
 import { CustomerSupport } from "@/components/customer-support";
 import { CustomerTracking } from "@/components/customer-tracking";
 import {
@@ -205,6 +205,11 @@ export function CustomerConsole({
   const transports = useCustomerTransportRequests(firebaseUser.uid);
   const parking = useCustomerParkingRecords(firebaseUser.uid);
   const purchases = useCustomerCarPurchases(firebaseUser.uid);
+  // A parcel the customer asked businesses to price belongs in the same list
+  // as everything else they are waiting on. Before this there was nowhere to
+  // see one: the prices could only be reached in the moment the request was
+  // made, so closing that screen lost the thread.
+  const priceRequests = useCustomerFreightQuoteRequests(firebaseUser.uid, true);
   const cars = usePublicCars(activeTab === "cars");
 
 
@@ -215,8 +220,21 @@ export function CustomerConsole({
       ...tagRows(transports.rows, "Car transport", "transportRequests", Truck),
       ...tagRows(parking.rows, "Car parking", "parkedCars", Car),
       ...tagRows(purchases.rows, "Car purchase", "carPurchases", CircleDollarSign),
+      ...tagRows(
+        priceRequests.rows,
+        "Price request",
+        "freightQuoteRequests",
+        ReceiptText,
+      ),
     ].sort((a, b) => rowTime(b.row) - rowTime(a.row)),
-    [freight.rows, parking.rows, purchases.rows, shipments.rows, transports.rows],
+    [
+      freight.rows,
+      parking.rows,
+      priceRequests.rows,
+      purchases.rows,
+      shipments.rows,
+      transports.rows,
+    ],
   );
 
   // A viewing is an appointment, not a purchase: nothing is bought and no

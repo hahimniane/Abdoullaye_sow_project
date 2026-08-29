@@ -3,10 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'barrel_shipment.dart';
 import 'parked_car.dart';
 import 'transport_request.dart';
+import '../services/notification_routing.dart';
 
 /// The kind of thing a customer paid for. New paid services become a new value
 /// here — never a new history screen.
-enum OrderType { car, barrel, freight, transport, parking }
+enum OrderType { car, barrel, freight, transport, parking, priceRequest }
 
 enum CustomerTrackingType { barrel, freight }
 
@@ -270,6 +271,52 @@ class CustomerOrder {
       detailRoute: _str(d, 'paymentType') == 'viewing_reservation'
           ? '/my-viewings'
           : '/my-purchases',
+    );
+  }
+
+  /// A parcel the customer asked businesses to price.
+  ///
+  /// It sits here rather than on a screen of its own because a customer
+  /// waiting on a price is waiting on the platform in exactly the way an
+  /// order is, and before this there was nowhere at all to see one: the
+  /// screen that shows the answers could only be reached in the moment the
+  /// request was made.
+  factory CustomerOrder.fromPriceRequest(OrderDoc doc) {
+    final d = doc.data() ?? const {};
+    final quoteStatus = _str(d, 'quoteStatus');
+    final amountCents = _amount(d, ['selectedAmountCents']);
+    final description = _str(d, 'description');
+    return CustomerOrder(
+      id: doc.id,
+      type: OrderType.priceRequest,
+      title: description.isEmpty
+          ? 'Price request → ${_str(d, 'destinationCountryName')}'
+          : '$description → ${_str(d, 'destinationCountryName')}',
+      subtitle: switch (quoteStatus) {
+        'selected' => 'Price agreed - finish the booking',
+        'booked' => 'Booked',
+        'cancelled' => 'Cancelled',
+        _ => 'Waiting for prices',
+      },
+      businessName: _str(d, 'selectedBusinessName'),
+      businessId: _str(d, 'selectedBusinessId'),
+      relatedCollection: 'freightQuoteRequests',
+      relatedId: doc.id,
+      amount: amountCents > 0 ? amountCents / 100 : 0,
+      currency: 'usd',
+      status: switch (quoteStatus) {
+        'booked' => OrderStatus.completed,
+        'cancelled' => OrderStatus.cancelled,
+        'selected' => OrderStatus.active,
+        _ => OrderStatus.pending,
+      },
+      createdAt: _date(d, 'createdAt'),
+      detailRoute: '/freight-quote',
+      detailArgument: FreightQuoteScreenArguments(
+        requestId: doc.id,
+        trackingCode: _str(d, 'trackingCode'),
+      ),
+      trackingCode: _str(d, 'trackingCode'),
     );
   }
 
