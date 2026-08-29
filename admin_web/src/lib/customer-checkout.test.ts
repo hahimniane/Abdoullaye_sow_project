@@ -7,9 +7,13 @@ import {
   CUSTOMER_CHECKOUT_ORDER_TYPES,
   buildCheckoutRequest,
   checkoutRedirectUrl,
+  paymentReturnHasCustomerWorkspace,
+  paymentReturnNeedsSignIn,
   paymentReturnState,
   paymentReturnShouldRedirect,
+  trackingCodeFromCheckoutRecord,
 } from "./customer-checkout.ts";
+import { translateValue } from "./french-dom.ts";
 
 test("customer checkout covers all 13 server-paid rails", () => {
   assert.equal(CUSTOMER_CHECKOUT_ORDER_TYPES.length, 13);
@@ -103,7 +107,45 @@ test("payment return only reports success from authoritative record state", () =
   assert.equal(paymentReturnShouldRedirect("pending"), false);
   assert.equal(paymentReturnShouldRedirect("failed"), false);
   assert.equal(paymentReturnShouldRedirect("cancelled"), false);
-  assert.equal(paymentReturnShouldRedirect("success"), true);
+  assert.equal(paymentReturnShouldRedirect("success"), false);
+  assert.equal(
+    paymentReturnShouldRedirect("success", { hasCustomerWorkspace: true }),
+    true,
+  );
+  assert.equal(
+    paymentReturnShouldRedirect("success", { hasCustomerWorkspace: false }),
+    false,
+  );
+});
+
+test("a guest payment return does not require a Firebase session", () => {
+  assert.equal(paymentReturnHasCustomerWorkspace(null), false);
+  assert.equal(paymentReturnHasCustomerWorkspace({ isAnonymous: true }), false);
+  assert.equal(paymentReturnHasCustomerWorkspace({ isAnonymous: false }), true);
+  assert.equal(
+    paymentReturnNeedsSignIn({ sessionId: "cs_test_abc", hasUser: false }),
+    false,
+  );
+  assert.equal(
+    paymentReturnNeedsSignIn({ sessionId: "", hasUser: false }),
+    true,
+  );
+  assert.equal(
+    paymentReturnNeedsSignIn({ sessionId: "", hasUser: true }),
+    false,
+  );
+});
+
+test("barrel orders expose a tracking code from the line list", () => {
+  assert.equal(
+    trackingCodeFromCheckoutRecord({ trackingCode: "BS-QHR2Q4" }),
+    "BS-QHR2Q4",
+  );
+  assert.equal(
+    trackingCodeFromCheckoutRecord({ trackingCodes: ["BS-QHR2Q4", "BS-OTHER"] }),
+    "BS-QHR2Q4",
+  );
+  assert.equal(trackingCodeFromCheckoutRecord({}), "");
 });
 
 test("payment return recovers the Checkout session and automatically returns", () => {
@@ -112,10 +154,30 @@ test("payment return recovers the Checkout session and automatically returns", (
     "utf8",
   );
   assert.match(component, /confirmCustomerCheckoutSession/);
-  assert.match(component, /paymentReturnShouldRedirect\(state\)/);
+  assert.match(
+    component,
+    /paymentReturnShouldRedirect\(state, \{ hasCustomerWorkspace \}\)/,
+  );
   assert.match(component, /window\.location\.replace\("\/"\)/);
   assert.match(component, /const timeoutId = setTimeout/);
   assert.doesNotMatch(component, /console\.(?:log|warn|error).*sessionId/);
+  // A guest who just paid must confirm from the Session id without waiting
+  // for Firebase Auth, and must not be labelled signed-out when that id is
+  // present. The anonymous-session-lost Stripe round-trip is the live bug.
+  assert.match(component, /if \(!isCardSetup\) confirmPayment\(\)/);
+  assert.match(component, /paymentReturnNeedsSignIn/);
+  assert.doesNotMatch(
+    component,
+    /const path = user\.isAnonymous\s*\?\s*null/,
+  );
+});
+
+test("guest payment confirmation copy is localized in French", () => {
+  for (const english of ["Your tracking number", "Track this shipment"]) {
+    const french = translateValue(english, "fr");
+    assert.notEqual(french, english, english);
+    assert.ok(french.length > 0, english);
+  }
 });
 
 test("a transport job's return state reads the request's own fields", () => {

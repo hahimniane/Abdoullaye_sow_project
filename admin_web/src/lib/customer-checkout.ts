@@ -133,6 +133,48 @@ export function paymentReturnState(
   return "pending";
 }
 
-export function paymentReturnShouldRedirect(state: string) {
-  return state === "success";
+export function paymentReturnHasCustomerWorkspace(
+  user: {isAnonymous?: boolean} | null | undefined,
+) {
+  return Boolean(user && user.isAnonymous !== true);
+}
+
+/**
+ * Signed-in customers go back to their workspace after a paid return.
+ * Guests have no workspace: bouncing them to `/` is the login screen.
+ */
+export function paymentReturnShouldRedirect(
+  state: string,
+  options: {hasCustomerWorkspace?: boolean} = {},
+) {
+  return state === "success" && options.hasCustomerWorkspace === true;
+}
+
+/**
+ * A Stripe Checkout Session id in the URL is enough to confirm a guest
+ * payment. Do not send them to sign-in just because Firebase Auth is empty
+ * after the round-trip.
+ */
+export function paymentReturnNeedsSignIn(input: {
+  sessionId?: string;
+  hasUser?: boolean;
+}) {
+  return !input.hasUser && !String(input.sessionId || "").trim();
+}
+
+/**
+ * Barrel orders store `trackingCodes`; shipments store `trackingCode`.
+ */
+export function trackingCodeFromCheckoutRecord(
+  data: Record<string, unknown> | undefined,
+): string {
+  const record = data && typeof data === "object" ? data : {};
+  const single = String(record.trackingCode ?? "").trim();
+  if (single) return single;
+  const listed = Array.isArray(record.trackingCodes) ? record.trackingCodes : [];
+  for (const value of listed) {
+    const code = String(value ?? "").trim();
+    if (code) return code;
+  }
+  return "";
 }

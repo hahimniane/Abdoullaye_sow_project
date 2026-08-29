@@ -235,3 +235,8 @@ Add future project conventions and repeated architectural decisions here.
   as guest, resolve the submit that opened the sheet so Stripe starts; do not
   dump the customer back on Review & pay. A signed-in customer never carries
   the guest block.
+- Guest `/pay/return` must confirm from the Stripe Checkout Session id in the
+  URL. Do not require a still-alive anonymous Firebase user, and do not
+  `location.replace("/")` on success for anyone without a customer workspace
+  — that is the sign-in screen. Resume the same `barrelOrder` id; the Session
+  id is the capability. Signed-in customers still auto-return to the console.

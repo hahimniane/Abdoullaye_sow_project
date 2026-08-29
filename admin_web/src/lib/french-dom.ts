@@ -1148,6 +1148,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Stripe is securely confirming the payment with Laawol.":
     "Stripe confirme le paiement de manière sécurisée auprès de Laawol.",
   "Return to customer workspace": "Retourner à l’espace client",
+  "Your tracking number": "Votre numéro de suivi",
+  "Track this shipment": "Suivre cet envoi",
   "Contact support": "Contacter l’assistance",
   "Reference: ": "Référence : ",
   Reference: "Référence",

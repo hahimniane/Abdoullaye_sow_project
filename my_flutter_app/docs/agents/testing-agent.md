@@ -281,9 +281,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `docs/ENGINEERING_GUARDRAILS.md`.
 - Hosted Checkout release checks must cover the configured Stripe webhook, not
   only whether the Cloud Function URL responds. Regression coverage should
-  prove a paid return Session can self-heal a delayed or missing webhook, cannot
-  cross user/type/record boundaries, and redirects exactly once only after the
-  persisted payment state succeeds.
+  prove a paid return Session can self-heal a delayed or missing webhook and
+  cannot cross user/type/record boundaries. Signed-in customers redirect to
+  the workspace exactly once after persisted payment success. Guests must stay
+  on `/pay/return` with the tracking code: success-redirect to `/` is the
+  sign-in screen for a logged-out guest. Cover `paymentReturnShouldRedirect`
+  plus `confirmCustomerCheckoutSession` without `requireAuth`.
 - Customer service discovery tests must join business capabilities to
   destination pricing. Seed misleading cross-service rates (barrel-only with a
   freight price and freight-only with a barrel price) and prove the web exposes
@@ -315,8 +318,13 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   opens. Catch-all "Check your connection" copy on `signInAnonymously` masks
   App Check / auth races; map only `network-request-failed` to that line. Do
   not force `getIdToken(true)` or the account-boot spinner for anonymous users
-  — that races the guest panel. Coverage: `admin_web/src/lib/guest-session.test.ts`
-  and the `ensureGuestOrAccount` / `askHowToContinue` checks in
+  — that races the guest panel. After Stripe TEST pay, `/pay/return` must show
+  the booking/tracking code without sign-in; confirming uses the Checkout
+  Session id because the anonymous session often does not survive the
+  round-trip. Coverage: `admin_web/src/lib/guest-session.test.ts`,
+  `admin_web/src/lib/customer-checkout.test.ts`,
+  `my_flutter_app/functions/test/customer-checkout.test.js`, and the
+  `ensureGuestOrAccount` / `askHowToContinue` checks in
   `customer-service-intent.test.ts`. Signed-in checkout is
   `ensureGuestOrAccount({ authenticated: true })` and must not open the guest
   sheet.
