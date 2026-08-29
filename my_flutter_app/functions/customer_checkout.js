@@ -187,7 +187,7 @@ function customerCheckoutReturnVerification({
     [String(session.client_reference_id || "").trim(), id],
     [String(metadata.checkoutOrderType || "").trim(), type],
     [String(metadata.checkoutRecordId || "").trim(), id],
-    [String(metadata.customerUid || "").trim(), uid],
+    [checkoutOwnerUid(metadata), uid],
   ].filter(([actual, expected]) => actual !== expected);
   if (mismatches.length > 0) {
     const error = new Error("Checkout Session does not match this order");
@@ -240,8 +240,24 @@ function customerCheckoutPaymentSucceeded(data, paymentStatusField) {
  * @param {object} input session plus optional Firebase uid
  * @return {string} the customer uid stored on the Session
  */
+/**
+ * Who owns a Checkout Session.
+ *
+ * Barrel/freight metadata uses `customerUid`. Car deposits and purchases
+ * stamp `buyerUid` on the PaymentIntent and used to copy that alone onto
+ * the Session — confirm then treated the owner as missing and left a paid
+ * hold stuck on "Confirming your payment".
+ *
+ * @param {object} [metadata] Stripe Session or PaymentIntent metadata
+ * @return {string}
+ */
+function checkoutOwnerUid(metadata) {
+  const source = metadata && typeof metadata === "object" ? metadata : {};
+  return String(source.customerUid || source.buyerUid || "").trim();
+}
+
 function resolveCheckoutReturnCustomerUid({session, callerUid}) {
-  const ownerUid = String(session?.metadata?.customerUid || "").trim();
+  const ownerUid = checkoutOwnerUid(session?.metadata);
   const caller = String(callerUid || "").trim();
   if (!ownerUid) {
     const error = new Error("Invalid Checkout return");
@@ -389,6 +405,7 @@ function checkoutResumeMetadata({orderType, recordId, record, customerUid}) {
 
 module.exports = {
   CUSTOMER_CHECKOUT_ACTIONS,
+  checkoutOwnerUid,
   checkoutRecordId,
   checkoutResumeAmountCents,
   checkoutResumeMetadata,

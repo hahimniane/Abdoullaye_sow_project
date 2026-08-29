@@ -334,3 +334,9 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `customer-service-intent.test.ts`. Signed-in checkout is
   `ensureGuestOrAccount({ authenticated: true })` and must not open the guest
   sheet.
+- Car-hold Checkout (`type=carDeposit`): PaymentIntent metadata stamps
+  `buyerUid`, not `customerUid`. Confirm and return verification must treat
+  `buyerUid` as the session owner or a paid TEST hold stays pending after
+  Stripe redirects. Coverage: `customer-checkout.test.js` (buyerUid-only
+  session), `car-purchase.test.js` / `admin_web/src/lib/car-purchase.test.ts`
+  (unpaid hold cannot be Mark sold / Completed). Do not switch Stripe mode.

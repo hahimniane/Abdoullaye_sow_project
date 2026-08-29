@@ -80,6 +80,23 @@ test("payment return only reports success from authoritative record state", () =
     paymentReturnState("carPurchase", { paymentStatus: "succeeded" }),
     "success",
   );
+  assert.equal(paymentReturnState("carDeposit", {}), "pending");
+  assert.equal(
+    paymentReturnState("carDeposit", {
+      paymentStatus: "pending",
+      checkoutStatus: "open",
+      purchaseStatus: "pending",
+    }),
+    "pending",
+  );
+  assert.equal(
+    paymentReturnState("carDeposit", {
+      paymentStatus: "succeeded",
+      checkoutStatus: "completed",
+      purchaseStatus: "reserved",
+    }),
+    "success",
+  );
   assert.equal(
     paymentReturnState("barrelDestinationChange", {
       destinationAdjustmentPaymentStatus: "failed",

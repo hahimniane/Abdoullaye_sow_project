@@ -134,6 +134,10 @@ import {
   type ViewingAction,
   type ViewingSlot,
 } from "@/lib/car-viewing";
+import {
+  carPurchaseCanMarkCompleted,
+  carPurchaseCanMarkSold,
+} from "@/lib/car-purchase";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import {
   normalizeTransportContainerNumber,
@@ -5699,7 +5703,8 @@ export function PurchasesPanel({
           const kind = purchaseKind(row);
           const status = text(row.purchaseStatus, "pending");
           const busy = busyId === row.id;
-          const holdActive = kind === "hold" && (status === "reserved" || status === "hold_review_required");
+          const holdActive = carPurchaseCanMarkSold(row);
+          const canCompletePurchase = carPurchaseCanMarkCompleted(row);
           const reliability = (row.buyerReliabilitySnapshot && typeof row.buyerReliabilitySnapshot === "object")
             ? row.buyerReliabilitySnapshot as Record<string, unknown>
             : null;
@@ -5804,6 +5809,7 @@ export function PurchasesPanel({
                   </>
                 ) : (
                   <>
+                    {canCompletePurchase && (
                     <button
                       className="lst-btn"
                       type="button"
@@ -5818,6 +5824,7 @@ export function PurchasesPanel({
                     >
                       <CheckCircle2 size={15} /> Completed
                     </button>
+                    )}
                     <button
                       className="lst-btn ghost danger"
                       type="button"
