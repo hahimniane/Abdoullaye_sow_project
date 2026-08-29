@@ -65,6 +65,14 @@ import {
   barrelStatusWriteFields,
 } from "@/lib/barrel-fulfillment";
 import {
+  freightCanConfirmWeight,
+  freightCanUpdateStatus,
+  freightIsPayOnArrival,
+  freightPaymentReadyForFulfillment,
+  freightSettlementReadyForStatus,
+  freightStatusChangeAllowed,
+} from "@/lib/freight-fulfillment";
+import {
   BUSINESS_PARKING_ENTRY_MESSAGES,
   BUSINESS_PARKING_RECEIVED_VIA_OPTIONS,
   businessParkingAmountDue,
@@ -3454,18 +3462,9 @@ export function FreightPanel({
   }, [focusRecordId, openPriceRequests, filteredRows, view]);
 
   async function updateStatus(row: FirestoreRow, status: string) {
-    const versionTwo = Number(row.freightPricingVersion ?? 0) >= 2;
-    const settlement = text(row.priceSettlementStatus, "");
-    // due_on_arrival ships unpaid by the business's own choice: marking it
-    // arrived (ready_for_pickup) is what triggers the charge. Completing it
-    // still waits for settled - handing over before the money lands is a
-    // click the business should not make by accident.
-    const dueOnArrival = row.payOnArrival === true && settlement === "due_on_arrival";
-    const settlementReady = !versionTwo || settlement === "settled" ||
-      (dueOnArrival && ["in_transit", "ready_for_pickup"].includes(status));
-    if (["in_transit", "ready_for_pickup", "completed"].includes(status) && !settlementReady) {
+    if (!freightStatusChangeAllowed(row, status)) {
       setMessage(
-        dueOnArrival
+        freightIsPayOnArrival(row) && status === "completed"
           ? "Mark it arrived first - the customer's saved card is charged on arrival, and completion unlocks once it settles."
           : "Fulfillment is locked until the verified weight is settled.",
       );
@@ -3695,10 +3694,14 @@ export function FreightPanel({
           const status = text(row.status, "pending");
           const paymentStatus = text(row.paymentStatus, "pending");
           const busy = busyId === row.id;
-          const paymentReady = ["paid", "succeeded", "completed"].includes(paymentStatus);
+          const paymentReady = freightPaymentReadyForFulfillment(row);
           const versionTwo = Number(row.freightPricingVersion ?? 0) >= 2;
           const settlementStatus = text(row.priceSettlementStatus, versionTwo ? "awaiting_weight" : "legacy_settled");
-          const settlementReady = !versionTwo || settlementStatus === "settled";
+          const settlementReady = freightSettlementReadyForStatus(row);
+          const canConfirmWeight = freightCanConfirmWeight(row);
+          const canUpdateStatus = freightCanUpdateStatus(row);
+          const dueOnArrival =
+            freightIsPayOnArrival(row) && settlementStatus === "due_on_arrival";
           const estimatedWeight = Number(row.estimatedWeightKg ?? row.weightKg ?? 0);
           const verifiedWeight = Number(row.verifiedWeightKg ?? 0);
           // A set price with no weight allowance covers the parcel however
@@ -3730,9 +3733,10 @@ export function FreightPanel({
               )}
               {!paymentReady && <div className="pur-notice warn"><AlertTriangle size={15} /> Fulfillment is locked until payment succeeds.</div>}
               {paymentReady && !settlementReady && <div className="pur-notice warn"><AlertTriangle size={15} /> {settlementStatus === "balance_due" || settlementStatus === "balance_payment_pending" ? "Waiting for customer payment. Fulfillment remains locked." : settlementStatus === "needs_attention" ? "Settlement needs attention. Contact support before fulfillment." : weighs ? "Confirm the parcel weight before fulfillment." : "This shipment has a set price. Fulfillment unlocks once payment settles."}</div>}
+              {dueOnArrival && <div className="pur-notice"><AlertTriangle size={15} /> The customer's saved card is charged when you mark this shipment arrived.</div>}
               <div className="pur-actions">
-                {versionTwo && weighs && verifiedWeight <= 0 && <label className="bar-field"><span>Enter verified weight</span><input aria-label="Enter verified weight" inputMode="decimal" value={weightDrafts[row.id] ?? ""} onChange={(event) => setWeightDrafts((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="0.0" /><button className="lst-btn primary" type="button" disabled={busy || !paymentReady} onClick={() => confirmWeight(row)}>Confirm weight and final price</button></label>}
-                <label className="bar-field"><span>Update status</span><select value={status} disabled={busy || !paymentReady || !settlementReady} onChange={(event) => updateStatus(row, event.target.value)}>{["pending_payment", "awaiting_weight_confirmation", "awaiting_balance_payment", "settlement_processing", "pending", "in_transit", "ready_for_pickup", "completed", "cancelled"].map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}</select></label>
+                {versionTwo && weighs && verifiedWeight <= 0 && <label className="bar-field"><span>Enter verified weight</span><input aria-label="Enter verified weight" inputMode="decimal" value={weightDrafts[row.id] ?? ""} onChange={(event) => setWeightDrafts((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="0.0" /><button className="lst-btn primary" type="button" disabled={busy || !canConfirmWeight} onClick={() => confirmWeight(row)}>Confirm weight and final price</button></label>}
+                <label className="bar-field"><span>Update status</span><select value={status} disabled={busy || !canUpdateStatus} onChange={(event) => updateStatus(row, event.target.value)}>{["pending_payment", "awaiting_weight_confirmation", "awaiting_balance_payment", "settlement_processing", "pending", "in_transit", "ready_for_pickup", "completed", "cancelled"].map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}</select></label>
                 {(() => {
                   const cancel = businessCancelAction(row, "freightShipments");
                   if (!cancel) return null;
@@ -6459,7 +6463,9 @@ function statusLabel(value: unknown) {
       balance_payment_pending: "Balance payment pending",
       businessheld: "Business-held",
       cancelled: "Cancelled",
+      card_saved: "Card saved",
       closed: "Closed",
+      due_on_arrival: "Due on arrival",
       collected_by_business: "Collected by business",
       completed: "Completed",
       customerposted: "Customer-posted",
@@ -6517,7 +6523,9 @@ function statusLabel(value: unknown) {
       balance_payment_pending: "Paiement du solde en attente",
       businessheld: "Géré par l’entreprise",
       cancelled: "Annulé",
+      card_saved: "Carte enregistrée",
       closed: "Fermé",
+      due_on_arrival: "Dû à l’arrivée",
       collected_by_business: "Encaissé par l’entreprise",
       completed: "Terminé",
       customerposted: "Publié par un client",

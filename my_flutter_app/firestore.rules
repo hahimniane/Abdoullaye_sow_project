@@ -596,6 +596,19 @@ service cloud.firestore {
         containerReadyForTransit(existing, incoming);
     }
 
+    // Pay-on-arrival is secured by a saved card, not a settled charge.
+    // The business must be able to mark in_transit / arrived so the
+    // arrival trigger can charge that card. Completion still waits for
+    // settled so handover cannot happen before the money lands.
+    function freightFulfillmentUnlocked(data, nextStatus) {
+      return data.get('priceSettlementStatus', '') == 'settled' ||
+        (
+          data.get('payOnArrival', false) == true &&
+          data.get('priceSettlementStatus', '') == 'due_on_arrival' &&
+          nextStatus in ['in_transit', 'ready_for_pickup']
+        );
+    }
+
     match /barrelShipments/{shipmentId} {
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
@@ -691,7 +704,7 @@ service cloud.firestore {
           !resource.data.keys().hasAny(['freightPricingVersion']) ||
           resource.data.freightPricingVersion != 2 ||
           !(request.resource.data.status in ['in_transit', 'ready_for_pickup', 'completed']) ||
-          resource.data.priceSettlementStatus == 'settled'
+          freightFulfillmentUnlocked(resource.data, request.resource.data.status)
         ) &&
         seaFreightContainerReady(resource.data, request.resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys()
