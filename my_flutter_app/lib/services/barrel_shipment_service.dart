@@ -10,6 +10,7 @@ import '../models/marketplace_disclosure_acceptance.dart';
 import '../models/structured_address.dart';
 import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
+import 'guest_checkout_service.dart';
 
 /// Result of quoteBarrelPickup: a priced quote, or a refusal when the
 /// business has not configured home pickup.
@@ -207,6 +208,7 @@ class BarrelShipmentService {
       'createBarrelShipmentPaymentIntent',
     );
     final response = await callable.call<Map<String, dynamic>>({
+      ...guestCheckout.payloadFields(),
       'senderName': senderName,
       'receiverName': receiverName,
       'receiverPhone': receiverPhone,

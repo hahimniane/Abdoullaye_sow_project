@@ -11,11 +11,13 @@ import '../models/customer_order.dart';
 import '../providers/auth_provider.dart';
 import '../services/business_review_service.dart';
 import '../services/freight_shipment_service.dart';
+import '../services/guest_tracking_service.dart';
 import '../services/shipment_tracking_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/async_action_button.dart';
+import '../widgets/guest_tracking_lookup.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 import '../widgets/shipment_tracking_section.dart';
@@ -135,6 +137,7 @@ class TrackingScreen extends StatefulWidget {
     this.freightService,
     this.trackingService,
     this.reviewService,
+    this.guestTrackingService,
     this.focusShipmentId,
   });
 
@@ -144,6 +147,7 @@ class TrackingScreen extends StatefulWidget {
   final FreightShipmentService? freightService;
   final ShipmentTrackingService? trackingService;
   final BusinessReviewService? reviewService;
+  final GuestTrackingLookupService? guestTrackingService;
   final String? focusShipmentId;
 
   @override
@@ -313,17 +317,21 @@ class _TrackingScreenState extends State<TrackingScreen> {
         ? context.watch<AuthProvider>().user
         : null;
     final customerUid = widget.customerUidOverride ?? user?.uid;
+    // A guest holds an anonymous session, so they have a uid but no account
+    // list worth showing. What they do have is the tracking number from their
+    // confirmation, and this is the only screen that takes one - without this
+    // they are sent to an empty list and cannot follow their own booking.
+    final guestSession = widget.customerUidOverride == null &&
+        (user?.isAnonymous ?? false);
 
-    if (customerUid == null) {
+    if (customerUid == null || guestSession) {
       return Scaffold(
         backgroundColor: AppColors.lightBg,
         body: SafeArea(
-          child: _EmptyShipmentsState(
-            title: l10n.trackShipment,
-            message: l10n.signInToTrackShipments,
-            actionLabel: l10n.signIn,
-            onAction: () => Navigator.pushNamed(context, '/login'),
+          child: GuestTrackingLookup(
+            service: widget.guestTrackingService,
             showBackButton: widget.showBackButton,
+            onSignIn: () => Navigator.pushNamed(context, '/login'),
           ),
         ),
       );
@@ -398,7 +406,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                     title: focusedShipment?.isFreight == true
                         ? l10n.freightOrderDetails
                         : l10n.trackShipment,
-                        showBackButton: widget.showBackButton,
+                    showBackButton: widget.showBackButton,
                   ),
                   Expanded(
                     child: focusedShipment == null
@@ -458,7 +466,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
               children: [
                 _ShipmentsHeader(
                   title: l10n.trackShipment,
-                    showBackButton: widget.showBackButton,
+                  showBackButton: widget.showBackButton,
                 ),
                 _TrackSearchField(
                   controller: _searchController,

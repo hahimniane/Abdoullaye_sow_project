@@ -28,11 +28,26 @@ import '../widgets/office_location_picker.dart';
 import '../widgets/rating_summary_badge.dart';
 import '../widgets/recipient_name_field.dart';
 import '../widgets/structured_address_fields.dart';
+import '../widgets/guest_checkout_sheet.dart';
+import '../services/guest_checkout_service.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
 class SendFreightScreen extends StatefulWidget {
-  const SendFreightScreen({super.key});
+  const SendFreightScreen({
+    super.key,
+    this.quoteRequestId = '',
+    this.agreedBusinessId = '',
+    this.agreedAmountCents = 0,
+  });
+
+  /// Set when this booking settles a price a business quoted. The server
+  /// reads the agreed amount off that request, so nothing here decides money;
+  /// these only carry the customer to the right business and let the screen
+  /// say what was agreed.
+  final String quoteRequestId;
+  final String agreedBusinessId;
+  final int agreedAmountCents;
 
   @override
   State<SendFreightScreen> createState() => _SendFreightScreenState();
@@ -329,7 +344,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   /// Whether this business has put a number on this item at all. When it has
   /// not, the customer asks it for one instead of being shown a guess.
-  bool get _itemPriced => _itemPricing.priced;
+  /// A price already agreed with a business is a price, even when the
+  /// pricing table still has no number for the parcel - asking again would
+  /// send the customer round the loop they just came out of.
+  bool get _hasAgreedPrice => widget.quoteRequestId.trim().isNotEmpty;
+
+  bool get _itemPriced => _hasAgreedPrice || _itemPricing.priced;
 
   /// A known object, priced once by the business. Nothing here is weighed.
   bool get _setPrice => _itemPricing.isFlat;
@@ -545,9 +565,18 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
-    if (FirebaseAuth.instance.currentUser == null) {
-      Navigator.pushNamed(context, '/login');
-      return;
+    // A returning guest still has their anonymous session but not the
+    // details that went with it, so "signed in" is not the same as "we can
+    // reach them".
+    if (FirebaseAuth.instance.currentUser == null ||
+        guestCheckout.needsContact) {
+      // A guest books from here without leaving the screen; anyone who would
+      // rather use an account still goes to the sign-in route.
+      final continued = await showGuestCheckoutSheet(
+        context,
+        onUseAccount: () => Navigator.pushNamed(context, '/login'),
+      );
+      if (!continued || !mounted) return;
     }
     final option = _selected;
     if (option == null) return;
@@ -637,6 +666,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         receiverPhone: _phoneController.text.trim(),
         destinationCountryId: option.country.id,
         businessId: option.businessId,
+        quoteRequestId: widget.quoteRequestId,
         mode: _mode,
         weightKg: _setPrice ? 0 : _weightKg,
         itemCategoryId: _categoryId,
@@ -721,10 +751,17 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   }
 
   /// Hands the parcel to the businesses on the route to price themselves.
-  void _askForPrice() {
-    if (FirebaseAuth.instance.currentUser == null) {
-      Navigator.pushNamed(context, '/login');
-      return;
+  Future<void> _askForPrice() async {
+    // A returning guest still has their anonymous session but not the
+    // details that went with it, so "signed in" is not the same as "we can
+    // reach them".
+    if (FirebaseAuth.instance.currentUser == null ||
+        guestCheckout.needsContact) {
+      final continued = await showGuestCheckoutSheet(
+        context,
+        onUseAccount: () => Navigator.pushNamed(context, '/login'),
+      );
+      if (!continued || !mounted) return;
     }
     final options = _countryOptions;
     final country =

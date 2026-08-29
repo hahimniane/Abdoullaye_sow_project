@@ -32,6 +32,8 @@ import '../widgets/marketplace_transaction_disclosure.dart';
 import '../widgets/office_location_picker.dart';
 import '../widgets/structured_address_fields.dart';
 import '../theme/app_colors.dart';
+import '../widgets/guest_checkout_sheet.dart';
+import '../services/guest_checkout_service.dart';
 
 class SendBarrelScreen extends StatefulWidget {
   const SendBarrelScreen({super.key, this.showBackButton = true});
@@ -430,8 +432,18 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     });
   }
 
+  /// Not a route: the sentinel the account sheet returns for the guest
+  /// choice, kept distinct from the '/login' and '/signup' routes beside it.
+  static const String _guestRoute = 'guest-checkout';
+
   Future<bool> _ensureCustomerAccount() async {
-    if (context.read<AuthProvider>().isAuthenticated) return true;
+    // A returning guest is authenticated and still cannot be reached: the
+    // anonymous session outlives the app, the details it was made with do
+    // not.
+    if (context.read<AuthProvider>().isAuthenticated &&
+        !guestCheckout.needsContact) {
+      return true;
+    }
 
     final route = await showModalBottomSheet<String>(
       context: context,
@@ -467,6 +479,15 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
+                  onPressed: () => Navigator.pop(context, _guestRoute),
+                  icon: const Icon(Icons.bolt_outlined),
+                  label: Text(l10n.guestCheckoutContinue),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
                   onPressed: () => Navigator.pop(context, '/login'),
                   icon: const Icon(Icons.login),
                   label: Text(l10n.signIn),
@@ -488,6 +509,12 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     );
 
     if (route == null || !mounted) return false;
+    // A guest never leaves this screen: the sheet collects their details,
+    // starts an anonymous session, and the booking carries on where it
+    // stopped.
+    if (route == _guestRoute) {
+      return showGuestCheckoutSheet(context);
+    }
     final result = await Navigator.pushNamed(
       context,
       route,

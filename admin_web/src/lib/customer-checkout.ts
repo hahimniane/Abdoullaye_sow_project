@@ -67,6 +67,9 @@ export type PaymentReturnState =
 
 export type CheckoutReturnConfirmation = {
   state: PaymentReturnState;
+  /// Returned to the customer the record belongs to, so a guest - who has no
+  /// workspace to look it up in - leaves the payment screen holding it.
+  trackingCode?: string;
 };
 
 const RETURN_STATUS_FIELDS: Record<CustomerCheckoutOrderType, string[]> = {

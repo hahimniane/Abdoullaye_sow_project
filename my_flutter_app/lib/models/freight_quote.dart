@@ -91,6 +91,7 @@ class FreightQuoteRequest {
     this.weightKg = 0,
     this.itemLabel = '',
     this.selectedQuoteId = '',
+    this.selectedBusinessId = '',
     this.selectedBusinessName = '',
     this.selectedAmountCents = 0,
   });
@@ -106,6 +107,10 @@ class FreightQuoteRequest {
   final double weightKg;
   final String itemLabel;
   final String selectedQuoteId;
+
+  /// Which business's price was accepted. The booking that follows has to go
+  /// to that business and no other, or it is not the price that was agreed.
+  final String selectedBusinessId;
   final String selectedBusinessName;
   final int selectedAmountCents;
 
@@ -127,6 +132,7 @@ class FreightQuoteRequest {
       weightKg: (data['weightKg'] as num?)?.toDouble() ?? 0,
       itemLabel: (data['itemLabel'] ?? '') as String,
       selectedQuoteId: (data['selectedQuoteId'] ?? '') as String,
+      selectedBusinessId: (data['selectedBusinessId'] ?? '') as String,
       selectedBusinessName: (data['selectedBusinessName'] ?? '') as String,
       selectedAmountCents:
           (data['selectedAmountCents'] as num?)?.toInt() ?? 0,

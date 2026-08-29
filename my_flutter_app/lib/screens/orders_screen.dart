@@ -41,6 +41,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   List<DocumentSnapshot<Map<String, dynamic>>>? _freight;
   List<DocumentSnapshot<Map<String, dynamic>>>? _transport;
   List<DocumentSnapshot<Map<String, dynamic>>>? _parking;
+  List<DocumentSnapshot<Map<String, dynamic>>>? _priceRequests;
   Set<String> _reviewedKeys = const {};
 
   @override
@@ -94,6 +95,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
       db.collection('parkedCars').where('customerUid', isEqualTo: user.uid),
       (docs) => _parking = docs,
     );
+    listen(
+      db
+          .collection('freightQuoteRequests')
+          .where('customerUid', isEqualTo: user.uid),
+      (docs) => _priceRequests = docs,
+    );
     _subscriptions.add(
       _reviewService.reviewedOrderKeysForCurrentUser().listen((keys) {
         if (mounted) setState(() => _reviewedKeys = keys);
@@ -115,7 +122,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       _barrels == null ||
       _freight == null ||
       _transport == null ||
-      _parking == null;
+      _parking == null ||
+      _priceRequests == null;
 
   List<CustomerOrder> _allOrders() {
     final orders = <CustomerOrder>[];
@@ -141,6 +149,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
     for (final doc in _parking ?? const []) {
       addSafely('parkedCars', doc.id, () => CustomerOrder.fromParking(doc));
+    }
+    for (final doc in _priceRequests ?? const []) {
+      addSafely(
+        'freightQuoteRequests',
+        doc.id,
+        () => CustomerOrder.fromPriceRequest(doc),
+      );
     }
     final barrelGroups =
         <String, List<DocumentSnapshot<Map<String, dynamic>>>>{};

@@ -12,6 +12,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/styles.css?v=32" />
   <link rel="icon" type="image/png" href="assets/logo.png" />
+
+  <style>
+    .track-form{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .track-input{flex:1 1 260px;min-width:0;padding:14px 16px;border:1px solid rgba(15,23,42,.18);border-radius:12px;font:inherit;background:#fff}
+    .track-input:focus{outline:2px solid #0f766e;outline-offset:1px}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -49,7 +56,15 @@
     <span class="kicker">Un suivi clair, à chaque étape</span>
     <h1>Suivez votre commande du départ à l’arrivée</h1>
     <p>Dès que votre baril, votre fret ou votre voiture est en route, Laawol vous donne un numéro de suivi et les mises à jour de statut, au même endroit que votre commande.</p>
-    <div class="hero-actions"><a class="btn btn-primary btn-lg" href="https://customer.laawoldigital.com">Suivre ma commande</a></div>
+    <!-- The page told people to track an order and then gave them nowhere to
+         type the number. The lookup itself stays in the customer app, where
+         it is attested and rate limited; this just carries the number over. -->
+    <form class="hero-actions track-form" action="https://customer.laawoldigital.com/" method="get">
+      <input type="hidden" name="service" value="tracking">
+      <label class="sr-only" for="tracking-code">Booking or tracking number</label>
+      <input class="track-input" id="tracking-code" name="code" type="text" inputmode="latin" autocomplete="off" placeholder="Exemple : BS-K7M4P2" required>
+      <button class="btn btn-primary btn-lg" type="submit">Suivre ma commande</button>
+    </form>
   </div></section>
 
   <section class="section"><div class="container source-split">
@@ -80,8 +95,8 @@
 
 
   <section class="section"><div class="container cta-band">
-    <div><h2>Ne perdez plus le fil de votre commande</h2><p>Connectez-vous pour voir le statut, le numéro de suivi et l’historique de chaque service que vous avez demandé.</p></div>
-    <div class="cta-actions"><a class="btn btn-dark btn-lg" href="https://customer.laawoldigital.com">Suivre ma commande</a><a class="btn btn-outline btn-lg" href="app.html">Télécharger l’application</a></div>
+    <div><h2>Ne perdez plus le fil de votre commande</h2><p>Saisissez votre numéro de réservation ou de suivi pour voir le statut sans vous connecter. Connectez-vous seulement pour vos reçus, paiements et historique complet.</p></div>
+    <div class="cta-actions"><a class="btn btn-dark btn-lg" href="https://customer.laawoldigital.com/?service=tracking">Suivre ma commande</a><a class="btn btn-outline btn-lg" href="app.html">Télécharger l’application</a></div>
   </div></section>
   
   <footer class="site-footer">

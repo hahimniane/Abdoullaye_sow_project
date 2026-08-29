@@ -4030,6 +4030,86 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Cette expédition a un prix fixe. Le traitement se débloque dès que le paiement est régularisé.",
 });
 
+Object.assign(TEXT_TRANSLATIONS, {
+  "No sign-in required": "Aucune connexion requise",
+  "Track a booking": "Suivre une commande",
+  "Enter the number from your Laawol confirmation or receipt.":
+    "Saisissez le numéro indiqué dans votre confirmation ou reçu Laawol.",
+  "Booking lookup": "Recherche de commande",
+  "Use a Laawol code such as BS-K7M4P2.":
+    "Utilisez un code Laawol comme BS-K7M4P2.",
+  "Booking or tracking number": "Numéro de réservation ou de suivi",
+  "Spaces and lowercase letters are accepted.":
+    "Les espaces et les lettres minuscules sont acceptés.",
+  "Checking your tracking number…": "Recherche de votre numéro de suivi…",
+  Track: "Suivre",
+  "Enter a booking or tracking number.":
+    "Saisissez un numéro de réservation ou de suivi.",
+  "Enter a valid booking or tracking number.":
+    "Saisissez un numéro de réservation ou de suivi valide.",
+  "We couldn’t find that number. Check it and try again.":
+    "Nous n’avons pas trouvé ce numéro. Vérifiez-le et réessayez.",
+  "Too many attempts. Wait a few minutes and try again.":
+    "Trop de tentatives. Attendez quelques minutes avant de réessayer.",
+  "Tracking is unavailable right now. Try again.":
+    "Le suivi est indisponible pour le moment. Réessayez.",
+  "Tracking result": "Résultat du suivi",
+  "Barrel shipment": "Expédition de baril",
+  "Freight shipment": "Expédition de fret",
+  "Car transport": "Transport de voitures",
+  "Car parking": "Stationnement de voiture",
+  "Shared barrel": "Baril partagé",
+  "Freight quote request": "Demande de devis de fret",
+  Booked: "Réservé",
+  "In progress": "En cours",
+  Ready: "Prêt",
+  Complete: "Terminé",
+  Updated: "Mis à jour",
+  "Not available": "Non disponible",
+  "For your privacy, only the booking status is shown here.":
+    "Pour protéger votre vie privée, seul le statut de la commande est affiché ici.",
+  "Track another": "Suivre un autre envoi",
+  // On the tracking result card, in both the guest lookup and the signed-in
+  // one. Missed on the first pass because the label is inside a ternary
+  // rather than sitting in the markup as plain text.
+  "Copy number": "Copier le numéro",
+  // Guest checkout: booking and paying without an account.
+  "Book without an account. We use these details to send your receipt and tracking number, and to reach you about this shipment.":
+    "Réservez sans compte. Ces informations nous servent à vous envoyer votre reçu et votre numéro de suivi, et à vous joindre au sujet de cet envoi.",
+  "Enter your full name": "Saisissez votre nom complet",
+  "Enter a valid email address": "Saisissez une adresse e-mail valide",
+  "Enter a valid phone number": "Saisissez un numéro de téléphone valide",
+  "Continue as guest": "Continuer en tant qu'invité",
+  "Continue": "Continuer",
+  "Price agreed": "Prix convenu",
+  "Your price is agreed. Fill in the receiver and the address below to finish the booking and pay that price.":
+    "Votre prix est convenu. Renseignez le destinataire et l'adresse ci-dessous pour terminer la réservation et payer ce prix.",
+  "How would you like to continue?": "Comment souhaitez-vous continuer ?",
+  "One moment...": "Un instant...",
+  "We could not continue. Check your connection and try again.":
+    "Nous n'avons pas pu continuer. Vérifiez votre connexion et réessayez.",
+  "Your tracking number arrives by email. Keep it to follow this booking.":
+    "Votre numéro de suivi arrive par e-mail. Conservez-le pour suivre cette réservation.",
+  "Use a Laawol account instead": "Utiliser plutôt un compte Laawol",
+  "Continue as a guest, or use a Laawol account. Either way your request stays exactly as you filled it in.":
+    "Continuez en tant qu'invité ou utilisez un compte Laawol. Dans les deux cas, votre demande reste telle que vous l'avez remplie.",
+  "or": "ou",
+  "Copied": "Copié",
+  "More details in your account": "Plus de détails dans votre compte",
+  "Sign in to see your own receipts, payment details, and complete order history.":
+    "Connectez-vous pour voir vos propres reçus, les détails de paiement et l’historique complet de vos commandes.",
+  "Create account": "Créer un compte",
+  "This booking was cancelled.": "Cette commande a été annulée.",
+  "Your booking is confirmed": "Votre commande est confirmée",
+  "The service is underway": "Le service est en cours",
+  "The service is ready for its final step":
+    "Le service est prêt pour sa dernière étape",
+  "The service is complete": "Le service est terminé",
+  "Check a booking without signing in.":
+    "Consultez une commande sans vous connecter.",
+  "Open your account": "Ouvrir votre compte",
+});
+
 const PICKUP_ERROR_LABELS: Record<string, string> = {
   "Shared pickup plan": "Plan de collecte partagé",
   "Barrel shipping pickup": "Collecte expédition de barils",
@@ -4067,6 +4147,8 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Collapse navigation": "Réduire la navigation",
   "Copy payment link": "Copier le lien de paiement",
   "Copy tracking code": "Copier le code de suivi",
+  "Booking progress": "Progression de la commande",
+  "Example: BS-K7M4P2": "Exemple : BS-K7M4P2",
   "Customer name": "Nom du client",
   "Delivery status": "Statut de livraison",
   "Describe the parcel: what it is, how many, how it is packed.":

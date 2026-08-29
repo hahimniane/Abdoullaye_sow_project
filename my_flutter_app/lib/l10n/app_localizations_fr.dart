@@ -2886,6 +2886,103 @@ class AppLocalizationsFr extends AppLocalizations {
       'Connectez-vous pour voir vos demandes d’envoi de barils, vos reçus et le statut de collecte.';
 
   @override
+  String get guestTrackingIntro =>
+      'Aucun compte n’est nécessaire. Saisissez le numéro figurant sur votre confirmation de réservation ou votre reçu.';
+
+  @override
+  String get guestTrackingIdentifierLabel =>
+      'Numéro de réservation ou de suivi';
+
+  @override
+  String get guestTrackingIdentifierHint => 'Par exemple, BS-K7M4P2';
+
+  @override
+  String get guestTrackingRequired =>
+      'Saisissez votre numéro de réservation ou de suivi.';
+
+  @override
+  String get guestTrackingInvalid =>
+      'Saisissez un numéro de réservation ou de suivi valide.';
+
+  @override
+  String get guestTrackingSubmit => 'Suivre';
+
+  @override
+  String get guestTrackingLoading => 'Vérification du statut…';
+
+  @override
+  String get guestTrackingSuccessTitle => 'Suivi trouvé';
+
+  @override
+  String get guestTrackingNotFoundTitle => 'Nous n’avons pas trouvé ce numéro';
+
+  @override
+  String get guestTrackingNotFoundBody =>
+      'Vérifiez le numéro sur votre confirmation ou votre reçu, puis réessayez.';
+
+  @override
+  String get guestTrackingRateLimited =>
+      'Trop de vérifications ont été effectuées. Patientez quelques minutes, puis réessayez.';
+
+  @override
+  String get guestTrackingUnavailable =>
+      'Le suivi est temporairement indisponible. Veuillez réessayer bientôt.';
+
+  @override
+  String get guestTrackingServiceLabel => 'Service';
+
+  @override
+  String get guestTrackingStatusLabel => 'Statut';
+
+  @override
+  String guestTrackingUpdatedLabel(Object date) {
+    return 'Dernière mise à jour : $date';
+  }
+
+  @override
+  String get guestTrackingPrivacyNote =>
+      'Pour protéger votre vie privée, le suivi sans compte affiche uniquement le statut du service. Connectez-vous pour voir les détails privés et les actions de la réservation.';
+
+  @override
+  String get guestTrackingTrackAnother => 'Suivre un autre numéro';
+
+  @override
+  String get guestTrackingSignInUpsell => 'Se connecter pour tous les détails';
+
+  @override
+  String get guestTrackingServiceBarrel => 'Expédition de barils';
+
+  @override
+  String get guestTrackingServiceFreight => 'Fret';
+
+  @override
+  String get guestTrackingServiceTransport => 'Transport de voiture';
+
+  @override
+  String get guestTrackingServiceParking => 'Stationnement de voiture';
+
+  @override
+  String get guestTrackingServiceSharedBarrel => 'Baril partagé';
+
+  @override
+  String get guestTrackingServiceFreightQuote => 'Demande de devis de fret';
+
+  @override
+  String get guestTrackingStageBooked => 'Réservé';
+
+  @override
+  String get guestTrackingStageInTransit => 'En transit';
+
+  @override
+  String get guestTrackingStageArrived => 'Arrivé';
+
+  @override
+  String get guestTrackingStageDelivered => 'Livré';
+
+  @override
+  String get guestTrackingStageCancelled => 'Annulé';
+
+  @override
   String get shipmentsLoadError =>
       'Nous ne pouvons pas charger vos demandes d’envoi pour le moment. Veuillez réessayer bientôt.';
 
@@ -7232,7 +7329,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String freightAskForPriceIntro(String country) {
-    return 'Décrivez ce que vous envoyez vers $country. Chaque entreprise sur cet itinéraire peut répondre avec son propre prix et indiquer ce qu\'elle rembourse si le colis est perdu.';
+    return 'Décrivez ce que vous envoyez vers $country. Chaque entreprise sur cet itinéraire peut répondre avec son propre prix et indiquer si elle couvre le colis en cas de perte.';
   }
 
   @override
@@ -7328,7 +7425,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get couldNotLoadFreightQuotes =>
-      'Les prix n\'ont pas pu être chargés.';
+      'Les prix ne se chargent pas pour le moment';
 
   @override
   String get freightQuoteChosenTitle => 'Prix choisi';
@@ -7337,4 +7434,80 @@ class AppLocalizationsFr extends AppLocalizations {
   String freightQuoteChosenMessage(String business, String price) {
     return '$business enverra votre colis pour $price.';
   }
+
+  @override
+  String get guestCheckoutTitle => 'Réserver sans compte';
+
+  @override
+  String get guestCheckoutIntro =>
+      'Ces informations nous servent à vous envoyer votre reçu et votre numéro de suivi, et à vous joindre au sujet de cet envoi.';
+
+  @override
+  String get guestCheckoutFullName => 'Nom complet';
+
+  @override
+  String get guestCheckoutEmail => 'Adresse e-mail';
+
+  @override
+  String get guestCheckoutPhone => 'Numéro de téléphone';
+
+  @override
+  String get guestCheckoutNameError => 'Saisissez votre nom complet';
+
+  @override
+  String get guestCheckoutEmailError => 'Saisissez une adresse e-mail valide';
+
+  @override
+  String get guestCheckoutPhoneError =>
+      'Saisissez un numéro de téléphone valide';
+
+  @override
+  String get guestCheckoutContinue => 'Continuer en tant qu\'invité';
+
+  @override
+  String get guestCheckoutUseAccount => 'Utiliser plutôt un compte Laawol';
+
+  @override
+  String get guestCheckoutFailed =>
+      'Nous n\'avons pas pu continuer. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get guestCheckoutNote =>
+      'Votre numéro de suivi arrive par e-mail. Conservez-le pour suivre cette réservation.';
+
+  @override
+  String get guestCheckoutChoiceTitle => 'Comment souhaitez-vous continuer ?';
+
+  @override
+  String get freightQuoteRequestSent => 'Demande envoyée';
+
+  @override
+  String freightQuoteRequestSentSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count entreprises sur cet itinéraire l\'ont reçue et peuvent répondre avec un prix.',
+      one:
+          '1 entreprise sur cet itinéraire l\'a reçue et peut répondre avec un prix.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get couldNotLoadFreightQuotesSubtitle =>
+      'Votre demande a bien été envoyée. Les prix apparaîtront ici dès le retour de la connexion.';
+
+  @override
+  String get continueToBooking => 'Continuer vers la réservation';
+
+  @override
+  String get freightQuoteChosenNext =>
+      'Ajoutez le destinataire, l\'adresse et la façon dont le colis parvient à l\'entreprise. Vous payez à la fin, au prix que vous avez accepté.';
+
+  @override
+  String get orderTypePriceRequests => 'Demandes de prix';
+
+  @override
+  String get guestTrackingStageAwaitingPayment => 'En attente de paiement';
 }

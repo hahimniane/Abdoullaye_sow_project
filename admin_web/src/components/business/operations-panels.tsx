@@ -3498,7 +3498,12 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
           type="button"
         >
           Price requests
-          <span>{openPriceRequests.length}</span>
+          {/* A count of 0 while the query is still open reads as "nobody is
+              waiting" and sends the business away from work that is in fact
+              queued. Say nothing until the answer is real. */}
+          <span>
+            {priceRequests.loading ? "\u2026" : openPriceRequests.length}
+          </span>
         </button>
       </div>
       {freight.error && <div className="error-box">{freight.error}</div>}

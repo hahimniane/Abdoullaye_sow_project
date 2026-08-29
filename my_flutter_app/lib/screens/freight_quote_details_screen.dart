@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../models/freight_quote.dart';
 import '../services/freight_quote_service.dart';
 import '../utils/freight_localization.dart';
+import 'send_freight_screen.dart';
 
 /// The prices businesses have sent back for one parcel, as they arrive.
 ///
@@ -131,13 +132,40 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (code.isNotEmpty)
+            Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  l10n.freightQuoteRequestSent,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            if (asked > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                l10n.freightQuoteRequestSentSubtitle(asked),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
+                ),
+              ),
+            ],
+            if (code.isNotEmpty) ...[
+              const SizedBox(height: 10),
               Text(
                 l10n.freightQuoteRequestReference(code),
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.hintColor,
                 ),
               ),
+            ],
             if ((request?.description ?? '').isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(
@@ -156,15 +184,7 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
                 ),
               ),
             ],
-            if (asked > 0) ...[
-              const SizedBox(height: 8),
-              Text(
-                l10n.freightQuoteAskedBusinesses(asked),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
-                ),
-              ),
-            ],
+
           ],
         ),
       ),
@@ -184,7 +204,7 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
             theme,
             Icons.cloud_off_outlined,
             l10n.couldNotLoadFreightQuotes,
-            '',
+            l10n.couldNotLoadFreightQuotesSubtitle,
           );
         }
         if (!snapshot.hasData) {
@@ -197,16 +217,49 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
         final chosen = quotes.where((q) => q.isSelected).toList();
         if (chosen.isNotEmpty || request?.isSelected == true) {
           final winner = chosen.isNotEmpty ? chosen.first : null;
-          return _notice(
-            theme,
-            Icons.verified_outlined,
-            l10n.freightQuoteChosenTitle,
-            l10n.freightQuoteChosenMessage(
-              winner?.businessName ?? request!.selectedBusinessName,
-              freightMoney(
-                (winner?.amountCents ?? request!.selectedAmountCents) / 100,
+          final businessId =
+              winner?.businessId ?? request?.selectedBusinessId ?? '';
+          final amountCents =
+              winner?.amountCents ?? request?.selectedAmountCents ?? 0;
+          // Accepting a price used to end here, on a notice with nowhere to
+          // go: the price was agreed and the customer had no way to book it
+          // or pay. Selecting fixes the price; the parcel still needs a
+          // receiver, an address and a pickup choice, so this carries them
+          // into the booking that collects those.
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _notice(
+                theme,
+                Icons.verified_outlined,
+                l10n.freightQuoteChosenTitle,
+                l10n.freightQuoteChosenMessage(
+                  winner?.businessName ?? request!.selectedBusinessName,
+                  freightMoney(amountCents / 100),
+                ),
               ),
-            ),
+              const SizedBox(height: 14),
+              Text(
+                l10n.freightQuoteChosenNext,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SendFreightScreen(
+                      quoteRequestId: widget.requestId,
+                      agreedBusinessId: businessId,
+                      agreedAmountCents: amountCents,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.arrow_forward),
+                label: Text(l10n.continueToBooking),
+              ),
+            ],
           );
         }
         final open = quotes

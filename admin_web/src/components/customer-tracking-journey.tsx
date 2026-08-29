@@ -15,6 +15,51 @@ import {
 } from "@/lib/tracking-journey";
 import type { FirestoreRow } from "@/types/admin";
 
+const PUBLIC_TRACKING_STAGES = [
+  {id: "booked", label: "Booked", hint: "Your booking is confirmed"},
+  {id: "in_transit", label: "In progress", hint: "The service is underway"},
+  {id: "arrived", label: "Ready", hint: "The service is ready for its final step"},
+  {id: "delivered", label: "Complete", hint: "The service is complete"},
+] as const;
+
+export function GuestJourneyProgress({
+  stage,
+}: {
+  stage: "booked" | "in_transit" | "arrived" | "delivered" | "cancelled";
+}) {
+  if (stage === "cancelled") {
+    return (
+      <div className="trk-journey trk-journey-cancelled">
+        <span>This booking was cancelled.</span>
+      </div>
+    );
+  }
+  const activeIndex = PUBLIC_TRACKING_STAGES.findIndex(
+    (item) => item.id === stage,
+  );
+  return (
+    <ol className="trk-journey" aria-label="Booking progress">
+      {PUBLIC_TRACKING_STAGES.map((item, index) => {
+        const done = index < activeIndex;
+        const current = index === activeIndex;
+        return (
+          <li
+            aria-current={current ? "step" : undefined}
+            className={`trk-step${done ? " done" : ""}${current ? " current" : ""}`}
+            key={item.id}
+          >
+            <span className="trk-step-dot" aria-hidden="true">
+              {done ? <Check size={12} strokeWidth={3} /> : null}
+            </span>
+            <strong className="trk-step-text">{item.label}</strong>
+            <span className="sr-only">{item.hint}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /** Milestones shown before the timeline folds the rest behind a toggle. */
 const VISIBLE_EVENTS = 3;
 

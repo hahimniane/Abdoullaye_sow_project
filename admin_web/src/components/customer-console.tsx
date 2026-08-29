@@ -31,7 +31,7 @@ import {
   getYears,
 } from "@/lib/car-catalog";
 import { DESTINATION_COUNTRIES } from "@/lib/destination-countries";
-import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
+import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, ReceiptText, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
@@ -58,7 +58,12 @@ import {
 } from "@/lib/notification-preferences";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { CustomerParkingPools } from "@/components/customer-parking-pools";
-import { CustomerShippingServices } from "@/components/customer-shipping-services";
+import {
+  CustomerFreightQuotes,
+  CustomerShippingServices,
+  type FreightQuoteRequestRow,
+  useCustomerFreightQuoteRequests,
+} from "@/components/customer-shipping-services";
 import { CustomerSupport } from "@/components/customer-support";
 import { CustomerTracking } from "@/components/customer-tracking";
 import {
@@ -205,6 +210,15 @@ export function CustomerConsole({
   const transports = useCustomerTransportRequests(firebaseUser.uid);
   const parking = useCustomerParkingRecords(firebaseUser.uid);
   const purchases = useCustomerCarPurchases(firebaseUser.uid);
+  // A parcel the customer asked businesses to price belongs in the same list
+  // as everything else they are waiting on. Before this there was nowhere to
+  // see one: the prices could only be reached in the moment the request was
+  // made, so closing that screen lost the thread.
+  const priceRequests = useCustomerFreightQuoteRequests(firebaseUser.uid, true);
+  // Set when the customer accepts a price from the orders drawer and asks to
+  // finish the booking: the shipping form opens carrying that request.
+  const [bookingQuoteRequestId, setBookingQuoteRequestId] = useState("");
+  const [bookingQuoteBusinessId, setBookingQuoteBusinessId] = useState("");
   const cars = usePublicCars(activeTab === "cars");
 
 
@@ -215,8 +229,21 @@ export function CustomerConsole({
       ...tagRows(transports.rows, "Car transport", "transportRequests", Truck),
       ...tagRows(parking.rows, "Car parking", "parkedCars", Car),
       ...tagRows(purchases.rows, "Car purchase", "carPurchases", CircleDollarSign),
+      ...tagRows(
+        priceRequests.rows,
+        "Price request",
+        "freightQuoteRequests",
+        ReceiptText,
+      ),
     ].sort((a, b) => rowTime(b.row) - rowTime(a.row)),
-    [freight.rows, parking.rows, purchases.rows, shipments.rows, transports.rows],
+    [
+      freight.rows,
+      parking.rows,
+      priceRequests.rows,
+      purchases.rows,
+      shipments.rows,
+      transports.rows,
+    ],
   );
 
   // A viewing is an appointment, not a purchase: nothing is bought and no
@@ -379,6 +406,8 @@ export function CustomerConsole({
           )}
           {activeTab === "services" && (
             <CustomerShippingServices
+              bookingQuoteBusinessId={bookingQuoteBusinessId}
+              bookingQuoteRequestId={bookingQuoteRequestId}
               freightShipments={freight.rows}
               profile={profile}
             />
@@ -399,6 +428,11 @@ export function CustomerConsole({
           )}
           {activeTab === "orders" && (
             <OrdersView
+              onBookAgreedPrice={(requestId, businessId) => {
+                setBookingQuoteRequestId(requestId);
+                setBookingQuoteBusinessId(businessId);
+                setActiveTab("services");
+              }}
               focusedRecord={focusedRecord}
               onFocusConsumed={() => setFocusedRecord(null)}
               loading={dataLoading}
@@ -505,6 +539,7 @@ function CustomerHome({
 }
 
 function OrdersView({
+  onBookAgreedPrice,
   focusedRecord,
   onFocusConsumed,
   loading,
@@ -517,6 +552,7 @@ function OrdersView({
   loading: boolean;
   orders: TaggedRow[];
   trackedShipments: FirestoreRow[];
+  onBookAgreedPrice?: (requestId: string, businessId: string) => void;
   uid: string;
 }) {
   // A barrel used to appear twice on this page: once as a row here and once
@@ -524,8 +560,22 @@ function OrdersView({
   // thing, so it gets one card - and that card opens this panel's drawer for
   // the actions (pay, cancel, review) the row used to carry.
   const [openKey, setOpenKey] = useState("");
+  const priceRequests = useMemo(
+    () =>
+      orders.filter(
+        (order) => order.collectionName === "freightQuoteRequests",
+      ),
+    [orders],
+  );
+  // Everything left over lands in "Cars & parking", so a price request has to
+  // be pulled out by name or it reads as a car.
   const untracked = useMemo(
-    () => orders.filter((order) => !TRACKED_COLLECTIONS.has(order.collectionName)),
+    () =>
+      orders.filter(
+        (order) =>
+          !TRACKED_COLLECTIONS.has(order.collectionName) &&
+          order.collectionName !== "freightQuoteRequests",
+      ),
     [orders],
   );
 
@@ -557,7 +607,13 @@ function OrdersView({
     () =>
       [
         {id: "barrels" as const, label: "Barrels", count: barrels.length},
-        {id: "freight" as const, label: "Freight", count: freight.length},
+        {
+          id: "freight" as const,
+          label: "Freight",
+          // Shipments and the parcels still waiting on a price are the same
+          // service to the customer, so they are one tab and one count.
+          count: freight.length + priceRequests.length,
+        },
         {
           id: "transport" as const,
           label: "Car transport",
@@ -569,7 +625,13 @@ function OrdersView({
           count: untracked.length,
         },
       ].filter((tab) => tab.count > 0),
-    [barrels.length, freight.length, transportJobs.length, untracked.length],
+    [
+      barrels.length,
+      freight.length,
+      priceRequests.length,
+      transportJobs.length,
+      untracked.length,
+    ],
   );
   const [activeTab, setActiveTab] = useState<
     "barrels" | "freight" | "transport" | "cars"
@@ -605,7 +667,11 @@ function OrdersView({
   const shownRecords = tabRecords.filter((row) =>
     bucketMatches(text(row.status, "")),
   );
-  const shownOrders = untracked.filter((order) =>
+  // Price requests and the leftover "cars & parking" rows are both order
+  // shaped rather than tracked shipments, so they render through here; which
+  // set that is depends on the tab.
+  const orderRowsForTab = shownTab === "freight" ? priceRequests : untracked;
+  const shownOrders = orderRowsForTab.filter((order) =>
     bucketMatches(
       text(order.row.status ?? order.row.purchaseStatus, ""),
     ),
@@ -614,7 +680,7 @@ function OrdersView({
   // an empty list is a dead end, not a filter.
   const presentBuckets = new Set(
     (shownTab === "cars"
-      ? untracked.map((order) =>
+      ? orderRowsForTab.map((order) =>
           text(order.row.status ?? order.row.purchaseStatus, ""),
         )
       : tabRecords.map((row) => text(row.status, ""))
@@ -648,7 +714,7 @@ function OrdersView({
           visible when the tab has records: a filter that hides itself
           when it would show one chip is a filter nobody learns exists. */}
       {tabs.length > 0 &&
-        (shownTab === "cars" ? untracked : tabRecords).length > 0 && (
+        (shownTab === "cars" ? orderRowsForTab : tabRecords).length > 0 && (
         <div
           aria-label="Filter by status"
           className="service-segments service-sort-segments"
@@ -677,12 +743,19 @@ function OrdersView({
       )}
       <OrderPanel
         loading={loading}
+        onBookAgreedPrice={onBookAgreedPrice}
         onOpenHandled={() => setOpenKey("")}
         openKey={openKey}
         orders={orders}
-        title="Cars, transport & parking"
+        title={
+          shownTab === "freight"
+            ? "Waiting on a price"
+            : "Cars, transport & parking"
+        }
         uid={uid}
-        visibleOrders={shownTab === "cars" ? shownOrders : []}
+        visibleOrders={
+          shownTab === "cars" || shownTab === "freight" ? shownOrders : []
+        }
       />
       {!loading && shownTab !== "cars" && (
         <CustomerTracking
@@ -709,6 +782,7 @@ const TRACKED_COLLECTIONS = new Set([
 
 function OrderPanel({
   loading,
+  onBookAgreedPrice,
   onOpenHandled,
   openKey = "",
   orders,
@@ -721,6 +795,7 @@ function OrderPanel({
   onOpenHandled?: () => void;
   /** An order to open from outside the panel, e.g. from a tracking card. */
   openKey?: string;
+  onBookAgreedPrice?: (requestId: string, businessId: string) => void;
   /** Every order the drawer may need to look up, listed or not. */
   orders: TaggedRow[];
   title: string;
@@ -827,6 +902,38 @@ function OrderPanel({
       >
         {selected && (
           <>
+            {/* A price request's whole point is the answers it collected, so
+                the drawer leads with those and the choice between them rather
+                than with a summary of a parcel the customer already knows
+                about. Without this the card opened onto facts and no way to
+                accept anything. */}
+            {selected.collectionName === "freightQuoteRequests" && (
+              <>
+                <CustomerFreightQuotes
+                  request={selected.row as FreightQuoteRequestRow}
+                />
+                {/* An agreed price is not yet a booking: the parcel still
+                    needs a receiver, an address and a pickup choice. Without
+                    this the drawer told the customer to fill in a form that
+                    was nowhere near it. */}
+                {text(selected.row.quoteStatus, "") === "selected" &&
+                  !text(selected.row.bookedShipmentId, "") && (
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      onBookAgreedPrice?.(
+                        text(selected.row.id, ""),
+                        text(selected.row.selectedBusinessId, ""),
+                      );
+                      setSelectedKey("");
+                    }}
+                    type="button"
+                  >
+                    Continue to booking
+                  </button>
+                )}
+              </>
+            )}
             <div className="customer-order-facts">
               <OrderFact
                 label="Reference"
@@ -1537,6 +1644,16 @@ function orderStatusLabel(order: TaggedRow) {
   if (order.collectionName === "barrelShipments" ||
       order.collectionName === "freightShipments") {
     return statusLabel(status, order.row.destinationDelivery === true);
+  }
+  // A price request's own vocabulary. "quote_requested" is the backend's
+  // word for it and means nothing to the person waiting; what they want to
+  // know is whether a price has arrived yet.
+  if (order.collectionName === "freightQuoteRequests") {
+    const quoteStatus = text(order.row.quoteStatus, "collecting");
+    if (quoteStatus === "selected") return "Price agreed";
+    if (quoteStatus === "booked") return "Booked";
+    if (quoteStatus === "cancelled") return "Cancelled";
+    return "Waiting for prices";
   }
   return status;
 }

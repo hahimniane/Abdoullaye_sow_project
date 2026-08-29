@@ -15,6 +15,7 @@ test("public customer service links select every supported customer journey", ()
   assert.equal(customerServiceFromSearch("?service=parking"), "parking");
   assert.equal(customerServiceFromSearch("?service=shared-barrels"), "shared-barrels");
   assert.equal(customerServiceFromSearch("?service=cars"), "cars");
+  assert.equal(customerServiceFromSearch("?service=tracking"), "tracking");
   assert.equal(customerServiceFromSearch("?service=unknown"), null);
   assert.equal(customerServiceUrl("freight"), "https://customer.laawoldigital.com/?service=freight");
 });
@@ -44,9 +45,14 @@ test("guest service entry gates only final submission and preserves the mounted 
   assert.match(entry, /setAuthIntent\("account-access"\)/);
   assert.match(entry, /setAuthIntent\("service-continuation"\)/);
   assert.match(entry, /Access your Laawol account/);
-  assert.match(entry, /authIntent === "account-access" \? "sign-in" : "sign-up"/);
+  assert.match(entry, /authIntent === "account-access" \? accountMode : "sign-up"/);
   assert.match(entry, /<CustomerShippingServices/);
-  assert.match(shipping, /Sign in to save & continue/);
+  assert.match(entry, /<GuestTracking/);
+  // Barrel and freight now offer a guest path, so their submit buttons must
+  // not promise a sign-in the customer no longer needs. Car transport is
+  // still account-only and keeps its sign-in label.
+  assert.doesNotMatch(shipping, /Sign in to save & continue/);
+  assert.match(shipping, /"Sign in to send request"/);
   assert.match(shipping, /if \(!authenticated\) \{\s*onAuthenticationRequired\?\.\(\)/);
   assert.match(router, /customerServiceFromSearch/);
 });
@@ -78,10 +84,53 @@ test("public CTAs deep-link to every guest customer journey", () => {
   );
 });
 
+test("the public tracking page sends guests to the lookup, not sign-in", () => {
+  // Someone with a tracking code has no account and no reason to make one.
+  // Both CTAs on that page have to land on the guest lookup itself; a link
+  // to the bare console drops them at a sign-in wall instead.
+  const tracking = readFileSync("../public_site/tracking.html", "utf8");
+  // The hero now carries a box: it posts the number the visitor typed to the
+  // same lookup rather than sending them there to type it again. The closing
+  // CTA is still a plain deep link.
+  assert.match(
+    tracking,
+    /<form[^>]*action="https:\/\/customer\.laawoldigital\.com\/"[^>]*method="get"/,
+  );
+  assert.match(tracking, /name="service" value="tracking"/);
+  assert.match(tracking, /name="code"/);
+  assert.match(
+    tracking,
+    /href="https:\/\/customer\.laawoldigital\.com\/\?service=tracking"/,
+    "the closing CTA must still deep-link to guest tracking",
+  );
+  // A bare console link anywhere on this page is the regression: it looks
+  // right and lands the guest on a login screen.
+  assert.doesNotMatch(
+    tracking,
+    /href="https:\/\/customer\.laawoldigital\.com\/?"/,
+    "no CTA may point at the console root",
+  );
+});
+
+test("every string on the tracking result card is translated", () => {
+  // "Copy number" shipped in English to French users because the label
+  // lives inside a ternary rather than as plain markup text, so it was
+  // invisible to a read-through of the component.
+  for (const [english, french] of [
+    ["Copy number", "Copier le numéro"],
+    ["Copied", "Copié"],
+    ["Tracking result", "Résultat du suivi"],
+    ["Track another", "Suivre un autre envoi"],
+  ] as const) {
+    assert.equal(translateValue(english, "fr"), french, english);
+  }
+});
+
 test("guest continuation copy is localized in French", () => {
+  assert.equal(translateValue("Continue", "fr"), "Continuer");
   assert.equal(
-    translateValue("Sign in to save & continue", "fr"),
-    "Se connecter pour enregistrer et continuer",
+    translateValue("Sign in to send request", "fr"),
+    "Se connecter pour envoyer la demande",
   );
   assert.equal(
     translateValue("Save your parking request", "fr"),

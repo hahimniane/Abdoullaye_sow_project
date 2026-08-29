@@ -103,6 +103,7 @@ import {
   type ServiceSort,
 } from "@/lib/service-ranking.ts";
 import { db, functions } from "@/lib/firebase";
+import { withGuestContact } from "@/lib/guest-checkout";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import { currentWebLanguage } from "@/lib/language";
 import { isValidPhone } from "@/lib/phone";
@@ -217,7 +218,16 @@ type CustomerShippingServicesProps = {
   profile: UserProfile;
   freightShipments?: FirestoreRow[];
   initialService?: ShippingService;
+  /// A price request the customer already accepted, so the booking that
+  /// follows charges the agreed amount. Only the id: the server reads the
+  /// price off the request.
+  /// The business whose price was accepted. It has to be bookable even
+  /// though it never published a row for this item - not having one is why
+  /// the customer asked in the first place.
+  bookingQuoteBusinessId?: string;
+  bookingQuoteRequestId?: string;
   authenticated?: boolean;
+  guestReady?: boolean;
   onAuthenticationRequired?: () => void;
   onTransportCreated?: (result: {
     id: string;
@@ -233,6 +243,10 @@ async function callFunction<TResult>(
     functions,
     name,
   );
+  // Requests that are not a checkout - asking a route for a price - reach the
+  // backend through here rather than through startCheckout, and a guest's
+  // details have to travel with them just the same.
+  data = withGuestContact(data);
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     const response = await Promise.race([
@@ -428,7 +442,10 @@ export function CustomerShippingServices({
   profile,
   freightShipments = [],
   initialService = "barrel",
+  bookingQuoteBusinessId = "",
+  bookingQuoteRequestId = "",
   authenticated = true,
+  guestReady = false,
   onAuthenticationRequired,
   onTransportCreated,
 }: CustomerShippingServicesProps) {
@@ -620,6 +637,7 @@ export function CustomerShippingServices({
           {service === "barrel" && (
             <BarrelOrderForm
               authenticated={authenticated}
+              guestReady={guestReady}
               onAuthenticationRequired={onAuthenticationRequired}
               options={barrelOptions}
               profile={profile}
@@ -628,6 +646,9 @@ export function CustomerShippingServices({
           {service === "freight" && (
             <FreightShipmentForm
               authenticated={authenticated}
+              bookingQuoteBusinessId={bookingQuoteBusinessId}
+              bookingQuoteRequestId={bookingQuoteRequestId}
+              guestReady={guestReady}
               freightShipments={freightShipments}
               onAuthenticationRequired={onAuthenticationRequired}
               options={destinationOptions}
@@ -637,6 +658,7 @@ export function CustomerShippingServices({
           {service === "transport" && (
             <TransportRequestForm
               authenticated={authenticated}
+              guestReady={guestReady}
               onAuthenticationRequired={onAuthenticationRequired}
               onCreated={onTransportCreated}
               options={transportOptions}
@@ -681,11 +703,13 @@ function ServiceTab({
 
 function BarrelShipmentForm({
   authenticated,
+  guestReady,
   onAuthenticationRequired,
   options,
   profile,
 }: {
   authenticated: boolean;
+  guestReady?: boolean;
   onAuthenticationRequired?: () => void;
   options: DestinationOption[];
   profile: UserProfile;
@@ -854,7 +878,7 @@ function BarrelShipmentForm({
 
   async function submit() {
     if (!valid || submitting || !destination) return;
-    if (!authenticated) {
+    if (!authenticated && !guestReady) {
       onAuthenticationRequired?.();
       return;
     }
@@ -965,7 +989,7 @@ function BarrelShipmentForm({
       submitLabel={
         authenticated
           ? "Continue to secure payment"
-          : "Sign in to save & continue"
+          : "Continue"
       }
       submitting={submitting}
       title="Send a barrel"
@@ -1270,11 +1294,13 @@ type BarrelOrderLine = {
 
 function BarrelOrderForm({
   authenticated,
+  guestReady,
   onAuthenticationRequired,
   options,
   profile,
 }: {
   authenticated: boolean;
+  guestReady?: boolean;
   onAuthenticationRequired?: () => void;
   options: DestinationOption[];
   profile: UserProfile;
@@ -1584,7 +1610,7 @@ function BarrelOrderForm({
 
   async function submit() {
     if (!valid || submitting) return;
-    if (!authenticated) {
+    if (!authenticated && !guestReady) {
       onAuthenticationRequired?.();
       return;
     }
@@ -1706,7 +1732,7 @@ function BarrelOrderForm({
       submitLabel={
         authenticated
           ? "Continue to secure payment"
-          : "Sign in to save & continue"
+          : "Continue"
       }
       submitting={submitting}
       title="Send barrels"
@@ -2283,18 +2309,31 @@ function PickupAvailability({
 
 function FreightShipmentForm({
   authenticated,
+  bookingQuoteBusinessId = "",
+  bookingQuoteRequestId = "",
+  guestReady,
   freightShipments,
   onAuthenticationRequired,
   options,
   profile,
 }: {
   authenticated: boolean;
+  bookingQuoteBusinessId?: string;
+  bookingQuoteRequestId?: string;
+  guestReady?: boolean;
   freightShipments: FirestoreRow[];
   onAuthenticationRequired?: () => void;
   options: DestinationOption[];
   profile: UserProfile;
 }) {
   const [mode, setMode] = useState<"air" | "sea">("air");
+  // The price request this booking settles, once the customer accepts a
+  // business's quote. Only the id travels: the server reads the agreed
+  // amount off that request, so no price is ever decided here.
+  const [acceptedHere, setAgreedQuoteRequestId] = useState("");
+  // Either accepted on this screen just now, or handed in from the orders
+  // drawer where the customer accepted it.
+  const agreedQuoteRequestId = acceptedHere || bookingQuoteRequestId;
   const availableOptions = useMemo(
     () => freightProvidersForMode(options, mode),
     [mode, options],
@@ -2471,7 +2510,11 @@ function FreightShipmentForm({
   const setPrice = itemPricing.mode === "flat";
   // Nobody here has a number for this parcel, so there is no price to show
   // and nothing to book. The customer asks, and the businesses answer.
+  // A price already agreed is the answer to that question, so asking it again
+  // sends the customer round the loop they just came out of. The booking goes
+  // ahead on the agreed amount instead.
   const needsPriceRequest =
+    !agreedQuoteRequestId &&
     itemStepSatisfied &&
     (qualifiedProviderOptions.length === 0 ||
       (destination !== null && !itemPricing.priced));
@@ -2677,7 +2720,7 @@ function FreightShipmentForm({
 
   async function submit() {
     if (submitting || !destination) return;
-    if (!authenticated) {
+    if (!authenticated && !guestReady) {
       onAuthenticationRequired?.();
       return;
     }
@@ -2698,6 +2741,7 @@ function FreightShipmentForm({
         "freightShipment",
         buildFreightShipmentPayload(
           {
+            quoteRequestId: agreedQuoteRequestId,
             senderName,
             receiverName,
             receiverPhone,
@@ -2944,7 +2988,7 @@ function FreightShipmentForm({
           }
           submitLabel={
             !authenticated
-              ? "Sign in to save & continue"
+              ? "Continue"
               : pickup.requested && !quote
                 ? "Calculate pickup & continue"
                 : payOnArrivalChosen
@@ -3050,6 +3094,8 @@ function FreightShipmentForm({
             {needsPriceRequest && (
               <FreightPriceRequest
                 authenticated={authenticated}
+                guestReady={guestReady}
+                onPriceAccepted={setAgreedQuoteRequestId}
                 customerUid={text(profile.id, "")}
                 destinationCountryId={destinationCountryId}
                 destinationCountryName={
@@ -3528,7 +3574,7 @@ function FreightDestinationDeliveryField({
   );
 }
 
-type FreightQuoteRequestRow = FirestoreRow & {
+export type FreightQuoteRequestRow = FirestoreRow & {
   trackingCode?: string;
   description?: string;
   weightKg?: number;
@@ -3555,7 +3601,7 @@ type FreightQuoteRow = FirestoreRow & {
   expiresAt?: unknown;
 };
 
-function useCustomerFreightQuoteRequests(
+export function useCustomerFreightQuoteRequests(
   customerUid: string,
   enabled: boolean,
 ) {
@@ -3654,6 +3700,8 @@ function useFreightQuotes(requestId: string, enabled: boolean) {
  */
 function FreightPriceRequest({
   authenticated,
+  guestReady,
+  onPriceAccepted,
   customerUid,
   destinationCountryId,
   destinationCountryName,
@@ -3663,6 +3711,8 @@ function FreightPriceRequest({
   onAuthenticationRequired,
 }: {
   authenticated: boolean;
+  guestReady?: boolean;
+  onPriceAccepted?: (requestId: string) => void;
   customerUid: string;
   destinationCountryId: string;
   destinationCountryName: string;
@@ -3694,7 +3744,7 @@ function FreightPriceRequest({
 
   async function submit() {
     if (submitting) return;
-    if (!authenticated) {
+    if (!authenticated && !guestReady) {
       onAuthenticationRequired?.();
       return;
     }
@@ -3788,14 +3838,17 @@ function FreightPriceRequest({
           type="button"
         >
           {!authenticated
-            ? "Sign in to ask for a price"
+            ? "Ask for a price"
             : submitting
               ? "Sending your request..."
               : "Ask for a price"}
         </button>
       </div>
       {authenticated && activeRequest && (
-        <CustomerFreightQuotes request={activeRequest} />
+        <CustomerFreightQuotes
+          request={activeRequest}
+          onPriceAccepted={onPriceAccepted}
+        />
       )}
       {requests.error && (
         <div className="customer-inline-note error" role="alert">
@@ -3814,10 +3867,12 @@ function FreightPriceRequest({
  * are not comparable on price alone, and the customer has to be able to see
  * both before choosing either.
  */
-function CustomerFreightQuotes({
+export function CustomerFreightQuotes({
   request,
+  onPriceAccepted,
 }: {
   request: FreightQuoteRequestRow;
+  onPriceAccepted?: (requestId: string) => void;
 }) {
   const quotes = useFreightQuotes(request.id, true);
   const [busyId, setBusyId] = useState("");
@@ -3846,6 +3901,10 @@ function CustomerFreightQuotes({
         requestId: request.id,
         quoteId: quote.id,
       });
+      // Accepting used to end here. The price was agreed and the parcel still
+      // needed a receiver, an address and a pickup choice, with nothing
+      // saying so - so the customer had a price and no way to pay it.
+      onPriceAccepted?.(request.id);
     } catch (caught) {
       setError(
         caught instanceof Error && caught.message
@@ -3862,7 +3921,7 @@ function CustomerFreightQuotes({
       <div className="customer-quote-row">
         <div>
           <strong>
-            {chosen ? "You chose a price" : "Waiting for prices"}
+            {chosen ? "Price agreed" : "Waiting for prices"}
           </strong>
           <small>
             Reference {text(request.trackingCode, request.id)} ·{" "}
@@ -3874,6 +3933,13 @@ function CustomerFreightQuotes({
       {(error || quotes.error) && (
         <div className="customer-inline-note error" role="alert">
           {error || quotes.error}
+        </div>
+      )}
+      {chosen && (
+        <div className="customer-inline-note">
+          <ShieldCheck aria-hidden="true" size={17} />{" "}
+          Your price is agreed. Fill in the receiver and the address below to
+          finish the booking and pay that price.
         </div>
       )}
       {open.length === 0 ? (
@@ -4166,12 +4232,14 @@ function transportTimestamp(value: unknown) {
 
 function TransportRequestForm({
   authenticated,
+  guestReady,
   onAuthenticationRequired,
   onCreated,
   options,
   profile,
 }: {
   authenticated: boolean;
+  guestReady?: boolean;
   onAuthenticationRequired?: () => void;
   onCreated?: (result: { id: string; trackingCode: string }) => void;
   options: DestinationOption[];

@@ -33,6 +33,20 @@ NotificationRoute? routeForNotificationData(Map<String, dynamic> data) {
         '/tracking',
         arguments: TrackingScreenArguments(shipmentId: shipmentId),
       );
+    // A price landing is the one notification a customer is actually waiting
+    // on, and it used to open nothing: there was no case here and no named
+    // route to send it to, so the tap fell through and the customer had no
+    // way back to the price they had just been told about.
+    case 'freight_quote_received':
+      final requestId = data['requestId']?.toString() ?? '';
+      if (requestId.isEmpty) return null;
+      return NotificationRoute(
+        '/freight-quote',
+        arguments: FreightQuoteScreenArguments(
+          requestId: requestId,
+          trackingCode: data['trackingCode']?.toString() ?? '',
+        ),
+      );
     case 'parking_reservation_status':
     case 'transport_request_status':
       return const NotificationRoute('/orders');
@@ -112,4 +126,15 @@ Map<String, String> decodeNotificationPayload(String payload) {
     data[key] = value;
   }
   return data;
+}
+
+/// What a notification about a price carries to the screen that shows it.
+class FreightQuoteScreenArguments {
+  const FreightQuoteScreenArguments({
+    required this.requestId,
+    this.trackingCode = '',
+  });
+
+  final String requestId;
+  final String trackingCode;
 }

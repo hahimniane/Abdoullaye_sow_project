@@ -18,6 +18,7 @@ export const MARKETPLACE_PEOPLE_CALLABLES = Object.freeze([
   "updateUserRole",
   "setPlatformAdminRole",
   "deleteUser",
+  "lookupGuestTracking",
 ]);
 
 const FIREBASE_ID = /^[a-z][a-z0-9-]{4,62}$/;

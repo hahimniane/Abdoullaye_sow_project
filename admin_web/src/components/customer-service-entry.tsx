@@ -8,6 +8,10 @@ import { CustomerCars } from "@/components/customer-cars";
 import { usePublicCars } from "@/components/customer-console";
 import { CustomerParkingPools } from "@/components/customer-parking-pools";
 import { CustomerShippingServices } from "@/components/customer-shipping-services";
+import { GuestContactPanel } from "@/components/guest-contact-panel";
+import { auth } from "@/lib/firebase";
+import { recallGuestContact } from "@/lib/guest-contact";
+import { GuestTracking } from "@/components/guest-tracking";
 import type { CustomerService } from "@/lib/customer-service-intent";
 import type { UserProfile } from "@/types/admin";
 
@@ -32,7 +36,21 @@ export function CustomerServiceEntry({
     "account-access" | "service-continuation" | null
   >(null);
   const [continuedAfterAuth, setContinuedAfterAuth] = useState(false);
+  // An anonymous session is not "authenticated" as far as the console router
+  // is concerned, so the forms need to be told separately that the guest has
+  // given their details and the submission may go ahead.
+  const [guestReady, setGuestReady] = useState(
+    // A guest who comes back still has their anonymous session but not the
+    // contact that went with it - sessionStorage ends with the tab, the
+    // session does not. Treat them as ready only if both survived.
+    () => auth.currentUser?.isAnonymous === true && recallGuestContact() !== null,
+  );
+  const [accountMode, setAccountMode] = useState<"sign-in" | "sign-up">(
+    "sign-in",
+  );
   const authOpen = authIntent !== null;
+  const guestAllowed = initialService === "barrel" ||
+    initialService === "freight";
   const cars = usePublicCars(initialService === "cars");
   const shippingService:
     | "barrel"
@@ -45,7 +63,9 @@ export function CustomerServiceEntry({
         ? "transport"
         : null;
   const authLabel =
-    initialService === "cars"
+    initialService === "tracking"
+      ? "Open your account"
+      : initialService === "cars"
       ? "Save your car request"
       : initialService === "parking"
         ? "Save your parking request"
@@ -70,7 +90,11 @@ export function CustomerServiceEntry({
           <span className="brand-badge">Laawol Digital</span>
           <span>
             <strong>Prepare your service request</strong>
-            <small>Compare services and prepare your request.</small>
+            <small>
+              {initialService === "tracking"
+                ? "Check a booking without signing in."
+                : "Compare services and prepare your request."}
+            </small>
           </span>
         </a>
         <div className="customer-entry-header-actions">
@@ -85,7 +109,10 @@ export function CustomerServiceEntry({
           ) : (
             <button
               className="secondary-button"
-              onClick={() => setAuthIntent("account-access")}
+              onClick={() => {
+                setAccountMode("sign-in");
+                setAuthIntent("account-access");
+              }}
               type="button"
             >
               <LogIn aria-hidden="true" size={16} />
@@ -104,6 +131,7 @@ export function CustomerServiceEntry({
         {shippingService && (
           <CustomerShippingServices
             authenticated={authenticated}
+            guestReady={guestReady}
             initialService={shippingService}
             onAuthenticationRequired={() =>
               setAuthIntent("service-continuation")
@@ -135,6 +163,15 @@ export function CustomerServiceEntry({
             state={cars}
           />
         )}
+        {initialService === "tracking" && (
+          <GuestTracking
+            authenticated={authenticated}
+            onAccountAccess={(mode) => {
+              setAccountMode(mode);
+              setAuthIntent("account-access");
+            }}
+          />
+        )}
       </main>
 
       {authOpen && (
@@ -151,12 +188,19 @@ export function CustomerServiceEntry({
                 <h2 id="customer-auth-title">
                   {authIntent === "account-access"
                     ? "Access your Laawol account"
-                    : authLabel}
+                    : guestAllowed
+                      ? "How would you like to continue?"
+                      : authLabel}
                 </h2>
                 {authIntent === "account-access" ? (
                   <p>
                     Sign in to open your workspace, or create an account if you
                     are new to Laawol.
+                  </p>
+                ) : guestAllowed ? (
+                  <p>
+                    Continue as a guest, or use a Laawol account. Either way
+                    your request stays exactly as you filled it in.
                   </p>
                 ) : (
                   <p>
@@ -180,9 +224,32 @@ export function CustomerServiceEntry({
                 <span className="loading-spinner" />
                 Securing your account and restoring the request...
               </div>
+            ) : authIntent === "service-continuation" && guestAllowed ? (
+              <div className="customer-auth-choice">
+                <GuestContactPanel
+                  busy={authenticating}
+                  onContinued={() => {
+                    // A guest holds an anonymous session, which the console
+                    // router does not count as authenticated, so the effect
+                    // that closes this sheet after a sign-in never fires for
+                    // them. Close it here or the overlay sits over the form
+                    // they just came back to finish.
+                    setAuthIntent(null);
+                    setGuestReady(true);
+                    setContinuedAfterAuth(true);
+                  }}
+                />
+                <div className="customer-auth-divider">
+                  <span>or</span>
+                </div>
+                <details className="customer-auth-account">
+                  <summary>Use a Laawol account instead</summary>
+                  {authPanel("sign-up")}
+                </details>
+              </div>
             ) : (
               authPanel(
-                authIntent === "account-access" ? "sign-in" : "sign-up",
+                authIntent === "account-access" ? accountMode : "sign-up",
               )
             )}
           </div>

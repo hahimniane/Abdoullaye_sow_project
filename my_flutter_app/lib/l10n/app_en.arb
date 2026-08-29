@@ -1199,6 +1199,40 @@
   "paymentPending": "Payment pending",
   "paymentCancelled": "Payment cancelled",
   "signInToTrackShipments": "Sign in to see your barrel shipment requests, receipts, and pickup status.",
+  "guestTrackingIntro": "No account needed. Enter the number from your booking confirmation or receipt.",
+  "guestTrackingIdentifierLabel": "Booking or tracking number",
+  "guestTrackingIdentifierHint": "For example, BS-K7M4P2",
+  "guestTrackingRequired": "Enter your booking or tracking number.",
+  "guestTrackingInvalid": "Enter a valid booking or tracking number.",
+  "guestTrackingSubmit": "Track",
+  "guestTrackingLoading": "Checking status…",
+  "guestTrackingSuccessTitle": "Tracking found",
+  "guestTrackingNotFoundTitle": "We could not find that number",
+  "guestTrackingNotFoundBody": "Check the number on your confirmation or receipt and try again.",
+  "guestTrackingRateLimited": "Too many checks were made. Please wait a few minutes and try again.",
+  "guestTrackingUnavailable": "Tracking is temporarily unavailable. Please try again shortly.",
+  "guestTrackingServiceLabel": "Service",
+  "guestTrackingStatusLabel": "Status",
+  "guestTrackingUpdatedLabel": "Last updated {date}",
+  "@guestTrackingUpdatedLabel": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "guestTrackingPrivacyNote": "For privacy, guest tracking shows only the service status. Sign in to see private booking details and actions.",
+  "guestTrackingTrackAnother": "Track another number",
+  "guestTrackingSignInUpsell": "Sign in for full details",
+  "guestTrackingServiceBarrel": "Barrel shipping",
+  "guestTrackingServiceFreight": "Freight",
+  "guestTrackingServiceTransport": "Car transport",
+  "guestTrackingServiceParking": "Car parking",
+  "guestTrackingServiceSharedBarrel": "Shared barrel",
+  "guestTrackingServiceFreightQuote": "Freight quote request",
+  "guestTrackingStageBooked": "Booked",
+  "guestTrackingStageInTransit": "In transit",
+  "guestTrackingStageArrived": "Arrived",
+  "guestTrackingStageDelivered": "Delivered",
+  "guestTrackingStageCancelled": "Cancelled",
   "shipmentsLoadError": "We could not load your shipment requests right now. Please try again shortly.",
   "shipmentsAppearAfterPayment": "Your barrel shipment requests will appear here after payment is completed.",
   "registerYourBusiness": "Register your business",
@@ -3110,7 +3144,7 @@
     }
   },
   "couldNotSelectFreightQuote": "That price could not be chosen. Try again.",
-  "couldNotLoadFreightQuotes": "Prices could not be loaded.",
+  "couldNotLoadFreightQuotes": "Prices are not loading right now",
   "freightQuoteChosenTitle": "Price chosen",
   "freightQuoteChosenMessage": "{business} will send your parcel for {price}.",
   "@freightQuoteChosenMessage": {
@@ -3122,5 +3156,32 @@
         "type": "String"
       }
     }
-  }
+  },
+  "guestCheckoutTitle": "Book without an account",
+  "guestCheckoutIntro": "We use these details to send your receipt and tracking number, and to reach you about this shipment.",
+  "guestCheckoutFullName": "Full name",
+  "guestCheckoutEmail": "Email address",
+  "guestCheckoutPhone": "Phone number",
+  "guestCheckoutNameError": "Enter your full name",
+  "guestCheckoutEmailError": "Enter a valid email address",
+  "guestCheckoutPhoneError": "Enter a valid phone number",
+  "guestCheckoutContinue": "Continue as guest",
+  "guestCheckoutUseAccount": "Use a Laawol account instead",
+  "guestCheckoutFailed": "We could not continue. Check your connection and try again.",
+  "guestCheckoutNote": "Your tracking number arrives by email. Keep it to follow this booking.",
+  "guestCheckoutChoiceTitle": "How would you like to continue?",
+  "freightQuoteRequestSent": "Request sent",
+  "freightQuoteRequestSentSubtitle": "{count, plural, =1{1 business on this route has it and can answer with a price.} other{{count} businesses on this route have it and can answer with a price.}}",
+  "couldNotLoadFreightQuotesSubtitle": "Your request was sent and is safe. Prices will appear here as soon as the connection is back.",
+  "@freightQuoteRequestSentSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "continueToBooking": "Continue to booking",
+  "freightQuoteChosenNext": "Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted.",
+  "orderTypePriceRequests": "Price requests",
+  "guestTrackingStageAwaitingPayment": "Waiting for payment"
 }

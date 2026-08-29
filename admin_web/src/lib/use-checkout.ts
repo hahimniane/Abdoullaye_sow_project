@@ -9,6 +9,7 @@ import {
   type CustomerCheckoutOrderType,
 } from "./customer-checkout.ts";
 import { functions } from "./firebase.ts";
+import { withGuestContact } from "./guest-checkout.ts";
 
 const CHECKOUT_START_TIMEOUT_MS = 30_000;
 
@@ -23,7 +24,7 @@ export async function startCheckout(
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     const response = await Promise.race([
-      callable(buildCheckoutRequest(orderType, payload)),
+      callable(buildCheckoutRequest(orderType, withGuestContact(payload))),
       new Promise<never>((_, reject) => {
         timeoutId = setTimeout(
           () => reject(new Error("The payment request timed out. Try again.")),

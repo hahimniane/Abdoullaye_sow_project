@@ -216,4 +216,29 @@ void main() {
       expect(decodeNotificationPayload(''), <String, String>{});
     });
   });
+
+  group('a price arriving', () {
+    test('opens the request it belongs to', () {
+      // This notification had no case at all: the tap resolved to null and
+      // the customer was left on whatever screen they were on, with no way
+      // back to the price they had just been told about.
+      final route = routeForNotificationData({
+        'type': 'freight_quote_received',
+        'requestId': 'req-123',
+        'trackingCode': 'FQ-Z6YPQT',
+      });
+      expect(route, isNotNull);
+      expect(route!.name, '/freight-quote');
+      final args = route.arguments as FreightQuoteScreenArguments;
+      expect(args.requestId, 'req-123');
+      expect(args.trackingCode, 'FQ-Z6YPQT');
+    });
+
+    test('goes nowhere without a request to open', () {
+      expect(
+        routeForNotificationData({'type': 'freight_quote_received'}),
+        isNull,
+      );
+    });
+  });
 }

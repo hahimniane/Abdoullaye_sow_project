@@ -52,6 +52,11 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
+            // Keep the release build compatible with Flutter plugins that are
+            // supplied as generated Android projects. R8's missing-class
+            // analysis incorrectly treats these plugin classes as absent.
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }

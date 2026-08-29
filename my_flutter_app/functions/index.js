@@ -10,6 +10,22 @@ const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
 const {buildTrackingCode} = require("./tracking_code");
+const {
+  isValidPhoneNumber,
+  normalizePhoneAlias,
+} = require("./phone_number");
+const {agreedFreightPrice} = require("./agreed_freight_price");
+const {resumableFreightSetup} = require("./resume_freight_setup");
+const {
+  guestRateLimitKeys,
+  isAnonymousCaller,
+  resolveBookingContact,
+  storedGuestIdentity,
+} = require("./guest_contact");
+const {
+  findGuestTrackingRecord,
+  guestTrackingCandidates,
+} = require("./guest_tracking");
 /** Category setting refusals, in words a business owner can act on. */
 const FREIGHT_CATEGORY_ERRORS = {
   unknown_category: "That is not one of the standard categories",
@@ -352,6 +368,11 @@ const MARKETPLACE_PEOPLE_CALLABLE_OPTIONS = Object.freeze({
   cors: true,
   invoker: "public",
 });
+const GUEST_TRACKING_CALLABLE_OPTIONS = Object.freeze({
+  enforceAppCheck: ENFORCE_APP_CHECK,
+  cors: true,
+  invoker: "public",
+});
 const DEFAULT_BUSINESS_ID = "keren_auto_sales";
 const DEFAULT_BUSINESS_NAME = "Keren";
 const MAX_BARREL_QUANTITY = 20;
@@ -492,13 +513,11 @@ function callableClientAddress(request) {
   return forwarded || String(rawRequest?.ip || "unknown");
 }
 
-async function enforceCallableRateLimit(request, {
+async function enforceRateLimitForIdentity(identity, {
   name,
   limit,
   windowSeconds,
 }) {
-  if (process.env.FUNCTIONS_EMULATOR === "true") return;
-  const identity = request.auth?.uid || callableClientAddress(request);
   const bucket = crypto.createHash("sha256")
       .update(`${name}:${identity}`)
       .digest("hex");
@@ -529,6 +548,147 @@ async function enforceCallableRateLimit(request, {
     }, {merge: true});
   });
 }
+
+async function enforceCallableRateLimit(request, options) {
+  if (process.env.FUNCTIONS_EMULATOR === "true") return;
+  const identity = request.auth?.uid || callableClientAddress(request);
+  await enforceRateLimitForIdentity(identity, options);
+}
+
+// A guest holds an anonymous session, and an anonymous caller can mint a
+// fresh uid whenever it likes - so the usual per-uid bucket would cap nobody
+// at all. Guest bookings count against the email the receipt has to reach and
+// against the caller's address, both of which cost something to vary.
+async function enforceGuestBookingRateLimit(request) {
+  if (process.env.FUNCTIONS_EMULATOR === "true") return;
+  if (!isAnonymousCaller(request.auth)) return;
+  const keys = guestRateLimitKeys({
+    email: request.data?.guestContact?.email,
+    ip: callableClientAddress(request),
+  });
+  for (const key of keys) {
+    await enforceRateLimitForIdentity(key, {
+      name: "guestBooking",
+      limit: 6,
+      windowSeconds: 60 * 60,
+    });
+  }
+}
+
+const GUEST_CONTACT_MESSAGES = Object.freeze({
+  guest_contact_missing: "Enter your contact details to continue",
+  guest_name_missing: "Enter your full name",
+  guest_email_invalid: "Enter a valid email address",
+  guest_phone_invalid: "Enter a valid phone number",
+});
+
+// Gives a guest the minimum profile the rest of the platform reads.
+//
+// Notifications, receipts and status updates all resolve a recipient through
+// users/{uid}; an anonymous caller has no such document, so a guest booking
+// would be silently unreachable. Written as a merge so a customer who later
+// links this session into a real account is never downgraded by a stale
+// booking.
+async function ensureGuestCustomerProfile(uid, identity) {
+  if (!identity.isGuest) return;
+  const ref = admin.firestore().collection("users").doc(uid);
+  const snapshot = await ref.get();
+  if (snapshot.exists && snapshot.data()?.role !== "customer") return;
+  await ref.set({
+    email: identity.customerEmail,
+    fullName: identity.customerName,
+    phone: identity.customerPhone,
+    normalizedPhone: normalizePhoneAlias(identity.customerPhone),
+    role: "customer",
+    isGuest: true,
+    notificationPreferences: defaultNotificationPreferences(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+}
+
+// Resolves who a booking belongs to, reading a returning guest's details
+// from the profile their first booking wrote when the client no longer holds
+// them. Async, so it runs once at the top of a callable rather than inside
+// the record literal.
+async function resolveBookingIdentity(request, customerUid) {
+  if (!isAnonymousCaller(request.auth)) return null;
+  const parsed = resolveBookingContact({
+    auth: request.auth,
+    userRecord: null,
+    guest: request.data?.guestContact,
+  });
+  if (parsed.ok) return parsed.identity;
+
+  const profile = await admin.firestore()
+      .collection("users").doc(customerUid).get();
+  const stored = storedGuestIdentity(profile.data());
+  if (stored) return stored;
+
+  throw new HttpsError(
+      "invalid-argument",
+      GUEST_CONTACT_MESSAGES[parsed.error] ||
+        "Enter your contact details to continue",
+  );
+}
+
+// Spread into the record a booking writes, so every service resolves the
+// customer's identity the same way and a guest's details can never overwrite
+// a signed-in customer's.
+function bookingIdentityFields(request, userRecord, guestIdentity = null) {
+  if (guestIdentity) {
+    const {isGuest, customerEmail, customerName, customerPhone} = guestIdentity;
+    return {isGuest, customerEmail, customerName, customerPhone};
+  }
+  const resolved = resolveBookingContact({
+    auth: request.auth,
+    userRecord,
+    guest: request.data?.guestContact,
+  });
+  if (!resolved.ok) {
+    throw new HttpsError(
+        "invalid-argument",
+        GUEST_CONTACT_MESSAGES[resolved.error] ||
+          "Enter your contact details to continue",
+    );
+  }
+  const {isGuest, customerEmail, customerName, customerPhone} =
+    resolved.identity;
+  return {isGuest, customerEmail, customerName, customerPhone};
+}
+
+// A tracking code is a bearer reference, not authentication. This endpoint
+// therefore returns an allowlisted status projection only; source documents,
+// milestone notes, identity, destination, provider, vehicle, and payment data
+// remain protected by Firestore rules and never cross this boundary.
+exports.lookupGuestTracking = onCall(
+    GUEST_TRACKING_CALLABLE_OPTIONS,
+    async (request) => {
+      await enforceCallableRateLimit(request, {
+        name: "lookupGuestTrackingMinute",
+        limit: 10,
+        windowSeconds: 60,
+      });
+      await enforceCallableRateLimit(request, {
+        name: "lookupGuestTrackingHour",
+        limit: 60,
+        windowSeconds: 60 * 60,
+      });
+      const candidates = guestTrackingCandidates(request.data?.identifier);
+      if (!candidates.length) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Enter a valid booking or tracking number",
+        );
+      }
+      const record = await findGuestTrackingRecord(
+          admin.firestore(),
+          candidates,
+      );
+      return record ?
+        {version: 1, found: true, record} :
+        {version: 1, found: false};
+    },
+);
 
 exports.resolveSignInIdentifier = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
@@ -5632,15 +5792,6 @@ function parseFuturePickup(value) {
   return pickup;
 }
 
-function isValidPhoneNumber(value) {
-  const raw = String(value || "").trim();
-  if (!raw || /[A-Za-z]/.test(raw)) return false;
-  const normalized = raw.replace(/[\s().-]/g, "");
-  if (!/^\+?\d+$/.test(normalized)) return false;
-  const digits = normalized.replace(/\D/g, "");
-  return digits.length >= 7 && digits.length <= 15;
-}
-
 function requireValidPhoneNumber(value, fieldName) {
   if (!isValidPhoneNumber(value)) {
     throw new HttpsError(
@@ -5648,10 +5799,6 @@ function requireValidPhoneNumber(value, fieldName) {
         `${fieldName} must be a valid phone number with 7 to 15 digits`,
     );
   }
-}
-
-function normalizePhoneAlias(value) {
-  return String(value || "").replace(/\D/g, "");
 }
 
 async function loadPlatformNotificationSettings(db) {
@@ -7795,6 +7942,24 @@ async function reconcileStripePaymentEvent(event, connectedAccountId) {
   return true;
 }
 
+// A guest has no workspace to find their booking in, so the confirmation
+// hands back the tracking code itself. Only ever for the customer the record
+// belongs to - the code is a bearer reference, and handing one to the wrong
+// caller would let them follow somebody else's shipment.
+async function checkoutTrackingCode(ref, customerUid) {
+  try {
+    const snapshot = await ref.get();
+    const record = snapshot.data() || {};
+    if (record.customerUid !== customerUid) return undefined;
+    const code = String(record.trackingCode || "").trim();
+    return code || undefined;
+  } catch {
+    // The state matters more than the code; a read that fails here should
+    // not turn a confirmed payment into an error on the return screen.
+    return undefined;
+  }
+}
+
 exports.confirmCustomerCheckoutSession = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -7895,13 +8060,17 @@ exports.confirmCustomerCheckoutSession = onCall(
       const claimed = await claimStripeWebhookEvent(event);
       if (!claimed) {
         const current = (await ref.get()).data() || {};
+        const state = customerCheckoutPaymentSucceeded(
+            current,
+            target.config.paymentStatusField,
+        ) ?
+          "success" :
+          "pending";
         return {
-          state: customerCheckoutPaymentSucceeded(
-              current,
-              target.config.paymentStatusField,
-          ) ?
-            "success" :
-            "pending",
+          state,
+          trackingCode: state === "success" ?
+            await checkoutTrackingCode(ref, customerUid) :
+            undefined,
         };
       }
 
@@ -7923,7 +8092,12 @@ exports.confirmCustomerCheckoutSession = onCall(
           paymentHandled,
           source: "customer_checkout_return",
         });
-        return {state: succeeded ? "success" : "pending"};
+        return {
+          state: succeeded ? "success" : "pending",
+          trackingCode: succeeded ?
+            await checkoutTrackingCode(ref, customerUid) :
+            undefined,
+        };
       } catch (error) {
         await finishStripeWebhookEvent(event.id, "failed", {
           errorMessage: String(error.message || "Return recovery failed").slice(
@@ -20040,6 +20214,14 @@ exports.createBarrelShipmentPaymentIntent = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await enforceGuestBookingRateLimit(request);
+      // Resolved here rather than at the record write so a guest with
+      // unusable contact details is turned away before any pricing,
+      // Stripe or Firestore work happens on their behalf.
+      const guestIdentity = await resolveBookingIdentity(request, customerUid);
+      if (guestIdentity) {
+        await ensureGuestCustomerProfile(customerUid, guestIdentity);
+      }
       await recordMarketplaceDisclosure(
           request,
           customerUid,
@@ -20164,7 +20346,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           businessName: business.name || DEFAULT_BUSINESS_NAME,
           ...deliveryEstimate,
           customerUid,
-          customerEmail: userRecord.email || "",
+          ...bookingIdentityFields(request, userRecord, guestIdentity),
           pickupRequested: wantsPickup,
           pickupAddress: cleanPickupAddress,
           pickupBorough: wantsPickup ?
@@ -20296,6 +20478,14 @@ exports.createBarrelOrderPaymentIntent = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await enforceGuestBookingRateLimit(request);
+      // Resolved here rather than at the record write so a guest with
+      // unusable contact details is turned away before any pricing,
+      // Stripe or Firestore work happens on their behalf.
+      const guestIdentity = await resolveBookingIdentity(request, customerUid);
+      if (guestIdentity) {
+        await ensureGuestCustomerProfile(customerUid, guestIdentity);
+      }
       await recordMarketplaceDisclosure(
           request,
           customerUid,
@@ -20554,7 +20744,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
         const chargeCents = orderTotalCents;
         transaction.set(orderRef, {
           customerUid,
-          customerEmail: userRecord.email || "",
+          ...bookingIdentityFields(request, userRecord, guestIdentity),
           senderName: String(senderName).trim(),
           pickupRequested: validatedLines.some((line) => line.pickupRequested),
           pickupAddress: validatedLines.some((line) => line.pickupRequested) ?
@@ -20603,7 +20793,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
             businessName: line.business.name || DEFAULT_BUSINESS_NAME,
             ...line.deliveryEstimate,
             customerUid,
-            customerEmail: userRecord.email || "",
+            ...bookingIdentityFields(request, userRecord, guestIdentity),
             pickupRequested: line.pickupRequested,
             pickupAddress: line.pickupAddress,
             pickupBorough: line.pickupBorough,
@@ -21175,6 +21365,17 @@ exports.createFreightShipmentPaymentIntent = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      // Set when this shipment is the booking of a price a business quoted
+      // for a parcel the pricing table had no number for.
+      const quoteRequestId = cleanText(request.data?.quoteRequestId, 200);
+      await enforceGuestBookingRateLimit(request);
+      // Resolved here rather than at the record write so a guest with
+      // unusable contact details is turned away before any pricing,
+      // Stripe or Firestore work happens on their behalf.
+      const guestIdentity = await resolveBookingIdentity(request, customerUid);
+      if (guestIdentity) {
+        await ensureGuestCustomerProfile(customerUid, guestIdentity);
+      }
       await recordMarketplaceDisclosure(
           request,
           customerUid,
@@ -21357,11 +21558,36 @@ exports.createFreightShipmentPaymentIntent = onCall(
             "Parcel weight must be greater than zero",
         );
       }
-      const shippingFee = itemPricing.mode === "flat" ?
-        itemPricing.flatPrice :
-        Math.round(
-            parcelWeightKg * pricePerKg * itemPricing.weightFactor * 100,
-        ) / 100;
+      // A parcel nobody had priced is booked at the price its business
+      // actually quoted, read server-side from the request the customer
+      // accepted - never from the client, and never from the pricing table
+      // that had no answer for it in the first place.
+      let agreedQuote = null;
+      if (quoteRequestId) {
+        const quoteRequestSnapshot = await db
+            .collection("freightQuoteRequests").doc(quoteRequestId).get();
+        const agreed = agreedFreightPrice({
+          request: quoteRequestSnapshot.data(),
+          customerUid,
+          businessId,
+        });
+        if (!agreed.ok) {
+          throw new HttpsError(
+              "failed-precondition",
+              agreed.reason === "already_booked" ?
+                "This price has already been booked" :
+                "That price is not available to book",
+          );
+        }
+        agreedQuote = {...agreed, requestId: quoteRequestId};
+      }
+      const shippingFee = agreedQuote ?
+        agreedQuote.amountCents / 100 :
+        itemPricing.mode === "flat" ?
+          itemPricing.flatPrice :
+          Math.round(
+              parcelWeightKg * pricePerKg * itemPricing.weightFactor * 100,
+          ) / 100;
       // The payback is the BUSINESS's number, published per item type -
       // the first real freight partner refused sender-declared values on
       // sight, because the sender's number is a lie in whichever direction
@@ -21487,7 +21713,12 @@ exports.createFreightShipmentPaymentIntent = onCall(
           // over, and a business can change its policy at any time.
           coveragePolicyAtBooking: coverage.policy,
           customerUid,
-          customerEmail: userRecord.email || "",
+          ...(agreedQuote ? {
+            quoteRequestId: agreedQuote.requestId,
+            quoteId: agreedQuote.quoteId,
+            priceAgreedByQuote: true,
+          } : {}),
+          ...bookingIdentityFields(request, userRecord, guestIdentity),
           pickupRequested: wantsPickup,
           pickupAddress: cleanPickupAddress,
           pickupBorough: wantsPickup ?
@@ -21585,6 +21816,17 @@ exports.createFreightShipmentPaymentIntent = onCall(
             destinationCountryName: freightDestination.country?.name,
             source: "freight",
           });
+          // Ties the accepted price to the shipment it became, so the same
+          // price cannot be booked a second time.
+          if (agreedQuote) {
+            await db.collection("freightQuoteRequests")
+                .doc(agreedQuote.requestId).set({
+                  bookedShipmentId: shipmentRef.id,
+                  quoteStatus: "booked",
+                  updatedAt: FirestoreFieldValue.serverTimestamp(),
+                }, {merge: true});
+          }
+
           return {
             shipmentId: shipmentRef.id,
             trackingCode,
@@ -21894,6 +22136,72 @@ exports.completeFreightShipmentPayment = onCall(
 // redirect, via sessionId) actually saved a card, then arms the shipment.
 // Nothing is charged here - the saved payment method is charged by
 // chargeFreightPayOnArrival when the business marks the shipment arrived.
+// Reopens the card save a pay-on-arrival customer walked away from.
+//
+// Without this the shipment is stranded: fulfilment waits on payment, the
+// business cannot act, and the customer has no route back to the page they
+// closed. A fresh session against the same shipment is the whole repair - no
+// second booking, no second price.
+exports.resumeFreightShipmentSetup = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      await enforceCallableRateLimit(request, {
+        name: "resumeFreightShipmentSetup",
+        limit: 10,
+        windowSeconds: 60 * 10,
+      });
+      const shipmentId = cleanText(request.data?.shipmentId, 200);
+      if (!shipmentId) {
+        throw new HttpsError("invalid-argument", "A shipment is required");
+      }
+      const db = admin.firestore();
+      const ref = db.collection("freightShipments").doc(shipmentId);
+      const snapshot = await ref.get();
+      const shipment = snapshot.data();
+      const resumable = resumableFreightSetup({shipment, customerUid});
+      if (!resumable.ok) {
+        throw new HttpsError(
+            resumable.reason === "not_yours" ?
+              "permission-denied" :
+              "failed-precondition",
+            resumable.reason === "already_settled" ?
+              "This shipment is already confirmed" :
+              "This shipment cannot be paid for here",
+        );
+      }
+
+      const returnUrls = customerCheckoutReturnUrls({
+        consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+        orderType: "freightShipment",
+        recordId: shipmentId,
+      });
+      const session = await createStripeSetupCheckoutSession({
+        customerId: shipment.stripeCustomerId,
+        connectedAccountId: shipment.stripeChargeType === "direct" ?
+          (shipment.stripeConnectedAccountId || undefined) :
+          undefined,
+        successUrl: `${returnUrls.successUrl}&setup=1`,
+        cancelUrl: returnUrls.cancelUrl,
+        metadata: {
+          shipmentId,
+          customerUid,
+          paymentType: "freight_pay_on_arrival_setup",
+        },
+      });
+      await ref.set({
+        checkoutSessionId: String(session.id || ""),
+        checkoutStatus: "open",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {shipmentId, sessionId: session.id, url: session.url};
+    },
+);
+
 exports.completeFreightShipmentCardSave = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -22504,6 +22812,14 @@ exports.createFreightQuoteRequest = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
       const customerUid = requireAuth(request);
+      await enforceGuestBookingRateLimit(request);
+      // Resolved here rather than at the record write so a guest with
+      // unusable contact details is turned away before any pricing,
+      // Stripe or Firestore work happens on their behalf.
+      const guestIdentity = await resolveBookingIdentity(request, customerUid);
+      if (guestIdentity) {
+        await ensureGuestCustomerProfile(customerUid, guestIdentity);
+      }
       const {destinationCountryId, mode} = request.data || {};
       if (!destinationCountryId) {
         throw new HttpsError("invalid-argument", "Destination is required");
@@ -22547,7 +22863,7 @@ exports.createFreightQuoteRequest = onCall(
       batch.set(requestRef, {
         trackingCode,
         customerUid,
-        customerEmail: userRecord.email || "",
+        ...bookingIdentityFields(request, userRecord, guestIdentity),
         destinationCountryId,
         destinationCountryName: countryName,
         mode: normalizeFreightMode(mode),
