@@ -54,6 +54,19 @@ test("a shipment appears once on the orders page, not twice", () => {
   );
 });
 
+test("an unpaid barrel can resume checkout from the order drawer", () => {
+  // Needs-payment barrels used to offer only Cancel and Close. Pay now must
+  // resume the same shipment/order - startCheckout with resumeRecordId, not
+  // a fresh createBarrelOrder payload.
+  assert.match(source, /<ResumeCheckoutButton/);
+  const resume = readFileSync(
+    "src/components/resume-checkout-button.tsx",
+    "utf8",
+  );
+  assert.match(resume, /startCheckout\(target\.orderType, checkoutResumePayload\(target\)\)/);
+  assert.match(resume, /"Pay now"/);
+});
+
 test("removing the rows does not remove the actions they carried", () => {
   // Paying, cancelling and reviewing a shipment all live in the order
   // drawer. With the row gone, the tracking card is the only way in - if

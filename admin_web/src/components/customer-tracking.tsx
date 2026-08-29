@@ -27,6 +27,7 @@ import {
   ReviewComposerDrawer,
   useReviewedOrderKeys,
 } from "@/components/customer-review-composer";
+import { ResumeCheckoutButton } from "@/components/resume-checkout-button";
 import type { FirestoreRow } from "@/types/admin";
 
 function CopyTrackingNumber({ code }: { code: string }) {
@@ -245,6 +246,10 @@ export function CustomerTracking({
                     the buttons do not split it in half. */}
                 <div className="trk-actions">
                   <CopyTrackingNumber code={trackingCodeFor(record)} />
+                  {/* Abandoned pay-now (barrels, freight, transport) reopens
+                      the SAME record. Pay-on-arrival freight still uses the
+                      card-save resume below. */}
+                  <ResumeCheckoutButton record={record} />
                   {/* A pay-on-arrival booking is confirmed by saving a card.
                       Close that page and the shipment sits unpaid for good:
                       the business cannot fulfil it, and there was no way

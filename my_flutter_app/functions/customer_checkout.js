@@ -278,10 +278,122 @@ function checkoutTrackingCodeFromRecord(record) {
   return "";
 }
 
+const CHECKOUT_RESUME_IDENTITY = Object.freeze({
+  barrelShipment: Object.freeze({
+    paymentType: "barrel_shipment",
+    idKey: "shipmentId",
+  }),
+  barrelOrder: Object.freeze({
+    paymentType: "barrel_order",
+    idKey: "orderId",
+  }),
+  freightShipment: Object.freeze({
+    paymentType: "freight_shipment",
+    idKey: "shipmentId",
+  }),
+});
+
+/**
+ * Whether an open Checkout Session can still be handed back.
+ *
+ * A held session completes with payment_status "unpaid", so "unpaid" is not
+ * the spent signal - status "open" plus an unexpired clock is.
+ *
+ * @param {object} session Stripe Checkout Session
+ * @param {number} [nowMs]
+ * @return {boolean}
+ */
+function checkoutSessionReusable(session, nowMs = Date.now()) {
+  const record = session && typeof session === "object" ? session : {};
+  if (String(record.status || "") !== "open") return false;
+  if (String(record.payment_status || "") === "paid") return false;
+  if (!String(record.url || "").trim()) return false;
+  const expiresAt = Number(record.expires_at || 0);
+  if (!Number.isFinite(expiresAt) || expiresAt <= 0) return false;
+  return expiresAt * 1000 > Number(nowMs || 0) + 60000;
+}
+
+/**
+ * An abandoned pay-now booking can reopen the same record.
+ *
+ * createBarrel* always mints a new shipment/order. Resume must never call
+ * those: the customer already has BS- / FR- sitting at pending_payment.
+ *
+ * @param {object} input
+ * @return {object} `{ok: true}` or `{ok: false, reason}`
+ */
+function resumableCheckoutRecord({orderType, record, customerUid}) {
+  if (!record || typeof record !== "object") {
+    return {ok: false, reason: "not_found"};
+  }
+  if (!CHECKOUT_RESUME_IDENTITY[String(orderType || "")]) {
+    return {ok: false, reason: "unsupported"};
+  }
+  const owner = String(record.customerUid || "").trim();
+  const caller = String(customerUid || "").trim();
+  if (owner !== caller) {
+    return {ok: false, reason: "not_yours"};
+  }
+  if (customerCheckoutPaymentSucceeded(record, "paymentStatus")) {
+    return {ok: false, reason: "already_settled"};
+  }
+  const status = String(record.status || "").toLowerCase();
+  const payment = String(record.paymentStatus || "").toLowerCase();
+  const checkout = String(record.checkoutStatus || "").toLowerCase();
+  if (status === "cancelled" || payment === "cancelled") {
+    return {ok: false, reason: "cancelled"};
+  }
+  if (checkout === "completed") {
+    return {ok: false, reason: "already_settled"};
+  }
+  if (status !== "pending_payment" && payment !== "pending") {
+    return {ok: false, reason: "not_pending"};
+  }
+  // Pay-on-arrival freight saves a card; that path has its own callable.
+  if (orderType === "freightShipment" &&
+      String(record.paymentTiming || "") === "arrival") {
+    return {ok: false, reason: "use_setup_resume"};
+  }
+  return {ok: true};
+}
+
+function checkoutResumeAmountCents(record) {
+  const data = record && typeof record === "object" ? record : {};
+  const cents = Number(data.cardChargeAmountCents);
+  if (Number.isSafeInteger(cents) && cents > 0) return cents;
+  const dollars = Number(
+      data.price ?? data.total ?? data.cardChargeAmount ?? 0,
+  );
+  if (Number.isFinite(dollars) && dollars > 0) {
+    return Math.round(dollars * 100);
+  }
+  return 0;
+}
+
+function checkoutResumeMetadata({orderType, recordId, record, customerUid}) {
+  const spec = CHECKOUT_RESUME_IDENTITY[String(orderType || "")];
+  if (!spec) {
+    const error = new Error("Unsupported customer checkout action");
+    error.code = "unsupported-checkout-action";
+    throw error;
+  }
+  const data = record && typeof record === "object" ? record : {};
+  return {
+    paymentType: spec.paymentType,
+    [spec.idKey]: String(recordId || "").trim(),
+    customerUid: String(customerUid || "").trim(),
+    businessId: String(data.businessId || ""),
+    trackingCode: checkoutTrackingCodeFromRecord(data),
+  };
+}
+
 module.exports = {
   CUSTOMER_CHECKOUT_ACTIONS,
   checkoutRecordId,
+  checkoutResumeAmountCents,
+  checkoutResumeMetadata,
   checkoutSessionIdempotencyKey,
+  checkoutSessionReusable,
   checkoutTrackingCodeFromRecord,
   customerCheckoutPaymentSucceeded,
   customerCheckoutReturnEventId,
@@ -292,4 +404,5 @@ module.exports = {
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
   resolveCheckoutReturnCustomerUid,
+  resumableCheckoutRecord,
 };

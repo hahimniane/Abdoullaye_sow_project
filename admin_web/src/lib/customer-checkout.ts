@@ -178,3 +178,63 @@ export function trackingCodeFromCheckoutRecord(
   }
   return "";
 }
+
+export type CheckoutResumeTarget = {
+  orderType: CustomerCheckoutOrderType;
+  recordId: string;
+};
+
+const SETTLED_PAYMENT = new Set([
+  "succeeded",
+  "paid",
+  "completed",
+  "reserved",
+  "card_saved",
+]);
+
+/**
+ * An abandoned pay-now booking the customer can reopen.
+ *
+ * A barrel with `orderId` must resume the order: siblings share one
+ * PaymentIntent, and minting a second barrelOrder is the live bug.
+ */
+export function checkoutResumeTarget(
+  record: Record<string, unknown> | undefined,
+): CheckoutResumeTarget | null {
+  const data = record && typeof record === "object" ? record : {};
+  const status = String(data.status ?? "").toLowerCase();
+  const payment = String(data.paymentStatus ?? "").toLowerCase();
+  const checkout = String(data.checkoutStatus ?? "").toLowerCase();
+  if (SETTLED_PAYMENT.has(payment) || checkout === "completed") return null;
+  if (status === "cancelled" || payment === "cancelled") return null;
+  if (status !== "pending_payment" && payment !== "pending") return null;
+  if (String(data.paymentTiming ?? "") === "arrival") return null;
+
+  const collection = String(
+    data.relatedCollection ?? data.collectionName ?? "",
+  );
+  const id = String(data.id ?? "").trim();
+  const orderId = String(data.orderId ?? "").trim();
+
+  if (collection === "barrelShipments" || collection === "barrelOrders") {
+    if (orderId) return {orderType: "barrelOrder", recordId: orderId};
+    if (collection === "barrelOrders" && id) {
+      return {orderType: "barrelOrder", recordId: id};
+    }
+    if (id) return {orderType: "barrelShipment", recordId: id};
+  }
+  if (collection === "freightShipments" && id) {
+    return {orderType: "freightShipment", recordId: id};
+  }
+  if (collection === "transportRequests" && id) {
+    return {orderType: "transportJob", recordId: id};
+  }
+  return null;
+}
+
+export function checkoutResumePayload(target: CheckoutResumeTarget) {
+  if (target.orderType === "transportJob") {
+    return {requestId: target.recordId};
+  }
+  return {resumeRecordId: target.recordId};
+}

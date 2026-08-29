@@ -58,6 +58,7 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
+import { barrelInTransitBlockedReason } from "@/lib/barrel-fulfillment";
 import {
   BUSINESS_PARKING_ENTRY_MESSAGES,
   BUSINESS_PARKING_RECEIVED_VIA_OPTIONS,
@@ -2423,7 +2424,13 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
   }
 
   function updateStatus(row: FirestoreRow, status: string) {
-    return setDoc(doc(db, "barrelShipments", row.id), { businessId, status, updatedAt: serverTimestamp() }, { merge: true });
+    const blocked = barrelInTransitBlockedReason(status, row.containerNumber);
+    if (blocked) return Promise.reject(new Error(blocked));
+    return setDoc(
+      doc(db, "barrelShipments", row.id),
+      { businessId, status, statusUpdatedAt: serverTimestamp(), updatedAt: serverTimestamp() },
+      { merge: true },
+    );
   }
   function sealPool(row: FirestoreRow, shipUnderfilled = false) {
     return httpsCallable(functions, "sealBarrelPool")({ poolId: row.id, shipUnderfilled });
@@ -3212,13 +3219,21 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
 	                  <select
 	                    value={status}
 	                    disabled={busy}
-	                    onChange={(event) => run(
-	                      row.id,
-	                      "Shipment updated.",
-	                      () => updateStatus(row, event.target.value),
-	                      `Change shipment status to ${statusLabel(event.target.value)}?`,
-	                      `Changer le statut de l’expédition en ${statusLabel(event.target.value)} ?`,
-	                    )}
+	                    onChange={(event) => {
+	                      // Capture before the confirm dialog: this select is
+	                      // controlled from Firestore, so it snaps back to
+	                      // pending while the dialog is open. Reading
+	                      // event.target.value after await wrote pending
+	                      // again and toasted a false success.
+	                      const nextStatus = event.target.value;
+	                      void run(
+	                        row.id,
+	                        "Shipment updated.",
+	                        () => updateStatus(row, nextStatus),
+	                        `Change shipment status to ${statusLabel(nextStatus)}?`,
+	                        `Changer le statut de l’expédition en ${statusLabel(nextStatus)} ?`,
+	                      );
+	                    }}
 	                  >
                     {barrelStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
                   </select>

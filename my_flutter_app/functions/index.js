@@ -226,7 +226,10 @@ const {
 } = require("./marketplace_disclosure");
 const {
   checkoutRecordId,
+  checkoutResumeAmountCents,
+  checkoutResumeMetadata,
   checkoutSessionIdempotencyKey,
+  checkoutSessionReusable,
   checkoutTrackingCodeFromRecord,
   customerCheckoutPaymentSucceeded,
   customerCheckoutReturnEventId,
@@ -236,6 +239,7 @@ const {
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
   resolveCheckoutReturnCustomerUid,
+  resumableCheckoutRecord,
 } = require("./customer_checkout");
 const {
   holdCaptureMethod,
@@ -7160,6 +7164,162 @@ async function attachCheckoutSessionToPaymentTarget({
   return checkoutPaymentIntentId;
 }
 
+/**
+ * Reopens Stripe Checkout on a pending_payment record the customer already
+ * has. Must not call createBarrel* / createFreight* - those mint a second
+ * booking.
+ */
+async function resumeExistingCustomerCheckout({
+  request,
+  customerUid,
+  orderType,
+  action,
+  recordId,
+}) {
+  if (!action.collection) {
+    throw new HttpsError(
+        "invalid-argument",
+        "This payment cannot be resumed",
+    );
+  }
+  const recordSnap = await admin.firestore()
+      .collection(action.collection).doc(recordId).get();
+  if (!recordSnap.exists) {
+    throw new HttpsError("not-found", "This order could not be found");
+  }
+  const record = recordSnap.data() || {};
+  const resumable = resumableCheckoutRecord({orderType, record, customerUid});
+  if (!resumable.ok) {
+    throw new HttpsError(
+        resumable.reason === "not_yours" ?
+          "permission-denied" :
+          "failed-precondition",
+        resumable.reason === "already_settled" ?
+          "This order is already paid" :
+          "This order cannot be paid for here",
+    );
+  }
+
+  let checkoutConnectedAccountId;
+  let checkoutApplicationFeeAmount;
+  if (record.stripeChargeType === "direct") {
+    checkoutConnectedAccountId = record.stripeConnectedAccountId || undefined;
+    checkoutApplicationFeeAmount = Number(record.platformFeeCents || 0) ||
+      undefined;
+  }
+
+  const existingSessionId = String(record.checkoutSessionId || "").trim();
+  if (existingSessionId) {
+    const existing = await retrieveStripeCheckoutSession(
+        existingSessionId, checkoutConnectedAccountId,
+    ).catch(() => null);
+    if (checkoutSessionReusable(existing)) {
+      return {
+        recordId,
+        sessionId: existing.id,
+        url: existing.url,
+        simulatedPayment: false,
+      };
+    }
+  }
+
+  let originalIntent = null;
+  const storedIntentId = String(
+      record.stripePaymentIntentId ||
+      record.checkoutOriginalPaymentIntentId ||
+      "",
+  ).trim();
+  if (storedIntentId.startsWith("pi_")) {
+    originalIntent = await retrieveStripePaymentIntent(
+        storedIntentId, checkoutConnectedAccountId,
+    ).catch(() => null);
+  }
+
+  const amount = originalIntent &&
+      Number.isSafeInteger(Number(originalIntent.amount)) &&
+      Number(originalIntent.amount) > 0 ?
+    Number(originalIntent.amount) :
+    checkoutResumeAmountCents(record);
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This payment does not have a valid amount",
+    );
+  }
+
+  const metadata = {
+    ...(originalIntent && originalIntent.metadata ?
+      originalIntent.metadata :
+      {}),
+    ...checkoutResumeMetadata({orderType, recordId, record, customerUid}),
+    checkoutOrderType: orderType,
+    checkoutRecordId: recordId,
+  };
+  const target = routePaymentIntentMetadata(metadata);
+  if (target.customerUid !== customerUid) {
+    throw new HttpsError(
+        "permission-denied",
+        "This payment belongs to a different account",
+    );
+  }
+
+  const returnUrls = customerCheckoutReturnUrls({
+    consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+    orderType,
+    recordId,
+  });
+  const mintCount = Number(record.checkoutResumeGeneration || 0) + 1;
+  const session = await createStripeCustomerCheckoutSession({
+    amount,
+    currency: String(
+        originalIntent?.currency || record.currency || SHIPMENT_CURRENCY,
+    ).toLowerCase(),
+    customerEmail: request.auth?.token?.email || "",
+    metadata,
+    originalPaymentIntentId: storedIntentId || recordId,
+    idempotencySeed: `${recordId}:resume:${mintCount}`,
+    productName: action.productName,
+    recordId,
+    connectedAccountId: checkoutConnectedAccountId,
+    applicationFeeAmount: checkoutConnectedAccountId ?
+      clampedApplicationFeeAmount(checkoutApplicationFeeAmount, amount) :
+      undefined,
+    ...returnUrls,
+  });
+
+  try {
+    await attachCheckoutSessionToPaymentTarget({
+      target,
+      originalPaymentIntentId: storedIntentId ||
+        String(session.payment_intent || ""),
+      session,
+      orderType,
+    });
+    await admin.firestore().doc(target.path).set({
+      checkoutResumeGeneration: mintCount,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+  } catch (error) {
+    await expireStripeCheckoutSession(
+        session.id,
+        checkoutConnectedAccountId,
+    ).catch((expireError) => logger.error(
+        "Could not expire an unattached Checkout Session",
+        {
+          sessionId: session.id,
+          message: expireError.message,
+        },
+    ));
+    throw error;
+  }
+  return {
+    recordId,
+    sessionId: session.id,
+    url: session.url,
+    simulatedPayment: false,
+  };
+}
+
 exports.createCustomerCheckoutSession = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -7184,6 +7344,18 @@ exports.createCustomerCheckoutSession = onCall(
             "invalid-argument",
             "A payment request is required",
         );
+      }
+      // Pay now on an abandoned booking must reuse the record. The create
+      // callables always mint a new barrelOrder / shipment.
+      const resumeRecordId = cleanText(payload.resumeRecordId, 200);
+      if (resumeRecordId) {
+        return resumeExistingCustomerCheckout({
+          request,
+          customerUid,
+          orderType,
+          action,
+          recordId: resumeRecordId,
+        });
       }
       const createCallable = exports[action.createFunction];
       if (!createCallable || typeof createCallable.run !== "function") {

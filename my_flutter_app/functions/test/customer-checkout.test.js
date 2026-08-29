@@ -5,7 +5,10 @@ const {describe, it} = require("node:test");
 const {
   CUSTOMER_CHECKOUT_ACTIONS,
   checkoutRecordId,
+  checkoutResumeAmountCents,
+  checkoutResumeMetadata,
   checkoutSessionIdempotencyKey,
+  checkoutSessionReusable,
   checkoutTrackingCodeFromRecord,
   customerCheckoutPaymentSucceeded,
   customerCheckoutReturnEventId,
@@ -14,6 +17,7 @@ const {
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
   resolveCheckoutReturnCustomerUid,
+  resumableCheckoutRecord,
 } = require("../customer_checkout");
 
 describe("customer Checkout routing", () => {
@@ -254,5 +258,149 @@ describe("customer Checkout routing", () => {
         source.slice(trackingHelperStart, trackingHelperStart + 700),
         /checkoutTrackingCodeFromRecord/,
     );
+  });
+});
+
+describe("resuming an abandoned pay-now checkout", () => {
+  const pendingBarrel = {
+    customerUid: "user_1",
+    status: "pending_payment",
+    paymentStatus: "pending",
+    cardChargeAmountCents: 11000,
+    businessId: "biz_1",
+    trackingCode: "BS-ZX7RVG",
+  };
+
+  it("reopens the same unpaid barrel shipment", () => {
+    assert.deepEqual(
+        resumableCheckoutRecord({
+          orderType: "barrelShipment",
+          record: pendingBarrel,
+          customerUid: "user_1",
+        }),
+        {ok: true},
+    );
+  });
+
+  it("reopens the same unpaid barrel order", () => {
+    assert.equal(
+        resumableCheckoutRecord({
+          orderType: "barrelOrder",
+          record: pendingBarrel,
+          customerUid: "user_1",
+        }).ok,
+        true,
+    );
+  });
+
+  it("is nobody else's to reopen", () => {
+    assert.equal(
+        resumableCheckoutRecord({
+          orderType: "barrelShipment",
+          record: pendingBarrel,
+          customerUid: "someone_else",
+        }).reason,
+        "not_yours",
+    );
+  });
+
+  it("leaves a paid or cancelled booking alone", () => {
+    assert.equal(
+        resumableCheckoutRecord({
+          orderType: "barrelShipment",
+          record: {...pendingBarrel, paymentStatus: "succeeded"},
+          customerUid: "user_1",
+        }).reason,
+        "already_settled",
+    );
+    assert.equal(
+        resumableCheckoutRecord({
+          orderType: "barrelShipment",
+          record: {...pendingBarrel, status: "cancelled"},
+          customerUid: "user_1",
+        }).reason,
+        "cancelled",
+    );
+  });
+
+  it("does not steal the freight card-save resume", () => {
+    assert.equal(
+        resumableCheckoutRecord({
+          orderType: "freightShipment",
+          record: {...pendingBarrel, paymentTiming: "arrival"},
+          customerUid: "user_1",
+        }).reason,
+        "use_setup_resume",
+    );
+  });
+
+  it("reads the stored charge without inventing a new price", () => {
+    assert.equal(checkoutResumeAmountCents(pendingBarrel), 11000);
+    assert.equal(checkoutResumeAmountCents({price: 110}), 11000);
+    assert.equal(checkoutResumeAmountCents({}), 0);
+  });
+
+  it("builds Stripe metadata that routes back to the same record", () => {
+    assert.deepEqual(
+        checkoutResumeMetadata({
+          orderType: "barrelOrder",
+          recordId: "order_1",
+          record: pendingBarrel,
+          customerUid: "user_1",
+        }),
+        {
+          paymentType: "barrel_order",
+          orderId: "order_1",
+          customerUid: "user_1",
+          businessId: "biz_1",
+          trackingCode: "BS-ZX7RVG",
+        },
+    );
+  });
+
+  it("reuses an open Checkout Session and rejects a spent one", () => {
+    const nowMs = 1720000000000;
+    assert.equal(
+        checkoutSessionReusable({
+          status: "open",
+          payment_status: "unpaid",
+          url: "https://checkout.stripe.com/c/pay/cs_test_1",
+          expires_at: Math.floor(nowMs / 1000) + 1800,
+        }, nowMs),
+        true,
+    );
+    assert.equal(
+        checkoutSessionReusable({
+          status: "expired",
+          payment_status: "unpaid",
+          url: "https://checkout.stripe.com/c/pay/cs_test_1",
+          expires_at: Math.floor(nowMs / 1000) + 1800,
+        }, nowMs),
+        false,
+    );
+  });
+
+  it("createCustomerCheckoutSession resumes before minting a record", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    const start = source.indexOf("exports.createCustomerCheckoutSession");
+    assert.ok(start > 0);
+    const body = source.slice(start, start + 2500);
+    assert.match(body, /payload\.resumeRecordId/);
+    assert.match(body, /resumeExistingCustomerCheckout/);
+    const resumeBeforeCreate =
+      body.indexOf("resumeExistingCustomerCheckout") <
+      body.indexOf("action.createFunction");
+    assert.equal(resumeBeforeCreate, true);
+    const resumeFn = source.indexOf(
+        "async function resumeExistingCustomerCheckout",
+    );
+    assert.ok(resumeFn > 0);
+    const resumeBody = source.slice(resumeFn, resumeFn + 2200);
+    assert.doesNotMatch(resumeBody, /createBarrelOrderPaymentIntent/);
+    assert.doesNotMatch(resumeBody, /createBarrelShipmentPaymentIntent/);
+    assert.match(resumeBody, /resumableCheckoutRecord/);
   });
 });

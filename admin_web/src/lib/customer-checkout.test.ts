@@ -7,6 +7,8 @@ import {
   CUSTOMER_CHECKOUT_ORDER_TYPES,
   buildCheckoutRequest,
   checkoutRedirectUrl,
+  checkoutResumePayload,
+  checkoutResumeTarget,
   paymentReturnHasCustomerWorkspace,
   paymentReturnNeedsSignIn,
   paymentReturnState,
@@ -179,6 +181,52 @@ test("guest payment confirmation copy is localized in French", () => {
     assert.notEqual(french, english, english);
     assert.ok(french.length > 0, english);
   }
+});
+
+test("an unpaid barrel offers Pay now on the same shipment or order", () => {
+  assert.deepEqual(
+    checkoutResumeTarget({
+      id: "ship_1",
+      relatedCollection: "barrelShipments",
+      status: "pending_payment",
+      paymentStatus: "pending",
+    }),
+    {orderType: "barrelShipment", recordId: "ship_1"},
+  );
+  // A multi-destination line shares one payment. Resume the order, never
+  // mint a second barrelOrder for one abandoned sibling.
+  assert.deepEqual(
+    checkoutResumeTarget({
+      id: "ship_1",
+      relatedCollection: "barrelShipments",
+      orderId: "order_1",
+      status: "pending_payment",
+      paymentStatus: "pending",
+    }),
+    {orderType: "barrelOrder", recordId: "order_1"},
+  );
+  assert.deepEqual(
+    checkoutResumePayload({orderType: "barrelOrder", recordId: "order_1"}),
+    {resumeRecordId: "order_1"},
+  );
+  assert.equal(
+    checkoutResumeTarget({
+      id: "ship_1",
+      relatedCollection: "barrelShipments",
+      status: "pending",
+      paymentStatus: "succeeded",
+    }),
+    null,
+  );
+  assert.equal(
+    checkoutResumeTarget({
+      id: "fr_1",
+      relatedCollection: "freightShipments",
+      status: "pending_payment",
+      paymentTiming: "arrival",
+    }),
+    null,
+  );
 });
 
 test("a transport job's return state reads the request's own fields", () => {

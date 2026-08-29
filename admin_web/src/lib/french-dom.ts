@@ -1045,6 +1045,11 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Request progress": "Progression de la demande",
   "Review request": "Vérifier la demande",
   "Opening secure payment...": "Ouverture du paiement sécurisé...",
+  "Pay now": "Payer maintenant",
+  "That did not open. Try again in a moment.":
+    "Cela ne s’est pas ouvert. Réessayez dans un instant.",
+  "Subscribe container tracking before marking this barrel in transit.":
+    "Abonnez le suivi du conteneur avant de marquer ce baril comme en transit.",
   "Back": "Retour",
   "Reserve viewing": "Réserver la visite",
   "Continue to deposit": "Continuer vers l’acompte",

@@ -71,6 +71,7 @@ import {
   useReviewedOrderKeys,
 } from "@/components/customer-review-composer";
 import { OrderDetailDrawer } from "@/components/order-detail-drawer";
+import { ResumeCheckoutButton } from "@/components/resume-checkout-button";
 import { isValidE164, isValidPhone, normalizePhone } from "@/lib/phone";
 import { phoneVerificationErrorMessage } from "@/lib/phone-verification";
 import { currentWebLanguage } from "@/lib/language";
@@ -934,6 +935,12 @@ function OrderPanel({
                 )}
               </>
             )}
+            <ResumeCheckoutButton
+              record={{
+                ...selected.row,
+                collectionName: selected.collectionName,
+              }}
+            />
             <div className="customer-order-facts">
               <OrderFact
                 label="Reference"
