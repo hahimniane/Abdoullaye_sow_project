@@ -1353,8 +1353,9 @@ describe("business dashboard Firestore rules", () => {
             }, {merge: true}),
         );
         await assertFails(
-            staffDb.doc("freightShipments/freight_v2_card_saved_awaiting_weight")
-                .set({status: "in_transit"}, {merge: true}),
+            staffDb.doc(
+                "freightShipments/freight_v2_card_saved_awaiting_weight",
+            ).set({status: "in_transit"}, {merge: true}),
         );
         await assertFails(
             staffDb.doc("freightSettlements/freight_v2_unsettled_v1").set({

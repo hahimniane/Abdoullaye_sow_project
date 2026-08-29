@@ -34,7 +34,7 @@ describe("freight settlement arithmetic", () => {
     assert.equal(freightMayProgress(result.priceSettlementStatus), false);
   });
 
-  it("lets a pay-on-arrival booking progress unpaid after weight confirm", () => {
+  it("lets pay-on-arrival progress unpaid after weight confirm", () => {
     assert.equal(
         freightMayProgress(FreightSettlementStatus.DUE_ON_ARRIVAL),
         true,

@@ -348,6 +348,17 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   Stripe redirects. Coverage: `customer-checkout.test.js` (buyerUid-only
   session), `car-purchase.test.js` / `admin_web/src/lib/car-purchase.test.ts`
   (unpaid hold cannot be Mark sold / Completed). Do not switch Stripe mode.
+- Pay-on-arrival freight (`payOnArrival` / `paymentTiming: arrival`) is
+  secured by `paymentStatus: card_saved`, not a succeeded charge. Weight
+  confirm and In transit / Arrived must stay unlocked; the saved card is
+  charged when status becomes `ready_for_pickup`. Do not treat `card_saved`
+  like unpaid pay-now (that deadlocks fulfillment). Completion still waits
+  for `settled`. Customer Pay now is only for abandoned setup or a failed
+  arrival charge (`balance_due`). Coverage:
+  `admin_web/src/lib/freight-fulfillment.test.ts`,
+  `functions/test/freight-settlement.test.js`,
+  `functions/test/firestore-rules.test.js` (due_on_arrival writes). Pay-now
+  freight (`FR-SNC3FQ` style) still requires succeeded + settled.
 - Website notification clicks have no URL route. The bell only marks read and
   calls `onSelect`. Routing lives in `admin_web/src/lib/notification-routing.ts`
   and must match the mobile contract in

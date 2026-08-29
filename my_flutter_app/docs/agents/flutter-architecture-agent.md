@@ -138,7 +138,9 @@ Add future project conventions and repeated architectural decisions here.
 - Freight pricing is a two-stage contract: the booking charge is a provisional
   estimate, a business-only weight confirmation creates one deterministic
   versioned settlement, and fulfillment/payout stays locked until that
-  settlement is complete. Preserve estimated and final amounts separately;
+  settlement is complete — except pay-on-arrival, which is secured by a
+  saved card (`card_saved`) and progresses unpaid (`due_on_arrival`) until
+  the business marks arrived. Preserve estimated and final amounts separately;
   never overwrite the estimate or treat operational status as payment status.
 - Stripe payment-sheet flows must separate three phases: create a pending
   server record, present the sheet, then confirm completion. Cancel the pending
