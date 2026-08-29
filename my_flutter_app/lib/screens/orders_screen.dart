@@ -303,8 +303,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return (icon: Icons.car_rental_outlined, color: AppColors.cobaltMid);
     case OrderType.parking:
       return (icon: Icons.local_parking_outlined, color: AppColors.sage);
-    case OrderType.priceRequest:
-      return (icon: Icons.request_quote_outlined, color: AppColors.cobalt);
   }
 }
 
@@ -320,8 +318,6 @@ String _typeLabel(AppLocalizations l10n, OrderType type) {
       return l10n.orderTypeTransport;
     case OrderType.parking:
       return l10n.orderTypeParking;
-    case OrderType.priceRequest:
-      return l10n.orderTypePriceRequests;
   }
 }
 

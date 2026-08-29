@@ -7,7 +7,7 @@ import '../services/notification_routing.dart';
 
 /// The kind of thing a customer paid for. New paid services become a new value
 /// here — never a new history screen.
-enum OrderType { car, barrel, freight, transport, parking, priceRequest }
+enum OrderType { car, barrel, freight, transport, parking }
 
 enum CustomerTrackingType { barrel, freight }
 
@@ -288,7 +288,10 @@ class CustomerOrder {
     final description = _str(d, 'description');
     return CustomerOrder(
       id: doc.id,
-      type: OrderType.priceRequest,
+      // Freight, not a service of its own: the customer asked a freight
+      // question and is waiting on a freight answer. The status says which
+      // stage it is at.
+      type: OrderType.freight,
       title: description.isEmpty
           ? 'Price request → ${_str(d, 'destinationCountryName')}'
           : '$description → ${_str(d, 'destinationCountryName')}',

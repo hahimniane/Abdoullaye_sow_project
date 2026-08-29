@@ -73,7 +73,9 @@ test("the orders panel is titled for what is left in it", () => {
   // Named for whichever set it is actually showing: the leftover services,
   // or the price requests that now have their own tab.
   assert.match(source, /"Cars, transport & parking"/);
-  assert.match(source, /shownTab === "priceRequests"\s*\?\s*"Price requests"/);
+  // On the freight tab the same panel carries the parcels still waiting on a
+  // price, so it is named for those instead.
+  assert.match(source, /shownTab === "freight"\s*\?\s*"Waiting on a price"/);
 });
 
 test("the console opens on Home, never on the profile form", () => {

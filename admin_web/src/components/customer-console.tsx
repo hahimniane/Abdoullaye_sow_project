@@ -589,16 +589,17 @@ function OrdersView({
     () =>
       [
         {id: "barrels" as const, label: "Barrels", count: barrels.length},
-        {id: "freight" as const, label: "Freight", count: freight.length},
+        {
+          id: "freight" as const,
+          label: "Freight",
+          // Shipments and the parcels still waiting on a price are the same
+          // service to the customer, so they are one tab and one count.
+          count: freight.length + priceRequests.length,
+        },
         {
           id: "transport" as const,
           label: "Car transport",
           count: transportJobs.length,
-        },
-        {
-          id: "priceRequests" as const,
-          label: "Price requests",
-          count: priceRequests.length,
         },
         {
           id: "cars" as const,
@@ -615,7 +616,7 @@ function OrdersView({
     ],
   );
   const [activeTab, setActiveTab] = useState<
-    "barrels" | "freight" | "transport" | "priceRequests" | "cars"
+    "barrels" | "freight" | "transport" | "cars"
   >("barrels");
   const [bucket, setBucket] = useState<"all" | StatusBucket>("all");
   const shownTab = tabs.some((tab) => tab.id === activeTab)
@@ -651,8 +652,7 @@ function OrdersView({
   // Price requests and the leftover "cars & parking" rows are both order
   // shaped rather than tracked shipments, so they render through here; which
   // set that is depends on the tab.
-  const orderRowsForTab =
-    shownTab === "priceRequests" ? priceRequests : untracked;
+  const orderRowsForTab = shownTab === "freight" ? priceRequests : untracked;
   const shownOrders = orderRowsForTab.filter((order) =>
     bucketMatches(
       text(order.row.status ?? order.row.purchaseStatus, ""),
@@ -661,7 +661,7 @@ function OrdersView({
   // Chips only for buckets that exist on this tab: a chip that always shows
   // an empty list is a dead end, not a filter.
   const presentBuckets = new Set(
-    (shownTab === "cars" || shownTab === "priceRequests"
+    (shownTab === "cars"
       ? orderRowsForTab.map((order) =>
           text(order.row.status ?? order.row.purchaseStatus, ""),
         )
@@ -696,9 +696,7 @@ function OrdersView({
           visible when the tab has records: a filter that hides itself
           when it would show one chip is a filter nobody learns exists. */}
       {tabs.length > 0 &&
-        (shownTab === "cars" || shownTab === "priceRequests"
-          ? orderRowsForTab
-          : tabRecords).length > 0 && (
+        (shownTab === "cars" ? orderRowsForTab : tabRecords).length > 0 && (
         <div
           aria-label="Filter by status"
           className="service-segments service-sort-segments"
@@ -731,18 +729,16 @@ function OrdersView({
         openKey={openKey}
         orders={orders}
         title={
-          shownTab === "priceRequests"
-            ? "Price requests"
+          shownTab === "freight"
+            ? "Waiting on a price"
             : "Cars, transport & parking"
         }
         uid={uid}
         visibleOrders={
-          shownTab === "cars" || shownTab === "priceRequests"
-            ? shownOrders
-            : []
+          shownTab === "cars" || shownTab === "freight" ? shownOrders : []
         }
       />
-      {!loading && shownTab !== "cars" && shownTab !== "priceRequests" && (
+      {!loading && shownTab !== "cars" && (
         <CustomerTracking
           focusedRecordId={focusedRecord?.id ?? ""}
           onFocusConsumed={onFocusConsumed}
@@ -1595,6 +1591,16 @@ function orderStatusLabel(order: TaggedRow) {
   if (order.collectionName === "barrelShipments" ||
       order.collectionName === "freightShipments") {
     return statusLabel(status, order.row.destinationDelivery === true);
+  }
+  // A price request's own vocabulary. "quote_requested" is the backend's
+  // word for it and means nothing to the person waiting; what they want to
+  // know is whether a price has arrived yet.
+  if (order.collectionName === "freightQuoteRequests") {
+    const quoteStatus = text(order.row.quoteStatus, "collecting");
+    if (quoteStatus === "selected") return "Price agreed";
+    if (quoteStatus === "booked") return "Booked";
+    if (quoteStatus === "cancelled") return "Cancelled";
+    return "Waiting for prices";
   }
   return status;
 }
