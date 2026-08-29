@@ -50,6 +50,8 @@ function isCompleteHeadquartersAddress(data = {}) {
 /**
  * Compose the public HQ line. Requires addressLine1 so a city-only or
  * country-only leftover never ships to customers as a drop-off address.
+ * @param {Object} [data] Business or profile fields.
+ * @return {string} Composed address, or "" when the street is missing.
  */
 function composeHeadquartersAddress(data = {}) {
   const parts = headquartersParts(data);
