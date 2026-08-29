@@ -342,7 +342,7 @@ export function ConsoleRouter() {
       <CustomerServiceEntry
         authenticated={Boolean(firebaseUser && profile)}
         authenticating={
-          booting && Boolean(firebaseUser) && !firebaseUser.isAnonymous
+          booting && Boolean(firebaseUser && !firebaseUser.isAnonymous)
         }
         authPanel={(initialMode) => (
           <RoleSignInCard

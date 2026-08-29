@@ -10,6 +10,7 @@
 
 export type AuthenticationRequiredHandler = () =>
   | void
+  | boolean
   | Promise<boolean | void>;
 
 /**

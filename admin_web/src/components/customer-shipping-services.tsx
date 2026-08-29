@@ -229,7 +229,7 @@ type CustomerShippingServicesProps = {
   bookingQuoteRequestId?: string;
   authenticated?: boolean;
   guestReady?: boolean;
-  onAuthenticationRequired?: () => void | Promise<boolean | void>;
+  onAuthenticationRequired?: () => void | boolean | Promise<boolean | void>;
   onTransportCreated?: (result: {
     id: string;
     trackingCode: string;
@@ -711,7 +711,7 @@ function BarrelShipmentForm({
 }: {
   authenticated: boolean;
   guestReady?: boolean;
-  onAuthenticationRequired?: () => void | Promise<boolean | void>;
+  onAuthenticationRequired?: () => void | boolean | Promise<boolean | void>;
   options: DestinationOption[];
   profile: UserProfile;
 }) {
@@ -1305,7 +1305,7 @@ function BarrelOrderForm({
 }: {
   authenticated: boolean;
   guestReady?: boolean;
-  onAuthenticationRequired?: () => void | Promise<boolean | void>;
+  onAuthenticationRequired?: () => void | boolean | Promise<boolean | void>;
   options: DestinationOption[];
   profile: UserProfile;
 }) {
@@ -2329,7 +2329,7 @@ function FreightShipmentForm({
   bookingQuoteRequestId?: string;
   guestReady?: boolean;
   freightShipments: FirestoreRow[];
-  onAuthenticationRequired?: () => void | Promise<boolean | void>;
+  onAuthenticationRequired?: () => void | boolean | Promise<boolean | void>;
   options: DestinationOption[];
   profile: UserProfile;
 }) {
@@ -3729,7 +3729,7 @@ function FreightPriceRequest({
   itemCategoryId: string;
   itemLabel: string;
   mode: "air" | "sea";
-  onAuthenticationRequired?: () => void | Promise<boolean | void>;
+  onAuthenticationRequired?: () => void | boolean | Promise<boolean | void>;
 }) {
   const [description, setDescription] = useState("");
   const [weightKg, setWeightKg] = useState("");
@@ -4253,7 +4253,7 @@ function TransportRequestForm({
 }: {
   authenticated: boolean;
   guestReady?: boolean;
-  onAuthenticationRequired?: () => void | Promise<boolean | void>;
+  onAuthenticationRequired?: () => void | boolean | Promise<boolean | void>;
   onCreated?: (result: { id: string; trackingCode: string }) => void;
   options: DestinationOption[];
   profile: UserProfile;
