@@ -1,3 +1,16 @@
+bool headquartersAddressNeedsAttention({
+  required String addressLine1,
+  required String country,
+  required String state,
+  required String city,
+}) {
+  final trimmedCountry = country.trim();
+  return addressLine1.trim().isEmpty ||
+      trimmedCountry.isEmpty ||
+      city.trim().isEmpty ||
+      (trimmedCountry == 'United States' && state.trim().isEmpty);
+}
+
 bool parkingCapacityNeedsAttention({
   required bool offersParking,
   required String addressLine1,

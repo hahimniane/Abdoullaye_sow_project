@@ -11,6 +11,11 @@ const crypto = require("crypto");
 const QRCode = require("qrcode");
 const {buildTrackingCode} = require("./tracking_code");
 const {
+  composeHeadquartersAddress,
+  defaultOfficeLocationFromBusiness,
+  headquartersAddressError,
+} = require("./business_address");
+const {
   isValidPhoneNumber,
   normalizePhoneAlias,
 } = require("./phone_number");
@@ -3063,22 +3068,11 @@ async function requireBusinessPermission(uid, businessId, section) {
 // business with none configured yet falls back to its single main address so
 // "bring to office" keeps working without requiring every business to set
 // this up first.
-function defaultOfficeLocationFromBusiness(business) {
-  const address = [
-    business.addressLine1,
-    business.city,
-    business.state,
-    business.postalCode,
-  ]
-      .filter((part) => typeof part === "string" && part.trim())
-      .join(", ");
-  if (!address) return null;
-  return {
-    id: "default",
-    label: business.name || "Main office",
-    address,
-    isActive: true,
-  };
+function requireCompleteHeadquartersAddress(data) {
+  const message = headquartersAddressError(data);
+  if (message) {
+    throw new HttpsError("invalid-argument", message);
+  }
 }
 
 function formatOfficeLocationAddress(location) {
@@ -3234,12 +3228,7 @@ exports.listActiveBarrelDestinationOptions = onCall(
             businessEmail: business.email || "",
             businessWebsite: business.website || "",
             businessProfileImageUrl: business.profileImageUrl || "",
-            businessAddress: [
-              business.addressLine1,
-              business.city,
-              business.state,
-              business.postalCode,
-            ].filter(Boolean).join(", "),
+            businessAddress: composeHeadquartersAddress(business),
             enabledServices: services,
             serviceNote: business.serviceNote || "",
             businessStatus: "approved",
@@ -9316,6 +9305,7 @@ exports.submitBusinessApplication = onCall(
         state,
         postalCode,
       });
+      requireCompleteHeadquartersAddress(profile);
 
       await db.runTransaction(async (transaction) => {
         const businessDoc = await transaction.get(businessRef);
@@ -9456,6 +9446,7 @@ exports.createAdminBusiness = onCall(
       if (!profile.name) {
         throw new HttpsError("invalid-argument", "Business name is required");
       }
+      requireCompleteHeadquartersAddress(profile);
       if (profile.phone) {
         requireValidPhoneNumber(profile.phone, "Business phone");
       }
@@ -10343,6 +10334,7 @@ exports.updateBusinessProfile = onCall(
       if (!profile.name) {
         throw new HttpsError("invalid-argument", "Business name is required");
       }
+      requireCompleteHeadquartersAddress(profile);
       if (profile.phone) {
         requireValidPhoneNumber(profile.phone, "Business phone");
       }

@@ -1340,7 +1340,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectBusinessCity => 'Select your business city';
 
   @override
+  String get selectBusinessState => 'Select your business state';
+
+  @override
   String get selectCountryFirst => 'Select country first';
+
+  @override
+  String get enterBusinessStreet => 'Enter the business street address';
+
+  @override
+  String get enterValidHeadquartersAddress =>
+      'Add a complete headquarters address so customers can drop off items.';
 
   @override
   String get seedDefaultCountries => 'Seed All Countries';
@@ -2107,7 +2117,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addOfficeLocationsHelp =>
-      'Add at least one so customers can drop off items in person.';
+      'Additional offices are optional. Customers already drop off at your headquarters address unless you add extra locations.';
 
   @override
   String get locationName => 'Location name';
@@ -2589,7 +2599,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get businessDefaultAddressSubtitle =>
-      'Used as the default address for vehicle listings.';
+      'This is the default drop-off address for customers. Extra offices are optional.';
 
   @override
   String get paidHoldPricing => 'Paid hold pricing';

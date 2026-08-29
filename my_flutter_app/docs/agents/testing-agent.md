@@ -359,6 +359,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `functions/test/freight-settlement.test.js`,
   `functions/test/firestore-rules.test.js` (due_on_arrival writes). Pay-now
   freight (`FR-SNC3FQ` style) still requires succeeded + settled.
+- Headquarters street is required for customer drop-off. Coverage:
+  `functions/test/business-address.test.js` (compose + empty-street reject),
+  `functions/test/service-callables.test.js` (HQ fallback + empty-street
+  booking reject), `test/business_profile_validation_test.dart`, and
+  `test/drop_off_address_test.dart`. Do not treat a city-only catalog
+  `businessAddress` as a configured office.
 - Website notification clicks have no URL route. The bell only marks read and
   calls `onSelect`. Routing lives in `admin_web/src/lib/notification-routing.ts`
   and must match the mobile contract in

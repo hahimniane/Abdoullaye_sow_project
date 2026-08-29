@@ -75,6 +75,7 @@ import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToggleRow } from "@/components/toggle-row";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
+import { CITIES_BY_STATE, US_STATE_NAMES } from "@/lib/us-locations";
 import { auth, db, functions, storage } from "@/lib/firebase";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import {
@@ -8259,6 +8260,11 @@ function BusinessesView({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [serviceNote, setServiceNote] = useState("");
+  const [addressLine1, setAddressLine1] = useState("");
+  const [city, setCity] = useState("");
+  const [country, setCountry] = useState("");
+  const [state, setState] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   const [enabledServices, setEnabledServices] = useState<string[]>(
     businessServices.map((service) => service.id),
   );
@@ -8287,6 +8293,16 @@ function BusinessesView({
     if (!enabledServices.length) {
       throw new Error("Choose at least one service for this business.");
     }
+    if (!addressLine1.trim() || !city.trim() || !country.trim()) {
+      throw new Error(
+        "A complete headquarters address is required (street, city, and country).",
+      );
+    }
+    if (country.trim() === "United States" && !state.trim()) {
+      throw new Error(
+        "A US state is required for a United States headquarters address.",
+      );
+    }
     await httpsCallable(
       functions,
       "createAdminBusiness",
@@ -8296,12 +8312,22 @@ function BusinessesView({
       email: email.trim(),
       enabledServices,
       serviceNote: serviceNote.trim(),
+      addressLine1: addressLine1.trim(),
+      city: city.trim(),
+      country: country.trim(),
+      state: country.trim() === "United States" ? state.trim() : state.trim(),
+      postalCode: postalCode.trim(),
       status: "pending",
     });
     setName("");
     setPhone("");
     setEmail("");
     setServiceNote("");
+    setAddressLine1("");
+    setCity("");
+    setCountry("");
+    setState("");
+    setPostalCode("");
     setEnabledServices(businessServices.map((service) => service.id));
   }
 
@@ -8482,6 +8508,86 @@ function BusinessesView({
               placeholder="Review note"
               value={serviceNote}
               onChange={(event) => setServiceNote(event.target.value)}
+            />
+            <input
+              required
+              autoComplete="street-address"
+              placeholder="Street address"
+              value={addressLine1}
+              onChange={(event) => setAddressLine1(event.target.value)}
+            />
+            <SearchableSelect
+              emptyMessage="No countries match your search."
+              label="Country"
+              listLabel="Business country options"
+              onChange={(value) => {
+                setCountry(value);
+                setState("");
+                setCity("");
+              }}
+              options={COUNTRY_CATALOG.map((item) => ({
+                label: item.name,
+                keywords: `${item.code} ${item.name}`,
+                value: item.name,
+              }))}
+              placeholder="Search or choose a country"
+              value={country}
+            />
+            {country === "United States" ? (
+              <SearchableSelect
+                emptyMessage="No states match your search."
+                label="State"
+                listLabel="Business state options"
+                onChange={(value) => {
+                  setState(value);
+                  setCity("");
+                }}
+                options={Object.entries(US_STATE_NAMES).map(([code, name]) => ({
+                  label: name,
+                  keywords: `${code} ${name}`,
+                  value: code,
+                }))}
+                placeholder="Search or choose a state"
+                value={state}
+              />
+            ) : (
+              <input
+                placeholder="State or region (optional)"
+                value={state}
+                onChange={(event) => setState(event.target.value)}
+              />
+            )}
+            {country === "United States" && state ? (
+              <SearchableSelect
+                emptyMessage="No cities match your search."
+                label="City"
+                listLabel="Business city options"
+                onChange={setCity}
+                options={[
+                  ...(CITIES_BY_STATE[state] ?? []),
+                  ...(city && !(CITIES_BY_STATE[state] ?? []).includes(city)
+                    ? [city]
+                    : []),
+                ].map((item) => ({label: item, value: item}))}
+                placeholder="Search or choose a city"
+                value={city}
+              />
+            ) : (
+              <input
+                required
+                placeholder="City"
+                value={city}
+                onChange={(event) => setCity(event.target.value)}
+              />
+            )}
+            <input
+              autoComplete="postal-code"
+              placeholder={
+                country === "United States" ? "Postal code" : "Postal code (optional)"
+              }
+              required={country === "United States"}
+              value={postalCode}
+              onChange={(event) => setPostalCode(event.target.value)}
             />
           </div>
           <div className="checkbox-group" aria-label="Business services">

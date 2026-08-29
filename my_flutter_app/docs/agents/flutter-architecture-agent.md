@@ -242,6 +242,11 @@ Add future project conventions and repeated architectural decisions here.
   `location.replace("/")` on success for anyone without a customer workspace
   — that is the sign-in screen. Resume the same `barrelOrder` id; the Session
   id is the capability. Signed-in customers still auto-return to the console.
+- Business headquarters lives on the business document (`addressLine1`, city,
+  country, US state, optional postal). Extra `officeLocations` stay optional.
+  Never auto-write HQ into the `officeLocations` subcollection. Customer
+  drop-off synthesizes a default office from HQ only when `addressLine1` is a
+  real street; city-only leftovers must not become a drop-off address.
 - Barrel `in_transit` needs a container / booking / BOL number (≥ 4 chars) on
   the merged document. A business may write `containerNumber` from the Barrels
   console without Terminal49. Do not require `trackingProvider: carrier_api`

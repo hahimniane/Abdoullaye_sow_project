@@ -140,6 +140,11 @@ type ProfileDraft = {
   email: string;
   website: string;
   serviceNote: string;
+  addressLine1: string;
+  city: string;
+  country: string;
+  state: string;
+  postalCode: string;
   enabledServices: string[];
   carHoldPricingMode: "flat" | "per_day";
   carHoldFlatFee: string;
@@ -342,6 +347,12 @@ export function BusinessProfilePanel({
         if (!businessId) throw new Error("Business account is not configured.");
         if (!business) throw new Error("Business profile is still loading.");
         if (!draft.name.trim()) throw new Error("Business name is required.");
+        if (!draft.addressLine1.trim() || !draft.city.trim() || !draft.country.trim()) {
+          throw new Error("A complete headquarters address is required (street, city, and country).");
+        }
+        if (draft.country.trim() === "United States" && !draft.state.trim()) {
+          throw new Error("A US state is required for a United States headquarters address.");
+        }
 
         let profileImageUrl = draft.profileImageUrl.trim();
         let profileImagePath = draft.profileImagePath.trim();
@@ -362,6 +373,11 @@ export function BusinessProfilePanel({
           email: draft.email.trim().toLowerCase(),
           website: draft.website.trim(),
           serviceNote: draft.serviceNote.trim(),
+          addressLine1: draft.addressLine1.trim(),
+          city: draft.city.trim(),
+          country: draft.country.trim(),
+          state: draft.country.trim() === "United States" ? draft.state.trim() : "",
+          postalCode: draft.postalCode.trim(),
           profileImageUrl,
           profileImagePath,
         });
@@ -453,6 +469,27 @@ export function BusinessProfilePanel({
             <textarea rows={3} value={draft.serviceNote} onChange={(event) => update("serviceNote", event.target.value)} placeholder="What your business is known for…" />
           </label>
         </div>
+        <HeadquartersAddressFields
+          draft={draft}
+          onCity={(city) => update("city", city)}
+          onCountry={(country) =>
+            setDraft((current) => ({
+              ...current,
+              country,
+              state: "",
+              city: "",
+            }))
+          }
+          onPostalCode={(postalCode) => update("postalCode", postalCode)}
+          onState={(state) =>
+            setDraft((current) => ({
+              ...current,
+              state,
+              city: "",
+            }))
+          }
+          onStreet={(addressLine1) => update("addressLine1", addressLine1)}
+        />
         <BusinessVerificationUploadSection
           busy={busy}
           documentFilesById={documentFilesById}
@@ -466,6 +503,124 @@ export function BusinessProfilePanel({
         />
       </form>
     </section>
+  );
+}
+
+function HeadquartersAddressFields({
+  draft,
+  onCity,
+  onCountry,
+  onPostalCode,
+  onState,
+  onStreet,
+}: {
+  draft: ProfileDraft;
+  onCity: (city: string) => void;
+  onCountry: (country: string) => void;
+  onPostalCode: (postalCode: string) => void;
+  onState: (state: string) => void;
+  onStreet: (addressLine1: string) => void;
+}) {
+  const isUnitedStates = draft.country.trim() === "United States";
+  const language = currentWebLanguage() === "fr" ? "fr" : "en";
+  const countryOptions = useMemo(() => {
+    const displayNames = new Intl.DisplayNames([language], {type: "region"});
+    return COUNTRY_CATALOG.map((country) => {
+      const localizedName = displayNames.of(country.code) ?? country.name;
+      return {
+        label: localizedName,
+        keywords: `${country.code} ${country.name} ${localizedName}`,
+        value: country.name,
+      };
+    });
+  }, [language]);
+  const cityOptions = [
+    ...(CITIES_BY_STATE[draft.state] ?? []),
+    ...(
+      draft.city &&
+      !(CITIES_BY_STATE[draft.state] ?? []).includes(draft.city)
+        ? [draft.city]
+        : []
+    ),
+  ].map((city) => ({label: city, value: city}));
+
+  return (
+    <div className="lst-form-grid">
+      <div className="lst-form-section">Headquarters address</div>
+      <p className="card-sub" style={{gridColumn: "1 / -1", margin: 0}}>
+        This is the default drop-off address for customers. Extra office
+        locations are optional.
+      </p>
+      <label className="lst-field wide">
+        <span>Business street address</span>
+        <input
+          autoComplete="street-address"
+          onChange={(event) => onStreet(event.target.value)}
+          required
+          value={draft.addressLine1}
+        />
+      </label>
+      <SearchableSelect
+        className="lst-field"
+        emptyMessage="No countries match your search."
+        label="Country"
+        listLabel="Headquarters country options"
+        onChange={onCountry}
+        options={countryOptions}
+        placeholder="Search or choose a country"
+        value={draft.country}
+      />
+      {isUnitedStates ? (
+        <SearchableSelect
+          className="lst-field"
+          emptyMessage="No states match your search."
+          label="State"
+          listLabel="Headquarters state options"
+          onChange={onState}
+          options={parkingStateOptions}
+          placeholder="Search or choose a state"
+          value={draft.state}
+        />
+      ) : (
+        <label className="lst-field">
+          <span>State or region</span>
+          <input
+            onChange={(event) => onState(event.target.value)}
+            value={draft.state}
+          />
+        </label>
+      )}
+      {isUnitedStates && draft.state ? (
+        <SearchableSelect
+          className="lst-field"
+          emptyMessage="No cities match your search."
+          label="City"
+          listLabel="Headquarters city options"
+          onChange={onCity}
+          options={cityOptions}
+          placeholder="Search or choose a city"
+          value={draft.city}
+        />
+      ) : (
+        <label className="lst-field">
+          <span>City</span>
+          <input
+            onChange={(event) => onCity(event.target.value)}
+            required
+            value={draft.city}
+          />
+        </label>
+      )}
+      <label className="lst-field">
+        <span>Postal code</span>
+        <input
+          autoComplete="postal-code"
+          onChange={(event) => onPostalCode(event.target.value)}
+          required={isUnitedStates}
+          value={draft.postalCode}
+        />
+      </label>
+    </div>
   );
 }
 
@@ -2817,6 +2972,11 @@ function profileDraftFromBusiness(business?: FirestoreRow | null): ProfileDraft 
     email: optionalBusinessText(business?.email),
     website: optionalBusinessText(business?.website),
     serviceNote: optionalBusinessText(business?.serviceNote),
+    addressLine1: optionalBusinessText(business?.addressLine1),
+    city: optionalBusinessText(business?.city),
+    country: optionalBusinessText(business?.country),
+    state: optionalBusinessText(business?.state),
+    postalCode: optionalBusinessText(business?.postalCode),
     enabledServices: services.length ? services : serviceOptions.map((option) => option.id),
     carHoldPricingMode: business?.carHoldPricingMode === "per_day" ? "per_day" : "flat",
     carHoldFlatFee: numberText(business?.carHoldFlatFee, "500"),

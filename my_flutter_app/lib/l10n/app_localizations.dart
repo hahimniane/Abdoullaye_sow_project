@@ -2558,11 +2558,29 @@ abstract class AppLocalizations {
   /// **'Select your business city'**
   String get selectBusinessCity;
 
+  /// No description provided for @selectBusinessState.
+  ///
+  /// In en, this message translates to:
+  /// **'Select your business state'**
+  String get selectBusinessState;
+
   /// No description provided for @selectCountryFirst.
   ///
   /// In en, this message translates to:
   /// **'Select country first'**
   String get selectCountryFirst;
+
+  /// No description provided for @enterBusinessStreet.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the business street address'**
+  String get enterBusinessStreet;
+
+  /// No description provided for @enterValidHeadquartersAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a complete headquarters address so customers can drop off items.'**
+  String get enterValidHeadquartersAddress;
 
   /// No description provided for @seedDefaultCountries.
   ///
@@ -3947,7 +3965,7 @@ abstract class AppLocalizations {
   /// No description provided for @addOfficeLocationsHelp.
   ///
   /// In en, this message translates to:
-  /// **'Add at least one so customers can drop off items in person.'**
+  /// **'Additional offices are optional. Customers already drop off at your headquarters address unless you add extra locations.'**
   String get addOfficeLocationsHelp;
 
   /// No description provided for @locationName.
@@ -4757,7 +4775,7 @@ abstract class AppLocalizations {
   /// No description provided for @businessDefaultAddressSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Used as the default address for vehicle listings.'**
+  /// **'This is the default drop-off address for customers. Extra offices are optional.'**
   String get businessDefaultAddressSubtitle;
 
   /// No description provided for @paidHoldPricing.

@@ -1365,7 +1365,17 @@ class AppLocalizationsFr extends AppLocalizations {
   String get selectBusinessCity => 'Sélectionnez la ville de votre entreprise';
 
   @override
+  String get selectBusinessState => 'Sélectionnez l’État de votre entreprise';
+
+  @override
   String get selectCountryFirst => 'Sélectionnez d’abord un pays';
+
+  @override
+  String get enterBusinessStreet => 'Saisissez l’adresse de l’entreprise';
+
+  @override
+  String get enterValidHeadquartersAddress =>
+      'Ajoutez une adresse de siège complète pour que les clients puissent déposer leurs articles.';
 
   @override
   String get seedDefaultCountries => 'Ajouter tous les pays';
@@ -2155,7 +2165,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get addOfficeLocationsHelp =>
-      'Ajoutez-en au moins un pour que les clients puissent déposer leurs articles en personne.';
+      'Les bureaux supplémentaires sont facultatifs. Les clients déposent déjà à l’adresse du siège, sauf si vous ajoutez d’autres lieux.';
 
   @override
   String get locationName => 'Nom du lieu';
@@ -2649,7 +2659,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get businessDefaultAddressSubtitle =>
-      'Utilisée comme adresse par défaut pour les annonces de véhicules.';
+      'C’est l’adresse de dépôt par défaut pour les clients. Les bureaux supplémentaires sont facultatifs.';
 
   @override
   String get paidHoldPricing => 'Tarif de retenue payante';
