@@ -2502,7 +2502,11 @@ function FreightShipmentForm({
   const setPrice = itemPricing.mode === "flat";
   // Nobody here has a number for this parcel, so there is no price to show
   // and nothing to book. The customer asks, and the businesses answer.
+  // A price already agreed is the answer to that question, so asking it again
+  // sends the customer round the loop they just came out of. The booking goes
+  // ahead on the agreed amount instead.
   const needsPriceRequest =
+    !agreedQuoteRequestId &&
     itemStepSatisfied &&
     (qualifiedProviderOptions.length === 0 ||
       (destination !== null && !itemPricing.priced));

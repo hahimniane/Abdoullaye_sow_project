@@ -343,7 +343,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   /// Whether this business has put a number on this item at all. When it has
   /// not, the customer asks it for one instead of being shown a guess.
-  bool get _itemPriced => _itemPricing.priced;
+  /// A price already agreed with a business is a price, even when the
+  /// pricing table still has no number for the parcel - asking again would
+  /// send the customer round the loop they just came out of.
+  bool get _hasAgreedPrice => widget.quoteRequestId.trim().isNotEmpty;
+
+  bool get _itemPriced => _hasAgreedPrice || _itemPricing.priced;
 
   /// A known object, priced once by the business. Nothing here is weighed.
   bool get _setPrice => _itemPricing.isFlat;
