@@ -378,7 +378,19 @@ void main() {
       // A price nobody set is not a price to show: the total, the per-kg
       // line and the Book button all assert one, so all three are gone and
       // the customer is offered the question instead.
-      expect(screen, contains('bool get _itemPriced => _itemPricing.priced;'));
+      // Still the pricing table's answer, with one exception: a price the
+      // customer already accepted from a business counts as priced, or
+      // arriving with an agreed price would send them back to ask for it.
+      expect(
+        screen,
+        contains('bool get _itemPriced => _hasAgreedPrice || '
+            '_itemPricing.priced;'),
+      );
+      expect(
+        screen,
+        contains("bool get _hasAgreedPrice => "
+            "widget.quoteRequestId.trim().isNotEmpty;"),
+      );
       expect(
         screen,
         contains(
