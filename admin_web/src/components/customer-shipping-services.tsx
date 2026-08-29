@@ -218,6 +218,10 @@ type CustomerShippingServicesProps = {
   profile: UserProfile;
   freightShipments?: FirestoreRow[];
   initialService?: ShippingService;
+  /// A price request the customer already accepted, so the booking that
+  /// follows charges the agreed amount. Only the id: the server reads the
+  /// price off the request.
+  bookingQuoteRequestId?: string;
   authenticated?: boolean;
   guestReady?: boolean;
   onAuthenticationRequired?: () => void;
@@ -434,6 +438,7 @@ export function CustomerShippingServices({
   profile,
   freightShipments = [],
   initialService = "barrel",
+  bookingQuoteRequestId = "",
   authenticated = true,
   guestReady = false,
   onAuthenticationRequired,
@@ -636,6 +641,7 @@ export function CustomerShippingServices({
           {service === "freight" && (
             <FreightShipmentForm
               authenticated={authenticated}
+              bookingQuoteRequestId={bookingQuoteRequestId}
               guestReady={guestReady}
               freightShipments={freightShipments}
               onAuthenticationRequired={onAuthenticationRequired}
@@ -2297,6 +2303,7 @@ function PickupAvailability({
 
 function FreightShipmentForm({
   authenticated,
+  bookingQuoteRequestId = "",
   guestReady,
   freightShipments,
   onAuthenticationRequired,
@@ -2304,6 +2311,7 @@ function FreightShipmentForm({
   profile,
 }: {
   authenticated: boolean;
+  bookingQuoteRequestId?: string;
   guestReady?: boolean;
   freightShipments: FirestoreRow[];
   onAuthenticationRequired?: () => void;
@@ -2314,7 +2322,10 @@ function FreightShipmentForm({
   // The price request this booking settles, once the customer accepts a
   // business's quote. Only the id travels: the server reads the agreed
   // amount off that request, so no price is ever decided here.
-  const [agreedQuoteRequestId, setAgreedQuoteRequestId] = useState("");
+  const [acceptedHere, setAgreedQuoteRequestId] = useState("");
+  // Either accepted on this screen just now, or handed in from the orders
+  // drawer where the customer accepted it.
+  const agreedQuoteRequestId = acceptedHere || bookingQuoteRequestId;
   const availableOptions = useMemo(
     () => freightProvidersForMode(options, mode),
     [mode, options],

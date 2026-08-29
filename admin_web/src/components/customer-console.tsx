@@ -215,6 +215,9 @@ export function CustomerConsole({
   // see one: the prices could only be reached in the moment the request was
   // made, so closing that screen lost the thread.
   const priceRequests = useCustomerFreightQuoteRequests(firebaseUser.uid, true);
+  // Set when the customer accepts a price from the orders drawer and asks to
+  // finish the booking: the shipping form opens carrying that request.
+  const [bookingQuoteRequestId, setBookingQuoteRequestId] = useState("");
   const cars = usePublicCars(activeTab === "cars");
 
 
@@ -402,6 +405,7 @@ export function CustomerConsole({
           )}
           {activeTab === "services" && (
             <CustomerShippingServices
+              bookingQuoteRequestId={bookingQuoteRequestId}
               freightShipments={freight.rows}
               profile={profile}
             />
@@ -422,6 +426,10 @@ export function CustomerConsole({
           )}
           {activeTab === "orders" && (
             <OrdersView
+              onBookAgreedPrice={(requestId) => {
+                setBookingQuoteRequestId(requestId);
+                setActiveTab("services");
+              }}
               focusedRecord={focusedRecord}
               onFocusConsumed={() => setFocusedRecord(null)}
               loading={dataLoading}
@@ -528,6 +536,7 @@ function CustomerHome({
 }
 
 function OrdersView({
+  onBookAgreedPrice,
   focusedRecord,
   onFocusConsumed,
   loading,
@@ -540,6 +549,7 @@ function OrdersView({
   loading: boolean;
   orders: TaggedRow[];
   trackedShipments: FirestoreRow[];
+  onBookAgreedPrice?: (requestId: string) => void;
   uid: string;
 }) {
   // A barrel used to appear twice on this page: once as a row here and once
@@ -730,6 +740,7 @@ function OrdersView({
       )}
       <OrderPanel
         loading={loading}
+        onBookAgreedPrice={onBookAgreedPrice}
         onOpenHandled={() => setOpenKey("")}
         openKey={openKey}
         orders={orders}
@@ -768,6 +779,7 @@ const TRACKED_COLLECTIONS = new Set([
 
 function OrderPanel({
   loading,
+  onBookAgreedPrice,
   onOpenHandled,
   openKey = "",
   orders,
@@ -780,6 +792,7 @@ function OrderPanel({
   onOpenHandled?: () => void;
   /** An order to open from outside the panel, e.g. from a tracking card. */
   openKey?: string;
+  onBookAgreedPrice?: (requestId: string) => void;
   /** Every order the drawer may need to look up, listed or not. */
   orders: TaggedRow[];
   title: string;
@@ -892,9 +905,28 @@ function OrderPanel({
                 about. Without this the card opened onto facts and no way to
                 accept anything. */}
             {selected.collectionName === "freightQuoteRequests" && (
-              <CustomerFreightQuotes
-                request={selected.row as FreightQuoteRequestRow}
-              />
+              <>
+                <CustomerFreightQuotes
+                  request={selected.row as FreightQuoteRequestRow}
+                />
+                {/* An agreed price is not yet a booking: the parcel still
+                    needs a receiver, an address and a pickup choice. Without
+                    this the drawer told the customer to fill in a form that
+                    was nowhere near it. */}
+                {text(selected.row.quoteStatus, "") === "selected" &&
+                  !text(selected.row.bookedShipmentId, "") && (
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      onBookAgreedPrice?.(text(selected.row.id, ""));
+                      setSelectedKey("");
+                    }}
+                    type="button"
+                  >
+                    Continue to booking
+                  </button>
+                )}
+              </>
             )}
             <div className="customer-order-facts">
               <OrderFact
