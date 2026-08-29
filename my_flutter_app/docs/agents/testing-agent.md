@@ -128,6 +128,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 - For top-level business-owned documents, add takeover regressions: updates must
   not authorize against a changed `request.resource.data.businessId` without also
   preserving the existing `resource.data.businessId`.
+- A controlled `<select>` plus `confirmImportantAction` (async in-page dialog)
+  must capture `event.target.value` *before* the await. The select snaps back
+  to the Firestore-backed value while the dialog is open; reading the event
+  after confirm writes the old status and toasts a false success. Freight
+  already passes the value into `updateStatus` immediately — barrels must
+  match that. Source-contract the capture (`const nextStatus = event.target.value`).
 - For UI workflows, test or manually verify that async buttons and tap targets
   show progress immediately, cannot be double-clicked/double-tapped, and recover
   after both success and failure.
