@@ -7425,7 +7425,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get couldNotLoadFreightQuotes =>
-      'Les prix n\'ont pas pu être chargés.';
+      'Les prix ne se chargent pas pour le moment';
 
   @override
   String get freightQuoteChosenTitle => 'Prix choisi';
@@ -7477,4 +7477,31 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get guestCheckoutChoiceTitle => 'Comment souhaitez-vous continuer ?';
+
+  @override
+  String get freightQuoteRequestSent => 'Demande envoyée';
+
+  @override
+  String freightQuoteRequestSentSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count entreprises sur cet itinéraire l\'ont reçue et peuvent répondre avec un prix.',
+      one:
+          '1 entreprise sur cet itinéraire l\'a reçue et peut répondre avec un prix.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get couldNotLoadFreightQuotesSubtitle =>
+      'Votre demande a bien été envoyée. Les prix apparaîtront ici dès le retour de la connexion.';
+
+  @override
+  String get continueToBooking => 'Continuer vers la réservation';
+
+  @override
+  String get freightQuoteChosenNext =>
+      'Ajoutez le destinataire, l\'adresse et la façon dont le colis parvient à l\'entreprise. Vous payez à la fin, au prix que vous avez accepté.';
 }

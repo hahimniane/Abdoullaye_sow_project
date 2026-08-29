@@ -3144,7 +3144,7 @@
     }
   },
   "couldNotSelectFreightQuote": "Ce prix n'a pas pu être choisi. Réessayez.",
-  "couldNotLoadFreightQuotes": "Les prix n'ont pas pu être chargés.",
+  "couldNotLoadFreightQuotes": "Les prix ne se chargent pas pour le moment",
   "freightQuoteChosenTitle": "Prix choisi",
   "freightQuoteChosenMessage": "{business} enverra votre colis pour {price}.",
   "@freightQuoteChosenMessage": {
@@ -3169,5 +3169,17 @@
   "guestCheckoutUseAccount": "Utiliser plutôt un compte Laawol",
   "guestCheckoutFailed": "Nous n'avons pas pu continuer. Vérifiez votre connexion et réessayez.",
   "guestCheckoutNote": "Votre numéro de suivi arrive par e-mail. Conservez-le pour suivre cette réservation.",
-  "guestCheckoutChoiceTitle": "Comment souhaitez-vous continuer ?"
+  "guestCheckoutChoiceTitle": "Comment souhaitez-vous continuer ?",
+  "freightQuoteRequestSent": "Demande envoyée",
+  "freightQuoteRequestSentSubtitle": "{count, plural, =1{1 entreprise sur cet itinéraire l'a reçue et peut répondre avec un prix.} other{{count} entreprises sur cet itinéraire l'ont reçue et peuvent répondre avec un prix.}}",
+  "couldNotLoadFreightQuotesSubtitle": "Votre demande a bien été envoyée. Les prix apparaîtront ici dès le retour de la connexion.",
+  "@freightQuoteRequestSentSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "continueToBooking": "Continuer vers la réservation",
+  "freightQuoteChosenNext": "Ajoutez le destinataire, l'adresse et la façon dont le colis parvient à l'entreprise. Vous payez à la fin, au prix que vous avez accepté."
 }

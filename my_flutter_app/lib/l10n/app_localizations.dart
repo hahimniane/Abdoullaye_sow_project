@@ -13005,7 +13005,7 @@ abstract class AppLocalizations {
   /// No description provided for @couldNotLoadFreightQuotes.
   ///
   /// In en, this message translates to:
-  /// **'Prices could not be loaded.'**
+  /// **'Prices are not loading right now'**
   String get couldNotLoadFreightQuotes;
 
   /// No description provided for @freightQuoteChosenTitle.
@@ -13097,6 +13097,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'How would you like to continue?'**
   String get guestCheckoutChoiceTitle;
+
+  /// No description provided for @freightQuoteRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Request sent'**
+  String get freightQuoteRequestSent;
+
+  /// No description provided for @freightQuoteRequestSentSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 business on this route has it and can answer with a price.} other{{count} businesses on this route have it and can answer with a price.}}'**
+  String freightQuoteRequestSentSubtitle(int count);
+
+  /// No description provided for @couldNotLoadFreightQuotesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request was sent and is safe. Prices will appear here as soon as the connection is back.'**
+  String get couldNotLoadFreightQuotesSubtitle;
+
+  /// No description provided for @continueToBooking.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue to booking'**
+  String get continueToBooking;
+
+  /// No description provided for @freightQuoteChosenNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted.'**
+  String get freightQuoteChosenNext;
 }
 
 class _AppLocalizationsDelegate

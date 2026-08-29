@@ -33,7 +33,20 @@ import '../widgets/guest_checkout_sheet.dart';
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
 class SendFreightScreen extends StatefulWidget {
-  const SendFreightScreen({super.key});
+  const SendFreightScreen({
+    super.key,
+    this.quoteRequestId = '',
+    this.agreedBusinessId = '',
+    this.agreedAmountCents = 0,
+  });
+
+  /// Set when this booking settles a price a business quoted. The server
+  /// reads the agreed amount off that request, so nothing here decides money;
+  /// these only carry the customer to the right business and let the screen
+  /// say what was agreed.
+  final String quoteRequestId;
+  final String agreedBusinessId;
+  final int agreedAmountCents;
 
   @override
   State<SendFreightScreen> createState() => _SendFreightScreenState();
@@ -643,6 +656,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         receiverPhone: _phoneController.text.trim(),
         destinationCountryId: option.country.id,
         businessId: option.businessId,
+        quoteRequestId: widget.quoteRequestId,
         mode: _mode,
         weightKg: _setPrice ? 0 : _weightKg,
         itemCategoryId: _categoryId,

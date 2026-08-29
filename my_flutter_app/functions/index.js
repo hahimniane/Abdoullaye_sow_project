@@ -14,6 +14,7 @@ const {
   isValidPhoneNumber,
   normalizePhoneAlias,
 } = require("./phone_number");
+const {agreedFreightPrice} = require("./agreed_freight_price");
 const {
   guestRateLimitKeys,
   isAnonymousCaller,
@@ -21333,6 +21334,9 @@ exports.createFreightShipmentPaymentIntent = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      // Set when this shipment is the booking of a price a business quoted
+      // for a parcel the pricing table had no number for.
+      const quoteRequestId = cleanText(request.data?.quoteRequestId, 200);
       await enforceGuestBookingRateLimit(request);
       // Resolved here rather than at the record write so a guest with
       // unusable contact details is turned away before any pricing,
@@ -21523,11 +21527,36 @@ exports.createFreightShipmentPaymentIntent = onCall(
             "Parcel weight must be greater than zero",
         );
       }
-      const shippingFee = itemPricing.mode === "flat" ?
-        itemPricing.flatPrice :
-        Math.round(
-            parcelWeightKg * pricePerKg * itemPricing.weightFactor * 100,
-        ) / 100;
+      // A parcel nobody had priced is booked at the price its business
+      // actually quoted, read server-side from the request the customer
+      // accepted - never from the client, and never from the pricing table
+      // that had no answer for it in the first place.
+      let agreedQuote = null;
+      if (quoteRequestId) {
+        const quoteRequestSnapshot = await db
+            .collection("freightQuoteRequests").doc(quoteRequestId).get();
+        const agreed = agreedFreightPrice({
+          request: quoteRequestSnapshot.data(),
+          customerUid,
+          businessId,
+        });
+        if (!agreed.ok) {
+          throw new HttpsError(
+              "failed-precondition",
+              agreed.reason === "already_booked" ?
+                "This price has already been booked" :
+                "That price is not available to book",
+          );
+        }
+        agreedQuote = {...agreed, requestId: quoteRequestId};
+      }
+      const shippingFee = agreedQuote ?
+        agreedQuote.amountCents / 100 :
+        itemPricing.mode === "flat" ?
+          itemPricing.flatPrice :
+          Math.round(
+              parcelWeightKg * pricePerKg * itemPricing.weightFactor * 100,
+          ) / 100;
       // The payback is the BUSINESS's number, published per item type -
       // the first real freight partner refused sender-declared values on
       // sight, because the sender's number is a lie in whichever direction
@@ -21653,6 +21682,11 @@ exports.createFreightShipmentPaymentIntent = onCall(
           // over, and a business can change its policy at any time.
           coveragePolicyAtBooking: coverage.policy,
           customerUid,
+          ...(agreedQuote ? {
+            quoteRequestId: agreedQuote.requestId,
+            quoteId: agreedQuote.quoteId,
+            priceAgreedByQuote: true,
+          } : {}),
           ...bookingIdentityFields(request, userRecord),
           pickupRequested: wantsPickup,
           pickupAddress: cleanPickupAddress,
@@ -21751,6 +21785,17 @@ exports.createFreightShipmentPaymentIntent = onCall(
             destinationCountryName: freightDestination.country?.name,
             source: "freight",
           });
+          // Ties the accepted price to the shipment it became, so the same
+          // price cannot be booked a second time.
+          if (agreedQuote) {
+            await db.collection("freightQuoteRequests")
+                .doc(agreedQuote.requestId).set({
+                  bookedShipmentId: shipmentRef.id,
+                  quoteStatus: "booked",
+                  updatedAt: FirestoreFieldValue.serverTimestamp(),
+                }, {merge: true});
+          }
+
           return {
             shipmentId: shipmentRef.id,
             trackingCode,

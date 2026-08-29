@@ -7298,7 +7298,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'That price could not be chosen. Try again.';
 
   @override
-  String get couldNotLoadFreightQuotes => 'Prices could not be loaded.';
+  String get couldNotLoadFreightQuotes => 'Prices are not loading right now';
 
   @override
   String get freightQuoteChosenTitle => 'Price chosen';
@@ -7349,4 +7349,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guestCheckoutChoiceTitle => 'How would you like to continue?';
+
+  @override
+  String get freightQuoteRequestSent => 'Request sent';
+
+  @override
+  String freightQuoteRequestSentSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count businesses on this route have it and can answer with a price.',
+      one: '1 business on this route has it and can answer with a price.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get couldNotLoadFreightQuotesSubtitle =>
+      'Your request was sent and is safe. Prices will appear here as soon as the connection is back.';
+
+  @override
+  String get continueToBooking => 'Continue to booking';
+
+  @override
+  String get freightQuoteChosenNext =>
+      'Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted.';
 }

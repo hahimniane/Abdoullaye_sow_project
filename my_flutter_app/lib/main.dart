@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -54,6 +56,8 @@ import 'models/barrel_shipment.dart';
 import 'screens/barrel_shipment_details_screen.dart';
 import 'models/transport_request.dart';
 import 'screens/transport_request_details_screen.dart';
+import 'screens/freight_quote_details_screen.dart';
+import 'services/notification_routing.dart';
 import 'services/stripe_config_service.dart';
 
 void main() async {
@@ -64,11 +68,42 @@ void main() async {
     ),
   );
   await connectFirebaseEmulatorsIfRequested();
-  await initializeFirebaseCrashlytics();
-  await initializeFirebaseAppCheck();
-  await StripeConfigService.ensureConfigured();
-  await PushNotificationService.instance.initialize();
+
+  // Everything past Firebase itself is optional to the first frame, and none
+  // of it used to be. A device that cannot finish one of these - App Check
+  // attesting a build Apple has not distributed, an APNs token on a device
+  // with notifications refused - held the splash screen for as long as the
+  // app was open, because each one was awaited before runApp.
+  //
+  // App Check still runs first and is still waited for: calls made before it
+  // activates go out unattested and are rejected. It is bounded now, so a
+  // device that cannot attest starts the app instead of hanging it.
+  await _startupStep('Crashlytics', initializeFirebaseCrashlytics);
+  await _startupStep('App Check', initializeFirebaseAppCheck);
+
+  // Neither of these is read before a screen asks for it, so they finish in
+  // the background rather than standing between the customer and the app.
+  unawaited(_startupStep('Stripe', StripeConfigService.ensureConfigured));
+  unawaited(
+    _startupStep('push notifications',
+        PushNotificationService.instance.initialize),
+  );
+
   runApp(const MyApp());
+}
+
+/// Runs one optional startup step without letting it hold the app back.
+///
+/// A step that fails leaves the app short of that one capability; a step that
+/// never returns used to leave the customer looking at a logo.
+Future<void> _startupStep(String name, Future<void> Function() step) async {
+  try {
+    await step().timeout(const Duration(seconds: 8));
+  } on TimeoutException {
+    debugPrint('Startup: $name timed out; continuing without it.');
+  } catch (error) {
+    debugPrint('Startup: $name unavailable ($error); continuing without it.');
+  }
 }
 
 Future<void> initializeFirebaseAppCheck() async {
@@ -225,6 +260,24 @@ class MyApp extends StatelessWidget {
                 scope: PurchaseListScope.viewings,
               ),
               '/orders': (context) => const OrdersScreen(showBackButton: true),
+              // Named so a notification about a price can open it. Before
+              // this the screen existed only as a push from the form that
+              // created the request, which left a customer who closed it -
+              // or who tapped the notification - with no route back to the
+              // price they were waiting for.
+              '/freight-quote': (context) {
+                final rawArgs = ModalRoute.of(context)!.settings.arguments;
+                final args = rawArgs is FreightQuoteScreenArguments
+                    ? rawArgs
+                    : null;
+                if (args == null) {
+                  return const OrdersScreen(showBackButton: true);
+                }
+                return FreightQuoteDetailsScreen(
+                  requestId: args.requestId,
+                  trackingCode: args.trackingCode,
+                );
+              },
               '/leave-review': (context) {
                 final args =
                     ModalRoute.of(context)!.settings.arguments

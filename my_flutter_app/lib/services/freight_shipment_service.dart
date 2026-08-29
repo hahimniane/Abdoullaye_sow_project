@@ -28,6 +28,11 @@ class FreightShipmentService {
     required String receiverPhone,
     required String destinationCountryId,
     required String businessId,
+    /// The price request this booking settles, when the customer accepted a
+    /// business's quote for a parcel the pricing table had no number for.
+    /// The server reads the agreed amount off that request; the client never
+    /// sends a price.
+    String quoteRequestId = '',
     required String mode,
     /// What the parcel weighs, when the business charges this item by weight.
     /// A set-price item is quoted from the business's published row, so there
@@ -62,6 +67,8 @@ class FreightShipmentService {
         .httpsCallable('createFreightShipmentPaymentIntent')
         .call<Map<String, dynamic>>({
           ...guestCheckout.payloadFields(),
+          if (quoteRequestId.trim().isNotEmpty)
+            'quoteRequestId': quoteRequestId.trim(),
           'senderName': senderName,
           'receiverName': receiverName,
           'receiverPhone': receiverPhone,

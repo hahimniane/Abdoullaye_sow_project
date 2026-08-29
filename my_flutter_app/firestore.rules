@@ -852,16 +852,34 @@ service cloud.firestore {
     // by callables, like every other quote collection - the price a business
     // states and the one the customer is charged must be the same number.
     match /freightQuoteRequests/{requestId} {
+      // Two things here were learned the hard way, both against the rules
+      // emulator rather than in production.
+      //
+      // `resource.data.eligibleBusinessIds is list` looks like a harmless
+      // guard and denies the entire query: on a list read it evaluates
+      // false, even though hasAny on that same field is happy. Presence is
+      // the guard that works.
+      //
+      // Ordered cheapest first, deliberately. Firestore allows ten document
+      // access calls per query, and a business reads this collection as the
+      // whole list of requests it was asked. Resolving the business through
+      // get(/users/...) cost a call for every document in that list, and a
+      // seven-request queue went over the ceiling - so the query came back
+      // denied even though each document was allowed. The businessId claim
+      // rides on the token already (storage.rules reads it the same way) and
+      // costs nothing, so the business check now short-circuits before any
+      // read happens.
       allow read: if request.auth != null &&
         (
-          isAdmin(request.auth.uid) ||
-          request.auth.uid == resource.data.customerUid ||
           // A business can read a request it was actually asked, and no
           // other: the fan-out list is the permission.
-          (resource.data.eligibleBusinessIds is list &&
+          ('businessId' in request.auth.token &&
+           'eligibleBusinessIds' in resource.data &&
            resource.data.eligibleBusinessIds.hasAny(
-             [userBusinessId(request.auth.uid)]
-           ))
+             [request.auth.token.businessId]
+           )) ||
+          request.auth.uid == resource.data.customerUid ||
+          isAdmin(request.auth.uid)
         );
       allow create, update, delete: if false;
     }
