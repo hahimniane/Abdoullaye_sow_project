@@ -1514,15 +1514,18 @@ export function OfficeLocationsPanel({
       }
     >
       <p className="card-sub">
-        Customers choosing “bring to office” pick from these locations. Add
-        every branch customers can physically drop items off at.
+        Extra offices are optional. Customers already drop off at your
+        headquarters address unless you add another location.
       </p>
       {message && <div className="lst-form-error" role="alert">{message}</div>}
       {locations.loading && <LoadingState />}
       {!locations.loading && rows.length === 0 && (
         <div className="lst-empty compact">
-          <h3>No office locations yet</h3>
-          <p>Add at least one so customers can drop off items in person.</p>
+          <h3>No extra office locations yet</h3>
+          <p>
+            Headquarters is the default drop-off. Add another location only if
+            customers can drop off at more than one place.
+          </p>
           <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> Add your first location</button>
         </div>
       )}

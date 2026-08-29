@@ -133,13 +133,21 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Office locations": "Lieux de dépôt",
   "Add every physical location customers can bring items to.":
     "Ajoutez chaque lieu physique où les clients peuvent apporter leurs articles.",
+  "Extra offices are optional. Customers use headquarters unless you add more drop-off locations.":
+    "Les bureaux supplémentaires sont facultatifs. Les clients utilisent le siège, sauf si vous ajoutez d’autres lieux de dépôt.",
   "3 · Locations": "3 · Lieux",
   "Add location": "Ajouter un lieu",
   "Customers choosing “bring to office” pick from these locations. Add every branch customers can physically drop items off at.":
     "Les clients qui choisissent « apporter au bureau » choisissent parmi ces lieux. Ajoutez chaque succursale où les clients peuvent déposer leurs articles en personne.",
+  "Extra offices are optional. Customers already drop off at your headquarters address unless you add another location.":
+    "Les bureaux supplémentaires sont facultatifs. Les clients déposent déjà à l’adresse du siège, sauf si vous ajoutez un autre lieu.",
   "No office locations yet": "Aucun lieu de dépôt pour le moment",
+  "No extra office locations yet":
+    "Aucun bureau supplémentaire pour le moment",
   "Add at least one so customers can drop off items in person.":
     "Ajoutez-en au moins un pour que les clients puissent déposer leurs articles en personne.",
+  "Headquarters is the default drop-off. Add another location only if customers can drop off at more than one place.":
+    "Le siège est le lieu de dépôt par défaut. Ajoutez un autre lieu uniquement si les clients peuvent déposer à plusieurs endroits.",
   "Add your first location": "Ajoutez votre premier lieu",
   "No address on file": "Aucune adresse enregistrée",
   Pause: "Suspendre",
@@ -1712,6 +1720,29 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Business user": "Utilisateur entreprise",
   "Business logo": "Logo de l’entreprise",
   "Business name is required.": "Le nom de l’entreprise est requis.",
+  "Headquarters address": "Adresse du siège",
+  "This is the default drop-off address for customers. Extra office locations are optional.":
+    "C’est l’adresse de dépôt par défaut pour les clients. Les bureaux supplémentaires sont facultatifs.",
+  "Business street address": "Adresse de l’entreprise",
+  "Headquarters country options": "Options de pays du siège",
+  "Headquarters state options": "Options d’État du siège",
+  "Headquarters city options": "Options de ville du siège",
+  "A complete headquarters address is required (street, city, and country).":
+    "Une adresse de siège complète est requise (rue, ville et pays).",
+  "A US state is required for a United States headquarters address.":
+    "Un État américain est requis pour une adresse de siège aux États-Unis.",
+  "A street address is required for the business headquarters.":
+    "Une adresse (rue) est requise pour le siège de l’entreprise.",
+  "A city is required for the business headquarters.":
+    "Une ville est requise pour le siège de l’entreprise.",
+  "A country is required for the business headquarters.":
+    "Un pays est requis pour le siège de l’entreprise.",
+  "Business country options": "Options de pays de l’entreprise",
+  "Business state options": "Options d’État de l’entreprise",
+  "Business city options": "Options de ville de l’entreprise",
+  "Postal code": "Code postal",
+  "Postal code (optional)": "Code postal (facultatif)",
+  "State or region (optional)": "État ou région (facultatif)",
   "How your business appears to customers, and your car-hold pricing.":
     "Comment votre entreprise apparaît aux clients et vos tarifs de blocage de voiture.",
   "Logo / profile image": "Logo / image de profil",

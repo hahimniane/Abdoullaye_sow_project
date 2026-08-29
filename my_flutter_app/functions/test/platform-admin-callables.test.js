@@ -163,9 +163,27 @@ test("trusted super-admin provisioning creates a usable verified manager",
           name: "Platform Admin Manager Business",
           status: "pending",
           enabledServices: ["freight"],
+          addressLine1: "12 Kaloum Street",
+          city: "Conakry",
+          country: "Guinea",
         },
       });
       assert.equal(business.success, true);
+
+      await assert.rejects(
+          () => functions.createAdminBusiness.run({
+            auth: {uid: result.uid},
+            data: {
+              businessId: "platform-admin-empty-street",
+              name: "Empty Street Business",
+              status: "pending",
+              enabledServices: ["freight"],
+              city: "Conakry",
+              country: "Guinea",
+            },
+          }),
+          /street address is required/,
+      );
     });
 
 test("a super admin can repair an unverified target without authorizing it",

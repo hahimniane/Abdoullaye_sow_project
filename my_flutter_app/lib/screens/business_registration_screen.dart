@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../data/business_location_catalog.dart';
+import '../data/us_locations.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_service.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
@@ -40,8 +41,11 @@ class _BusinessRegistrationScreenState
   final _businessEmailController = TextEditingController();
   final _businessWebsiteController = TextEditingController();
   final _serviceNoteController = TextEditingController();
+  final _addressLine1Controller = TextEditingController();
+  final _postalCodeController = TextEditingController();
   final _selectedServices = <String>{...defaultBusinessServiceValues};
   String? _businessCountry;
+  String? _businessState;
   String? _businessCity;
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
@@ -63,6 +67,8 @@ class _BusinessRegistrationScreenState
     _businessEmailController.dispose();
     _businessWebsiteController.dispose();
     _serviceNoteController.dispose();
+    _addressLine1Controller.dispose();
+    _postalCodeController.dispose();
     super.dispose();
   }
 
@@ -125,11 +131,13 @@ class _BusinessRegistrationScreenState
         businessWebsite: _businessWebsiteController.text.trim(),
         enabledServices: _selectedServices.toList(),
         serviceNote: _serviceNoteController.text.trim(),
-        addressLine1: '',
+        addressLine1: _addressLine1Controller.text.trim(),
         city: _businessCity ?? '',
         country: _businessCountry ?? '',
-        state: _businessCountry ?? '',
-        postalCode: '',
+        state: _isUnitedStates
+            ? (normalizeUsState(_businessState) ?? '')
+            : '',
+        postalCode: _postalCodeController.text.trim(),
         marketplaceAcceptance: MarketplaceDisclosureAcceptance(locale: locale),
       );
       final businessId = application['businessId'] as String?;
@@ -149,11 +157,13 @@ class _BusinessRegistrationScreenState
           profileImageUrl: upload.url,
           profileImagePath: upload.path,
           serviceNote: _serviceNoteController.text.trim(),
-          addressLine1: '',
+          addressLine1: _addressLine1Controller.text.trim(),
           city: _businessCity ?? '',
           country: _businessCountry ?? '',
-          state: _businessCountry ?? '',
-          postalCode: '',
+          state: _isUnitedStates
+              ? (normalizeUsState(_businessState) ?? '')
+              : '',
+          postalCode: _postalCodeController.text.trim(),
           carHoldPricingMode: 'flat',
           carHoldFlatFee: 500,
           carHoldDailyRate: 100,
@@ -228,6 +238,8 @@ class _BusinessRegistrationScreenState
     );
     return _UploadedImage(path: path, url: await ref.getDownloadURL());
   }
+
+  bool get _isUnitedStates => _businessCountry == 'United States';
 
   String? _required(String? value, String message) {
     return value == null || value.trim().isEmpty ? message : null;
@@ -498,6 +510,16 @@ class _BusinessRegistrationScreenState
                                   validator: _websiteValidator,
                                 ),
                                 const SizedBox(height: 12),
+                                _TextField(
+                                  controller: _addressLine1Controller,
+                                  label: l10n.businessAddressLine1,
+                                  icon: Icons.place_outlined,
+                                  validator: (value) => _required(
+                                    value,
+                                    l10n.enterBusinessStreet,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
                                 _DropdownField(
                                   label: l10n.countryName,
                                   icon: Icons.public_outlined,
@@ -512,31 +534,80 @@ class _BusinessRegistrationScreenState
                                   onChanged: (value) {
                                     setState(() {
                                       _businessCountry = value;
+                                      _businessState = null;
                                       _businessCity = null;
                                     });
                                   },
                                 ),
+                                if (_isUnitedStates) ...[
+                                  const SizedBox(height: 12),
+                                  _DropdownField(
+                                    label: l10n.locationState,
+                                    icon: Icons.map_outlined,
+                                    value: normalizeUsState(_businessState),
+                                    values: usStateOptions(_businessState),
+                                    displayLabel: (value) =>
+                                        usStateNames[value] ?? value,
+                                    validator: (value) => _required(
+                                      value,
+                                      l10n.selectBusinessState,
+                                    ),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _businessState = value;
+                                        _businessCity = null;
+                                      });
+                                    },
+                                  ),
+                                ],
                                 const SizedBox(height: 12),
                                 _DropdownField(
                                   label: l10n.locationCity,
                                   icon: Icons.location_city_outlined,
                                   value: _businessCity,
-                                  values: businessCityOptions(
-                                    _businessCountry,
-                                    _businessCity,
-                                  ),
-                                  hintText: _businessCountry == null
+                                  values: _isUnitedStates
+                                      ? usCityOptions(
+                                          _businessState,
+                                          _businessCity,
+                                        )
+                                      : businessCityOptions(
+                                          _businessCountry,
+                                          _businessCity,
+                                        ),
+                                  hintText: _isUnitedStates &&
+                                          (_businessState == null ||
+                                              _businessState!.trim().isEmpty)
+                                      ? l10n.selectStateFirst
+                                      : _businessCountry == null
                                       ? l10n.selectCountryFirst
                                       : null,
                                   validator: (value) =>
                                       _required(value, l10n.selectBusinessCity),
-                                  onChanged: _businessCountry == null
+                                  onChanged:
+                                      _businessCountry == null ||
+                                          (_isUnitedStates &&
+                                              (_businessState == null ||
+                                                  _businessState!
+                                                      .trim()
+                                                      .isEmpty))
                                       ? null
                                       : (value) {
                                           setState(() {
                                             _businessCity = value;
                                           });
                                         },
+                                ),
+                                const SizedBox(height: 12),
+                                _TextField(
+                                  controller: _postalCodeController,
+                                  label: l10n.postalCode,
+                                  icon: Icons.local_post_office_outlined,
+                                  validator: _isUnitedStates
+                                      ? (value) => _required(
+                                          value,
+                                          l10n.requiredField,
+                                        )
+                                      : null,
                                 ),
                                 const SizedBox(height: 12),
                                 _TextField(
@@ -898,6 +969,7 @@ class _DropdownField extends StatelessWidget {
     required this.onChanged,
     this.validator,
     this.hintText,
+    this.displayLabel,
   });
 
   final String label;
@@ -907,6 +979,7 @@ class _DropdownField extends StatelessWidget {
   final ValueChanged<String?>? onChanged;
   final String? Function(String?)? validator;
   final String? hintText;
+  final String Function(String value)? displayLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -916,7 +989,10 @@ class _DropdownField extends StatelessWidget {
       hint: hintText == null ? null : Text(hintText!),
       items: values
           .map(
-            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
+            (item) => DropdownMenuItem<String>(
+              value: item,
+              child: Text(displayLabel?.call(item) ?? item),
+            ),
           )
           .toList(),
       onChanged: onChanged,

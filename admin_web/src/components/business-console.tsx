@@ -589,7 +589,8 @@ export function BusinessConsole({
                 <div>
                   <strong>Office locations</strong>
                   <span>
-                    Add every physical location customers can bring items to.
+                    Extra offices are optional. Customers use headquarters
+                    unless you add more drop-off locations.
                   </span>
                 </div>
                 <span className="service-settings-step">3 · Locations</span>

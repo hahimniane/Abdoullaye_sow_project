@@ -61,6 +61,10 @@ async function seedBusiness(id, {
   pickupPlan,
   destinationId = COUNTRY_ID,
   destinationName = "Guinea",
+  addressLine1 = "100 Test Avenue",
+  city = "Bronx",
+  country = "United States",
+  state,
 } = {}) {
   const ref = db.collection("businesses").doc(id);
   const availability = serviceAvailability || {
@@ -74,10 +78,12 @@ async function seedBusiness(id, {
       name: `Service Test ${id}`,
       status,
       enabledServices: services,
-      city: "Bronx",
-      addressLine1: "100 Test Avenue",
+      city,
+      addressLine1,
+      country,
+      ...(state ? {state} : {}),
       ...(freightPickup || {}),
-      ...(pickupPlan ? {state: "NY", pickupPlan} : {}),
+      ...(pickupPlan ? {state: state || "NY", pickupPlan} : {}),
       parkingCity: "Bronx",
       parkingAddressLine1: "100 Test Avenue",
       parkingTotalSpaces: 5,
@@ -358,7 +364,10 @@ describe("freight service callable lifecycle", () => {
             option.country.freightSeaDepartureDays,
             ["saturday"],
         );
-        assert.equal(option.businessAddress, "100 Test Avenue, Bronx");
+        assert.equal(
+            option.businessAddress,
+            "100 Test Avenue, Bronx, United States",
+        );
       });
 
   it("rejects freight modes disabled for the destination", async () => {
@@ -2428,9 +2437,58 @@ describe("barrel shipping service callable lifecycle", () => {
     });
     const shipment = await db.collection("barrelShipments")
         .doc(created.shipmentId).get();
-    assert.equal(shipment.get("pickupAddress"), "100 Test Avenue, Bronx");
+    assert.equal(
+        shipment.get("pickupAddress"),
+        "100 Test Avenue, Bronx, United States",
+    );
     assert.equal(shipment.get("officeLocationId"), "default");
   });
+
+  it("rejects drop-off when headquarters has no street and no offices",
+      async () => {
+        const businessId = "barrel-office-empty-street";
+        await seedBusiness(businessId, {addressLine1: ""});
+        const catalog = await functions.listActiveBarrelDestinationOptions.run({
+          data: {},
+        });
+        const option = catalog.options.find((row) =>
+          row.businessId === businessId);
+        assert.ok(option);
+        assert.equal(option.businessAddress, "");
+        await assert.rejects(
+            () => functions.createBarrelShipmentPaymentIntent.run({
+              auth: {uid: CUSTOMER_UID},
+              data: {
+                senderName: "Empty Street Sender",
+                receiverName: "Empty Street Receiver",
+                receiverPhone: "+224620000042",
+                destinationCountryId: COUNTRY_ID,
+                businessId,
+                quantity: 1,
+                pickupRequested: false,
+              },
+            }),
+            /no office location configured/,
+        );
+      });
+
+  it("rejects a business application without a headquarters street",
+      async () => {
+        await assert.rejects(
+            () => functions.submitBusinessApplication.run({
+              auth: {uid: CUSTOMER_UID},
+              data: {
+                ownerName: "Empty Street Owner",
+                ownerPhone: "+17185550011",
+                businessName: "Empty Street Application",
+                enabledServices: ["freight"],
+                city: "Conakry",
+                country: "Guinea",
+              },
+            }),
+            /street address is required/,
+        );
+      });
 
   it("requires choosing among a business's multiple office locations",
       async () => {
@@ -2715,7 +2773,7 @@ describe("barrel shipping service callable lifecycle", () => {
               // (no configured office locations, so it falls back to the
               // business's main address) instead of the old shared global
               // pricing-doc placeholder.
-              "100 Test Avenue, Bronx, NY",
+              "100 Test Avenue, Bronx, NY, United States",
             ],
         );
         assert.deepEqual(

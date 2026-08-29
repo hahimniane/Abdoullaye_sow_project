@@ -4,6 +4,56 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/utils/business_profile_validation.dart';
 
 void main() {
+  group('headquarters address validation', () {
+    test('accepts a complete non-US headquarters address', () {
+      expect(
+        headquartersAddressNeedsAttention(
+          addressLine1: '12 Kaloum Street',
+          country: 'Guinea',
+          state: '',
+          city: 'Conakry',
+        ),
+        isFalse,
+      );
+    });
+
+    test('rejects an empty street even when city and country exist', () {
+      expect(
+        headquartersAddressNeedsAttention(
+          addressLine1: '',
+          country: 'Guinea',
+          state: 'Guinea',
+          city: 'Conakry',
+        ),
+        isTrue,
+      );
+    });
+
+    test('requires a state for United States headquarters', () {
+      expect(
+        headquartersAddressNeedsAttention(
+          addressLine1: '100 Test Avenue',
+          country: 'United States',
+          state: '',
+          city: 'Bronx',
+        ),
+        isTrue,
+      );
+    });
+
+    test('accepts a complete United States headquarters address', () {
+      expect(
+        headquartersAddressNeedsAttention(
+          addressLine1: '100 Test Avenue',
+          country: 'United States',
+          state: 'NY',
+          city: 'Bronx',
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('parking capacity validation', () {
     test('accepts an address-based parking location without coordinates', () {
       expect(
@@ -106,6 +156,18 @@ void main() {
         isTrue,
       );
     });
+  });
+
+  test('business registration collects a real headquarters street', () {
+    final source = File(
+      'lib/screens/business_registration_screen.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('addressLine1: _addressLine1Controller.text.trim()'));
+    expect(source, isNot(contains("addressLine1: ''")));
+    expect(source, isNot(contains('state: _businessCountry')));
+    expect(source, contains('l10n.enterBusinessStreet'));
+    expect(source, contains('l10n.selectBusinessState'));
   });
 
   test('business parking capacity form does not expose coordinate fields', () {

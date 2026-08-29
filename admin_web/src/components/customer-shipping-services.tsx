@@ -75,6 +75,7 @@ import {
   type BarrelPickupQuoteResult,
   type PickupDetails,
 } from "@/lib/customer-shipping";
+import { isGenericOfficeDropOffAddress } from "@/lib/office-drop-off";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import {
   freightCategoryById,
@@ -5505,7 +5506,7 @@ function PickupFields({
           !pickup.requested &&
           !officeLocationsLoading && (
             <small className="customer-pickup-office">
-              {officeAddress === "the business office" ? (
+              {isGenericOfficeDropOffAddress(officeAddress) ? (
                 <span>Drop off at the business office</span>
               ) : (
                 <>

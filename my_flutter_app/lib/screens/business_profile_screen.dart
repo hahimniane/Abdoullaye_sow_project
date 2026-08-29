@@ -35,6 +35,7 @@ class BusinessProfileScreen extends StatefulWidget {
 
 enum _BusinessProfileSectionKey {
   details,
+  headquarters,
   paidHoldPricing,
   parkingCapacity,
   services,
@@ -43,6 +44,7 @@ enum _BusinessProfileSectionKey {
 class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _detailsSectionKey = GlobalKey();
+  final _headquartersSectionKey = GlobalKey();
   final _paidHoldPricingSectionKey = GlobalKey();
   final _parkingCapacitySectionKey = GlobalKey();
   final _servicesSectionKey = GlobalKey();
@@ -407,6 +409,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     switch (section) {
       case _BusinessProfileSectionKey.details:
         return _detailsSectionKey;
+      case _BusinessProfileSectionKey.headquarters:
+        return _headquartersSectionKey;
       case _BusinessProfileSectionKey.paidHoldPricing:
         return _paidHoldPricingSectionKey;
       case _BusinessProfileSectionKey.parkingCapacity:
@@ -455,6 +459,15 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     if (_selectedServices.isEmpty) {
       sectionErrors[_BusinessProfileSectionKey.services] =
           l10n.chooseAtLeastOneService;
+    }
+    if (headquartersAddressNeedsAttention(
+      addressLine1: _addressLine1Controller.text,
+      country: _countryController.text,
+      state: normalizeUsState(_stateController.text) ?? '',
+      city: _cityController.text,
+    )) {
+      sectionErrors[_BusinessProfileSectionKey.headquarters] =
+          l10n.enterValidHeadquartersAddress;
     }
     final holdFlatFee =
         double.tryParse(_holdFlatFeeController.text.trim()) ?? 0;
@@ -681,6 +694,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   formKey: _formKey,
                   canEdit: canEdit,
                   detailsSectionKey: _detailsSectionKey,
+                  headquartersSectionKey: _headquartersSectionKey,
                   paidHoldPricingSectionKey: _paidHoldPricingSectionKey,
                   parkingCapacitySectionKey: _parkingCapacitySectionKey,
                   servicesSectionKey: _servicesSectionKey,
@@ -1378,6 +1392,7 @@ class _BusinessForm extends StatelessWidget {
     required this.formKey,
     required this.canEdit,
     required this.detailsSectionKey,
+    required this.headquartersSectionKey,
     required this.paidHoldPricingSectionKey,
     required this.parkingCapacitySectionKey,
     required this.servicesSectionKey,
@@ -1422,6 +1437,7 @@ class _BusinessForm extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final bool canEdit;
   final GlobalKey detailsSectionKey;
+  final GlobalKey headquartersSectionKey;
   final GlobalKey paidHoldPricingSectionKey;
   final GlobalKey parkingCapacitySectionKey;
   final GlobalKey servicesSectionKey;
@@ -1548,15 +1564,22 @@ class _BusinessForm extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           _ProfileSection(
+            key: headquartersSectionKey,
             icon: Icons.location_on_outlined,
             title: l10n.businessLocation,
             subtitle: l10n.businessDefaultAddressSubtitle,
+            errorText: sectionErrors[_BusinessProfileSectionKey.headquarters],
             children: [
               _BusinessProfileField(
                 controller: addressLine1Controller,
                 enabled: canEdit,
                 label: l10n.businessAddressLine1,
                 icon: Icons.place_outlined,
+                onChanged: () =>
+                    onSectionEdited(_BusinessProfileSectionKey.headquarters),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? l10n.enterBusinessStreet
+                    : null,
               ),
               _BusinessProfileDropdown(
                 label: l10n.countryName,
@@ -1565,7 +1588,13 @@ class _BusinessForm extends StatelessWidget {
                 value: selectedCountry.isEmpty ? null : selectedCountry,
                 values: businessCountryOptions(selectedCountry),
                 displayLabel: (value) => value,
-                onChanged: onAddressCountryChanged,
+                onChanged: (value) {
+                  onAddressCountryChanged(value);
+                  onSectionEdited(_BusinessProfileSectionKey.headquarters);
+                },
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? l10n.selectBusinessCountry
+                    : null,
               ),
               if (isUnitedStates)
                 _BusinessProfileDropdown(
@@ -1575,7 +1604,13 @@ class _BusinessForm extends StatelessWidget {
                   value: normalizeUsState(stateController.text),
                   values: usStateOptions(stateController.text),
                   displayLabel: (value) => usStateNames[value] ?? value,
-                  onChanged: onAddressStateChanged,
+                  onChanged: (value) {
+                    onAddressStateChanged(value);
+                    onSectionEdited(_BusinessProfileSectionKey.headquarters);
+                  },
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? l10n.selectBusinessState
+                      : null,
                 ),
               _BusinessProfileDropdown(
                 label: l10n.locationCity,
@@ -1598,13 +1633,26 @@ class _BusinessForm extends StatelessWidget {
                     : null,
                 displayLabel: (value) =>
                     value == otherCityValue ? l10n.otherOption : value,
-                onChanged: onAddressCityChanged,
+                onChanged: (value) {
+                  onAddressCityChanged(value);
+                  onSectionEdited(_BusinessProfileSectionKey.headquarters);
+                },
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? l10n.selectBusinessCity
+                    : null,
               ),
               _BusinessProfileField(
                 controller: postalCodeController,
                 enabled: canEdit,
                 label: l10n.postalCode,
                 icon: Icons.local_post_office_outlined,
+                onChanged: () =>
+                    onSectionEdited(_BusinessProfileSectionKey.headquarters),
+                validator: isUnitedStates
+                    ? (value) => value == null || value.trim().isEmpty
+                          ? l10n.requiredField
+                          : null
+                    : null,
               ),
             ],
           ),
@@ -2069,6 +2117,7 @@ class _BusinessProfileDropdown extends StatelessWidget {
     required this.displayLabel,
     required this.onChanged,
     this.hintText,
+    this.validator,
   });
 
   final String label;
@@ -2079,6 +2128,7 @@ class _BusinessProfileDropdown extends StatelessWidget {
   final String Function(String value) displayLabel;
   final ValueChanged<String?> onChanged;
   final String? hintText;
+  final String? Function(String?)? validator;
 
   @override
   Widget build(BuildContext context) {
@@ -2104,6 +2154,7 @@ class _BusinessProfileDropdown extends StatelessWidget {
           )
           .toList(),
       onChanged: enabled ? onChanged : null,
+      validator: validator,
     );
   }
 }

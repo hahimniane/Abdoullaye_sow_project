@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../models/office_location.dart';
 import '../services/office_location_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/drop_off_address.dart';
 
 /// A business can register more than one physical office/drop-off location,
 /// so this shows a plain address tile when there's only one (or none
@@ -31,12 +32,15 @@ class OfficeLocationPicker extends StatelessWidget {
       builder: (context, snapshot) {
         final locations = snapshot.data ?? const <OfficeLocation>[];
         if (locations.length <= 1) {
+          final l10n = AppLocalizations.of(context)!;
           return OfficeDropOffTile(
-            address: locations.isNotEmpty
-                ? locations.first.address
-                : (fallbackAddress.isNotEmpty
-                      ? fallbackAddress
-                      : AppLocalizations.of(context)!.dropOffOffice),
+            address: resolveOfficeDropOffAddress(
+              officeAddress: locations.isNotEmpty
+                  ? locations.first.address
+                  : null,
+              fallbackAddress: fallbackAddress,
+              genericLabel: l10n.dropOffOffice,
+            ),
           );
         }
         final effectiveSelection = OfficeLocation.resolveSelectedId(
