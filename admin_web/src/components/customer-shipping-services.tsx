@@ -221,6 +221,10 @@ type CustomerShippingServicesProps = {
   /// A price request the customer already accepted, so the booking that
   /// follows charges the agreed amount. Only the id: the server reads the
   /// price off the request.
+  /// The business whose price was accepted. It has to be bookable even
+  /// though it never published a row for this item - not having one is why
+  /// the customer asked in the first place.
+  bookingQuoteBusinessId?: string;
   bookingQuoteRequestId?: string;
   authenticated?: boolean;
   guestReady?: boolean;
@@ -438,6 +442,7 @@ export function CustomerShippingServices({
   profile,
   freightShipments = [],
   initialService = "barrel",
+  bookingQuoteBusinessId = "",
   bookingQuoteRequestId = "",
   authenticated = true,
   guestReady = false,
@@ -641,6 +646,7 @@ export function CustomerShippingServices({
           {service === "freight" && (
             <FreightShipmentForm
               authenticated={authenticated}
+              bookingQuoteBusinessId={bookingQuoteBusinessId}
               bookingQuoteRequestId={bookingQuoteRequestId}
               guestReady={guestReady}
               freightShipments={freightShipments}
@@ -2303,6 +2309,7 @@ function PickupAvailability({
 
 function FreightShipmentForm({
   authenticated,
+  bookingQuoteBusinessId = "",
   bookingQuoteRequestId = "",
   guestReady,
   freightShipments,
@@ -2311,6 +2318,7 @@ function FreightShipmentForm({
   profile,
 }: {
   authenticated: boolean;
+  bookingQuoteBusinessId?: string;
   bookingQuoteRequestId?: string;
   guestReady?: boolean;
   freightShipments: FirestoreRow[];

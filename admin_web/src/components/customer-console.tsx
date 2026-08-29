@@ -218,6 +218,7 @@ export function CustomerConsole({
   // Set when the customer accepts a price from the orders drawer and asks to
   // finish the booking: the shipping form opens carrying that request.
   const [bookingQuoteRequestId, setBookingQuoteRequestId] = useState("");
+  const [bookingQuoteBusinessId, setBookingQuoteBusinessId] = useState("");
   const cars = usePublicCars(activeTab === "cars");
 
 
@@ -405,6 +406,7 @@ export function CustomerConsole({
           )}
           {activeTab === "services" && (
             <CustomerShippingServices
+              bookingQuoteBusinessId={bookingQuoteBusinessId}
               bookingQuoteRequestId={bookingQuoteRequestId}
               freightShipments={freight.rows}
               profile={profile}
@@ -426,8 +428,9 @@ export function CustomerConsole({
           )}
           {activeTab === "orders" && (
             <OrdersView
-              onBookAgreedPrice={(requestId) => {
+              onBookAgreedPrice={(requestId, businessId) => {
                 setBookingQuoteRequestId(requestId);
+                setBookingQuoteBusinessId(businessId);
                 setActiveTab("services");
               }}
               focusedRecord={focusedRecord}
@@ -549,7 +552,7 @@ function OrdersView({
   loading: boolean;
   orders: TaggedRow[];
   trackedShipments: FirestoreRow[];
-  onBookAgreedPrice?: (requestId: string) => void;
+  onBookAgreedPrice?: (requestId: string, businessId: string) => void;
   uid: string;
 }) {
   // A barrel used to appear twice on this page: once as a row here and once
@@ -792,7 +795,7 @@ function OrderPanel({
   onOpenHandled?: () => void;
   /** An order to open from outside the panel, e.g. from a tracking card. */
   openKey?: string;
-  onBookAgreedPrice?: (requestId: string) => void;
+  onBookAgreedPrice?: (requestId: string, businessId: string) => void;
   /** Every order the drawer may need to look up, listed or not. */
   orders: TaggedRow[];
   title: string;
@@ -918,7 +921,10 @@ function OrderPanel({
                   <button
                     className="primary-button"
                     onClick={() => {
-                      onBookAgreedPrice?.(text(selected.row.id, ""));
+                      onBookAgreedPrice?.(
+                        text(selected.row.id, ""),
+                        text(selected.row.selectedBusinessId, ""),
+                      );
                       setSelectedKey("");
                     }}
                     type="button"
