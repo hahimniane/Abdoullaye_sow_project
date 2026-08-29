@@ -33,20 +33,24 @@ test("a shipment appears once on the orders page, not twice", () => {
     source,
     /TRACKED_COLLECTIONS = new Set\(\[\s*"barrelShipments",\s*"freightShipments",\s*"transportRequests",?\s*\]\)/,
   );
+  // Tracked shipments still never reach the order list. Price requests are
+  // excluded here too: they have their own tab, and the leftover bucket is
+  // titled "Cars & parking", which a parcel awaiting a price is not.
+  assert.match(source, /!TRACKED_COLLECTIONS\.has\(order\.collectionName\)/);
   assert.match(
     source,
-    /orders\.filter\(\(order\) => !TRACKED_COLLECTIONS\.has\(order\.collectionName\)\)/,
+    /order\.collectionName !== "freightQuoteRequests"/,
   );
   // The list the panel renders must come from the untracked set - now
   // additionally filtered by the active tab and status chip, never the raw
   // orders array.
+  // The panel renders the filtered set for whichever order-shaped tab is
+  // showing, never the raw orders array.
+  assert.match(source, /visibleOrders=\{[\s\S]{0,160}shownOrders/);
+  assert.doesNotMatch(source, /visibleOrders=\{orders\}/);
   assert.match(
     source,
-    /visibleOrders=\{shownTab === "cars" \? shownOrders : \[\]\}/,
-  );
-  assert.match(
-    source,
-    /const shownOrders = untracked\.filter/,
+    /const shownOrders = orderRowsForTab\.filter/,
   );
 });
 
@@ -66,7 +70,10 @@ test("the orders panel is titled for what is left in it", () => {
   // With shipments gone it holds parking, car purchases and transport, so
   // "Orders & tracking" would name a panel that has no tracking in it.
   assert.doesNotMatch(source, /title="Orders & tracking"/);
-  assert.match(source, /title="Cars, transport & parking"/);
+  // Named for whichever set it is actually showing: the leftover services,
+  // or the price requests that now have their own tab.
+  assert.match(source, /"Cars, transport & parking"/);
+  assert.match(source, /shownTab === "priceRequests"\s*\?\s*"Price requests"/);
 });
 
 test("the console opens on Home, never on the profile form", () => {

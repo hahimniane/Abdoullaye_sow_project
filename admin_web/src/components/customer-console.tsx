@@ -542,8 +542,22 @@ function OrdersView({
   // thing, so it gets one card - and that card opens this panel's drawer for
   // the actions (pay, cancel, review) the row used to carry.
   const [openKey, setOpenKey] = useState("");
+  const priceRequests = useMemo(
+    () =>
+      orders.filter(
+        (order) => order.collectionName === "freightQuoteRequests",
+      ),
+    [orders],
+  );
+  // Everything left over lands in "Cars & parking", so a price request has to
+  // be pulled out by name or it reads as a car.
   const untracked = useMemo(
-    () => orders.filter((order) => !TRACKED_COLLECTIONS.has(order.collectionName)),
+    () =>
+      orders.filter(
+        (order) =>
+          !TRACKED_COLLECTIONS.has(order.collectionName) &&
+          order.collectionName !== "freightQuoteRequests",
+      ),
     [orders],
   );
 
@@ -582,15 +596,26 @@ function OrdersView({
           count: transportJobs.length,
         },
         {
+          id: "priceRequests" as const,
+          label: "Price requests",
+          count: priceRequests.length,
+        },
+        {
           id: "cars" as const,
           label: "Cars & parking",
           count: untracked.length,
         },
       ].filter((tab) => tab.count > 0),
-    [barrels.length, freight.length, transportJobs.length, untracked.length],
+    [
+      barrels.length,
+      freight.length,
+      priceRequests.length,
+      transportJobs.length,
+      untracked.length,
+    ],
   );
   const [activeTab, setActiveTab] = useState<
-    "barrels" | "freight" | "transport" | "cars"
+    "barrels" | "freight" | "transport" | "priceRequests" | "cars"
   >("barrels");
   const [bucket, setBucket] = useState<"all" | StatusBucket>("all");
   const shownTab = tabs.some((tab) => tab.id === activeTab)
@@ -623,7 +648,12 @@ function OrdersView({
   const shownRecords = tabRecords.filter((row) =>
     bucketMatches(text(row.status, "")),
   );
-  const shownOrders = untracked.filter((order) =>
+  // Price requests and the leftover "cars & parking" rows are both order
+  // shaped rather than tracked shipments, so they render through here; which
+  // set that is depends on the tab.
+  const orderRowsForTab =
+    shownTab === "priceRequests" ? priceRequests : untracked;
+  const shownOrders = orderRowsForTab.filter((order) =>
     bucketMatches(
       text(order.row.status ?? order.row.purchaseStatus, ""),
     ),
@@ -631,8 +661,8 @@ function OrdersView({
   // Chips only for buckets that exist on this tab: a chip that always shows
   // an empty list is a dead end, not a filter.
   const presentBuckets = new Set(
-    (shownTab === "cars"
-      ? untracked.map((order) =>
+    (shownTab === "cars" || shownTab === "priceRequests"
+      ? orderRowsForTab.map((order) =>
           text(order.row.status ?? order.row.purchaseStatus, ""),
         )
       : tabRecords.map((row) => text(row.status, ""))
@@ -666,7 +696,9 @@ function OrdersView({
           visible when the tab has records: a filter that hides itself
           when it would show one chip is a filter nobody learns exists. */}
       {tabs.length > 0 &&
-        (shownTab === "cars" ? untracked : tabRecords).length > 0 && (
+        (shownTab === "cars" || shownTab === "priceRequests"
+          ? orderRowsForTab
+          : tabRecords).length > 0 && (
         <div
           aria-label="Filter by status"
           className="service-segments service-sort-segments"
@@ -698,11 +730,19 @@ function OrdersView({
         onOpenHandled={() => setOpenKey("")}
         openKey={openKey}
         orders={orders}
-        title="Cars, transport & parking"
+        title={
+          shownTab === "priceRequests"
+            ? "Price requests"
+            : "Cars, transport & parking"
+        }
         uid={uid}
-        visibleOrders={shownTab === "cars" ? shownOrders : []}
+        visibleOrders={
+          shownTab === "cars" || shownTab === "priceRequests"
+            ? shownOrders
+            : []
+        }
       />
-      {!loading && shownTab !== "cars" && (
+      {!loading && shownTab !== "cars" && shownTab !== "priceRequests" && (
         <CustomerTracking
           focusedRecordId={focusedRecord?.id ?? ""}
           onFocusConsumed={onFocusConsumed}
