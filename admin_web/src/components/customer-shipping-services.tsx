@@ -3551,7 +3551,7 @@ function FreightDestinationDeliveryField({
   );
 }
 
-type FreightQuoteRequestRow = FirestoreRow & {
+export type FreightQuoteRequestRow = FirestoreRow & {
   trackingCode?: string;
   description?: string;
   weightKg?: number;
@@ -3844,7 +3844,7 @@ function FreightPriceRequest({
  * are not comparable on price alone, and the customer has to be able to see
  * both before choosing either.
  */
-function CustomerFreightQuotes({
+export function CustomerFreightQuotes({
   request,
   onPriceAccepted,
 }: {

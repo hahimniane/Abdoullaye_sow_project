@@ -58,7 +58,12 @@ import {
 } from "@/lib/notification-preferences";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { CustomerParkingPools } from "@/components/customer-parking-pools";
-import { CustomerShippingServices , useCustomerFreightQuoteRequests } from "@/components/customer-shipping-services";
+import {
+  CustomerFreightQuotes,
+  CustomerShippingServices,
+  type FreightQuoteRequestRow,
+  useCustomerFreightQuoteRequests,
+} from "@/components/customer-shipping-services";
 import { CustomerSupport } from "@/components/customer-support";
 import { CustomerTracking } from "@/components/customer-tracking";
 import {
@@ -881,6 +886,16 @@ function OrderPanel({
       >
         {selected && (
           <>
+            {/* A price request's whole point is the answers it collected, so
+                the drawer leads with those and the choice between them rather
+                than with a summary of a parcel the customer already knows
+                about. Without this the card opened onto facts and no way to
+                accept anything. */}
+            {selected.collectionName === "freightQuoteRequests" && (
+              <CustomerFreightQuotes
+                request={selected.row as FreightQuoteRequestRow}
+              />
+            )}
             <div className="customer-order-facts">
               <OrderFact
                 label="Reference"
