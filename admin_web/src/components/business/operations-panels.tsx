@@ -58,7 +58,12 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
-import { barrelInTransitBlockedReason } from "@/lib/barrel-fulfillment";
+import {
+  barrelFulfillmentWriteErrorMessage,
+  barrelInTransitBlockedReason,
+  barrelManualContainerWriteFields,
+  barrelStatusWriteFields,
+} from "@/lib/barrel-fulfillment";
 import {
   BUSINESS_PARKING_ENTRY_MESSAGES,
   BUSINESS_PARKING_RECEIVED_VIA_OPTIONS,
@@ -2366,8 +2371,11 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
   const [rollingPool, setRollingPool] = useState<FirestoreRow | null>(null);
   const [rollDraft, setRollDraft] = useState<PoolRolloverDraft>(() => defaultPoolRolloverDraft());
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"ok" | "error">("ok");
+  const [alertRowId, setAlertRowId] = useState("");
   const [busyId, setBusyId] = useState("");
   const [copied, setCopied] = useState("");
+  const [containerDrafts, setContainerDrafts] = useState<Record<string, string>>({});
 
   const searched = useMemo(
     () => filterRows(shipments.rows, search, ["trackingCode", "senderName", "receiverName", "receiverPhone", "destinationCountryName", "status", "paymentStatus"]),
@@ -2413,28 +2421,79 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     action: () => Promise<unknown>,
     confirm?: string,
     confirmFr?: string,
+    errorMessage?: (error: unknown) => string,
   ) {
     if (confirm && !(await confirmImportantAction(confirm, confirmFr))) return;
     setBusyId(id);
     setMessage("");
     try {
       await action();
+      setMessageTone("ok");
+      setAlertRowId("");
       setMessage(label);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Update failed.");
+      setMessageTone("error");
+      setAlertRowId(id);
+      setMessage(
+        errorMessage
+          ? errorMessage(error)
+          : error instanceof Error && error.message
+            ? error.message
+            : "Update failed.",
+      );
     } finally {
       setBusyId("");
     }
   }
 
   function updateStatus(row: FirestoreRow, status: string) {
-    const blocked = barrelInTransitBlockedReason(status, row.containerNumber);
+    const submitted = containerDrafts[row.id] ?? "";
+    const blocked = barrelInTransitBlockedReason(
+      status,
+      row.containerNumber,
+      submitted,
+    );
     if (blocked) return Promise.reject(new Error(blocked));
+    const fields = barrelStatusWriteFields(status, {
+      submittedContainerNumber: submitted,
+      existingContainerNumber: row.containerNumber,
+    });
     return setDoc(
       doc(db, "barrelShipments", row.id),
-      { businessId, status, statusUpdatedAt: serverTimestamp(), updatedAt: serverTimestamp() },
+      {
+        businessId,
+        ...fields,
+        statusUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
       { merge: true },
     );
+  }
+
+  async function saveManualContainer(row: FirestoreRow, number: string) {
+    const fields = barrelManualContainerWriteFields(number);
+    if (!fields) throw new Error("Enter a valid tracking number.");
+    try {
+      await setDoc(
+        doc(db, "barrelShipments", row.id),
+        { businessId, ...fields, updatedAt: serverTimestamp() },
+        { merge: true },
+      );
+      setContainerDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[row.id];
+        return next;
+      });
+      setMessageTone("ok");
+      setAlertRowId("");
+      setMessage("Container number saved. You can now mark this barrel in transit.");
+    } catch (error) {
+      const text = barrelFulfillmentWriteErrorMessage(error);
+      setMessageTone("error");
+      setAlertRowId(row.id);
+      setMessage(text);
+      throw new Error(text);
+    }
   }
   function sealPool(row: FirestoreRow, shipUnderfilled = false) {
     return httpsCallable(functions, "sealBarrelPool")({ poolId: row.id, shipUnderfilled });
@@ -2680,7 +2739,7 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
               ? `${shipments.rows.length} expédition${shipments.rows.length === 1 ? "" : "s"}`
               : `${shipments.rows.length} shipment${shipments.rows.length === 1 ? "" : "s"}`}</p>
         </div>
-        <div className="lst-head-actions"><StatusText busy={Boolean(busyId)} message={message} /></div>
+        <div className="lst-head-actions"><StatusText busy={Boolean(busyId)} message={message} tone={messageTone} /></div>
       </header>
 
       {shipments.error && <div className="error-box">{shipments.error}</div>}
@@ -3209,6 +3268,9 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
                 {row.pickupRequested === true && <div><span>Pickup fee</span><b>{formatMoney(row.pickupFee)}</b></div>}
                 {(deliveryWindow(row) || text(row.deliveryEstimateLabel, "")) && <div><span>Delivery</span><b>{text(row.deliveryEstimateLabel, "") || deliveryWindow(row)}</b></div>}
                 <div><span>Created</span><b>{formatDate(row.createdAt)}</b></div>
+                {text(row.containerNumber, "") && (
+                  <div><span>Container on file</span><b>{text(row.containerNumber)}</b></div>
+                )}
               </div>
 
               {row.pickupRequested === true && (
@@ -3216,6 +3278,10 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
               )}
               {row.pricingPendingReview === true && (
                 <div className="pur-notice warn"><AlertTriangle size={15} /> Pricing is pending review for this shipment.</div>
+              )}
+
+              {alertRowId === row.id && message && messageTone === "error" && (
+                <div className="lst-form-error" role="alert">{message}</div>
               )}
 
               <div className="pur-actions">
@@ -3230,12 +3296,24 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
 	                      // event.target.value after await wrote pending
 	                      // again and toasted a false success.
 	                      const nextStatus = event.target.value;
+	                      const blocked = barrelInTransitBlockedReason(
+	                        nextStatus,
+	                        row.containerNumber,
+	                        containerDrafts[row.id] ?? "",
+	                      );
+	                      if (blocked) {
+	                        setMessageTone("error");
+	                        setAlertRowId(row.id);
+	                        setMessage(blocked);
+	                        return;
+	                      }
 	                      void run(
 	                        row.id,
 	                        "Shipment updated.",
 	                        () => updateStatus(row, nextStatus),
 	                        `Change shipment status to ${statusLabel(nextStatus)}?`,
 	                        `Changer le statut de l’expédition en ${statusLabel(nextStatus)} ?`,
+	                        barrelFulfillmentWriteErrorMessage,
 	                      );
 	                    }}
 	                  >
@@ -3275,6 +3353,12 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
                 relatedId={row.id}
                 containerNumber={text(row.containerNumber, "")}
                 trackingProvider={text(row.trackingProvider, "")}
+                allowManualSave
+                containerDraft={containerDrafts[row.id] ?? ""}
+                onContainerDraftChange={(value) =>
+                  setContainerDrafts((drafts) => ({ ...drafts, [row.id]: value }))
+                }
+                onSaveManual={(number) => saveManualContainer(row, number)}
               />
               <TrackingUpdatesSection relatedCollection="barrelShipments" relatedId={row.id} />
             </article>
@@ -6117,7 +6201,15 @@ function Panel({
   );
 }
 
-function StatusText({ busy, message }: { busy: boolean; message: string }) {
+function StatusText({
+  busy,
+  message,
+  tone = "ok",
+}: {
+  busy: boolean;
+  message: string;
+  tone?: "ok" | "error";
+}) {
   if (busy) {
     return (
       <span className="status-pill compact warning">
@@ -6126,7 +6218,14 @@ function StatusText({ busy, message }: { busy: boolean; message: string }) {
     );
   }
   if (!message) return null;
-  return <span className="status-pill compact">{message}</span>;
+  return (
+    <span
+      className={`status-pill compact${tone === "error" ? " danger" : ""}`}
+      role={tone === "error" ? "alert" : undefined}
+    >
+      {message}
+    </span>
+  );
 }
 
 function LoadingState() {

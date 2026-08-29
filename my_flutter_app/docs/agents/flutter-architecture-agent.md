@@ -240,3 +240,9 @@ Add future project conventions and repeated architectural decisions here.
   `location.replace("/")` on success for anyone without a customer workspace
   — that is the sign-in screen. Resume the same `barrelOrder` id; the Session
   id is the capability. Signed-in customers still auto-return to the console.
+- Barrel `in_transit` needs a container / booking / BOL number (≥ 4 chars) on
+  the merged document. A business may write `containerNumber` from the Barrels
+  console without Terminal49. Do not require `trackingProvider: carrier_api`
+  for that move; automated tracking stays optional. Freight still cannot
+  client-write `containerNumber`. A Terminal49-owned number
+  (`trackingProvider == carrier_api`) stays server-owned.
