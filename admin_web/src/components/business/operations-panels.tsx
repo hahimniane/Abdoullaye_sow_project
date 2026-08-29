@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   collection,
   deleteField,
@@ -164,6 +164,10 @@ type PanelProps = {
   previewMode?: boolean;
   /** Request id from an opened notification, scrolled to and highlighted. */
   focusRequestId?: string;
+  /** Record id from an opened notification, scrolled to and highlighted. */
+  focusRecordId?: string;
+  /** Which inner view a notification should open. */
+  focusView?: string;
   businessName?: string;
   businessStatus?: string;
   businessProfileImageUrl?: string;
@@ -2349,7 +2353,12 @@ function deadlineHasPassed(value: unknown) {
   return Number.isFinite(parsed) && parsed <= Date.now();
 }
 
-export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinations }: PanelProps) {
+export function BarrelsPanel({
+  businessId,
+  previewMode = false,
+  onOpenDestinations,
+  focusRecordId = "",
+}: PanelProps) {
   const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const enabled = Boolean(businessId && !previewMode);
   const shipments = useBusinessRows("barrelShipments", businessId, enabled, 500);
@@ -2358,6 +2367,7 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
   const destinations = useBusinessSubcollectionRows("destinationCountries", businessId, enabled, 100);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const focusedCardRef = useRef<HTMLElement | null>(null);
   const [poolFilter, setPoolFilter] = useState("all");
   const [poolFormOpen, setPoolFormOpen] = useState(false);
   const [poolDraft, setPoolDraft] = useState<PoolDraft>(() => defaultPoolDraft());
@@ -2385,6 +2395,15 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     () => (filter === "all" ? searched : searched.filter((row) => text(row.status, "") === filter)),
     [searched, filter],
   );
+  useEffect(() => {
+    if (!focusRecordId) return;
+    setSearch("");
+    setFilter("all");
+  }, [focusRecordId]);
+  useEffect(() => {
+    if (!focusRecordId || !focusedCardRef.current) return;
+    focusedCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusRecordId, filteredRows]);
   const searchedPools = useMemo(
     () => filterRows(pools.rows, search, ["trackingCode", "businessName", "destinationCountryName", "status", "origin", "shipMode"]),
     [pools.rows, search],
@@ -3246,7 +3265,11 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
           const busy = busyId === row.id;
           const tracking = text(row.trackingCode, row.id);
           return (
-            <article className="pur-card" key={row.id}>
+            <article
+              className={`pur-card${focusRecordId === row.id ? " focused" : ""}`}
+              key={row.id}
+              ref={focusRecordId === row.id ? focusedCardRef : undefined}
+            >
               <div className="pur-head">
                 <div className="pur-title">
                   <button className="bar-track" type="button" title="Copy tracking code" onClick={() => copyTracking(tracking)}>
@@ -3369,7 +3392,12 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
   );
 }
 
-export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
+export function FreightPanel({
+  businessId,
+  previewMode = false,
+  focusRecordId = "",
+  focusView = "",
+}: PanelProps) {
   const enabled = Boolean(businessId && !previewMode);
   const freight = useBusinessRows("freightShipments", businessId, enabled, 500);
   const priceRequests = useFreightQuoteRequests(businessId, enabled);
@@ -3377,6 +3405,14 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
   const [view, setView] = useState<"shipments" | "requests">("shipments");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const focusedCardRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!focusRecordId) return;
+    setView(focusView === "requests" ? "requests" : "shipments");
+    setSearch("");
+    setFilter("all");
+  }, [focusRecordId, focusView]);
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
   const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
@@ -3390,10 +3426,13 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
   const openPriceRequests = useMemo(
     () =>
       priceRequests.rows.filter(
-        (row) => text(row.quoteStatus, "collecting") === "collecting",
+        (row) =>
+          text(row.quoteStatus, "collecting") === "collecting" ||
+          (Boolean(focusRecordId) && row.id === focusRecordId),
       ),
-    [priceRequests.rows],
+    [priceRequests.rows, focusRecordId],
   );
+
   const quoteByRequestId = useMemo(
     () =>
       new Map(ownQuotes.rows.map((quote) => [text(quote.requestId, ""), quote])),
@@ -3408,6 +3447,11 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
     () => (filter === "all" ? searched : searched.filter((row) => text(row.status, "") === filter)),
     [filter, searched],
   );
+
+  useEffect(() => {
+    if (!focusRecordId || !focusedCardRef.current) return;
+    focusedCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusRecordId, openPriceRequests, filteredRows, view]);
 
   async function updateStatus(row: FirestoreRow, status: string) {
     const versionTwo = Number(row.freightPricingVersion ?? 0) >= 2;
@@ -3615,6 +3659,8 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
           busyId={busyId}
           drafts={quoteDrafts}
           error={priceRequests.error || ownQuotes.error}
+          focusRequestId={focusRecordId}
+          focusedCardRef={focusedCardRef}
           loading={priceRequests.loading}
           onDraft={(requestId, patch) =>
             setQuoteDrafts((current) => ({
@@ -3661,7 +3707,11 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
           // button that only produces an error.
           const weighs = row.weightVerificationRequired !== false;
           return (
-            <article className="pur-card" key={row.id}>
+            <article
+              className={`pur-card${focusRecordId === row.id ? " focused" : ""}`}
+              key={row.id}
+              ref={focusRecordId === row.id ? focusedCardRef : undefined}
+            >
               <div className="pur-head"><div className="pur-title"><strong>{text(row.trackingCode, row.id)}</strong><span className="pur-kind">{statusLabel(text(row.mode ?? row.freightMode, "freight"))}</span></div><span className={`lst-badge ${barrelTone(status)}`}>{statusLabel(status)}</span></div>
               <div className="pur-info">
                 <div><span>Sender</span><b>{text(row.senderName, "—")}</b></div><div><span>Receiver</span><b>{text(row.receiverName, "—")}</b></div>
@@ -3740,6 +3790,8 @@ function FreightPriceRequestsFeed({
   busyId,
   drafts,
   error,
+  focusRequestId = "",
+  focusedCardRef,
   loading,
   onDraft,
   onSend,
@@ -3749,6 +3801,8 @@ function FreightPriceRequestsFeed({
   busyId: string;
   drafts: Record<string, FreightQuoteDraft>;
   error: string;
+  focusRequestId?: string;
+  focusedCardRef?: RefObject<HTMLElement | null>;
   loading: boolean;
   onDraft: (requestId: string, patch: Partial<FreightQuoteDraft>) => void;
   onSend: (request: FirestoreRow) => void;
@@ -3787,8 +3841,13 @@ function FreightPriceRequestsFeed({
         };
         const weightKg = Number(request.weightKg ?? 0);
         const busy = busyId === `quote:${request.id}`;
+        const focused = Boolean(focusRequestId) && focusRequestId === request.id;
         return (
-          <article className="pur-card" key={request.id}>
+          <article
+            className={`pur-card${focused ? " focused" : ""}`}
+            key={request.id}
+            ref={focused ? focusedCardRef : undefined}
+          >
             <div className="pur-head">
               <div className="pur-title">
                 <strong>{text(request.trackingCode, request.id)}</strong>
@@ -3896,7 +3955,12 @@ function transportTone(status: string) {
   }
 }
 
-export function TransportPanel({ businessId, previewMode = false, focusRequestId = "" }: PanelProps) {
+export function TransportPanel({
+  businessId,
+  previewMode = false,
+  focusRequestId = "",
+  focusView = "",
+}: PanelProps) {
   const enabled = Boolean(businessId && !previewMode);
   const opportunities = useBusinessRows("transportOpportunities", businessId, enabled, 500);
   const businessQuotes = useBusinessRows("transportQuotes", businessId, enabled, 500);
@@ -3913,14 +3977,14 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
   const [containerDrafts, setContainerDrafts] = useState<Record<string, string>>({});
   const focusedCardRef = useRef<HTMLElement | null>(null);
 
-  // A notification points at one request. Show the view that contains it and
-  // clear any search that would filter it out, otherwise the deep link lands
-  // on a list where the request is not visible.
+  // A notification points at one request. Open Accepted jobs for a paid/won
+  // job and Opportunities for a new or lost quote — never force Opportunities
+  // for every transport notification.
   useEffect(() => {
     if (!focusRequestId) return;
-    setView("opportunities");
+    setView(focusView === "jobs" ? "jobs" : "opportunities");
     setSearch("");
-  }, [focusRequestId]);
+  }, [focusRequestId, focusView]);
 
   const quoteByRequest = useMemo(
     () =>
@@ -3960,13 +4024,6 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
     [openOpportunities, search],
   );
 
-  // The rows stream in from Firestore, so the target card usually does not
-  // exist on the render that handles the notification - scroll once it does.
-  useEffect(() => {
-    if (!focusRequestId || !focusedCardRef.current) return;
-    focusedCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [focusRequestId, filteredOpportunities]);
-
   const filteredJobs = useMemo(
     () =>
       filterRows(transports.rows, search, [
@@ -3982,6 +4039,13 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
       ]),
     [transports.rows, search],
   );
+
+  // The rows stream in from Firestore, so the target card usually does not
+  // exist on the render that handles the notification - scroll once it does.
+  useEffect(() => {
+    if (!focusRequestId || !focusedCardRef.current) return;
+    focusedCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusRequestId, filteredOpportunities, filteredJobs, view]);
 
   function openQuote(opportunity: FirestoreRow) {
     const requestId = text(opportunity.requestId, opportunity.id);
@@ -4346,8 +4410,13 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
               const container = normalizeTransportContainerNumber(row.containerNumber);
               const busyRow = busyId.startsWith(`${row.id}:`);
               const selectedAmountCents = Number(row.selectedAmountCents ?? 0);
+              const focused = Boolean(focusRequestId) && focusRequestId === row.id;
               return (
-                <article className="pur-card transport-job-card" key={row.id}>
+                <article
+                  className={`pur-card transport-job-card${focused ? " focused" : ""}`}
+                  key={row.id}
+                  ref={focused ? focusedCardRef : undefined}
+                >
                   <div className="pur-head">
                     <div className="pur-title">
                       <strong>{transportTitle(row)}</strong>
@@ -4538,6 +4607,7 @@ function useTransientMessage(setMessage: (value: string) => void, ms = ROW_MESSA
 export function ParkingPanel({
   businessId,
   previewMode = false,
+  focusRecordId = "",
 }: PanelProps) {
   const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
@@ -4566,6 +4636,7 @@ export function ParkingPanel({
   // as a plain link the browser will honour.
   const [blockedDocument, setBlockedDocument] = useState<{ id: string; url: string } | null>(null);
   const setRowMessage = useTransientMessage(setMessage);
+  const focusedCardRef = useRef<HTMLElement | null>(null);
   const searched = useMemo(
     () => filterRows(parkedCars.rows, search, ["trackingCode", "ownerName", "customerName", "carMake", "carModel", "carYear", "vinNumber", "status"]),
     [parkedCars.rows, search],
@@ -4593,6 +4664,17 @@ export function ParkingPanel({
     }
     return inRange.filter((row) => text(row.status, "") === filter);
   }, [searched, filter, rangeFrom, rangeTo]);
+  useEffect(() => {
+    if (!focusRecordId) return;
+    setSearch("");
+    setFilter("all");
+    setRangeFrom("");
+    setRangeTo("");
+  }, [focusRecordId]);
+  useEffect(() => {
+    if (!focusRecordId || !focusedCardRef.current) return;
+    focusedCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusRecordId, filteredRows]);
   const activeCount = parkedCars.rows.filter((row) => text(row.status, "active") === "active").length;
 
   function closeForm() {
@@ -4986,7 +5068,11 @@ export function ParkingPanel({
           const awaitingDirect = canMarkBusinessParkingPaid(row);
           const rowBusy = paidBusyId === row.id;
           return (
-            <article className="pur-card" key={row.id}>
+            <article
+              className={`pur-card${focusRecordId === row.id ? " focused" : ""}`}
+              key={row.id}
+              ref={focusRecordId === row.id ? focusedCardRef : undefined}
+            >
               <div className="pur-head">
                 <div className="pur-title">
                   <strong>{parkingTitle(row)}</strong>
@@ -5625,6 +5711,7 @@ export function PurchasesPanel({
   businessId,
   previewMode = false,
   scope = "purchases",
+  focusRecordId = "",
 }: PanelProps & {scope?: "purchases" | "viewings"}) {
   const enabled = Boolean(businessId && !previewMode);
   const purchases = useBusinessRows("carPurchases", businessId, enabled, 250);
@@ -5636,6 +5723,7 @@ export function PurchasesPanel({
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const focusedCardRef = useRef<HTMLElement | null>(null);
   // A filter picked on one queue must not survive into the other, where it
   // would match nothing and read as an empty queue rather than a stale filter.
   useEffect(() => {
@@ -5679,6 +5767,16 @@ export function PurchasesPanel({
     if (filter === "viewings") return searched.filter((row) => purchaseKind(row) === "viewing");
     return searched.filter((row) => text(row.purchaseStatus, "") === filter);
   }, [searched, filter]);
+
+  useEffect(() => {
+    if (!focusRecordId) return;
+    setSearch("");
+    setFilter("all");
+  }, [focusRecordId]);
+  useEffect(() => {
+    if (!focusRecordId || !focusedCardRef.current) return;
+    focusedCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusRecordId, filteredRows]);
 
   const actionCount = useMemo(() => scopedRows.filter(purchaseNeedsAction).length, [scopedRows]);
 
@@ -5794,7 +5892,13 @@ export function PurchasesPanel({
             : null;
           const note = noteById[row.id] ?? "";
           return (
-            <article className={`pur-card ${purchaseNeedsAction(row) ? "alert" : ""}`} key={row.id}>
+            <article
+              className={`pur-card${purchaseNeedsAction(row) ? " alert" : ""}${
+                focusRecordId === row.id ? " focused" : ""
+              }`}
+              key={row.id}
+              ref={focusRecordId === row.id ? focusedCardRef : undefined}
+            >
               <div className="pur-head">
                 <div className="pur-title">
                   <strong>{text(row.carTitle ?? row.title, "Vehicle")}</strong>

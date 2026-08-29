@@ -76,6 +76,10 @@ import { ResumeCheckoutButton } from "@/components/resume-checkout-button";
 import { isValidE164, isValidPhone, normalizePhone } from "@/lib/phone";
 import { phoneVerificationErrorMessage } from "@/lib/phone-verification";
 import { currentWebLanguage } from "@/lib/language";
+import {
+  customerOrdersInnerTab,
+  customerTargetForNotification,
+} from "@/lib/notification-routing";
 
 type CustomerTab =
   | "home"
@@ -134,51 +138,6 @@ const tabs: Array<{
   { id: "profile", label: "Profile", description: "Account and security", icon: UserRound },
 ];
 
-type NotificationTarget = {
-  tab: CustomerTab;
-  focus?: {collection: string; id: string};
-};
-
-/**
- * Where a clicked notification should LAND - the tab plus, when the payload
- * names a record, that exact record. "It just takes me to Home" was mostly
- * unmapped types (shipment_tracking_update above all) falling through.
- */
-function targetForNotification(
-  data: Record<string, string>,
-): NotificationTarget {
-  const type = data.type ?? "";
-  const relatedId = data.relatedId ?? data.shipmentId ?? "";
-  const focus = relatedId
-    ? {collection: data.relatedCollection ?? "", id: relatedId}
-    : undefined;
-  switch (type) {
-    case "support_message":
-    case "support_escalated":
-      return {tab: "support"};
-    case "car_viewing_status":
-      // Viewings are not purchases and no longer live under Orders. Without
-      // this case the type fell through to the default and landed on Home.
-      return {tab: "viewings", focus};
-    case "car_purchase_status":
-    case "barrel_shipment_status":
-    case "freight_shipment_status":
-    case "freight_balance_due":
-    case "freight_refund_issued":
-    case "parking_reservation_status":
-    case "shipment_tracking_update":
-    case "review_request":
-    case "deposit_refund_due":
-      return {tab: "orders", focus};
-    case "barrel_pool_deposit":
-    case "barrel_pool_join":
-    case "barrel_pool_balance_due":
-      return {tab: "parkingPools", focus};
-    default:
-      return {tab: "home"};
-  }
-}
-
 export function CustomerConsole({
   firebaseUser,
   profile,
@@ -201,7 +160,9 @@ export function CustomerConsole({
   const [focusedRecord, setFocusedRecord] = useState<{
     collection: string;
     id: string;
+    openReview?: boolean;
   } | null>(null);
+  const [focusCaseId, setFocusCaseId] = useState("");
   const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -320,9 +281,14 @@ export function CustomerConsole({
           <NotificationBell
             enabled={Boolean(firebaseUser.uid)}
             onSelect={(data) => {
-              const target = targetForNotification(data);
+              const target = customerTargetForNotification(data);
               setActiveTab(target.tab);
-              setFocusedRecord(target.focus ?? null);
+              setFocusedRecord(
+                target.focus
+                  ? {...target.focus, openReview: target.openReview}
+                  : null,
+              );
+              setFocusCaseId(target.caseId ?? "");
             }}
             uid={firebaseUser.uid}
           />
@@ -422,7 +388,9 @@ export function CustomerConsole({
           )}
           {activeTab === "viewings" && (
             <OrderPanel
+              focusedRecord={focusedRecord}
               loading={dataLoading}
+              onFocusConsumed={() => setFocusedRecord(null)}
               orders={viewingOrders}
               title="Car viewings"
               uid={firebaseUser.uid}
@@ -462,6 +430,8 @@ export function CustomerConsole({
           )}
           {activeTab === "support" && (
             <CustomerSupport
+              caseId={focusCaseId}
+              onCaseOpened={() => setFocusCaseId("")}
               references={allOrders.map(({ collectionName, label, row }) => ({
                 collection: collectionName,
                 id: row.id,
@@ -549,7 +519,7 @@ function OrdersView({
   trackedShipments,
   uid,
 }: {
-  focusedRecord: {collection: string; id: string} | null;
+  focusedRecord: {collection: string; id: string; openReview?: boolean} | null;
   onFocusConsumed: () => void;
   loading: boolean;
   orders: TaggedRow[];
@@ -644,16 +614,12 @@ function OrdersView({
     : tabs[0]?.id ?? "barrels";
 
   // A notification deep-link names one record; it must land on the tab that
-  // record lives in, with no filter hiding it.
+  // record lives in, with no filter hiding it. Price requests live on Freight
+  // ("Waiting on a price"), not the leftover Cars tab.
   useEffect(() => {
     if (!focusedRecord) return;
     setBucket("all");
-    if (focusedRecord.collection === "barrelShipments") setActiveTab("barrels");
-    else if (focusedRecord.collection === "freightShipments") {
-      setActiveTab("freight");
-    } else if (focusedRecord.collection === "transportRequests") {
-      setActiveTab("transport");
-    } else setActiveTab("cars");
+    setActiveTab(customerOrdersInnerTab(focusedRecord.collection));
   }, [focusedRecord]);
 
   const tabRecords =
@@ -744,10 +710,13 @@ function OrdersView({
         </div>
       )}
       <OrderPanel
+        focusedRecord={focusedRecord}
         loading={loading}
         onBookAgreedPrice={onBookAgreedPrice}
+        onFocusConsumed={onFocusConsumed}
         onOpenHandled={() => setOpenKey("")}
         openKey={openKey}
+        openReview={focusedRecord?.openReview === true}
         orders={orders}
         title={
           shownTab === "freight"
@@ -762,7 +731,9 @@ function OrdersView({
       {!loading && shownTab !== "cars" && (
         <CustomerTracking
           focusedRecordId={focusedRecord?.id ?? ""}
-          onFocusConsumed={onFocusConsumed}
+          onFocusConsumed={
+            focusedRecord?.openReview ? undefined : onFocusConsumed
+          }
           onOpenDetails={(record) =>
             setOpenKey(`${text(record.relatedCollection, "")}:${record.id}`)
           }
@@ -783,20 +754,27 @@ const TRACKED_COLLECTIONS = new Set([
 ]);
 
 function OrderPanel({
+  focusedRecord,
   loading,
   onBookAgreedPrice,
+  onFocusConsumed,
   onOpenHandled,
   openKey = "",
+  openReview = false,
   orders,
   title,
   uid,
   visibleOrders,
 }: {
+  focusedRecord?: {collection: string; id: string; openReview?: boolean} | null;
   loading: boolean;
   /** Called once an externally requested `openKey` has been opened. */
   onOpenHandled?: () => void;
+  onFocusConsumed?: () => void;
   /** An order to open from outside the panel, e.g. from a tracking card. */
   openKey?: string;
+  /** Open the review composer for the focused order. */
+  openReview?: boolean;
   onBookAgreedPrice?: (requestId: string, businessId: string) => void;
   /** Every order the drawer may need to look up, listed or not. */
   orders: TaggedRow[];
@@ -826,6 +804,29 @@ function OrderPanel({
     onOpenHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openKey]);
+  // A notification names one order (and sometimes asks to leave a review).
+  // Open that drawer once the live rows contain it, then consume the focus
+  // so a later visit to this list does not re-open it.
+  useEffect(() => {
+    if (!focusedRecord?.id) return;
+    const match = orders.find(
+      (order) =>
+        order.row.id === focusedRecord.id &&
+        (!focusedRecord.collection ||
+          order.collectionName === focusedRecord.collection),
+    );
+    if (!match) return;
+    setSelectedKey(orderKey(match));
+    setReviewing(openReview || focusedRecord.openReview === true);
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(`order-${match.row.id}`)
+        ?.scrollIntoView({behavior: "smooth", block: "center"});
+    });
+    onFocusConsumed?.();
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedRecord, openReview, orders]);
   const selected = useMemo(
     () => orders.find((order) => orderKey(order) === selectedKey) ?? null,
     [orders, selectedKey],
@@ -866,7 +867,10 @@ function OrderPanel({
             return (
               <button
                 aria-label="Open order details"
-                className="data-row customer-order-row customer-order-button"
+                className={`data-row customer-order-row customer-order-button${
+                  focusedRecord?.id === row.id ? " focused" : ""
+                }`}
+                id={`order-${row.id}`}
                 key={orderKey(order)}
                 onClick={() => {
                   setSelectedKey(orderKey(order));

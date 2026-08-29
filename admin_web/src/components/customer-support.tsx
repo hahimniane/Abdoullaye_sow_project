@@ -65,9 +65,14 @@ function safeAction<T>(request: Promise<T>): Promise<T> {
 export function CustomerSupport({
   uid,
   references = [],
+  caseId = "",
+  onCaseOpened,
 }: {
   uid: string;
   references?: CustomerSupportReference[];
+  /** Open this thread when a notification names it. */
+  caseId?: string;
+  onCaseOpened?: () => void;
 }) {
   const [cases, setCases] = useState<FirestoreRow[]>([]);
   const [casesLoading, setCasesLoading] = useState(true);
@@ -115,6 +120,13 @@ export function CustomerSupport({
       unsubscribe();
     };
   }, [uid]);
+
+  useEffect(() => {
+    if (!caseId) return;
+    setSelectedCaseId(caseId);
+    onCaseOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caseId]);
 
   if (selectedCaseId) {
     const selectedCase = cases.find((item) => item.id === selectedCaseId);

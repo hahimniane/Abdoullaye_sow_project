@@ -54,6 +54,8 @@ export type SupportCasesPanelProps = {
   canReply: boolean;
   enabled?: boolean;
   runAction?: ActionRunner;
+  /** Open this thread when a notification names it. */
+  caseId?: string;
 };
 
 // Business owners/staff escalate to admins when they cannot resolve a
@@ -329,6 +331,7 @@ export function SupportCasesPanel({
   canReply,
   enabled: enabledOverride,
   runAction,
+  caseId = "",
 }: SupportCasesPanelProps) {
   const enabled =
     enabledOverride ?? (scope === "admin" ? true : Boolean(businessId));
@@ -367,10 +370,22 @@ export function SupportCasesPanel({
   }, [rows, search, showResolved]);
 
   useEffect(() => {
-    if (selectedId && !rows.some((row) => row.id === selectedId)) {
-      setSelectedId("");
+    if (!selectedId) return;
+    if (rows.some((row) => row.id === selectedId)) return;
+    // A notification can name a case before the list snapshot arrives.
+    // Keep that selection until we know the list does not contain it.
+    if (caseId && selectedId === caseId && (loading || rows.length === 0)) {
+      return;
     }
-  }, [rows, selectedId]);
+    setSelectedId("");
+  }, [rows, selectedId, caseId, loading]);
+
+  useEffect(() => {
+    if (!caseId) return;
+    setSelectedId(caseId);
+    setShowResolved(true);
+    setSearch("");
+  }, [caseId]);
 
   const selectedCase = rows.find((row) => row.id === selectedId) ?? null;
 

@@ -1038,6 +1038,7 @@ exports.notifyCarPurchaseStatus = onDocumentUpdated(
             service: "purchases",
             purchaseId: event.params.purchaseId,
             requestId: event.params.purchaseId,
+            ...relatedRecordFields("carPurchases", event.params.purchaseId),
           },
         });
       }
@@ -1053,6 +1054,7 @@ exports.notifyCarPurchaseStatus = onDocumentUpdated(
           type: "car_purchase_status",
           purchaseId: event.params.purchaseId,
           status: after.status || "",
+          ...relatedRecordFields("carPurchases", event.params.purchaseId),
         },
       });
       await maybeSendReviewRequestNotification({
@@ -1083,6 +1085,7 @@ exports.notifyBarrelShipmentStatus = onDocumentUpdated(
             shipmentId: event.params.shipmentId,
             requestId: event.params.shipmentId,
             trackingCode: paidAfter.trackingCode || "",
+            ...relatedRecordFields("barrelShipments", event.params.shipmentId),
           },
         });
       }
@@ -1098,6 +1101,7 @@ exports.notifyBarrelShipmentStatus = onDocumentUpdated(
           type: "barrel_shipment_status",
           shipmentId: event.params.shipmentId,
           status: after.status || "",
+          ...relatedRecordFields("barrelShipments", event.params.shipmentId),
         },
       });
       await maybeSendReviewRequestNotification({
@@ -1133,6 +1137,7 @@ exports.notifyFreightShipmentPaid = onDocumentUpdated(
           shipmentId: event.params.shipmentId,
           requestId: event.params.shipmentId,
           trackingCode: after.trackingCode || "",
+          ...relatedRecordFields("freightShipments", event.params.shipmentId),
         },
       });
     },
@@ -1207,6 +1212,7 @@ exports.notifyParkingReservationStatus = onDocumentUpdated(
             reservationId: event.params.reservationId,
             requestId: event.params.reservationId,
             trackingCode: paidAfter.trackingCode || "",
+            ...relatedRecordFields("parkedCars", event.params.reservationId),
           },
         });
       }
@@ -1222,6 +1228,7 @@ exports.notifyParkingReservationStatus = onDocumentUpdated(
           type: "parking_reservation_status",
           reservationId: event.params.reservationId,
           status: after.status || "",
+          ...relatedRecordFields("parkedCars", event.params.reservationId),
         },
       });
       await maybeSendReviewRequestNotification({
@@ -1256,6 +1263,7 @@ exports.notifyTransportRequestStatus = onDocumentUpdated(
             service: "transport",
             requestId: event.params.requestId,
             trackingCode: paidAfter.trackingCode || "",
+            ...relatedRecordFields("transportRequests", event.params.requestId),
           },
         });
       }
@@ -1271,6 +1279,7 @@ exports.notifyTransportRequestStatus = onDocumentUpdated(
           type: "transport_request_status",
           requestId: event.params.requestId,
           status: after.status || "",
+          ...relatedRecordFields("transportRequests", event.params.requestId),
         },
       });
       await maybeSendReviewRequestNotification({
@@ -3853,6 +3862,7 @@ exports.createTransportRequest = onCall(
             ),
             businessId: provider.businessId,
             trackingCode,
+            ...relatedRecordFields("transportRequests", requestRef.id),
           },
         });
       }));
@@ -4051,7 +4061,11 @@ exports.updateTransportRequestDetails = onCall(
           title: "Transport request updated",
           body: "A customer changed a request you can quote on. " +
             "Review the new details and send a quote.",
-          data: {type: "transport_opportunity", requestId},
+          data: {
+            type: "transport_opportunity",
+            requestId,
+            ...relatedRecordFields("transportRequests", requestId),
+          },
         }),
       ));
 
@@ -4496,6 +4510,7 @@ exports.selectTransportQuote = onCall(
               requestId,
               businessId: eligible[index],
               trackingCode: selected.trackingCode || "",
+              ...relatedRecordFields("transportRequests", requestId),
             },
           });
         }));
@@ -4794,6 +4809,7 @@ exports.completeTransportJobPayment = onCall(
             requestId,
             businessId: String(job.businessId || ""),
             trackingCode: String(job.trackingCode || ""),
+            ...relatedRecordFields("transportRequests", requestId),
           },
         });
       }
@@ -6187,6 +6203,54 @@ exports.sendTestNotificationDelivery = onCall(
       };
     },
 );
+
+/**
+ * Collection + id a notification click needs to open the right record.
+ * Website routing infers from `type` when these are missing, but live
+ * payloads must carry them so Orders can switch Barrels/Freight/Cars.
+ *
+ * @param {string} collection Firestore collection.
+ * @param {string} id Document id.
+ * @return {{relatedCollection: string, relatedId: string}}
+ */
+function relatedRecordFields(collection, id) {
+  return {
+    relatedCollection: String(collection || ""),
+    relatedId: String(id || ""),
+  };
+}
+
+/**
+ * Maps a checkout / Stripe payment type onto the order collection.
+ *
+ * @param {string} orderType Checkout orderType or intent paymentType.
+ * @return {string} Firestore collection, or empty when unknown.
+ */
+function collectionForHoldOrderType(orderType) {
+  switch (String(orderType || "")) {
+    case "parking":
+    case "parking_deposit":
+      return "parkedCars";
+    case "barrelShipment":
+    case "barrelOrder":
+    case "barrelDestinationChange":
+      return "barrelShipments";
+    case "freightShipment":
+    case "freightSettlement":
+      return "freightShipments";
+    case "transportJob":
+    case "transport_job":
+      return "transportRequests";
+    case "carDeposit":
+    case "carPurchase":
+    case "holdExtension":
+    case "reservation_deposit":
+    case "full_purchase":
+      return "carPurchases";
+    default:
+      return "";
+  }
+}
 
 async function sendPreferenceNotification({
   uid,
@@ -8603,6 +8667,12 @@ exports.captureExpiringPaymentHolds = onSchedule(
                 type: "payment_hold_capture_notice",
                 paymentIntentId: hold.paymentIntentId,
                 recordId: hold.recordId || "",
+                orderType: String(hold.orderType || ""),
+                ...relatedRecordFields(
+                    hold.collection ||
+                      collectionForHoldOrderType(hold.orderType),
+                    hold.recordId || "",
+                ),
               },
             });
             await holdDoc.ref.update({
@@ -22584,6 +22654,11 @@ async function notifyBusinessCancellation({
       type: "secured_order_cancelled_by_business",
       orderType,
       recordId,
+      ...relatedRecordFields(
+          (SECURED_CANCELLABLE_ORDERS[orderType] || {}).collection ||
+            collectionForHoldOrderType(orderType),
+          recordId,
+      ),
     },
   });
 }
@@ -23071,6 +23146,7 @@ exports.createFreightQuoteRequest = onCall(
             requestId: requestRef.id,
             businessId: provider.businessId,
             trackingCode,
+            ...relatedRecordFields("freightQuoteRequests", requestRef.id),
           },
         }),
       ));
@@ -23167,6 +23243,7 @@ exports.submitFreightQuote = onCall(
           type: "freight_quote_received",
           requestId,
           trackingCode: requestData.trackingCode || "",
+          ...relatedRecordFields("freightQuoteRequests", requestId),
         },
       });
 
@@ -23270,7 +23347,11 @@ exports.selectFreightQuote = onCall(
           preferenceKey: "businessActivity",
           title: "A quote went elsewhere",
           body: "The customer chose another price for that parcel.",
-          data: {type: "freight_quote_lost", requestId},
+          data: {
+            type: "freight_quote_lost",
+            requestId,
+            ...relatedRecordFields("freightQuoteRequests", requestId),
+          },
         });
       }));
 
@@ -23286,6 +23367,7 @@ exports.selectFreightQuote = onCall(
           type: "freight_quote_won",
           requestId,
           trackingCode: requestData.trackingCode || "",
+          ...relatedRecordFields("freightQuoteRequests", requestId),
         },
       });
 
@@ -23926,6 +24008,7 @@ async function notifyFreightBalanceDue({
       shipmentId: shipmentId || "",
       autoChargeAttempted: String(!!autoChargeAttempted),
       autoChargeSucceeded: String(!!autoChargeSucceeded),
+      ...relatedRecordFields("freightShipments", shipmentId || ""),
     },
   });
 }
@@ -23959,6 +24042,7 @@ async function notifyFreightRefundIssued({shipmentId, shipment, settlement}) {
     data: {
       type: "freight_refund_issued",
       shipmentId: shipmentId || "",
+      ...relatedRecordFields("freightShipments", shipmentId || ""),
     },
   });
 }
@@ -24515,6 +24599,7 @@ exports.notifyFreightShipmentStatus = onDocumentUpdated(
           type: "freight_shipment_status",
           shipmentId: event.params.shipmentId,
           status: after.status || "",
+          ...relatedRecordFields("freightShipments", event.params.shipmentId),
         },
       });
       await maybeSendReviewRequestNotification({
@@ -25662,6 +25747,7 @@ exports.createCarViewingReservation = onCall(
           purchaseId: purchaseRef.id,
           carId,
           status: VIEWING_REQUESTED,
+          ...relatedRecordFields("carPurchases", purchaseRef.id),
         },
       });
 
@@ -25863,6 +25949,7 @@ async function notifyViewingTransition({purchaseId, purchase, actor, next}) {
     purchaseId,
     carId: String(purchase.carId || ""),
     status,
+    ...relatedRecordFields("carPurchases", purchaseId),
   };
   const toCustomer = (title, body) => safeSendPreferenceNotification({
     uid: String(purchase.buyerUid || ""),
@@ -25959,6 +26046,7 @@ exports.expireStaleCarViewings = onSchedule(
             purchaseId: doc.id,
             carId: String(purchase.carId || ""),
             status: VIEWING_EXPIRED,
+            ...relatedRecordFields("carPurchases", doc.id),
           };
           const carName = String(purchase.carTitle || "a car");
           await Promise.all([
@@ -28455,7 +28543,11 @@ exports.escalateSupportCase = onCall(
         preferenceKey: "supportEscalations",
         title: "Support case escalated",
         body: supportCase.subject || supportCase.relatedLabel || "Support",
-        data: {type: "support_escalated", caseId},
+        data: {
+          type: "support_escalated",
+          caseId,
+          ...relatedRecordFields("supportCases", caseId),
+        },
       });
       return {success: true, caseId};
     },

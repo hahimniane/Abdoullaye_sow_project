@@ -93,4 +93,41 @@ describe("service status notification triggers", () => {
         /createdAt: FirestoreFieldValue\.serverTimestamp\(\)/,
     );
   });
+
+  it("stamps relatedCollection and relatedId on order notification payloads",
+      () => {
+        const source = fs.readFileSync(
+            path.join(__dirname, "..", "index.js"),
+            "utf8",
+        );
+        assert.match(source, /function relatedRecordFields\(/);
+        const stamps = [
+          ["car_purchase_status", "carPurchases"],
+          ["barrel_shipment_status", "barrelShipments"],
+          ["parking_reservation_status", "parkedCars"],
+          ["transport_request_status", "transportRequests"],
+          ["freight_quote_received", "freightQuoteRequests"],
+          ["freight_balance_due", "freightShipments"],
+          ["freight_refund_issued", "freightShipments"],
+          ["freight_shipment_status", "freightShipments"],
+          ["car_viewing_status", "carPurchases"],
+          ["payment_hold_capture_notice", "collectionForHoldOrderType"],
+          ["secured_order_cancelled_by_business", "SECURED_CANCELLABLE_ORDERS"],
+        ];
+        for (const [type, collectionHint] of stamps) {
+          const index = source.indexOf(`type: "${type}"`);
+          assert.ok(index >= 0, `${type} payload not found`);
+          const block = source.slice(index, index + 450);
+          assert.match(
+              block,
+              /relatedRecordFields\(/,
+              `${type} does not stamp relatedCollection/relatedId`,
+          );
+          assert.match(
+              block,
+              new RegExp(collectionHint),
+              `${type} does not name ${collectionHint}`,
+          );
+        }
+      });
 });

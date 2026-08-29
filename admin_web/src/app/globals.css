@@ -6338,7 +6338,9 @@ button[data-loading="true"]::before {
 }
 /* The card a notification pointed at. The ring has to survive after the
    smooth scroll settles, so it stays applied rather than animating away. */
-.transport-opportunity-card.focused {
+.transport-opportunity-card.focused,
+.pur-card.focused,
+.customer-order-row.focused {
   border-color: var(--brand, #0b7a6e);
   box-shadow: 0 0 0 3px rgba(11, 122, 110, 0.18), 0 8px 22px rgba(11, 59, 56, 0.08);
   scroll-margin-block: 24px;
