@@ -561,18 +561,31 @@ service cloud.firestore {
     }
 
     // A load that is "in transit" is inside a container, and the customer's
-    // next question is always "where is it". The container number is the key
-    // the carrier tracking API is built on, so without it the status is one
-    // neither the customer nor support can act on. containerNumber is written
-    // only by subscribeToContainerTracking (Admin SDK, so it bypasses these
-    // rules and is not in any business's allowed key list) - the business
-    // subscribes tracking first, then advances the status. Enforced here
-    // rather than in the console because the console writes these documents
-    // directly, so a UI-only check would be advisory.
+    // next question is always "where is it". The number can be a container,
+    // booking, or bill of lading. Automated Terminal49 tracking is optional:
+    // a business may write containerNumber itself (manual) or let
+    // subscribeToContainerTracking write it after the carrier accepts the
+    // number. `incoming` is the merged document, so a single write can set
+    // both status and containerNumber. Enforced here rather than in the
+    // console because the console writes these documents directly.
+    function containerNumberReady(data) {
+      return data.get('containerNumber', '') is string &&
+        data.get('containerNumber', '').size() >= 4 &&
+        data.get('containerNumber', '').size() <= 40;
+    }
+
     function containerReadyForTransit(existing, incoming) {
       return incoming.status != 'in_transit' ||
-        (existing.get('containerNumber', '') is string &&
-         existing.get('containerNumber', '').size() >= 4);
+        containerNumberReady(incoming) ||
+        containerNumberReady(existing);
+    }
+
+    // Manual save of a container / BOL. Carrier-API numbers stay server-owned
+    // so a typed overwrite cannot desync Terminal49.
+    function containerNumberWriteAllowed(existing, incoming) {
+      return !incoming.diff(existing).affectedKeys().hasAny(['containerNumber']) ||
+        (existing.get('trackingProvider', '') != 'carrier_api' &&
+         containerNumberReady(incoming));
     }
 
     // Air freight has no container, so only sea is gated. A shipment with no
@@ -599,8 +612,9 @@ service cloud.firestore {
         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'barrels') &&
         request.resource.data.businessId == resource.data.businessId &&
         containerReadyForTransit(resource.data, request.resource.data) &&
+        containerNumberWriteAllowed(resource.data, request.resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'trackingNumber', 'trackingCode', 'staffNotes', 'statusUpdatedAt', 'updatedAt']);
+          .hasOnly(['status', 'containerNumber', 'trackingNumber', 'trackingCode', 'staffNotes', 'statusUpdatedAt', 'updatedAt']);
       allow delete: if request.auth != null &&
         hasAdminCapability(request.auth.uid, 'operations');
       allow read: if request.auth != null &&

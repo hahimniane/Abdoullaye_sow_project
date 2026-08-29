@@ -134,6 +134,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   after confirm writes the old status and toasts a false success. Freight
   already passes the value into `updateStatus` immediately — barrels must
   match that. Source-contract the capture (`const nextStatus = event.target.value`).
+- Barrel `in_transit` is gated on `containerNumber` (≥ 4 chars) in Firestore
+  rules. A rules reject can look like a silent snap-back (local write, then
+  revert, no toast). Client-validate before confirm, write the typed number in
+  the same merge when needed, and map `permission-denied` to a visible
+  `role="alert"` error. Cover both: manual container write then `in_transit`,
+  and `in_transit` without a number still denied. Do not require
+  `trackingProvider: carrier_api`. Freight must keep failing a self-written
+  container number.
 - For UI workflows, test or manually verify that async buttons and tap targets
   show progress immediately, cannot be double-clicked/double-tapped, and recover
   after both success and failure.

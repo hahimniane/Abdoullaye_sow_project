@@ -1050,6 +1050,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Cela ne s’est pas ouvert. Réessayez dans un instant.",
   "Subscribe container tracking before marking this barrel in transit.":
     "Abonnez le suivi du conteneur avant de marquer ce baril comme en transit.",
+  "Enter a container, booking, or bill of lading number (at least 4 characters) before marking this barrel in transit.":
+    "Entrez un numéro de conteneur, de réservation ou de connaissement (au moins 4 caractères) avant de marquer ce baril comme en transit.",
+  "This update was rejected. If you are marking the barrel in transit, save a container or bill of lading number first.":
+    "Cette mise à jour a été refusée. Si vous marquez le baril comme en transit, enregistrez d’abord un numéro de conteneur ou de connaissement.",
+  "The shipment could not be updated. Try again.":
+    "L’expédition n’a pas pu être mise à jour. Réessayez.",
   "Back": "Retour",
   "Reserve viewing": "Réserver la visite",
   "Continue to deposit": "Continuer vers l’acompte",
@@ -3390,6 +3396,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Ocean carrier options": "Options de transporteur maritime",
   "Starting…": "Démarrage…",
   "Start tracking": "Démarrer le suivi",
+  "Save number": "Enregistrer le numéro",
+  "Saving number…": "Enregistrement du numéro…",
+  "Container number saved. You can now mark this barrel in transit.":
+    "Numéro de conteneur enregistré. Vous pouvez maintenant marquer ce baril comme en transit.",
+  "Automated tracking is optional. Save the number to mark the barrel in transit without a carrier subscription.":
+    "Le suivi automatique est facultatif. Enregistrez le numéro pour marquer le baril comme en transit sans abonnement transporteur.",
   "Enter a valid tracking number.": "Entrez un numéro de suivi valide.",
   "Could not start tracking.": "Impossible de démarrer le suivi.",
 };

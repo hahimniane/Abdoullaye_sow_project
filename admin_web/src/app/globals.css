@@ -1713,6 +1713,14 @@ button[data-loading="true"]::before {
   text-transform: none;
 }
 
+.status-pill.danger {
+  background: color-mix(in srgb, #dc2626 10%, transparent);
+  border-color: color-mix(in srgb, #dc2626 28%, transparent);
+  color: #b42318;
+  max-width: min(420px, 70vw);
+  white-space: normal;
+}
+
 .muted-action {
   color: var(--muted);
   font-size: 14px;
@@ -9645,7 +9653,27 @@ button[data-loading="true"]::before {
 .ctrack-custom-scac { max-width: 220px; }
 .ctrack-custom-scac input { letter-spacing: .16em; text-transform: uppercase; }
 .ctrack-fields input { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
-.ctrack-actions { display: flex; justify-content: flex-end; }
+.ctrack-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.ctrack-on-file {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+.ctrack-on-file span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.ctrack-on-file b {
+  color: var(--brand-strong);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+}
 /* Quieter than .error-box, which is a full-width block with its own margin -
    too heavy for a validation message sitting under two inputs. */
 .ctrack-error {

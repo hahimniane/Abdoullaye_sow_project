@@ -432,6 +432,14 @@ async function seedFirestore() {
         status: "pending",
         containerNumber: "MSKU1234567",
       },
+      "barrelShipments/barrel_carrier_tracked": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "BR-T49",
+        status: "pending",
+        containerNumber: "MSKU1111111",
+        trackingProvider: "carrier_api",
+      },
       "freightShipments/freight_sea_no_container": {
         businessId: "biz_a",
         customerUid: "customer-owner",
@@ -1178,10 +1186,8 @@ describe("business dashboard Firestore rules", () => {
   it("blocks in-transit on a container load until the container is known",
       async () => {
         // "In transit" is the point the customer starts asking where their
-        // load is, and the container number is the only thing that can answer
-        // it. containerNumber is written by subscribeToContainerTracking
-        // (Admin SDK), so the business subscribes tracking first - it is not
-        // in the allowed key list below and cannot be self-asserted here.
+        // load is. The number can be saved manually (sandbox / no Terminal49)
+        // or by subscribeToContainerTracking. Automated tracking is optional.
         const barrelStaff = firestoreFor("staff-barrels-a");
         await assertFails(
             barrelStaff.doc("barrelShipments/barrel_no_container").set({
@@ -1200,12 +1206,58 @@ describe("business dashboard Firestore rules", () => {
               status: "cancelled",
             }, {merge: true}),
         );
-        // A business must not be able to satisfy the gate by writing the
-        // container number itself; it comes from the tracking subscription.
+        await assertSucceeds(
+            barrelStaff.doc("barrelShipments/barrel_no_container").set({
+              status: "ready_for_pickup",
+            }, {merge: true}),
+        );
+        // A short / fake-looking typed value does not satisfy the gate.
         await assertFails(
             barrelStaff.doc("barrelShipments/barrel_no_container").set({
               status: "in_transit",
-              containerNumber: "SELF1234567",
+              containerNumber: "AB",
+            }, {merge: true}),
+        );
+        // Manual container / BOL, without trackingProvider:carrier_api.
+        await assertSucceeds(
+            barrelStaff.doc("barrelShipments/barrel_no_container").set({
+              containerNumber: "BOL-SENEGAL-1",
+            }, {merge: true}),
+        );
+        await assertSucceeds(
+            barrelStaff.doc("barrelShipments/barrel_no_container").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+        // One write can set both the number and in_transit.
+        await assertSucceeds(
+            barrelStaff.doc("barrelShipments/barrel_a").set({
+              status: "in_transit",
+              containerNumber: "MSKU9999999",
+            }, {merge: true}),
+        );
+        // Automated tracking stays optional: the business cannot self-assert
+        // a carrier_api subscription from the client.
+        await assertFails(
+            barrelStaff.doc("barrelShipments/barrel_a").set({
+              trackingProvider: "carrier_api",
+            }, {merge: true}),
+        );
+        // A Terminal49-owned number cannot be overwritten from the client.
+        await assertFails(
+            barrelStaff.doc("barrelShipments/barrel_carrier_tracked").set({
+              containerNumber: "MANUAL9999",
+            }, {merge: true}),
+        );
+        await assertSucceeds(
+            barrelStaff.doc("barrelShipments/barrel_carrier_tracked").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+        await assertFails(
+            barrelStaff.doc("barrelShipments/barrel_a").set({
+              price: 1,
+              paymentStatus: "refunded",
             }, {merge: true}),
         );
       });
@@ -1227,6 +1279,15 @@ describe("business dashboard Firestore rules", () => {
         await assertSucceeds(
             freightStaff.doc("freightShipments/freight_air_no_container").set({
               status: "in_transit",
+            }, {merge: true}),
+        );
+        // Freight still cannot self-write a container number. Barrel's
+        // manual-BOL path is the exception; sea freight stays on the
+        // subscribe-or-already-on-file gate.
+        await assertFails(
+            freightStaff.doc("freightShipments/freight_sea_no_container").set({
+              status: "in_transit",
+              containerNumber: "SELF1234567",
             }, {merge: true}),
         );
       });
