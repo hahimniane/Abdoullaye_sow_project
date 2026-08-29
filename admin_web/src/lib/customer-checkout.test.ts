@@ -166,6 +166,7 @@ test("payment return recovers the Checkout session and automatically returns", (
   // present. The anonymous-session-lost Stripe round-trip is the live bug.
   assert.match(component, /if \(!isCardSetup\) confirmPayment\(\)/);
   assert.match(component, /paymentReturnNeedsSignIn/);
+  assert.match(component, /useFrenchDomTranslation/);
   assert.doesNotMatch(
     component,
     /const path = user\.isAnonymous\s*\?\s*null/,

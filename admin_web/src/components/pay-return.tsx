@@ -26,6 +26,7 @@ import {
   type PaymentReturnState,
 } from "@/lib/customer-checkout";
 import { SUPPORT_URL } from "@/lib/legal-links";
+import { useFrenchDomTranslation } from "@/lib/french-dom";
 
 const PAYMENT_RETURN_TIMEOUT_MS = 60_000;
 
@@ -67,6 +68,7 @@ function directPaymentPath(
 }
 
 export function PayReturn() {
+  useFrenchDomTranslation();
   const [state, setState] = useState<ReturnViewState>("pending");
   const [trackingCode, setTrackingCode] = useState("");
   const [hasCustomerWorkspace, setHasCustomerWorkspace] = useState(false);
