@@ -180,7 +180,12 @@ export function GuestTracking({
             <span className="status-pill compact">{GUEST_STAGE_LABEL[record.stage]}</span>
           </div>
           <p className="guest-tracking-service">{GUEST_SERVICE_LABEL[record.service]}</p>
-          <GuestJourneyProgress stage={record.stage} />
+          {/* Nothing has started moving until it is paid for, so there is no
+              journey to draw - showing one from "Booked" would imply the
+              shipment is under way when it is waiting on the customer. */}
+          {record.stage !== "awaiting_payment" && (
+            <GuestJourneyProgress stage={record.stage} />
+          )}
           <p className="guest-tracking-updated">
             <strong>Updated</strong> <time>{updated}</time>
           </p>
