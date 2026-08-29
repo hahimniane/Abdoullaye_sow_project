@@ -41,6 +41,7 @@ import {
   statusBucket,
   statusLabel,
 } from "@/lib/tracking-journey";
+import { customerOrderAmount } from "@/lib/car-purchase";
 import {
   carPurchaseIsViewing,
   viewingStatusLabel,
@@ -973,13 +974,19 @@ function OrderPanel({
               <OrderFact
                 label="Total"
                 value={formatMoney(
-                  selected.row.totalAmount ??
-                    selected.row.amount ??
-                    selected.row.purchasePrice ??
-                    selected.row.price,
-                  text(selected.row.currency, "USD"),
+                  customerOrderAmount(selected.row),
+                  text(
+                    selected.row.currency ?? selected.row.depositCurrency,
+                    "USD",
+                  ),
                 )}
               />
+              {Boolean(selected.row.holdUntilDate) && (
+                <OrderFact
+                  label="Hold until"
+                  value={formatDate(selected.row.holdUntilDate)}
+                />
+              )}
               <OrderFact
                 label="Created"
                 value={formatDate(selected.row.createdAt)}

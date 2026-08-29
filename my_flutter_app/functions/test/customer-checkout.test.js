@@ -4,6 +4,7 @@ const path = require("node:path");
 const {describe, it} = require("node:test");
 const {
   CUSTOMER_CHECKOUT_ACTIONS,
+  checkoutOwnerUid,
   checkoutRecordId,
   checkoutResumeAmountCents,
   checkoutResumeMetadata,
@@ -87,6 +88,56 @@ describe("customer Checkout routing", () => {
     assert.equal(first, checkoutSessionIdempotencyKey("pi_123"));
     assert.notEqual(first, checkoutSessionIdempotencyKey("pi_456"));
     assert.match(first, /^laawol-checkout-v1-[a-f0-9]{32}$/);
+  });
+
+  it("reads the owner from buyerUid when customerUid is absent", () => {
+    // Live car-deposit Checkout Sessions copied PaymentIntent metadata
+    // (buyerUid) and never stamped customerUid. Confirm used to treat that
+    // as an invalid return and leave the hold pending after Stripe TEST.
+    assert.equal(
+        checkoutOwnerUid({buyerUid: "buyer_1"}),
+        "buyer_1",
+    );
+    assert.equal(
+        checkoutOwnerUid({customerUid: "user_1", buyerUid: "buyer_1"}),
+        "user_1",
+    );
+    assert.equal(checkoutOwnerUid({}), "");
+  });
+
+  it("confirms a carDeposit return that only has buyerUid", () => {
+    const session = {
+      id: "cs_test_cardeposit123",
+      status: "complete",
+      payment_status: "unpaid",
+      payment_intent: "pi_hold123",
+      created: 1720000000,
+      client_reference_id: "purchase_1",
+      metadata: {
+        paymentType: "reservation_deposit",
+        buyerUid: "user_1",
+        purchaseId: "purchase_1",
+        carId: "car_1",
+        checkoutOrderType: "carDeposit",
+        checkoutRecordId: "purchase_1",
+      },
+    };
+    const result = customerCheckoutReturnVerification({
+      session,
+      customerUid: "user_1",
+      orderType: "carDeposit",
+      recordId: "purchase_1",
+    });
+    assert.equal(result.state, "paid");
+    assert.equal(result.event.type, "checkout.session.completed");
+    assert.equal(
+        resolveCheckoutReturnCustomerUid({session, callerUid: "user_1"}),
+        "user_1",
+    );
+    assert.equal(
+        resolveCheckoutReturnCustomerUid({session, callerUid: ""}),
+        "user_1",
+    );
   });
 
   it("authorizes a paid return and creates a deterministic event", () => {
@@ -377,6 +428,25 @@ describe("resuming an abandoned pay-now checkout", () => {
           expires_at: Math.floor(nowMs / 1000) + 1800,
         }, nowMs),
         false,
+    );
+  });
+
+  it("createCustomerCheckoutSession stamps customerUid for car deposits", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    const start = source.indexOf("exports.createCustomerCheckoutSession");
+    assert.ok(start > 0);
+    const body = source.slice(start, start + 12000);
+    assert.match(body, /customerUid: checkoutOwnerUid\(originalIntent\.metadata\)/);
+    const depositMeta = source.indexOf(
+        "holdUntilDate: holdQuote.holdDate.toISOString()",
+    );
+    assert.ok(depositMeta > 0);
+    assert.match(
+        source.slice(depositMeta - 250, depositMeta + 80),
+        /customerUid: buyerUid/,
     );
   });
 

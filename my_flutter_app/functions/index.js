@@ -100,6 +100,12 @@ const {
   awaitingParty,
   viewingHistoryEntry,
 } = require("./car_viewing");
+const {
+  carPurchaseCanMarkCompleted,
+  isTerminalPurchaseStatus,
+  paidHoldActionRefusal,
+  purchaseIsViewing,
+} = require("./car_purchase");
 const {classifyTransportEdit} = require("./transport_request_edit");
 const {
   TRANSPORT_FULFILLMENT_DESTINATIONS,
@@ -225,6 +231,7 @@ const {
   marketplaceDisclosure,
 } = require("./marketplace_disclosure");
 const {
+  checkoutOwnerUid,
   checkoutRecordId,
   checkoutResumeAmountCents,
   checkoutResumeMetadata,
@@ -2944,43 +2951,26 @@ function calculateHoldExtensionQuote({purchase, car, business, holdUntilDate}) {
   };
 }
 
-function isPaidHold(purchase) {
-  return purchase.paymentType === "reservation_deposit";
-}
-
 function assertPaidHoldActionable(purchase) {
-  if (!isPaidHold(purchase)) {
+  const reason = paidHoldActionRefusal(purchase);
+  if (reason === "not_a_paid_hold") {
     throw new HttpsError(
         "failed-precondition",
         "Only paid holds can use this action",
     );
   }
-  if (
-    purchase.purchaseStatus === "completed" ||
-    purchase.purchaseStatus === "no_show" ||
-    purchase.purchaseStatus === "cancelled" ||
-    purchase.purchaseStatus === "refunded" ||
-    purchase.purchaseStatus === "forfeited"
-  ) {
+  if (reason === "already_finalized") {
     throw new HttpsError(
         "failed-precondition",
         "This hold has already been finalized",
     );
   }
-}
-
-const TERMINAL_PURCHASE_STATUSES = [
-  "completed", "no_show", "cancelled", "refunded", "forfeited",
-];
-
-function isTerminalPurchaseStatus(status) {
-  return TERMINAL_PURCHASE_STATUSES.includes(String(status || ""));
-}
-
-function purchaseIsViewing(purchase) {
-  if (purchase.paymentType === "viewing_reservation") return true;
-  return Boolean(purchase.appointmentStart) &&
-    Number(purchase.depositAmount || 0) === 0;
+  if (reason === "not_settled") {
+    throw new HttpsError(
+        "failed-precondition",
+        "This hold cannot be marked sold until payment has succeeded.",
+    );
+  }
 }
 
 function toMillis(value) {
@@ -5308,7 +5298,7 @@ async function registerHeldPayment({intent, connectedAccountId}) {
     collection: "",
     recordId: String(intent.metadata?.checkoutRecordId ||
       intent.metadata?.recordId || ""),
-    customerUid: String(intent.metadata?.customerUid || ""),
+    customerUid: checkoutOwnerUid(intent.metadata),
     nowMs,
   });
   await admin.firestore().collection("paymentHolds").doc(intentId).set({
@@ -7511,6 +7501,10 @@ exports.createCustomerCheckoutSession = onCall(
         ...originalIntent.metadata,
         checkoutOrderType: orderType,
         checkoutRecordId: recordId,
+        // Car deposits stamp buyerUid, not customerUid. Confirm and the
+        // hold registry both look up the owner — without this alias a paid
+        // TEST hold stays pending after Stripe redirects back.
+        customerUid: checkoutOwnerUid(originalIntent.metadata) || customerUid,
       };
       // Only freight has a later off-session charge to reuse this for (see
       // attemptAutomaticFreightBalanceCharge) - resolving a Stripe Customer
@@ -25475,6 +25469,7 @@ exports.createCarDepositPaymentIntent = onCall(
           metadata: {
             carId,
             buyerUid,
+            customerUid: buyerUid,
             businessId: carBusiness.businessId,
             purchaseId: purchaseRef.id,
             holdUntilDate: holdQuote.holdDate.toISOString(),
@@ -26359,6 +26354,7 @@ exports.createCarPurchasePaymentIntent = onCall(
           metadata: {
             carId,
             buyerUid,
+            customerUid: buyerUid,
             purchaseId: purchaseRef.id,
             businessId: carBusiness.businessId,
             paymentType: "full_purchase",
@@ -26917,6 +26913,13 @@ exports.businessFinalizeCarPurchase = onCall(
               "This record is already finalized and cannot be changed.",
           );
         }
+        if (outcome === "completed" && !purchaseIsViewing(purchase) &&
+            !carPurchaseCanMarkCompleted(purchase)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This purchase cannot be marked sold until payment has succeeded.",
+          );
+        }
         const carRef = purchase.carId ?
           db.collection("cars").doc(purchase.carId) : null;
         const carDoc = carRef ? await transaction.get(carRef) : null;
@@ -27244,6 +27247,7 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
           purchaseId,
           extensionId: purchase.extensionId,
           buyerUid,
+          customerUid: buyerUid,
           businessId: purchase.businessId || "",
           paymentType: "hold_extension",
         },

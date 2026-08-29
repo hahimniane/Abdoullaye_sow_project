@@ -54,6 +54,15 @@ test("a shipment appears once on the orders page, not twice", () => {
   );
 });
 
+test("a car hold drawer shows the deposit and hold-until date", () => {
+  // Live car deposits store the $500 on depositAmount and the expiry on
+  // holdUntilDate. The drawer used to read price/totalAmount and render
+  // $0.00 with no hold date after Stripe TEST.
+  assert.match(source, /customerOrderAmount\(selected\.row\)/);
+  assert.match(source, /label="Hold until"/);
+  assert.match(source, /selected\.row\.holdUntilDate/);
+});
+
 test("an unpaid barrel can resume checkout from the order drawer", () => {
   // Needs-payment barrels used to offer only Cancel and Close. Pay now must
   // resume the same shipment/order - startCheckout with resumeRecordId, not

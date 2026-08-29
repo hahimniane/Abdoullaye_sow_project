@@ -1382,6 +1382,10 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Mark this shared barrel balance as collected?":
     "Marquer ce solde de baril partagé comme encaissé ?",
   "Mark sold": "Marquer vendu",
+  "This hold cannot be marked sold until payment has succeeded.":
+    "Cette réservation ne peut pas être marquée vendue tant que le paiement n’a pas abouti.",
+  "This purchase cannot be marked sold until payment has succeeded.":
+    "Cet achat ne peut pas être marqué vendu tant que le paiement n’a pas abouti.",
   Message: "Message",
   Model: "Modèle",
   Mode: "Mode",
