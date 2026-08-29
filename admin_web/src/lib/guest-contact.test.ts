@@ -85,3 +85,22 @@ test("guest checkout copy is localized in French", () => {
     assert.ok(french.length > 0, english);
   }
 });
+
+test("accepting a price leads to a booking on the web too", () => {
+  // This shipped to Flutter first and stopped there, which is exactly the
+  // split the parity rule exists to prevent: a customer on the web could
+  // accept a price and still have nowhere to pay it.
+  const shipping = readFileSync(
+    "src/components/customer-shipping-services.tsx",
+    "utf8",
+  );
+  assert.match(shipping, /onPriceAccepted/);
+  assert.match(shipping, /agreedQuoteRequestId/);
+  assert.match(shipping, /Fill in the receiver and the address below/);
+
+  // The id travels, the amount never does - the server reads the agreed
+  // price off the request the customer accepted.
+  const payload = readFileSync("src/lib/customer-shipping.ts", "utf8");
+  assert.match(payload, /quoteRequestId: trimmed\(fields\.quoteRequestId\)/);
+  assert.doesNotMatch(payload, /agreedAmountCents/);
+});

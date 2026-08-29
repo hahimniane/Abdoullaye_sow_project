@@ -137,6 +137,8 @@ export type BarrelOrderFields = {
 };
 
 export type FreightShipmentFields = {
+  /// Set when this booking settles an accepted price. Carries no amount.
+  quoteRequestId?: string;
   senderName: string;
   receiverName: string;
   receiverPhone: string;
@@ -679,6 +681,13 @@ export function buildFreightShipmentPayload(
   disclosure: MarketplaceDisclosurePayload,
 ) {
   return {
+    // The price request this booking settles, when the customer accepted a
+    // business's quote for a parcel the pricing table had no number for. The
+    // server reads the agreed amount off that request; an amount sent from
+    // here would be an amount chosen from here.
+    ...(fields.quoteRequestId?.trim() && {
+      quoteRequestId: trimmed(fields.quoteRequestId),
+    }),
     senderName: trimmed(fields.senderName),
     receiverName: trimmed(fields.receiverName),
     receiverPhone: trimmed(fields.receiverPhone),

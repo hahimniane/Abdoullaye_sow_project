@@ -4081,6 +4081,9 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Enter a valid phone number": "Saisissez un numéro de téléphone valide",
   "Continue as guest": "Continuer en tant qu'invité",
   "Continue": "Continuer",
+  "Price agreed": "Prix convenu",
+  "Your price is agreed. Fill in the receiver and the address below to finish the booking and pay that price.":
+    "Votre prix est convenu. Renseignez le destinataire et l'adresse ci-dessous pour terminer la réservation et payer ce prix.",
   "How would you like to continue?": "Comment souhaitez-vous continuer ?",
   "One moment...": "Un instant...",
   "We could not continue. Check your connection and try again.":
