@@ -1,15 +1,19 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const {describe, it} = require("node:test");
 const {
   CUSTOMER_CHECKOUT_ACTIONS,
   checkoutRecordId,
   checkoutSessionIdempotencyKey,
+  checkoutTrackingCodeFromRecord,
   customerCheckoutPaymentSucceeded,
   customerCheckoutReturnEventId,
   customerCheckoutReturnVerification,
   customerCheckoutReturnUrls,
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
+  resolveCheckoutReturnCustomerUid,
 } = require("../customer_checkout");
 
 describe("customer Checkout routing", () => {
@@ -184,6 +188,71 @@ describe("customer Checkout routing", () => {
             "paymentStatus",
         ),
         true,
+    );
+  });
+
+  it("lets a guest resume the same Checkout Session without Auth", () => {
+    const session = {
+      metadata: {customerUid: "anon_guest_1"},
+    };
+    assert.equal(
+        resolveCheckoutReturnCustomerUid({session, callerUid: ""}),
+        "anon_guest_1",
+    );
+    assert.equal(
+        resolveCheckoutReturnCustomerUid({
+          session,
+          callerUid: "anon_guest_1",
+        }),
+        "anon_guest_1",
+    );
+    assert.throws(
+        () => resolveCheckoutReturnCustomerUid({
+          session,
+          callerUid: "someone_else",
+        }),
+        (error) => error.code === "checkout-session-mismatch",
+    );
+    assert.throws(
+        () => resolveCheckoutReturnCustomerUid({
+          session: {metadata: {}},
+          callerUid: "",
+        }),
+        (error) => error.code === "invalid-checkout-return",
+    );
+  });
+
+  it("reads a barrel order's tracking code off the line list", () => {
+    assert.equal(
+        checkoutTrackingCodeFromRecord({trackingCode: "BS-QHR2Q4"}),
+        "BS-QHR2Q4",
+    );
+    assert.equal(
+        checkoutTrackingCodeFromRecord({
+          trackingCodes: ["BS-QHR2Q4", "BS-OTHER1"],
+        }),
+        "BS-QHR2Q4",
+    );
+    assert.equal(checkoutTrackingCodeFromRecord({}), "");
+  });
+
+  it("confirms a Checkout return without requireAuth", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    const start = source.indexOf("exports.confirmCustomerCheckoutSession");
+    assert.ok(start > 0);
+    const body = source.slice(start, start + 4500);
+    assert.match(body, /resolveCheckoutReturnCustomerUid/);
+    assert.match(body, /const callerUid = String\(request\.auth\?\.uid/);
+    assert.doesNotMatch(body, /requireAuth\(request\)/);
+    const trackingHelperStart = source.indexOf(
+        "async function checkoutTrackingCode(",
+    );
+    assert.match(
+        source.slice(trackingHelperStart, trackingHelperStart + 700),
+        /checkoutTrackingCodeFromRecord/,
     );
   });
 });

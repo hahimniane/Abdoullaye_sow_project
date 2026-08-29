@@ -227,6 +227,7 @@ const {
 const {
   checkoutRecordId,
   checkoutSessionIdempotencyKey,
+  checkoutTrackingCodeFromRecord,
   customerCheckoutPaymentSucceeded,
   customerCheckoutReturnEventId,
   customerCheckoutReturnVerification,
@@ -234,6 +235,7 @@ const {
   normalizedConsoleUrl,
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
+  resolveCheckoutReturnCustomerUid,
 } = require("./customer_checkout");
 const {
   holdCaptureMethod,
@@ -7951,7 +7953,7 @@ async function checkoutTrackingCode(ref, customerUid) {
     const snapshot = await ref.get();
     const record = snapshot.data() || {};
     if (record.customerUid !== customerUid) return undefined;
-    const code = String(record.trackingCode || "").trim();
+    const code = checkoutTrackingCodeFromRecord(record);
     return code || undefined;
   } catch {
     // The state matters more than the code; a read that fails here should
@@ -7967,7 +7969,11 @@ exports.confirmCustomerCheckoutSession = onCall(
       secrets: [stripeSecretKey],
     },
     async (request) => {
-      const customerUid = requireAuth(request);
+      // Auth is optional on purpose. Stripe's success_url carries the
+      // Checkout Session id, and a guest's anonymous Firebase session is
+      // often gone after that round-trip. The Session id resumes the same
+      // barrelOrder; a missing uid must not mint a new shipment.
+      const callerUid = String(request.auth?.uid || "").trim();
       const orderType = cleanText(request.data?.orderType, 80);
       const recordId = cleanText(request.data?.recordId, 180);
       const sessionId = cleanText(request.data?.sessionId, 220);
@@ -7999,12 +8005,17 @@ exports.confirmCustomerCheckoutSession = onCall(
       }
       let session;
       let verification;
+      let customerUid;
       try {
         customerCheckoutReturnEventId(sessionId);
         session = await retrieveStripeCheckoutSession(
             sessionId,
             confirmConnectedAccountId,
         );
+        customerUid = resolveCheckoutReturnCustomerUid({
+          session,
+          callerUid,
+        });
         verification = customerCheckoutReturnVerification({
           session,
           customerUid,

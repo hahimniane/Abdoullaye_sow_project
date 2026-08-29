@@ -228,10 +228,61 @@ function customerCheckoutPaymentSucceeded(data, paymentStatusField) {
     String(data?.stripeReconciliationState || "").trim() === "succeeded";
 }
 
+/**
+ * Owner of a Checkout Session, used on the return page.
+ *
+ * A signed-in caller must be that owner. A guest who lost their anonymous
+ * Firebase session after Stripe still holds the unguessable Session id in
+ * the URL; that is enough to resume the same record without minting a new
+ * uid (which would look like a different customer and duplicate nothing,
+ * but would also fail the owner check).
+ *
+ * @param {object} input session plus optional Firebase uid
+ * @return {string} the customer uid stored on the Session
+ */
+function resolveCheckoutReturnCustomerUid({session, callerUid}) {
+  const ownerUid = String(session?.metadata?.customerUid || "").trim();
+  const caller = String(callerUid || "").trim();
+  if (!ownerUid) {
+    const error = new Error("Invalid Checkout return");
+    error.code = "invalid-checkout-return";
+    throw error;
+  }
+  if (caller && caller !== ownerUid) {
+    const error = new Error("Checkout Session does not match this order");
+    error.code = "checkout-session-mismatch";
+    throw error;
+  }
+  return ownerUid;
+}
+
+/**
+ * Tracking code a guest can leave the return page holding.
+ *
+ * Barrel orders store `trackingCodes` (one per line). Individual shipments
+ * store `trackingCode`. Either shape has to work: returning undefined here
+ * is what sent a paid guest to the sign-in screen with no booking code.
+ *
+ * @param {object} record Firestore payment record
+ * @return {string} the first tracking code, or ""
+ */
+function checkoutTrackingCodeFromRecord(record) {
+  const data = record && typeof record === "object" ? record : {};
+  const single = String(data.trackingCode || "").trim();
+  if (single) return single;
+  const listed = Array.isArray(data.trackingCodes) ? data.trackingCodes : [];
+  for (const value of listed) {
+    const code = String(value || "").trim();
+    if (code) return code;
+  }
+  return "";
+}
+
 module.exports = {
   CUSTOMER_CHECKOUT_ACTIONS,
   checkoutRecordId,
   checkoutSessionIdempotencyKey,
+  checkoutTrackingCodeFromRecord,
   customerCheckoutPaymentSucceeded,
   customerCheckoutReturnEventId,
   customerCheckoutReturnVerification,
@@ -240,4 +291,5 @@ module.exports = {
   normalizedConsoleUrl,
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
+  resolveCheckoutReturnCustomerUid,
 };

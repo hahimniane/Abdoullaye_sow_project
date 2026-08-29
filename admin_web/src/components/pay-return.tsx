@@ -16,13 +16,17 @@ import { CheckCircle2, CircleX, Clock3, RefreshCw } from "lucide-react";
 import { auth, db, functions } from "@/lib/firebase";
 import {
   isCustomerCheckoutOrderType,
+  paymentReturnHasCustomerWorkspace,
+  paymentReturnNeedsSignIn,
   paymentReturnState,
   paymentReturnShouldRedirect,
+  trackingCodeFromCheckoutRecord,
   type CheckoutReturnConfirmation,
   type CustomerCheckoutOrderType,
   type PaymentReturnState,
 } from "@/lib/customer-checkout";
 import { SUPPORT_URL } from "@/lib/legal-links";
+import { useFrenchDomTranslation } from "@/lib/french-dom";
 
 const PAYMENT_RETURN_TIMEOUT_MS = 60_000;
 
@@ -64,8 +68,10 @@ function directPaymentPath(
 }
 
 export function PayReturn() {
+  useFrenchDomTranslation();
   const [state, setState] = useState<ReturnViewState>("pending");
   const [trackingCode, setTrackingCode] = useState("");
+  const [hasCustomerWorkspace, setHasCustomerWorkspace] = useState(false);
   const [params, setParams] = useState<{
     orderType: CustomerCheckoutOrderType;
     recordId: string;
@@ -76,6 +82,7 @@ export function PayReturn() {
     const type = search.get("type") || "";
     const recordId = search.get("id")?.trim() || "";
     const sessionId = search.get("session")?.trim() || "";
+    const isCardSetup = search.get("setup") === "1";
     if (!isCustomerCheckoutOrderType(type) || !recordId) {
       setState("invalid");
       return undefined;
@@ -87,75 +94,104 @@ export function PayReturn() {
     }
 
     let stopSnapshot: (() => void) | undefined;
-    let confirmationStartedFor = "";
+    let confirmationStarted = false;
     let active = true;
     const timeoutId = setTimeout(
       () => setState((current) => current === "pending" ? "timeout" : current),
       PAYMENT_RETURN_TIMEOUT_MS,
     );
+
+    const rememberCode = (code: string) => {
+      const trimmed = code.trim();
+      if (trimmed) setTrackingCode(trimmed);
+    };
+
+    const confirmPayment = (uid?: string) => {
+      if (confirmationStarted || !sessionId) return;
+      if (isCardSetup && !uid) return;
+      confirmationStarted = true;
+      // setup=1 is a pay-on-arrival card save: the session verified a
+      // card without charging it, and its own completion callable turns
+      // that into a booked shipment. Everything else is a payment, and
+      // the Checkout Session id is enough even when Firebase Auth is gone.
+      const confirm = isCardSetup
+        ? httpsCallable<
+            { shipmentId: string; sessionId: string },
+            { success?: boolean }
+          >(functions, "completeFreightShipmentCardSave")({
+            shipmentId: recordId,
+            sessionId,
+          }).then((response) => ({
+            data: {
+              state: response.data?.success ? "success" : "pending",
+            } as CheckoutReturnConfirmation,
+          }))
+        : httpsCallable<
+            {
+              orderType: CustomerCheckoutOrderType;
+              recordId: string;
+              sessionId: string;
+            },
+            CheckoutReturnConfirmation
+          >(functions, "confirmCustomerCheckoutSession")({
+            orderType: type,
+            recordId,
+            sessionId,
+          });
+      void confirm
+        .then((response) => {
+          if (!active) return;
+          rememberCode(String(response.data.trackingCode ?? ""));
+          if (response.data.state === "success") setState("success");
+        })
+        .catch(() => {
+          // Keep listening when a signed-in customer is present. A delayed
+          // webhook can still complete the order before the safety timeout.
+        });
+    };
+
+    // Guests often lose the anonymous session on the Stripe round-trip.
+    // Confirm immediately from the Session id so we never bounce them to
+    // sign-in before Auth has even restored — or if it never does.
+    if (!isCardSetup) confirmPayment();
+
     const stopAuth = onAuthStateChanged(auth, (user) => {
       stopSnapshot?.();
+      setHasCustomerWorkspace(paymentReturnHasCustomerWorkspace(user));
       if (!user) {
-        setState("signed-out");
+        if (paymentReturnNeedsSignIn({ sessionId, hasUser: false })) {
+          setState("signed-out");
+        }
         return;
       }
-      setState("pending");
-      if (sessionId && confirmationStartedFor !== user.uid) {
-        confirmationStartedFor = user.uid;
-        // setup=1 is a pay-on-arrival card save: the session verified a
-        // card without charging it, and its own completion callable turns
-        // that into a booked shipment. Everything else is a payment.
-        const isCardSetup = search.get("setup") === "1";
-        const confirm = isCardSetup
-          ? httpsCallable<
-              { shipmentId: string; sessionId: string },
-              { success?: boolean }
-            >(functions, "completeFreightShipmentCardSave")({
-              shipmentId: recordId,
-              sessionId,
-            }).then((response) => ({
-              data: {
-                state: response.data?.success ? "success" : "pending",
-              } as CheckoutReturnConfirmation,
-            }))
-          : httpsCallable<
-              {
-                orderType: CustomerCheckoutOrderType;
-                recordId: string;
-                sessionId: string;
-              },
-              CheckoutReturnConfirmation
-            >(functions, "confirmCustomerCheckoutSession")({
-              orderType: type,
-              recordId,
-              sessionId,
-            });
-        void confirm
-          .then((response) => {
-            if (!active) return;
-            const code = String(response.data.trackingCode ?? "").trim();
-            if (code) setTrackingCode(code);
-            if (response.data.state === "success") setState("success");
-          })
-          .catch(() => {
-            // Keep the authoritative Firestore listener active. A delayed
-            // webhook can still complete the order before the safety timeout.
-          });
+      if (user.isAnonymous) {
+        confirmPayment(user.uid);
+        return;
       }
-      const path = user.isAnonymous
-        ? null
-        : directPaymentPath(type, recordId, user.uid);
+      setState((current) =>
+        current === "success" ||
+          current === "failed" ||
+          current === "cancelled" ||
+          current === "invalid" ||
+          current === "timeout"
+          ? current
+          : "pending",
+      );
+      confirmPayment(user.uid);
+      const path = directPaymentPath(type, recordId, user.uid);
       if (path) {
         stopSnapshot = onSnapshot(
           doc(db, ...path),
           (snapshot) => {
             if (!snapshot.exists()) {
-              setState("invalid");
+              setState((current) => current === "success" ? current : "invalid");
               return;
             }
-            setState(paymentReturnState(type, snapshot.data()));
+            const data = snapshot.data();
+            rememberCode(trackingCodeFromCheckoutRecord(data));
+            setState(paymentReturnState(type, data));
           },
-          () => setState("failed"),
+          () => setState((current) => current === "success" ? current : "failed"),
         );
       } else {
         const attemptQuery = query(
@@ -179,7 +215,7 @@ export function PayReturn() {
             else if (states.includes("failed")) setState("failed");
             else if (states.includes("cancelled")) setState("cancelled");
           },
-          () => setState("failed"),
+          () => setState((current) => current === "success" ? current : "failed"),
         );
       }
     });
@@ -192,18 +228,23 @@ export function PayReturn() {
   }, []);
 
   useEffect(() => {
-    if (!paymentReturnShouldRedirect(state)) return undefined;
+    if (!paymentReturnShouldRedirect(state, { hasCustomerWorkspace })) {
+      return undefined;
+    }
     const redirectId = setTimeout(() => {
       window.location.replace("/");
     }, 1_200);
     return () => clearTimeout(redirectId);
-  }, [state]);
+  }, [hasCustomerWorkspace, state]);
 
   const content = returnContent(state);
   // A guest has no workspace, so the success screen hands them the tracking
   // code and points at the public lookup instead of a console they cannot
-  // open.
-  const guestSuccess = state === "success" && Boolean(trackingCode);
+  // open. Signed-in customers still auto-return to that console.
+  const guestSuccess =
+    state === "success" &&
+    Boolean(trackingCode) &&
+    !hasCustomerWorkspace;
   const Icon = content.icon;
   return (
     <main className="payment-return-screen">
