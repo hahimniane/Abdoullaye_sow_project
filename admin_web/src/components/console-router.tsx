@@ -257,6 +257,16 @@ export function ConsoleRouter() {
         setBooting(false);
         return;
       }
+      // A guest's anonymous sign-in is still in flight when this listener
+      // fires. Forcing a token refresh here raced that promise and the guest
+      // panel reported it as "Check your connection". Guests also have no
+      // profile until checkout writes one, so booting them through the
+      // account spinner unmounted the panel they were still submitting.
+      if (user.isAnonymous) {
+        setProfileMissing(true);
+        setBooting(false);
+        return;
+      }
       setBooting(true);
       try {
         // Storage rules read role/businessId/etc. from the ID token's custom
@@ -331,7 +341,9 @@ export function ConsoleRouter() {
     return (
       <CustomerServiceEntry
         authenticated={Boolean(firebaseUser && profile)}
-        authenticating={booting && Boolean(firebaseUser)}
+        authenticating={
+          booting && Boolean(firebaseUser && !firebaseUser.isAnonymous)
+        }
         authPanel={(initialMode) => (
           <RoleSignInCard
             authError={authError}
@@ -364,7 +376,7 @@ export function ConsoleRouter() {
   }
 
   if (!firebaseUser || !profile) {
-    if (firebaseUser && profileMissing) {
+    if (firebaseUser && profileMissing && !firebaseUser.isAnonymous) {
       return (
         <AccessInvitationSetup
           firebaseUser={firebaseUser}

@@ -41,9 +41,13 @@ test("every unusable field is named at once", () => {
 test("a guest booking never needs a password", () => {
   // The whole point of the path: anonymous sign-in, no credential screen.
   const panel = readFileSync("src/components/guest-contact-panel.tsx", "utf8");
-  assert.match(panel, /signInAnonymously/);
+  const session = readFileSync("src/lib/guest-checkout.ts", "utf8");
+  assert.match(panel, /beginGuestSession/);
+  assert.match(panel, /guestSessionErrorMessage/);
   assert.doesNotMatch(panel, /type="password"/);
   assert.doesNotMatch(panel, /createUserWithEmailAndPassword/);
+  assert.match(session, /signInAnonymously/);
+  assert.match(session, /completeGuestSignIn/);
 });
 
 test("the guest block rides on every call, and only for a guest", () => {
@@ -79,6 +83,7 @@ test("guest checkout copy is localized in French", () => {
     "Use a Laawol account instead",
     "Enter a valid phone number",
     "Your tracking number arrives by email. Keep it to follow this booking.",
+    "We could not start guest checkout. Try again, or use a Laawol account.",
   ]) {
     const french = translateValue(english, "fr");
     assert.notEqual(french, english, english);

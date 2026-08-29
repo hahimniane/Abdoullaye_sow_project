@@ -1,17 +1,18 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { signInAnonymously } from "firebase/auth";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 
 import { CustomerPhoneField } from "@/components/customer-phone-field";
-import { auth } from "@/lib/firebase";
+import {
+  beginGuestSession,
+  guestSessionErrorMessage,
+} from "@/lib/guest-checkout";
 import {
   type GuestContact,
   type GuestContactField,
   guestContactProblems,
   normalizeGuestContact,
-  rememberGuestContact,
 } from "@/lib/guest-contact";
 
 type GuestContactPanelProps = {
@@ -48,15 +49,10 @@ export function GuestContactPanel({
     setSubmitting(true);
     setError("");
     try {
-      const normalized = normalizeGuestContact(contact);
-      // Stored before the sign-in rather than after: the anonymous session
-      // flipping to signed-in re-renders this panel away, and the checkout
-      // that follows reads the contact back out of storage.
-      rememberGuestContact(normalized);
-      await signInAnonymously(auth);
+      await beginGuestSession(normalizeGuestContact(contact));
       onContinued();
-    } catch {
-      setError("We could not continue. Check your connection and try again.");
+    } catch (sessionError) {
+      setError(guestSessionErrorMessage(sessionError));
       setSubmitting(false);
     }
   }

@@ -310,3 +310,13 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   acceptance path), self-action guards, last-super-admin/last-owner
   protections, ownership transfer, session revocation, and dependency-aware
   deletion/tombstoning. Verify both English and French in a running browser.
+- Guest web checkout (customer.laawoldigital.com `?service=barrel`): Continue-as-guest
+  must start the anonymous session *and* resume the in-flight submit so Stripe
+  opens. Catch-all "Check your connection" copy on `signInAnonymously` masks
+  App Check / auth races; map only `network-request-failed` to that line. Do
+  not force `getIdToken(true)` or the account-boot spinner for anonymous users
+  — that races the guest panel. Coverage: `admin_web/src/lib/guest-session.test.ts`
+  and the `ensureGuestOrAccount` / `askHowToContinue` checks in
+  `customer-service-intent.test.ts`. Signed-in checkout is
+  `ensureGuestOrAccount({ authenticated: true })` and must not open the guest
+  sheet.

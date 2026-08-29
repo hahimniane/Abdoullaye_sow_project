@@ -55,31 +55,44 @@ export function isGuestContactComplete(raw: Partial<GuestContact>) {
 const STORAGE_KEY = "laawol.guest-contact";
 
 /**
- * Kept in sessionStorage because checkout leaves the site for Stripe and
- * comes back: the contact has to survive that round trip, but it has no
- * business outliving the tab.
+ * Held in memory for the life of this page, and also in sessionStorage so
+ * the Stripe round trip can restore it. Storage can be blocked or emptied
+ * while the anonymous session lives on; the in-memory copy is what the
+ * checkout that follows Continue-as-guest actually needs.
  */
+let memoryContact: GuestContact | null = null;
+
 export function rememberGuestContact(contact: GuestContact) {
+  const normalized = normalizeGuestContact(contact);
+  memoryContact = isGuestContactComplete(normalized) ? normalized : null;
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(contact));
+    if (memoryContact) {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(memoryContact));
+    }
   } catch {
     // A browser with storage blocked still completes the booking - the
-    // contact simply does not survive the redirect back.
+    // in-memory copy is enough to reach Stripe. The contact simply does
+    // not survive the redirect back.
   }
 }
 
 export function recallGuestContact(): GuestContact | null {
+  if (memoryContact && isGuestContactComplete(memoryContact)) {
+    return memoryContact;
+  }
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = normalizeGuestContact(JSON.parse(raw) as GuestContact);
-    return isGuestContactComplete(parsed) ? parsed : null;
+    memoryContact = isGuestContactComplete(parsed) ? parsed : null;
+    return memoryContact;
   } catch {
     return null;
   }
 }
 
 export function forgetGuestContact() {
+  memoryContact = null;
   try {
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {

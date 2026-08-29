@@ -2,6 +2,7 @@ import { initializeApp, getApps } from "firebase/app";
 import {
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
+  type AppCheck,
 } from "firebase/app-check";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
@@ -28,6 +29,7 @@ const firebaseConfig = {
 };
 
 export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+export let appCheck: AppCheck | null = null;
 
 type AppCheckRuntime = typeof globalThis & {
   FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string;
@@ -66,7 +68,7 @@ if (
       appCheckRuntime.FIREBASE_APPCHECK_DEBUG_TOKEN =
         appCheckDebugToken === "true" ? true : appCheckDebugToken;
     }
-    initializeAppCheck(app, {
+    appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaEnterpriseProvider(
         appCheckSiteKey || "debug-provider-not-used",
       ),

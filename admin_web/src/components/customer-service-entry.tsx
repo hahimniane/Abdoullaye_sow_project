@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ArrowLeft, LogIn, X } from "lucide-react";
 import type { User } from "firebase/auth";
 
@@ -48,7 +48,25 @@ export function CustomerServiceEntry({
   const [accountMode, setAccountMode] = useState<"sign-in" | "sign-up">(
     "sign-in",
   );
+  const pendingContinuation = useRef<((ready: boolean) => void) | null>(null);
   const authOpen = authIntent !== null;
+
+  function finishContinuation(ready: boolean) {
+    const resolve = pendingContinuation.current;
+    pendingContinuation.current = null;
+    resolve?.(ready);
+  }
+
+  // The submit that opened this sheet waits on this promise. Resolving true
+  // lets it go on to Stripe; resolving false (close / replace) aborts it
+  // without creating a shipment.
+  function askHowToContinue(): Promise<boolean> {
+    finishContinuation(false);
+    return new Promise((resolve) => {
+      pendingContinuation.current = resolve;
+      setAuthIntent("service-continuation");
+    });
+  }
   const guestAllowed = initialService === "barrel" ||
     initialService === "freight";
   const cars = usePublicCars(initialService === "cars");
@@ -81,6 +99,9 @@ export function CustomerServiceEntry({
     if (!authenticated || !authOpen) return;
     setAuthIntent(null);
     setContinuedAfterAuth(true);
+    const resolve = pendingContinuation.current;
+    pendingContinuation.current = null;
+    resolve?.(true);
   }, [authOpen, authenticated]);
 
   return (
@@ -133,9 +154,7 @@ export function CustomerServiceEntry({
             authenticated={authenticated}
             guestReady={guestReady}
             initialService={shippingService}
-            onAuthenticationRequired={() =>
-              setAuthIntent("service-continuation")
-            }
+            onAuthenticationRequired={askHowToContinue}
             profile={profile}
           />
         )}
@@ -213,7 +232,10 @@ export function CustomerServiceEntry({
                 aria-label="Close account access"
                 className="icon-button"
                 disabled={authenticating}
-                onClick={() => setAuthIntent(null)}
+                onClick={() => {
+                  finishContinuation(false);
+                  setAuthIntent(null);
+                }}
                 type="button"
               >
                 <X aria-hidden="true" size={18} />
@@ -233,10 +255,13 @@ export function CustomerServiceEntry({
                     // router does not count as authenticated, so the effect
                     // that closes this sheet after a sign-in never fires for
                     // them. Close it here or the overlay sits over the form
-                    // they just came back to finish.
+                    // they just came back to finish. Resolving the waiting
+                    // submit is what actually opens Stripe - without it the
+                    // customer is dumped back on Review & pay.
                     setAuthIntent(null);
                     setGuestReady(true);
                     setContinuedAfterAuth(true);
+                    finishContinuation(true);
                   }}
                 />
                 <div className="customer-auth-divider">

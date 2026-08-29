@@ -54,7 +54,15 @@ test("guest service entry gates only final submission and preserves the mounted 
   assert.doesNotMatch(shipping, /Sign in to save & continue/);
   assert.match(shipping, /"Sign in to send request"/);
   assert.match(shipping, /if \(!authenticated\) \{\s*onAuthenticationRequired\?\.\(\)/);
+  // Guest barrel/freight submit waits for Continue-as-guest (or a real
+  // sign-in) and then proceeds to checkout. Returning without that wait is
+  // what dumped the customer back on Review & pay with no Stripe.
+  assert.match(shipping, /ensureGuestOrAccount/);
+  assert.match(entry, /askHowToContinue/);
+  assert.match(entry, /finishContinuation\(true\)/);
   assert.match(router, /customerServiceFromSearch/);
+  assert.match(router, /user\.isAnonymous/);
+  assert.match(router, /!firebaseUser\.isAnonymous/);
 });
 
 test("public CTAs deep-link to every guest customer journey", () => {
