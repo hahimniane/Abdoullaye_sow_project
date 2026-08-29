@@ -33,6 +33,7 @@ import '../widgets/office_location_picker.dart';
 import '../widgets/structured_address_fields.dart';
 import '../theme/app_colors.dart';
 import '../widgets/guest_checkout_sheet.dart';
+import '../services/guest_checkout_service.dart';
 
 class SendBarrelScreen extends StatefulWidget {
   const SendBarrelScreen({super.key, this.showBackButton = true});
@@ -436,7 +437,13 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   static const String _guestRoute = 'guest-checkout';
 
   Future<bool> _ensureCustomerAccount() async {
-    if (context.read<AuthProvider>().isAuthenticated) return true;
+    // A returning guest is authenticated and still cannot be reached: the
+    // anonymous session outlives the app, the details it was made with do
+    // not.
+    if (context.read<AuthProvider>().isAuthenticated &&
+        !guestCheckout.needsContact) {
+      return true;
+    }
 
     final route = await showModalBottomSheet<String>(
       context: context,

@@ -16,9 +16,12 @@ const GUEST_TRACKING_COLLECTIONS = Object.freeze([
 ]);
 
 const PUBLIC_STAGE_BY_STATUS = Object.freeze({
-  pending_payment: "booked",
+  // Not "booked": nothing is booked until it is paid for, and telling the
+  // customer otherwise leaves them waiting on a shipment that will never
+  // move while the business waits on a payment that never came.
+  pending_payment: "awaiting_payment",
   awaiting_weight_confirmation: "booked",
-  awaiting_balance_payment: "booked",
+  awaiting_balance_payment: "awaiting_payment",
   settlement_processing: "booked",
   quote_requested: "booked",
   pending: "booked",

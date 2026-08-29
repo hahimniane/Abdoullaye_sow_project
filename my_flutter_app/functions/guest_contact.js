@@ -149,7 +149,35 @@ function guestRateLimitKeys({email, ip}) {
   return keys;
 }
 
+/**
+ * The contact a guest gave on an earlier booking.
+ *
+ * An anonymous session outlives the app that created it - Firebase keeps it
+ * in the keychain - while anything the client held in memory does not. A
+ * guest coming back to a second booking is therefore still anonymous and no
+ * longer carrying their details, and demanding them again from a screen that
+ * does not ask is a dead end. Their first booking already wrote them to
+ * their profile, so read them from there.
+ *
+ * @param {object} profile the caller's users/{uid} document
+ * @return {object} the identity fields, or null when there is nothing stored
+ */
+function storedGuestIdentity(profile) {
+  if (!profile || profile.isGuest !== true) return null;
+  const email = normalizeGuestEmail(profile.email);
+  const name = cleanField(profile.fullName, NAME_MAX);
+  if (!email || !name) return null;
+  return {
+    isGuest: true,
+    customerEmail: email,
+    customerName: name,
+    customerPhone: normalizeGuestPhone(profile.phone),
+    guestEmail: email,
+  };
+}
+
 module.exports = {
+  storedGuestIdentity,
   guestRateLimitKeys,
   isAnonymousCaller,
   normalizeGuestEmail,

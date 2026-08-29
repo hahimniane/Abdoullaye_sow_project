@@ -9,6 +9,8 @@ import { usePublicCars } from "@/components/customer-console";
 import { CustomerParkingPools } from "@/components/customer-parking-pools";
 import { CustomerShippingServices } from "@/components/customer-shipping-services";
 import { GuestContactPanel } from "@/components/guest-contact-panel";
+import { auth } from "@/lib/firebase";
+import { recallGuestContact } from "@/lib/guest-contact";
 import { GuestTracking } from "@/components/guest-tracking";
 import type { CustomerService } from "@/lib/customer-service-intent";
 import type { UserProfile } from "@/types/admin";
@@ -37,7 +39,12 @@ export function CustomerServiceEntry({
   // An anonymous session is not "authenticated" as far as the console router
   // is concerned, so the forms need to be told separately that the guest has
   // given their details and the submission may go ahead.
-  const [guestReady, setGuestReady] = useState(false);
+  const [guestReady, setGuestReady] = useState(
+    // A guest who comes back still has their anonymous session but not the
+    // contact that went with it - sessionStorage ends with the tab, the
+    // session does not. Treat them as ready only if both survived.
+    () => auth.currentUser?.isAnonymous === true && recallGuestContact() !== null,
+  );
   const [accountMode, setAccountMode] = useState<"sign-in" | "sign-up">(
     "sign-in",
   );

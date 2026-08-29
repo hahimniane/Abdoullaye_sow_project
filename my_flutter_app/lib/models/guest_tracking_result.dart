@@ -7,7 +7,14 @@ enum GuestTrackingServiceType {
   freightQuote,
 }
 
-enum GuestTrackingStage { booked, inTransit, arrived, delivered, cancelled }
+enum GuestTrackingStage {
+  awaitingPayment,
+  booked,
+  inTransit,
+  arrived,
+  delivered,
+  cancelled,
+}
 
 class GuestTrackingRecord {
   const GuestTrackingRecord({
@@ -75,6 +82,7 @@ GuestTrackingServiceType _serviceFromWire(Object? value) {
 
 GuestTrackingStage _stageFromWire(Object? value) {
   return switch (value) {
+    'awaiting_payment' => GuestTrackingStage.awaitingPayment,
     'booked' => GuestTrackingStage.booked,
     'in_transit' => GuestTrackingStage.inTransit,
     'arrived' => GuestTrackingStage.arrived,

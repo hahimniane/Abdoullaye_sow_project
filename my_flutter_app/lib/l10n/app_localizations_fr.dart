@@ -7507,4 +7507,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get orderTypePriceRequests => 'Demandes de prix';
+
+  @override
+  String get guestTrackingStageAwaitingPayment => 'En attente de paiement';
 }

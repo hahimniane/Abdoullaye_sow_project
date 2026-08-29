@@ -7,6 +7,7 @@ export type GuestTrackingService =
   | "freight_quote";
 
 export type GuestTrackingStage =
+  | "awaiting_payment"
   | "booked"
   | "in_transit"
   | "arrived"
@@ -33,6 +34,7 @@ const SERVICES = new Set<GuestTrackingService>([
   "freight_quote",
 ]);
 const STAGES = new Set<GuestTrackingStage>([
+  "awaiting_payment",
   "booked",
   "in_transit",
   "arrived",
@@ -101,6 +103,7 @@ export const GUEST_SERVICE_LABEL: Record<GuestTrackingService, string> = {
 };
 
 export const GUEST_STAGE_LABEL: Record<GuestTrackingStage, string> = {
+  awaiting_payment: "Waiting for payment",
   booked: "Booked",
   in_transit: "In progress",
   arrived: "Ready",

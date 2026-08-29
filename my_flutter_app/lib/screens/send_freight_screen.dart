@@ -29,6 +29,7 @@ import '../widgets/rating_summary_badge.dart';
 import '../widgets/recipient_name_field.dart';
 import '../widgets/structured_address_fields.dart';
 import '../widgets/guest_checkout_sheet.dart';
+import '../services/guest_checkout_service.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
@@ -564,7 +565,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
-    if (FirebaseAuth.instance.currentUser == null) {
+    // A returning guest still has their anonymous session but not the
+    // details that went with it, so "signed in" is not the same as "we can
+    // reach them".
+    if (FirebaseAuth.instance.currentUser == null ||
+        guestCheckout.needsContact) {
       // A guest books from here without leaving the screen; anyone who would
       // rather use an account still goes to the sign-in route.
       final continued = await showGuestCheckoutSheet(
@@ -747,7 +752,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   /// Hands the parcel to the businesses on the route to price themselves.
   Future<void> _askForPrice() async {
-    if (FirebaseAuth.instance.currentUser == null) {
+    // A returning guest still has their anonymous session but not the
+    // details that went with it, so "signed in" is not the same as "we can
+    // reach them".
+    if (FirebaseAuth.instance.currentUser == null ||
+        guestCheckout.needsContact) {
       final continued = await showGuestCheckoutSheet(
         context,
         onUseAccount: () => Navigator.pushNamed(context, '/login'),

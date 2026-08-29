@@ -137,3 +137,47 @@ describe("rate limiting a guest", () => {
     assert.deepEqual(guestRateLimitKeys({email: "bad", ip: ""}), []);
   });
 });
+
+describe("a guest who comes back", () => {
+  const {storedGuestIdentity} = require("../guest_contact");
+
+  it("is recognised from the profile their first booking wrote", () => {
+    // The anonymous session outlives the app that made it; anything the
+    // client held in memory does not. Without this the second booking asked
+    // for details from a screen that no longer offers them, and payment
+    // stopped there.
+    assert.deepEqual(
+        storedGuestIdentity({
+          isGuest: true,
+          email: "Mariama@Example.com",
+          fullName: "Mariama Diallo",
+          phone: "+12015550147",
+        }),
+        {
+          isGuest: true,
+          customerEmail: "mariama@example.com",
+          customerName: "Mariama Diallo",
+          customerPhone: "+12015550147",
+          guestEmail: "mariama@example.com",
+        },
+    );
+  });
+
+  it("is not read off an account that is not a guest", () => {
+    // A real customer's profile must never be used to fill a guest booking.
+    assert.equal(storedGuestIdentity({
+      isGuest: false, email: "real@example.com", fullName: "Real",
+    }), null);
+  });
+
+  it("is nothing when the profile cannot reach them either", () => {
+    for (const profile of [
+      null,
+      {isGuest: true},
+      {isGuest: true, email: "nope", fullName: "A"},
+      {isGuest: true, email: "a@b.co"},
+    ]) {
+      assert.equal(storedGuestIdentity(profile), null);
+    }
+  });
+});

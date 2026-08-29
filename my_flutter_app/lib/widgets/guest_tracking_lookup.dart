@@ -487,6 +487,8 @@ String _serviceLabel(AppLocalizations l10n, GuestTrackingServiceType service) {
 
 String _stageLabel(AppLocalizations l10n, GuestTrackingStage stage) {
   return switch (stage) {
+    GuestTrackingStage.awaitingPayment =>
+      l10n.guestTrackingStageAwaitingPayment,
     GuestTrackingStage.booked => l10n.guestTrackingStageBooked,
     GuestTrackingStage.inTransit => l10n.guestTrackingStageInTransit,
     GuestTrackingStage.arrived => l10n.guestTrackingStageArrived,

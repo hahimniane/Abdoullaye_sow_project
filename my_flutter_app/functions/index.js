@@ -19,6 +19,7 @@ const {
   guestRateLimitKeys,
   isAnonymousCaller,
   resolveBookingContact,
+  storedGuestIdentity,
 } = require("./guest_contact");
 const {
   findGuestTrackingRecord,
@@ -604,10 +605,39 @@ async function ensureGuestCustomerProfile(uid, identity) {
   }, {merge: true});
 }
 
+// Resolves who a booking belongs to, reading a returning guest's details
+// from the profile their first booking wrote when the client no longer holds
+// them. Async, so it runs once at the top of a callable rather than inside
+// the record literal.
+async function resolveBookingIdentity(request, customerUid) {
+  if (!isAnonymousCaller(request.auth)) return null;
+  const parsed = resolveBookingContact({
+    auth: request.auth,
+    userRecord: null,
+    guest: request.data?.guestContact,
+  });
+  if (parsed.ok) return parsed.identity;
+
+  const profile = await admin.firestore()
+      .collection("users").doc(customerUid).get();
+  const stored = storedGuestIdentity(profile.data());
+  if (stored) return stored;
+
+  throw new HttpsError(
+      "invalid-argument",
+      GUEST_CONTACT_MESSAGES[parsed.error] ||
+        "Enter your contact details to continue",
+  );
+}
+
 // Spread into the record a booking writes, so every service resolves the
 // customer's identity the same way and a guest's details can never overwrite
 // a signed-in customer's.
-function bookingIdentityFields(request, userRecord) {
+function bookingIdentityFields(request, userRecord, guestIdentity = null) {
+  if (guestIdentity) {
+    const {isGuest, customerEmail, customerName, customerPhone} = guestIdentity;
+    return {isGuest, customerEmail, customerName, customerPhone};
+  }
   const resolved = resolveBookingContact({
     auth: request.auth,
     userRecord,
@@ -20187,10 +20217,10 @@ exports.createBarrelShipmentPaymentIntent = onCall(
       // Resolved here rather than at the record write so a guest with
       // unusable contact details is turned away before any pricing,
       // Stripe or Firestore work happens on their behalf.
-      await ensureGuestCustomerProfile(
-          customerUid,
-          bookingIdentityFields(request, null),
-      );
+      const guestIdentity = await resolveBookingIdentity(request, customerUid);
+      if (guestIdentity) {
+        await ensureGuestCustomerProfile(customerUid, guestIdentity);
+      }
       await recordMarketplaceDisclosure(
           request,
           customerUid,
@@ -20315,7 +20345,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           businessName: business.name || DEFAULT_BUSINESS_NAME,
           ...deliveryEstimate,
           customerUid,
-          ...bookingIdentityFields(request, userRecord),
+          ...bookingIdentityFields(request, userRecord, guestIdentity),
           pickupRequested: wantsPickup,
           pickupAddress: cleanPickupAddress,
           pickupBorough: wantsPickup ?
@@ -20451,10 +20481,10 @@ exports.createBarrelOrderPaymentIntent = onCall(
       // Resolved here rather than at the record write so a guest with
       // unusable contact details is turned away before any pricing,
       // Stripe or Firestore work happens on their behalf.
-      await ensureGuestCustomerProfile(
-          customerUid,
-          bookingIdentityFields(request, null),
-      );
+      const guestIdentity = await resolveBookingIdentity(request, customerUid);
+      if (guestIdentity) {
+        await ensureGuestCustomerProfile(customerUid, guestIdentity);
+      }
       await recordMarketplaceDisclosure(
           request,
           customerUid,
@@ -20713,7 +20743,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
         const chargeCents = orderTotalCents;
         transaction.set(orderRef, {
           customerUid,
-          ...bookingIdentityFields(request, userRecord),
+          ...bookingIdentityFields(request, userRecord, guestIdentity),
           senderName: String(senderName).trim(),
           pickupRequested: validatedLines.some((line) => line.pickupRequested),
           pickupAddress: validatedLines.some((line) => line.pickupRequested) ?
@@ -20762,7 +20792,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
             businessName: line.business.name || DEFAULT_BUSINESS_NAME,
             ...line.deliveryEstimate,
             customerUid,
-            ...bookingIdentityFields(request, userRecord),
+            ...bookingIdentityFields(request, userRecord, guestIdentity),
             pickupRequested: line.pickupRequested,
             pickupAddress: line.pickupAddress,
             pickupBorough: line.pickupBorough,
@@ -21341,10 +21371,10 @@ exports.createFreightShipmentPaymentIntent = onCall(
       // Resolved here rather than at the record write so a guest with
       // unusable contact details is turned away before any pricing,
       // Stripe or Firestore work happens on their behalf.
-      await ensureGuestCustomerProfile(
-          customerUid,
-          bookingIdentityFields(request, null),
-      );
+      const guestIdentity = await resolveBookingIdentity(request, customerUid);
+      if (guestIdentity) {
+        await ensureGuestCustomerProfile(customerUid, guestIdentity);
+      }
       await recordMarketplaceDisclosure(
           request,
           customerUid,
@@ -21687,7 +21717,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
             quoteId: agreedQuote.quoteId,
             priceAgreedByQuote: true,
           } : {}),
-          ...bookingIdentityFields(request, userRecord),
+          ...bookingIdentityFields(request, userRecord, guestIdentity),
           pickupRequested: wantsPickup,
           pickupAddress: cleanPickupAddress,
           pickupBorough: wantsPickup ?
@@ -22719,10 +22749,10 @@ exports.createFreightQuoteRequest = onCall(
       // Resolved here rather than at the record write so a guest with
       // unusable contact details is turned away before any pricing,
       // Stripe or Firestore work happens on their behalf.
-      await ensureGuestCustomerProfile(
-          customerUid,
-          bookingIdentityFields(request, null),
-      );
+      const guestIdentity = await resolveBookingIdentity(request, customerUid);
+      if (guestIdentity) {
+        await ensureGuestCustomerProfile(customerUid, guestIdentity);
+      }
       const {destinationCountryId, mode} = request.data || {};
       if (!destinationCountryId) {
         throw new HttpsError("invalid-argument", "Destination is required");
@@ -22766,7 +22796,7 @@ exports.createFreightQuoteRequest = onCall(
       batch.set(requestRef, {
         trackingCode,
         customerUid,
-        ...bookingIdentityFields(request, userRecord),
+        ...bookingIdentityFields(request, userRecord, guestIdentity),
         destinationCountryId,
         destinationCountryName: countryName,
         mode: normalizeFreightMode(mode),

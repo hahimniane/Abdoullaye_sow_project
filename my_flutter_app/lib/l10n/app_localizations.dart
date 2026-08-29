@@ -13133,6 +13133,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Price requests'**
   String get orderTypePriceRequests;
+
+  /// No description provided for @guestTrackingStageAwaitingPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for payment'**
+  String get guestTrackingStageAwaitingPayment;
 }
 
 class _AppLocalizationsDelegate

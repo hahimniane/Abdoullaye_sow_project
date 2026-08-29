@@ -110,6 +110,14 @@ class GuestCheckoutSession {
     }
   }
 
+  /// True when this is a guest whose details the app no longer holds.
+  ///
+  /// The anonymous session is kept in the keychain and outlives the app; the
+  /// contact was only ever in memory. A guest coming back is therefore still
+  /// a guest and still needs to be asked, or the booking reaches the server
+  /// with nothing to reach them by.
+  bool get needsContact => isGuest && _contact == null;
+
   /// Starts an anonymous session so the booking has an identity, without the
   /// customer choosing a password or verifying an email.
   Future<void> begin(GuestContact contact) async {

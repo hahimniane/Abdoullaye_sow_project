@@ -3182,5 +3182,6 @@
   },
   "continueToBooking": "Continuer vers la réservation",
   "freightQuoteChosenNext": "Ajoutez le destinataire, l'adresse et la façon dont le colis parvient à l'entreprise. Vous payez à la fin, au prix que vous avez accepté.",
-  "orderTypePriceRequests": "Demandes de prix"
+  "orderTypePriceRequests": "Demandes de prix",
+  "guestTrackingStageAwaitingPayment": "En attente de paiement"
 }
