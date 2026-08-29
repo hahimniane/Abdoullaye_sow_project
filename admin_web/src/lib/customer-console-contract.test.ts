@@ -120,11 +120,11 @@ test("the orders page is organised by service tab with status chips", () => {
   assert.match(source, /service-segments service-sort-segments/);
   assert.doesNotMatch(source, /customer-orders-chips/);
   assert.match(source, /statusBucket\(/);
-  // A notification deep-link must land on the tab its record lives in.
-  assert.match(
-    source,
-    /focusedRecord\.collection === "barrelShipments"\) setActiveTab\("barrels"\)/,
-  );
+  // A notification deep-link must land on the tab its record lives in,
+  // including freight quote requests (Waiting on a price), not leftover Cars.
+  assert.match(source, /customerOrdersInnerTab\(focusedRecord\.collection\)/);
+  assert.match(source, /focusedRecord=\{focusedRecord\}/);
+  assert.match(source, /openReview=\{focusedRecord\?\.openReview === true\}/);
 });
 
 test("the profile follows its Firestore document for the whole session", () => {

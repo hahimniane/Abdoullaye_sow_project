@@ -348,3 +348,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   Stripe redirects. Coverage: `customer-checkout.test.js` (buyerUid-only
   session), `car-purchase.test.js` / `admin_web/src/lib/car-purchase.test.ts`
   (unpaid hold cannot be Mark sold / Completed). Do not switch Stripe mode.
+- Website notification clicks have no URL route. The bell only marks read and
+  calls `onSelect`. Routing lives in `admin_web/src/lib/notification-routing.ts`
+  and must match the mobile contract in
+  `my_flutter_app/lib/services/notification_routing.dart`. Live payloads often
+  carry only `shipmentId` / `requestId` / `reservationId` / `purchaseId` /
+  `caseId` — infer the collection from `type` and pass focus into the panel
+  (Orders inner tab, review composer, support thread, Freight requests,
+  Transport jobs vs opportunities). Coverage:
+  `admin_web/src/lib/notification-routing.test.ts` plus the functions stamp
+  in `notification-triggers.test.js`. Do not treat "opens the sidebar tab"
+  as enough: the record or thread must open.

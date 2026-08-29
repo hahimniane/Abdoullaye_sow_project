@@ -55,19 +55,21 @@ test("the bell hands the notification payload to the console", () => {
 });
 
 test("opening a transport notification opens the transport tab", () => {
-  assert.match(console_, /case "transport_opportunity":/);
-  assert.match(console_, /return "transport";/);
+  const routing = readFileSync("src/lib/notification-routing.ts", "utf8");
+  assert.match(routing, /case "transport_opportunity":/);
+  assert.match(console_, /businessTargetForNotification/);
 });
 
 test("the console forwards the request id to the transport panel", () => {
-  assert.match(console_, /setNotificationFocusId\(data\.requestId \?\? ""\)/);
+  assert.match(console_, /setNotificationFocusId\(target\.focusId \?\? ""\)/);
   assert.match(console_, /focusRequestId=\{notificationFocusId\}/);
+  assert.match(console_, /focusView=\{notificationFocusView\}/);
 });
 
 test("the panel reveals the focused request instead of filtering it out", () => {
-  // A stale search box or the jobs view would hide the very card the
-  // notification pointed at.
-  assert.match(panels, /setView\("opportunities"\)/);
+  // A stale search box would hide the card. View comes from the notification
+  // type: paid/won jobs open Accepted jobs, new/lost quotes open Opportunities.
+  assert.match(panels, /setView\(focusView === "jobs" \? "jobs" : "opportunities"\)/);
   assert.match(panels, /setSearch\(""\)/);
   assert.match(panels, /scrollIntoView/);
 });

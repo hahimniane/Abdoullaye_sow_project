@@ -65,7 +65,8 @@ test("transport credits the winning business, not the requester", () => {
 });
 
 test("each service opens its own tab", () => {
-  assert.match(console_, /if \(type === "business_order_paid"\)/);
+  const routing = readFileSync("src/lib/notification-routing.ts", "utf8");
+  assert.match(routing, /if \(type === "business_order_paid"\)/);
   for (const [service, tab] of [
     ["barrels", "barrels"],
     ["freight", "freight"],
@@ -74,7 +75,7 @@ test("each service opens its own tab", () => {
     ["purchases", "purchases"],
   ]) {
     assert.match(
-        console_,
+        routing,
         new RegExp(`case "${service}":\\s*\\n\\s*return "${tab}";`),
         `${service} does not route to the ${tab} tab`,
     );
@@ -82,5 +83,6 @@ test("each service opens its own tab", () => {
 });
 
 test("the console forwards the service so routing can use it", () => {
-  assert.match(console_, /data\.service \?\? ""/);
+  assert.match(console_, /businessTargetForNotification\(data\)/);
+  assert.match(console_, /focusRecordId=\{notificationFocusId\}/);
 });

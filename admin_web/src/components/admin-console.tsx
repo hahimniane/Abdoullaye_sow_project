@@ -142,25 +142,11 @@ import {
   type ActionConfirmationOptions,
   type ActionRunner,
 } from "@/lib/action-confirmation";
+import { adminTargetForNotification } from "@/lib/notification-routing";
 
 const tabs = adminAreaIds;
 
 type Tab = string;
-
-function tabForNotification(type: string): Tab {
-  switch (type) {
-    case "support_message":
-    case "support_escalated":
-      return "support";
-    case "business_application":
-    case "business_application_status":
-    case "business_verification_document":
-    case "business_verification_review":
-      return "businesses";
-    default:
-      return "today";
-  }
-}
 
 const navGroups: Array<{ label: string; tabs: Tab[] }> = [
   { label: "Overview", tabs: ["today"] },
@@ -2182,6 +2168,7 @@ export function AdminConsole() {
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("today");
+  const [notificationCaseId, setNotificationCaseId] = useState("");
   // Same bundle serves every subdomain, so the tab title has to be set here
   // rather than in layout metadata - otherwise all three consoles read alike.
   useConsoleDocumentTitle("admin", tabLabel(activeTab));
@@ -2633,7 +2620,11 @@ export function AdminConsole() {
           </button>
           <NotificationBell
             enabled={Boolean(firebaseUser?.uid) && !previewMode}
-            onSelect={(data) => setActiveTab(tabForNotification(data.type ?? ""))}
+            onSelect={(data) => {
+              const target = adminTargetForNotification(data);
+              setActiveTab(target.tab);
+              setNotificationCaseId(target.caseId ?? "");
+            }}
             uid={firebaseUser?.uid ?? ""}
           />
           <button
@@ -2785,6 +2776,7 @@ export function AdminConsole() {
           {activeTab === "support" && (
             <SupportCasesPanel
               scope="admin"
+              caseId={notificationCaseId}
               currentUid={firebaseUser?.uid ?? ""}
               currentName={text(
                 profile?.fullName ?? firebaseUser?.email,

@@ -70,6 +70,10 @@ import {
   type BusinessPayoutStatus,
 } from "@/lib/payout-status";
 import { confirmImportantAction } from "@/lib/action-confirmation";
+import {
+  businessTargetForNotification,
+  type BusinessPanelView,
+} from "@/lib/notification-routing";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
 type BusinessConsoleProps = {
@@ -89,59 +93,6 @@ const serviceLabels: Record<string, string> = {
 };
 
 const businessSidebarStorageKey = "laawol:business-sidebar-pins";
-
-function tabForNotification(
-  type: string,
-  service = "",
-): BusinessTab {
-  // A paid order can belong to any service, so the payload carries which one -
-  // dropping the business on "today" would make them hunt for the order that
-  // was just paid for.
-  if (type === "business_order_paid") {
-    switch (service) {
-      case "barrels":
-        return "barrels";
-      case "freight":
-        return "freight";
-      case "transport":
-        return "transport";
-      case "parking":
-        return "parking";
-      case "purchases":
-        return "purchases";
-      default:
-        return "today";
-    }
-  }
-  switch (type) {
-    case "support_message":
-    case "support_escalated":
-      return "cases";
-    case "business_verification_review":
-    case "business_verification_document":
-    case "business_application_status":
-      return "profile";
-    case "barrel_shipment_status":
-      return "barrels";
-    case "freight_shipment_status":
-    case "freight_balance_due":
-    case "freight_refund_issued":
-      return "freight";
-    case "parking_reservation_status":
-      return "parking";
-    case "car_viewing_status":
-      // Viewing requests are worked from the purchases queue, where the
-      // negotiation controls live. Unmapped, this fell through to "today".
-      return "purchases";
-    case "transport_opportunity":
-    case "transport_request_status":
-    case "transport_quote_won":
-    case "transport_quote_lost":
-      return "transport";
-    default:
-      return "today";
-  }
-}
 
 function NotificationPreferencesPanel({ profile }: { profile: UserProfile }) {
   const [prefs, setPrefs] = useState(() =>
@@ -217,6 +168,9 @@ export function BusinessConsole({
   // and highlight the exact record instead of dropping the business into a
   // list of everything and making them hunt for it.
   const [notificationFocusId, setNotificationFocusId] = useState("");
+  const [notificationFocusView, setNotificationFocusView] =
+    useState<BusinessPanelView | "">("");
+  const [notificationCaseId, setNotificationCaseId] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarFilter, setSidebarFilter] = useState("");
   const [pinnedTabs, setPinnedTabs] = useState<BusinessTab[]>(readPinnedTabs);
@@ -454,10 +408,11 @@ export function BusinessConsole({
           <NotificationBell
             enabled={Boolean(firebaseUser.uid) && !previewMode}
             onSelect={(data) => {
-              setActiveTab(
-                tabForNotification(data.type ?? "", data.service ?? ""),
-              );
-              setNotificationFocusId(data.requestId ?? "");
+              const target = businessTargetForNotification(data);
+              setActiveTab(target.tab);
+              setNotificationFocusId(target.focusId ?? "");
+              setNotificationFocusView(target.panelView ?? "");
+              setNotificationCaseId(target.caseId ?? "");
             }}
             uid={firebaseUser.uid}
           />
@@ -577,11 +532,16 @@ export function BusinessConsole({
             />
           )}
           {activeTab === "purchases" && (
-            <PurchasesPanel businessId={businessId} previewMode={previewMode} />
+            <PurchasesPanel
+              businessId={businessId}
+              focusRecordId={notificationFocusId}
+              previewMode={previewMode}
+            />
           )}
           {activeTab === "viewings" && (
             <PurchasesPanel
               businessId={businessId}
+              focusRecordId={notificationFocusId}
               previewMode={previewMode}
               scope="viewings"
             />
@@ -589,17 +549,24 @@ export function BusinessConsole({
           {activeTab === "barrels" && (
             <BarrelsPanel
               businessId={businessId}
+              focusRecordId={notificationFocusId}
               previewMode={previewMode}
               onOpenDestinations={openDestinationSetup}
             />
           )}
           {activeTab === "freight" && (
-            <FreightPanel businessId={businessId} previewMode={previewMode} />
+            <FreightPanel
+              businessId={businessId}
+              focusRecordId={notificationFocusId}
+              focusView={notificationFocusView}
+              previewMode={previewMode}
+            />
           )}
           {activeTab === "transport" && (
             <TransportPanel
               businessId={businessId}
               focusRequestId={notificationFocusId}
+              focusView={notificationFocusView}
               previewMode={previewMode}
             />
           )}
@@ -607,6 +574,7 @@ export function BusinessConsole({
             <ParkingPanel
               businessId={businessId}
               businessName={businessName}
+              focusRecordId={notificationFocusId}
               previewMode={previewMode}
             />
           )}
@@ -665,6 +633,7 @@ export function BusinessConsole({
             <SupportCasesPanel
               scope="business"
               businessId={businessId}
+              caseId={notificationCaseId}
               currentUid={firebaseUser.uid}
               currentName={text(
                 profile.fullName ?? firebaseUser.email,
