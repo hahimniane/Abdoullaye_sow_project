@@ -34,6 +34,21 @@ describe("freight settlement arithmetic", () => {
     assert.equal(freightMayProgress(result.priceSettlementStatus), false);
   });
 
+  it("lets a pay-on-arrival booking progress unpaid after weight confirm", () => {
+    assert.equal(
+        freightMayProgress(FreightSettlementStatus.DUE_ON_ARRIVAL),
+        true,
+    );
+    assert.equal(
+        freightMayProgress(FreightSettlementStatus.SETTLED),
+        true,
+    );
+    assert.equal(
+        freightMayProgress(FreightSettlementStatus.AWAITING_WEIGHT),
+        false,
+    );
+  });
+
   it("returns the whole overpayment to the card", () => {
     const result = calculateFreightSettlement({
       estimatedTotalCents: 10000,

@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { httpsCallable } from "firebase/functions";
-import { functions } from "@/lib/firebase";
 import {
   Check,
   Clipboard,
@@ -28,6 +26,7 @@ import {
   useReviewedOrderKeys,
 } from "@/components/customer-review-composer";
 import { ResumeCheckoutButton } from "@/components/resume-checkout-button";
+import { FreightCustomerPay } from "@/components/freight-customer-pay";
 import type { FirestoreRow } from "@/types/admin";
 
 function CopyTrackingNumber({ code }: { code: string }) {
@@ -250,11 +249,10 @@ export function CustomerTracking({
                       the SAME record. Pay-on-arrival freight still uses the
                       card-save resume below. */}
                   <ResumeCheckoutButton record={record} />
-                  {/* A pay-on-arrival booking is confirmed by saving a card.
-                      Close that page and the shipment sits unpaid for good:
-                      the business cannot fulfil it, and there was no way
-                      back to the page. This is that way back. */}
-                  <ResumeFreightSetup record={record} />
+                  {/* Pay-on-arrival: Finish payment if the card was never
+                      saved, or Pay now if the arrival charge failed.
+                      A saved card with nothing due renders nothing. */}
+                  <FreightCustomerPay record={record} />
                   {onOpenDetails && (
                     <button
                       className="secondary-button"
@@ -298,57 +296,3 @@ export function CustomerTracking({
   );
 }
 
-/**
- * Offers the card save again on a pay-on-arrival shipment that never got one.
- */
-function ResumeFreightSetup({ record }: { record: FirestoreRow }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const status = text(record.status, "");
-  const settled = ["succeeded", "paid", "completed"].includes(
-    text(record.paymentStatus, ""),
-  );
-  const resumable =
-    text(record.paymentTiming, "") === "arrival" &&
-    status === "pending_payment" &&
-    !settled &&
-    text(record.checkoutStatus, "") !== "completed";
-  if (!resumable) return null;
-
-  async function resume() {
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      const call = httpsCallable<{ shipmentId: string }, { url?: string }>(
-        functions,
-        "resumeFreightShipmentSetup",
-      );
-      const result = await call({ shipmentId: text(record.id, "") });
-      const url = text(result.data?.url, "");
-      if (!url) throw new Error("no url");
-      window.location.assign(url);
-    } catch {
-      setError("That did not open. Try again in a moment.");
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <button
-        className="primary-button"
-        disabled={busy}
-        onClick={resume}
-        type="button"
-      >
-        {busy ? "Opening..." : "Finish payment"}
-      </button>
-      {error && (
-        <span className="customer-inline-note error" role="alert">
-          {error}
-        </span>
-      )}
-    </>
-  );
-}

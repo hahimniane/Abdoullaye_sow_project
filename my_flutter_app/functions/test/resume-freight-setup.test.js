@@ -36,6 +36,7 @@ describe("reopening an abandoned card save", () => {
     // Reopening would ask for a card the shipment already has.
     for (const shipment of [
       stuck({paymentStatus: "succeeded"}),
+      stuck({paymentStatus: "card_saved"}),
       stuck({checkoutStatus: "completed"}),
       stuck({status: "awaiting_weight_confirmation"}),
     ]) {

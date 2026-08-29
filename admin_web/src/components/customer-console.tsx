@@ -73,6 +73,7 @@ import {
 } from "@/components/customer-review-composer";
 import { OrderDetailDrawer } from "@/components/order-detail-drawer";
 import { ResumeCheckoutButton } from "@/components/resume-checkout-button";
+import { FreightCustomerPay } from "@/components/freight-customer-pay";
 import { isValidE164, isValidPhone, normalizePhone } from "@/lib/phone";
 import { phoneVerificationErrorMessage } from "@/lib/phone-verification";
 import { currentWebLanguage } from "@/lib/language";
@@ -941,6 +942,12 @@ function OrderPanel({
               </>
             )}
             <ResumeCheckoutButton
+              record={{
+                ...selected.row,
+                collectionName: selected.collectionName,
+              }}
+            />
+            <FreightCustomerPay
               record={{
                 ...selected.row,
                 collectionName: selected.collectionName,

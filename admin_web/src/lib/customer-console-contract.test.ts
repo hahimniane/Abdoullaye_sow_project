@@ -68,6 +68,7 @@ test("an unpaid barrel can resume checkout from the order drawer", () => {
   // resume the same shipment/order - startCheckout with resumeRecordId, not
   // a fresh createBarrelOrder payload.
   assert.match(source, /<ResumeCheckoutButton/);
+  assert.match(source, /<FreightCustomerPay/);
   const resume = readFileSync(
     "src/components/resume-checkout-button.tsx",
     "utf8",

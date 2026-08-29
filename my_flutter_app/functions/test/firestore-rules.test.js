@@ -504,6 +504,26 @@ async function seedFirestore() {
         paymentStatus: "succeeded",
         status: "pending",
       },
+      "freightShipments/freight_v2_due_on_arrival": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "FR-Q56QWK",
+        freightPricingVersion: 2,
+        payOnArrival: true,
+        priceSettlementStatus: "due_on_arrival",
+        paymentStatus: "card_saved",
+        status: "pending",
+      },
+      "freightShipments/freight_v2_card_saved_awaiting_weight": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "FR-CARD-SAVED",
+        freightPricingVersion: 2,
+        payOnArrival: true,
+        priceSettlementStatus: "awaiting_weight",
+        paymentStatus: "card_saved",
+        status: "awaiting_weight_confirmation",
+      },
       "freightSettlements/freight_v2_unsettled_v1": {
         settlementId: "freight_v2_unsettled_v1",
         shipmentId: "freight_v2_unsettled",
@@ -1314,6 +1334,27 @@ describe("business dashboard Firestore rules", () => {
             staffDb.doc("freightShipments/freight_v2_settled").set({
               status: "in_transit",
             }, {merge: true}),
+        );
+        // Pay-on-arrival with a saved card: transit and arrival must write
+        // so the charge trigger can run. Completion still waits for settled.
+        await assertSucceeds(
+            staffDb.doc("freightShipments/freight_v2_due_on_arrival").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+        await assertSucceeds(
+            staffDb.doc("freightShipments/freight_v2_due_on_arrival").set({
+              status: "ready_for_pickup",
+            }, {merge: true}),
+        );
+        await assertFails(
+            staffDb.doc("freightShipments/freight_v2_due_on_arrival").set({
+              status: "completed",
+            }, {merge: true}),
+        );
+        await assertFails(
+            staffDb.doc("freightShipments/freight_v2_card_saved_awaiting_weight")
+                .set({status: "in_transit"}, {merge: true}),
         );
         await assertFails(
             staffDb.doc("freightSettlements/freight_v2_unsettled_v1").set({

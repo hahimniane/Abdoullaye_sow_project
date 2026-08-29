@@ -2,10 +2,9 @@
  * Whether a shipment's card save can be reopened.
  *
  * A pay-on-arrival booking is confirmed by saving a card, not by a charge.
- * If the customer closes that page the shipment sits at pending_payment for
- * good: the business cannot fulfil it, because fulfilment waits on payment,
- * and the customer has no way back to the page they left. Reopening the save
- * is the only thing missing.
+ * If the customer closes that page the shipment sits at pending_payment
+ * until they come back and finish the save. Reopening the setup session
+ * against the same shipment is that way back.
  */
 
 /**
@@ -27,7 +26,7 @@ function resumableFreightSetup({shipment, customerUid}) {
     return {ok: false, reason: "not_pending"};
   }
   // Already saved: reopening would ask for a card the shipment has.
-  if (["succeeded", "paid", "completed"].includes(
+  if (["succeeded", "paid", "completed", "card_saved"].includes(
       String(shipment.paymentStatus || ""))) {
     return {ok: false, reason: "already_settled"};
   }

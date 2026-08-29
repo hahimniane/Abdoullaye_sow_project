@@ -1045,6 +1045,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Request progress": "Progression de la demande",
   "Review request": "Vérifier la demande",
   "Opening secure payment...": "Ouverture du paiement sécurisé...",
+  "Opening...": "Ouverture...",
   "Pay now": "Payer maintenant",
   "That did not open. Try again in a moment.":
     "Cela ne s’est pas ouvert. Réessayez dans un instant.",
@@ -1880,6 +1881,15 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Confirm the parcel weight before fulfillment.": "Confirmez le poids du colis avant l’expédition.",
   "Waiting for customer payment. Fulfillment remains locked.": "En attente du paiement du client. L’expédition reste bloquée.",
   "Settlement needs attention. Contact support before fulfillment.": "Le règlement nécessite une intervention. Contactez l’assistance avant l’expédition.",
+  "Fulfillment is locked until payment succeeds.":
+    "L’expédition est bloquée jusqu’à ce que le paiement aboutisse.",
+  "The customer's saved card is charged when you mark this shipment arrived.":
+    "La carte enregistrée du client est débitée lorsque vous marquez cette expédition comme arrivée.",
+  "Mark it arrived first - the customer's saved card is charged on arrival, and completion unlocks once it settles.":
+    "Marquez-la d’abord comme arrivée — la carte enregistrée du client est débitée à l’arrivée, et la clôture se débloque une fois le règlement effectué.",
+  "Finish payment": "Terminer le paiement",
+  "Card saved": "Carte enregistrée",
+  "Due on arrival": "Dû à l’arrivée",
   "Fulfillment is locked until the verified weight is settled.": "L’expédition est bloquée jusqu’au règlement du poids confirmé.",
   "Enter a verified weight greater than zero.": "Saisissez un poids confirmé supérieur à zéro.",
   "Verified weight and final price saved.": "Poids confirmé et prix final enregistrés.",
