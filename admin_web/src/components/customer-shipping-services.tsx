@@ -104,6 +104,7 @@ import {
 } from "@/lib/service-ranking.ts";
 import { db, functions } from "@/lib/firebase";
 import { withGuestContact } from "@/lib/guest-checkout";
+import { ensureGuestOrAccount } from "@/lib/guest-session";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import { currentWebLanguage } from "@/lib/language";
 import { isValidPhone } from "@/lib/phone";
@@ -228,7 +229,7 @@ type CustomerShippingServicesProps = {
   bookingQuoteRequestId?: string;
   authenticated?: boolean;
   guestReady?: boolean;
-  onAuthenticationRequired?: () => void;
+  onAuthenticationRequired?: () => void | Promise<boolean | void>;
   onTransportCreated?: (result: {
     id: string;
     trackingCode: string;
@@ -710,7 +711,7 @@ function BarrelShipmentForm({
 }: {
   authenticated: boolean;
   guestReady?: boolean;
-  onAuthenticationRequired?: () => void;
+  onAuthenticationRequired?: () => void | Promise<boolean | void>;
   options: DestinationOption[];
   profile: UserProfile;
 }) {
@@ -878,8 +879,11 @@ function BarrelShipmentForm({
 
   async function submit() {
     if (!valid || submitting || !destination) return;
-    if (!authenticated && !guestReady) {
-      onAuthenticationRequired?.();
+    if (!(await ensureGuestOrAccount({
+      authenticated,
+      guestReady,
+      requestContinuation: onAuthenticationRequired,
+    }))) {
       return;
     }
     setSubmitting(true);
@@ -1301,7 +1305,7 @@ function BarrelOrderForm({
 }: {
   authenticated: boolean;
   guestReady?: boolean;
-  onAuthenticationRequired?: () => void;
+  onAuthenticationRequired?: () => void | Promise<boolean | void>;
   options: DestinationOption[];
   profile: UserProfile;
 }) {
@@ -1610,8 +1614,11 @@ function BarrelOrderForm({
 
   async function submit() {
     if (!valid || submitting) return;
-    if (!authenticated && !guestReady) {
-      onAuthenticationRequired?.();
+    if (!(await ensureGuestOrAccount({
+      authenticated,
+      guestReady,
+      requestContinuation: onAuthenticationRequired,
+    }))) {
       return;
     }
     setSubmitting(true);
@@ -2322,7 +2329,7 @@ function FreightShipmentForm({
   bookingQuoteRequestId?: string;
   guestReady?: boolean;
   freightShipments: FirestoreRow[];
-  onAuthenticationRequired?: () => void;
+  onAuthenticationRequired?: () => void | Promise<boolean | void>;
   options: DestinationOption[];
   profile: UserProfile;
 }) {
@@ -2720,8 +2727,11 @@ function FreightShipmentForm({
 
   async function submit() {
     if (submitting || !destination) return;
-    if (!authenticated && !guestReady) {
-      onAuthenticationRequired?.();
+    if (!(await ensureGuestOrAccount({
+      authenticated,
+      guestReady,
+      requestContinuation: onAuthenticationRequired,
+    }))) {
       return;
     }
     if (
@@ -3719,7 +3729,7 @@ function FreightPriceRequest({
   itemCategoryId: string;
   itemLabel: string;
   mode: "air" | "sea";
-  onAuthenticationRequired?: () => void;
+  onAuthenticationRequired?: () => void | Promise<boolean | void>;
 }) {
   const [description, setDescription] = useState("");
   const [weightKg, setWeightKg] = useState("");
@@ -3744,8 +3754,11 @@ function FreightPriceRequest({
 
   async function submit() {
     if (submitting) return;
-    if (!authenticated && !guestReady) {
-      onAuthenticationRequired?.();
+    if (!(await ensureGuestOrAccount({
+      authenticated,
+      guestReady,
+      requestContinuation: onAuthenticationRequired,
+    }))) {
       return;
     }
     const validated = validateFreightQuoteRequest({
@@ -4240,7 +4253,7 @@ function TransportRequestForm({
 }: {
   authenticated: boolean;
   guestReady?: boolean;
-  onAuthenticationRequired?: () => void;
+  onAuthenticationRequired?: () => void | Promise<boolean | void>;
   onCreated?: (result: { id: string; trackingCode: string }) => void;
   options: DestinationOption[];
   profile: UserProfile;

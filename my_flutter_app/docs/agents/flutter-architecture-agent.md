@@ -228,3 +228,10 @@ Add future project conventions and repeated architectural decisions here.
   or email. Zero or ambiguous matches fail closed. Preserve last-super-admin and
   last-business-owner protections across suspension, demotion, ownership
   transfer, and account-deletion workflows.
+- Guest checkout on the customer web console uses an anonymous Firebase session
+  plus a contact block, not a `users/{uid}` profile. The console router must
+  not treat that sign-in as account boot (`getIdToken(true)` + profile spinner):
+  that races `signInAnonymously` and unmounts the guest panel. After Continue
+  as guest, resolve the submit that opened the sheet so Stripe starts; do not
+  dump the customer back on Review & pay. A signed-in customer never carries
+  the guest block.

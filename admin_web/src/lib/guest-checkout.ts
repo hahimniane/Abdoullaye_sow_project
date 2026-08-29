@@ -1,7 +1,33 @@
 "use client";
 
-import { auth } from "./firebase.ts";
-import { recallGuestContact } from "./guest-contact.ts";
+import { getToken } from "firebase/app-check";
+import { signInAnonymously } from "firebase/auth";
+
+import { appCheck, auth } from "./firebase.ts";
+import {
+  isGuestContactComplete,
+  normalizeGuestContact,
+  recallGuestContact,
+  rememberGuestContact,
+  type GuestContact,
+} from "./guest-contact.ts";
+import { completeGuestSignIn } from "./guest-session.ts";
+
+export {
+  ensureGuestOrAccount,
+  guestSessionErrorMessage,
+  type AuthenticationRequiredHandler,
+} from "./guest-session.ts";
+
+async function waitForAppCheckToken() {
+  if (!appCheck) return;
+  try {
+    await getToken(appCheck, false);
+  } catch {
+    // A missing token is not fatal here: Auth still tries, and we'd rather
+    // surface that error than invent a network failure.
+  }
+}
 
 /**
  * Attaches a guest's contact details to a callable payload.
@@ -20,4 +46,24 @@ export function withGuestContact(payload: Record<string, unknown>) {
   if (!auth.currentUser?.isAnonymous) return payload;
   const guestContact = recallGuestContact();
   return guestContact ? { ...payload, guestContact } : payload;
+}
+
+/**
+ * Stores the guest's contact and ensures an anonymous Firebase session.
+ *
+ * The booking that follows reads the contact back out of memory / storage,
+ * so this has to succeed before checkout is allowed to run.
+ */
+export async function beginGuestSession(contact: GuestContact) {
+  const normalized = normalizeGuestContact(contact);
+  if (!isGuestContactComplete(normalized)) {
+    throw new Error("Enter your contact details to continue");
+  }
+  rememberGuestContact(normalized);
+  await completeGuestSignIn({
+    isAnonymous: auth.currentUser?.isAnonymous === true,
+    signInAnonymously: () => signInAnonymously(auth),
+    isAnonymousAfter: () => auth.currentUser?.isAnonymous === true,
+    waitForAppCheck: waitForAppCheckToken,
+  });
 }

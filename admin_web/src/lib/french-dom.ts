@@ -4088,6 +4088,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "One moment...": "Un instant...",
   "We could not continue. Check your connection and try again.":
     "Nous n'avons pas pu continuer. Vérifiez votre connexion et réessayez.",
+  "We could not start guest checkout. Try again, or use a Laawol account.":
+    "Nous n'avons pas pu démarrer le paiement en tant qu'invité. Réessayez, ou utilisez un compte Laawol.",
   "Your tracking number arrives by email. Keep it to follow this booking.":
     "Votre numéro de suivi arrive par e-mail. Conservez-le pour suivre cette réservation.",
   "Use a Laawol account instead": "Utiliser plutôt un compte Laawol",
