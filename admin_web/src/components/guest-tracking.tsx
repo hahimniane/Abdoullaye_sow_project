@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Check, Clipboard, LogIn, PackageSearch, RefreshCw, Search } from "lucide-react";
 import { httpsCallable } from "firebase/functions";
 
@@ -46,13 +46,28 @@ export function GuestTracking({
   const [error, setError] = useState<GuestTrackingError>("");
   const [record, setRecord] = useState<GuestTrackingRecord | null>(null);
   const [copied, setCopied] = useState(false);
+  // The public tracking page has the box; the lookup lives here, where it is
+  // attested and rate limited. A number arriving in the URL is one somebody
+  // already typed, so run it rather than making them type it twice.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("code") ?? "";
+    if (!code.trim()) return;
+    setIdentifier(code);
+    void search(code);
+    // Once only: this is the arrival, not a subscription to the URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLElement>(null);
 
   async function lookup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await search(identifier);
+  }
+
+  async function search(raw: string) {
     if (loading) return;
-    const value = identifier.trim();
+    const value = raw.trim();
     if (!value) {
       setError("required");
       inputRef.current?.focus();

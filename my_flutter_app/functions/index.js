@@ -15,6 +15,7 @@ const {
   normalizePhoneAlias,
 } = require("./phone_number");
 const {agreedFreightPrice} = require("./agreed_freight_price");
+const {resumableFreightSetup} = require("./resume_freight_setup");
 const {
   guestRateLimitKeys,
   isAnonymousCaller,
@@ -22135,6 +22136,72 @@ exports.completeFreightShipmentPayment = onCall(
 // redirect, via sessionId) actually saved a card, then arms the shipment.
 // Nothing is charged here - the saved payment method is charged by
 // chargeFreightPayOnArrival when the business marks the shipment arrived.
+// Reopens the card save a pay-on-arrival customer walked away from.
+//
+// Without this the shipment is stranded: fulfilment waits on payment, the
+// business cannot act, and the customer has no route back to the page they
+// closed. A fresh session against the same shipment is the whole repair - no
+// second booking, no second price.
+exports.resumeFreightShipmentSetup = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      await enforceCallableRateLimit(request, {
+        name: "resumeFreightShipmentSetup",
+        limit: 10,
+        windowSeconds: 60 * 10,
+      });
+      const shipmentId = cleanText(request.data?.shipmentId, 200);
+      if (!shipmentId) {
+        throw new HttpsError("invalid-argument", "A shipment is required");
+      }
+      const db = admin.firestore();
+      const ref = db.collection("freightShipments").doc(shipmentId);
+      const snapshot = await ref.get();
+      const shipment = snapshot.data();
+      const resumable = resumableFreightSetup({shipment, customerUid});
+      if (!resumable.ok) {
+        throw new HttpsError(
+            resumable.reason === "not_yours" ?
+              "permission-denied" :
+              "failed-precondition",
+            resumable.reason === "already_settled" ?
+              "This shipment is already confirmed" :
+              "This shipment cannot be paid for here",
+        );
+      }
+
+      const returnUrls = customerCheckoutReturnUrls({
+        consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+        orderType: "freightShipment",
+        recordId: shipmentId,
+      });
+      const session = await createStripeSetupCheckoutSession({
+        customerId: shipment.stripeCustomerId,
+        connectedAccountId: shipment.stripeChargeType === "direct" ?
+          (shipment.stripeConnectedAccountId || undefined) :
+          undefined,
+        successUrl: `${returnUrls.successUrl}&setup=1`,
+        cancelUrl: returnUrls.cancelUrl,
+        metadata: {
+          shipmentId,
+          customerUid,
+          paymentType: "freight_pay_on_arrival_setup",
+        },
+      });
+      await ref.set({
+        checkoutSessionId: String(session.id || ""),
+        checkoutStatus: "open",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {shipmentId, sessionId: session.id, url: session.url};
+    },
+);
+
 exports.completeFreightShipmentCardSave = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,

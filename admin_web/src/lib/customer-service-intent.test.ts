@@ -89,12 +89,19 @@ test("the public tracking page sends guests to the lookup, not sign-in", () => {
   // Both CTAs on that page have to land on the guest lookup itself; a link
   // to the bare console drops them at a sign-in wall instead.
   const tracking = readFileSync("../public_site/tracking.html", "utf8");
-  const expected = "https://customer.laawoldigital.com/?service=tracking";
-  const occurrences = tracking.split(expected).length - 1;
-  assert.equal(
-    occurrences,
-    2,
-    "both the hero and the closing CTA must deep-link to guest tracking",
+  // The hero now carries a box: it posts the number the visitor typed to the
+  // same lookup rather than sending them there to type it again. The closing
+  // CTA is still a plain deep link.
+  assert.match(
+    tracking,
+    /<form[^>]*action="https:\/\/customer\.laawoldigital\.com\/"[^>]*method="get"/,
+  );
+  assert.match(tracking, /name="service" value="tracking"/);
+  assert.match(tracking, /name="code"/);
+  assert.match(
+    tracking,
+    /href="https:\/\/customer\.laawoldigital\.com\/\?service=tracking"/,
+    "the closing CTA must still deep-link to guest tracking",
   );
   // A bare console link anywhere on this page is the regression: it looks
   // right and lands the guest on a login screen.
