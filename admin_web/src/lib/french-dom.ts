@@ -420,6 +420,14 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Sign in to see parking": "Se connecter pour voir le stationnement",
   "You can still prepare a new shared-barrel request before creating an account.":
     "Vous pouvez toujours préparer une nouvelle demande de baril partagé avant de créer un compte.",
+  "Your price request was sent.": "Votre demande de prix a été envoyée.",
+  "business on this route was asked.":
+    "entreprise sur cet itinéraire a été sollicitée.",
+  "businesses on this route were asked.":
+    "entreprises sur cet itinéraire ont été sollicitées.",
+  "Keep your request number": "Conservez votre numéro de demande",
+  "answers arrive by email, and this number follows the request.":
+    "les réponses arrivent par e-mail et ce numéro suit la demande.",
   "Your request is ready to continue.":
     "Votre demande est prête à continuer.",
   "Shipping services": "Services d’expédition",
@@ -1911,6 +1919,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Confirm weight and final price": "Confirmer le poids et le prix final",
   "Confirm the parcel weight before fulfillment.": "Confirmez le poids du colis avant l’expédition.",
   "Waiting for customer payment. Fulfillment remains locked.": "En attente du paiement du client. L’expédition reste bloquée.",
+  "This shipment was paid with its order, so the whole order is cancelled":
+    "Cette expédition a été payée avec sa commande ; toute la commande est donc annulée.",
   "Settlement needs attention. Contact support before fulfillment.": "Le règlement nécessite une intervention. Contactez l’assistance avant l’expédition.",
   "Fulfillment is locked until payment succeeds.":
     "L’expédition est bloquée jusqu’à ce que le paiement aboutisse.",

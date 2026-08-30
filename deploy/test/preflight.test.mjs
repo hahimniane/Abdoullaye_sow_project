@@ -28,8 +28,8 @@ afterEach(() => {
 });
 
 describe("deployment mode", () => {
-  const beforeDevelopmentCutoff = new Date("2026-09-01T03:59:59.999Z");
-  const atDevelopmentCutoff = new Date("2026-09-01T04:00:00.000Z");
+  const beforeDevelopmentCutoff = new Date("2026-09-11T03:59:59.999Z");
+  const atDevelopmentCutoff = new Date("2026-09-11T04:00:00.000Z");
 
   test("keeps the production project production by default", () => {
     assert.deepEqual(deploymentMode({
@@ -54,7 +54,7 @@ describe("deployment mode", () => {
       allowsTestPayments: true,
       detail:
         "production project car-selling-flutter-app; " +
-        "test payments authorized through August 31, 2026",
+        "test payments authorized through September 10, 2026",
     });
   });
 
@@ -67,7 +67,7 @@ describe("deployment mode", () => {
       ok: false,
       mode: "production",
       allowsTestPayments: false,
-      detail: "the authorized development payment window ended August 31, 2026",
+      detail: "the authorized development payment window ended September 10, 2026",
     });
   });
 

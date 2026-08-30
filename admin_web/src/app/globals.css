@@ -1035,6 +1035,17 @@ button[data-loading="true"]::before {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.data-row.clickable {
+  cursor: pointer;
+}
+
+.data-row.clickable:hover,
+.data-row.clickable:focus-visible {
+  background: #f0fdf9;
+  outline: none;
+}
+
+
 .finance-row {
   grid-template-columns: minmax(0, 1fr) auto minmax(240px, auto);
 }
@@ -8263,6 +8274,12 @@ button[data-loading="true"]::before {
   font-size: 13px;
   font-weight: 700;
   padding: 11px;
+}
+
+.customer-inline-note.success {
+  background: #f0fdf9;
+  border-color: #99f6e4;
+  color: #115e59;
 }
 
 .customer-inline-note.error {

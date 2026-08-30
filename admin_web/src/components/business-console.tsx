@@ -346,16 +346,30 @@ export function BusinessConsole({
     payoutsEnabled: business?.payoutsEnabled,
   });
   const canOpenSupport = visibleTabs.some((tab) => tab.id === "cases");
-  const attentionRows = [
-    ...shipments.rows.filter((row) => isOpenStatus(row.status)).slice(0, 3),
+  // Each row keeps the tab that can actually act on it: a work list whose
+  // rows go nowhere just tells the owner to go searching for the same
+  // shipment a second time.
+  const attentionRows: AttentionRow[] = [
+    ...shipments.rows
+      .filter((row) => isOpenStatus(row.status))
+      .slice(0, 3)
+      .map((row) => ({row, tab: "barrels" as BusinessTab})),
     ...freightShipments.rows
       .filter((row) => isOpenStatus(row.status))
-      .slice(0, 3),
+      .slice(0, 3)
+      .map((row) => ({row, tab: "freight" as BusinessTab})),
     ...purchases.rows
       .filter((row) => isOpenStatus(purchaseStatus(row)))
-      .slice(0, 3),
-    ...transports.rows.filter((row) => isOpenStatus(row.status)).slice(0, 3),
-    ...parkedCars.rows.filter((row) => isOpenStatus(row.status)).slice(0, 3),
+      .slice(0, 3)
+      .map((row) => ({row, tab: "purchases" as BusinessTab})),
+    ...transports.rows
+      .filter((row) => isOpenStatus(row.status))
+      .slice(0, 3)
+      .map((row) => ({row, tab: "transport" as BusinessTab})),
+    ...parkedCars.rows
+      .filter((row) => isOpenStatus(row.status))
+      .slice(0, 3)
+      .map((row) => ({row, tab: "parking" as BusinessTab})),
   ].slice(0, 8);
 
   return (
@@ -502,6 +516,7 @@ export function BusinessConsole({
               businessId={businessId}
               business={business}
               attentionRows={attentionRows}
+              onOpenTab={setActiveTab}
               cars={cars.rows}
               purchases={purchases.rows}
               shipments={shipments.rows}
@@ -831,6 +846,7 @@ function TodayView({
   businessId,
   business,
   attentionRows,
+  onOpenTab,
   cars,
   purchases,
   shipments,
@@ -845,7 +861,8 @@ function TodayView({
 }: {
   businessId: string;
   business: FirestoreRow | null;
-  attentionRows: FirestoreRow[];
+  attentionRows: AttentionRow[];
+  onOpenTab: (tab: BusinessTab) => void;
   cars: FirestoreRow[];
   purchases: FirestoreRow[];
   shipments: FirestoreRow[];
@@ -912,7 +929,7 @@ function TodayView({
       <div className="split-grid">
         <Panel title="Needs attention" icon={<BarChart3 size={18} />}>
           <div className="row-list compact">
-            {attentionRows.map((row) => (
+            {attentionRows.map(({row, tab}) => (
               <DataRow
                 key={`${row._path ?? row.id}`}
                 title={text(
@@ -924,6 +941,7 @@ function TodayView({
                 )}
                 subtitle={formatDate(row.updatedAt ?? row.createdAt)}
                 status={text(row.purchaseStatus ?? row.status, "pending")}
+                onOpen={() => onOpenTab(tab)}
               />
             ))}
             {attentionRows.length === 0 && (
@@ -1492,13 +1510,28 @@ function DataRow({
   title,
   subtitle,
   status,
+  onOpen,
 }: {
   title: string;
   subtitle: string;
   status: string;
+  onOpen?: () => void;
 }) {
   return (
-    <article className="data-row">
+    // A work item names something the owner must act on; the row opens the
+    // queue that can act on it instead of leaving them to find it again.
+    <article
+      className={`data-row${onOpen ? " clickable" : ""}`}
+      onClick={onOpen}
+      onKeyDown={onOpen ? (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      } : undefined}
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+    >
       <div>
         <strong>{title}</strong>
         <small>{subtitle}</small>
@@ -1580,22 +1613,33 @@ function hasBusinessPermission(profile: UserProfile, permission: string) {
   return permissions.includes(permission);
 }
 
+type AttentionRow = {row: FirestoreRow; tab: BusinessTab};
+
 function statusLabel(value: unknown) {
   const normalized = text(value, "unknown").toLowerCase();
   const labels: Record<string, string> = {
     active: "Active",
     approved: "Approved",
+    // The freight lifecycle statuses land on this dashboard too. Each label
+    // must be an exact french-dom dictionary key: the fallback below Title-
+    // Cases unknown statuses, which misses the dictionary and lets the
+    // substring pass mangle them word by word ("Awaiting Poids Confirmation").
+    awaiting_balance_payment: "Awaiting balance payment",
+    awaiting_weight_confirmation: "Awaiting weight confirmation",
     cancelled: "Cancelled",
     closed: "Closed",
     completed: "Completed",
     inactive: "Inactive",
     in_transit: "In transit",
     pending: "Pending",
+    pending_payment: "Pending payment",
+    ready_for_pickup: "Ready for pickup",
     refund_pending: "Refund pending",
     refunded: "Refunded",
     rejected: "Rejected",
     reserved: "Reserved",
     resolved: "Resolved",
+    settlement_processing: "Settlement processing",
     sold: "Sold",
     unknown: "Unknown",
   };
