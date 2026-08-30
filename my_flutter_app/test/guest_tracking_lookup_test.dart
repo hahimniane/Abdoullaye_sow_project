@@ -37,6 +37,7 @@ Future<void> _pumpLookup(
   GuestTrackingLookupService service, {
   Locale locale = const Locale('en'),
   VoidCallback? onSignIn,
+  String? initialCode,
 }) async {
   final language = LanguageProvider()..setLanguage(locale.languageCode);
   await tester.pumpWidget(
@@ -51,6 +52,7 @@ Future<void> _pumpLookup(
           body: SafeArea(
             child: GuestTrackingLookup(
               service: service,
+              initialCode: initialCode,
               onSignIn: onSignIn ?? () {},
             ),
           ),
@@ -215,5 +217,27 @@ void main() {
     expect(find.text('Expédition de barils'), findsOneWidget);
     expect(find.text('En transit'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a code handed in by the caller is looked up unasked', (
+    tester,
+  ) async {
+    // A guest tapping their own paid order used to land here on an empty
+    // search, being asked for the number the app was already holding.
+    final service = _FakeGuestTrackingService((_) async => _success);
+    await _pumpLookup(tester, service, initialCode: 'BS-K7M4P2');
+    await tester.pumpAndSettle();
+
+    expect(service.identifiers, ['BS-K7M4P2']);
+    expect(find.text('Tracking found'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no initial code means no lookup fires', (tester) async {
+    final service = _FakeGuestTrackingService((_) async => _success);
+    await _pumpLookup(tester, service);
+    await tester.pumpAndSettle();
+
+    expect(service.identifiers, isEmpty);
   });
 }

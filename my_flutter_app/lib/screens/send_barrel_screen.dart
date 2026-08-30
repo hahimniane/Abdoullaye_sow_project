@@ -1286,7 +1286,11 @@ class _BusinessOptionSelectorState extends State<_BusinessOptionSelector> {
                 for (final option in options) ...[
                   _BusinessOptionCard(
                     option: option,
-                    price: currency.format(option.country.barrelShippingPrice),
+                    // "$0.00" reads as free shipping; an unset rate is not a
+                    // price. Mirrors the web card's "Rate unavailable".
+                    price: option.country.barrelShippingPrice > 0
+                        ? currency.format(option.country.barrelShippingPrice)
+                        : l10n.barrelRateUnavailable,
                     selected: field.value?.id == option.id,
                     onTap: () {
                       field.didChange(option);
@@ -2395,7 +2399,15 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
     destination: _country,
   );
 
-  double get _lineFee => (_country?.barrelShippingPrice ?? 0) * _quantity;
+  /// The country record that actually carries a price. The dropdown's record
+  /// only names the country - its barrelShippingPrice defaults to 0 - while
+  /// the business option holds that business's priced route. Pricing a line
+  /// from the dropdown record is how a $100 business produced a $0 order
+  /// with a pay button that could never enable.
+  DestinationCountry? get _pricedCountry => _business?.country ?? _country;
+
+  double get _lineFee =>
+      (_pricedCountry?.barrelShippingPrice ?? 0) * _quantity;
   double get _pickupFee => widget.collectPickupDetails && _pickupRequested
       ? (_quotedPickupFee ?? 0)
       : 0;
@@ -2531,7 +2543,9 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
-    final country = _country;
+    // The saved line must carry the priced record, not the dropdown's: the
+    // line's unitShippingFee reads barrelShippingPrice straight off it.
+    final country = _pricedCountry;
     final business = _business;
     if (country == null || business == null) return;
     if (widget.collectPickupDetails &&

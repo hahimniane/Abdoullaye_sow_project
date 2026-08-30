@@ -8160,6 +8160,12 @@ abstract class AppLocalizations {
   /// **'Fixed pickup price for this borough'**
   String get fixedPickupPriceForBorough;
 
+  /// No description provided for @barrelRateUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Rate unavailable'**
+  String get barrelRateUnavailable;
+
   /// No description provided for @finalPriceConfirmedByStaff.
   ///
   /// In en, this message translates to:
@@ -13160,21 +13166,25 @@ abstract class AppLocalizations {
 
   /// No description provided for @openingSecurePayment.
   ///
+  /// In en, this message translates to:
   /// **'Opening secure payment...'**
   String get openingSecurePayment;
 
   /// No description provided for @checkoutResumeFailed.
   ///
+  /// In en, this message translates to:
   /// **'That did not open. Try again in a moment.'**
   String get checkoutResumeFailed;
 
   /// No description provided for @noNotificationsYet.
   ///
+  /// In en, this message translates to:
   /// **'No notifications yet'**
   String get noNotificationsYet;
 
   /// No description provided for @markAllNotificationsRead.
   ///
+  /// In en, this message translates to:
   /// **'Mark all read'**
   String get markAllNotificationsRead;
 }

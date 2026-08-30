@@ -1989,6 +1989,7 @@
   "editDestinationPickupHelp": "Utilisez Modifier sur chaque ligne de destination pour ajouter ou changer les détails de ramassage de cette destination.",
   "businessesShippingToCountry": "Entreprises expédiant vers ce pays",
   "fixedPickupPriceForBorough": "Prix de ramassage fixe pour cet arrondissement",
+  "barrelRateUnavailable": "Tarif indisponible",
   "finalPriceConfirmedByStaff": "Le prix final sera confirmé par l’équipe.",
   "useWalletCredit": "Utiliser le crédit du portefeuille",
   "whereAreBarrelsGoing": "Où vont ces barils ?",

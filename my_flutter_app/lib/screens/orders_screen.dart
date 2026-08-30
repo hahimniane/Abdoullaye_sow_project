@@ -263,12 +263,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
         arguments: order.detailArgument,
       );
     } else if (order.trackable) {
+      // Prefer the tracking code over the document id: the signed-in list
+      // matches either, but a guest's lookup only understands codes - an id
+      // left a guest on a blank search for an order they had already paid.
+      final code = order.trackingCode?.trim() ?? '';
       Navigator.pushNamed(
         context,
         '/tracking',
-        arguments: order.type == OrderType.freight
-            ? TrackingScreenArguments(shipmentId: order.relatedId)
-            : null,
+        arguments: code.isNotEmpty
+            ? TrackingScreenArguments(shipmentId: code)
+            : (order.type == OrderType.freight
+                  ? TrackingScreenArguments(shipmentId: order.relatedId)
+                  : null),
       );
     }
   }
