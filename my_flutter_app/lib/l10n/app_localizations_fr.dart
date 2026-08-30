@@ -4637,6 +4637,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Prix de ramassage fixe pour cet arrondissement';
 
   @override
+  String get barrelRateUnavailable => 'Tarif indisponible';
+
+  @override
   String get finalPriceConfirmedByStaff =>
       'Le prix final sera confirmé par l’équipe.';
 

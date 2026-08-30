@@ -1989,6 +1989,7 @@
   "editDestinationPickupHelp": "Use Edit on each destination row to add or change that destination's pickup details.",
   "businessesShippingToCountry": "Businesses shipping to this country",
   "fixedPickupPriceForBorough": "Fixed pickup price for this borough",
+  "barrelRateUnavailable": "Rate unavailable",
   "finalPriceConfirmedByStaff": "Final price will be confirmed by staff.",
   "useWalletCredit": "Use wallet credit",
   "whereAreBarrelsGoing": "Where are these barrels going?",

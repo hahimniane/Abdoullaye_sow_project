@@ -21,6 +21,7 @@ const {
 } = require("./phone_number");
 const {agreedFreightPrice} = require("./agreed_freight_price");
 const {resumableFreightSetup} = require("./resume_freight_setup");
+const {humanStatusLabel} = require("./status_label");
 const {
   guestRateLimitKeys,
   isAnonymousCaller,
@@ -1054,7 +1055,7 @@ exports.notifyCarPurchaseStatus = onDocumentUpdated(
         uid,
         preferenceKey: "carActivity",
         title: "Car update",
-        body: `Your car request is now ${after.status || "updated"}.`,
+        body: `Your car request is now ${humanStatusLabel(after.status)}.`,
         data: {
           type: "car_purchase_status",
           purchaseId: event.params.purchaseId,
@@ -1101,7 +1102,7 @@ exports.notifyBarrelShipmentStatus = onDocumentUpdated(
         uid,
         preferenceKey: "shipmentActivity",
         title: "Shipment update",
-        body: `Your barrel shipment is now ${after.status || "updated"}.`,
+        body: `Your barrel shipment is now ${humanStatusLabel(after.status)}.`,
         data: {
           type: "barrel_shipment_status",
           shipmentId: event.params.shipmentId,
@@ -1189,7 +1190,7 @@ exports.notifyBusinessApplicationStatus = onDocumentUpdated(
         uid,
         preferenceKey: "businessActivity",
         title: "Business application update",
-        body: `Your application is now ${after.status || "updated"}.`,
+        body: `Your application is now ${humanStatusLabel(after.status)}.`,
         data: {
           type: "business_application_status",
           applicationId: event.params.applicationId,
@@ -1228,7 +1229,9 @@ exports.notifyParkingReservationStatus = onDocumentUpdated(
         uid,
         preferenceKey: "carActivity",
         title: "Parking update",
-        body: `Your parking reservation is now ${after.status || "updated"}.`,
+        body:
+          `Your parking reservation is now ` +
+          `${humanStatusLabel(after.status)}.`,
         data: {
           type: "parking_reservation_status",
           reservationId: event.params.reservationId,
@@ -1279,7 +1282,9 @@ exports.notifyTransportRequestStatus = onDocumentUpdated(
         uid,
         preferenceKey: "shipmentActivity",
         title: "Transport update",
-        body: `Your car transport request is now ${after.status || "updated"}.`,
+        body:
+          `Your car transport request is now ` +
+          `${humanStatusLabel(after.status)}.`,
         data: {
           type: "transport_request_status",
           requestId: event.params.requestId,
@@ -24586,7 +24591,7 @@ exports.notifyFreightShipmentStatus = onDocumentUpdated(
         uid,
         preferenceKey: "shipmentActivity",
         title: "Shipment update",
-        body: `Your freight shipment is now ${after.status || "updated"}.`,
+        body: `Your freight shipment is now ${humanStatusLabel(after.status)}.`,
         data: {
           type: "freight_shipment_status",
           shipmentId: event.params.shipmentId,

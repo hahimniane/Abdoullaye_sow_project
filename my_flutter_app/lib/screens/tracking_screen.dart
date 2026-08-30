@@ -331,6 +331,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
           child: GuestTrackingLookup(
             service: widget.guestTrackingService,
             showBackButton: widget.showBackButton,
+            // A guest arriving from their own order already carries the
+            // code; make the lookup run instead of asking for it again.
+            initialCode: widget.focusShipmentId,
             onSignIn: () => Navigator.pushNamed(context, '/login'),
           ),
         ),

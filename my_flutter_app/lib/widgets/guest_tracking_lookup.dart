@@ -20,11 +20,17 @@ class GuestTrackingLookup extends StatefulWidget {
     required this.onSignIn,
     this.service,
     this.showBackButton = false,
+    this.initialCode,
   });
 
   final GuestTrackingLookupService? service;
   final VoidCallback onSignIn;
   final bool showBackButton;
+
+  /// A tracking code to look up immediately, for a caller that already knows
+  /// it - a guest tapping their own order. Without this they land on an
+  /// empty search being asked for a number the app was already holding.
+  final String? initialCode;
 
   @override
   State<GuestTrackingLookup> createState() => _GuestTrackingLookupState();
@@ -40,6 +46,20 @@ class _GuestTrackingLookupState extends State<GuestTrackingLookup> {
 
   GuestTrackingLookupService get _lookupService =>
       widget.service ?? (_service ??= FirebaseGuestTrackingService());
+
+  @override
+  void initState() {
+    super.initState();
+    final code = widget.initialCode?.trim() ?? '';
+    if (code.isNotEmpty) {
+      _controller.text = code;
+      // After the first frame: _submit reads AppLocalizations off context,
+      // which is not available during initState.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _submit();
+      });
+    }
+  }
 
   @override
   void didUpdateWidget(covariant GuestTrackingLookup oldWidget) {

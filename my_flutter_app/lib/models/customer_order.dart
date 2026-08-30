@@ -244,6 +244,12 @@ class CustomerOrder {
       case 'active':
       case 'reserved':
       case 'hold':
+      // A paid freight shipment waiting on the business. Falling through to
+      // `pending` told the customer who had just paid that nothing had
+      // happened - the same trap `scheduled` and `delivered` fell into above.
+      // Web maps both to its "booked" stage (tracking-journey.ts).
+      case 'awaiting_weight_confirmation':
+      case 'settlement_processing':
         return OrderStatus.active;
       default:
         return OrderStatus.pending;

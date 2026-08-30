@@ -4542,6 +4542,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Fixed pickup price for this borough';
 
   @override
+  String get barrelRateUnavailable => 'Rate unavailable';
+
+  @override
   String get finalPriceConfirmedByStaff =>
       'Final price will be confirmed by staff.';
 
