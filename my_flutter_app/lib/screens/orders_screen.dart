@@ -9,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../models/customer_order.dart';
 import '../providers/auth_provider.dart';
 import '../services/business_review_service.dart';
+import '../services/notification_routing.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/async_action_button.dart';
@@ -19,9 +20,14 @@ import 'tracking_screen.dart';
 /// Unified "Orders" — every paid transaction (cars, barrels, freight,
 /// transport, parking) in one searchable, type-filtered history.
 class OrdersScreen extends StatefulWidget {
-  const OrdersScreen({super.key, this.showBackButton = false});
+  const OrdersScreen({
+    super.key,
+    this.showBackButton = false,
+    this.initialArgs,
+  });
 
   final bool showBackButton;
+  final OrdersScreenArguments? initialArgs;
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -32,6 +38,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String _query = '';
   OrderType? _typeFilter;
   OrderStatus? _statusFilter;
+  OrdersScreenArguments? _args;
+  bool _appliedArgs = false;
+  bool _openedFocus = false;
 
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   final BusinessReviewService _reviewService = BusinessReviewService();
@@ -47,6 +56,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _args ??=
+        widget.initialArgs ??
+        (ModalRoute.of(context)?.settings.arguments is OrdersScreenArguments
+            ? ModalRoute.of(context)!.settings.arguments
+                  as OrdersScreenArguments
+            : null);
+    if (!_appliedArgs && _args != null) {
+      _appliedArgs = true;
+      _typeFilter = _orderTypeForInnerTab(_args!);
+    }
     if (_subscribed) return;
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
@@ -202,6 +221,40 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
+  OrderType? _orderTypeForInnerTab(OrdersScreenArguments args) {
+    switch (args.innerTab) {
+      case 'barrels':
+        return OrderType.barrel;
+      case 'freight':
+        return OrderType.freight;
+      case 'transport':
+        return OrderType.transport;
+      case 'cars':
+        return args.focusCollection == 'parkedCars'
+            ? OrderType.parking
+            : OrderType.car;
+      default:
+        return null;
+    }
+  }
+
+  void _openFocusedOrder(List<CustomerOrder> orders) {
+    final focusId = _args?.focusId;
+    if (_openedFocus || focusId == null || focusId.isEmpty) return;
+    CustomerOrder? match;
+    for (final order in orders) {
+      if (order.relatedId == focusId || order.id == focusId) {
+        match = order;
+        break;
+      }
+    }
+    if (match == null) return;
+    _openedFocus = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _open(match!);
+    });
+  }
+
   void _open(CustomerOrder order) {
     if (order.hasDetail) {
       Navigator.pushNamed(
@@ -224,6 +277,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final orders = _allOrders();
+    _openFocusedOrder(orders);
     final presentTypes = {for (final o in orders) o.type};
     final presentStatuses = {for (final o in orders) o.status};
     final filtered = orders.where(_matches).toList();

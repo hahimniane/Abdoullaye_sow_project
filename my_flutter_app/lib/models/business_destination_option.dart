@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../services/freight_categories.dart';
 import '../services/freight_coverage.dart';
+import '../utils/callable_data.dart';
 import '../utils/freight_delivery.dart';
 import 'business_profile.dart';
 import 'business_service.dart';
@@ -137,81 +138,95 @@ class BusinessDestinationOption {
   factory BusinessDestinationOption.fromFunctionData(
     Map<String, dynamic> data,
   ) {
-    final country = data['country'] is Map
-        ? Map<String, dynamic>.from(data['country'] as Map)
-        : <String, dynamic>{};
+    final decoded = callableMap(data);
+    final country = callableMap(decoded['country']);
     return BusinessDestinationOption(
-      id: (data['id'] ?? '') as String,
-      businessId:
-          (data['businessId'] ?? BusinessProfile.defaultBusinessId) as String,
-      businessName:
-          (data['businessName'] ?? BusinessProfile.defaultBusinessName)
-              as String,
-      businessPhone: data['businessPhone'] as String?,
-      businessEmail: data['businessEmail'] as String?,
-      businessWebsite: data['businessWebsite'] as String?,
-      businessProfileImageUrl: data['businessProfileImageUrl'] as String?,
-      businessAddress: data['businessAddress'] as String?,
-      enabledServices: normalizeBusinessServices(data['enabledServices']),
-      serviceNote: data['serviceNote'] as String?,
-      businessStatus: (data['businessStatus'] ?? 'approved') as String,
-      freightPickupAvailable: data['freightPickupAvailable'] == true,
-      freightPayOnArrival: data['freightPayOnArrival'] == true,
-      freightDestinationDeliveryAvailable:
-          data['freightDestinationDeliveryAvailable'] == true,
+      id: callableString(decoded['id']),
+      businessId: callableString(
+        decoded['businessId'],
+        BusinessProfile.defaultBusinessId,
+      ),
+      businessName: callableString(
+        decoded['businessName'],
+        BusinessProfile.defaultBusinessName,
+      ),
+      businessPhone: _optionalString(decoded['businessPhone']),
+      businessEmail: _optionalString(decoded['businessEmail']),
+      businessWebsite: _optionalString(decoded['businessWebsite']),
+      businessProfileImageUrl: _optionalString(
+        decoded['businessProfileImageUrl'],
+      ),
+      businessAddress: _optionalString(decoded['businessAddress']),
+      enabledServices: normalizeBusinessServices(decoded['enabledServices']),
+      serviceNote: _optionalString(decoded['serviceNote']),
+      businessStatus: callableString(decoded['businessStatus'], 'approved'),
+      freightPickupAvailable: callableBool(decoded['freightPickupAvailable']),
+      freightPayOnArrival: callableBool(decoded['freightPayOnArrival']),
+      freightDestinationDeliveryAvailable: callableBool(
+        decoded['freightDestinationDeliveryAvailable'],
+      ),
       freightDestinationDeliveryAreas:
-          data['freightDestinationDeliveryAreas'] is List
-          ? data['freightDestinationDeliveryAreas'] as List<dynamic>
+          decoded['freightDestinationDeliveryAreas'] is List
+          ? decoded['freightDestinationDeliveryAreas'] as List<dynamic>
           : const [],
-      freightDestinationDeliveryFee:
-          (data['freightDestinationDeliveryFee'] as num?)?.toDouble() ?? 0,
-      freightPickupModel: (data['freightPickupModel'] as String?) == 'borough'
+      freightDestinationDeliveryFee: callableDouble(
+        decoded['freightDestinationDeliveryFee'],
+      ),
+      freightPickupModel:
+          callableString(decoded['freightPickupModel']) == 'borough'
           ? 'borough'
           : 'distance',
-      freightCategories: FreightCategory.listFromWire(data['freightCategories']),
-      freightPaybackTable: data['freightPaybackTable'] is Map
-          ? Map<String, dynamic>.from(data['freightPaybackTable'] as Map)
+      freightCategories: FreightCategory.listFromWire(
+        decoded['freightCategories'],
+      ),
+      freightPaybackTable: decoded['freightPaybackTable'] is Map
+          ? callableMap(decoded['freightPaybackTable'])
           : null,
-      freightCoverage: FreightCoveragePolicy.fromWire(data['freightCoverage']),
-      reviewCount: (data['reviewCount'] as num?)?.toInt() ?? 0,
-      reviewAverage: (data['reviewAverage'] as num?)?.toDouble() ?? 0,
-      reviewWeightedScore:
-          (data['reviewWeightedScore'] as num?)?.toDouble() ?? 0,
+      freightCoverage: FreightCoveragePolicy.fromWire(
+        decoded['freightCoverage'],
+      ),
+      reviewCount: callableInt(decoded['reviewCount']),
+      reviewAverage: callableDouble(decoded['reviewAverage']),
+      reviewWeightedScore: callableDouble(decoded['reviewWeightedScore']),
       country: DestinationCountry(
-        id: (country['id'] ?? '') as String,
-        name: (country['name'] ?? '') as String,
-        code: country['code'] as String?,
-        isActive: country['isActive'] == true,
-        sortOrder: (country['sortOrder'] as num?)?.toInt() ?? 0,
-        destinationCoverageVersion:
-            (country['destinationCoverageVersion'] as num?)?.toInt() ?? 1,
+        id: callableString(country['id']),
+        name: callableString(country['name']),
+        code: _optionalString(country['code']),
+        // The callable already filtered inactive destinations. A missing
+        // isActive (iOS plugin dropping the field) must not hide a priced
+        // freight row — including the legacy rate inference below.
+        isActive: _callableCountryIsActive(country),
+        sortOrder: callableInt(country['sortOrder']),
+        destinationCoverageVersion: callableInt(
+          country['destinationCoverageVersion'],
+        ) ==
+                0
+            ? 1
+            : callableInt(country['destinationCoverageVersion']),
         barrelShippingAvailable: _serviceEnabled(
           country,
           'barrelShipping',
           legacy:
-              country['isActive'] == true &&
-              ((country['barrelShippingPrice'] as num?)?.toDouble() ?? 0) > 0,
+              _callableCountryIsActive(country) &&
+              callableDouble(country['barrelShippingPrice']) > 0,
         ),
         freightAirAvailable: _serviceEnabled(
           country,
           'freightAir',
           legacy:
-              country['isActive'] == true &&
-              ((country['freightAirPricePerKg'] as num?)?.toDouble() ?? 0) > 0,
+              _callableCountryIsActive(country) &&
+              callableDouble(country['freightAirPricePerKg']) > 0,
         ),
         freightSeaAvailable: _serviceEnabled(
           country,
           'freightSea',
           legacy:
-              country['isActive'] == true &&
-              ((country['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0) > 0,
+              _callableCountryIsActive(country) &&
+              callableDouble(country['freightSeaPricePerKg']) > 0,
         ),
-        barrelShippingPrice:
-            (country['barrelShippingPrice'] as num?)?.toDouble() ?? 0,
-        freightAirPricePerKg:
-            (country['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
-        freightSeaPricePerKg:
-            (country['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
+        barrelShippingPrice: callableDouble(country['barrelShippingPrice']),
+        freightAirPricePerKg: callableDouble(country['freightAirPricePerKg']),
+        freightSeaPricePerKg: callableDouble(country['freightSeaPricePerKg']),
         freightAirDepartureDays: _departureDays(
           country['freightAirDepartureDays'],
         ),
@@ -413,14 +428,24 @@ class BusinessDestinationOption {
     return model == 'borough' && isNewYork ? 'borough' : 'distance';
   }
 
+  static String? _optionalString(dynamic value) {
+    final text = callableString(value);
+    return text.isEmpty ? null : text;
+  }
+
+  static bool _callableCountryIsActive(Map<String, dynamic> country) {
+    if (!country.containsKey('isActive')) return true;
+    return callableBool(country['isActive']);
+  }
+
   static bool _serviceEnabled(
     Map<String, dynamic> data,
     String key, {
     required bool legacy,
   }) {
     final availability = data['serviceAvailability'];
-    if (availability is Map && availability[key] is bool) {
-      return availability[key] as bool;
+    if (availability is Map && availability.containsKey(key)) {
+      return callableBool(availability[key]);
     }
     return legacy;
   }

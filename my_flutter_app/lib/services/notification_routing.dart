@@ -9,6 +9,87 @@ class NotificationRoute {
   final Object? arguments;
 }
 
+/// Focus for the customer Orders screen (inner tab + record).
+///
+/// Mirrors `customerOrdersInnerTab` / `customerTargetForNotification`
+/// in admin_web so a bell tap opens the same shipment the web console does.
+class OrdersScreenArguments {
+  const OrdersScreenArguments({
+    this.innerTab,
+    this.focusId,
+    this.focusCollection,
+  });
+
+  /// `barrels` | `freight` | `transport` | `cars`
+  final String? innerTab;
+  final String? focusId;
+  final String? focusCollection;
+}
+
+const _typeCollections = <String, String>{
+  'barrel_shipment_status': 'barrelShipments',
+  'freight_shipment_status': 'freightShipments',
+  'freight_balance_due': 'freightShipments',
+  'freight_refund_issued': 'freightShipments',
+  'freight_quote_received': 'freightQuoteRequests',
+  'transport_request_status': 'transportRequests',
+  'parking_reservation_status': 'parkedCars',
+  'car_purchase_status': 'carPurchases',
+  'car_viewing_status': 'carPurchases',
+};
+
+String collectionForNotificationType(String type) =>
+    _typeCollections[type] ?? '';
+
+String recordIdFromNotification(Map<String, dynamic> data) {
+  for (final key in [
+    'relatedId',
+    'shipmentId',
+    'requestId',
+    'reservationId',
+    'purchaseId',
+    'recordId',
+  ]) {
+    final value = data[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
+
+String collectionFromNotification(Map<String, dynamic> data) {
+  final stamped = data['relatedCollection']?.toString().trim() ?? '';
+  if (stamped.isNotEmpty) return stamped;
+  return collectionForNotificationType(data['type']?.toString() ?? '');
+}
+
+String customerOrdersInnerTab(String collection) {
+  switch (collection) {
+    case 'barrelShipments':
+    case 'barrelOrders':
+      return 'barrels';
+    case 'freightShipments':
+    case 'freightQuoteRequests':
+      return 'freight';
+    case 'transportRequests':
+      return 'transport';
+    default:
+      return 'cars';
+  }
+}
+
+NotificationRoute _ordersRoute(Map<String, dynamic> data) {
+  final collection = collectionFromNotification(data);
+  final id = recordIdFromNotification(data);
+  return NotificationRoute(
+    '/orders',
+    arguments: OrdersScreenArguments(
+      innerTab: customerOrdersInnerTab(collection),
+      focusId: id.isEmpty ? null : id,
+      focusCollection: collection.isEmpty ? null : collection,
+    ),
+  );
+}
+
 /// Best-effort deep link: routes to the most relevant screen for this
 /// notification's category. Several detail screens (parked car, barrel
 /// shipment, transport request) require a full loaded model as a route
@@ -28,11 +109,9 @@ NotificationRoute? routeForNotificationData(Map<String, dynamic> data) {
     case 'freight_shipment_status':
     case 'freight_balance_due':
     case 'freight_refund_issued':
-      final shipmentId = data['shipmentId']?.toString();
-      return NotificationRoute(
-        '/tracking',
-        arguments: TrackingScreenArguments(shipmentId: shipmentId),
-      );
+    case 'parking_reservation_status':
+    case 'transport_request_status':
+      return _ordersRoute(data);
     // A price landing is the one notification a customer is actually waiting
     // on, and it used to open nothing: there was no case here and no named
     // route to send it to, so the tap fell through and the customer had no
@@ -47,9 +126,6 @@ NotificationRoute? routeForNotificationData(Map<String, dynamic> data) {
           trackingCode: data['trackingCode']?.toString() ?? '',
         ),
       );
-    case 'parking_reservation_status':
-    case 'transport_request_status':
-      return const NotificationRoute('/orders');
     case 'review_request':
       final relatedCollection = data['relatedCollection']?.toString();
       final relatedId = data['relatedId']?.toString();

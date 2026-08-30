@@ -70,8 +70,7 @@ class AppGateProvider extends ChangeNotifier {
       )),
       _urlLauncher = ((url) async => false),
       _status = AppGateStatus.ready,
-      _hasCompletedInitialCheck = true,
-      _lastOnline = true {
+      _hasCompletedInitialCheck = true {
     _connectivityChecker = () async => const [ConnectivityResult.other];
     _appConfigLoader = () async => const <String, dynamic>{};
   }
@@ -88,10 +87,9 @@ class AppGateProvider extends ChangeNotifier {
   // Once the first check resolves we stop flashing the blocking "checking"
   // overlay for subsequent re-checks (connectivity changes, retries).
   bool _hasCompletedInitialCheck = false;
-  // Last known online state, used to ignore duplicate connectivity events that
-  // iOS emits frequently and which previously caused the app to re-check (and
-  // flicker the gate screen) on every event.
-  bool? _lastOnline;
+  // Last reported interface state. Used to ignore duplicate connectivity
+  // events that iOS emits frequently.
+  bool? _lastReportedOnline;
 
   AppGateStatus _status = AppGateStatus.checking;
   AppVersionDecision? _decision;
@@ -122,19 +120,17 @@ class AppGateProvider extends ChangeNotifier {
       _setStatus(AppGateStatus.checking);
     }
 
-    List<ConnectivityResult> results;
+    var reportedOnline = false;
     try {
-      results = await _connectivityChecker().timeout(
+      final results = await _connectivityChecker().timeout(
         const Duration(seconds: 4),
       );
+      reportedOnline = _hasConnection(results);
     } catch (error) {
-      if (token == _refreshToken) _setOffline(error);
-      return;
-    }
-
-    if (!_hasConnection(results)) {
-      if (token == _refreshToken) _setOffline();
-      return;
+      // A hung or empty connectivity_plus reply is not proof of no
+      // network. The iOS simulator reports none on cold start while
+      // Safari and sockets still work — probe before gating.
+      _lastError = error;
     }
 
     try {
@@ -152,7 +148,6 @@ class AppGateProvider extends ChangeNotifier {
 
       if (token != _refreshToken) return;
       _hasCompletedInitialCheck = true;
-      _lastOnline = true;
       _decision = decision;
       _lastError = null;
       switch (decision.requirement) {
@@ -169,8 +164,14 @@ class AppGateProvider extends ChangeNotifier {
       }
     } catch (error) {
       if (token != _refreshToken) return;
+      // Reachability, not the interface list, decides a real offline
+      // device. connectivity_plus saying none is only enough when the
+      // config probe also failed.
+      if (!reportedOnline) {
+        _setOffline(error);
+        return;
+      }
       _hasCompletedInitialCheck = true;
-      _lastOnline = true;
       _lastError = error;
       _setStatus(AppGateStatus.ready);
     }
@@ -203,16 +204,13 @@ class AppGateProvider extends ChangeNotifier {
   }
 
   void _handleConnectivityChanged(List<ConnectivityResult> results) {
-    final online = _hasConnection(results);
-    // Ignore duplicate events that don't actually change the online/offline
-    // state — iOS emits these often and they would otherwise re-check on a loop.
-    if (_lastOnline == online) return;
-    _lastOnline = online;
-    if (online) {
-      refresh();
-    } else {
-      _setOffline();
-    }
+    final reportedOnline = _hasConnection(results);
+    // Ignore duplicate interface events. A cold-start `none` still
+    // reaches refresh() once so the config probe can prove the sim is
+    // online; later identical none events must not loop.
+    if (_lastReportedOnline == reportedOnline) return;
+    _lastReportedOnline = reportedOnline;
+    refresh();
   }
 
   bool _hasConnection(List<ConnectivityResult> results) {
@@ -229,7 +227,6 @@ class AppGateProvider extends ChangeNotifier {
 
   void _setOffline([Object? error]) {
     _hasCompletedInitialCheck = true;
-    _lastOnline = false;
     _lastError = error;
     _setStatus(AppGateStatus.offline);
   }

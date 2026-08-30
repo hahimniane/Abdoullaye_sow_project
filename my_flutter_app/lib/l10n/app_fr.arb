@@ -3186,5 +3186,9 @@
   "continueToBooking": "Continuer vers la réservation",
   "freightQuoteChosenNext": "Ajoutez le destinataire, l'adresse et la façon dont le colis parvient à l'entreprise. Vous payez à la fin, au prix que vous avez accepté.",
   "orderTypePriceRequests": "Demandes de prix",
-  "guestTrackingStageAwaitingPayment": "En attente de paiement"
+  "guestTrackingStageAwaitingPayment": "En attente de paiement",
+  "openingSecurePayment": "Ouverture du paiement sécurisé...",
+  "checkoutResumeFailed": "Cela ne s’est pas ouvert. Réessayez dans un instant.",
+  "noNotificationsYet": "Aucune notification pour le moment",
+  "markAllNotificationsRead": "Tout marquer comme lu"
 }

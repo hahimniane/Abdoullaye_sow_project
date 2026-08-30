@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/app_gate_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../widgets/customer_notification_bell.dart';
 
 /// The content of each persistent-navbar tab. Services of the same nature live
 /// together: Shipping, Cars, and Activity. These are the *roots* of the tab
@@ -34,8 +35,13 @@ class HomeTab extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 28),
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-              child: _GreetingHeader(auth: auth),
+              padding: const EdgeInsets.fromLTRB(20, 16, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(child: _GreetingHeader(auth: auth)),
+                  const CustomerNotificationBell(),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
@@ -88,6 +94,7 @@ class ShippingTab extends StatelessWidget {
     return _CategoryTab(
       title: l10n.hubShipping,
       subtitle: l10n.hubShippingSubtitle,
+      showBell: true,
       items: [
         _HubItem(
           l10n.hubSendBarrel,
@@ -169,10 +176,11 @@ class ActivityTab extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 28),
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(22, 20, 22, 4),
+              padding: const EdgeInsets.fromLTRB(22, 20, 8, 4),
               child: _CategoryHeader(
                 title: l10n.activity,
                 subtitle: l10n.hubActivitySubtitle,
+                trailing: const CustomerNotificationBell(),
               ),
             ),
             Padding(
@@ -224,11 +232,13 @@ class _CategoryTab extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.items,
+    this.showBell = false,
   });
 
   final String title;
   final String subtitle;
   final List<_HubItem> items;
+  final bool showBell;
 
   @override
   Widget build(BuildContext context) {
@@ -240,8 +250,12 @@ class _CategoryTab extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 28),
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(22, 20, 22, 4),
-              child: _CategoryHeader(title: title, subtitle: subtitle),
+              padding: const EdgeInsets.fromLTRB(22, 20, 8, 4),
+              child: _CategoryHeader(
+                title: title,
+                subtitle: subtitle,
+                trailing: showBell ? const CustomerNotificationBell() : null,
+              ),
             ),
             const SizedBox(height: 12),
             Padding(
@@ -256,30 +270,43 @@ class _CategoryTab extends StatelessWidget {
 }
 
 class _CategoryHeader extends StatelessWidget {
-  const _CategoryHeader({required this.title, required this.subtitle});
+  const _CategoryHeader({
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+  });
 
   final String title;
   final String subtitle;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w900,
-            color: AppColors.ink,
-            letterSpacing: -0.3,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(color: AppColors.muted, fontSize: 14),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: const TextStyle(color: AppColors.muted, fontSize: 14),
-        ),
+        ?trailing,
       ],
     );
   }

@@ -3186,5 +3186,9 @@
   "continueToBooking": "Continue to booking",
   "freightQuoteChosenNext": "Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted.",
   "orderTypePriceRequests": "Price requests",
-  "guestTrackingStageAwaitingPayment": "Waiting for payment"
+  "guestTrackingStageAwaitingPayment": "Waiting for payment",
+  "openingSecurePayment": "Opening secure payment...",
+  "checkoutResumeFailed": "That did not open. Try again in a moment.",
+  "noNotificationsYet": "No notifications yet",
+  "markAllNotificationsRead": "Mark all read"
 }

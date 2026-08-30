@@ -5,7 +5,9 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/business_destination_option.dart';
 import '../models/business_profile.dart';
+import '../models/business_service.dart';
 import '../models/destination_country.dart';
+import '../utils/callable_data.dart';
 
 class BusinessService {
   BusinessService({FirebaseFirestore? firestore, FirebaseFunctions? functions})
@@ -42,46 +44,62 @@ class BusinessService {
         yield await _destinationOptionsFromFunction();
       }
       return;
-    } on FirebaseException {
-      // Fall through to direct Firestore reads for local/dev projects where the
-      // callable has not been deployed yet.
-    }
-
-    try {
-      await for (final snapshot
-          in _firestore
-              .collectionGroup('destinationCountries')
-              .where('isActive', isEqualTo: true)
-              .where('businessStatus', isEqualTo: 'approved')
-              .snapshots()) {
-        var options = await _optionsWithLiveBusinessProfiles(snapshot.docs);
-        if (options.isEmpty) {
-          options = await _destinationOptionsFromApprovedBusinesses();
+    } on FirebaseException catch (callableError) {
+      // App Check rejects the callable as unauthenticated on an iOS
+      // simulator whose debug token is not registered. The Firestore
+      // fallbacks below are for local/dev; production customers cannot
+      // list businesses, so a failed callable must not become an empty
+      // "no freight businesses" catalog.
+      try {
+        final approved = await _destinationOptionsFromApprovedBusinesses();
+        if (approved.isNotEmpty) {
+          yield approved;
+          return;
         }
-        yield options;
+      } on FirebaseException {
+        // Customers cannot list the businesses collection.
       }
-    } on FirebaseException {
-      yield* _legacyDestinationOptions();
+
+      try {
+        await for (final snapshot
+            in _firestore
+                .collectionGroup('destinationCountries')
+                .where('isActive', isEqualTo: true)
+                .where('businessStatus', isEqualTo: 'approved')
+                .snapshots()) {
+          var options = await _optionsWithLiveBusinessProfiles(snapshot.docs);
+          if (options.isEmpty) {
+            options = await _destinationOptionsFromApprovedBusinesses();
+          }
+          yield options;
+        }
+      } on FirebaseException {
+        throw callableError;
+      }
     }
   }
 
   Future<List<BusinessDestinationOption>>
   _destinationOptionsFromFunction() async {
-    final response = await _functions
-        .httpsCallable('listActiveBarrelDestinationOptions')
-        .call<Map<String, dynamic>>();
-    final rawOptions = response.data['options'];
-    if (rawOptions is! List) return const <BusinessDestinationOption>[];
-    return rawOptions
-        .whereType<Map>()
-        .map(
-          (option) => BusinessDestinationOption.fromFunctionData(
-            Map<String, dynamic>.from(option),
-          ),
-        )
-        .where((option) => option.isAvailableForAnyShippingService)
-        .toList()
-      ..sort(_compareDestinationOptions);
+    Future<List<BusinessDestinationOption>> once() async {
+      final response = await _functions
+          .httpsCallable('listActiveBarrelDestinationOptions')
+          .call();
+      return destinationOptionsFromCallableData(response.data)
+        ..sort(_compareDestinationOptions);
+    }
+
+    try {
+      return await once();
+    } on FirebaseFunctionsException catch (error) {
+      // App Check often finishes a beat after the first catalog call on a
+      // debug iOS build. One retry turns that race into a loaded list.
+      if (error.code == 'unauthenticated' || error.code == 'unavailable') {
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        return once();
+      }
+      rethrow;
+    }
   }
 
   Future<List<BusinessDestinationOption>>
@@ -176,22 +194,6 @@ class BusinessService {
     );
   }
 
-  Stream<List<BusinessDestinationOption>> _legacyDestinationOptions() {
-    return _firestore
-        .collection('destinationCountries')
-        .where('isActive', isEqualTo: true)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs
-                  .map(DestinationCountry.fromFirestore)
-                  .where((country) => country.barrelShippingPrice > 0)
-                  .map(BusinessDestinationOption.fromLegacyCountry)
-                  .toList()
-                ..sort(_compareDestinationOptions),
-        );
-  }
-
   int _compareDestinationOptions(
     BusinessDestinationOption a,
     BusinessDestinationOption b,
@@ -216,4 +218,29 @@ class BusinessService {
     if (price != 0) return price;
     return a.businessName.compareTo(b.businessName);
   }
+}
+
+/// Parses `listActiveBarrelDestinationOptions` the way both Send freight and
+/// Send barrel consume it. Kept top-level so tests can feed the live Conakry
+/// Express wire shape without standing up Functions.
+List<BusinessDestinationOption> destinationOptionsFromCallableData(
+  dynamic data,
+) {
+  final rawOptions = callableMap(data)['options'];
+  if (rawOptions is! List) return const <BusinessDestinationOption>[];
+  return rawOptions
+      .whereType<Map>()
+      .map((option) => BusinessDestinationOption.fromFunctionData(callableMap(option)))
+      .where((option) => option.isAvailableForAnyShippingService)
+      .toList();
+}
+
+/// Same eligibility web uses for freight (`shippingOptionIsEligible`).
+List<BusinessDestinationOption> freightEligibleOptions(
+  Iterable<BusinessDestinationOption> options,
+) {
+  return [
+    for (final option in options)
+      if (option.isAvailableFor(BusinessServiceKey.freight)) option,
+  ];
 }

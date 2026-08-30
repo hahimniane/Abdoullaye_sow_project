@@ -376,3 +376,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `admin_web/src/lib/notification-routing.test.ts` plus the functions stamp
   in `notification-triggers.test.js`. Do not treat "opens the sidebar tab"
   as enough: the record or thread must open.
+- iOS customer E2E vs web (sandbox, Stripe TEST): Send freight empty,
+  missing barrel Pay now, missing inbox bell, and AppGate false-offline.
+  Coverage: `test/freight_catalog_filter_test.dart` (Conakry Express
+  Senegal 12.50/4 through nested `Map<Object?, Object?>`),
+  `test/customer_checkout_resume_test.dart` (resumeRecordId / barrelOrder,
+  no duplicate mint), `test/notification_routing_test.dart` (Orders inner
+  tab + record; tracking update stays `/tracking`),
+  `test/app_gate_boundary_test.dart` (`none` + successful probe = ready;
+  `none` + failed probe = offline). Do not switch Stripe mode or pass
+  `pk_live`. Maestro `localEmulator()` is not coverage for the real
+  AppGate path.

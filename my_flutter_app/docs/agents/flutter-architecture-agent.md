@@ -253,3 +253,21 @@ Add future project conventions and repeated architectural decisions here.
   for that move; automated tracking stays optional. Freight still cannot
   client-write `containerNumber`. A Terminal49-owned number
   (`trackingProvider == carrier_api`) stays server-owned.
+- Customer destination catalogs come from
+  `listActiveBarrelDestinationOptions`, not a customer `businesses` list or
+  `destinationCountries` collectionGroup (those are staff/admin). A failed
+  callable must surface Retry, not an empty “No freight businesses yet”
+  state. Decode HTTPS-callable payloads with `callableMap` —
+  iOS returns nested `Map<Object?, Object?>`.
+- Resume an unpaid barrel with `createCustomerCheckoutSession` +
+  `resumeRecordId` (or `barrelOrder` when `orderId` is set). Do not mint a
+  second `barrelOrder` via `createBarrelShipmentPaymentIntent`.
+- Customer inbox bell belongs on Home, Shipping, Activity, and Settings.
+  Bell taps use `routeForNotificationData`: barrel/freight/parking/transport
+  status → `/orders` with inner tab + record; `shipment_tracking_update`
+  still → `/tracking`. Register `/orders` and `/freight-quote` on the
+  nested customer tab navigator, not only `MaterialApp.routes`.
+- AppGate must probe `appConfig` before treating connectivity_plus `none`
+  as offline. iOS Simulator 26.x reports `none` on cold start while the
+  network works. `AppGateProvider.localEmulator()` stays a full bypass for
+  Maestro only — do not disable the gate for a physically offline device.

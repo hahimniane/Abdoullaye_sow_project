@@ -14,30 +14,33 @@ void main() {
       expect(route?.name, '/my-purchases');
     });
 
-    test('routes a freight status update to tracking with the shipment id',
-        () {
+    test('routes a freight status update to Orders freight tab + record', () {
       final route = routeForNotificationData({
         'type': 'freight_shipment_status',
         'shipmentId': 'ship-1',
       });
 
-      expect(route?.name, '/tracking');
-      final args = route?.arguments as TrackingScreenArguments;
-      expect(args.shipmentId, 'ship-1');
+      expect(route?.name, '/orders');
+      final args = route?.arguments as OrdersScreenArguments;
+      expect(args.innerTab, 'freight');
+      expect(args.focusId, 'ship-1');
+      expect(args.focusCollection, 'freightShipments');
     });
 
-    test('routes a barrel status update to tracking too', () {
+    test('routes a barrel status update to Orders barrels tab + record', () {
       final route = routeForNotificationData({
         'type': 'barrel_shipment_status',
         'shipmentId': 'barrel-9',
       });
 
-      expect(route?.name, '/tracking');
-      final args = route?.arguments as TrackingScreenArguments;
-      expect(args.shipmentId, 'barrel-9');
+      expect(route?.name, '/orders');
+      final args = route?.arguments as OrdersScreenArguments;
+      expect(args.innerTab, 'barrels');
+      expect(args.focusId, 'barrel-9');
+      expect(args.focusCollection, 'barrelShipments');
     });
 
-    test('routes a freight balance-due and refund event to tracking', () {
+    test('routes a freight balance-due and refund event to Orders', () {
       final balanceDue = routeForNotificationData({
         'type': 'freight_balance_due',
         'shipmentId': 'ship-2',
@@ -47,24 +50,36 @@ void main() {
         'shipmentId': 'ship-2',
       });
 
-      expect(balanceDue?.name, '/tracking');
-      expect(refund?.name, '/tracking');
+      expect(balanceDue?.name, '/orders');
+      expect(refund?.name, '/orders');
+      expect(
+        (balanceDue?.arguments as OrdersScreenArguments).innerTab,
+        'freight',
+      );
     });
 
-    test('routes a parking reservation update to Orders', () {
+    test('routes a parking reservation update to Orders cars tab', () {
       final route = routeForNotificationData({
         'type': 'parking_reservation_status',
+        'relatedId': 'park-1',
       });
 
       expect(route?.name, '/orders');
+      final args = route?.arguments as OrdersScreenArguments;
+      expect(args.innerTab, 'cars');
+      expect(args.focusId, 'park-1');
     });
 
-    test('routes a transport request update to Orders', () {
+    test('routes a transport request update to Orders transport tab', () {
       final route = routeForNotificationData({
         'type': 'transport_request_status',
+        'requestId': 'tr-1',
       });
 
       expect(route?.name, '/orders');
+      final args = route?.arguments as OrdersScreenArguments;
+      expect(args.innerTab, 'transport');
+      expect(args.focusId, 'tr-1');
     });
 
     test('routes a review request to the review composer', () {
@@ -139,6 +154,8 @@ void main() {
       });
 
       expect(route?.name, '/tracking');
+      final args = route?.arguments as TrackingScreenArguments;
+      expect(args.shipmentId, 'ship-9');
     });
 
     test('routes a business application update to Business registration',
