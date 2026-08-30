@@ -237,6 +237,47 @@ type CustomerShippingServicesProps = {
   }) => void;
 };
 
+const SENT_QUOTE_REQUEST_KEY = "laawol:sent-freight-quote-request";
+
+// Starting a guest session remounts this panel while its submit is still
+// finishing, so the confirmation is parked in sessionStorage the same way
+// the guest contact is - in-memory state alone does not survive the remount.
+function readSentQuoteRequest() {
+  try {
+    const raw = sessionStorage.getItem(SENT_QUOTE_REQUEST_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      trackingCode?: unknown;
+      eligibleBusinessCount?: unknown;
+    };
+    const trackingCode = typeof parsed.trackingCode === "string"
+      ? parsed.trackingCode
+      : "";
+    if (!trackingCode) return null;
+    return {
+      trackingCode,
+      eligibleBusinessCount: Number(parsed.eligibleBusinessCount ?? 0) || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function rememberSentQuoteRequest(confirmation: {
+  trackingCode: string;
+  eligibleBusinessCount: number;
+}) {
+  try {
+    sessionStorage.setItem(
+      SENT_QUOTE_REQUEST_KEY,
+      JSON.stringify(confirmation),
+    );
+  } catch {
+    // Storage being blocked only costs the confirmation a remount - the
+    // in-memory copy still renders it for this mount.
+  }
+}
+
 async function callFunction<TResult>(
   name: string,
   data: Record<string, unknown> = {},
@@ -3737,6 +3778,14 @@ function FreightPriceRequest({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [createdId, setCreatedId] = useState("");
+  // A guest's request subscription is auth-gated, so without this their
+  // successful send rendered nothing at all - the cleared form read as
+  // "nothing happened" and invited a duplicate. Kept in sessionStorage
+  // because starting the guest session remounts this panel mid-submit.
+  const [sent, setSent] = useState<{
+    trackingCode: string;
+    eligibleBusinessCount: number;
+  } | null>(readSentQuoteRequest);
   const requests = useCustomerFreightQuoteRequests(
     authenticated ? customerUid : "",
     authenticated,
@@ -3783,6 +3832,12 @@ function FreightPriceRequest({
         eligibleBusinessCount: number;
       }>("createFreightQuoteRequest", {...validated.request});
       setCreatedId(result.id);
+      const confirmation = {
+        trackingCode: text(result.trackingCode, ""),
+        eligibleBusinessCount: Number(result.eligibleBusinessCount ?? 0),
+      };
+      setSent(confirmation);
+      rememberSentQuoteRequest(confirmation);
       setDescription("");
       setWeightKg("");
     } catch (caught) {
@@ -3863,6 +3918,27 @@ function FreightPriceRequest({
           request={activeRequest}
           onPriceAccepted={onPriceAccepted}
         />
+      )}
+      {sent && !(authenticated && activeRequest) && (
+        <div className="customer-inline-note success" role="status">
+          <strong>Your price request was sent.</strong>{" "}
+          {sent.eligibleBusinessCount > 0 && (
+            <span>
+              {sent.eligibleBusinessCount === 1
+                ? "1 business on this route was asked."
+                : `${sent.eligibleBusinessCount} businesses on this route were asked.`}
+            </span>
+          )}{" "}
+          {sent.trackingCode && (
+            <span>
+              Keep your request number
+              {" "}
+              <span className="customer-quote-value">{sent.trackingCode}</span>
+              {" "}
+              - answers arrive by email, and this number follows the request.
+            </span>
+          )}
+        </div>
       )}
       {requests.error && (
         <div className="customer-inline-note error" role="alert">

@@ -4,7 +4,7 @@ import path from "node:path";
 
 export const DEFAULT_PRODUCTION_PROJECT = "car-selling-flutter-app";
 export const DEVELOPMENT_PAYMENT_WINDOW_END =
-  "2026-09-01T04:00:00.000Z";
+  "2026-09-11T04:00:00.000Z";
 export const CI_VERIFICATION_SKIP_WINDOW_END =
   "2026-08-16T04:00:00.000Z";
 export const HOSTINGER_PRODUCTION_IPV4 = "46.202.183.189";
@@ -332,7 +332,7 @@ export function deploymentMode({
         allowsTestPayments: true,
         detail:
           `production project ${projectId}; test payments authorized ` +
-          "through August 31, 2026",
+          "through September 10, 2026",
       };
     }
 
@@ -342,7 +342,7 @@ export function deploymentMode({
       allowsTestPayments: false,
       detail: environment && environment !== "production" ?
         environment === "development" ?
-          "the authorized development payment window ended August 31, 2026" :
+          "the authorized development payment window ended September 10, 2026" :
           `project ${projectId} cannot use DEPLOY_ENV=${environment}` :
         `production project ${projectId}`,
     };
