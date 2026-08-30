@@ -30,7 +30,6 @@ class BusinessService {
   }
 
   Stream<List<BusinessDestinationOption>> activeDestinationOptions() async* {
-    Object? callableError;
     try {
       yield await _destinationOptionsFromFunction();
       // The callable answers once, so an open screen would keep showing a
@@ -45,43 +44,38 @@ class BusinessService {
         yield await _destinationOptionsFromFunction();
       }
       return;
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (callableError) {
       // App Check rejects the callable as unauthenticated on an iOS
       // simulator whose debug token is not registered. The Firestore
       // fallbacks below are for local/dev; production customers cannot
       // list businesses, so a failed callable must not become an empty
       // "no freight businesses" catalog.
-      callableError = error;
-    }
-
-    try {
-      final approved = await _destinationOptionsFromApprovedBusinesses();
-      if (approved.isNotEmpty) {
-        yield approved;
-        return;
-      }
-    } on FirebaseException {
-      // Customers cannot list the businesses collection.
-    }
-
-    try {
-      await for (final snapshot
-          in _firestore
-              .collectionGroup('destinationCountries')
-              .where('isActive', isEqualTo: true)
-              .where('businessStatus', isEqualTo: 'approved')
-              .snapshots()) {
-        var options = await _optionsWithLiveBusinessProfiles(snapshot.docs);
-        if (options.isEmpty) {
-          options = await _destinationOptionsFromApprovedBusinesses();
+      try {
+        final approved = await _destinationOptionsFromApprovedBusinesses();
+        if (approved.isNotEmpty) {
+          yield approved;
+          return;
         }
-        yield options;
+      } on FirebaseException {
+        // Customers cannot list the businesses collection.
       }
-    } on FirebaseException {
-      if (callableError != null) {
+
+      try {
+        await for (final snapshot
+            in _firestore
+                .collectionGroup('destinationCountries')
+                .where('isActive', isEqualTo: true)
+                .where('businessStatus', isEqualTo: 'approved')
+                .snapshots()) {
+          var options = await _optionsWithLiveBusinessProfiles(snapshot.docs);
+          if (options.isEmpty) {
+            options = await _destinationOptionsFromApprovedBusinesses();
+          }
+          yield options;
+        }
+      } on FirebaseException {
         throw callableError;
       }
-      yield* _legacyDestinationOptions();
     }
   }
 
@@ -198,22 +192,6 @@ class BusinessService {
       (options) =>
           options.where((option) => option.country.id == countryId).toList(),
     );
-  }
-
-  Stream<List<BusinessDestinationOption>> _legacyDestinationOptions() {
-    return _firestore
-        .collection('destinationCountries')
-        .where('isActive', isEqualTo: true)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs
-                  .map(DestinationCountry.fromFirestore)
-                  .where((country) => country.barrelShippingPrice > 0)
-                  .map(BusinessDestinationOption.fromLegacyCountry)
-                  .toList()
-                ..sort(_compareDestinationOptions),
-        );
   }
 
   int _compareDestinationOptions(

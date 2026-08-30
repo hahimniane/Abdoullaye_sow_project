@@ -44,6 +44,28 @@ void main() {
     expect(freight.single.isAvailableFor(BusinessServiceKey.barrelShipping), isFalse);
   });
 
+  test('a callable row missing isActive still counts as active freight', () {
+    final options = destinationOptionsFromCallableData({
+      'options': [
+        {
+          'id': 'conakry_express_senegal',
+          'businessId': 'conakry_express',
+          'businessName': 'Conakry Express',
+          'businessStatus': 'approved',
+          'enabledServices': ['freight'],
+          'country': {
+            'id': 'senegal',
+            'name': 'Senegal',
+            'freightAirPricePerKg': 12.5,
+            'freightSeaPricePerKg': 4,
+          },
+        },
+      ],
+    });
+
+    expect(freightEligibleOptions(options), hasLength(1));
+  });
+
   test('a barrel-only business is not a freight option', () {
     final options = destinationOptionsFromCallableData({
       'options': [

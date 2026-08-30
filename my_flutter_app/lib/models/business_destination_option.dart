@@ -192,7 +192,10 @@ class BusinessDestinationOption {
         id: callableString(country['id']),
         name: callableString(country['name']),
         code: _optionalString(country['code']),
-        isActive: callableBool(country['isActive']),
+        // The callable already filtered inactive destinations. A missing
+        // isActive (iOS plugin dropping the field) must not hide a priced
+        // freight row — including the legacy rate inference below.
+        isActive: _callableCountryIsActive(country),
         sortOrder: callableInt(country['sortOrder']),
         destinationCoverageVersion: callableInt(
           country['destinationCoverageVersion'],
@@ -204,21 +207,21 @@ class BusinessDestinationOption {
           country,
           'barrelShipping',
           legacy:
-              callableBool(country['isActive']) &&
+              _callableCountryIsActive(country) &&
               callableDouble(country['barrelShippingPrice']) > 0,
         ),
         freightAirAvailable: _serviceEnabled(
           country,
           'freightAir',
           legacy:
-              callableBool(country['isActive']) &&
+              _callableCountryIsActive(country) &&
               callableDouble(country['freightAirPricePerKg']) > 0,
         ),
         freightSeaAvailable: _serviceEnabled(
           country,
           'freightSea',
           legacy:
-              callableBool(country['isActive']) &&
+              _callableCountryIsActive(country) &&
               callableDouble(country['freightSeaPricePerKg']) > 0,
         ),
         barrelShippingPrice: callableDouble(country['barrelShippingPrice']),
@@ -428,6 +431,11 @@ class BusinessDestinationOption {
   static String? _optionalString(dynamic value) {
     final text = callableString(value);
     return text.isEmpty ? null : text;
+  }
+
+  static bool _callableCountryIsActive(Map<String, dynamic> country) {
+    if (!country.containsKey('isActive')) return true;
+    return callableBool(country['isActive']);
   }
 
   static bool _serviceEnabled(
