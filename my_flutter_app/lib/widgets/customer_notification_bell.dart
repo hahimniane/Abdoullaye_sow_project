@@ -64,7 +64,14 @@ class CustomerNotificationBell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final uid = context.watch<AuthProvider>().user?.uid;
+    AuthProvider? auth;
+    try {
+      auth = Provider.of<AuthProvider>(context);
+    } on ProviderNotFoundException {
+      // Hub widget tests pump Shipping without Firebase-backed AuthProvider.
+      auth = null;
+    }
+    final uid = auth?.user?.uid;
     if (uid == null || uid.isEmpty) return const SizedBox.shrink();
     return _SignedInBell(
       uid: uid,
