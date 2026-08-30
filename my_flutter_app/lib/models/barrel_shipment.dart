@@ -31,6 +31,7 @@ class BarrelShipment {
     this.pickupDateTime,
     this.paymentStatus = 'not_required',
     this.paymentHoldStatus = '',
+    this.checkoutStatus = '',
     this.stripePaymentIntentId,
     this.orderId,
     this.platformFeeCents = 0,
@@ -77,6 +78,7 @@ class BarrelShipment {
   /// "held" while the money is only reserved on the card; cancelling then is
   /// free. Empty or "captured" once charged.
   final String paymentHoldStatus;
+  final String checkoutStatus;
   final String? stripePaymentIntentId;
   final String? orderId;
   final int platformFeeCents;
@@ -93,6 +95,16 @@ class BarrelShipment {
   final String trackingProvider; // '' (manual) | 'carrier_api'
 
   bool get hasAutomatedTracking => trackingProvider == 'carrier_api';
+
+  /// Wire shape `checkoutResumeTarget` shares with the web console.
+  Map<String, dynamic> get checkoutResumeRecord => {
+    'id': id,
+    'relatedCollection': 'barrelShipments',
+    'status': status,
+    'paymentStatus': paymentStatus,
+    'checkoutStatus': checkoutStatus,
+    'orderId': orderId ?? '',
+  };
 
   factory BarrelShipment.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -131,6 +143,7 @@ class BarrelShipment {
       pricingPendingReview: data['pricingPendingReview'] == true,
       pickupDateTime: (data['pickupDateTime'] as Timestamp?)?.toDate(),
       paymentStatus: (data['paymentStatus'] ?? 'not_required') as String,
+      checkoutStatus: (data['checkoutStatus'] ?? '') as String,
       stripePaymentIntentId: data['stripePaymentIntentId'] as String?,
       orderId: data['orderId'] as String?,
       paymentHoldStatus: (data['paymentHoldStatus'] as String?) ?? '',
@@ -179,6 +192,7 @@ class BarrelShipment {
     bool? pricingPendingReview,
     DateTime? pickupDateTime,
     String? paymentStatus,
+    String? checkoutStatus,
     String? stripePaymentIntentId,
     String? orderId,
     int? platformFeeCents,
@@ -222,6 +236,7 @@ class BarrelShipment {
       pricingPendingReview: pricingPendingReview ?? this.pricingPendingReview,
       pickupDateTime: pickupDateTime ?? this.pickupDateTime,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      checkoutStatus: checkoutStatus ?? this.checkoutStatus,
       stripePaymentIntentId:
           stripePaymentIntentId ?? this.stripePaymentIntentId,
       orderId: orderId ?? this.orderId,

@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
-import '../models/business_service.dart';
 import '../models/office_location.dart';
 import '../models/structured_address.dart';
 import '../services/barrel_shipment_service.dart';
@@ -157,19 +156,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     await _optionsSub?.cancel();
     _optionsSub = _businessService.activeDestinationOptions().listen(
       (all) {
-        final options =
-            all
-                .where(
-                  (o) =>
-                      hasBusinessService(
-                        o.enabledServices,
-                        BusinessServiceKey.freight,
-                      ) &&
-                      o.country.isActive &&
-                      o.country.hasAnyFreightRate,
-                )
-                .toList()
-              ..sort((a, b) => a.businessName.compareTo(b.businessName));
+        final options = freightEligibleOptions(all)
+          ..sort((a, b) => a.businessName.compareTo(b.businessName));
         if (!mounted) return;
         setState(() {
           _options = options;

@@ -45,7 +45,7 @@ void main() {
     final gate = AppGateProvider(
       connectivityChecker: () async => const [ConnectivityResult.none],
       connectivityChanges: const Stream<List<ConnectivityResult>>.empty(),
-      appConfigLoader: () async => const <String, dynamic>{},
+      appConfigLoader: () async => throw Exception('unreachable'),
     );
 
     await gate.refresh();
@@ -53,6 +53,53 @@ void main() {
     expect(gate.status, AppGateStatus.offline);
     gate.dispose();
   });
+
+  test(
+    'iOS simulator none-on-cold-start stays open when the config probe works',
+    () async {
+      final gate = AppGateProvider(
+        connectivityChecker: () async => const [ConnectivityResult.none],
+        connectivityChanges: const Stream<List<ConnectivityResult>>.empty(),
+        packageInfoLoader: () async => PackageInfo(
+          appName: 'Test',
+          packageName: 'test',
+          version: '1.0.0',
+          buildNumber: '1',
+        ),
+        appConfigLoader: () async => const <String, dynamic>{},
+      );
+
+      await gate.refresh();
+
+      expect(gate.status, AppGateStatus.ready);
+      expect(gate.isBlocking, isFalse);
+      gate.dispose();
+    },
+  );
+
+  test(
+    'a hung connectivity check does not gate a reachable simulator',
+    () async {
+      final gate = AppGateProvider(
+        connectivityChecker: () async {
+          throw Exception('connectivity_plus timed out');
+        },
+        connectivityChanges: const Stream<List<ConnectivityResult>>.empty(),
+        packageInfoLoader: () async => PackageInfo(
+          appName: 'Test',
+          packageName: 'test',
+          version: '1.0.0',
+          buildNumber: '1',
+        ),
+        appConfigLoader: () async => const <String, dynamic>{},
+      );
+
+      await gate.refresh();
+
+      expect(gate.status, AppGateStatus.ready);
+      gate.dispose();
+    },
+  );
 
   testWidgets('offline gate blocks app and shows retry', (tester) async {
     final gate = AppGateProvider.test(status: AppGateStatus.offline);

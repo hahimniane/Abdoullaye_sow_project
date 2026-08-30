@@ -7391,4 +7391,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guestTrackingStageAwaitingPayment => 'Waiting for payment';
+
+  @override
+  String get openingSecurePayment => 'Opening secure payment...';
+
+  @override
+  String get checkoutResumeFailed =>
+      'That did not open. Try again in a moment.';
+
+  @override
+  String get noNotificationsYet => 'No notifications yet';
+
+  @override
+  String get markAllNotificationsRead => 'Mark all read';
 }

@@ -259,7 +259,13 @@ class MyApp extends StatelessWidget {
                 showBackButton: true,
                 scope: PurchaseListScope.viewings,
               ),
-              '/orders': (context) => const OrdersScreen(showBackButton: true),
+              '/orders': (context) {
+                final rawArgs = ModalRoute.of(context)!.settings.arguments;
+                return OrdersScreen(
+                  showBackButton: true,
+                  initialArgs: rawArgs is OrdersScreenArguments ? rawArgs : null,
+                );
+              },
               // Named so a notification about a price can open it. Before
               // this the screen existed only as a push from the form that
               // created the request, which left a customer who closed it -

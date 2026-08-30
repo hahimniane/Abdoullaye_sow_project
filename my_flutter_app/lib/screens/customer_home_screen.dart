@@ -15,6 +15,7 @@ import 'request_transport_screen.dart';
 import 'tracking_screen.dart';
 import 'my_purchases_screen.dart';
 import 'orders_screen.dart';
+import 'freight_quote_details_screen.dart';
 import 'review_composer_screen.dart';
 import 'business_management_screen.dart';
 import 'business_profile_screen.dart';
@@ -32,6 +33,7 @@ import '../models/transport_request.dart';
 import 'transport_request_details_screen.dart';
 import 'support_inbox_screen.dart';
 import 'support_thread_screen.dart';
+import '../services/notification_routing.dart';
 
 /// Builds the customer-area screens for the *nested* tab navigators. Keeping
 /// these in the tab navigator (instead of the root navigator) is what lets the
@@ -81,7 +83,23 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
       );
       break;
     case '/orders':
-      page = const OrdersScreen(showBackButton: true);
+      page = OrdersScreen(
+        showBackButton: true,
+        initialArgs: settings.arguments is OrdersScreenArguments
+            ? settings.arguments as OrdersScreenArguments
+            : null,
+      );
+      break;
+    case '/freight-quote':
+      final quoteArgs = settings.arguments;
+      if (quoteArgs is FreightQuoteScreenArguments) {
+        page = FreightQuoteDetailsScreen(
+          requestId: quoteArgs.requestId,
+          trackingCode: quoteArgs.trackingCode,
+        );
+      } else {
+        page = const OrdersScreen(showBackButton: true);
+      }
       break;
     // Pushed from a completed order card (OrdersScreen) and from
     // TrackingScreen, both of which live inside a tab navigator - so the route

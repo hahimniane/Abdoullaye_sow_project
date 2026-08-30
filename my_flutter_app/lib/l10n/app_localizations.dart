@@ -13157,6 +13157,26 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Waiting for payment'**
   String get guestTrackingStageAwaitingPayment;
+
+  /// No description provided for @openingSecurePayment.
+  ///
+  /// **'Opening secure payment...'**
+  String get openingSecurePayment;
+
+  /// No description provided for @checkoutResumeFailed.
+  ///
+  /// **'That did not open. Try again in a moment.'**
+  String get checkoutResumeFailed;
+
+  /// No description provided for @noNotificationsYet.
+  ///
+  /// **'No notifications yet'**
+  String get noNotificationsYet;
+
+  /// No description provided for @markAllNotificationsRead.
+  ///
+  /// **'Mark all read'**
+  String get markAllNotificationsRead;
 }
 
 class _AppLocalizationsDelegate

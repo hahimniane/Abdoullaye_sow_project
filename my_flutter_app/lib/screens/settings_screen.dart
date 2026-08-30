@@ -12,6 +12,7 @@ import '../services/biometric_lock_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../widgets/app_back_button.dart';
+import '../widgets/customer_notification_bell.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -220,6 +221,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                   ),
+                  const CustomerNotificationBell(),
                   const LanguageToggle(),
                 ],
               ),

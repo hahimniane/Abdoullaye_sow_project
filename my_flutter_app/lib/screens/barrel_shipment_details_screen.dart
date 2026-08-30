@@ -14,6 +14,7 @@ import '../models/destination_country.dart';
 import '../providers/auth_provider.dart';
 import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
+import '../services/customer_checkout.dart';
 import '../services/destination_country_service.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/barrel_receipt_generator.dart';
@@ -49,7 +50,9 @@ class _BarrelShipmentDetailsScreenState
   late final TextEditingController _priceController;
 
   final _shipmentService = BarrelShipmentService();
+  final _checkoutService = CustomerCheckoutService();
   late BarrelShipment _currentShipment;
+  bool _paying = false;
   late String _statusDraft;
   String? _destinationCountryIdDraft;
   String? _businessIdDraft;
@@ -656,6 +659,29 @@ class _BarrelShipmentDetailsScreenState
       _currentShipment.status == 'pending' &&
       _currentShipment.paymentStatus == 'succeeded';
 
+  CheckoutResumeTarget? get _resumeTarget =>
+      barrelCheckoutResumeTarget(_currentShipment);
+
+  bool _canResumePayment(AuthProvider auth) =>
+      _isShipmentOwner(auth) && _resumeTarget != null;
+
+  Future<void> _payNow() async {
+    final target = _resumeTarget;
+    if (target == null || _paying) return;
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _paying = true);
+    try {
+      await _checkoutService.resumeCheckout(target);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.checkoutResumeFailed)));
+    } finally {
+      if (mounted) setState(() => _paying = false);
+    }
+  }
+
   Future<void> _cancelSecuredOrder() async {
     final l10n = AppLocalizations.of(context)!;
     final held = _currentShipment.paymentHoldStatus == 'held';
@@ -1125,6 +1151,32 @@ class _BarrelShipmentDetailsScreenState
                                       _hasDraftChanges,
                                   onPressed: _updateShipment,
                                 ),
+                                if (_canResumePayment(auth)) ...[
+                                  const SizedBox(height: 12),
+                                  FilledButton.icon(
+                                    onPressed: _paying ? null : _payNow,
+                                    style: FilledButton.styleFrom(
+                                      minimumSize: const Size.fromHeight(52),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    icon: _paying
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.payments_outlined),
+                                    label: Text(
+                                      _paying
+                                          ? l10n.openingSecurePayment
+                                          : l10n.transportPayNow,
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 12),
                                 OutlinedButton.icon(
                                   onPressed: _reprintReceipt,
