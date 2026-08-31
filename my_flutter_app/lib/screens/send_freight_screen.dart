@@ -16,6 +16,7 @@ import '../utils/freight_delivery.dart';
 import '../utils/freight_payback.dart';
 import '../services/service_ranking.dart';
 import '../services/freight_shipment_service.dart';
+import '../utils/freight_contents.dart';
 import '../services/office_location_service.dart';
 import '../utils/freight_localization.dart';
 import '../utils/receiver_phone_rules.dart';
@@ -139,6 +140,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     _receiverController.dispose();
     _phoneController.dispose();
     _weightController.dispose();
+    _boxOtherKgController.dispose();
     _pickupAddressController.dispose();
     _receiverAddressController.dispose();
     super.dispose();
@@ -337,16 +339,97 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   /// send the customer round the loop they just came out of.
   bool get _hasAgreedPrice => widget.quoteRequestId.trim().isNotEmpty;
 
+  /// The rest of the box: more set-price items from THIS business, plus one
+  /// weighed line. Reset when the business changes - the box was priced
+  /// against the previous business's list.
+  List<ContentsItem> _extraItems = const [];
+  final _boxOtherKgController = TextEditingController();
+
+  /// Every item this business sells at a set price, flattened for a picker.
+  List<({String categoryId, String itemId, String label, int priceCents})>
+  get _businessFlatItems {
+    final table = _selected?.freightPaybackTable;
+    if (table == null) return const [];
+    final rows =
+        <({String categoryId, String itemId, String label, int priceCents})>[];
+    for (final entry in table.entries) {
+      final items = entry.value is Map ? entry.value['items'] : null;
+      if (items is! List) continue;
+      for (final row in items) {
+        if (row is! Map) continue;
+        if ((row['pricingMode'] ?? '') != 'flat') continue;
+        final price = row['flatPrice'];
+        final priceCents = price is num ? (price * 100).round() : 0;
+        if (priceCents <= 0) continue;
+        rows.add((
+          categoryId: entry.key,
+          itemId: (row['id'] ?? '').toString(),
+          label: (row['label'] ?? row['id'] ?? '').toString(),
+          priceCents: priceCents,
+        ));
+      }
+    }
+    return rows;
+  }
+
+  double get _boxOtherKg =>
+      double.tryParse(_boxOtherKgController.text.trim()) ?? 0;
+
+  FreightContents get _boxContents => FreightContents(
+    items: [
+      if (_setPrice && _itemPricing.priced)
+        ContentsItem(
+          categoryId: _categoryId,
+          itemId: _submittedItemId ?? '',
+          label: _primaryItemLabel,
+        ),
+      ..._extraItems,
+    ],
+    otherGoodsKg: _setPrice ? (_boxOtherKg > 0 ? _boxOtherKg : 0) : _weightKg,
+    otherCategoryId: _setPrice ? 'general' : _categoryId,
+  );
+
+  String get _primaryItemLabel {
+    final wanted = _submittedItemId ?? '';
+    for (final row in _businessFlatItems) {
+      if (row.itemId == wanted && row.categoryId == _categoryId) {
+        return row.label;
+      }
+    }
+    return _category?.label ?? 'This item';
+  }
+
+  /// The single-item flow IS a manifest of one; the builder takes over only
+  /// once the box holds more than the funnel asked about.
+  bool get _manifestActive =>
+      !_hasAgreedPrice &&
+      _itemPricing.priced &&
+      (_extraItems.isNotEmpty || (_setPrice && _boxOtherKg > 0));
+
+  ContentsPricing? get _manifestPricing => _manifestActive
+      ? priceContentsForBusiness(
+          table: _selected?.freightPaybackTable,
+          ratePerKgCents: (_ratePerKg * 100).round(),
+          contents: _boxContents,
+        )
+      : null;
+
   bool get _itemPriced => _hasAgreedPrice || _itemPricing.priced;
 
   /// A known object, priced once by the business. Nothing here is weighed.
   bool get _setPrice => _itemPricing.isFlat;
 
-  double get _price => !_itemPriced
-      ? 0
-      : _setPrice
-      ? _itemPricing.flatPrice
-      : freightShippingFee(weightKg: _weightKg, ratePerKg: _ratePerKg);
+  double get _price {
+    final manifest = _manifestPricing;
+    if (manifest != null) {
+      return manifest.ok ? manifest.estimateCents / 100 : 0;
+    }
+    return !_itemPriced
+        ? 0
+        : _setPrice
+        ? _itemPricing.flatPrice
+        : freightShippingFee(weightKg: _weightKg, ratePerKg: _ratePerKg);
+  }
 
   /// The business publishes the items it carries; the customer only says
   /// which one this is. Mirrors the web console exactly - see freight_payback.
@@ -422,6 +505,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _selected = o;
       _receiverPhoneIsWhatsappOnly = false;
       _payOnArrival = false;
+      _extraItems = const [];
+      _boxOtherKgController.clear();
       final modes = _availableModes(o);
       _mode = modes.contains(_mode)
           ? _mode
@@ -670,6 +755,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         officeLocationId: _pickupRequested ? null : _officeLocationId,
         paymentTiming: _payOnArrivalChosen ? 'arrival' : null,
         marketplaceAcceptance: marketplaceAcceptance,
+        contents: _manifestActive ? _boxContents : null,
       );
       if (!mounted) return;
       final code = shipment['trackingCode']?.toString() ?? '';
@@ -1445,6 +1531,147 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   /// What a known object costs: one price the business published for this
   /// item, and what that price covers by weight.
+  Widget _boxBuilderSection(ThemeData theme, AppLocalizations l10n) {
+    final flatItems = _businessFlatItems;
+    final manifest = _manifestPricing;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(l10n.freightWhatElseInBox, style: theme.textTheme.labelLarge),
+        const SizedBox(height: 6),
+        for (var index = 0; index < _extraItems.length; index++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue:
+                        '${_extraItems[index].categoryId}|'
+                        '${_extraItems[index].itemId}',
+                    isExpanded: true,
+                    items: [
+                      for (final row in flatItems)
+                        DropdownMenuItem(
+                          value: '${row.categoryId}|${row.itemId}',
+                          child: Text(
+                            '${row.label} · '
+                            '\$${(row.priceCents / 100).toStringAsFixed(2)}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (value) {
+                            final parts = (value ?? '').split('|');
+                            if (parts.length != 2) return;
+                            final match = flatItems
+                                .where(
+                                  (r) =>
+                                      r.categoryId == parts[0] &&
+                                      r.itemId == parts[1],
+                                )
+                                .toList();
+                            if (match.isEmpty) return;
+                            setState(() {
+                              _extraItems = [..._extraItems]..[index] =
+                                  _extraItems[index].copyWith(
+                                    categoryId: match.first.categoryId,
+                                    itemId: match.first.itemId,
+                                    label: match.first.label,
+                                  );
+                            });
+                          },
+                  ),
+                ),
+                IconButton(
+                  onPressed: _busy || _extraItems[index].quantity <= 1
+                      ? null
+                      : () => setState(() {
+                          _extraItems = [..._extraItems]..[index] =
+                              _extraItems[index].copyWith(
+                                quantity: _extraItems[index].quantity - 1,
+                              );
+                        }),
+                  icon: const Icon(Icons.remove_circle_outline),
+                ),
+                Text(
+                  '${_extraItems[index].quantity}',
+                  style: theme.textTheme.titleMedium,
+                ),
+                IconButton(
+                  onPressed:
+                      _busy || _extraItems[index].quantity >= maxItemQuantity
+                      ? null
+                      : () => setState(() {
+                          _extraItems = [..._extraItems]..[index] =
+                              _extraItems[index].copyWith(
+                                quantity: _extraItems[index].quantity + 1,
+                              );
+                        }),
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
+                IconButton(
+                  onPressed: _busy
+                      ? null
+                      : () => setState(() {
+                          _extraItems = [..._extraItems]..removeAt(index);
+                        }),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _busy || _extraItems.length >= 9 || flatItems.isEmpty
+                ? null
+                : () => setState(() {
+                    _extraItems = [
+                      ..._extraItems,
+                      ContentsItem(
+                        categoryId: flatItems.first.categoryId,
+                        itemId: flatItems.first.itemId,
+                        label: flatItems.first.label,
+                      ),
+                    ];
+                  }),
+            icon: const Icon(Icons.add),
+            label: Text(l10n.freightAddAnotherPricedItem),
+          ),
+        ),
+        if (_setPrice)
+          TextField(
+            controller: _boxOtherKgController,
+            enabled: !_busy,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: l10n.freightOtherGoodsLabel,
+              helperText: l10n.freightWeighedAtRateHelper,
+              helperMaxLines: 2,
+              prefixIcon: const Icon(Icons.scale_outlined),
+            ),
+          ),
+        if (manifest != null &&
+            !manifest.ok &&
+            manifest.error != 'contents_empty') ...[
+          const SizedBox(height: 8),
+          Text(
+            manifest.error == 'contents_item_weighed'
+                ? l10n.freightItemWeighedByBusiness(manifest.itemLabel)
+                : l10n.freightItemUnpricedByBusiness(manifest.itemLabel),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _setPriceSection(ThemeData theme, AppLocalizations l10n) {
     final pricing = _itemPricing;
     return Card(
@@ -1840,6 +2067,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               prefixIcon: const Icon(Icons.scale_outlined),
             ),
           ),
+        if (_itemPriced && !_hasAgreedPrice &&
+            _businessFlatItems.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _boxBuilderSection(theme, l10n),
+        ],
         if (_categories.isNotEmpty) ...[
           const SizedBox(height: 14),
           _categorySection(theme, l10n),
@@ -1929,7 +2161,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                           style: theme.textTheme.labelMedium,
                         ),
                         Text(
-                          _setPrice
+                          _manifestActive &&
+                                  (_manifestPricing?.ok ?? false)
+                              ? _boxContents.summary()
+                              : _setPrice
                               ? l10n.freightSetPriceLine(
                                   freightMoney(_itemPricing.flatPrice),
                                 )

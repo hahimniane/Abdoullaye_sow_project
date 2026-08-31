@@ -12900,6 +12900,102 @@ abstract class AppLocalizations {
   /// **'You are not committing to anything. You choose which price to take, or none of them.'**
   String get freightAskForPriceNote;
 
+  /// No description provided for @freightWhatsInTheBox.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s in the box?'**
+  String get freightWhatsInTheBox;
+
+  /// No description provided for @freightAddAnItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Add an item'**
+  String get freightAddAnItem;
+
+  /// No description provided for @freightItemNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name the item'**
+  String get freightItemNameLabel;
+
+  /// No description provided for @freightOtherGoodsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Other goods, weighed (kg)'**
+  String get freightOtherGoodsLabel;
+
+  /// No description provided for @freightOtherGoodsHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything not listed above, weighed together.'**
+  String get freightOtherGoodsHelper;
+
+  /// No description provided for @freightBoxEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Box estimate'**
+  String get freightBoxEstimate;
+
+  /// No description provided for @freightAnythingElseLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Anything else the businesses should know?'**
+  String get freightAnythingElseLabel;
+
+  /// No description provided for @freightWhatElseInBox.
+  ///
+  /// In en, this message translates to:
+  /// **'What else is in the box?'**
+  String get freightWhatElseInBox;
+
+  /// No description provided for @freightAddAnotherPricedItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Add another priced item'**
+  String get freightAddAnotherPricedItem;
+
+  /// No description provided for @freightWeighedAtRateHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Charged per kg once the business weighs the box.'**
+  String get freightWeighedAtRateHelper;
+
+  /// No description provided for @freightContentsTooMany.
+  ///
+  /// In en, this message translates to:
+  /// **'List at most 10 kinds of item in one box.'**
+  String get freightContentsTooMany;
+
+  /// No description provided for @freightContentsLabelInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Name each item in under 60 characters.'**
+  String get freightContentsLabelInvalid;
+
+  /// No description provided for @freightContentsQuantityInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Item counts must be between 1 and 99.'**
+  String get freightContentsQuantityInvalid;
+
+  /// No description provided for @freightContentsCategoryInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick each item\'s category from the list.'**
+  String get freightContentsCategoryInvalid;
+
+  /// No description provided for @freightItemWeighedByBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'{item} is weighed by this business. Include it in the weighed kilos instead.'**
+  String freightItemWeighedByBusiness(String item);
+
+  /// No description provided for @freightItemUnpricedByBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'{item} has no price from this business. Ask for a price instead.'**
+  String freightItemUnpricedByBusiness(String item);
+
   /// No description provided for @freightQuoteDescriptionLabel.
   ///
   /// In en, this message translates to:

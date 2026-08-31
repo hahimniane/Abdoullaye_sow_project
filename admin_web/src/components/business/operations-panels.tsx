@@ -59,6 +59,11 @@ import {
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import {
+  contentsFromRecord,
+  quoteLensForBusiness,
+} from "@/lib/freight-contents";
+import { type PaybackTable } from "@/lib/freight-payback";
+import {
   barrelFulfillmentWriteErrorMessage,
   barrelInTransitBlockedReason,
   barrelManualContainerWriteFields,
@@ -3412,6 +3417,7 @@ export function FreightPanel({
   const enabled = Boolean(businessId && !previewMode);
   const freight = useBusinessRows("freightShipments", businessId, enabled, 500);
   const priceRequests = useFreightQuoteRequests(businessId, enabled);
+  const quoteLens = useBusinessQuoteLens(businessId, enabled);
   const ownQuotes = useBusinessRows("freightQuotes", businessId, enabled, 500);
   const [view, setView] = useState<"shipments" | "requests">("shipments");
   const [search, setSearch] = useState("");
@@ -3537,8 +3543,9 @@ export function FreightPanel({
     // parcel outgrew the weight that price covers, and the excess is charged
     // at the route's rate for the extra mass and nothing else. Mirrors
     // calculateFreightSettlement, which is what actually moves the money.
+    const pricingMode = text(row.pricingMode, "");
     const flatPrice =
-      text(row.pricingMode, "") === "flat"
+      pricingMode === "flat" || pricingMode === "manifest"
         ? Number(row.itemFlatPrice ?? 0) || 0
         : 0;
     const includedKg = Number(row.itemIncludedKg ?? 0) || 0;
@@ -3660,6 +3667,7 @@ export function FreightPanel({
         <FreightPriceRequestsFeed
           busyId={busyId}
           drafts={quoteDrafts}
+          lens={quoteLens}
           error={priceRequests.error || ownQuotes.error}
           focusRequestId={focusRecordId}
           focusedCardRef={focusedCardRef}
@@ -3728,6 +3736,9 @@ export function FreightPanel({
                 <div><span>Rate locked at booking</span><b>{formatMoney(row.pricePerKg ?? row.ratePerKg)} / kg</b></div><div><span>Estimated total</span><b>{formatMoney(row.estimatedTotal ?? row.price ?? row.total)}</b></div>
                 <div><span>Final total</span><b>{row.finalTotal == null ? "—" : formatMoney(row.finalTotal)}</b></div><div><span>Settlement</span><b>{statusLabel(settlementStatus)}</b></div>
                 <div><span>Payment</span><b>{statusLabel(paymentStatus)}</b></div><div><span>Created</span><b>{formatDate(row.createdAt)}</b></div>
+                {text(row.contentsSummary, "") && (
+                  <div className="pur-info-wide"><span>In the box</span><b>{text(row.contentsSummary, "")}</b></div>
+                )}
               </div>
               {/* The customer paid for delivery at booking, so where it goes
                   is part of fulfillment, not a note buried in the total. */}
@@ -3796,6 +3807,7 @@ function emptyFreightQuoteDraft(): FreightQuoteDraft {
 function FreightPriceRequestsFeed({
   busyId,
   drafts,
+  lens,
   error,
   focusRequestId = "",
   focusedCardRef,
@@ -3807,6 +3819,7 @@ function FreightPriceRequestsFeed({
 }: {
   busyId: string;
   drafts: Record<string, FreightQuoteDraft>;
+  lens: ReturnType<typeof useBusinessQuoteLens>;
   error: string;
   focusRequestId?: string;
   focusedCardRef?: RefObject<HTMLElement | null>;
@@ -3847,6 +3860,21 @@ function FreightPriceRequestsFeed({
           terms: text(existing?.terms, ""),
         };
         const weightKg = Number(request.weightKg ?? 0);
+        const contents = contentsFromRecord(request.contents);
+        const route = lens.routes.get(text(request.destinationCountryId, ""));
+        const routeRate = Number(
+          text(request.mode, "air") === "sea"
+            ? route?.freightSeaPricePerKg
+            : route?.freightAirPricePerKg,
+        ) || 0;
+        const view = contents
+          ? quoteLensForBusiness({
+              table: lens.table,
+              ratePerKgCents: Math.round(routeRate * 100),
+              multiplierFor: lens.multiplierFor,
+              contents,
+            })
+          : null;
         const busy = busyId === `quote:${request.id}`;
         const focused = Boolean(focusRequestId) && focusRequestId === request.id;
         return (
@@ -3875,10 +3903,49 @@ function FreightPriceRequestsFeed({
               </div>
               <div><span>Asked</span><b>{formatDate(request.createdAt)}</b></div>
             </div>
-            <div className="pur-notice">
-              <ClipboardList size={15} />{" "}
-              <span>{text(request.description, "No description given")}</span>
-            </div>
+            {contents && view && (
+              <div className="freight-request-contents">
+                <table>
+                  <tbody>
+                    {view.lines.map((line, index) => (
+                      <tr key={index}>
+                        <td>{line.quantity} × {line.label}</td>
+                        <td>
+                          {line.lineCents != null
+                            ? formatMoney(line.lineCents / 100)
+                            : line.hint}
+                        </td>
+                      </tr>
+                    ))}
+                    {view.weighedNote && (
+                      <tr>
+                        <td>Other goods</td>
+                        <td>{view.weighedNote}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                {view.suggestionCents != null && (
+                  <button
+                    className="lst-btn"
+                    onClick={() =>
+                      onDraft(request.id, {
+                        price: (view.suggestionCents! / 100).toFixed(2),
+                      })
+                    }
+                    type="button"
+                  >
+                    Use suggested {formatMoney(view.suggestionCents / 100)}
+                  </button>
+                )}
+              </div>
+            )}
+            {(text(request.description, "") || !contents) && (
+              <div className="pur-notice">
+                <ClipboardList size={15} />{" "}
+                <span>{text(request.description, "No description given")}</span>
+              </div>
+            )}
             <div className="pur-actions">
               <label className="bar-field">
                 <span>What you charge (USD)</span>
@@ -6131,6 +6198,45 @@ function useBusinessRows(
  * composite index for a list this small, and an index a deploy forgot is an
  * empty feed nobody can explain.
  */
+/**
+ * This business's own price list and routes, for reading a request through
+ * its lens. The request stores facts; the card multiplies THEIR numbers.
+ */
+function useBusinessQuoteLens(businessId: string, enabled: boolean) {
+  const [table, setTable] = useState<PaybackTable | undefined>(undefined);
+  const [categories, setCategories] = useState<unknown>(null);
+  const [routes, setRoutes] = useState<Map<string, FirestoreRow>>(new Map());
+  useEffect(() => {
+    if (!enabled || !businessId) return;
+    return onSnapshot(doc(db, "businesses", businessId), (snap) => {
+      const data = snap.data() || {};
+      setTable(
+        (data.freightPaybackTable as PaybackTable | undefined) ?? undefined,
+      );
+      setCategories(data.freightCategories ?? data.freightCategoryRates ?? null);
+    });
+  }, [businessId, enabled]);
+  useEffect(() => {
+    if (!enabled || !businessId) return;
+    return onSnapshot(
+      collection(db, "businesses", businessId, "destinationCountries"),
+      (snap) => {
+        const next = new Map<string, FirestoreRow>();
+        snap.docs.forEach((row) =>
+          next.set(row.id, {id: row.id, ...row.data()}),
+        );
+        setRoutes(next);
+      },
+    );
+  }, [businessId, enabled]);
+  // Multipliers are effectively retired - v2 bookings store 1 and the
+  // priced-item model replaced factor pricing - so the lens does not
+  // resurrect them. The suggestion is editable either way.
+  const multiplierFor = useMemo(() => () => 1, []);
+  void categories;
+  return {table, routes, multiplierFor};
+}
+
 function useFreightQuoteRequests(businessId: string, enabled: boolean) {
   const [rows, setRows] = useState<FirestoreRow[]>([]);
   const [loading, setLoading] = useState(false);

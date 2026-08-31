@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/freight_quote.dart';
+import '../utils/freight_contents.dart';
 import 'guest_checkout_service.dart';
 
 /// Asking businesses what they charge for a parcel none of them has priced.
@@ -33,6 +34,7 @@ class FreightQuoteService {
     double weightKg = 0,
     String itemCategoryId = '',
     String itemLabel = '',
+    FreightContents? contents,
   }) async {
     final response = await _functions
         .httpsCallable('createFreightQuoteRequest')
@@ -45,6 +47,7 @@ class FreightQuoteService {
           if (itemCategoryId.trim().isNotEmpty)
             'itemCategoryId': itemCategoryId.trim(),
           if (itemLabel.trim().isNotEmpty) 'itemLabel': itemLabel.trim(),
+          ...?contents?.payloadFields(),
         });
     final data = Map<String, dynamic>.from(response.data);
     return FreightQuoteRequestResult(

@@ -19,6 +19,11 @@ const {
   isValidPhoneNumber,
   normalizePhoneAlias,
 } = require("./phone_number");
+const {
+  validateFreightContents,
+  priceFreightContents,
+  freightContentsSummary,
+} = require("./freight_contents");
 const {agreedFreightPrice} = require("./agreed_freight_price");
 const {resumableFreightSetup} = require("./resume_freight_setup");
 const {humanStatusLabel} = require("./status_label");
@@ -50,6 +55,7 @@ const FREIGHT_CATEGORY_ERRORS = {
 const FREIGHT_COVERAGE_ERRORS = {};
 const {
   freightCategoriesForBusiness,
+  freightCategoryMultiplier,
   validateFreightCategorySettings,
 } = require("./freight_categories");
 const {
@@ -21767,6 +21773,14 @@ exports.createFreightShipmentPaymentIntent = onCall(
       // is weighed and the existing confirm-and-settle flow runs. Nothing
       // is priced by category any more - a number a business never chose is
       // not a price, and the goods it has not quoted go to a request.
+      // Declared contents change what the single-item guards below may
+      // demand, so they are read first. Validation only - pricing waits
+      // until the agreed-quote question is settled.
+      const declaredContents = validateFreightContents(request.data || {});
+      if (!declaredContents.ok) {
+        throw new HttpsError("invalid-argument", declaredContents.error);
+      }
+      const hasDeclaredContents = Boolean(declaredContents.contents);
       const resolvedPricing = freightItemPricing({
         table: business.freightPaybackTable,
         categoryId: itemCategoryId,
@@ -21793,10 +21807,11 @@ exports.createFreightShipmentPaymentIntent = onCall(
       // A price this business never set is not one to invent. A customer who
       // picked an item it has not quoted gets a request it answers with a
       // number of its own.
-      if (!itemPricing.priced) {
+      if (!itemPricing.priced && !hasDeclaredContents) {
         throw new HttpsError("failed-precondition", "item_not_priced");
       }
-      if (itemPricing.needsWeightAtBooking && parcelWeightKg <= 0) {
+      if (itemPricing.needsWeightAtBooking && parcelWeightKg <= 0 &&
+          !hasDeclaredContents) {
         throw new HttpsError(
             "invalid-argument",
             "Parcel weight must be greater than zero",
@@ -21825,7 +21840,32 @@ exports.createFreightShipmentPaymentIntent = onCall(
         }
         agreedQuote = {...agreed, requestId: quoteRequestId};
       }
-      const shippingFee = agreedQuote ?
+      // A declared box: N set-price items plus one weighed bucket, priced
+      // through this business's own catalogue. Exclusive with an agreed
+      // quote - a quoted price already IS the whole box's number.
+      let manifest = null;
+      if (!agreedQuote) {
+        const contentsResult = declaredContents;
+        if (contentsResult.contents) {
+          const priced = priceFreightContents({
+            table: business.freightPaybackTable,
+            ratePerKgCents: Math.round(pricePerKg * 100),
+            multiplierFor: (categoryId) => freightCategoryMultiplier(
+                business, categoryId,
+            ),
+            contents: contentsResult.contents,
+          });
+          if (!priced.ok) {
+            // A routing answer, not a dead end: the client knows whether to
+            // move the item into the weighed kilos or ask for a price.
+            throw new HttpsError("failed-precondition", priced.error);
+          }
+          manifest = {...priced, contents: contentsResult.contents};
+        }
+      }
+      const shippingFee = manifest ?
+        manifest.estimateCents / 100 :
+        agreedQuote ?
         agreedQuote.amountCents / 100 :
         itemPricing.mode === "flat" ?
           itemPricing.flatPrice :
@@ -21842,7 +21882,19 @@ exports.createFreightShipmentPaymentIntent = onCall(
         Boolean(business.freightPaybackTable);
       let coverage;
       let itemSnapshot = null;
-      if (wantsItemPricing) {
+      if (manifest) {
+        // Every line in the manifest resolved to a price this business set,
+        // so each is a listed item; cover is the standing policy's answer,
+        // and costs nothing, exactly as for one listed item.
+        coverage = {
+          ok: true,
+          declaredValueCents: 0,
+          coverageFee: 0,
+          coverageFeeCents: 0,
+          covered: policyNow.coversLoss === true,
+          policy: policyNow,
+        };
+      } else if (wantsItemPricing) {
         const itemQuote = quoteFreightItemCoverage({
           business,
           policy: policyNow,
@@ -21875,6 +21927,19 @@ exports.createFreightShipmentPaymentIntent = onCall(
           );
         }
       }
+      // A manifest's weighed bucket sets the effective per-kg rate: the
+      // bucket is the only weighed component, and folding its category
+      // multiplier in here is what lets settlement recompute the excess
+      // with the same one number the estimate used.
+      const effectivePricePerKg = manifest ?
+        Math.round(pricePerKg * manifest.weighedCategoryMultiplier * 100) /
+          100 :
+        pricePerKg;
+      const manifestEstimatedWeightKg = manifest ?
+        (manifest.contents.totalWeightKg ||
+          Math.round((manifest.weighedKg + manifest.includedKg) * 1000) /
+            1000) :
+        0;
       const shippingFeeCents = Math.round(shippingFee * 100);
       const pickupFeeCents = Math.round(pickup.fee * 100);
       const destinationDeliveryFeeCents = deliveryQuote.feeCents;
@@ -21929,23 +21994,38 @@ exports.createFreightShipmentPaymentIntent = onCall(
           mode: freightMode,
           freightPricingVersion: 2,
           settlementVersion: 1,
-          estimatedWeightKg: parcelWeightKg,
-          weightKg: parcelWeightKg,
-          pricePerKg,
-          pricePerKgCents: Math.round(pricePerKg * 100),
-          itemCategoryId: String(itemCategoryId || ""),
+          estimatedWeightKg: manifest ?
+            manifestEstimatedWeightKg :
+            parcelWeightKg,
+          weightKg: manifest ? manifestEstimatedWeightKg : parcelWeightKg,
+          pricePerKg: effectivePricePerKg,
+          pricePerKgCents: Math.round(effectivePricePerKg * 100),
+          itemCategoryId: manifest ?
+            String(manifest.contents.otherCategoryId || "") :
+            String(itemCategoryId || ""),
           itemCategoryMultiplier: 1,
           // How this parcel was priced, frozen at booking. A set-price
           // shipment has no weight to verify, so nothing downstream may
-          // reprice it against a scale.
-          pricingMode: itemPricing.mode,
-          ...(itemPricing.mode === "flat" ? {
+          // reprice it against a scale. A manifest is N set-price items in
+          // one box: their summed price and allowance settle by the same
+          // formula as one, and the weighed bucket floats with the scale.
+          pricingMode: manifest ? "manifest" : itemPricing.mode,
+          ...(manifest ? {
+            itemFlatPrice: manifest.flatCents / 100,
+            itemIncludedKg: manifest.includedKg,
+            contentsManifest: manifest.lines,
+            contentsOtherGoodsKg: manifest.weighedKg,
+            contentsOtherCategoryId: manifest.contents.otherCategoryId,
+            contentsSummary: freightContentsSummary(manifest.contents),
+          } : itemPricing.mode === "flat" ? {
             itemFlatPrice: itemPricing.flatPrice,
             itemIncludedKg: itemPricing.includedKg,
           } : {itemWeightFactor: itemPricing.weightFactor}),
           // A set price with an allowance is still weighed at the counter -
           // only to see whether the parcel outgrew what the price covers.
-          weightVerificationRequired: itemPricing.weighsAtDropOff,
+          weightVerificationRequired: manifest ?
+            manifest.weighedKg > 0 || manifest.includedKg > 0 :
+            itemPricing.weighsAtDropOff,
           ...(itemSnapshot ? {
             itemId: String(itemId || ""),
           } : {}),
@@ -23136,8 +23216,9 @@ exports.createFreightQuoteRequest = onCall(
           uid: provider.business?.ownerUid,
           preferenceKey: "businessActivity",
           title: "Someone is asking for a price",
-          body: `${validated.request.description.slice(0, 80)} to ` +
-            `${countryName}`.trim(),
+          body: `${(validated.request.description ||
+            freightContentsSummary(validated.request.contents))
+              .slice(0, 80)} to ${countryName}`.trim(),
           data: {
             type: "freight_quote_request",
             requestId: requestRef.id,
@@ -23798,7 +23879,10 @@ exports.confirmFreightShipmentWeight = onCall(
             // A set-price parcel settles at its price plus whatever it
             // weighed over the allowance; a by-weight one sends zero here
             // and is priced by the scale exactly as before.
-            flatPriceCents: shipment.pricingMode === "flat" ?
+            // "manifest" is N set-price items in one box; their summed
+            // price and allowance settle by the same formula as one.
+            flatPriceCents: shipment.pricingMode === "flat" ||
+              shipment.pricingMode === "manifest" ?
               centsFromDollars(shipment.itemFlatPrice) || 0 :
               0,
             includedKg: Number(shipment.itemIncludedKg || 0) || 0,

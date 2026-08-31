@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const {humanStatusLabel} = require("./status_label");
+const {humanStatusLabel} = require("../status_label");
 
 test("a database enum becomes words a customer can read", () => {
   // "Your freight shipment is now awaiting_weight_confirmation." went out
@@ -23,7 +23,7 @@ test("an absent status falls back instead of printing emptiness", () => {
 
 test("the notification bodies use the label, not the raw status", () => {
   const fs = require("node:fs");
-  const source = fs.readFileSync(`${__dirname}/index.js`, "utf8");
+  const source = fs.readFileSync(`${__dirname}/../index.js`, "utf8");
   assert.match(
       source,
       /barrel shipment is now \$\{humanStatusLabel\(after\.status\)\}/,
