@@ -343,10 +343,13 @@ void main() {
       expect(
         screen,
         contains(
-          'double get _price => !_itemPriced\n'
-          '      ? 0\n'
-          '      : _setPrice\n'
-          '      ? _itemPricing.flatPrice',
+          // A declared box prices as the sum of its manifest; the
+          // single-item shapes below are the fallback inside the same
+          // getter, unchanged.
+          'return !_itemPriced\n'
+          '        ? 0\n'
+          '        : _setPrice\n'
+          '        ? _itemPricing.flatPrice',
         ),
       );
       expect(
