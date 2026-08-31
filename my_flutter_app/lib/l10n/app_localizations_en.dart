@@ -7224,6 +7224,65 @@ class AppLocalizationsEn extends AppLocalizations {
       'You are not committing to anything. You choose which price to take, or none of them.';
 
   @override
+  String get freightWhatsInTheBox => 'What\'s in the box?';
+
+  @override
+  String get freightAddAnItem => 'Add an item';
+
+  @override
+  String get freightItemNameLabel => 'Name the item';
+
+  @override
+  String get freightOtherGoodsLabel => 'Other goods, weighed (kg)';
+
+  @override
+  String get freightOtherGoodsHelper =>
+      'Everything not listed above, weighed together.';
+
+  @override
+  String get freightBoxEstimate => 'Box estimate';
+
+  @override
+  String get freightAnythingElseLabel =>
+      'Anything else the businesses should know?';
+
+  @override
+  String get freightWhatElseInBox => 'What else is in the box?';
+
+  @override
+  String get freightAddAnotherPricedItem => 'Add another priced item';
+
+  @override
+  String get freightWeighedAtRateHelper =>
+      'Charged per kg once the business weighs the box.';
+
+  @override
+  String get freightContentsTooMany =>
+      'List at most 10 kinds of item in one box.';
+
+  @override
+  String get freightContentsLabelInvalid =>
+      'Name each item in under 60 characters.';
+
+  @override
+  String get freightContentsQuantityInvalid =>
+      'Item counts must be between 1 and 99.';
+
+  @override
+  String get freightContentsCategoryInvalid =>
+      'Pick each item\'s category from the list.';
+
+  @override
+  String freightItemWeighedByBusiness(String item) {
+    return '$item is weighed by this business. Include it in the weighed kilos instead.';
+  }
+
+  @override
+  String freightItemUnpricedByBusiness(String item) {
+    return '$item has no price from this business. Ask for a price instead.';
+  }
+
+  @override
   String get freightQuoteDescriptionLabel => 'What are you sending?';
 
   @override

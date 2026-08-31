@@ -7350,6 +7350,66 @@ class AppLocalizationsFr extends AppLocalizations {
       'Vous ne vous engagez à rien. Vous choisissez le prix que vous acceptez, ou aucun.';
 
   @override
+  String get freightWhatsInTheBox => 'Qu\'y a-t-il dans le colis ?';
+
+  @override
+  String get freightAddAnItem => 'Ajouter un article';
+
+  @override
+  String get freightItemNameLabel => 'Nommez l\'article';
+
+  @override
+  String get freightOtherGoodsLabel => 'Autres marchandises, au poids (kg)';
+
+  @override
+  String get freightOtherGoodsHelper =>
+      'Tout ce qui n\'est pas listé ci-dessus, pesé ensemble.';
+
+  @override
+  String get freightBoxEstimate => 'Estimation du colis';
+
+  @override
+  String get freightAnythingElseLabel =>
+      'Autre chose que les entreprises devraient savoir ?';
+
+  @override
+  String get freightWhatElseInBox => 'Quoi d\'autre dans le colis ?';
+
+  @override
+  String get freightAddAnotherPricedItem =>
+      'Ajouter un autre article au prix fixé';
+
+  @override
+  String get freightWeighedAtRateHelper =>
+      'Facturé au kilo une fois le colis pesé par l\'entreprise.';
+
+  @override
+  String get freightContentsTooMany =>
+      'Indiquez au plus 10 types d\'articles par colis.';
+
+  @override
+  String get freightContentsLabelInvalid =>
+      'Nommez chaque article en moins de 60 caractères.';
+
+  @override
+  String get freightContentsQuantityInvalid =>
+      'Les quantités doivent être entre 1 et 99.';
+
+  @override
+  String get freightContentsCategoryInvalid =>
+      'Choisissez la catégorie de chaque article dans la liste.';
+
+  @override
+  String freightItemWeighedByBusiness(String item) {
+    return '$item est pesé par cette entreprise. Incluez-le plutôt dans les kilos pesés.';
+  }
+
+  @override
+  String freightItemUnpricedByBusiness(String item) {
+    return '$item n\'a pas de prix chez cette entreprise. Demandez plutôt un prix.';
+  }
+
+  @override
   String get freightQuoteDescriptionLabel => 'Qu\'envoyez-vous ?';
 
   @override

@@ -6,6 +6,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
+import '../utils/freight_contents.dart';
 import 'guest_checkout_service.dart';
 
 /// Customer-side flow for parcel/box freight shipments (priced by weight,
@@ -62,6 +63,7 @@ class FreightShipmentService {
     /// shipment arrived. Only businesses that opted in accept it.
     String? paymentTiming,
     required MarketplaceDisclosureAcceptance marketplaceAcceptance,
+    FreightContents? contents,
   }) async {
     final response = await _functions
         .httpsCallable('createFreightShipmentPaymentIntent')
@@ -94,6 +96,7 @@ class FreightShipmentService {
           if (!pickupRequested && officeLocationId != null)
             'officeLocationId': officeLocationId,
           if (paymentTiming == 'arrival') 'paymentTiming': 'arrival',
+          ...?contents?.payloadFields(),
           'useWalletBalance': useWalletBalance,
           'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         });

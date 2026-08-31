@@ -42,8 +42,15 @@ const FREIGHT_QUOTE_ERRORS = Object.freeze({
   covers_invalid: "Say whether you cover this parcel if it is lost",
   terms_too_long: "Keep the note under 1000 characters",
   description_required: "Describe what is being sent",
+  contents_too_many_items: "List at most 10 kinds of item in one box",
+  contents_category_invalid: "Pick a category from the list",
+  contents_label_invalid: "Name each item in under 60 characters",
+  contents_quantity_invalid: "Item counts must be between 1 and 99",
+  contents_weight_invalid: "That weight could not be read",
   description_too_long: "Keep the description under 2000 characters",
 });
+
+const {validateFreightContents} = require("./freight_contents");
 
 const MAX_DESCRIPTION_LENGTH = 2000;
 const MAX_TERMS_LENGTH = 1000;
@@ -60,7 +67,15 @@ const MAX_TERMS_LENGTH = 1000;
  */
 function validateFreightQuoteRequest(raw) {
   const description = String(raw?.description || "").trim();
-  if (!description) return {ok: false, error: "description_required"};
+  const contentsResult = validateFreightContents(raw);
+  if (!contentsResult.ok) return contentsResult;
+  const contents = contentsResult.contents;
+  // A declared list of contents IS the description; prose becomes the
+  // optional nuance. A request with neither says nothing a business could
+  // price.
+  if (!description && !contents) {
+    return {ok: false, error: "description_required"};
+  }
   if (description.length > MAX_DESCRIPTION_LENGTH) {
     return {ok: false, error: "description_too_long"};
   }
@@ -77,6 +92,7 @@ function validateFreightQuoteRequest(raw) {
         0,
       itemCategoryId: String(raw?.itemCategoryId || "").trim(),
       itemLabel: String(raw?.itemLabel || "").trim().slice(0, 120),
+      ...(contents ? {contents} : {}),
     },
   };
 }

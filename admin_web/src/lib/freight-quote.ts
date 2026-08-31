@@ -73,11 +73,16 @@ export function validateFreightQuoteRequest(raw: {
   weightKg?: unknown;
   itemCategoryId?: string;
   itemLabel?: string;
+  hasContents?: boolean;
 }):
   | {ok: true; request: FreightQuoteRequestPayload}
   | {ok: false; error: string} {
   const description = String(raw?.description ?? "").trim();
-  if (!description) return {ok: false, error: "description_required"};
+  // A declared contents list IS the description; prose becomes optional
+  // nuance. Mirrors functions/freight_quote.js.
+  if (!description && !raw?.hasContents) {
+    return {ok: false, error: "description_required"};
+  }
   if (description.length > MAX_FREIGHT_QUOTE_DESCRIPTION_LENGTH) {
     return {ok: false, error: "description_too_long"};
   }

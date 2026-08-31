@@ -420,6 +420,64 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Sign in to see parking": "Se connecter pour voir le stationnement",
   "You can still prepare a new shared-barrel request before creating an account.":
     "Vous pouvez toujours préparer une nouvelle demande de baril partagé avant de créer un compte.",
+  "What's in the box?":
+    "Qu'y a-t-il dans le colis ?",
+  "Add an item":
+    "Ajouter un article",
+  "Name the item":
+    "Nommez l'article",
+  "Whole box weight (kg), if you know it":
+    "Poids total du colis (kg), si vous le connaissez",
+  "Anything else the businesses should know?":
+    "Autre chose que les entreprises devraient savoir ?",
+  "Packing, condition, timing - whatever helps them price it.":
+    "Emballage, état, délais - tout ce qui les aide à fixer un prix.",
+  "Everything not listed above, weighed together.":
+    "Tout ce qui n'est pas listé ci-dessus, pesé ensemble.",
+  ", by weight":
+    ", au poids",
+  "What else is in the box?":
+    "Quoi d'autre dans le colis ?",
+  "Add another priced item":
+    "Ajouter un autre article au prix fixé",
+  "Other goods, weighed":
+    "Autres marchandises, au poids",
+  "Box estimate":
+    "Estimation du colis",
+  "once the business weighs the box.":
+    "une fois le colis pesé par l'entreprise.",
+  "is weighed by this business - include it in the weighed kilos instead.":
+    "est pesé par cette entreprise - incluez-le plutôt dans les kilos pesés.",
+  "has no price from this business - ask for a price instead.":
+    "n'a pas de prix chez cette entreprise - demandez plutôt un prix.",
+  "This box could not be priced. Adjust the list.":
+    "Ce colis n'a pas pu être tarifé. Ajustez la liste.",
+  "your price ×":
+    "votre prix ×",
+  "weighed with the rest":
+    "pesé avec le reste",
+  "no price set":
+    "aucun prix fixé",
+  "Other goods":
+    "Autres marchandises",
+  "kg weighed at your rate":
+    "kg pesés à votre tarif",
+  "weighed goods - no weight given":
+    "marchandises au poids - poids non indiqué",
+  "Use suggested":
+    "Utiliser la suggestion",
+  "List at most 10 kinds of item in one box.":
+    "Indiquez au plus 10 types d'articles par colis.",
+  "Pick each item's category from the list.":
+    "Choisissez la catégorie de chaque article dans la liste.",
+  "Name each item in under 60 characters.":
+    "Nommez chaque article en moins de 60 caractères.",
+  "Item counts must be between 1 and 99.":
+    "Les quantités doivent être entre 1 et 99.",
+  "Charged at":
+    "Facturé à",
+  "In the box": "Dans le colis",
+  "kg other goods": "kg d'autres marchandises",
   "Your price request was sent.": "Votre demande de prix a été envoyée.",
   "business on this route was asked.":
     "entreprise sur cet itinéraire a été sollicitée.",

@@ -79,10 +79,21 @@ import { isGenericOfficeDropOffAddress } from "@/lib/office-drop-off";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import {
   freightCategoryById,
+  STANDARD_FREIGHT_CATEGORIES,
   freightCategoryOptionsFrom,
   freightCoverageComparisonLine,
   freightCoveragePolicyFrom,
 } from "@/lib/freight-categories";
+import {
+  type ContentsItem,
+  type FreightContents,
+  MAX_ITEM_QUANTITY,
+  contentsPayloadFields,
+  contentsProblem,
+  contentsSummary,
+  hasDeclaredContents,
+  priceContentsForBusiness,
+} from "@/lib/freight-contents";
 import {
   freightQuoteErrorMessage,
   freightQuoteCoverageLine,
@@ -115,6 +126,8 @@ import {
 } from "@/lib/receiver-phone-rules";
 import {
   OTHER_ITEM_ID,
+  STANDARD_FREIGHT_ITEMS,
+  type PaybackTable,
   freightItemChoicesFor,
   freightItemPricing,
   freightPaybackFor,
@@ -2418,6 +2431,10 @@ function FreightShipmentForm({
   const [pickupLocation, setPickupLocation] =
     useState<AddressSuggestion | null>(null);
   const [quote, setQuote] = useState<FreightQuote | null>(null);
+  // The rest of the box: more set-price items from THIS business, plus one
+  // weighed line. Selection over typing - rows are picked and stepped.
+  const [extraItems, setExtraItems] = useState<ContentsItem[]>([]);
+  const [boxOtherKg, setBoxOtherKg] = useState("");
   const [quoting, setQuoting] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -2579,6 +2596,67 @@ function FreightShipmentForm({
         weightKg: setPrice ? 1 : weightKg,
       })
     : null;
+  // Every item this business sells at a set price, flattened for a picker.
+  const businessFlatItems = useMemo(() => {
+    const rows: Array<{
+      categoryId: string;
+      itemId: string;
+      label: string;
+      priceCents: number;
+    }> = [];
+    const table = paybackTable as PaybackTable | undefined;
+    if (table) {
+      for (const [categoryId, entry] of Object.entries(table)) {
+        for (const item of entry?.items ?? []) {
+          if (item?.pricingMode === "flat" && Number(item.flatPrice) > 0) {
+            rows.push({
+              categoryId,
+              itemId: String(item.id),
+              label: String(item.label || item.id),
+              priceCents: Math.round(Number(item.flatPrice) * 100),
+            });
+          }
+        }
+      }
+    }
+    return rows;
+  }, [paybackTable]);
+  const boxContents: FreightContents = {
+    items: [
+      ...(setPrice && itemStepSatisfied
+        ? [{
+            categoryId: activeCategoryId,
+            itemId: resolvedItemId,
+            label: itemLookup?.label || "This item",
+            quantity: 1,
+          }]
+        : []),
+      ...extraItems,
+    ],
+    otherGoodsKg: setPrice
+      ? Number(boxOtherKg) > 0
+        ? Number(boxOtherKg)
+        : 0
+      : Number(weightKg) > 0
+        ? Number(weightKg)
+        : 0,
+    otherCategoryId: setPrice ? "general" : activeCategoryId,
+    totalWeightKg: 0,
+  };
+  // The single-item flow IS the manifest of one; the builder only takes
+  // over once the box holds more than the funnel asked about.
+  const manifestActive =
+    Boolean(destination) &&
+    itemPricing.priced &&
+    (extraItems.length > 0 || (setPrice && boxContents.otherGoodsKg > 0));
+  const manifestPricing = manifestActive
+    ? priceContentsForBusiness({
+        table: paybackTable as PaybackTable | undefined,
+        ratePerKgCents: Math.round((pricing?.rate ?? 0) * 100),
+        multiplierFor: () => 1,
+        contents: boxContents,
+      })
+    : null;
   const coversLoss = coveragePolicy?.coversLoss === true;
   // A promise is only worth stating about a parcel this business will take:
   // a row it does not list goes to a price request, where cover is answered
@@ -2619,9 +2697,12 @@ function FreightShipmentForm({
   // The subtotal the customer is shown has to be the one the server charges:
   // a published price stands on its own, and a by-weight row is the route's
   // rate times the weight and nothing else.
-  const shippingSubtotal = setPrice
-    ? itemPricing.flatPrice
-    : (pricing?.subtotal ?? 0);
+  const shippingSubtotal =
+    manifestPricing && manifestPricing.ok
+      ? manifestPricing.estimateCents / 100
+      : setPrice
+        ? itemPricing.flatPrice
+        : (pricing?.subtotal ?? 0);
   const estimatedTotal =
     pricing === null || pricing.total === null
       ? null
@@ -2640,6 +2721,10 @@ function FreightShipmentForm({
   useEffect(() => {
     setWantsDelivery(false);
     setReceiverAddress("");
+    // The box was priced against the previous business's list; a different
+    // business prices it differently or not at all.
+    setExtraItems([]);
+    setBoxOtherKg("");
   }, [destination?.businessId]);
   const officeLocations = useOfficeLocations(destination?.businessId ?? "");
   const [officeLocationId, setOfficeLocationId] = useState("");
@@ -2791,7 +2876,8 @@ function FreightShipmentForm({
     try {
       await startCheckout(
         "freightShipment",
-        buildFreightShipmentPayload(
+        {
+        ...buildFreightShipmentPayload(
           {
             quoteRequestId: agreedQuoteRequestId,
             senderName,
@@ -2825,6 +2911,8 @@ function FreightShipmentForm({
           },
           marketplaceDisclosure(accepted),
         ),
+        ...(manifestActive ? contentsPayloadFields(boxContents) : {}),
+        },
       );
     } catch {
       setError(
@@ -3156,6 +3244,7 @@ function FreightShipmentForm({
                     : ""
                 }
                 itemCategoryId={activeCategoryId}
+                itemId={activeItemId}
                 itemLabel={
                   funnelItems.find((item) => item.id === activeItemId)?.label ??
                   ""
@@ -3297,6 +3386,163 @@ function FreightShipmentForm({
                   </span>
                 ) : (
                   <span>It covers the parcel whatever it weighs.</span>
+                )}
+              </div>
+            )}
+            {destination && itemPricing.priced &&
+              businessFlatItems.length > 0 && (
+              <div className="customer-form-span customer-contents-builder">
+                <span className="customer-contents-title">
+                  What else is in the box?
+                </span>
+                {extraItems.map((item, index) => (
+                  <div className="customer-contents-row" key={index}>
+                    <select
+                      aria-label="Priced item"
+                      onChange={(event) => {
+                        const [categoryId, itemId] =
+                          event.target.value.split("|");
+                        const match = businessFlatItems.find(
+                          (row) =>
+                            row.categoryId === categoryId &&
+                            row.itemId === itemId,
+                        );
+                        if (!match) return;
+                        setExtraItems((current) =>
+                          current.map((row, i) =>
+                            i === index
+                              ? {
+                                  categoryId: match.categoryId,
+                                  itemId: match.itemId,
+                                  label: match.label,
+                                  quantity: row.quantity,
+                                }
+                              : row,
+                          ),
+                        );
+                      }}
+                      value={`${item.categoryId}|${item.itemId}`}
+                    >
+                      {businessFlatItems.map((row) => (
+                        <option
+                          key={`${row.categoryId}|${row.itemId}`}
+                          value={`${row.categoryId}|${row.itemId}`}
+                        >
+                          {row.label} · {formatMoney(row.priceCents / 100)}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="customer-qty-stepper">
+                      <button
+                        aria-label="Fewer"
+                        disabled={item.quantity <= 1}
+                        onClick={() =>
+                          setExtraItems((current) =>
+                            current.map((row, i) =>
+                              i === index
+                                ? {...row, quantity: row.quantity - 1}
+                                : row,
+                            ),
+                          )
+                        }
+                        type="button"
+                      >
+                        −
+                      </button>
+                      <span>{item.quantity}</span>
+                      <button
+                        aria-label="More"
+                        disabled={item.quantity >= MAX_ITEM_QUANTITY}
+                        onClick={() =>
+                          setExtraItems((current) =>
+                            current.map((row, i) =>
+                              i === index
+                                ? {...row, quantity: row.quantity + 1}
+                                : row,
+                            ),
+                          )
+                        }
+                        type="button"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button
+                      aria-label="Remove this item"
+                      className="customer-contents-remove"
+                      onClick={() =>
+                        setExtraItems((current) =>
+                          current.filter((_, i) => i !== index),
+                        )
+                      }
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className="secondary-button customer-contents-add"
+                  onClick={() => {
+                    const first = businessFlatItems[0];
+                    if (!first) return;
+                    setExtraItems((current) =>
+                      current.length >= 9
+                        ? current
+                        : [
+                            ...current,
+                            {
+                              categoryId: first.categoryId,
+                              itemId: first.itemId,
+                              label: first.label,
+                              quantity: 1,
+                            },
+                          ],
+                    );
+                  }}
+                  type="button"
+                >
+                  + Add another priced item
+                </button>
+                {setPrice && (
+                  <div className="customer-contents-row customer-contents-other">
+                    <span>Other goods, weighed</span>
+                    <input
+                      aria-label="Other goods weight in kilograms"
+                      inputMode="decimal"
+                      min="0"
+                      onChange={(event) => setBoxOtherKg(event.target.value)}
+                      placeholder="kg"
+                      step="0.5"
+                      style={{maxWidth: 90}}
+                      type="number"
+                      value={boxOtherKg}
+                    />
+                    <small>
+                      Charged at {formatMoney(pricing?.rate ?? 0)} / kg once
+                      the business weighs the box.
+                    </small>
+                  </div>
+                )}
+                {manifestPricing && manifestPricing.ok && (
+                  <div className="customer-quote-row">
+                    <div>
+                      <strong>Box estimate</strong>
+                      <small>{contentsSummary(boxContents)}</small>
+                    </div>
+                    <span className="customer-quote-value">
+                      {formatMoney(manifestPricing.estimateCents / 100)}
+                    </span>
+                  </div>
+                )}
+                {manifestPricing && !manifestPricing.ok && (
+                  <div className="customer-inline-note error" role="alert">
+                    {manifestPricing.error === "contents_item_weighed"
+                      ? `${manifestPricing.itemLabel} is weighed by this business - include it in the weighed kilos instead.`
+                      : manifestPricing.error === "contents_item_unpriced"
+                        ? `${manifestPricing.itemLabel} has no price from this business - ask for a price instead.`
+                        : "This box could not be priced. Adjust the list."}
+                  </div>
                 )}
               </div>
             )}
@@ -3758,6 +4004,7 @@ function FreightPriceRequest({
   destinationCountryId,
   destinationCountryName,
   itemCategoryId,
+  itemId,
   itemLabel,
   mode,
   onAuthenticationRequired,
@@ -3769,12 +4016,29 @@ function FreightPriceRequest({
   destinationCountryId: string;
   destinationCountryName: string;
   itemCategoryId: string;
+  itemId?: string;
   itemLabel: string;
   mode: "air" | "sea";
   onAuthenticationRequired?: () => void | boolean | Promise<boolean | void>;
 }) {
   const [description, setDescription] = useState("");
   const [weightKg, setWeightKg] = useState("");
+  // What is in the box, as a list. Selection over typing: the first row is
+  // the item the funnel already asked about, and every further row is
+  // picked, stepped, or removed - typing appears only for "Something else"
+  // and for kilos.
+  const [contentsItems, setContentsItems] = useState<ContentsItem[]>(() =>
+    itemCategoryId && itemLabel
+      ? [{
+          categoryId: itemCategoryId,
+          itemId: itemId ?? "",
+          label: itemLabel,
+          quantity: 1,
+        }]
+      : [],
+  );
+  const [otherKg, setOtherKg] = useState("");
+  const [otherCategoryId, setOtherCategoryId] = useState("general");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [createdId, setCreatedId] = useState("");
@@ -3811,6 +4075,18 @@ function FreightPriceRequest({
     }))) {
       return;
     }
+    const contents = {
+      items: contentsItems,
+      otherGoodsKg: Number(otherKg) > 0 ? Number(otherKg) : 0,
+      otherCategoryId,
+      totalWeightKg: Number(weightKg) > 0 ? Number(weightKg) : 0,
+    };
+    const declared = hasDeclaredContents(contents);
+    const contentsError = declared ? contentsProblem(contents) : null;
+    if (contentsError) {
+      setError(contentsError);
+      return;
+    }
     const validated = validateFreightQuoteRequest({
       destinationCountryId,
       mode,
@@ -3818,6 +4094,7 @@ function FreightPriceRequest({
       weightKg,
       itemCategoryId,
       itemLabel,
+      hasContents: declared,
     });
     if (!validated.ok) {
       setError(freightQuoteErrorMessage(validated.error));
@@ -3830,7 +4107,10 @@ function FreightPriceRequest({
         id: string;
         trackingCode: string;
         eligibleBusinessCount: number;
-      }>("createFreightQuoteRequest", {...validated.request});
+      }>("createFreightQuoteRequest", {
+        ...validated.request,
+        ...contentsPayloadFields(contents),
+      });
       setCreatedId(result.id);
       const confirmation = {
         trackingCode: text(result.trackingCode, ""),
@@ -3871,21 +4151,157 @@ function FreightPriceRequest({
           {error}
         </div>
       )}
-      <label className="customer-form-span">
-        What are you sending?
-        <textarea
-          maxLength={2000}
-          onChange={(event) => setDescription(event.target.value)}
-          placeholder="Describe the parcel: what it is, how many, how it is packed."
-          rows={3}
-          value={description}
-        />
-        <small>
-          The more the business knows, the closer the price it can give you.
-        </small>
-      </label>
+      <div className="customer-form-span customer-contents-builder">
+        <span className="customer-contents-title">What's in the box?</span>
+        {contentsItems.map((item, index) => {
+          const categoryItems =
+            STANDARD_FREIGHT_ITEMS[item.categoryId] ?? [];
+          const knownItem = categoryItems.some((i) => i.id === item.itemId);
+          const update = (patch: Partial<ContentsItem>) =>
+            setContentsItems((current) =>
+              current.map((row, i) =>
+                i === index ? {...row, ...patch} : row,
+              ),
+            );
+          return (
+            <div className="customer-contents-row" key={index}>
+              <select
+                aria-label="Item category"
+                onChange={(event) =>
+                  update({
+                    categoryId: event.target.value,
+                    itemId: "",
+                    label: "",
+                  })
+                }
+                value={item.categoryId}
+              >
+                {STANDARD_FREIGHT_CATEGORIES.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Item"
+                onChange={(event) => {
+                  const id = event.target.value;
+                  const match = categoryItems.find((i) => i.id === id);
+                  update({
+                    itemId: id === "__other" ? "" : id,
+                    label: match ? match.label : "",
+                  });
+                }}
+                value={knownItem && item.itemId ? item.itemId : "__other"}
+              >
+                {categoryItems.map((choice) => (
+                  <option key={choice.id} value={choice.id}>
+                    {choice.label}
+                  </option>
+                ))}
+                <option value="__other">Something else</option>
+              </select>
+              {!(knownItem && item.itemId) && (
+                <input
+                  aria-label="Item name"
+                  maxLength={60}
+                  onChange={(event) => update({label: event.target.value})}
+                  placeholder="Name the item"
+                  value={item.label}
+                />
+              )}
+              <div className="customer-qty-stepper">
+                <button
+                  aria-label="Fewer"
+                  disabled={item.quantity <= 1}
+                  onClick={() =>
+                    update({quantity: Math.max(1, item.quantity - 1)})
+                  }
+                  type="button"
+                >
+                  −
+                </button>
+                <span>{item.quantity}</span>
+                <button
+                  aria-label="More"
+                  disabled={item.quantity >= MAX_ITEM_QUANTITY}
+                  onClick={() =>
+                    update({
+                      quantity: Math.min(
+                        MAX_ITEM_QUANTITY,
+                        item.quantity + 1,
+                      ),
+                    })
+                  }
+                  type="button"
+                >
+                  +
+                </button>
+              </div>
+              <button
+                aria-label="Remove this item"
+                className="customer-contents-remove"
+                onClick={() =>
+                  setContentsItems((current) =>
+                    current.filter((_, i) => i !== index),
+                  )
+                }
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+        <button
+          className="secondary-button customer-contents-add"
+          onClick={() =>
+            setContentsItems((current) =>
+              current.length >= 10
+                ? current
+                : [
+                    ...current,
+                    {
+                      categoryId: "electronics",
+                      itemId: "",
+                      label: "",
+                      quantity: 1,
+                    },
+                  ],
+            )
+          }
+          type="button"
+        >
+          + Add an item
+        </button>
+        <div className="customer-contents-row customer-contents-other">
+          <select
+            aria-label="Category of the other goods"
+            onChange={(event) => setOtherCategoryId(event.target.value)}
+            value={otherCategoryId}
+          >
+            {STANDARD_FREIGHT_CATEGORIES.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.label}, by weight
+              </option>
+            ))}
+          </select>
+          <input
+            aria-label="Weight of the other goods in kilograms"
+            inputMode="decimal"
+            min="0"
+            onChange={(event) => setOtherKg(event.target.value)}
+            placeholder="kg"
+            step="0.5"
+            style={{maxWidth: 90}}
+            type="number"
+            value={otherKg}
+          />
+          <small>Everything not listed above, weighed together.</small>
+        </div>
+      </div>
       <label>
-        Weight (kg), if you know it
+        Whole box weight (kg), if you know it
         <input
           inputMode="decimal"
           min="0"
@@ -3896,13 +4312,23 @@ function FreightPriceRequest({
           value={weightKg}
         />
       </label>
+      <label className="customer-form-span">
+        Anything else the businesses should know?
+        <textarea
+          maxLength={2000}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="Packing, condition, timing - whatever helps them price it."
+          rows={2}
+          value={description}
+        />
+      </label>
       <div className="customer-form-span">
         <button
           className="primary-button"
           data-loading={submitting}
           // Signing in comes first, so it is not held behind a description
           // the customer would have to retype after the round trip.
-          disabled={submitting || (authenticated && !description.trim())}
+          disabled={submitting}
           onClick={() => void submit()}
           type="button"
         >
