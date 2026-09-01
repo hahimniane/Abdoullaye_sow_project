@@ -3091,6 +3091,8 @@
   "freightAnythingElseLabel": "Autre chose que les entreprises devraient savoir ?",
   "freightWhatElseInBox": "Quoi d'autre dans le colis ?",
   "freightAddAnotherPricedItem": "Ajouter un autre article au prix fixé",
+  "freightPriceEach": "{price} l'unité",
+  "@freightPriceEach": {"placeholders": {"price": {"type": "String"}}},
   "freightWeighedAtRateHelper": "Facturé au kilo une fois le colis pesé par l'entreprise.",
   "freightContentsTooMany": "Indiquez au plus 10 types d'articles par colis.",
   "freightContentsLabelInvalid": "Nommez chaque article en moins de 60 caractères.",
