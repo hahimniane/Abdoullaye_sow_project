@@ -499,6 +499,9 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "That did not work. Check the email and try again.":
     "Cela n'a pas fonctionné. Vérifiez l'e-mail et réessayez.",
   "Continue to booking": "Continuer vers la réservation",
+  "is the price you accepted from this business for this parcel. That is the amount charged.":
+    "est le prix que vous avez accepté de cette entreprise pour ce colis. C'est le montant facturé.",
+  "Agreed price": "Prix convenu",
   "Your price request was sent.": "Votre demande de prix a été envoyée.",
   "business on this route was asked.":
     "entreprise sur cet itinéraire a été sollicitée.",
