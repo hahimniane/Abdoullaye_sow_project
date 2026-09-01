@@ -6,6 +6,17 @@ import { httpsCallable } from "firebase/functions";
 import { signInAnonymously } from "firebase/auth";
 
 import { GuestJourneyProgress } from "@/components/customer-tracking-journey";
+import {
+  CustomerFreightQuotes,
+  type FreightQuoteRequestRow,
+} from "@/components/customer-shipping-services";
+import {
+  collection,
+  limit as limitTo,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
 import { currentLocale } from "@/lib/format";
 import {
   GUEST_SERVICE_LABEL,
@@ -15,7 +26,7 @@ import {
   validGuestTrackingIdentifier,
   type GuestTrackingRecord,
 } from "@/lib/guest-tracking";
-import { auth, functions } from "@/lib/firebase";
+import { auth, db, functions } from "@/lib/firebase";
 
 type GuestTrackingProps = {
   authenticated: boolean;
@@ -53,6 +64,28 @@ export function GuestTracking({
   const [claimEmail, setClaimEmail] = useState("");
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState("");
+  // Set once the claim succeeds: the session now owns the request, so the
+  // prices render right here - the anonymous session cannot enter the
+  // signed-in workspace, and this page is the guest's home ground.
+  const [claimedCode, setClaimedCode] = useState("");
+  const [claimedRequest, setClaimedRequest] =
+    useState<FreightQuoteRequestRow | null>(null);
+  useEffect(() => {
+    if (!claimedCode) return;
+    return onSnapshot(
+      query(
+        collection(db, "freightQuoteRequests"),
+        where("trackingCode", "==", claimedCode),
+        limitTo(1),
+      ),
+      (snapshot) => {
+        const doc = snapshot.docs[0];
+        setClaimedRequest(
+          doc ? ({id: doc.id, ...doc.data()} as FreightQuoteRequestRow) : null,
+        );
+      },
+    );
+  }, [claimedCode]);
   // The public tracking page has the box; the lookup lives here, where it is
   // attested and rate limited. A number arriving in the URL is one somebody
   // already typed, so run it rather than making them type it twice.
@@ -150,9 +183,11 @@ export function GuestTracking({
         trackingCode: record.trackingCode,
         email,
       });
-      // The request now belongs to this session; the workspace shows the
-      // prices and takes the booking from here.
-      window.location.assign("/");
+      // The request now belongs to this session. The prices render right
+      // here: an anonymous session cannot enter the signed-in workspace,
+      // and this page is the guest's home ground.
+      setClaimedCode(record.trackingCode);
+      setClaiming(false);
     } catch (caught) {
       setClaiming(false);
       setClaimError(
@@ -237,7 +272,28 @@ export function GuestTracking({
             record.stage !== "awaiting_payment" && (
             <GuestJourneyProgress stage={record.stage} />
           )}
-          {record.service === "freight_quote" && (
+          {record.service === "freight_quote" && claimedRequest && (
+            <div className="guest-quote-state guest-quote-open">
+              <CustomerFreightQuotes request={claimedRequest} />
+              {String(claimedRequest.quoteStatus ?? "") === "selected" &&
+                !String(claimedRequest.bookedShipmentId ?? "") && (
+                <button
+                  className="primary-button"
+                  onClick={() =>
+                    window.location.assign(
+                      "/?service=freight" +
+                        `&agreedRequest=${claimedRequest.id}` +
+                        `&agreedBusiness=${String(claimedRequest.selectedBusinessId ?? "")}`,
+                    )
+                  }
+                  type="button"
+                >
+                  Continue to booking
+                </button>
+              )}
+            </div>
+          )}
+          {record.service === "freight_quote" && !claimedRequest && (
             <div className="guest-quote-state">
               {(record.quoteCount ?? 0) > 0 ? (
                 <>

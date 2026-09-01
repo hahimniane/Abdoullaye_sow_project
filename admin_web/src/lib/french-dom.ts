@@ -498,6 +498,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Entrez l'e-mail donné avec la demande.",
   "That did not work. Check the email and try again.":
     "Cela n'a pas fonctionné. Vérifiez l'e-mail et réessayez.",
+  "Continue to booking": "Continuer vers la réservation",
   "Your price request was sent.": "Votre demande de prix a été envoyée.",
   "business on this route was asked.":
     "entreprise sur cet itinéraire a été sollicitée.",
