@@ -7380,6 +7380,11 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ajouter un autre article au prix fixé';
 
   @override
+  String freightPriceEach(String price) {
+    return '$price l\'unité';
+  }
+
+  @override
   String get freightWeighedAtRateHelper =>
       'Facturé au kilo une fois le colis pesé par l\'entreprise.';
 

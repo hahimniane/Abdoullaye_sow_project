@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../services/freight_quote_service.dart';
 import '../utils/freight_contents.dart';
+import '../utils/freight_localization.dart';
+import '../widgets/box_item_editor.dart';
 import 'freight_quote_details_screen.dart';
 
 /// Describing a parcel nobody on the route has put a price on.
@@ -79,6 +81,49 @@ class _FreightQuoteRequestScreenState extends State<FreightQuoteRequestScreen> {
       if (choice.label == label) return choice.id;
     }
     return '';
+  }
+
+  /// Picking beats typing: the whole platform catalogue in one sheet, a
+  /// name field only behind "something else".
+  Future<void> _addItem() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showBoxItemPicker(
+      context,
+      sections: [
+        for (final category in standardFreightCategories)
+          BoxPickerSection(
+            categoryId: category.id,
+            label: freightCategoryLabelForId(l10n, category.id),
+            allowCustom: true,
+            items: [
+              for (final choice
+                  in standardFreightItems[category.id] ?? const [])
+                (itemId: choice.id, label: choice.label, priceCents: null),
+            ],
+          ),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      // The same catalogue item twice is one row counted up, not two rows.
+      final index = picked.itemId.isEmpty
+          ? -1
+          : _items.indexWhere(
+              (row) =>
+                  row.categoryId == picked.categoryId &&
+                  row.itemId == picked.itemId,
+            );
+      if (index >= 0) {
+        final bumped = _items[index].quantity + 1;
+        if (bumped <= maxItemQuantity) {
+          _items = [..._items]..[index] = _items[index].copyWith(
+            quantity: bumped,
+          );
+        }
+      } else {
+        _items = [..._items, picked];
+      }
+    });
   }
 
   @override
@@ -180,37 +225,30 @@ class _FreightQuoteRequestScreenState extends State<FreightQuoteRequestScreen> {
           ),
           const SizedBox(height: 18),
           Text(l10n.freightWhatsInTheBox, style: theme.textTheme.labelLarge),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           for (var index = 0; index < _items.length; index++)
-            _ContentsItemRow(
+            BoxItemTile(
               key: ValueKey('contents-$index'),
-              busy: _busy,
-              item: _items[index],
-              onChanged: (item) => setState(() {
-                _items = [..._items]..[index] = item;
-              }),
-              onRemoved: () => setState(() {
-                _items = [..._items]..removeAt(index);
+              label: _items[index].label,
+              subtitle: freightCategoryLabelForId(
+                l10n,
+                _items[index].categoryId,
+              ),
+              quantity: _items[index].quantity,
+              enabled: !_busy,
+              onQuantity: (quantity) => setState(() {
+                _items = quantity <= 0
+                    ? ([..._items]..removeAt(index))
+                    : ([..._items]..[index] = _items[index].copyWith(
+                        quantity: quantity,
+                      ));
               }),
             ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: _busy || _items.length >= maxContentItems
-                  ? null
-                  : () => setState(() {
-                      _items = [
-                        ..._items,
-                        const ContentsItem(
-                          categoryId: 'electronics',
-                          label: '',
-                        ),
-                      ];
-                    }),
-              icon: const Icon(Icons.add),
-              label: Text(l10n.freightAddAnItem),
-            ),
+          AddBoxItemButton(
+            enabled: !_busy && _items.length < maxContentItems,
+            onTap: _addItem,
           ),
+          const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -331,147 +369,6 @@ class _FreightQuoteRequestScreenState extends State<FreightQuoteRequestScreen> {
             l10n.freightAskForPriceNote,
             style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
             textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One picked row of the box: category, item, count. Typing appears only
-/// when the item is not on the standard list.
-class _ContentsItemRow extends StatelessWidget {
-  const _ContentsItemRow({
-    super.key,
-    required this.busy,
-    required this.item,
-    required this.onChanged,
-    required this.onRemoved,
-  });
-
-  final bool busy;
-  final ContentsItem item;
-  final ValueChanged<ContentsItem> onChanged;
-  final VoidCallback onRemoved;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final choices = standardFreightItems[item.categoryId] ?? const [];
-    final knownItem =
-        item.itemId.isNotEmpty && choices.any((c) => c.id == item.itemId);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: item.categoryId,
-                  isExpanded: true,
-                  items: [
-                    for (final category in standardFreightCategories)
-                      DropdownMenuItem(
-                        value: category.id,
-                        child: Text(
-                          category.label,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                  onChanged: busy
-                      ? null
-                      : (value) => onChanged(
-                          item.copyWith(
-                            categoryId: value ?? item.categoryId,
-                            itemId: '',
-                            label: '',
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: knownItem ? item.itemId : '__other',
-                  isExpanded: true,
-                  items: [
-                    for (final choice in choices)
-                      DropdownMenuItem(
-                        value: choice.id,
-                        child: Text(
-                          choice.label,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    DropdownMenuItem(
-                      value: '__other',
-                      child: Text(
-                        l10n.somethingElseInCategory,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                  onChanged: busy
-                      ? null
-                      : (value) {
-                          final match = choices
-                              .where((c) => c.id == value)
-                              .toList();
-                          onChanged(
-                            item.copyWith(
-                              itemId: match.isEmpty ? '' : match.first.id,
-                              label: match.isEmpty ? '' : match.first.label,
-                            ),
-                          );
-                        },
-                ),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              if (!knownItem)
-                Expanded(
-                  child: TextFormField(
-                    enabled: !busy,
-                    initialValue: item.label,
-                    maxLength: maxContentLabelLength,
-                    decoration: InputDecoration(
-                      labelText: l10n.freightItemNameLabel,
-                      counterText: '',
-                    ),
-                    onChanged: (value) =>
-                        onChanged(item.copyWith(label: value)),
-                  ),
-                )
-              else
-                const Spacer(),
-              IconButton(
-                onPressed: busy || item.quantity <= 1
-                    ? null
-                    : () =>
-                          onChanged(item.copyWith(quantity: item.quantity - 1)),
-                icon: const Icon(Icons.remove_circle_outline),
-              ),
-              Text(
-                '${item.quantity}',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              IconButton(
-                onPressed: busy || item.quantity >= maxItemQuantity
-                    ? null
-                    : () =>
-                          onChanged(item.copyWith(quantity: item.quantity + 1)),
-                icon: const Icon(Icons.add_circle_outline),
-              ),
-              IconButton(
-                onPressed: busy ? null : onRemoved,
-                icon: const Icon(Icons.close),
-              ),
-            ],
           ),
         ],
       ),

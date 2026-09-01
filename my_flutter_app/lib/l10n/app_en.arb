@@ -3091,6 +3091,8 @@
   "freightAnythingElseLabel": "Anything else the businesses should know?",
   "freightWhatElseInBox": "What else is in the box?",
   "freightAddAnotherPricedItem": "Add another priced item",
+  "freightPriceEach": "{price} each",
+  "@freightPriceEach": {"placeholders": {"price": {"type": "String"}}},
   "freightWeighedAtRateHelper": "Charged per kg once the business weighs the box.",
   "freightContentsTooMany": "List at most 10 kinds of item in one box.",
   "freightContentsLabelInvalid": "Name each item in under 60 characters.",

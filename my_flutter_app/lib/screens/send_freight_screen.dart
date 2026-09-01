@@ -21,6 +21,7 @@ import '../services/office_location_service.dart';
 import '../utils/freight_localization.dart';
 import '../utils/receiver_phone_rules.dart';
 import 'freight_quote_request_screen.dart';
+import '../widgets/box_item_editor.dart';
 import '../widgets/business_reviews_sheet.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
@@ -383,19 +384,101 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   double get _boxOtherKg =>
       double.tryParse(_boxOtherKgController.text.trim()) ?? 0;
 
-  FreightContents get _boxContents => FreightContents(
-    items: [
+  int _priceCentsFor(ContentsItem item) {
+    for (final row in _businessFlatItems) {
+      if (row.categoryId == item.categoryId && row.itemId == item.itemId) {
+        return row.priceCents;
+      }
+    }
+    return 0;
+  }
+
+  /// This business's set-price list in one sheet; tapping an item already
+  /// in the box counts it up instead of listing it twice.
+  Future<void> _addExtraItem() async {
+    final l10n = AppLocalizations.of(context)!;
+    final flatItems = _businessFlatItems;
+    final sections = <BoxPickerSection>[];
+    for (final row in flatItems) {
+      final index = sections.indexWhere(
+        (section) => section.categoryId == row.categoryId,
+      );
+      final entry = (
+        itemId: row.itemId,
+        label: row.label,
+        priceCents: (row.priceCents as int?),
+      );
+      if (index >= 0) {
+        sections[index] = BoxPickerSection(
+          categoryId: sections[index].categoryId,
+          label: sections[index].label,
+          items: [...sections[index].items, entry],
+        );
+      } else {
+        sections.add(
+          BoxPickerSection(
+            categoryId: row.categoryId,
+            label: freightCategoryLabelForId(l10n, row.categoryId),
+            items: [entry],
+          ),
+        );
+      }
+    }
+    final picked = await showBoxItemPicker(context, sections: sections);
+    if (picked == null || !mounted) return;
+    setState(() {
+      final index = _extraItems.indexWhere(
+        (row) =>
+            row.categoryId == picked.categoryId && row.itemId == picked.itemId,
+      );
+      if (index >= 0) {
+        final bumped = _extraItems[index].quantity + 1;
+        if (bumped <= maxItemQuantity) {
+          _extraItems = [..._extraItems]..[index] = _extraItems[index]
+              .copyWith(quantity: bumped);
+        }
+      } else {
+        _extraItems = [..._extraItems, picked];
+      }
+    });
+  }
+
+
+  FreightContents get _boxContents {
+    // One line per item: the funnel's own item and a matching extra row
+    // merge, so the business reads "4 x iPhone", never "1 x, 3 x".
+    final merged = <ContentsItem>[
       if (_setPrice && _itemPricing.priced)
         ContentsItem(
           categoryId: _categoryId,
           itemId: _submittedItemId ?? '',
           label: _primaryItemLabel,
         ),
-      ..._extraItems,
-    ],
-    otherGoodsKg: _setPrice ? (_boxOtherKg > 0 ? _boxOtherKg : 0) : _weightKg,
-    otherCategoryId: _setPrice ? 'general' : _categoryId,
-  );
+    ];
+    for (final item in _extraItems) {
+      final index = merged.indexWhere(
+        (row) =>
+            row.itemId.isNotEmpty &&
+            row.categoryId == item.categoryId &&
+            row.itemId == item.itemId,
+      );
+      if (index >= 0) {
+        final total = merged[index].quantity + item.quantity;
+        merged[index] = merged[index].copyWith(
+          quantity: total > maxItemQuantity ? maxItemQuantity : total,
+        );
+      } else {
+        merged.add(item);
+      }
+    }
+    return FreightContents(
+      items: merged,
+      otherGoodsKg: _setPrice
+          ? (_boxOtherKg > 0 ? _boxOtherKg : 0)
+          : _weightKg,
+      otherCategoryId: _setPrice ? 'general' : _categoryId,
+    );
+  }
 
   String get _primaryItemLabel {
     final wanted = _submittedItemId ?? '';
@@ -1553,110 +1636,32 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(l10n.freightWhatElseInBox, style: theme.textTheme.labelLarge),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         for (var index = 0; index < _extraItems.length; index++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue:
-                        '${_extraItems[index].categoryId}|'
-                        '${_extraItems[index].itemId}',
-                    isExpanded: true,
-                    items: [
-                      for (final row in flatItems)
-                        DropdownMenuItem(
-                          value: '${row.categoryId}|${row.itemId}',
-                          child: Text(
-                            '${row.label} · '
-                            '\$${(row.priceCents / 100).toStringAsFixed(2)}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                    onChanged: _busy
-                        ? null
-                        : (value) {
-                            final parts = (value ?? '').split('|');
-                            if (parts.length != 2) return;
-                            final match = flatItems
-                                .where(
-                                  (r) =>
-                                      r.categoryId == parts[0] &&
-                                      r.itemId == parts[1],
-                                )
-                                .toList();
-                            if (match.isEmpty) return;
-                            setState(() {
-                              _extraItems = [..._extraItems]..[index] =
-                                  _extraItems[index].copyWith(
-                                    categoryId: match.first.categoryId,
-                                    itemId: match.first.itemId,
-                                    label: match.first.label,
-                                  );
-                            });
-                          },
-                  ),
-                ),
-                IconButton(
-                  onPressed: _busy || _extraItems[index].quantity <= 1
-                      ? null
-                      : () => setState(() {
-                          _extraItems = [..._extraItems]..[index] =
-                              _extraItems[index].copyWith(
-                                quantity: _extraItems[index].quantity - 1,
-                              );
-                        }),
-                  icon: const Icon(Icons.remove_circle_outline),
-                ),
-                Text(
-                  '${_extraItems[index].quantity}',
-                  style: theme.textTheme.titleMedium,
-                ),
-                IconButton(
-                  onPressed:
-                      _busy || _extraItems[index].quantity >= maxItemQuantity
-                      ? null
-                      : () => setState(() {
-                          _extraItems = [..._extraItems]..[index] =
-                              _extraItems[index].copyWith(
-                                quantity: _extraItems[index].quantity + 1,
-                              );
-                        }),
-                  icon: const Icon(Icons.add_circle_outline),
-                ),
-                IconButton(
-                  onPressed: _busy
-                      ? null
-                      : () => setState(() {
-                          _extraItems = [..._extraItems]..removeAt(index);
-                        }),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
+          BoxItemTile(
+            key: ValueKey(
+              'extra-${_extraItems[index].categoryId}-'
+              '${_extraItems[index].itemId}',
             ),
+            label: _extraItems[index].label,
+            subtitle: l10n.freightPriceEach(
+              '\$${(_priceCentsFor(_extraItems[index]) / 100).toStringAsFixed(2)}',
+            ),
+            quantity: _extraItems[index].quantity,
+            enabled: !_busy,
+            onQuantity: (quantity) => setState(() {
+              _extraItems = quantity <= 0
+                  ? ([..._extraItems]..removeAt(index))
+                  : ([..._extraItems]..[index] = _extraItems[index].copyWith(
+                      quantity: quantity,
+                    ));
+            }),
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: _busy || _extraItems.length >= 9 || flatItems.isEmpty
-                ? null
-                : () => setState(() {
-                    _extraItems = [
-                      ..._extraItems,
-                      ContentsItem(
-                        categoryId: flatItems.first.categoryId,
-                        itemId: flatItems.first.itemId,
-                        label: flatItems.first.label,
-                      ),
-                    ];
-                  }),
-            icon: const Icon(Icons.add),
-            label: Text(l10n.freightAddAnotherPricedItem),
-          ),
+        AddBoxItemButton(
+          enabled: !_busy && _extraItems.length < 9 && flatItems.isNotEmpty,
+          onTap: _addExtraItem,
         ),
+        const SizedBox(height: 12),
         if (_setPrice)
           TextField(
             controller: _boxOtherKgController,

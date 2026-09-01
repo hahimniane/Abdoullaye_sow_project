@@ -45,6 +45,19 @@ String freightCategoryLabel(AppLocalizations l10n, FreightCategory category) =>
       _ => category.label,
     };
 
+/// [freightCategoryLabel] for places that hold only the id.
+String freightCategoryLabelForId(AppLocalizations l10n, String id) =>
+    switch (id) {
+      'general' => l10n.freightCategoryGeneral,
+      'clothing' => l10n.freightCategoryClothing,
+      'food' => l10n.freightCategoryFood,
+      'documents' => l10n.freightCategoryDocuments,
+      'cosmetics' => l10n.freightCategoryCosmetics,
+      'electronics' => l10n.freightCategoryElectronics,
+      'fragile' => l10n.freightCategoryFragile,
+      _ => id,
+    };
+
 /// The examples under the name, so a customer holding a charger knows which
 /// row it belongs to.
 String freightCategoryHint(AppLocalizations l10n, FreightCategory category) =>

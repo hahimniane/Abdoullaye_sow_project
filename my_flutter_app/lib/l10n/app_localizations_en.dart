@@ -7253,6 +7253,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get freightAddAnotherPricedItem => 'Add another priced item';
 
   @override
+  String freightPriceEach(String price) {
+    return '$price each';
+  }
+
+  @override
   String get freightWeighedAtRateHelper =>
       'Charged per kg once the business weighs the box.';
 

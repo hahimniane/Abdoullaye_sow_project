@@ -12954,6 +12954,12 @@ abstract class AppLocalizations {
   /// **'Add another priced item'**
   String get freightAddAnotherPricedItem;
 
+  /// No description provided for @freightPriceEach.
+  ///
+  /// In en, this message translates to:
+  /// **'{price} each'**
+  String freightPriceEach(String price);
+
   /// No description provided for @freightWeighedAtRateHelper.
   ///
   /// In en, this message translates to:
