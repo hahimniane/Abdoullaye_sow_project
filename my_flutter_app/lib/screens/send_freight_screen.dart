@@ -166,6 +166,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           _loading = false;
           _loadFailed = false;
           _refreshSelectionFrom(options);
+          // An accepted price names its business; asking the customer to
+          // find it again in the list would re-ask an answered question.
+          if (_selected == null && widget.agreedBusinessId.isNotEmpty) {
+            final agreed = options
+                .where((o) => o.businessId == widget.agreedBusinessId)
+                .toList();
+            if (agreed.isNotEmpty) _select(agreed.first);
+          }
         });
       },
       onError: (_) {
