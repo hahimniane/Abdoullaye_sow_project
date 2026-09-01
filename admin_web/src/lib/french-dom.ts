@@ -478,6 +478,26 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Facturé à",
   "In the box": "Dans le colis",
   "kg other goods": "kg d'autres marchandises",
+  "1 business has answered with a price.":
+    "1 entreprise a répondu avec un prix.",
+  "businesses have answered with a price.":
+    "entreprises ont répondu avec un prix.",
+  "Enter the email you gave with this request to see the prices and choose one.":
+    "Entrez l'e-mail donné avec cette demande pour voir les prix et en choisir un.",
+  "No prices yet. Businesses have been asked, and answers usually arrive within a day. Enter the email you gave to open this request on this device.":
+    "Pas encore de prix. Les entreprises ont été sollicitées ; les réponses arrivent généralement sous un jour. Entrez l'e-mail donné pour ouvrir cette demande sur cet appareil.",
+  "See prices and choose":
+    "Voir les prix et choisir",
+  "Open my request":
+    "Ouvrir ma demande",
+  "Opening...":
+    "Ouverture...",
+  "The email you gave with the request":
+    "L'e-mail donné avec la demande",
+  "Enter the email you gave with the request.":
+    "Entrez l'e-mail donné avec la demande.",
+  "That did not work. Check the email and try again.":
+    "Cela n'a pas fonctionné. Vérifiez l'e-mail et réessayez.",
   "Your price request was sent.": "Votre demande de prix a été envoyée.",
   "business on this route was asked.":
     "entreprise sur cet itinéraire a été sollicitée.",

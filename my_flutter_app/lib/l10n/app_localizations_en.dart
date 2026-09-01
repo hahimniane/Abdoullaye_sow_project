@@ -7283,6 +7283,35 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get guestQuoteOneAnswer => '1 business has answered with a price.';
+
+  @override
+  String guestQuoteManyAnswers(int count) {
+    return '$count businesses have answered with a price.';
+  }
+
+  @override
+  String get guestQuoteSeeHint =>
+      'Enter the email you gave with this request to see the prices and choose one.';
+
+  @override
+  String get guestQuoteNoAnswers =>
+      'No prices yet. Businesses have been asked, and answers usually arrive within a day. Enter the email you gave to open this request on this device.';
+
+  @override
+  String get guestQuoteEmailLabel => 'The email you gave with the request';
+
+  @override
+  String get guestQuoteSeePrices => 'See prices and choose';
+
+  @override
+  String get guestQuoteOpenRequest => 'Open my request';
+
+  @override
+  String get guestQuoteClaimFailed =>
+      'That did not work. Check the email and try again.';
+
+  @override
   String get freightQuoteDescriptionLabel => 'What are you sending?';
 
   @override

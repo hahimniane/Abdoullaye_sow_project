@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Check, Clipboard, LogIn, PackageSearch, RefreshCw, Search } from "lucide-react";
 import { httpsCallable } from "firebase/functions";
+import { signInAnonymously } from "firebase/auth";
 
 import { GuestJourneyProgress } from "@/components/customer-tracking-journey";
 import { currentLocale } from "@/lib/format";
@@ -14,7 +15,7 @@ import {
   validGuestTrackingIdentifier,
   type GuestTrackingRecord,
 } from "@/lib/guest-tracking";
-import { functions } from "@/lib/firebase";
+import { auth, functions } from "@/lib/firebase";
 
 type GuestTrackingProps = {
   authenticated: boolean;
@@ -46,6 +47,12 @@ export function GuestTracking({
   const [error, setError] = useState<GuestTrackingError>("");
   const [record, setRecord] = useState<GuestTrackingRecord | null>(null);
   const [copied, setCopied] = useState(false);
+  // Seeing prices takes one proof: the email the customer gave with the
+  // request. Claiming moves the request into this browser's session, and
+  // from there the ordinary workspace shows the prices and books the win.
+  const [claimEmail, setClaimEmail] = useState("");
+  const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState("");
   // The public tracking page has the box; the lookup lives here, where it is
   // attested and rate limited. A number arriving in the URL is one somebody
   // already typed, so run it rather than making them type it twice.
@@ -128,6 +135,34 @@ export function GuestTracking({
       }).format(new Date(record.updatedAtMs))
     : "Not available";
 
+  async function claimRequest() {
+    if (claiming || !record) return;
+    const email = claimEmail.trim();
+    if (!email.includes("@")) {
+      setClaimError("Enter the email you gave with the request.");
+      return;
+    }
+    setClaiming(true);
+    setClaimError("");
+    try {
+      if (!auth.currentUser) await signInAnonymously(auth);
+      await httpsCallable(functions, "claimFreightQuoteRequest")({
+        trackingCode: record.trackingCode,
+        email,
+      });
+      // The request now belongs to this session; the workspace shows the
+      // prices and takes the booking from here.
+      window.location.assign("/");
+    } catch (caught) {
+      setClaiming(false);
+      setClaimError(
+        caught instanceof Error && caught.message
+          ? caught.message
+          : "That did not work. Check the email and try again.",
+      );
+    }
+  }
+
   return (
     <section className="guest-tracking-layout" aria-labelledby="guest-tracking-title">
       <div className="customer-service-hero guest-tracking-hero">
@@ -198,8 +233,61 @@ export function GuestTracking({
           {/* Nothing has started moving until it is paid for, so there is no
               journey to draw - showing one from "Booked" would imply the
               shipment is under way when it is waiting on the customer. */}
-          {record.stage !== "awaiting_payment" && (
+          {record.service !== "freight_quote" &&
+            record.stage !== "awaiting_payment" && (
             <GuestJourneyProgress stage={record.stage} />
+          )}
+          {record.service === "freight_quote" && (
+            <div className="guest-quote-state">
+              {(record.quoteCount ?? 0) > 0 ? (
+                <>
+                  <p className="guest-quote-count">
+                    <strong>
+                      {record.quoteCount === 1
+                        ? "1 business has answered with a price."
+                        : `${record.quoteCount} businesses have answered with a price.`}
+                    </strong>
+                  </p>
+                  <p>
+                    Enter the email you gave with this request to see the
+                    prices and choose one.
+                  </p>
+                </>
+              ) : (
+                <p>
+                  No prices yet. Businesses have been asked, and answers
+                  usually arrive within a day. Enter the email you gave to
+                  open this request on this device.
+                </p>
+              )}
+              <div className="guest-claim-row">
+                <input
+                  aria-label="The email you gave with the request"
+                  autoComplete="email"
+                  disabled={claiming}
+                  onChange={(event) => setClaimEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  type="email"
+                  value={claimEmail}
+                />
+                <button
+                  className="primary-button"
+                  data-loading={claiming}
+                  disabled={claiming}
+                  onClick={() => void claimRequest()}
+                  type="button"
+                >
+                  {claiming
+                    ? "Opening..."
+                    : (record.quoteCount ?? 0) > 0
+                      ? "See prices and choose"
+                      : "Open my request"}
+                </button>
+              </div>
+              {claimError && (
+                <p className="guest-claim-error" role="alert">{claimError}</p>
+              )}
+            </div>
           )}
           <p className="guest-tracking-updated">
             <strong>Updated</strong> <time>{updated}</time>

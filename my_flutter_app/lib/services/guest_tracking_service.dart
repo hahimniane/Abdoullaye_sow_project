@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/guest_tracking_result.dart';
 
@@ -12,6 +13,14 @@ class GuestTrackingFailure implements Exception {
 
 abstract interface class GuestTrackingLookupService {
   Future<GuestTrackingResult> lookup(String identifier);
+
+  /// Moves a guest's price request into this device's session, proven by
+  /// the email they gave with it. Returns the request id for the details
+  /// screen. Throws [GuestTrackingFailure] when the proof does not hold.
+  Future<String> claimQuoteRequest({
+    required String trackingCode,
+    required String email,
+  });
 }
 
 class FirebaseGuestTrackingService implements GuestTrackingLookupService {
@@ -40,6 +49,38 @@ class FirebaseGuestTrackingService implements GuestTrackingLookupService {
       rethrow;
     } on FormatException {
       throw const GuestTrackingFailure(GuestTrackingFailureKind.unavailable);
+    } catch (_) {
+      throw const GuestTrackingFailure(GuestTrackingFailureKind.unavailable);
+    }
+  }
+
+  @override
+  Future<String> claimQuoteRequest({
+    required String trackingCode,
+    required String email,
+  }) async {
+    try {
+      // A fresh device has no session yet; the claim only needs an
+      // anonymous one to move the request into.
+      if (FirebaseAuth.instance.currentUser == null) {
+        await FirebaseAuth.instance.signInAnonymously();
+      }
+      final response = await _functions
+          .httpsCallable('claimFreightQuoteRequest')
+          .call(<String, dynamic>{
+            'trackingCode': trackingCode.trim(),
+            'email': email.trim(),
+          });
+      final data = response.data;
+      final requestId = data is Map ? data['requestId'] : null;
+      if (requestId is! String || requestId.isEmpty) {
+        throw const GuestTrackingFailure(GuestTrackingFailureKind.unavailable);
+      }
+      return requestId;
+    } on FirebaseFunctionsException catch (error) {
+      throw GuestTrackingFailure(_failureKind(error.code));
+    } on GuestTrackingFailure {
+      rethrow;
     } catch (_) {
       throw const GuestTrackingFailure(GuestTrackingFailureKind.unavailable);
     }

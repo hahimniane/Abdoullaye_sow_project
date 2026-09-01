@@ -12416,6 +12416,39 @@ async function smsWalkUpParkingCustomer({to, body}) {
   }
 }
 
+/**
+ * One email to a customer, through the connected provider.
+ *
+ * Provider-gated like every mail write: with nothing connected this is a
+ * logged no-op, and the queued copy flows the moment a provider is. A guest
+ * has no push token and no account inbox - email is the only receipt they
+ * get, which is why the booking sheet asks for one.
+ *
+ * @param {object} params to / subject / text.
+ * @return {Promise<boolean>} Whether the email was queued.
+ */
+async function queueCustomerEmail({to, subject, text}) {
+  const email = String(to || "").trim().toLowerCase();
+  if (!email.includes("@")) return false;
+  try {
+    const db = admin.firestore();
+    const settings = await loadPlatformNotificationSettings(db);
+    if (settings.emailProvider !== "firebaseTriggerEmail") {
+      logger.warn("Customer email skipped: no provider connected", {subject});
+      return false;
+    }
+    await db.collection("mail").add({
+      to: [email],
+      message: {subject, text, html: notificationHtml(subject, text)},
+      createdAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    logger.warn("Customer email failed", {detail: error.message});
+    return false;
+  }
+}
+
 async function emailWalkUpParkingCustomer({to, subject, text}) {
   const email = String(to || "").trim().toLowerCase();
   if (!email.includes("@")) return false;
@@ -23229,6 +23262,23 @@ exports.createFreightQuoteRequest = onCall(
         }),
       ));
 
+      // The one receipt a guest gets: no push token, no account inbox.
+      // The code in this email is also how they come back to choose a
+      // price from another device.
+      const requesterEmail = guestIdentity?.customerEmail ||
+        userRecord.email || "";
+      await queueCustomerEmail({
+        to: requesterEmail,
+        subject: `Your Laawol price request ${trackingCode}`,
+        text: `We asked ${providers.length} ` +
+          `${providers.length === 1 ? "business" : "businesses"} on the ` +
+          `${countryName} route for their price. Answers usually arrive ` +
+          `within a day.\n\nKeep this number: ${trackingCode}\n\n` +
+          "See your prices and choose: " +
+          "https://customer.laawoldigital.com/?service=tracking&code=" +
+          `${trackingCode}`,
+      });
+
       return {
         id: requestRef.id,
         trackingCode,
@@ -23323,6 +23373,16 @@ exports.submitFreightQuote = onCall(
           trackingCode: requestData.trackingCode || "",
           ...relatedRecordFields("freightQuoteRequests", requestId),
         },
+      });
+      await queueCustomerEmail({
+        to: requestData.customerEmail || "",
+        subject: "You have a price for " +
+          `${requestData.trackingCode || "your parcel"}`,
+        text: `${businessDoc.data()?.name || "A business"} answered your ` +
+          `request with $${(validated.quote.amountCents / 100).toFixed(2)}.` +
+          "\n\nSee every price and choose: " +
+          "https://customer.laawoldigital.com/?service=tracking&code=" +
+          `${requestData.trackingCode || ""}`,
       });
 
       return {success: true, quoteId: quoteRef.id};
@@ -23450,6 +23510,82 @@ exports.selectFreightQuote = onCall(
       });
 
       return {success: true, requestId, quoteId};
+    },
+);
+
+// A guest coming back for their answers, from any device.
+//
+// The request was made in an anonymous session that lives in one browser.
+// The email receipt carries the code; code plus the email the customer gave
+// is how they prove the request is theirs, and the request moves into the
+// session they are holding now. Only guest-owned requests can be claimed -
+// a request made by a signed-in account is reached by signing in.
+exports.claimFreightQuoteRequest = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const callerUid = requireAuth(request);
+      await enforceCallableRateLimit(request, {
+        name: "claimQuoteRequestHour",
+        limit: 10,
+        windowSeconds: 60 * 60,
+      });
+      const trackingCode = String(request.data?.trackingCode || "")
+          .trim().toUpperCase();
+      const email = String(request.data?.email || "").trim().toLowerCase();
+      if (!trackingCode || !email.includes("@")) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Enter the request number and the email you gave with it",
+        );
+      }
+      const db = admin.firestore();
+      const snapshot = await db.collection("freightQuoteRequests")
+          .where("trackingCode", "==", trackingCode)
+          .limit(1)
+          .get();
+      if (snapshot.empty) {
+        throw new HttpsError("not-found", "No request with that number");
+      }
+      const requestDoc = snapshot.docs[0];
+      const data = requestDoc.data() || {};
+      const storedEmail = String(data.customerEmail || "")
+          .trim().toLowerCase();
+      if (!storedEmail || storedEmail !== email) {
+        throw new HttpsError(
+            "permission-denied",
+            "That email does not match this request",
+        );
+      }
+      if (data.customerUid === callerUid) {
+        return {success: true, requestId: requestDoc.id, trackingCode};
+      }
+      // A signed-in account's request is reached by signing in; moving it
+      // on the strength of an email would hand one customer's answers to
+      // whoever shares their inbox.
+      const owner = await admin.auth().getUser(String(data.customerUid || ""))
+          .catch(() => null);
+      if (owner && owner.providerData.length > 0) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This request belongs to a Laawol account. Sign in to see it.",
+        );
+      }
+      await requestDoc.ref.update({
+        customerUid: callerUid,
+        claimedFromUid: String(data.customerUid || ""),
+        claimedAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      // The new session needs the same guest profile the old one had, so
+      // notifications and receipts keep reaching the same person.
+      await ensureGuestCustomerProfile(callerUid, {
+        isGuest: true,
+        customerEmail: storedEmail,
+        customerName: String(data.customerName || ""),
+        customerPhone: String(data.customerPhone || ""),
+        guestEmail: storedEmail,
+      });
+      return {success: true, requestId: requestDoc.id, trackingCode};
     },
 );
 

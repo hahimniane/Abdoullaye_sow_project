@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/guest_tracking_result.dart';
+import '../screens/freight_quote_details_screen.dart';
 import '../services/guest_tracking_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -71,6 +72,32 @@ class _GuestTrackingLookupState extends State<GuestTrackingLookup> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Moves the price request into this device's session and opens it.
+  /// Returns null on success, or the message to show beside the field.
+  Future<String?> _claimQuoteRequest(String trackingCode, String email) async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final requestId = await _lookupService.claimQuoteRequest(
+        trackingCode: trackingCode,
+        email: email,
+      );
+      if (!mounted) return null;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => FreightQuoteDetailsScreen(
+            requestId: requestId,
+            trackingCode: trackingCode,
+          ),
+        ),
+      );
+      return null;
+    } on GuestTrackingFailure {
+      return l10n.guestQuoteClaimFailed;
+    } catch (_) {
+      return l10n.guestQuoteClaimFailed;
+    }
   }
 
   Future<void> _submit() async {
@@ -238,6 +265,7 @@ class _GuestTrackingLookupState extends State<GuestTrackingLookup> {
                       record: _result!.record!,
                       onSignIn: widget.onSignIn,
                       onTrackAnother: _trackAnother,
+                      onClaim: _claimQuoteRequest,
                     )
                   else
                     _GuestTrackingNotFound(onTrackAnother: _trackAnother),
@@ -256,11 +284,13 @@ class _GuestTrackingSuccess extends StatelessWidget {
     required this.record,
     required this.onSignIn,
     required this.onTrackAnother,
+    required this.onClaim,
   });
 
   final GuestTrackingRecord record;
   final VoidCallback onSignIn;
   final VoidCallback onTrackAnother;
+  final Future<String?> Function(String trackingCode, String email) onClaim;
 
   @override
   Widget build(BuildContext context) {
@@ -310,6 +340,13 @@ class _GuestTrackingSuccess extends StatelessWidget {
             label: l10n.guestTrackingStatusLabel,
             value: _stageLabel(l10n, record.stage),
           ),
+          if (record.service == GuestTrackingServiceType.freightQuote) ...[
+            const SizedBox(height: AppSpacing.md),
+            _GuestQuoteClaim(
+              quoteCount: record.quoteCount,
+              onClaim: (email) => onClaim(record.trackingCode, email),
+            ),
+          ],
           if (updatedLabel != null) ...[
             const SizedBox(height: AppSpacing.md),
             Text(
@@ -515,4 +552,104 @@ String _stageLabel(AppLocalizations l10n, GuestTrackingStage stage) {
     GuestTrackingStage.delivered => l10n.guestTrackingStageDelivered,
     GuestTrackingStage.cancelled => l10n.guestTrackingStageCancelled,
   };
+}
+
+/// A price request's public state, and the one proof that opens it: the
+/// email the customer gave with it. Claiming moves the request into this
+/// device's session, where the details screen shows prices and books.
+class _GuestQuoteClaim extends StatefulWidget {
+  const _GuestQuoteClaim({required this.quoteCount, required this.onClaim});
+
+  final int quoteCount;
+  final Future<String?> Function(String email) onClaim;
+
+  @override
+  State<_GuestQuoteClaim> createState() => _GuestQuoteClaimState();
+}
+
+class _GuestQuoteClaimState extends State<_GuestQuoteClaim> {
+  final _emailController = TextEditingController();
+  bool _busy = false;
+  String _error = '';
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _claim() async {
+    final l10n = AppLocalizations.of(context)!;
+    final email = _emailController.text.trim();
+    if (!email.contains('@')) {
+      setState(() => _error = l10n.guestQuoteClaimFailed);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    final failure = await widget.onClaim(email);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = failure ?? '';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.quoteCount > 0
+              ? widget.quoteCount == 1
+                    ? l10n.guestQuoteOneAnswer
+                    : l10n.guestQuoteManyAnswers(widget.quoteCount)
+              : l10n.guestQuoteNoAnswers,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: widget.quoteCount > 0 ? FontWeight.w700 : null,
+          ),
+        ),
+        if (widget.quoteCount > 0) ...[
+          const SizedBox(height: 4),
+          Text(
+            l10n.guestQuoteSeeHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.lightMuted,
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sm),
+        TextField(
+          controller: _emailController,
+          enabled: !_busy,
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email],
+          decoration: InputDecoration(
+            labelText: l10n.guestQuoteEmailLabel,
+            errorText: _error.isEmpty ? null : _error,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        FilledButton(
+          onPressed: _busy ? null : _claim,
+          child: _busy
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(
+                  widget.quoteCount > 0
+                      ? l10n.guestQuoteSeePrices
+                      : l10n.guestQuoteOpenRequest,
+                ),
+        ),
+      ],
+    );
+  }
 }
