@@ -7410,6 +7410,35 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get guestQuoteOneAnswer => '1 entreprise a répondu avec un prix.';
+
+  @override
+  String guestQuoteManyAnswers(int count) {
+    return '$count entreprises ont répondu avec un prix.';
+  }
+
+  @override
+  String get guestQuoteSeeHint =>
+      'Entrez l\'e-mail donné avec cette demande pour voir les prix et en choisir un.';
+
+  @override
+  String get guestQuoteNoAnswers =>
+      'Pas encore de prix. Les entreprises ont été sollicitées ; les réponses arrivent généralement sous un jour. Entrez l\'e-mail donné pour ouvrir cette demande sur cet appareil.';
+
+  @override
+  String get guestQuoteEmailLabel => 'L\'e-mail donné avec la demande';
+
+  @override
+  String get guestQuoteSeePrices => 'Voir les prix et choisir';
+
+  @override
+  String get guestQuoteOpenRequest => 'Ouvrir ma demande';
+
+  @override
+  String get guestQuoteClaimFailed =>
+      'Cela n\'a pas fonctionné. Vérifiez l\'e-mail et réessayez.';
+
+  @override
   String get freightQuoteDescriptionLabel => 'Qu\'envoyez-vous ?';
 
   @override

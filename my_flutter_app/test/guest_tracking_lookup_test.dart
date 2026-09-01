@@ -21,6 +21,17 @@ class _FakeGuestTrackingService implements GuestTrackingLookupService {
     identifiers.add(identifier);
     return handler(identifier);
   }
+
+  final List<({String trackingCode, String email})> claims = [];
+
+  @override
+  Future<String> claimQuoteRequest({
+    required String trackingCode,
+    required String email,
+  }) async {
+    claims.add((trackingCode: trackingCode, email: email));
+    return 'request-id';
+  }
 }
 
 const _success = GuestTrackingResult.found(

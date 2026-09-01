@@ -96,6 +96,15 @@ function publicGuestTrackingRecord({id, service, data}) {
     trackingCode: cleanText(row.trackingCode || id, 60),
     service,
     stage,
+    // How many businesses have answered a price request - a count, never a
+    // price. The customer holding the code learns answers are waiting and
+    // proves the email they gave to see them; anyone else learns a number.
+    ...(service === "freight_quote" ? {
+      quoteCount: Number.isFinite(Number(row.quoteCount)) ?
+        Math.max(0, Math.trunc(Number(row.quoteCount))) :
+        0,
+      quoteStatus: cleanText(row.quoteStatus, 30).toLowerCase(),
+    } : {}),
     updatedAtMs: Math.max(
         timestampMillis(row.updatedAt),
         timestampMillis(row.createdAt),

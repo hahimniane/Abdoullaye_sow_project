@@ -8310,6 +8310,38 @@ button[data-loading="true"]::before {
   margin-top: 8px;
 }
 
+.guest-quote-state {
+  border: 0.5px solid #e5e7eb;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px 14px;
+}
+
+.guest-quote-state p {
+  font-size: 14px;
+  margin: 0;
+}
+
+.guest-claim-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.guest-claim-row input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.guest-claim-error {
+  color: #9f1239;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .customer-contents-builder {
   display: flex;
   flex-direction: column;

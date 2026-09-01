@@ -12996,6 +12996,54 @@ abstract class AppLocalizations {
   /// **'{item} has no price from this business. Ask for a price instead.'**
   String freightItemUnpricedByBusiness(String item);
 
+  /// No description provided for @guestQuoteOneAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'1 business has answered with a price.'**
+  String get guestQuoteOneAnswer;
+
+  /// No description provided for @guestQuoteManyAnswers.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} businesses have answered with a price.'**
+  String guestQuoteManyAnswers(int count);
+
+  /// No description provided for @guestQuoteSeeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the email you gave with this request to see the prices and choose one.'**
+  String get guestQuoteSeeHint;
+
+  /// No description provided for @guestQuoteNoAnswers.
+  ///
+  /// In en, this message translates to:
+  /// **'No prices yet. Businesses have been asked, and answers usually arrive within a day. Enter the email you gave to open this request on this device.'**
+  String get guestQuoteNoAnswers;
+
+  /// No description provided for @guestQuoteEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'The email you gave with the request'**
+  String get guestQuoteEmailLabel;
+
+  /// No description provided for @guestQuoteSeePrices.
+  ///
+  /// In en, this message translates to:
+  /// **'See prices and choose'**
+  String get guestQuoteSeePrices;
+
+  /// No description provided for @guestQuoteOpenRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Open my request'**
+  String get guestQuoteOpenRequest;
+
+  /// No description provided for @guestQuoteClaimFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That did not work. Check the email and try again.'**
+  String get guestQuoteClaimFailed;
+
   /// No description provided for @freightQuoteDescriptionLabel.
   ///
   /// In en, this message translates to:

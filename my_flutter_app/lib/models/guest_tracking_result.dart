@@ -22,6 +22,7 @@ class GuestTrackingRecord {
     required this.service,
     required this.stage,
     this.updatedAt,
+    this.quoteCount = 0,
   });
 
   final String trackingCode;
@@ -29,17 +30,25 @@ class GuestTrackingRecord {
   final GuestTrackingStage stage;
   final DateTime? updatedAt;
 
+  /// Price requests only: how many businesses have answered. A count is
+  /// public; a price never is - seeing prices takes the claim step.
+  final int quoteCount;
+
   factory GuestTrackingRecord.fromMap(Map<String, dynamic> data) {
     final trackingCode = data['trackingCode'];
     if (trackingCode is! String || trackingCode.trim().isEmpty) {
       throw const FormatException('Missing tracking code');
     }
 
+    final rawCount = data['quoteCount'];
     return GuestTrackingRecord(
       trackingCode: trackingCode.trim(),
       service: _serviceFromWire(data['service']),
       stage: _stageFromWire(data['stage']),
       updatedAt: _dateFromMilliseconds(data['updatedAtMs']),
+      quoteCount: rawCount is num && rawCount.isFinite && rawCount > 0
+          ? rawCount.truncate()
+          : 0,
     );
   }
 }

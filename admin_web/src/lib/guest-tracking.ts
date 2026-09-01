@@ -19,6 +19,9 @@ export type GuestTrackingRecord = {
   service: GuestTrackingService;
   stage: GuestTrackingStage;
   updatedAtMs: number;
+  /** Price requests only: how many businesses have answered. A count is
+   * public; a price never is - seeing prices takes the claim step. */
+  quoteCount?: number;
 };
 
 export type GuestTrackingResponse =
@@ -64,6 +67,11 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
   const service = String(row.service ?? "") as GuestTrackingService;
   const stage = String(row.stage ?? "") as GuestTrackingStage;
   const updatedAtMs = Number(row.updatedAtMs ?? 0);
+  const quoteCountRaw = Number(row.quoteCount);
+  const quoteCount =
+    service === "freight_quote" && Number.isFinite(quoteCountRaw)
+      ? Math.max(0, Math.trunc(quoteCountRaw))
+      : undefined;
   if (
     !trackingCode ||
     !SERVICES.has(service) ||
@@ -76,7 +84,13 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
   return {
     version: 1,
     found: true,
-    record: {trackingCode, service, stage, updatedAtMs},
+    record: {
+      trackingCode,
+      service,
+      stage,
+      updatedAtMs,
+      ...(quoteCount !== undefined ? {quoteCount} : {}),
+    },
   };
 }
 
