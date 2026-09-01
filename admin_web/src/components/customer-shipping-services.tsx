@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState, useRef } from "react";
 import {
   collection,
   doc,
@@ -2402,6 +2402,10 @@ function FreightShipmentForm({
   // catalogue happens to say about the picked item - those disagreed once,
   // quoting $25 on screen for a booking charged at $100.
   const [agreedAmountCents, setAgreedAmountCents] = useState(0);
+  // One-shot: hydrate the funnel from the request so the customer is not
+  // asked again for answers the request already holds. Only fields still
+  // at their defaults are filled - the form never fights the customer.
+  const hydratedRequestRef = useRef("");
   useEffect(() => {
     if (!agreedQuoteRequestId) {
       setAgreedAmountCents(0);
@@ -2411,9 +2415,24 @@ function FreightShipmentForm({
     void getDoc(doc(db, "freightQuoteRequests", agreedQuoteRequestId)).then(
       (snap) => {
         if (!active) return;
-        setAgreedAmountCents(
-          Number(snap.data()?.selectedAmountCents ?? 0) || 0,
-        );
+        const data = snap.data() ?? {};
+        setAgreedAmountCents(Number(data.selectedAmountCents ?? 0) || 0);
+        if (hydratedRequestRef.current === agreedQuoteRequestId) return;
+        hydratedRequestRef.current = agreedQuoteRequestId;
+        const requestCountryId = text(data.destinationCountryId, "");
+        if (requestCountryId) {
+          setDestinationCountryId((current) =>
+            current || requestCountryId,
+          );
+        }
+        const requestMode = text(data.mode, "");
+        if (requestMode === "air" || requestMode === "sea") {
+          setMode(requestMode);
+        }
+        const requestCategoryId = text(data.itemCategoryId, "");
+        if (requestCategoryId) {
+          setItemCategoryId((current) => current || requestCategoryId);
+        }
       },
       () => {},
     );
@@ -2421,6 +2440,7 @@ function FreightShipmentForm({
       active = false;
     };
   }, [agreedQuoteRequestId]);
+
   const availableOptions = useMemo(
     () => freightProvidersForMode(options, mode),
     [mode, options],
@@ -2535,6 +2555,40 @@ function FreightShipmentForm({
         : [],
     [activeCategoryId, activeItemId, itemStepSatisfied, providerOptions],
   );
+  // The item pick: match the request's label against the funnel once the
+  // funnel has loaded, falling back to "Something else" - it qualifies the
+  // agreed business either way, since the price is already agreed.
+  const [agreedItemLabel, setAgreedItemLabel] = useState("");
+  useEffect(() => {
+    if (!agreedQuoteRequestId) return;
+    void getDoc(doc(db, "freightQuoteRequests", agreedQuoteRequestId)).then(
+      (snap) => setAgreedItemLabel(text(snap.data()?.itemLabel, "")),
+      () => {},
+    );
+  }, [agreedQuoteRequestId]);
+  useEffect(() => {
+    if (!agreedQuoteRequestId || itemId || funnelItems.length === 0) return;
+    const match = funnelItems.find(
+      (item) => item.label === agreedItemLabel,
+    );
+    setItemId(match ? match.id : OTHER_ITEM_ID);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agreedItemLabel, agreedQuoteRequestId, funnelItems.length]);
+  // And the business whose price was accepted, once its option exists.
+  useEffect(() => {
+    if (!agreedQuoteRequestId || !bookingQuoteBusinessId) return;
+    if (destinationOptionId) return;
+    const option = qualifiedProviderOptions.find(
+      (candidate) => candidate.businessId === bookingQuoteBusinessId,
+    );
+    if (option) setDestinationOptionId(option.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    agreedQuoteRequestId,
+    bookingQuoteBusinessId,
+    destinationOptionId,
+    qualifiedProviderOptions.length,
+  ]);
   const destination = selectedOption(providerOptions, destinationOptionId);
   // The choice only survives while the chosen business actually offers it -
   // switching to a business that has not opted in submits "now", whatever
