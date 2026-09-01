@@ -72,9 +72,17 @@ export function GuestTracking({
     useState<FreightQuoteRequestRow | null>(null);
   useEffect(() => {
     if (!claimedCode) return;
+    const uid = auth.currentUser?.uid ?? "";
+    if (!uid) return;
+    // Both filters are load-bearing: the rules allow an owner to read, and
+    // a query is only allowed when every possible result provably matches -
+    // so the owner clause must appear IN the query. By code alone the
+    // listener dies with permission-denied even though every matching
+    // document is the caller's own.
     return onSnapshot(
       query(
         collection(db, "freightQuoteRequests"),
+        where("customerUid", "==", uid),
         where("trackingCode", "==", claimedCode),
         limitTo(1),
       ),
