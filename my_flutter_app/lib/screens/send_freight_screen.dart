@@ -420,6 +420,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   bool get _setPrice => _itemPricing.isFlat;
 
   double get _price {
+    // The price the customer ACCEPTED wins over everything the catalogue
+    // says. The server charges the agreed amount off the request either
+    // way; showing the catalogue's number here once quoted $25 on screen
+    // for a booking the card was about to be charged $100 for.
+    if (_hasAgreedPrice && widget.agreedAmountCents > 0) {
+      return widget.agreedAmountCents / 100;
+    }
     final manifest = _manifestPricing;
     if (manifest != null) {
       return manifest.ok ? manifest.estimateCents / 100 : 0;

@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   query,
   where,
@@ -2396,6 +2397,30 @@ function FreightShipmentForm({
   // Either accepted on this screen just now, or handed in from the orders
   // drawer where the customer accepted it.
   const agreedQuoteRequestId = acceptedHere || bookingQuoteRequestId;
+  // What the customer ACCEPTED. The server charges this amount off the
+  // request; the form must show the same number, not whatever the
+  // catalogue happens to say about the picked item - those disagreed once,
+  // quoting $25 on screen for a booking charged at $100.
+  const [agreedAmountCents, setAgreedAmountCents] = useState(0);
+  useEffect(() => {
+    if (!agreedQuoteRequestId) {
+      setAgreedAmountCents(0);
+      return;
+    }
+    let active = true;
+    void getDoc(doc(db, "freightQuoteRequests", agreedQuoteRequestId)).then(
+      (snap) => {
+        if (!active) return;
+        setAgreedAmountCents(
+          Number(snap.data()?.selectedAmountCents ?? 0) || 0,
+        );
+      },
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [agreedQuoteRequestId]);
   const availableOptions = useMemo(
     () => freightProvidersForMode(options, mode),
     [mode, options],
@@ -2646,6 +2671,7 @@ function FreightShipmentForm({
   // The single-item flow IS the manifest of one; the builder only takes
   // over once the box holds more than the funnel asked about.
   const manifestActive =
+    !agreedQuoteRequestId &&
     Boolean(destination) &&
     itemPricing.priced &&
     (extraItems.length > 0 || (setPrice && boxContents.otherGoodsKg > 0));
@@ -2698,11 +2724,13 @@ function FreightShipmentForm({
   // a published price stands on its own, and a by-weight row is the route's
   // rate times the weight and nothing else.
   const shippingSubtotal =
-    manifestPricing && manifestPricing.ok
-      ? manifestPricing.estimateCents / 100
-      : setPrice
-        ? itemPricing.flatPrice
-        : (pricing?.subtotal ?? 0);
+    agreedQuoteRequestId && agreedAmountCents > 0
+      ? agreedAmountCents / 100
+      : manifestPricing && manifestPricing.ok
+        ? manifestPricing.estimateCents / 100
+        : setPrice
+          ? itemPricing.flatPrice
+          : (pricing?.subtotal ?? 0);
   const estimatedTotal =
     pricing === null || pricing.total === null
       ? null
@@ -2996,7 +3024,12 @@ function FreightShipmentForm({
               )}
               {pricing && (
                 <>
-                  {setPrice ? (
+                  {agreedQuoteRequestId && agreedAmountCents > 0 ? (
+                    <ReviewDetail
+                      label="Agreed price"
+                      value={formatMoney(agreedAmountCents / 100)}
+                    />
+                  ) : setPrice ? (
                     <ReviewDetail
                       label="Set price"
                       value={formatMoney(itemPricing.flatPrice)}
@@ -3367,6 +3400,14 @@ function FreightShipmentForm({
                   value={weightKg}
                 />
               </label>
+            ) : agreedQuoteRequestId && agreedAmountCents > 0 ? (
+              <div className="customer-inline-note customer-form-span">
+                <strong>{formatMoney(agreedAmountCents / 100)}</strong>{" "}
+                <span>
+                  is the price you accepted from this business for this
+                  parcel. That is the amount charged.
+                </span>
+              </div>
             ) : (
               /* A published price for a known object. Asking what an
                  iPhone weighs would be asking the customer to guess at a
@@ -3389,7 +3430,7 @@ function FreightShipmentForm({
                 )}
               </div>
             )}
-            {destination && itemPricing.priced &&
+            {destination && itemPricing.priced && !agreedQuoteRequestId &&
               businessFlatItems.length > 0 && (
               <div className="customer-form-span customer-contents-builder">
                 <span className="customer-contents-title">
