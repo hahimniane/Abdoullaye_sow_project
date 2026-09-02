@@ -253,6 +253,13 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
                       quoteRequestId: widget.requestId,
                       agreedBusinessId: businessId,
                       agreedAmountCents: amountCents,
+                      agreedBusinessName: winner?.businessName ??
+                          request?.selectedBusinessName ??
+                          '',
+                      agreedMode: request?.mode ?? '',
+                      agreedCoversLoss: winner?.coversLoss ??
+                          request?.selectedCoversLoss ??
+                          false,
                     ),
                   ),
                 ),

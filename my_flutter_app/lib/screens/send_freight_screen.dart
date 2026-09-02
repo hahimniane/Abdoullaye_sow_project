@@ -40,15 +40,25 @@ class SendFreightScreen extends StatefulWidget {
     this.quoteRequestId = '',
     this.agreedBusinessId = '',
     this.agreedAmountCents = 0,
+    this.agreedBusinessName = '',
+    this.agreedMode = '',
+    this.agreedCoversLoss = false,
   });
 
   /// Set when this booking settles a price a business quoted. The server
   /// reads the agreed amount off that request, so nothing here decides money;
   /// these only carry the customer to the right business and let the screen
-  /// say what was agreed.
+  /// say what was agreed - the deal card restates business, mode, cover and
+  /// price, and the catalogue funnel stays out of the way.
   final String quoteRequestId;
   final String agreedBusinessId;
   final int agreedAmountCents;
+  final String agreedBusinessName;
+
+  /// 'air' or 'sea' as it was on the priced request - the booking opens on
+  /// this mode instead of a default the customer never chose.
+  final String agreedMode;
+  final bool agreedCoversLoss;
 
   @override
   State<SendFreightScreen> createState() => _SendFreightScreenState();
@@ -612,7 +622,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _extraItems = const [];
       _boxOtherKgController.clear();
       final modes = _availableModes(o);
-      _mode = modes.contains(_mode)
+      // An accepted price was quoted for one mode; opening the booking on
+      // any other would restate the deal wrongly.
+      _mode = _hasAgreedPrice && modes.contains(widget.agreedMode)
+          ? widget.agreedMode
+          : modes.contains(_mode)
           ? _mode
           : (modes.isNotEmpty ? modes.first : 'sea');
       // The funnel already answered what is being sent, and the server
@@ -781,7 +795,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       return;
     }
     // Only a parcel the business charges by the kilo has a weight to give.
-    if (!_setPrice && _weightKg <= 0) {
+    // An agreed price is whole: the server freezes it flat and never weighs
+    // this parcel, so demanding a weight here blocked the booking on a
+    // number nothing would ever be charged against.
+    if (!_setPrice && !_hasAgreedPrice && _weightKg <= 0) {
       _snack(l10n.enterParcelWeightKg);
       return;
     }
@@ -1699,6 +1716,99 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     );
   }
 
+  String _agreedBusinessLabel(BusinessDestinationOption o) =>
+      widget.agreedBusinessName.trim().isNotEmpty
+      ? widget.agreedBusinessName.trim()
+      : o.businessName;
+
+  /// The deal, restated whole: business, price, and whether it makes good
+  /// on a lost parcel. Everything the catalogue funnel would ask again is
+  /// already settled, so this card stands where those questions stood.
+  Widget _agreedDealSection(
+    ThemeData theme,
+    AppLocalizations l10n,
+    BusinessDestinationOption o,
+  ) {
+    final name = _agreedBusinessLabel(o);
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.verified_outlined,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.freightQuoteChosenTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  freightMoney(_price),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.freightQuoteChosenMessage(name, freightMoney(_price)),
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(
+                  widget.agreedCoversLoss
+                      ? Icons.verified_user_outlined
+                      : Icons.gpp_maybe_outlined,
+                  size: 16,
+                  color: widget.agreedCoversLoss
+                      ? theme.colorScheme.primary
+                      : theme.hintColor,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    widget.agreedCoversLoss
+                        ? l10n.freightQuoteCoversLoss(name)
+                        : l10n.freightQuoteDoesNotCoverLoss(name),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: widget.agreedCoversLoss
+                          ? theme.colorScheme.onSurface
+                          : theme.hintColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.freightAgreedPriceFinal,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _setPriceSection(ThemeData theme, AppLocalizations l10n) {
     final pricing = _itemPricing;
     return Card(
@@ -2046,8 +2156,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         const SizedBox(height: 16),
         // The mode cards quote this route's per-kg rates, so they only
         // belong on a form that is going to charge one of them. An
-        // unpriced item names its mode on the request instead.
-        if (_itemPriced) ...[
+        // unpriced item names its mode on the request instead, and an
+        // agreed price was quoted for one mode - offering the other would
+        // dangle a rate that cannot apply.
+        if (_itemPriced && !_hasAgreedPrice) ...[
           Text(l10n.shippingMode, style: theme.textTheme.labelLarge),
           const SizedBox(height: 10),
           IntrinsicHeight(
@@ -2082,6 +2194,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             l10n,
             message: l10n.freightBusinessHasNotPricedItem(o.businessName),
           )
+        else if (_hasAgreedPrice)
+          _agreedDealSection(theme, l10n, o)
         else if (_setPrice)
           _setPriceSection(theme, l10n)
         else
@@ -2099,11 +2213,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           const SizedBox(height: 14),
           _boxBuilderSection(theme, l10n),
         ],
-        if (_categories.isNotEmpty) ...[
+        // The agreed-deal card already states the category, the cover
+        // answer and the price; the catalogue's own sections would restate
+        // all three from the wrong source.
+        if (!_hasAgreedPrice && _categories.isNotEmpty) ...[
           const SizedBox(height: 14),
           _categorySection(theme, l10n),
         ],
-        if (o.freightCoverage != null) ...[
+        if (!_hasAgreedPrice && o.freightCoverage != null) ...[
           const SizedBox(height: 14),
           _coverageSection(theme, l10n),
         ],
@@ -2188,7 +2305,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                           style: theme.textTheme.labelMedium,
                         ),
                         Text(
-                          _manifestActive &&
+                          _hasAgreedPrice
+                              ? l10n.freightQuoteChosenMessage(
+                                  _agreedBusinessLabel(o),
+                                  freightMoney(_price),
+                                )
+                              : _manifestActive &&
                                   (_manifestPricing?.ok ?? false)
                               ? _boxContents.summary()
                               : _setPrice
@@ -2246,8 +2368,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           Text(
             // A set price is settled at booking unless an allowance leaves the
             // excess to be weighed, so promising a weight confirmation would
-            // describe a step that does not happen to this parcel.
-            !_setPrice
+            // describe a step that does not happen to this parcel. An agreed
+            // price goes further: it is the whole price, frozen by the
+            // server, never re-weighed.
+            _hasAgreedPrice
+                ? l10n.freightAgreedPriceFinal
+                : !_setPrice
                 ? l10n.freightEstimateExplanation
                 : _itemPricing.includedKg > 0
                 ? l10n.freightSetPriceOverAllowanceNote
@@ -2272,7 +2398,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             label: Text(
               _payOnArrivalChosen
                   ? l10n.saveCardAndBook
-                  : _setPrice
+                  : _setPrice || _hasAgreedPrice
                   ? l10n.bookAndPay
                   : l10n.payEstimate,
             ),

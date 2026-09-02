@@ -7135,6 +7135,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get freightSetPriceFinal => 'This is the full price for this item.';
 
   @override
+  String get freightAgreedPriceFinal =>
+      'This is the price you accepted for this parcel. Nothing is weighed and nothing is settled afterwards - what you pay today is the whole price.';
+
+  @override
   String get freightSetPriceOverAllowanceNote =>
       'The business weighs the parcel at drop-off and charges for any weight over what this price covers.';
 

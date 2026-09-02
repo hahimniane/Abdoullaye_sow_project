@@ -3024,6 +3024,7 @@
   },
   "freightSetPriceCoversAnyWeight": "Covers this item whatever it weighs",
   "freightSetPriceFinal": "This is the full price for this item.",
+  "freightAgreedPriceFinal": "This is the price you accepted for this parcel. Nothing is weighed and nothing is settled afterwards - what you pay today is the whole price.",
   "freightSetPriceOverAllowanceNote": "The business weighs the parcel at drop-off and charges for any weight over what this price covers.",
   "freightDestinationDeliveryFeeLabel": "Delivery at destination",
   "freightReceiverAddressLabel": "Receiver's address",

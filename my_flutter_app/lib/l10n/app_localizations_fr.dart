@@ -7261,6 +7261,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get freightSetPriceFinal => 'C\'est le prix complet pour cet article.';
 
   @override
+  String get freightAgreedPriceFinal =>
+      'C\'est le prix que vous avez accepté pour ce colis. Rien n\'est pesé et rien n\'est réglé ensuite : ce que vous payez aujourd\'hui est le prix total.';
+
+  @override
   String get freightSetPriceOverAllowanceNote =>
       'L\'entreprise pèse le colis au dépôt et facture le poids qui dépasse ce que ce prix comprend.';
 

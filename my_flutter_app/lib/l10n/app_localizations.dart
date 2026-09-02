@@ -12762,6 +12762,12 @@ abstract class AppLocalizations {
   /// **'This is the full price for this item.'**
   String get freightSetPriceFinal;
 
+  /// No description provided for @freightAgreedPriceFinal.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the price you accepted for this parcel. Nothing is weighed and nothing is settled afterwards - what you pay today is the whole price.'**
+  String get freightAgreedPriceFinal;
+
   /// No description provided for @freightSetPriceOverAllowanceNote.
   ///
   /// In en, this message translates to:
