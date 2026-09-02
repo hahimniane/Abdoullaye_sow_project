@@ -513,7 +513,10 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     // starts an anonymous session, and the booking carries on where it
     // stopped.
     if (route == _guestRoute) {
-      return showGuestCheckoutSheet(context);
+      return showGuestCheckoutSheet(
+        context,
+        initialName: _senderNameController.text,
+      );
     }
     final result = await Navigator.pushNamed(
       context,

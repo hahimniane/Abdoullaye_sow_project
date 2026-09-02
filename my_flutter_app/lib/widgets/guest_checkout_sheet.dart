@@ -12,6 +12,7 @@ Future<bool> showGuestCheckoutSheet(
   BuildContext context, {
   GuestCheckoutSession? session,
   VoidCallback? onUseAccount,
+  String initialName = '',
 }) async {
   final result = await showModalBottomSheet<bool>(
     context: context,
@@ -20,16 +21,25 @@ Future<bool> showGuestCheckoutSheet(
     builder: (sheetContext) => _GuestCheckoutSheet(
       session: session ?? guestCheckout,
       onUseAccount: onUseAccount,
+      initialName: initialName,
     ),
   );
   return result ?? false;
 }
 
 class _GuestCheckoutSheet extends StatefulWidget {
-  const _GuestCheckoutSheet({required this.session, this.onUseAccount});
+  const _GuestCheckoutSheet({
+    required this.session,
+    this.onUseAccount,
+    this.initialName = '',
+  });
 
   final GuestCheckoutSession session;
   final VoidCallback? onUseAccount;
+
+  /// The sender name the form already collected. A guest asked to retype
+  /// their own name reads the sheet as the screen having lost their work.
+  final String initialName;
 
   @override
   State<_GuestCheckoutSheet> createState() => _GuestCheckoutSheetState();
@@ -43,6 +53,12 @@ class _GuestCheckoutSheetState extends State<_GuestCheckoutSheet> {
 
   bool _submitting = false;
   String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController.text = widget.initialName.trim();
+  }
 
   @override
   void dispose() {

@@ -1,3 +1,8 @@
+import {
+  type GuestContact,
+  rememberGuestContactDraft,
+} from "./guest-contact.ts";
+
 /**
  * Pure guest-session rules, kept off Firebase so they can be unit-tested.
  *
@@ -26,8 +31,15 @@ export async function ensureGuestOrAccount(input: {
   authenticated: boolean;
   guestReady?: boolean;
   requestContinuation?: AuthenticationRequiredHandler;
+  /**
+   * What the form already knows about the person - typically the sender
+   * name they typed. Parked for the continuation sheet to seed its fields
+   * with, so a guest is not asked to retype it.
+   */
+  draft?: Partial<GuestContact>;
 }): Promise<boolean> {
   if (input.authenticated || input.guestReady) return true;
+  if (input.draft) rememberGuestContactDraft(input.draft);
   return (await input.requestContinuation?.()) === true;
 }
 
