@@ -166,6 +166,18 @@
             <input type="text" id="businessCityText" name="businessCityText" placeholder="Saisissez une ville" autocomplete="address-level2" hidden disabled />
           </label>
         </div>
+        <label class="fld">Adresse (rue) <span class="req">*</span>
+          <input type="text" id="businessStreet" name="businessStreet" autocomplete="street-address" required />
+          <span class="hint">Adresse de dépôt par défaut pour vos clients.</span>
+        </label>
+        <div class="field-row">
+          <label class="fld">Région ou état
+            <input type="text" id="businessState" name="businessState" autocomplete="address-level1" />
+          </label>
+          <label class="fld">Code postal
+            <input type="text" id="businessPostal" name="businessPostal" autocomplete="postal-code" placeholder="Optional" />
+          </label>
+        </div>
         <label class="fld">Parlez-nous de votre service
           <textarea id="serviceNote" name="serviceNote" rows="4" placeholder="Routes, pricing, experience, anything useful for approval (optional)"></textarea>
         </label>
@@ -461,6 +473,9 @@
       const businessWebsite = $("businessWebsite").value.trim();
       const selectedCountry = businessCountry.value.trim();
       const selectedCity = (businessCity.hidden ? businessCityText.value : businessCity.value).trim();
+      const selectedStreet = $("businessStreet").value.trim();
+      const selectedState = $("businessState").value.trim();
+      const selectedPostal = $("businessPostal").value.trim();
       const serviceNote = $("serviceNote").value.trim();
       const services = selectedServices();
 
@@ -474,6 +489,8 @@
       if (!businessName) return showError("Veuillez saisir le nom de votre entreprise.");
       if (!selectedCountry) return showError("Sélectionnez le pays de votre entreprise.");
       if (!selectedCity) return showError("Sélectionnez la ville de votre entreprise.");
+      if (!selectedStreet) return showError("Saisissez l’adresse (rue) de votre entreprise.");
+      if (selectedCountry === "United States" && !selectedState) return showError("Saisissez l’état de votre entreprise (obligatoire aux États-Unis).");
       if (businessPhone && !PHONE_OK(businessPhone)) return showError("Saisissez un téléphone d’entreprise valide, ou laissez ce champ vide.");
       if (businessEmail && !EMAIL_OK(businessEmail)) return showError("Saisissez un email d’entreprise valide, ou laissez ce champ vide.");
       if (!$("legalAccept").checked) return showError("Veuillez accepter les conditions d’utilisation et la politique de confidentialité.");
@@ -528,11 +545,11 @@
           businessWebsite,
           enabledServices: services,
           serviceNote,
-          addressLine1: "",
+          addressLine1: selectedStreet,
           city: selectedCity,
           country: selectedCountry,
-          state: selectedCountry,
-          postalCode: "",
+          state: selectedState,
+          postalCode: selectedPostal,
           marketplaceDisclosure: { accepted: true, version: MARKETPLACE_DISCLOSURE_VERSION, locale: "fr" },
         });
         const businessId = appRes.data && appRes.data.businessId;
@@ -552,11 +569,11 @@
               profileImageUrl: up.url,
               profileImagePath: up.path,
               serviceNote,
-              addressLine1: "",
+              addressLine1: selectedStreet,
               city: selectedCity,
               country: selectedCountry,
-              state: selectedCountry,
-              postalCode: "",
+              state: selectedState,
+              postalCode: selectedPostal,
               carHoldPricingMode: "flat",
               carHoldFlatFee: 500,
               carHoldDailyRate: 100,

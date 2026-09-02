@@ -1053,6 +1053,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Welcome, ": "Bienvenue, ",
   "Create account": "Créer un compte",
   "Create your customer account": "Créez votre compte client",
+  "Listing a business?": "Vous inscrivez une entreprise ?",
+  "Apply on laawoldigital.com": "Faites la demande sur laawoldigital.com",
   "Reset your password": "Réinitialisez votre mot de passe",
   "Full name": "Nom complet",
   "Phone number": "Numéro de téléphone",
