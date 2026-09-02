@@ -7258,6 +7258,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get trackWithCode => 'Track with a code';
+
+  @override
   String get freightWeighedAtRateHelper =>
       'Charged per kg once the business weighs the box.';
 

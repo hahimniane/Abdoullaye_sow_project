@@ -302,6 +302,26 @@ class _TrackingScreenState extends State<TrackingScreen> {
     return null;
   }
 
+  /// The same code lookup a guest gets, for a signed-in customer: a booking
+  /// made outside this account (a guest web order, someone's receipt) is
+  /// followed by its code, exactly as on the website.
+  void _openCodeLookup() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: AppColors.lightBg,
+          body: SafeArea(
+            child: GuestTrackingLookup(
+              service: widget.guestTrackingService,
+              showBackButton: true,
+              onSignIn: null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Stream<List<CustomerTrackingShipment>> _streamFor(String customerUid) {
     if (_streamCustomerUid != customerUid || _shipmentsStream == null) {
       _streamCustomerUid = customerUid;
@@ -352,6 +372,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 icon: Icons.lock_outline,
                 message: l10n.shipmentsLoadError,
                 showBackButton: widget.showBackButton,
+                onCodeLookup: _openCodeLookup,
               ),
             );
           }
@@ -370,6 +391,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 actionLabel: l10n.sendBarrels,
                 onAction: () => Navigator.pushNamed(context, '/barrel'),
                 showBackButton: widget.showBackButton,
+                onCodeLookup: _openCodeLookup,
               ),
             );
           }
@@ -410,6 +432,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                         ? l10n.freightOrderDetails
                         : l10n.trackShipment,
                     showBackButton: widget.showBackButton,
+                    onCodeLookup: _openCodeLookup,
                   ),
                   Expanded(
                     child: focusedShipment == null
@@ -470,6 +493,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 _ShipmentsHeader(
                   title: l10n.trackShipment,
                   showBackButton: widget.showBackButton,
+                  onCodeLookup: _openCodeLookup,
                 ),
                 _TrackSearchField(
                   controller: _searchController,
@@ -567,10 +591,19 @@ class _ShipmentGroup {
 }
 
 class _ShipmentsHeader extends StatelessWidget {
-  const _ShipmentsHeader({required this.title, required this.showBackButton});
+  const _ShipmentsHeader({
+    required this.title,
+    required this.showBackButton,
+    this.onCodeLookup,
+  });
 
   final String title;
   final bool showBackButton;
+
+  /// Opens the track-with-a-code lookup. The web tracking page takes a code
+  /// from anyone; without this a signed-in customer has no way to follow a
+  /// booking made outside this account - a guest web order, a receipt.
+  final VoidCallback? onCodeLookup;
 
   @override
   Widget build(BuildContext context) {
@@ -590,6 +623,12 @@ class _ShipmentsHeader extends StatelessWidget {
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
           ),
+          if (onCodeLookup != null)
+            IconButton(
+              onPressed: onCodeLookup,
+              tooltip: AppLocalizations.of(context)!.trackWithCode,
+              icon: const Icon(Icons.confirmation_number_outlined),
+            ),
           const LanguageToggle(),
         ],
       ),
@@ -1406,6 +1445,7 @@ class _EmptyShipmentsState extends StatelessWidget {
     this.actionLabel,
     this.onAction,
     this.showBackButton = false,
+    this.onCodeLookup,
   });
 
   final String title;
@@ -1414,12 +1454,17 @@ class _EmptyShipmentsState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final bool showBackButton;
+  final VoidCallback? onCodeLookup;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _ShipmentsHeader(title: title, showBackButton: showBackButton),
+        _ShipmentsHeader(
+          title: title,
+          showBackButton: showBackButton,
+          onCodeLookup: onCodeLookup,
+        ),
         Expanded(
           child: Center(
             child: Padding(
@@ -1450,6 +1495,15 @@ class _EmptyShipmentsState extends StatelessWidget {
                     FilledButton(
                       onPressed: onAction,
                       child: Text(actionLabel!),
+                    ),
+                  if (onCodeLookup != null)
+                    TextButton.icon(
+                      onPressed: onCodeLookup,
+                      icon: const Icon(
+                        Icons.confirmation_number_outlined,
+                        size: 18,
+                      ),
+                      label: Text(AppLocalizations.of(context)!.trackWithCode),
                     ),
                 ],
               ),

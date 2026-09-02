@@ -25,7 +25,10 @@ class GuestTrackingLookup extends StatefulWidget {
   });
 
   final GuestTrackingLookupService? service;
-  final VoidCallback onSignIn;
+
+  /// Null when the caller is already signed in - the sign-in upsell would
+  /// only ask for what they already have.
+  final VoidCallback? onSignIn;
   final bool showBackButton;
 
   /// A tracking code to look up immediately, for a caller that already knows
@@ -288,7 +291,7 @@ class _GuestTrackingSuccess extends StatelessWidget {
   });
 
   final GuestTrackingRecord record;
-  final VoidCallback onSignIn;
+  final VoidCallback? onSignIn;
   final VoidCallback onTrackAnother;
   final Future<String?> Function(String trackingCode, String email) onClaim;
 
@@ -390,12 +393,14 @@ class _GuestTrackingSuccess extends StatelessWidget {
             label: l10n.guestTrackingTrackAnother,
             icon: Icons.search,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          AsyncActionButton.filled(
-            onPressed: onSignIn,
-            label: l10n.guestTrackingSignInUpsell,
-            icon: Icons.login,
-          ),
+          if (onSignIn != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AsyncActionButton.filled(
+              onPressed: onSignIn,
+              label: l10n.guestTrackingSignInUpsell,
+              icon: Icons.login,
+            ),
+          ],
         ],
       ),
     );
