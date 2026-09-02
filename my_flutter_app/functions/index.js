@@ -21839,12 +21839,17 @@ exports.createFreightShipmentPaymentIntent = onCall(
         };
       // A price this business never set is not one to invent. A customer who
       // picked an item it has not quoted gets a request it answers with a
-      // number of its own.
-      if (!itemPricing.priced && !hasDeclaredContents) {
+      // number of its own. An accepted quote IS that number, so these two
+      // guards yield to it: the request exists precisely because the
+      // catalogue had no row, and a quoted price needs no weight to stand.
+      // A bogus quoteRequestId does not slip through - agreedFreightPrice
+      // below refuses anything not accepted by this customer for this
+      // business.
+      if (!itemPricing.priced && !hasDeclaredContents && !quoteRequestId) {
         throw new HttpsError("failed-precondition", "item_not_priced");
       }
       if (itemPricing.needsWeightAtBooking && parcelWeightKg <= 0 &&
-          !hasDeclaredContents) {
+          !hasDeclaredContents && !quoteRequestId) {
         throw new HttpsError(
             "invalid-argument",
             "Parcel weight must be greater than zero",
