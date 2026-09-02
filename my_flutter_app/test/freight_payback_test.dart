@@ -319,8 +319,12 @@ void main() {
       expect(screen, contains('else if (_setPrice)\n          _setPriceSection('));
       expect(screen, contains('weightKg: _setPrice ? 0 : _weightKg'));
       // And the guard on the button must not hold the order for a weight
-      // this parcel has no reason to carry.
-      expect(screen, contains('if (!_setPrice && _weightKg <= 0)'));
+      // this parcel has no reason to carry - an agreed price carries none
+      // either (see freight_agreed_booking_contract_test.dart).
+      expect(
+        screen,
+        contains('if (!_setPrice && !_hasAgreedPrice && _weightKg <= 0)'),
+      );
       expect(service, contains("if (weightKg > 0) 'weightKg': weightKg"));
       expect(service, contains('double weightKg = 0,'));
     });

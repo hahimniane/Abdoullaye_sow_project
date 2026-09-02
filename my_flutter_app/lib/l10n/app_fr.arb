@@ -3024,6 +3024,7 @@
   },
   "freightSetPriceCoversAnyWeight": "Comprend cet article quel que soit son poids",
   "freightSetPriceFinal": "C'est le prix complet pour cet article.",
+  "freightAgreedPriceFinal": "C'est le prix que vous avez accepté pour ce colis. Rien n'est pesé et rien n'est réglé ensuite : ce que vous payez aujourd'hui est le prix total.",
   "freightSetPriceOverAllowanceNote": "L'entreprise pèse le colis au dépôt et facture le poids qui dépasse ce que ce prix comprend.",
   "freightDestinationDeliveryFeeLabel": "Livraison à destination",
   "freightReceiverAddressLabel": "Adresse du destinataire",

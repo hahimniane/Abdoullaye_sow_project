@@ -90,10 +90,12 @@ class FreightQuoteRequest {
     required this.eligibleBusinessCount,
     this.weightKg = 0,
     this.itemLabel = '',
+    this.mode = '',
     this.selectedQuoteId = '',
     this.selectedBusinessId = '',
     this.selectedBusinessName = '',
     this.selectedAmountCents = 0,
+    this.selectedCoversLoss = false,
   });
 
   final String id;
@@ -106,6 +108,10 @@ class FreightQuoteRequest {
   final int eligibleBusinessCount;
   final double weightKg;
   final String itemLabel;
+
+  /// 'air' or 'sea' - the mode the parcel was priced for. The booking that
+  /// follows an accepted price must open on this mode, not a default.
+  final String mode;
   final String selectedQuoteId;
 
   /// Which business's price was accepted. The booking that follows has to go
@@ -113,6 +119,10 @@ class FreightQuoteRequest {
   final String selectedBusinessId;
   final String selectedBusinessName;
   final int selectedAmountCents;
+
+  /// Whether the accepted quote covers the parcel if it is lost - the
+  /// answer the customer chose, shown wherever the agreed deal is restated.
+  final bool selectedCoversLoss;
 
   bool get isCollecting => quoteStatus == 'collecting';
   bool get isSelected => quoteStatus == 'selected';
@@ -131,11 +141,13 @@ class FreightQuoteRequest {
           (data['eligibleBusinessCount'] as num?)?.toInt() ?? 0,
       weightKg: (data['weightKg'] as num?)?.toDouble() ?? 0,
       itemLabel: (data['itemLabel'] ?? '') as String,
+      mode: (data['mode'] ?? '') as String,
       selectedQuoteId: (data['selectedQuoteId'] ?? '') as String,
       selectedBusinessId: (data['selectedBusinessId'] ?? '') as String,
       selectedBusinessName: (data['selectedBusinessName'] ?? '') as String,
       selectedAmountCents:
           (data['selectedAmountCents'] as num?)?.toInt() ?? 0,
+      selectedCoversLoss: data['selectedCoversLoss'] == true,
     );
   }
 }
