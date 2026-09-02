@@ -13,6 +13,7 @@ import {
   type GuestContactField,
   guestContactProblems,
   normalizeGuestContact,
+  readGuestContactDraft,
 } from "@/lib/guest-contact";
 
 type GuestContactPanelProps = {
@@ -26,7 +27,13 @@ export function GuestContactPanel({
   busy = false,
   onContinued,
 }: GuestContactPanelProps) {
-  const [contact, setContact] = useState<GuestContact>(EMPTY);
+  // Seeded with what the booking form already collected - the sender name
+  // the person just typed. A guest asked to retype their own name reads
+  // the sheet as the page having lost their work.
+  const [contact, setContact] = useState<GuestContact>(() => ({
+    ...EMPTY,
+    ...readGuestContactDraft(),
+  }));
   const [touched, setTouched] = useState<GuestContactField[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");

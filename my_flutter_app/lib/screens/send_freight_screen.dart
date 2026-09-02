@@ -752,6 +752,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       final continued = await showGuestCheckoutSheet(
         context,
         onUseAccount: () => Navigator.pushNamed(context, '/login'),
+        initialName: _senderController.text,
       );
       if (!continued || !mounted) return;
     }

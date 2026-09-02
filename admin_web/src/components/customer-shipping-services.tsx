@@ -947,6 +947,7 @@ function BarrelShipmentForm({
       authenticated,
       guestReady,
       requestContinuation: onAuthenticationRequired,
+      draft: {name: senderName},
     }))) {
       return;
     }
@@ -1682,6 +1683,7 @@ function BarrelOrderForm({
       authenticated,
       guestReady,
       requestContinuation: onAuthenticationRequired,
+      draft: {name: senderName},
     }))) {
       return;
     }
@@ -2971,6 +2973,7 @@ function FreightShipmentForm({
       authenticated,
       guestReady,
       requestContinuation: onAuthenticationRequired,
+      draft: {name: senderName},
     }))) {
       return;
     }

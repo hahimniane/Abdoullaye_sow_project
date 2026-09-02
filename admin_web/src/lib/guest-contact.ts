@@ -53,6 +53,56 @@ export function isGuestContactComplete(raw: Partial<GuestContact>) {
 }
 
 const STORAGE_KEY = "laawol.guest-contact";
+const DRAFT_KEY = "laawol.guest-contact-draft";
+
+/**
+ * What the page already knows about the person before the continuation
+ * sheet opens - the sender name they typed into the booking form. The
+ * sheet seeds its fields from this so a guest is never asked to retype
+ * what they just gave the same page.
+ *
+ * A draft is a suggestion, not a contact: it may be partial, it is never
+ * validated, and it never lets a submit skip the sheet.
+ */
+export function rememberGuestContactDraft(draft: Partial<GuestContact>) {
+  const name = (draft.name ?? "").trim().slice(0, NAME_MAX);
+  const email = (draft.email ?? "").trim().slice(0, EMAIL_MAX);
+  const phone = (draft.phone ?? "").trim().slice(0, 32);
+  if (!name && !email && !phone) return;
+  try {
+    sessionStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({ name, email, phone }),
+    );
+  } catch {
+    // Prefill only: without storage the sheet simply opens empty.
+  }
+}
+
+export function readGuestContactDraft(): Partial<GuestContact> {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<GuestContact>;
+    const draft: Partial<GuestContact> = {};
+    const name =
+      typeof parsed.name === "string"
+        ? parsed.name.trim().slice(0, NAME_MAX)
+        : "";
+    const email =
+      typeof parsed.email === "string"
+        ? parsed.email.trim().slice(0, EMAIL_MAX)
+        : "";
+    const phone =
+      typeof parsed.phone === "string" ? parsed.phone.trim().slice(0, 32) : "";
+    if (name) draft.name = name;
+    if (email) draft.email = email;
+    if (phone) draft.phone = phone;
+    return draft;
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Held in memory for the life of this page, and also in sessionStorage so

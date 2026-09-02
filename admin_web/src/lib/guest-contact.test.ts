@@ -6,6 +6,8 @@ import {
   guestContactProblems,
   isGuestContactComplete,
   normalizeGuestContact,
+  readGuestContactDraft,
+  rememberGuestContactDraft,
 } from "./guest-contact.ts";
 import { translateValue } from "./french-dom.ts";
 
@@ -35,6 +37,47 @@ test("every unusable field is named at once", () => {
   assert.deepEqual(
     guestContactProblems({ name: "A", email: "a@b.co", phone: "12" }),
     ["phone"],
+  );
+});
+
+test("the sheet opens knowing what the form already collected", () => {
+  // The booking form asks for the sender's name, then the continuation
+  // sheet asked for it again from scratch - a guest read that as the page
+  // having lost their work. The form parks a draft when it opens the
+  // sheet, and the sheet seeds its fields from it.
+  const store = new Map<string, string>();
+  (globalThis as { sessionStorage?: unknown }).sessionStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+  };
+  try {
+    rememberGuestContactDraft({ name: "  Mariama Diallo  " });
+    assert.deepEqual(readGuestContactDraft(), { name: "Mariama Diallo" });
+    // A draft is partial by design and never validated.
+    rememberGuestContactDraft({ name: "M", email: "", phone: "" });
+    assert.deepEqual(readGuestContactDraft(), { name: "M" });
+    // An all-blank draft is not worth parking - the last real one stays.
+    rememberGuestContactDraft({ name: "   " });
+    assert.deepEqual(readGuestContactDraft(), { name: "M" });
+  } finally {
+    delete (globalThis as { sessionStorage?: unknown }).sessionStorage;
+  }
+  // Junk in storage prefills nothing rather than crashing the sheet.
+  assert.deepEqual(readGuestContactDraft(), {});
+
+  const panel = readFileSync("src/components/guest-contact-panel.tsx", "utf8");
+  assert.match(panel, /readGuestContactDraft\(\)/);
+  const shipping = readFileSync(
+    "src/components/customer-shipping-services.tsx",
+    "utf8",
+  );
+  // Every booking form that knows the sender's name hands it over: barrels,
+  // freight, and car transport all gate their submit the same way.
+  const drafts = shipping.match(/draft: \{name: senderName\}/g) || [];
+  assert.ok(
+    drafts.length >= 3,
+    `every sender-name form passes a draft (saw ${drafts.length})`,
   );
 });
 
