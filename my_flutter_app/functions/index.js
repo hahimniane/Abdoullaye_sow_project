@@ -21876,7 +21876,12 @@ exports.createFreightShipmentPaymentIntent = onCall(
                 "That price is not available to book",
           );
         }
-        agreedQuote = {...agreed, requestId: quoteRequestId};
+        agreedQuote = {
+          ...agreed,
+          requestId: quoteRequestId,
+          coversLoss:
+            quoteRequestSnapshot.data()?.selectedCoversLoss === true,
+        };
       }
       // A declared box: N set-price items plus one weighed bucket, priced
       // through this business's own catalogue. Exclusive with an agreed
@@ -21930,6 +21935,18 @@ exports.createFreightShipmentPaymentIntent = onCall(
           coverageFee: 0,
           coverageFeeCents: 0,
           covered: policyNow.coversLoss === true,
+          policy: policyNow,
+        };
+      } else if (agreedQuote) {
+        // Cover was asked and answered on the quote itself - the business
+        // said whether it pays for this parcel when it named its price, and
+        // its catalogue (which had no row for this parcel) has no say.
+        coverage = {
+          ok: true,
+          declaredValueCents: 0,
+          coverageFee: 0,
+          coverageFeeCents: 0,
+          covered: agreedQuote.coversLoss === true,
           policy: policyNow,
         };
       } else if (wantsItemPricing) {
@@ -22047,7 +22064,12 @@ exports.createFreightShipmentPaymentIntent = onCall(
           // reprice it against a scale. A manifest is N set-price items in
           // one box: their summed price and allowance settle by the same
           // formula as one, and the weighed bucket floats with the scale.
-          pricingMode: manifest ? "manifest" : itemPricing.mode,
+          // An agreed quote is the whole parcel's price, whatever it
+          // weighs: it freezes as a flat price with no allowance, so no
+          // scale and no catalogue row can ever reprice it at settlement.
+          pricingMode: manifest ?
+            "manifest" :
+            agreedQuote ? "flat" : itemPricing.mode,
           ...(manifest ? {
             itemFlatPrice: manifest.flatCents / 100,
             itemIncludedKg: manifest.includedKg,
@@ -22055,6 +22077,9 @@ exports.createFreightShipmentPaymentIntent = onCall(
             contentsOtherGoodsKg: manifest.weighedKg,
             contentsOtherCategoryId: manifest.contents.otherCategoryId,
             contentsSummary: freightContentsSummary(manifest.contents),
+          } : agreedQuote ? {
+            itemFlatPrice: agreedQuote.amountCents / 100,
+            itemIncludedKg: 0,
           } : itemPricing.mode === "flat" ? {
             itemFlatPrice: itemPricing.flatPrice,
             itemIncludedKg: itemPricing.includedKg,
@@ -22063,7 +22088,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
           // only to see whether the parcel outgrew what the price covers.
           weightVerificationRequired: manifest ?
             manifest.weighedKg > 0 || manifest.includedKg > 0 :
-            itemPricing.weighsAtDropOff,
+            agreedQuote ? false : itemPricing.weighsAtDropOff,
           ...(itemSnapshot ? {
             itemId: String(itemId || ""),
           } : {}),

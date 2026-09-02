@@ -3203,6 +3203,12 @@ function FreightShipmentForm({
                   shipment arrived. If that charge doesn&rsquo;t go through,
                   you&rsquo;ll be asked to complete payment in the app.
                 </div>
+              ) : agreedDealReady ? (
+                <div className="customer-inline-note">
+                  This is the price the business quoted for this parcel.
+                  Nothing is weighed and nothing is settled afterwards -
+                  what you pay today is the whole price.
+                </div>
               ) : setPrice ? (
                 itemPricing.includedKg > 0 ? (
                   <div className="customer-inline-note">
