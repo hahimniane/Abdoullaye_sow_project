@@ -322,12 +322,17 @@ test("the freight form reveals itself one answered question at a time", () => {
     "src/components/customer-shipping-services.tsx",
     "utf8",
   );
-  // Receiver/weight/pickup live behind the chosen business AND its price.
-  assert.match(customer, /\{destination && itemPricing\.priced && \(<>/);
+  // Receiver/weight/pickup live behind the chosen business AND a known
+  // price - the catalogue's, or the one an accepted quote already fixed.
+  assert.match(customer, /\{destination && priceKnown && \(<>/);
+  assert.match(
+    customer,
+    /const priceKnown = itemPricing\.priced \|\| agreedDealReady;/,
+  );
   // The shared footer hides until then too.
   assert.match(
     customer,
-    /footerVisible=\{Boolean\(destination\) && itemPricing\.priced\}/,
+    /footerVisible=\{Boolean\(destination\) && priceKnown\}/,
   );
   // And the single-provider auto-select waits for the funnel.
   assert.match(
@@ -490,11 +495,11 @@ test("a set-price booking asks for no weight and sends none", () => {
   // what it weighs, so the field is not on the screen at all.
   assert.match(
     customer,
-    /\{itemPricing\.needsWeightAtBooking \? \(\s*\n\s*<label>\s*\n\s*Estimated weight \(kg\)/,
+    /itemPricing\.needsWeightAtBooking \? \(\s*\n\s*<label>\s*\n\s*Estimated weight \(kg\)/,
   );
   assert.match(
     customer,
-    /weightKg: itemPricing\.needsWeightAtBooking \? weightKg : 0,/,
+    /itemPricing\.needsWeightAtBooking && !agreedDealReady\s*\n?\s*\? weightKg\s*\n?\s*: 0,/,
   );
   // And the form cannot be held open waiting for a weight that is never
   // asked for.
@@ -530,13 +535,13 @@ test("an unpriced item shows the request path and never a price", () => {
   );
   // The estimate, the review footer and the receiver/weight/pickup block all
   // hang off a resolved price.
-  assert.match(customer, /\{destination && itemPricing\.priced && \(<>/);
+  assert.match(customer, /\{destination && priceKnown && \(<>/);
   assert.match(
     customer,
-    /footerVisible=\{Boolean\(destination\) && itemPricing\.priced\}/,
+    /footerVisible=\{Boolean\(destination\) && priceKnown\}/,
   );
-  // And checkout cannot be reached without one.
-  assert.match(customer, /itemPricing\.priced &&\s*\n\s*\/\/ A set-price item/);
+  // And checkout cannot be reached without one - published or agreed.
+  assert.match(customer, /priceKnown &&\s*\n\s*\/\/ A set price/);
   // The request replaces the dead end, both when nobody prices the item and
   // when the chosen business does not.
   assert.match(

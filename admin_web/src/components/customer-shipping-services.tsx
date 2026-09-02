@@ -2676,6 +2676,12 @@ function FreightShipmentForm({
     itemStepSatisfied &&
     (qualifiedProviderOptions.length === 0 ||
       (destination !== null && !itemPricing.priced));
+  // An accepted quote makes the deal: the price is set, the business is
+  // chosen, and neither the catalogue nor the funnel has anything left to
+  // decide. The whole comparison step collapses into a summary.
+  const agreedDealReady =
+    Boolean(agreedQuoteRequestId) && agreedAmountCents > 0;
+  const priceKnown = itemPricing.priced || agreedDealReady;
   // A set price still needs the route's rate resolved: it is what any weight
   // beyond the allowance is charged at, and it is quoted here so the
   // customer reads it before paying rather than after the scale.
@@ -2895,11 +2901,15 @@ function FreightShipmentForm({
       senderName.trim() &&
         receiverName.trim() &&
         destination &&
-        // A price this business never set is not one to check out against.
-        itemPricing.priced &&
-        // A set-price item is never weighed by the customer, so there is no
-        // weight for the form to hold the booking on.
-        (!itemPricing.needsWeightAtBooking ||
+        // A price this business never set is not one to check out against -
+        // unless the customer holds this business's accepted quote, which
+        // IS its price for this parcel.
+        priceKnown &&
+        // A set price - agreed or published - is never weighed by the
+        // customer, so there is no weight for the form to hold the booking
+        // on.
+        (agreedDealReady ||
+          !itemPricing.needsWeightAtBooking ||
           (Number.isFinite(weightKg) && weightKg > 0)),
     ) &&
     // The funnel's answers, in the funnel's order: a booking without a
@@ -2985,7 +2995,10 @@ function FreightShipmentForm({
             // weight is sent: the server prices the published row, and the
             // business puts it on the scale only when the price has an
             // allowance to check it against.
-            weightKg: itemPricing.needsWeightAtBooking ? weightKg : 0,
+            weightKg:
+              itemPricing.needsWeightAtBooking && !agreedDealReady
+                ? weightKg
+                : 0,
             itemCategoryId: activeCategoryId,
             paymentTiming: payOnArrivalChosen ? "arrival" : "now",
             ...(usesItemPricing && {
@@ -3054,7 +3067,7 @@ function FreightShipmentForm({
         />
       ) : (
         <ServiceRequestForm
-          footerVisible={Boolean(destination) && itemPricing.priced}
+          footerVisible={Boolean(destination) && priceKnown}
           canReview={valid}
           error={error}
           intro="Choose air or sea freight. The approved business verifies the final weight before settlement."
@@ -3256,6 +3269,19 @@ function FreightShipmentForm({
                 value={senderName}
               />
             </label>
+            {agreedDealReady && destination ? (
+              <div className="customer-inline-note customer-form-span">
+                <strong>{destination.businessName}</strong>{" "}
+                <span>
+                  {mode === "air" ? "Air freight" : "Sea freight"} to{" "}
+                  {selectedCountry
+                    ? shippingCountryDisplayName(selectedCountry, language)
+                    : destination.country.name}
+                  . Agreed price{" "}
+                  <strong>{formatMoney(agreedAmountCents / 100)}</strong>.
+                </span>
+              </div>
+            ) : (<>
             <SearchableSelect
               className="customer-form-span"
               emptyMessage="No destination countries match your search."
@@ -3373,11 +3399,12 @@ function FreightShipmentForm({
                 value={destinationOptionId}
               />
             )}
+            </>)}
             {/* Nothing below exists until a business is chosen AND it has a
                 price for this parcel: a receiver, a weight and a pickup all
                 describe a booking WITH someone, at a number. Without both
                 there is nothing to fill this in for. */}
-            {destination && itemPricing.priced && (<>
+            {destination && priceKnown && (<>
             {destination.freightPayOnArrival === true && (
               <label className="customer-form-span">
                 When do you pay?
@@ -3453,7 +3480,15 @@ function FreightShipmentForm({
                 </span>
               </label>
             )}
-            {itemPricing.needsWeightAtBooking ? (
+            {agreedDealReady ? (
+              <div className="customer-inline-note customer-form-span">
+                <strong>{formatMoney(agreedAmountCents / 100)}</strong>{" "}
+                <span>
+                  is the price you accepted from this business for this
+                  parcel. That is the amount charged.
+                </span>
+              </div>
+            ) : itemPricing.needsWeightAtBooking ? (
               <label>
                 Estimated weight (kg)
                 <input
@@ -3467,14 +3502,6 @@ function FreightShipmentForm({
                   value={weightKg}
                 />
               </label>
-            ) : agreedQuoteRequestId && agreedAmountCents > 0 ? (
-              <div className="customer-inline-note customer-form-span">
-                <strong>{formatMoney(agreedAmountCents / 100)}</strong>{" "}
-                <span>
-                  is the price you accepted from this business for this
-                  parcel. That is the amount charged.
-                </span>
-              </div>
             ) : (
               /* A published price for a known object. Asking what an
                  iPhone weighs would be asking the customer to guess at a
