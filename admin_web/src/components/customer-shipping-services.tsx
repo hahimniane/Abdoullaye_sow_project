@@ -292,6 +292,14 @@ function rememberSentQuoteRequest(confirmation: {
   }
 }
 
+function forgetSentQuoteRequest() {
+  try {
+    sessionStorage.removeItem(SENT_QUOTE_REQUEST_KEY);
+  } catch {
+    // Nothing to clear when storage is blocked.
+  }
+}
+
 async function callFunction<TResult>(
   name: string,
   data: Record<string, unknown> = {},
@@ -4191,6 +4199,18 @@ function FreightPriceRequest({
     trackingCode: string;
     eligibleBusinessCount: number;
   } | null>(readSentQuoteRequest);
+  const sentPanelRef = useRef<HTMLElement | null>(null);
+  // The form is tall and the send button sits at its foot; when the
+  // success panel replaces the form the page shortens, which can leave the
+  // panel above the viewport. Bring it to the reader.
+  useEffect(() => {
+    if (sent) {
+      sentPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [sent]);
   const requests = useCustomerFreightQuoteRequests(
     authenticated ? customerUid : "",
     authenticated,
@@ -4270,6 +4290,63 @@ function FreightPriceRequest({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // A sent request takes over the panel. The old inline note under the
+  // button read as "nothing happened" - the form stayed on screen, filled
+  // in, inviting a duplicate send.
+  if (sent && !(authenticated && activeRequest)) {
+    return (
+      <section
+        className="customer-form-span customer-quote-sent"
+        ref={sentPanelRef}
+        role="status"
+      >
+        <span aria-hidden="true" className="customer-quote-sent-check">
+          ✓
+        </span>
+        <h3>Your price request was sent.</h3>
+        {sent.eligibleBusinessCount > 0 && (
+          <p>
+            {sent.eligibleBusinessCount === 1
+              ? "1 business on this route was asked."
+              : `${sent.eligibleBusinessCount} businesses on this route were asked.`}
+          </p>
+        )}
+        {sent.trackingCode && (
+          <>
+            <span className="customer-quote-sent-code">
+              {sent.trackingCode}
+            </span>
+            <p>
+              Keep your request number -{" "}
+              answers arrive by email, and this number follows the request.
+            </p>
+          </>
+        )}
+        <div className="customer-quote-sent-actions">
+          {sent.trackingCode && (
+            <a
+              className="primary-button"
+              href={`/?service=tracking&code=${encodeURIComponent(sent.trackingCode)}`}
+            >
+              Track this request
+            </a>
+          )}
+          <button
+            className="secondary-button"
+            onClick={() => {
+              forgetSentQuoteRequest();
+              setSent(null);
+              setCreatedId("");
+            }}
+            type="button"
+          >
+            Send another request
+          </button>
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -4485,27 +4562,6 @@ function FreightPriceRequest({
           request={activeRequest}
           onPriceAccepted={onPriceAccepted}
         />
-      )}
-      {sent && !(authenticated && activeRequest) && (
-        <div className="customer-inline-note success" role="status">
-          <strong>Your price request was sent.</strong>{" "}
-          {sent.eligibleBusinessCount > 0 && (
-            <span>
-              {sent.eligibleBusinessCount === 1
-                ? "1 business on this route was asked."
-                : `${sent.eligibleBusinessCount} businesses on this route were asked.`}
-            </span>
-          )}{" "}
-          {sent.trackingCode && (
-            <span>
-              Keep your request number
-              {" "}
-              <span className="customer-quote-value">{sent.trackingCode}</span>
-              {" "}
-              - answers arrive by email, and this number follows the request.
-            </span>
-          )}
-        </div>
       )}
       {requests.error && (
         <div className="customer-inline-note error" role="alert">

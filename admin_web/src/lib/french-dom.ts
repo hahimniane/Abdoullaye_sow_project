@@ -508,6 +508,8 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "businesses on this route were asked.":
     "entreprises sur cet itinéraire ont été sollicitées.",
   "Keep your request number": "Conservez votre numéro de demande",
+  "Track this request": "Suivre cette demande",
+  "Send another request": "Envoyer une autre demande",
   "answers arrive by email, and this number follows the request.":
     "les réponses arrivent par e-mail et ce numéro suit la demande.",
   "Your request is ready to continue.":
