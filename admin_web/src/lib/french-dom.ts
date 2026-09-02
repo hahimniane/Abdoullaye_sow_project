@@ -1312,6 +1312,10 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Ce rôle de compte n’est pas pris en charge. Contactez l’assistance Laawol.",
   "Sign in to open your customer, business, or platform workspace.":
     "Connectez-vous pour ouvrir votre espace client, entreprise ou plateforme.",
+  "Sign in to open your business workspace.":
+    "Connectez-vous pour ouvrir votre espace entreprise.",
+  "Sign in to open your platform workspace.":
+    "Connectez-vous pour ouvrir votre espace plateforme.",
   "Expand navigation": "Développer la navigation",
   "Collapse navigation": "Réduire la navigation",
   "Administration Laawol Digital": "Administration Laawol Digital",
