@@ -14,6 +14,10 @@ import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { MailCheck, RefreshCw, Send, ShieldCheck } from "lucide-react";
 
 import { AdminConsole } from "@/components/admin-console";
+import {
+  type ConsoleHost,
+  consoleHostKind,
+} from "@/lib/console-host";
 import { BusinessConsole } from "@/components/business-console";
 import { CustomerConsole } from "@/components/customer-console";
 import { CustomerServiceEntry } from "@/components/customer-service-entry";
@@ -691,6 +695,21 @@ function RoleSignInCard({
   const [mode, setMode] = useState<"sign-in" | "sign-up" | "forgot">(
     initialMode,
   );
+  // Decided after mount: the same bundle serves all three hosts, and the
+  // prerendered HTML must match the first client render on every one of
+  // them. Until it resolves, the panel shows the customer shape.
+  const [consoleHost, setConsoleHost] = useState<ConsoleHost>("customer");
+  useEffect(() => {
+    const host = consoleHostKind(window.location.hostname);
+    setConsoleHost(host);
+    // The business and admin consoles have no self-serve account to create:
+    // a sign-up here only ever made a customer account that the business
+    // domain then routed straight back to the customer workspace.
+    if (host !== "customer") {
+      setMode((current) => (current === "sign-up" ? "sign-in" : current));
+    }
+  }, []);
+  const customerSignUp = consoleHost === "customer";
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -753,7 +772,13 @@ function RoleSignInCard({
           </div>
           <div>
             <h1>Laawol Digital</h1>
-            <p>Sign in to open your customer, business, or platform workspace.</p>
+            <p>
+              {consoleHost === "business"
+                ? "Sign in to open your business workspace."
+                : consoleHost === "admin"
+                  ? "Sign in to open your platform workspace."
+                  : "Sign in to open your customer, business, or platform workspace."}
+            </p>
           </div>
         </div>
         <form className="login-card" onSubmit={submit}>
@@ -769,17 +794,19 @@ function RoleSignInCard({
             >
               Sign in
             </button>
-            <button
-              className={mode === "sign-up" ? "active" : ""}
-              onClick={() => {
-                setMode("sign-up");
-                setError("");
-                setNotice("");
-              }}
-              type="button"
-            >
-              Create account
-            </button>
+            {customerSignUp && (
+              <button
+                className={mode === "sign-up" ? "active" : ""}
+                onClick={() => {
+                  setMode("sign-up");
+                  setError("");
+                  setNotice("");
+                }}
+                type="button"
+              >
+                Create account
+              </button>
+            )}
           </div>
           <h2>
             {mode === "sign-up"
@@ -866,7 +893,8 @@ function RoleSignInCard({
               Forgot password?
             </button>
           )}
-          {mode === "sign-up" && (
+          {(mode === "sign-up" ||
+            (consoleHost === "business" && mode === "sign-in")) && (
             <p className="card-sub" style={{margin: "6px 0 0", textAlign: "center"}}>
               Listing a business?{" "}
               <a href="https://laawoldigital.com/partner.html">
