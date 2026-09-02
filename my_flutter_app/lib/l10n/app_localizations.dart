@@ -12960,6 +12960,12 @@ abstract class AppLocalizations {
   /// **'{price} each'**
   String freightPriceEach(String price);
 
+  /// No description provided for @trackWithCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Track with a code'**
+  String get trackWithCode;
+
   /// No description provided for @freightWeighedAtRateHelper.
   ///
   /// In en, this message translates to:

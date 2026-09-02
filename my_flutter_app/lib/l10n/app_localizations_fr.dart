@@ -7385,6 +7385,9 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get trackWithCode => 'Suivre avec un code';
+
+  @override
   String get freightWeighedAtRateHelper =>
       'Facturé au kilo une fois le colis pesé par l\'entreprise.';
 

@@ -3092,6 +3092,7 @@
   "freightWhatElseInBox": "Quoi d'autre dans le colis ?",
   "freightAddAnotherPricedItem": "Ajouter un autre article au prix fixé",
   "freightPriceEach": "{price} l'unité",
+  "trackWithCode": "Suivre avec un code",
   "@freightPriceEach": {"placeholders": {"price": {"type": "String"}}},
   "freightWeighedAtRateHelper": "Facturé au kilo une fois le colis pesé par l'entreprise.",
   "freightContentsTooMany": "Indiquez au plus 10 types d'articles par colis.",
