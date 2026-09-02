@@ -22509,6 +22509,19 @@ exports.completeFreightShipmentPayment = onCall(
           serviceType: "freight_shipment",
         });
       }
+      // Ties the accepted price to the shipment it became, so the same
+      // price cannot be booked a second time and the tracking page stops
+      // offering a booking that already happened. The pay-on-arrival path
+      // stamps this at creation; pay-now only knows here, once paid.
+      const paidQuoteRequestId = String(shipment.quoteRequestId || "").trim();
+      if (shipment.priceAgreedByQuote === true && paidQuoteRequestId) {
+        await db.collection("freightQuoteRequests")
+            .doc(paidQuoteRequestId).set({
+              bookedShipmentId: shipmentId,
+              quoteStatus: "booked",
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            }, {merge: true});
+      }
 
       return {
         success: true,

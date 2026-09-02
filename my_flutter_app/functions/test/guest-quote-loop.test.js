@@ -76,6 +76,18 @@ test("an accepted quote books without a catalogue row, at its own terms",
           /agreedQuote \? false : itemPricing\.weighsAtDropOff/);
     });
 
+test("a paid agreed booking stamps the request it came from", () => {
+  // Pay-on-arrival stamps bookedShipmentId at creation; pay-now only knows
+  // once the payment completes. Without the stamp the accepted price stays
+  // bookable a second time and the tracking page keeps offering a booking
+  // that already happened.
+  assert.match(source,
+      /priceAgreedByQuote === true && paidQuoteRequestId/);
+  const stamps = source.match(/bookedShipmentId: shipment/g) || [];
+  assert.ok(stamps.length >= 2,
+      "both the arrival and the paid path tie the price to its shipment");
+});
+
 test("both quote-request moments email the customer", () => {
   // A guest has no push token and no account inbox: the email IS the
   // receipt, and its code is the way back in.
