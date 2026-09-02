@@ -2545,15 +2545,28 @@ function FreightShipmentForm({
   const qualifiedProviderOptions = useMemo(
     () =>
       itemStepSatisfied
-        ? providerOptions.filter((option) =>
-            providerQualifiesForItem(
-              option as {freightPaybackTable?: unknown},
-              activeCategoryId,
-              activeItemId,
-            ),
+        ? providerOptions.filter(
+            (option) =>
+              // The business whose price was accepted is qualified by that
+              // acceptance - its catalogue may have no row for this item,
+              // and the agreed number replaces the catalogue anyway.
+              (Boolean(agreedQuoteRequestId) &&
+                option.businessId === bookingQuoteBusinessId) ||
+              providerQualifiesForItem(
+                option as {freightPaybackTable?: unknown},
+                activeCategoryId,
+                activeItemId,
+              ),
           )
         : [],
-    [activeCategoryId, activeItemId, itemStepSatisfied, providerOptions],
+    [
+      activeCategoryId,
+      activeItemId,
+      agreedQuoteRequestId,
+      bookingQuoteBusinessId,
+      itemStepSatisfied,
+      providerOptions,
+    ],
   );
   // The item pick: match the request's label against the funnel once the
   // funnel has loaded, falling back to "Something else" - it qualifies the

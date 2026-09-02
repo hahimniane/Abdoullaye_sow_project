@@ -286,11 +286,17 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     final q = _query.trim().toLowerCase();
     final qualified = _countryOptions
         .where(
-          (o) => providerQualifiesForItem(
-            o.freightPaybackTable,
-            _activeFunnelCategoryId,
-            _activeFunnelItemId,
-          ),
+          (o) =>
+              // The business whose price was accepted is qualified by that
+              // acceptance - its catalogue may have no row for this item,
+              // and the agreed number replaces the catalogue anyway.
+              (_hasAgreedPrice &&
+                  o.businessId == widget.agreedBusinessId) ||
+              providerQualifiesForItem(
+                o.freightPaybackTable,
+                _activeFunnelCategoryId,
+                _activeFunnelItemId,
+              ),
         )
         .toList();
     final matches = q.isEmpty

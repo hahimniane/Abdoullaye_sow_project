@@ -866,6 +866,14 @@ function RoleSignInCard({
               Forgot password?
             </button>
           )}
+          {mode === "sign-up" && (
+            <p className="card-sub" style={{margin: "6px 0 0", textAlign: "center"}}>
+              Listing a business?{" "}
+              <a href="https://laawoldigital.com/partner.html">
+                Apply on laawoldigital.com
+              </a>
+            </p>
+          )}
           {mode === "forgot" && (
             <button
               className="text-button"
