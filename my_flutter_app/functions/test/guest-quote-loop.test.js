@@ -56,6 +56,26 @@ test("claiming moves a guest request into the session holding the code",
       assert.match(source, /claimedFromUid/);
     });
 
+test("an accepted quote books without a catalogue row, at its own terms",
+    () => {
+      // A price request exists because the catalogue has no row, so the
+      // catalogue guards yield to the quote the customer accepted...
+      assert.match(source,
+          /!itemPricing\.priced && !hasDeclaredContents && !quoteRequestId/);
+      assert.match(source,
+          /!hasDeclaredContents && !quoteRequestId\) \{/);
+      // ...cover is the quote's own answer, not the catalogue's...
+      assert.match(source, /\} else if \(agreedQuote\) \{/);
+      assert.match(source, /selectedCoversLoss === true/);
+      // ...and the shipment freezes the agreed number as the whole price:
+      // flat, no allowance, never repriced by a scale.
+      assert.match(source, /agreedQuote \? "flat" : itemPricing\.mode/);
+      assert.match(source,
+          /itemFlatPrice: agreedQuote\.amountCents \/ 100/);
+      assert.match(source,
+          /agreedQuote \? false : itemPricing\.weighsAtDropOff/);
+    });
+
 test("both quote-request moments email the customer", () => {
   // A guest has no push token and no account inbox: the email IS the
   // receipt, and its code is the way back in.
