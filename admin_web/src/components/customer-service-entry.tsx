@@ -45,6 +45,16 @@ export function CustomerServiceEntry({
     // session does not. Treat them as ready only if both survived.
     () => auth.currentUser?.isAnonymous === true && recallGuestContact() !== null,
   );
+  // The mount-time check races Firebase's session restore: on a fresh
+  // navigation (the tracking page's Continue-to-booking most of all)
+  // `auth.currentUser` is still null for a moment, so a guest whose session
+  // AND contact both survived was asked for their email and phone again.
+  // Re-answer once the restored session actually arrives.
+  useEffect(() => {
+    if (firebaseUser?.isAnonymous === true && recallGuestContact() !== null) {
+      setGuestReady(true);
+    }
+  }, [firebaseUser]);
   const [accountMode, setAccountMode] = useState<"sign-in" | "sign-up">(
     "sign-in",
   );

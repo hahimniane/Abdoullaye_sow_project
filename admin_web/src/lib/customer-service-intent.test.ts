@@ -65,6 +65,26 @@ test("guest service entry gates only final submission and preserves the mounted 
   assert.match(router, /!firebaseUser\.isAnonymous/);
 });
 
+test("a returning guest with session and contact is not asked again", () => {
+  // guestReady was decided once, at mount - which races Firebase's async
+  // session restore. Arriving by navigation (tracking's Continue-to-booking
+  // above all), auth.currentUser is still null at that instant, so a guest
+  // whose anonymous session AND stored contact both survived was asked for
+  // their email and phone a second time.
+  const entry = readFileSync("src/components/customer-service-entry.tsx", "utf8");
+  assert.match(
+    entry,
+    /auth\.currentUser\?\.isAnonymous === true && recallGuestContact\(\) !== null/,
+  );
+  // The re-check must run when the restored session arrives, keyed on the
+  // live auth subscription - not the one-shot mount read.
+  assert.match(
+    entry,
+    /firebaseUser\?\.isAnonymous === true && recallGuestContact\(\) !== null/,
+  );
+  assert.match(entry, /\}, \[firebaseUser\]\);/);
+});
+
 test("public CTAs deep-link to every guest customer journey", () => {
   const home = readFileSync("../public_site/index.html", "utf8");
   const services = readFileSync("../public_site/services.html", "utf8");
