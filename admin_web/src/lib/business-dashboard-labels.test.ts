@@ -73,9 +73,42 @@ test("a guest's price request confirms on screen, with its code", () => {
   assert.match(shipping, /sessionStorage\.getItem\(SENT_QUOTE_REQUEST_KEY\)/);
 });
 
+test("a sent request replaces the form with a success screen", () => {
+  // The confirmation used to be one inline line under the button; with the
+  // filled-in form still on screen it read as "nothing happened"
+  // (FQ-TNR8WJ). Now the send takes over the panel: the form is gone, the
+  // code is the centerpiece, and the two ways forward are buttons.
+  const shipping = readFileSync(
+    "src/components/customer-shipping-services.tsx",
+    "utf8",
+  );
+  assert.match(
+    shipping,
+    /if \(sent && !\(authenticated && activeRequest\)\) \{\s*return \(/,
+    "the success screen must return before the form renders",
+  );
+  assert.match(shipping, /customer-quote-sent-code/);
+  assert.match(
+    shipping,
+    /\/\?service=tracking&code=\$\{encodeURIComponent\(sent\.trackingCode\)\}/,
+  );
+  // "Send another request" must actually clear the parked confirmation, or
+  // the success screen comes back on the next remount.
+  assert.match(shipping, /forgetSentQuoteRequest\(\);\s*setSent\(null\)/);
+  assert.match(
+    shipping,
+    /sessionStorage\.removeItem\(SENT_QUOTE_REQUEST_KEY\)/,
+  );
+  // The panel scrolls to the reader - the send button they just pressed sat
+  // at the foot of a tall form that no longer exists.
+  assert.match(shipping, /sentPanelRef\.current\?\.scrollIntoView/);
+});
+
 test("the sent confirmation copy is localized in French", () => {
   for (const english of [
     "Your price request was sent.",
+    "Track this request",
+    "Send another request",
   ]) {
     const french = translateValue(english, "fr");
     assert.notEqual(french, english, english);

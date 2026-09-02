@@ -8420,6 +8420,67 @@ button[data-loading="true"]::before {
   color: #115e59;
 }
 
+.customer-quote-sent {
+  align-items: center;
+  background: #f0fdf9;
+  border: 1px solid #99f6e4;
+  border-radius: 14px;
+  color: #115e59;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 36px 24px;
+  text-align: center;
+}
+
+.customer-quote-sent h3 {
+  color: #0f766e;
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.customer-quote-sent p {
+  margin: 0;
+  max-width: 46ch;
+}
+
+.customer-quote-sent-check {
+  align-items: center;
+  background: #0f766e;
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  font-size: 26px;
+  height: 52px;
+  justify-content: center;
+  margin-bottom: 6px;
+  width: 52px;
+}
+
+.customer-quote-sent-code {
+  background: #fff;
+  border: 1px dashed #5eead4;
+  border-radius: 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 8px 0 2px;
+  padding: 10px 20px;
+}
+
+.customer-quote-sent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.customer-quote-sent-actions .primary-button {
+  text-decoration: none;
+}
+
 .customer-inline-note.error {
   align-items: center;
   background: #fff1f2;
