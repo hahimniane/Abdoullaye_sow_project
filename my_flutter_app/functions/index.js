@@ -11683,9 +11683,12 @@ exports.parkingPaymentLink = onRequest(
           .limit(1)
           .get();
       if (matches.empty) {
+        // The same durable /p link also carries lot-activity tokens, whose
+        // records live in lotActivities rather than parkedCars.
+        if (await resolveLotActivityPaymentLink(db, token, res)) return;
         return res.status(404).send(parkingPaymentLinkPage({
           title: "Link not found",
-          message: "This payment link is not valid. Ask the parking " +
+          message: "This payment link is not valid. Ask the " +
             "business to send you a new one.",
         }));
       }
@@ -13333,6 +13336,100 @@ async function issueLotActivityLink({
       `Pay: ${durableUrl}`,
   });
   return {emailed, texted, durableUrl};
+}
+
+/**
+ * Resolve a durable /p link whose token belongs to a lot activity rather than
+ * a parked car. Mirrors the parkedCars branch of parkingPaymentLink: reuse a
+ * live session or mint a fresh one, redirect to Stripe, and show a plain page
+ * when the entry is already paid or cancelled.
+ *
+ * @param {object} db Firestore.
+ * @param {string} token The paymentLinkToken from the /p query.
+ * @param {object} res The Express response.
+ * @return {Promise<boolean>} true when this token was a lot activity and the
+ *   response was sent; false when it is not a lot activity (caller 404s).
+ */
+async function resolveLotActivityPaymentLink(db, token, res) {
+  const matches = await db.collection("lotActivities")
+      .where("paymentLinkToken", "==", token)
+      .limit(1)
+      .get();
+  if (matches.empty) return false;
+
+  const ref = matches.docs[0].ref;
+  const entry = matches.docs[0].data() || {};
+  const status = String(entry.paymentStatus || "");
+  if (status === LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED) {
+    res.status(200).send(parkingPaymentLinkPage({
+      title: "Already paid",
+      message: "This service is paid in full. Nothing further is owed.",
+    }));
+    return true;
+  }
+  if (status === LOT_ACTIVITY_PAYMENT_STATUS.CANCELLED) {
+    res.status(200).send(parkingPaymentLinkPage({
+      title: "Link cancelled",
+      message: "The business cancelled this payment link. Contact them if " +
+        "you think this is a mistake.",
+    }));
+    return true;
+  }
+  if (status !== LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_LINK) {
+    res.status(200).send(parkingPaymentLinkPage({
+      title: "Nothing to pay",
+      message: "There is no payment outstanding on this service.",
+    }));
+    return true;
+  }
+
+  const connectedAccountId =
+    String(entry.stripeConnectedAccountId || "").trim() || undefined;
+  const amountCents = Number(entry.feeCents || 0);
+  const existingSessionId = String(entry.checkoutSessionId || "").trim();
+  if (existingSessionId) {
+    const existing = await retrieveStripeCheckoutSession(
+        existingSessionId, connectedAccountId,
+    ).catch(() => null);
+    if (parkingCheckoutSessionReusable({
+      session: existing, nowMs: Date.now(),
+    })) {
+      res.redirect(303, String(existing.url || ""));
+      return true;
+    }
+  }
+  const mintCount = Number(entry.paymentLinkMintCount || 0) + 1;
+  const session = await createStripeCustomerCheckoutSession({
+    amount: amountCents,
+    currency: SHIPMENT_CURRENCY,
+    customerEmail: String(entry.customerEmail || "") || undefined,
+    productName: "Laawol lot service",
+    recordId: ref.id,
+    idempotencySeed: `lot-activity:${ref.id}:${mintCount}`,
+    connectedAccountId,
+    applicationFeeAmount:
+      String(entry.stripeChargeType || "") === "direct" ?
+        clampedApplicationFeeAmount(
+            Number(entry.platformFeeCents || 0), amountCents,
+        ) : undefined,
+    metadata: {
+      paymentType: LOT_ACTIVITY_PAYMENT_TYPE,
+      activityId: ref.id,
+      businessId: String(entry.businessId || ""),
+      trackingCode: String(entry.trackingCode || ""),
+    },
+    ...businessParkingReturnUrls(entry.trackingCode),
+  });
+  await ref.update({
+    checkoutSessionId: String(session.id || ""),
+    stripeCheckoutUrl: String(session.url || ""),
+    checkoutStatus: "open",
+    paymentLinkMintCount: mintCount,
+    paymentLinkRefreshedAt: FirestoreFieldValue.serverTimestamp(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  res.redirect(303, String(session.url || ""));
+  return true;
 }
 
 exports.createLotActivity = onCall(
