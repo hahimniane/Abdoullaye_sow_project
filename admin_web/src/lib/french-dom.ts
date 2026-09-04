@@ -4335,6 +4335,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Void": "Invalider",
   "History": "Historique",
   "Chase payment": "Relancer le paiement",
+  "Chase": "Relancer",
   "Voided": "Invalidé",
   "Log a job the lot billed for.":
     "Enregistrer une prestation facturée par le parc.",

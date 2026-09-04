@@ -31,6 +31,8 @@ import {
   MapPinned,
   Package,
   ParkingCircle,
+  Ban,
+  History,
   Paperclip,
   Pencil,
   Plane,
@@ -69,6 +71,8 @@ import {
   LOT_RECEIVED_VIA_OPTIONS,
   DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS,
   lotActivityPaymentLabel,
+  lotActivityPaid,
+  lotActivityAwaitingLink,
   canChaseLotActivity,
   emptyLotActivityDraft,
   emptyLotActivityTypeDraft,
@@ -6835,21 +6839,6 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       : id;
   };
 
-  // Who handled the money, in plain words: a named person, or "the website"
-  // when a payment link settled itself (no human took the cash).
-  const whoReceived = (row: Record<string, unknown>): string => {
-    if (String(row.paymentMethod) === "payment_link") {
-      return String(row.paymentStatus) === "succeeded"
-        ? "Received by the website"
-        : "";
-    }
-    const name = staffName(text(row.receivedByStaffId, ""));
-    return name ? `Received by ${name}` : "";
-  };
-  const whoRecorded = (row: Record<string, unknown>): string => {
-    const name = staffName(text(row.recordedByStaffId, ""));
-    return name ? `Recorded by ${name}` : "";
-  };
 
   const orderedTypes = useMemo(
     () =>
@@ -7165,8 +7154,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     setHistoryLoading(true);
     setModal("history");
     try {
+      // Filter by businessId too: the security rule authorizes by business,
+      // and Firestore rejects a query it can't prove stays inside that scope.
       const snap = await getDocs(query(
         collection(db, "lotLedgerAudit"),
+        where("businessId", "==", businessId),
         where("entityId", "==", entityId),
         orderBy("at", "desc"),
         limit(50),
@@ -7318,19 +7310,20 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                         <span><strong>{voided ? <s>{vehicle}</s> : vehicle}</strong><small>{text(r.vinNumber, "")}</small>{voided && <span className="status-pill danger compact">Voided</span>}</span>
                         <span><strong>{text(r.customerName, "")}</strong><small>{text(r.customerPhone, "")}</small></span>
                         <span><strong style={{ color: tintForType(String(r.activityTypeId)) }}>{label}</strong><small>{text(r.auctionHouse, "") ? `Auction: ${text(r.auctionHouse, "")}` : r.feeOverridden ? "Priced for this job" : "Standard rate"}</small></span>
-                        <span>{formatDate(r.activityDate)}
-                          {!voided && <button className="ghost-button" type="button" onClick={() => openEdit(r)}><Pencil size={13} /> Edit</button>}
-                          <button className="ghost-button" type="button" onClick={() => openHistory(String(r.id))}>History</button>
-                          {!voided && <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "activity", id: String(r.id), label: `${vehicle} · ${lotFormatCents(Number(r.feeCents) || 0)}` }); setVoidReason(""); setDraftError(""); setModal("void"); }}>Void</button>}
+                        <span>
+                          <strong>{formatDate(r.activityDate)}</strong>
+                          {text(r.editedByStaffId, "") && <small>Edited</small>}
+                          <span className="lot-row-actions">
+                            {!voided && <button className="ghost-button" type="button" onClick={() => openEdit(r)} title="Edit"><Pencil size={14} /></button>}
+                            <button className="ghost-button" type="button" onClick={() => openHistory(String(r.id))} title="Change history"><History size={14} /></button>
+                            {!voided && <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "activity", id: String(r.id), label: `${vehicle} · ${lotFormatCents(Number(r.feeCents) || 0)}` }); setVoidReason(""); setDraftError(""); setModal("void"); }} title="Void"><Ban size={14} /></button>}
+                          </span>
                         </span>
                         <span>
                           <strong>{voided ? <s>{lotFormatCents(Number(r.feeCents) || 0)}</s> : lotFormatCents(Number(r.feeCents) || 0)}</strong>
-                          <small>{lotActivityPaymentLabel(r)}</small>
-                          {text(r.editedByStaffId, "") && <small>Edited by {staffName(text(r.editedByStaffId, ""))}</small>}
-                          {voided && <small>Voided by {staffName(text(r.voidedByStaffId, ""))}{text(r.voidReason, "") ? ` — ${text(r.voidReason, "")}` : ""}</small>}
-                          {whoReceived(r) && <small>{whoReceived(r)}</small>}
-                          {whoRecorded(r) && <small>{whoRecorded(r)}</small>}
-                          {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase payment</button>)}
+                          <span className={`status-pill compact ${lotActivityPaid(r) ? "good" : lotActivityAwaitingLink(r) ? "warning" : ""}`}>{lotActivityPaymentLabel(r)}</span>
+                          {!voided && String(r.paymentMethod) === "direct" && staffName(text(r.receivedByStaffId, "")) && <small>by {staffName(text(r.receivedByStaffId, ""))}</small>}
+                          {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase</button>)}
                         </span>
                       </div>
                     );

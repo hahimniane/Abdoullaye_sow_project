@@ -1884,6 +1884,20 @@ button[data-loading="true"]::before {
   padding: 2px 6px;
 }
 
+/* Row actions (edit / history / void) sit in a compact horizontal group
+   rather than stacking down the cell. */
+.lot-activity-table .lot-row-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.lot-activity-table .lot-row-actions .ghost-button {
+  margin-top: 0;
+  padding: 3px 6px;
+}
+
 .mini-table-row:last-child {
   border-bottom: 0;
 }
