@@ -4,11 +4,10 @@
  * Lot ledger — the authority for activity records, the activity catalogue,
  * and the expense ledger (design_handoff_lot_ledger).
  *
- * This module is a deliberate mirror of the console's pure module,
+ * A deliberate mirror of the console's pure module,
  * `admin_web/src/lib/lot-ledger.ts`. It validates input and decides the
  * statuses each payment method produces; every Firestore and Stripe call
- * stays with the caller in `index.js`, exactly as `business_parking_entry.js`
- * keeps its pricing and payout wiring there.
+ * stays with the caller in `index.js`, as `business_parking_entry.js` does.
  *
  * The activity catalogue (`lotActivityTypes`) is per-business data, never a
  * hard-coded enum: the four Keren activities are seed rows, nothing more.
@@ -17,7 +16,10 @@
  * a later rename does not silently rewrite last quarter's entries.
  */
 
-const LOT_ACTIVITY_PAYMENT_METHODS = Object.freeze(["payment_link", "direct"]);
+const LOT_ACTIVITY_PAYMENT_METHODS = Object.freeze([
+  "payment_link",
+  "direct",
+]);
 const LOT_CUSTOM_ACTIVITY_ID = "custom";
 
 const LOT_DIRECT_METHODS = Object.freeze([
@@ -56,26 +58,34 @@ const MAX_LABEL = 120;
 const MAX_NOTE = 500;
 const MAX_VIN = 17;
 
-const text = (value, max = MAX_TEXT) => String(value ?? "").trim().slice(0, max);
+const text = (value, max = MAX_TEXT) =>
+  String(value ?? "").trim().slice(0, max);
 const intCents = (value) => {
   const n = Math.round(Number(value));
   return Number.isFinite(n) ? n : NaN;
 };
-const isEmailish = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
+/**
+ * @param {*} value Free text.
+ * @return {string} A known off-platform method, or "other".
+ */
 function normalizeReceivedVia(value) {
   const v = text(value, 40).toLowerCase();
   return LOT_DIRECT_METHODS.includes(v) ? v : "other";
 }
 
+/**
+ * @param {*} value Free text.
+ * @return {string} A known auction house, or "".
+ */
 function normalizeAuctionHouse(value) {
   const v = text(value, 40);
   return LOT_AUCTION_HOUSES.includes(v) ? v : "";
 }
 
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 // Activity types (the catalogue).
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
 /**
  * @param {object} input Raw callable data.
@@ -83,34 +93,44 @@ function normalizeAuctionHouse(value) {
  */
 function validateLotActivityType(input) {
   const errors = [];
-  if (!text(input?.label, MAX_LABEL)) errors.push("activity_type_label_required");
+  if (!text(input?.label, MAX_LABEL)) {
+    errors.push("activity_type_label_required");
+  }
   const fee = intCents(input?.defaultFeeCents);
-  if (!Number.isFinite(fee) || fee < 0) errors.push("activity_type_fee_invalid");
+  if (!Number.isFinite(fee) || fee < 0) {
+    errors.push("activity_type_fee_invalid");
+  }
   return errors;
 }
 
+/**
+ * @param {object} input Validated callable data.
+ * @return {object} The activity-type record body.
+ */
 function lotActivityTypeRecord(input) {
+  const sortOrder = Number(input.sortOrder);
   return {
     label: text(input.label, MAX_LABEL),
     defaultFeeCents: Math.max(0, intCents(input.defaultFeeCents) || 0),
     needsAuctionHouse: input.needsAuctionHouse === true,
     active: input.active !== false,
-    sortOrder: Number.isFinite(Number(input.sortOrder)) ? Number(input.sortOrder) : 0,
+    sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
   };
 }
 
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 // A recorded activity.
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
 /**
  * @param {object} input Raw callable data.
- * @param {object} opts { knownTypeIds: string[], typeNeedsAuction: bool }
+ * @param {object} opts { knownTypeIds: string[] }.
  * @return {string[]} Error codes.
  */
 function validateLotActivity(input, opts = {}) {
   const errors = [];
-  const knownTypeIds = Array.isArray(opts.knownTypeIds) ? opts.knownTypeIds : [];
+  const knownTypeIds = Array.isArray(opts.knownTypeIds) ?
+    opts.knownTypeIds : [];
 
   const typeId = text(input?.activityTypeId, MAX_LABEL);
   const isCustom = typeId === LOT_CUSTOM_ACTIVITY_ID;
@@ -149,15 +169,16 @@ function validateLotActivity(input, opts = {}) {
  * recomputed from the type unless overridden; label is denormalised).
  *
  * @param {object} input Validated callable data.
- * @param {object} opts { activityTypeLabel, feeCents, feeOverridden,
- *   recordedByStaffId }
+ * @param {object} opts Resolved fee, label, and staff ids.
  * @return {object} Fields to write, sans Stripe/status.
  */
 function lotActivityRecord(input, opts) {
   const method = text(input.paymentMethod, 40);
-  const isCustom = text(input.activityTypeId, MAX_LABEL) === LOT_CUSTOM_ACTIVITY_ID;
+  const typeId = text(input.activityTypeId, MAX_LABEL);
+  const isCustom = typeId === LOT_CUSTOM_ACTIVITY_ID;
+  const direct = method === "direct";
   return {
-    activityTypeId: text(input.activityTypeId, MAX_LABEL),
+    activityTypeId: typeId,
     activityTypeLabel: text(opts.activityTypeLabel, MAX_LABEL),
     customLabel: isCustom ? text(input.customLabel, MAX_LABEL) : "",
     feeCents: Math.max(0, intCents(opts.feeCents) || 0),
@@ -171,8 +192,9 @@ function lotActivityRecord(input, opts) {
     vinNumber: text(input.vinNumber, MAX_VIN).toUpperCase(),
     auctionHouse: normalizeAuctionHouse(input.auctionHouse),
     paymentMethod: method,
-    receivedVia: method === "direct" ? normalizeReceivedVia(input.receivedVia) : "",
-    receivedByStaffId: method === "direct" ? text(input.receivedByStaffId, MAX_LABEL) : "",
+    receivedVia: direct ? normalizeReceivedVia(input.receivedVia) : "",
+    receivedByStaffId: direct ?
+      text(input.receivedByStaffId, MAX_LABEL) : "",
     recordedByStaffId: text(opts.recordedByStaffId, MAX_LABEL),
   };
 }
@@ -181,20 +203,28 @@ function lotActivityRecord(input, opts) {
  * Which status a fresh entry lands in. A link waits for the website; money
  * taken off-platform is already in hand.
  *
- * @param {string} method payment_link | direct
- * @return {{status: string, needsStripe: boolean}}
+ * @param {string} method payment_link | direct.
+ * @return {{status: string, needsStripe: boolean}} The initial state.
  */
 function lotActivityInitialStatus(method) {
   if (method === "direct") {
-    return { status: LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED, needsStripe: false };
+    return {status: LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED, needsStripe: false};
   }
-  return { status: LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_LINK, needsStripe: true };
+  return {
+    status: LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_LINK,
+    needsStripe: true,
+  };
 }
 
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 // Expenses.
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
+/**
+ * @param {number} amountCents The purchase amount.
+ * @param {number} thresholdCents The business's proof threshold.
+ * @return {boolean} Whether a receipt is required.
+ */
 function expenseProofRequired(amountCents, thresholdCents) {
   const threshold = Number(thresholdCents) || 0;
   if (threshold <= 0) return false;
@@ -203,18 +233,21 @@ function expenseProofRequired(amountCents, thresholdCents) {
 
 /**
  * @param {object} input Raw callable data.
- * @param {object} opts { thresholdCents, hasProof }
+ * @param {object} opts { thresholdCents, hasProof }.
  * @return {string[]} Error codes.
  */
 function validateLotExpenseEntry(input, opts = {}) {
   const errors = [];
   const cents = intCents(input?.amountCents);
-  if (!Number.isFinite(cents) || cents <= 0) errors.push("expense_amount_required");
+  if (!Number.isFinite(cents) || cents <= 0) {
+    errors.push("expense_amount_required");
+  }
   if (!text(input?.spentAt, 60)) errors.push("expense_date_required");
-  if (!text(input?.paidByStaffId, MAX_LABEL)) errors.push("expense_paid_by_required");
-  const threshold = Number.isFinite(Number(opts.thresholdCents))
-    ? Number(opts.thresholdCents)
-    : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
+  if (!text(input?.paidByStaffId, MAX_LABEL)) {
+    errors.push("expense_paid_by_required");
+  }
+  const threshold = Number.isFinite(Number(opts.thresholdCents)) ?
+    Number(opts.thresholdCents) : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
   if (
     Number.isFinite(cents) &&
     expenseProofRequired(cents, threshold) &&
@@ -225,11 +258,15 @@ function validateLotExpenseEntry(input, opts = {}) {
   return errors;
 }
 
+/**
+ * @param {object} input Validated callable data.
+ * @param {object} opts { recordedByStaffId, thresholdCents }.
+ * @return {object} The expense-entry record body.
+ */
 function lotExpenseEntryRecord(input, opts) {
   const cents = Math.max(0, intCents(input.amountCents) || 0);
-  const threshold = Number.isFinite(Number(opts.thresholdCents))
-    ? Number(opts.thresholdCents)
-    : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
+  const threshold = Number.isFinite(Number(opts.thresholdCents)) ?
+    Number(opts.thresholdCents) : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
   return {
     lineId: text(input.lineId, MAX_LABEL),
     month: text(input.month, 7),
@@ -237,17 +274,25 @@ function lotExpenseEntryRecord(input, opts) {
     paidByStaffId: text(input.paidByStaffId, MAX_LABEL),
     recordedByStaffId: text(opts.recordedByStaffId, MAX_LABEL),
     note: text(input.note, MAX_NOTE),
-    // Snapshot the rule at entry time so raising the threshold later does not
-    // retroactively mark old entries non-compliant.
+    // Snapshot the rule at entry time so raising the threshold later does
+    // not retroactively mark old entries non-compliant.
     proofRequired: expenseProofRequired(cents, threshold),
   };
 }
 
+/**
+ * @param {object} input Raw callable data.
+ * @return {string[]} Error codes.
+ */
 function validateLotExpenseLine(input) {
   const errors = [];
-  if (!text(input?.label, MAX_LABEL)) errors.push("expense_line_label_required");
+  if (!text(input?.label, MAX_LABEL)) {
+    errors.push("expense_line_label_required");
+  }
   const kind = text(input?.kind, 20);
-  if (!LOT_EXPENSE_KINDS.includes(kind)) errors.push("expense_line_kind_invalid");
+  if (!LOT_EXPENSE_KINDS.includes(kind)) {
+    errors.push("expense_line_kind_invalid");
+  }
   return errors;
 }
 
