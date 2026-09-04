@@ -53,6 +53,7 @@
       "collectionGroup": "lotLedgerAudit",
       "queryScope": "COLLECTION",
       "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
         {"fieldPath": "entityId", "order": "ASCENDING"},
         {"fieldPath": "at", "order": "DESCENDING"}
       ]
