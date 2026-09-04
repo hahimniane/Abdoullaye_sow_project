@@ -560,6 +560,44 @@ service cloud.firestore {
          canManageBusinessSection(request.auth.uid, resource.data.businessId, 'parking'));
     }
 
+    // Lot ledger collections (design_handoff_lot_ledger). Every write goes
+    // through a callable (createLotActivity, upsertLotActivityType,
+    // createLotExpenseEntry, ...) that runs as admin and so bypasses these
+    // rules; the client only READS these to render the ledger. Reads are
+    // scoped to the business's own managers, mirroring parkedCars. Client
+    // writes are allowed for a ledger-section manager as a safety net, but the
+    // console never writes these documents directly.
+    function lotLedgerRead(businessId) {
+      return request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, businessId));
+    }
+    function lotLedgerWrite(businessId) {
+      return request.auth != null &&
+        (hasAdminCapability(request.auth.uid, 'operations') ||
+         canManageBusinessSection(request.auth.uid, businessId, 'ledger'));
+    }
+    match /lotActivityTypes/{typeId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow create: if lotLedgerWrite(request.resource.data.businessId);
+      allow update, delete: if lotLedgerWrite(resource.data.businessId);
+    }
+    match /lotActivities/{activityId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow create: if lotLedgerWrite(request.resource.data.businessId);
+      allow update, delete: if lotLedgerWrite(resource.data.businessId);
+    }
+    match /lotExpenseLines/{lineId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow create: if lotLedgerWrite(request.resource.data.businessId);
+      allow update, delete: if lotLedgerWrite(resource.data.businessId);
+    }
+    match /lotExpenseEntries/{entryId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow create: if lotLedgerWrite(request.resource.data.businessId);
+      allow update, delete: if lotLedgerWrite(resource.data.businessId);
+    }
+
     // A load that is "in transit" is inside a container, and the customer's
     // next question is always "where is it". The number can be a container,
     // booking, or bill of lading. Automated Terminal49 tracking is optional:
