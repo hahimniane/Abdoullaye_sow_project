@@ -364,53 +364,63 @@ class _RecordActivityFormState extends State<_RecordActivityForm> {
           const SizedBox(height: 16),
           const Text('How it gets paid',
               style: TextStyle(fontWeight: FontWeight.w700)),
-          RadioListTile<String>(
-            contentPadding: EdgeInsets.zero,
-            value: 'payment_link',
+          RadioGroup<String>(
             groupValue: _method,
-            onChanged: (v) => setState(() => _method = v!),
-            title: const Text('Charge through the website'),
-            subtitle: const Text(
-              'A payment link goes to the customer and the money lands in '
-              'your account.',
-            ),
-          ),
-          if (_method == 'payment_link')
-            TextField(
-              controller: _email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                helperText: 'The link goes by text and email.',
-              ),
-            ),
-          RadioListTile<String>(
-            contentPadding: EdgeInsets.zero,
-            value: 'direct',
-            groupValue: _method,
-            onChanged: (v) => setState(() => _method = v!),
-            title: const Text('Paid outside the website'),
-            subtitle: const Text('Cash, Zelle, a check. Record who took it.'),
-          ),
-          if (_method == 'direct') ...[
-            DropdownButtonFormField<String>(
-              initialValue: _receivedVia,
-              decoration: const InputDecoration(labelText: 'How it was paid'),
-              items: [
-                for (final m in _received)
-                  DropdownMenuItem(value: m, child: Text(m)),
+            onChanged: (v) {
+              if (v == null) return;
+              setState(() => _method = v);
+            },
+            child: Column(
+              children: [
+                const RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  value: 'payment_link',
+                  title: Text('Charge through the website'),
+                  subtitle: Text(
+                    'A payment link goes to the customer and the money lands '
+                    'in your account.',
+                  ),
+                ),
+                if (_method == 'payment_link')
+                  TextField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      helperText: 'The link goes by text and email.',
+                    ),
+                  ),
+                const RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  value: 'direct',
+                  title: Text('Paid outside the website'),
+                  subtitle:
+                      Text('Cash, Zelle, a check. Record who took it.'),
+                ),
+                if (_method == 'direct') ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: _receivedVia,
+                    decoration:
+                        const InputDecoration(labelText: 'How it was paid'),
+                    items: [
+                      for (final m in _received)
+                        DropdownMenuItem(value: m, child: Text(m)),
+                    ],
+                    onChanged: (v) =>
+                        setState(() => _receivedVia = v ?? 'cash'),
+                  ),
+                  const SizedBox(height: 12),
+                  _StaffDropdown(
+                    businessId: widget.businessId,
+                    db: widget.db,
+                    value: _receivedBy,
+                    label: 'Received by',
+                    onChanged: (v) => setState(() => _receivedBy = v),
+                  ),
+                ],
               ],
-              onChanged: (v) => setState(() => _receivedVia = v ?? 'cash'),
             ),
-            const SizedBox(height: 12),
-            _StaffDropdown(
-              businessId: widget.businessId,
-              db: widget.db,
-              value: _receivedBy,
-              label: 'Received by',
-              onChanged: (v) => setState(() => _receivedBy = v),
-            ),
-          ],
+          ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _busy ? null : _submit,

@@ -162,7 +162,7 @@ describe("business parking entry input", () => {
     assert.equal(clean.vinNumber, "SHORT-VIN");
   });
 
-  it("requires a start, allows an open-ended stay, and rejects an inverted window", () => {
+  it("requires a start, allows open-ended, rejects an inverted window", () => {
     assert.deepEqual(codes(input({startDate: ""})), ["start_date_required"]);
     // A missing / unparseable end is an open-ended stay, not an error.
     assert.deepEqual(codes(input({endDate: "nonsense"})), []);
