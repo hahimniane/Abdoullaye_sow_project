@@ -599,6 +599,7 @@ export function BusinessConsole({
             <LotLedgerPanel
               businessId={businessId}
               businessName={businessName}
+              business={business}
               previewMode={previewMode}
             />
           )}
