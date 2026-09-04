@@ -1,6 +1,55 @@
 {
   "indexes": [
     {
+      "collectionGroup": "lotActivities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "activityDate", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "lotActivities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "activityDate", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "lotActivityTypes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "sortOrder", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "lotExpenseLines",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "sortOrder", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "lotExpenseEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "month", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "lotExpenseEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "lineId", "order": "ASCENDING"},
+        {"fieldPath": "month", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "destinationCountries",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
