@@ -29,6 +29,7 @@ import {
   MapPinned,
   Package,
   ParkingCircle,
+  Paperclip,
   Pencil,
   Plane,
   Plus,
@@ -6816,12 +6817,29 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
     : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
 
   const staffName = (id: string) => {
+    if (!id) return "";
     const row = staff.rows.find((s) => String((s as Record<string, unknown>).id) === id);
     return row
       ? text((row as Record<string, unknown>).fullName, "") ||
         text((row as Record<string, unknown>).name, "") ||
         text((row as Record<string, unknown>).email, id)
       : id;
+  };
+
+  // Who handled the money, in plain words: a named person, or "the website"
+  // when a payment link settled itself (no human took the cash).
+  const whoReceived = (row: Record<string, unknown>): string => {
+    if (String(row.paymentMethod) === "payment_link") {
+      return String(row.paymentStatus) === "succeeded"
+        ? "Received by the website"
+        : "";
+    }
+    const name = staffName(text(row.receivedByStaffId, ""));
+    return name ? `Received by ${name}` : "";
+  };
+  const whoRecorded = (row: Record<string, unknown>): string => {
+    const name = staffName(text(row.recordedByStaffId, ""));
+    return name ? `Recorded by ${name}` : "";
   };
 
   const orderedTypes = useMemo(
@@ -7241,6 +7259,8 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
                         <span>
                           <strong>{lotFormatCents(Number(r.feeCents) || 0)}</strong>
                           <small>{lotActivityPaymentLabel(r)}</small>
+                          {whoReceived(r) && <small>{whoReceived(r)}</small>}
+                          {whoRecorded(r) && <small>{whoRecorded(r)}</small>}
                           {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase payment</button>)}
                         </span>
                       </div>
@@ -7445,7 +7465,7 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
             <div className="lst-modal-body">
               {expenseEntries.rows.filter((e) => String((e as Record<string, unknown>).lineId) === purchaseLineId && (String((e as Record<string, unknown>).month) === month || lotRowMonth(e, "spentAt") === month)).map((e) => {
                 const er = e as Record<string, unknown>;
-                return (<div key={String(er.id)} className="mini-table-row"><span><strong>{lotFormatCents(Number(er.amountCents) || 0)}</strong><small>{formatDate(er.spentAt)}</small></span><span>{text(er.proofUrl, "") ? <span className="status-pill good compact">{text(er.proofFileName, "Receipt")}</span> : er.proofRequired ? <span className="status-pill danger compact">Proof missing</span> : <span className="status-pill compact">No proof needed</span>}</span><span><small>Paid by {staffName(text(er.paidByStaffId, ""))}</small><small>{text(er.note, "")}</small></span></div>);
+                return (<div key={String(er.id)} className="mini-table-row"><span><strong>{lotFormatCents(Number(er.amountCents) || 0)}</strong><small>{formatDate(er.spentAt)}</small></span><span>{text(er.proofUrl, "") ? <a className="status-pill good compact" href={text(er.proofUrl, "")} target="_blank" rel="noopener" title="Open the receipt"><Paperclip size={12} /> {text(er.proofFileName, "View receipt")}</a> : er.proofRequired ? <span className="status-pill danger compact">Proof missing</span> : <span className="status-pill compact">No proof needed</span>}</span><span><small>Paid by {staffName(text(er.paidByStaffId, "")) || "—"}</small><small>Recorded by {staffName(text(er.recordedByStaffId, "")) || "—"}</small>{text(er.note, "") && <small>{text(er.note, "")}</small>}</span></div>);
               })}
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
               <div style={{ borderTop: "2px solid var(--rule)", marginTop: 12, paddingTop: 12 }}>
