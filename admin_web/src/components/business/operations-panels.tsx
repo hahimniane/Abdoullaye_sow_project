@@ -29,6 +29,7 @@ import {
   MapPinned,
   Package,
   ParkingCircle,
+  Paperclip,
   Pencil,
   Plane,
   Plus,
@@ -5371,8 +5372,9 @@ export function ParkingPanel({
                 <label className="lst-field"><span>Start date</span>
                   <input type="date" value={draft.startDate} onChange={(event) => setDraft((value) => ({ ...value, startDate: event.target.value }))} />
                 </label>
-                <label className="lst-field"><span>End date</span>
+                <label className="lst-field"><span>End date (optional)</span>
                   <input type="date" value={draft.endDate} onChange={(event) => setDraft((value) => ({ ...value, endDate: event.target.value }))} />
+                  <small className="lst-hint">Leave blank if you don&apos;t know when the car leaves — the stay stays open and you bill it any time.</small>
                 </label>
                 <label className="lst-field"><span>Payment method</span>
                   <select value={draft.paymentMethod} onChange={(event) => setDraft((value) => ({ ...value, paymentMethod: event.target.value === "payment_link" ? "payment_link" : "direct" }))}>
@@ -5479,8 +5481,9 @@ export function ParkingPanel({
                   <label className="lst-field"><span>Start date</span>
                     <input type="date" value={entryDraft.startDate} onChange={(event) => setEntryDraft((value) => ({...value, startDate: event.target.value}))} />
                   </label>
-                  <label className="lst-field"><span>End date</span>
+                  <label className="lst-field"><span>End date (optional)</span>
                     <input type="date" value={entryDraft.endDate} onChange={(event) => setEntryDraft((value) => ({...value, endDate: event.target.value}))} />
+                    <small className="lst-hint">Leave blank for an open-ended stay — bill it through today whenever you like.</small>
                   </label>
                 </div>
 
@@ -6774,6 +6777,10 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
   const expenseLines = useBusinessRows("lotExpenseLines", businessId, enabled, 200);
   const expenseEntries = useBusinessRows("lotExpenseEntries", businessId, enabled, 2000);
   const staff = useBusinessStaff(businessId, enabled, 200);
+  // Parked cars are read so a VIN typed into the activity form can pull the
+  // car and customer it already belongs to (reusing existing records rather
+  // than re-typing) — the same reuse the handoff called for.
+  const parkedCars = useBusinessRows("parkedCars", businessId, enabled, 500);
   const business = useBusinessRows("businesses", businessId, false, 1);
 
   const [segment, setSegment] = useState<LotSegment>("activity");
@@ -6791,6 +6798,7 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
   const [draftError, setDraftError] = useState("");
 
   const [activityDraft, setActivityDraft] = useState<LotActivityDraft>(emptyLotActivityDraft);
+  const [vinHint, setVinHint] = useState("");
   const [newType, setNewType] = useState<LotActivityTypeDraft>(emptyLotActivityTypeDraft);
   const [lineDraft, setLineDraft] = useState({ label: "", detail: "", kind: "metered", recurring: "" });
   const [purchase, setPurchase] = useState<LotExpenseEntryDraft>(emptyLotExpenseEntryDraft);
@@ -6809,12 +6817,29 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
     : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
 
   const staffName = (id: string) => {
+    if (!id) return "";
     const row = staff.rows.find((s) => String((s as Record<string, unknown>).id) === id);
     return row
       ? text((row as Record<string, unknown>).fullName, "") ||
         text((row as Record<string, unknown>).name, "") ||
         text((row as Record<string, unknown>).email, id)
       : id;
+  };
+
+  // Who handled the money, in plain words: a named person, or "the website"
+  // when a payment link settled itself (no human took the cash).
+  const whoReceived = (row: Record<string, unknown>): string => {
+    if (String(row.paymentMethod) === "payment_link") {
+      return String(row.paymentStatus) === "succeeded"
+        ? "Received by the website"
+        : "";
+    }
+    const name = staffName(text(row.receivedByStaffId, ""));
+    return name ? `Received by ${name}` : "";
+  };
+  const whoRecorded = (row: Record<string, unknown>): string => {
+    const name = staffName(text(row.recordedByStaffId, ""));
+    return name ? `Recorded by ${name}` : "";
   };
 
   const orderedTypes = useMemo(
@@ -6958,12 +6983,14 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
     setPurchaseLineId("");
     setDraftError("");
     setPurchaseFile(null);
+    setVinHint("");
   }
 
   function openRecord() {
     setActivityDraft({ ...emptyLotActivityDraft, activityDate: `${month}-01` });
     setEditId("");
     setDraftError("");
+    setVinHint("");
     setModal("activity");
   }
 
@@ -6991,6 +7018,44 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
   }
 
   const selectedType = typeById.get(activityDraft.activityTypeId);
+
+  // Typing a VIN pulls the car and customer from an existing record for this
+  // business (a parked car or a past activity), so staff don't re-key what the
+  // lot already knows. Everything prefilled stays editable.
+  function applyVin(rawVin: string) {
+    const clean = rawVin.toUpperCase().slice(0, 17);
+    setActivityDraft((d) => ({ ...d, vinNumber: clean }));
+    if (clean.length < 6) {
+      setVinHint("");
+      return;
+    }
+    const match = [...parkedCars.rows, ...activities.rows].find(
+      (row) =>
+        String((row as Record<string, unknown>).vinNumber || "")
+          .toUpperCase() === clean,
+    ) as Record<string, unknown> | undefined;
+    if (!match) {
+      setVinHint("");
+      return;
+    }
+    setActivityDraft((d) => ({
+      ...d,
+      carMake: text(match.carMake, d.carMake),
+      carModel: text(match.carModel, d.carModel),
+      carYear: text(match.carYear, d.carYear),
+      customerName: d.customerName || text(match.customerName ?? match.ownerName, ""),
+      customerPhone: d.customerPhone || text(match.customerPhone, ""),
+      customerEmail: d.customerEmail || text(match.customerEmail, ""),
+    }));
+    const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")]
+      .filter(Boolean)
+      .join(" ");
+    const who = text(match.customerName ?? match.ownerName, "");
+    setVinHint(
+      `Filled from an existing record${car ? `: ${car}` : ""}` +
+        `${who ? ` for ${who}` : ""}. You can change anything below.`,
+    );
+  }
 
   async function saveActivity() {
     const errors = validateLotActivityDraft(activityDraft, [...knownTypeIds]);
@@ -7180,7 +7245,7 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
               <EmptyState text="No activity recorded for this scope yet." />
             ) : (
               <div className="mini-table">
-                <div style={{ minWidth: 760 }}>
+                <div className="lot-activity-table" style={{ minWidth: 820 }}>
                   <div className="mini-table-head"><span>Vehicle</span><span>Customer</span><span>Activity</span><span>Date</span><span>Fee</span></div>
                   {scopedActivities.map((row) => {
                     const r = row as Record<string, unknown>;
@@ -7194,6 +7259,8 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
                         <span>
                           <strong>{lotFormatCents(Number(r.feeCents) || 0)}</strong>
                           <small>{lotActivityPaymentLabel(r)}</small>
+                          {whoReceived(r) && <small>{whoReceived(r)}</small>}
+                          {whoRecorded(r) && <small>{whoRecorded(r)}</small>}
                           {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase payment</button>)}
                         </span>
                       </div>
@@ -7287,12 +7354,27 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
                 )}
                 <label className="lst-field"><span>Fee</span><input inputMode="decimal" value={activityDraft.fee} onChange={(e) => setActivityDraft((d) => ({ ...d, fee: e.target.value }))} /><small className="lst-hint">From your activity list; edit to price this job.</small></label>
                 <label className="lst-field"><span>Date</span><input type="date" value={activityDraft.activityDate} onChange={(e) => setActivityDraft((d) => ({ ...d, activityDate: e.target.value }))} /></label>
-                <label className="lst-field"><span>VIN</span><input value={activityDraft.vinNumber} onChange={(e) => setActivityDraft((d) => ({ ...d, vinNumber: e.target.value }))} /></label>
+                <label className="lst-field wide"><span>VIN</span><input value={activityDraft.vinNumber} onChange={(e) => applyVin(e.target.value)} placeholder="17 characters" />{vinHint && <small className="lst-hint" style={{ color: "var(--money)" }}>{vinHint}</small>}</label>
                 <label className="lst-field"><span>Customer</span><input value={activityDraft.customerName} onChange={(e) => setActivityDraft((d) => ({ ...d, customerName: e.target.value }))} /></label>
                 <label className="lst-field"><span>Phone</span><input value={activityDraft.customerPhone} onChange={(e) => setActivityDraft((d) => ({ ...d, customerPhone: e.target.value }))} /></label>
-                <label className="lst-field"><span>Car make</span><input value={activityDraft.carMake} onChange={(e) => setActivityDraft((d) => ({ ...d, carMake: e.target.value }))} /></label>
-                <label className="lst-field"><span>Car model</span><input value={activityDraft.carModel} onChange={(e) => setActivityDraft((d) => ({ ...d, carModel: e.target.value }))} /></label>
-                <label className="lst-field"><span>Car year</span><input value={activityDraft.carYear} onChange={(e) => setActivityDraft((d) => ({ ...d, carYear: e.target.value }))} /></label>
+                <label className="lst-field"><span>Car make</span>
+                  <select value={canonicalMake(activityDraft.carMake) || activityDraft.carMake} onChange={(e) => setActivityDraft((d) => ({ ...d, carMake: e.target.value, carModel: "", carYear: "" }))}>
+                    <option value="">Select a make</option>
+                    {getMakes().map((m) => (<option key={m} value={m}>{m}</option>))}
+                  </select>
+                </label>
+                <label className="lst-field"><span>Car model</span>
+                  <select disabled={!activityDraft.carMake} value={canonicalModel(activityDraft.carMake, activityDraft.carModel) || activityDraft.carModel} onChange={(e) => setActivityDraft((d) => ({ ...d, carModel: e.target.value, carYear: "" }))}>
+                    <option value="">Select a model</option>
+                    {getModels(activityDraft.carMake).map((m) => (<option key={m} value={m}>{m}</option>))}
+                  </select>
+                </label>
+                <label className="lst-field"><span>Car year</span>
+                  <select disabled={!activityDraft.carModel} value={activityDraft.carYear} onChange={(e) => setActivityDraft((d) => ({ ...d, carYear: e.target.value }))}>
+                    <option value="">Select a year</option>
+                    {getYears(activityDraft.carMake, activityDraft.carModel).map((y) => (<option key={y} value={y}>{y}</option>))}
+                  </select>
+                </label>
                 {Boolean(selectedType?.needsAuctionHouse) && (
                   <label className="lst-field"><span>Auction house</span><select value={activityDraft.auctionHouse} onChange={(e) => setActivityDraft((d) => ({ ...d, auctionHouse: e.target.value }))}><option value="">Choose</option>{LOT_AUCTION_HOUSES.map((h) => (<option key={h} value={h}>{h}</option>))}</select></label>
                 )}
@@ -7383,7 +7465,7 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
             <div className="lst-modal-body">
               {expenseEntries.rows.filter((e) => String((e as Record<string, unknown>).lineId) === purchaseLineId && (String((e as Record<string, unknown>).month) === month || lotRowMonth(e, "spentAt") === month)).map((e) => {
                 const er = e as Record<string, unknown>;
-                return (<div key={String(er.id)} className="mini-table-row"><span><strong>{lotFormatCents(Number(er.amountCents) || 0)}</strong><small>{formatDate(er.spentAt)}</small></span><span>{text(er.proofUrl, "") ? <span className="status-pill good compact">{text(er.proofFileName, "Receipt")}</span> : er.proofRequired ? <span className="status-pill danger compact">Proof missing</span> : <span className="status-pill compact">No proof needed</span>}</span><span><small>Paid by {staffName(text(er.paidByStaffId, ""))}</small><small>{text(er.note, "")}</small></span></div>);
+                return (<div key={String(er.id)} className="mini-table-row"><span><strong>{lotFormatCents(Number(er.amountCents) || 0)}</strong><small>{formatDate(er.spentAt)}</small></span><span>{text(er.proofUrl, "") ? <a className="status-pill good compact" href={text(er.proofUrl, "")} target="_blank" rel="noopener" title="Open the receipt"><Paperclip size={12} /> {text(er.proofFileName, "View receipt")}</a> : er.proofRequired ? <span className="status-pill danger compact">Proof missing</span> : <span className="status-pill compact">No proof needed</span>}</span><span><small>Paid by {staffName(text(er.paidByStaffId, "")) || "—"}</small><small>Recorded by {staffName(text(er.recordedByStaffId, "")) || "—"}</small>{text(er.note, "") && <small>{text(er.note, "")}</small>}</span></div>);
               })}
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
               <div style={{ borderTop: "2px solid var(--rule)", marginTop: 12, paddingTop: 12 }}>

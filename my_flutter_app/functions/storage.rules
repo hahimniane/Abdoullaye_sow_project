@@ -212,6 +212,28 @@ service firebase.storage {
       allow write: if false;
     }
 
+    // Lot-ledger expense receipts. Written by a business's own ledger managers
+    // (or an operations admin); readable by the same. Image or PDF, any of the
+    // types validSupportUpload allows, under its 50MB cap.
+    function canManageBusinessLedger(businessId) {
+      return hasAdminCapability('operations') ||
+        (
+          isLinkedToBusiness(businessId) &&
+          (
+            userRole() == 'businessOwner' ||
+            (userRole() == 'staff' && hasBusinessSection('ledger'))
+          )
+        );
+    }
+
+    match /lotExpenseProofs/{businessId}/{allPaths=**} {
+      allow read: if request.auth != null &&
+        (hasAdminCapability('operations') || isLinkedToBusiness(businessId));
+      allow write: if request.auth != null &&
+        validSupportUpload() &&
+        canManageBusinessLedger(businessId);
+    }
+
     match /businesses/{businessId}/{allPaths=**} {
       allow read: if true;
       allow write: if request.auth != null &&

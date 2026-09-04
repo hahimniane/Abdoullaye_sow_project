@@ -1851,6 +1851,39 @@ button[data-loading="true"]::before {
   min-height: 52px;
 }
 
+/* The lot-ledger activity log has five columns (Vehicle, Customer, Activity,
+   Date, Fee); the shared grid above sizes four. Give it its own template and
+   a little more breathing room per cell. */
+.lot-activity-table .mini-table-head,
+.lot-activity-table .mini-table-row {
+  grid-template-columns:
+    minmax(160px, 2fr)
+    minmax(130px, 1.3fr)
+    minmax(130px, 1.3fr)
+    minmax(120px, 1fr)
+    minmax(120px, 1.1fr);
+  align-items: center;
+}
+
+/* Each activity cell stacks a value over a muted sub-line; keep them tight
+   and let the row's inline action buttons wrap under their value cleanly. */
+.lot-activity-table .mini-table-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lot-activity-table .mini-table-row > span > small {
+  color: var(--muted);
+}
+
+.lot-activity-table .mini-table-row .ghost-button {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 6px;
+}
+
 .mini-table-row:last-child {
   border-bottom: 0;
 }
