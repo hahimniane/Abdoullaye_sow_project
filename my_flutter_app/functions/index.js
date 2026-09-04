@@ -302,6 +302,11 @@ const {
   normalizeReceivedVia: lotNormalizeReceivedVia,
 } = require("./lot_ledger");
 const {
+  resolveBillingPlan,
+  subscriptionAccrualDelta,
+  monthEndBillingAmount,
+} = require("./business_billing_plan");
+const {
   sendFirebasePasswordSetupEmail,
 } = require("./firebase_auth_email");
 const {
@@ -8126,6 +8131,317 @@ async function bindCheckoutPaymentIntent(event) {
   return true;
 }
 
+/**
+ * Add one settled subscription-billed charge to its business's monthly
+ * accrual. The commission is the exact figure stored at charge time; the
+ * absorbed Stripe fee is estimated from the gross. The month-end job reads
+ * these totals for the "whichever is smaller" bill. Best-effort: a failure
+ * here must never fail the payment reconciliation.
+ *
+ * @param {object} ref The settled record's Firestore ref.
+ * @return {Promise<void>}
+ */
+async function recordSubscriptionAccrual(ref) {
+  try {
+    const snap = await ref.get();
+    const record = snap.data() || {};
+    if (String(record.billingMode || "") !== "subscription") return;
+    const businessId = String(record.businessId || "").trim();
+    if (!businessId) return;
+    const delta = subscriptionAccrualDelta({
+      grossCents: Number(record.subscriptionGrossCents || 0),
+      platformFeePct: 0,
+    });
+    const commissionCents =
+      Math.max(0, Math.round(Number(record.subscriptionCommissionCents || 0)));
+    const scope = String(record.subscriptionScope || "business");
+    const monthlyFeeCents =
+      Math.max(0, Math.round(Number(record.subscriptionMonthlyFeeCents || 0)));
+    const month = new Date().toISOString().slice(0, 7);
+    const db = admin.firestore();
+    await db.collection("businessBillingAccruals")
+        .doc(`${businessId}_${month}_${scope}`)
+        .set({
+          businessId,
+          month,
+          scope,
+          monthlyFeeCents,
+          accruedCommissionCents:
+            FirestoreFieldValue.increment(commissionCents),
+          accruedStripeFeeCents:
+            FirestoreFieldValue.increment(delta.stripeFeeCents),
+          transactionCount: FirestoreFieldValue.increment(1),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+  } catch (error) {
+    logger.warn("Subscription accrual not recorded", {
+      path: ref?.path || "", error: String(error?.message || error),
+    });
+  }
+}
+
+// ===========================================================================
+// Subscription billing — card enrollment and the month-end reconciliation.
+// The business saves a card on Laawol's own account (the month-end charge is
+// Laawol billing the business, not a connected-account charge); at month end a
+// scheduled job charges the smaller of accrued cost and the flat fee. Actual
+// charging is gated by billingConfig/settings.autoChargeEnabled so the first
+// runs can be verified in report-only mode before real cards are charged.
+// ===========================================================================
+
+/**
+ * Ensure a platform-account Stripe Customer for a business's own billing.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} business The business document.
+ * @return {Promise<string>} The Stripe customer id.
+ */
+async function ensureBusinessBillingCustomer(db, businessId, business) {
+  const existing = String(business.stripeBillingCustomerId || "").trim();
+  if (existing) return existing;
+  const body = new URLSearchParams();
+  if (business.email) body.set("email", String(business.email));
+  body.set("name", String(business.name || businessId));
+  body.set("metadata[businessId]", businessId);
+  body.set("metadata[purpose]", "subscription_billing");
+  const customer = await stripeFormRequest("/customers", body, {});
+  await db.collection("businesses").doc(businessId).set({
+    stripeBillingCustomerId: customer.id,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  return customer.id;
+}
+
+exports.startBusinessBillingCardSetup = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const businessId = String(request.data?.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, "profile");
+      const db = admin.firestore();
+      const businessDoc = await db.collection("businesses").doc(businessId)
+          .get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const customerId = await ensureBusinessBillingCustomer(
+          db, businessId, businessDoc.data() || {},
+      );
+      // A Stripe-hosted setup page saves the card with no Stripe.js in the
+      // console: the console opens the URL and calls finalize on return.
+      const base = String(request.data?.returnUrl || "").trim() ||
+        "https://business.laawoldigital.com/";
+      const joiner = base.includes("?") ? "&" : "?";
+      const session = await createStripeSetupCheckoutSession({
+        customerId,
+        successUrl:
+          `${base}${joiner}billingCard=done&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${base}${joiner}billingCard=cancelled`,
+        metadata: {businessId, purpose: "subscription_billing"},
+      });
+      return {url: String(session.url || ""), sessionId: String(session.id)};
+    },
+);
+
+exports.finalizeBusinessBillingCard = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const businessId = String(request.data?.businessId || "").trim();
+      const sessionId = String(request.data?.sessionId || "").trim();
+      await requireBusinessPermission(uid, businessId, "profile");
+      const session = await retrieveStripeCheckoutSession(sessionId);
+      if (session?.mode !== "setup" ||
+          String(session?.metadata?.businessId || "") !== businessId) {
+        throw new HttpsError(
+            "permission-denied", "This card setup does not belong here.",
+        );
+      }
+      const intent = await retrieveStripeSetupIntent(
+          String(session.setup_intent || ""),
+      );
+      const paymentMethodId = String(intent?.payment_method || "").trim();
+      if (intent?.status !== "succeeded" || !paymentMethodId) {
+        throw new HttpsError(
+            "failed-precondition", "The card was not saved. Try again.",
+        );
+      }
+      await admin.firestore().collection("businesses").doc(businessId).set({
+        stripeBillingPaymentMethodId: paymentMethodId,
+        billingCardSavedAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {success: true};
+    },
+);
+
+/**
+ * Charge a saved card off-session for the month-end subscription bill.
+ *
+ * @param {object} params customerId, paymentMethodId, amountCents, businessId,
+ *   month.
+ * @return {Promise<object>} The Stripe PaymentIntent.
+ */
+async function chargeBusinessBillingCard(params) {
+  const body = new URLSearchParams();
+  body.set("amount", String(params.amountCents));
+  body.set("currency", SHIPMENT_CURRENCY);
+  body.set("customer", params.customerId);
+  body.set("payment_method", params.paymentMethodId);
+  body.set("off_session", "true");
+  body.set("confirm", "true");
+  body.set("metadata[paymentType]", "business_subscription_bill");
+  body.set("metadata[businessId]", params.businessId);
+  body.set("metadata[month]", params.month);
+  return stripeRequest("/payment_intents", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Idempotency-Key":
+        `subscription-bill:${params.businessId}:${params.month}`,
+    },
+    body,
+  });
+}
+
+/**
+ * Compute (and, when enabled, charge) each business's month-end subscription
+ * bill for the previous calendar month: the sum over its plan buckets of the
+ * smaller of accrued cost and the flat fee. Writes one invoice document per
+ * business either way; charges only when autoChargeEnabled is on and a card
+ * is saved.
+ *
+ * @param {string} month The yyyy-mm to bill.
+ * @return {Promise<object>} A summary.
+ */
+async function runMonthlySubscriptionBilling(month) {
+  const db = admin.firestore();
+  const configDoc = await db.collection("billingConfig").doc("settings").get();
+  const autoCharge = configDoc.exists &&
+    configDoc.data()?.autoChargeEnabled === true;
+  const accruals = await db.collection("businessBillingAccruals")
+      .where("month", "==", month)
+      .get();
+  const byBusiness = new Map();
+  for (const doc of accruals.docs) {
+    const a = doc.data() || {};
+    const businessId = String(a.businessId || "");
+    if (!businessId) continue;
+    const bucket = monthEndBillingAmount({
+      accruedCommissionCents: a.accruedCommissionCents,
+      accruedStripeFeeCents: a.accruedStripeFeeCents,
+      monthlyFeeCents: a.monthlyFeeCents,
+    });
+    const prev = byBusiness.get(businessId) || {amountCents: 0, buckets: []};
+    prev.amountCents += bucket.amountCents;
+    prev.buckets.push({
+      scope: String(a.scope || "business"),
+      ...bucket,
+      transactionCount: Number(a.transactionCount || 0),
+    });
+    byBusiness.set(businessId, prev);
+  }
+
+  let charged = 0;
+  let reported = 0;
+  for (const [businessId, summary] of byBusiness.entries()) {
+    if (summary.amountCents <= 0) continue;
+    const businessDoc = await db.collection("businesses").doc(businessId).get();
+    const business = businessDoc.data() || {};
+    const customerId = String(business.stripeBillingCustomerId || "").trim();
+    const paymentMethodId =
+      String(business.stripeBillingPaymentMethodId || "").trim();
+    const invoiceRef = db.collection("businessBillingInvoices")
+        .doc(`${businessId}_${month}`);
+    const base = {
+      businessId,
+      month,
+      amountCents: summary.amountCents,
+      buckets: summary.buckets,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    };
+    const canCharge = autoCharge && customerId && paymentMethodId &&
+      !SIMULATE_PAYMENTS;
+    if (!canCharge) {
+      await invoiceRef.set({
+        ...base,
+        status: autoCharge ? "awaiting_card" : "report_only",
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      reported += 1;
+      continue;
+    }
+    try {
+      const intent = await chargeBusinessBillingCard({
+        customerId, paymentMethodId, amountCents: summary.amountCents,
+        businessId, month,
+      });
+      await invoiceRef.set({
+        ...base,
+        status: intent.status === "succeeded" ? "paid" : "pending",
+        stripePaymentIntentId: String(intent.id || ""),
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      charged += 1;
+    } catch (error) {
+      await invoiceRef.set({
+        ...base,
+        status: "failed",
+        failureReason: String(error?.message || error).slice(0, 300),
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      logger.error("Subscription bill charge failed", {
+        businessId, month, error: String(error?.message || error),
+      });
+    }
+  }
+  return {month, businesses: byBusiness.size, charged, reported, autoCharge};
+}
+
+exports.chargeMonthlySubscriptions = onSchedule(
+    {
+      schedule: "0 8 1 * *",
+      timeZone: "America/New_York",
+      secrets: [stripeSecretKey],
+    },
+    async () => {
+      const now = new Date();
+      const prev = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      const month = prev.toISOString().slice(0, 7);
+      const summary = await runMonthlySubscriptionBilling(month);
+      logger.info("Monthly subscription billing run", summary);
+    },
+);
+
+// A manual trigger so an admin can run (or dry-run) a month's billing on
+// demand — the same computation the scheduler uses.
+exports.runSubscriptionBillingForMonth = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const adminUser = await getUserProfile(uid);
+      requireAdminCapability(
+          adminUser, "operations",
+          "Only operations admins can run billing");
+      const month = String(request.data?.month || "").trim();
+      if (!/^\d{4}-\d{2}$/.test(month)) {
+        throw new HttpsError("invalid-argument", "Pass month as yyyy-mm.");
+      }
+      return runMonthlySubscriptionBilling(month);
+    },
+);
+
 async function reconcileStripePaymentEvent(event, connectedAccountId) {
   const intent = await paymentIntentForStripeEvent(event, connectedAccountId);
   const paymentType = String(intent?.metadata?.paymentType || "").trim();
@@ -8152,6 +8468,9 @@ async function reconcileStripePaymentEvent(event, connectedAccountId) {
   if (decision.state === PAYMENT_STATES.SUCCEEDED) {
     if (decision.changed) {
       await runPaymentCompletion(target);
+      // Count this charge toward the month's subscription accrual, once, on
+      // the first transition to succeeded.
+      await recordSubscriptionAccrual(ref);
     }
     await ref.set({
       stripeReconciliationState: PAYMENT_STATES.SUCCEEDED,
@@ -21246,7 +21565,36 @@ function servicePayoutFields({
   platformFeePct,
   connectReady,
   business,
+  serviceKey = "",
 }) {
+  // A business (or one of its services) on a subscription plan is billed a flat
+  // monthly fee, not per-transaction commission. For those charges Laawol eats
+  // the Stripe fee (a PLATFORM charge, no application fee) and the business
+  // receives 100% of the payout; what Laawol forwent is accrued for the
+  // month-end "whichever is smaller" bill (business_billing_plan.js). A
+  // business-wide plan applies even where no serviceKey is passed.
+  const plan = resolveBillingPlan(business, serviceKey);
+  if (plan.mode === "subscription") {
+    return {
+      platformFeeCents: 0,
+      businessPayoutCents: grossCents,
+      payoutStatus: connectReady ? "pending" : "pending_account",
+      stripeFeeMode: STRIPE_FEE_MODE_PLATFORM_ABSORBS,
+      stripeChargeType: "platform",
+      stripeConnectedAccountId: "",
+      billingMode: "subscription",
+      // What the month-end reconciliation accrues for this charge: the forgone
+      // commission (exact) and the gross the absorbed Stripe fee is estimated
+      // from when the payment settles.
+      subscriptionCommissionCents: Math.round(grossCents * platformFeePct),
+      subscriptionGrossCents: Math.max(0, Math.round(grossCents)),
+      // The plan bucket this charge bills under: a per-service plan bills
+      // against that service's own flat fee, a business-wide plan against one
+      // shared fee. Both are reconciled "whichever is smaller" at month end.
+      subscriptionScope: plan.source === "service" ? serviceKey : "business",
+      subscriptionMonthlyFeeCents: plan.monthlyFeeCents,
+    };
+  }
   const platformFeeCents = Math.round(grossCents * platformFeePct);
   const stripeFeeMode = businessStripeFeeMode(business);
   const useDirectCharge =
@@ -21259,6 +21607,7 @@ function servicePayoutFields({
     stripeChargeType: useDirectCharge ? "direct" : "platform",
     stripeConnectedAccountId:
       useDirectCharge ? String(business.stripeAccountId) : "",
+    billingMode: "commission",
   };
 }
 

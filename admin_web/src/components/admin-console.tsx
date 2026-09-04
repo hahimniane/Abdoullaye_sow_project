@@ -107,6 +107,11 @@ import {
   type ServiceFeeKey,
 } from "@/lib/business-service-fees";
 import {
+  billingPlanPayload,
+  validateBillingPlanDraft,
+  type BillingMode,
+} from "@/lib/business-billing-plan";
+import {
   asDate,
   formatDate,
   formatMoney,
@@ -5331,6 +5336,10 @@ function MoreSettings({
     STRIPE_FEE_MODE_PLATFORM_ABSORBS,
   );
   const [businessFeeSearch, setBusinessFeeSearch] = useState("");
+  // Subscription billing plan (flat monthly fee vs per-transaction commission).
+  const [billingModeDraft, setBillingModeDraft] =
+    useState<BillingMode>("commission");
+  const [billingFeeDraft, setBillingFeeDraft] = useState("");
   const [serviceFeeBusinessId, setServiceFeeBusinessId] = useState("");
   const [serviceFeeDrafts, setServiceFeeDrafts] = useState<
     Record<string, string>
@@ -5592,6 +5601,43 @@ function MoreSettings({
     ));
   }
 
+  // Business-wide billing plan: switch the business between per-transaction
+  // commission and a flat monthly fee (whichever is smaller at month end).
+  // Writes businesses/{id}.billingPlan and applies immediately (the payout
+  // path reads it on the next charge).
+  async function saveBusinessBillingPlan(targets: FirestoreRow[]) {
+    if (targets.length === 0) throw new Error("Select at least one business.");
+    const errors = validateBillingPlanDraft(billingModeDraft, billingFeeDraft);
+    if (errors.length > 0) {
+      throw new Error("Enter a monthly fee greater than $0.");
+    }
+    const plan = billingPlanPayload(billingModeDraft, billingFeeDraft);
+    if (previewMode) return;
+    await Promise.all(targets.map((business) =>
+      setDoc(
+        doc(db, "businesses", business.id),
+        {
+          billingPlan: plan,
+          billingPlanUpdatedAt: serverTimestamp(),
+          billingPlanUpdatedBy: currentUserId,
+        },
+        {merge: true},
+      ),
+    ));
+  }
+
+  async function resetBusinessBillingPlan(targets: FirestoreRow[]) {
+    if (targets.length === 0) throw new Error("Select at least one business.");
+    if (previewMode) return;
+    await Promise.all(targets.map((business) =>
+      updateDoc(doc(db, "businesses", business.id), {
+        billingPlan: deleteField(),
+        billingPlanUpdatedAt: serverTimestamp(),
+        billingPlanUpdatedBy: currentUserId,
+      }),
+    ));
+  }
+
   function setServiceFeeDraft(key: ServiceFeeKey, value: string) {
     setServiceFeeDrafts((current) => ({ ...current, [key]: value }));
   }
@@ -5841,6 +5887,84 @@ function MoreSettings({
             have finished Stripe Connect onboarding, otherwise this falls
             back to Platform automatically.
           </p>
+        </div>
+        <div className="info-band">
+          <h4>Billing plan</h4>
+          <div className="commission-rate-controls">
+            <label className="commission-rate-input">
+              Plan
+              <select
+                value={billingModeDraft}
+                onChange={(event) =>
+                  setBillingModeDraft(event.target.value as BillingMode)
+                }
+              >
+                <option value="commission">
+                  Per-transaction commission (default)
+                </option>
+                <option value="subscription">
+                  Flat monthly fee — whichever is smaller
+                </option>
+              </select>
+            </label>
+            {billingModeDraft === "subscription" && (
+              <label className="commission-rate-input">
+                Monthly fee ($)
+                <input
+                  inputMode="decimal"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={billingFeeDraft}
+                  onChange={(event) => setBillingFeeDraft(event.target.value)}
+                  placeholder="50"
+                />
+              </label>
+            )}
+          </div>
+          <p>
+            On a flat monthly fee, Laawol absorbs Stripe&apos;s per-transaction
+            fee and the business keeps 100% of every payout during the month.
+            At month end the business is charged the smaller of its accrued
+            cost (commission it would have paid + the Stripe fees Laawol
+            absorbed) or the flat monthly fee, on its saved card. Applies to
+            the whole business immediately.
+          </p>
+          <div className="commission-actions">
+            <button
+              className="primary-button"
+              type="button"
+              disabled={selectedBusinesses.length === 0}
+              onClick={() =>
+                runAction(
+                  "Billing plan saved",
+                  () => saveBusinessBillingPlan(selectedBusinesses),
+                  {
+                    confirm: `Set the billing plan for ${selectedBusinesses.length} selected business${selectedBusinesses.length === 1 ? "" : "es"}? It applies immediately.`,
+                  },
+                )
+              }
+            >
+              <span>Set plan</span>
+              <span>({selectedBusinesses.length})</span>
+            </button>
+            <button
+              className="ghost-button"
+              type="button"
+              disabled={selectedBusinesses.length === 0}
+              onClick={() =>
+                runAction(
+                  "Billing plan reset to commission",
+                  () => resetBusinessBillingPlan(selectedBusinesses),
+                  {
+                    confirm: `Reset ${selectedBusinesses.length} business${selectedBusinesses.length === 1 ? "" : "es"} to per-transaction commission?`,
+                  },
+                )
+              }
+            >
+              Reset to commission
+            </button>
+          </div>
         </div>
         <div className="commission-actions">
           <button
