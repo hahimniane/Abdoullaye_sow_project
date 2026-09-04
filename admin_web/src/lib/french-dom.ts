@@ -4303,6 +4303,145 @@ for (const [label, frLabel] of Object.entries(PICKUP_ERROR_LABELS)) {
   }
 }
 
+// Lot ledger, subscription billing, and the parking/attribution copy added
+// for the Keren workbook feature. Static visible strings only — composed
+// strings that embed a name or amount pass through untranslated by design.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Lot ledger": "Registre du parc",
+  "Activity, expenses, reports": "Activité, dépenses, rapports",
+  "Every job the lot billed for, what it costs to run, and the month-by-month picture — in one place.":
+    "Chaque prestation facturée par le parc, ce qu’il coûte à exploiter et la vue mois par mois — au même endroit.",
+  "Activity": "Activité",
+  "Expenses": "Dépenses",
+  "Reports": "Rapports",
+  "Activity log": "Journal d’activité",
+  "Record activity": "Enregistrer une activité",
+  "Activities & rates": "Activités et tarifs",
+  "Awaiting payment": "En attente de paiement",
+  "Website links sent and not settled": "Liens web envoyés et non réglés",
+  "All activities": "Toutes les activités",
+  "One-off jobs": "Prestations ponctuelles",
+  "VIN, customer, phone": "VIN, client, téléphone",
+  "Vehicle": "Véhicule",
+  "Customer": "Client",
+  "Date": "Date",
+  "Fee": "Frais",
+  "Expense": "Dépense",
+  "Supplier / detail": "Fournisseur / détail",
+  "How it behaves": "Comportement",
+  "Standard rate": "Tarif standard",
+  "Priced for this job": "Tarifé pour ce travail",
+  "Edit": "Modifier",
+  "Void": "Invalider",
+  "History": "Historique",
+  "Chase payment": "Relancer le paiement",
+  "Voided": "Invalidé",
+  "Log a job the lot billed for.":
+    "Enregistrer une prestation facturée par le parc.",
+  "Edit this activity": "Modifier cette activité",
+  "Changing the fee on an unpaid link re-issues it at the new amount.":
+    "Modifier les frais d’un lien impayé le réémet au nouveau montant.",
+  "What was done": "Ce qui a été fait",
+  "Choose an activity": "Choisir une activité",
+  "Something else — one-off": "Autre chose — ponctuel",
+  "Say what was done": "Décrivez ce qui a été fait",
+  "From your activity list; edit to price this job.":
+    "D’après votre liste d’activités ; modifiez pour tarifer ce travail.",
+  "Phone": "Téléphone",
+  "Car make": "Marque",
+  "Car model": "Modèle",
+  "Car year": "Année",
+  "Select a make": "Choisir une marque",
+  "Select a model": "Choisir un modèle",
+  "Select a year": "Choisir une année",
+  "Auction house": "Maison d’enchères",
+  "Charge through the website": "Facturer via le site web",
+  "A payment link goes to the customer and the money lands in your account.":
+    "Un lien de paiement est envoyé au client et l’argent arrive sur votre compte.",
+  "The link goes by text and email.":
+    "Le lien est envoyé par SMS et par e-mail.",
+  "Paid outside the website": "Payé hors du site web",
+  "Cash, Zelle, a check. Record who took it.":
+    "Espèces, Zelle, un chèque. Indiquez qui a reçu le paiement.",
+  "How it was paid": "Mode de paiement",
+  "Received by": "Reçu par",
+  "Choose staff": "Choisir un membre",
+  "Save changes": "Enregistrer les modifications",
+  "Add expense line": "Ajouter une ligne de dépense",
+  "A line marked same every month fills itself in; a line that changes every month starts empty.":
+    "Une ligne « identique chaque mois » se remplit d’elle-même ; une ligne « change chaque mois » démarre vide.",
+  "Changes every month": "Change chaque mois",
+  "Same every month": "Identique chaque mois",
+  "Add purchase": "Ajouter un achat",
+  "Add a purchase": "Ajouter un achat",
+  "No proof needed": "Aucun justificatif requis",
+  "Proof missing": "Justificatif manquant",
+  "View receipt": "Voir le reçu",
+  "Change": "Modifier",
+  "Save": "Enregistrer",
+  "Cancel": "Annuler",
+  "Done": "Terminé",
+  "Add": "Ajouter",
+  "Remove": "Retirer",
+  "Not used yet": "Pas encore utilisé",
+  "Add an activity": "Ajouter une activité",
+  "$0 means a receipt is never required.":
+    "0 $ signifie qu’aucun justificatif n’est jamais requis.",
+  "Name": "Nom",
+  "Amount": "Montant",
+  "Paid by": "Payé par",
+  "Note": "Note",
+  "Receipt": "Reçu",
+  "Void this entry": "Invalider cette entrée",
+  "It stays on the record (struck through) and drops out of the totals — it is never deleted. Other staff see who voided it and why.":
+    "Elle reste dans le registre (barrée) et sort des totaux — elle n’est jamais supprimée. Les autres membres voient qui l’a invalidée et pourquoi.",
+  "Reason (optional)": "Motif (facultatif)",
+  "Void entry": "Invalider l’entrée",
+  "Change history": "Historique des modifications",
+  "Every edit and void on this entry, most recent first.":
+    "Chaque modification et invalidation de cette entrée, la plus récente en premier.",
+  "No changes recorded — nothing has been edited or voided.":
+    "Aucune modification enregistrée — rien n’a été modifié ni invalidé.",
+  "Edited": "Modifié",
+  "Month by month": "Mois par mois",
+  "Year in summary": "Bilan annuel",
+  "Net profit": "Bénéfice net",
+  "Margin": "Marge",
+  "Net": "Net",
+  // Billing plan (admin console)
+  "Billing plan": "Formule de facturation",
+  "Plan": "Formule",
+  "Per-transaction commission (default)":
+    "Commission par transaction (par défaut)",
+  "Flat monthly fee — whichever is smaller":
+    "Forfait mensuel — le plus avantageux",
+  "Monthly fee ($)": "Forfait mensuel ($)",
+  "Set plan": "Appliquer la formule",
+  "Reset to commission": "Revenir à la commission",
+  // Parking optional end date
+  "End date (optional)": "Date de fin (facultatif)",
+  "Leave blank if you don’t know when the car leaves — the stay stays open and you bill it any time.":
+    "Laissez vide si vous ne savez pas quand la voiture repart — le séjour reste ouvert et vous le facturez à tout moment.",
+  "Leave blank for an open-ended stay — bill it through today whenever you like.":
+    "Laissez vide pour un séjour à durée indéterminée — facturez-le jusqu’à aujourd’hui quand vous voulez.",
+});
+
+Object.assign(TEXT_TRANSLATIONS, {
+  "Received by the website": "Reçu par le site web",
+  "Paid on the platform": "Payé sur la plateforme",
+  "Payment received in person": "Paiement reçu en personne",
+  "Car left today": "Voiture repartie aujourd’hui",
+  "Open-ended": "Durée indéterminée",
+  "Nothing to bill": "Rien à facturer",
+  "Leaves": "Départ",
+  "Billed through": "Facturé jusqu’au",
+  "Unbilled": "Non facturé",
+  "Nothing yet": "Rien pour l’instant",
+  "Revenue": "Recettes",
+  "On a flat monthly fee, Laawol absorbs Stripe’s per-transaction fee and the business keeps 100% of every payout during the month. At month end the business is charged the smaller of its accrued cost (commission it would have paid + the Stripe fees Laawol absorbed) or the flat monthly fee, on its saved card. Applies to the whole business immediately.":
+    "Avec un forfait mensuel, Laawol prend en charge les frais Stripe par transaction et l’entreprise conserve 100 % de chaque versement pendant le mois. En fin de mois, l’entreprise est débitée du plus petit des deux montants entre son coût cumulé (la commission qu’elle aurait payée + les frais Stripe pris en charge par Laawol) et le forfait mensuel, sur sa carte enregistrée. S’applique immédiatement à toute l’entreprise.",
+});
+
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "17 characters": "17 caractères",
   "Add a photo by URL": "Ajouter une photo par URL",

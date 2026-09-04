@@ -13137,6 +13137,70 @@ function lotLedgerMessage(errors) {
   return errors.map((code) => LOT_LEDGER_MESSAGES[code] || code).join(" ");
 }
 
+// Money-field labels for a readable change summary.
+const LOT_AUDIT_FIELDS = Object.freeze({
+  feeCents: {label: "Fee", money: true},
+  amountCents: {label: "Amount", money: true},
+  customerName: {label: "Customer", money: false},
+  customerPhone: {label: "Phone", money: false},
+  vinNumber: {label: "VIN", money: false},
+  activityTypeLabel: {label: "Activity", money: false},
+  paymentMethod: {label: "Payment method", money: false},
+  auctionHouse: {label: "Auction house", money: false},
+  note: {label: "Note", money: false},
+});
+
+/**
+ * The changed fields between two records, as readable {field, from, to}.
+ *
+ * @param {object} before The prior record.
+ * @param {object} after The new record.
+ * @return {Array<object>} One entry per changed audited field.
+ */
+function lotFieldDiff(before, after) {
+  const changes = [];
+  for (const [key, meta] of Object.entries(LOT_AUDIT_FIELDS)) {
+    if (!(key in after)) continue;
+    const b = before[key];
+    const a = after[key];
+    if (String(b ?? "") === String(a ?? "")) continue;
+    const fmt = (v) => meta.money ?
+      `$${((Number(v) || 0) / 100).toFixed(2)}` : String(v ?? "—");
+    changes.push({field: meta.label, from: fmt(b), to: fmt(a)});
+  }
+  return changes;
+}
+
+/**
+ * Record a ledger change so other staff can see it (per-entry history) and so
+ * it surfaces in the business's "Needs attention" feed. Best-effort: an audit
+ * failure must never fail the edit itself.
+ *
+ * @param {object} params businessId, entityType, entityId, action, byStaffId,
+ *   summary, changes.
+ * @return {Promise<void>}
+ */
+async function writeLotLedgerAudit(params) {
+  try {
+    const db = admin.firestore();
+    await db.collection("lotLedgerAudit").add({
+      businessId: String(params.businessId || ""),
+      entityType: String(params.entityType || ""),
+      entityId: String(params.entityId || ""),
+      action: String(params.action || ""),
+      byStaffId: String(params.byStaffId || ""),
+      summary: String(params.summary || ""),
+      changes: Array.isArray(params.changes) ? params.changes : [],
+      acknowledged: false,
+      at: FirestoreFieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    logger.warn("Lot ledger audit not written", {
+      entityId: params?.entityId || "", error: String(error?.message || error),
+    });
+  }
+}
+
 function lotActivityMidday(value) {
   const raw = String(value || "").trim();
   const date = raw ? new Date(raw) : null;
@@ -13544,6 +13608,23 @@ exports.updateLotActivity = onCall(
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       }, {merge: true});
 
+      const diff = lotFieldDiff(current, record);
+      if (diff.length > 0) {
+        const first = diff[0];
+        await writeLotLedgerAudit({
+          businessId,
+          entityType: "activity",
+          entityId: activityId,
+          action: "edited",
+          byStaffId: uid,
+          summary: diff.length === 1 ?
+            `${first.field} ${first.from} → ${first.to}` :
+            `${first.field} ${first.from} → ${first.to} ` +
+              `(+${diff.length - 1} more)`,
+          changes: diff,
+        });
+      }
+
       // If the fee changed while a link is unpaid, re-issue the link at the
       // new amount so the customer never holds a superseded price.
       const unpaidLink = String(current.paymentMethod) === "payment_link" &&
@@ -13752,6 +13833,104 @@ exports.createLotExpenseEntry = onCall(
         updatedAt: now,
       });
       return {success: true, entryId: ref.id};
+    },
+);
+
+// Money entries are voided, never hard-deleted: the row stays for the record,
+// marked with who/when/why, excluded from totals, and it lands in the Needs-
+// attention feed so others see the change.
+exports.voidLotActivity = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const activityId = String(data.activityId || "").trim();
+      const reason = String(data.reason || "").trim().slice(0, 300);
+      const db = admin.firestore();
+      const ref = db.collection("lotActivities").doc(activityId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Activity not found");
+      const current = doc.data() || {};
+      const businessId = String(current.businessId || "");
+      await requireBusinessPermission(uid, businessId, "ledger");
+      if (current.voided === true) {
+        throw new HttpsError("failed-precondition", "Already voided.");
+      }
+      await ref.set({
+        voided: true,
+        voidedByStaffId: uid,
+        voidReason: reason,
+        voidedAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      await writeLotLedgerAudit({
+        businessId,
+        entityType: "activity",
+        entityId: activityId,
+        action: "voided",
+        byStaffId: uid,
+        summary: reason ?
+          `Voided — ${reason}` : "Voided",
+        changes: [],
+      });
+      return {success: true, activityId};
+    },
+);
+
+exports.voidLotExpenseEntry = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const entryId = String(data.entryId || "").trim();
+      const reason = String(data.reason || "").trim().slice(0, 300);
+      const db = admin.firestore();
+      const ref = db.collection("lotExpenseEntries").doc(entryId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Purchase not found");
+      const current = doc.data() || {};
+      const businessId = String(current.businessId || "");
+      await requireBusinessPermission(uid, businessId, "ledger");
+      if (current.voided === true) {
+        throw new HttpsError("failed-precondition", "Already voided.");
+      }
+      await ref.set({
+        voided: true,
+        voidedByStaffId: uid,
+        voidReason: reason,
+        voidedAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      await writeLotLedgerAudit({
+        businessId,
+        entityType: "expense_entry",
+        entityId: entryId,
+        action: "voided",
+        byStaffId: uid,
+        summary: reason ? `Voided — ${reason}` : "Voided",
+        changes: [],
+      });
+      return {success: true, entryId};
+    },
+);
+
+exports.acknowledgeLotLedgerEvent = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const eventId = String(request.data?.eventId || "").trim();
+      const db = admin.firestore();
+      const ref = db.collection("lotLedgerAudit").doc(eventId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Event not found");
+      await requireBusinessPermission(
+          uid, String(doc.data()?.businessId || ""), "ledger");
+      await ref.set({
+        acknowledged: true,
+        acknowledgedByStaffId: uid,
+        acknowledgedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {success: true};
     },
 );
 

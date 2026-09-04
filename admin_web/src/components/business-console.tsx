@@ -338,6 +338,12 @@ export function BusinessConsole({
     50,
   );
   const staff = useBusinessStaff(businessId, enabled, 200);
+  const ledgerEvents = useBusinessCollection(
+    "lotLedgerAudit",
+    businessId,
+    enabled && services.has("carParking"),
+    50,
+  );
 
   const businessName = text(business?.name ?? profile.businessName, "Business");
   const status = text(business?.status ?? business?.businessStatus, "pending");
@@ -518,6 +524,7 @@ export function BusinessConsole({
               businessId={businessId}
               business={business}
               attentionRows={attentionRows}
+              ledgerEvents={ledgerEvents.rows}
               onOpenTab={setActiveTab}
               cars={cars.rows}
               purchases={purchases.rows}
@@ -856,6 +863,7 @@ function TodayView({
   businessId,
   business,
   attentionRows,
+  ledgerEvents,
   onOpenTab,
   cars,
   purchases,
@@ -872,6 +880,7 @@ function TodayView({
   businessId: string;
   business: FirestoreRow | null;
   attentionRows: AttentionRow[];
+  ledgerEvents: FirestoreRow[];
   onOpenTab: (tab: BusinessTab) => void;
   cars: FirestoreRow[];
   purchases: FirestoreRow[];
@@ -885,6 +894,27 @@ function TodayView({
   onOpenSupport: () => void;
   canOpenSupport: boolean;
 }) {
+  const eventMs = (r: FirestoreRow) => {
+    const a = r.at as { toMillis?: () => number; seconds?: number } | undefined;
+    if (a?.toMillis) return a.toMillis();
+    if (a?.seconds) return a.seconds * 1000;
+    return 0;
+  };
+  const ledgerAlerts = ledgerEvents
+    .filter((e) => e.acknowledged !== true)
+    .sort((a, b) => eventMs(b) - eventMs(a))
+    .slice(0, 6);
+  async function dismissLedgerEvent(id: string) {
+    if (previewMode) return;
+    try {
+      await httpsCallable(functions, "acknowledgeLotLedgerEvent")({
+        eventId: id,
+      });
+    } catch {
+      // A failed dismiss is non-fatal; the event simply stays listed.
+    }
+  }
+
   const metrics = [
     {
       label: "Active listings",
@@ -954,9 +984,18 @@ function TodayView({
                 onOpen={() => onOpenTab(tab)}
               />
             ))}
-            {attentionRows.length === 0 && (
+            {attentionRows.length === 0 && ledgerAlerts.length === 0 && (
               <EmptyState text="No urgent operational items right now." />
             )}
+            {ledgerAlerts.map((ev) => (
+              <article className="data-row" key={String(ev.id)} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div className="clickable" style={{ flex: 1, cursor: "pointer" }} role="button" tabIndex={0} onClick={() => onOpenTab("ledger")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenTab("ledger"); } }}>
+                  <strong>Ledger {text(ev.action, "change")}</strong>
+                  <div><small>{text(ev.summary, "")}{text(ev.byStaffId, "") ? " · by staff" : ""} · {formatDate(ev.at)}</small></div>
+                </div>
+                <button className="ghost-button" type="button" onClick={() => dismissLedgerEvent(String(ev.id))}>Dismiss</button>
+              </article>
+            ))}
           </div>
         </Panel>
         <Panel title="Enabled services" icon={<Building2 size={18} />}>

@@ -597,6 +597,12 @@ service cloud.firestore {
       allow create: if lotLedgerWrite(request.resource.data.businessId);
       allow update, delete: if lotLedgerWrite(resource.data.businessId);
     }
+    // The change log (edits and voids) — read-only to a business's managers;
+    // every write is made by the ledger callables as admin.
+    match /lotLedgerAudit/{eventId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
 
     // A load that is "in transit" is inside a container, and the customer's
     // next question is always "where is it". The number can be a container,

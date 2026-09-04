@@ -50,6 +50,23 @@
       ]
     },
     {
+      "collectionGroup": "lotLedgerAudit",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "entityId", "order": "ASCENDING"},
+        {"fieldPath": "at", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "lotLedgerAudit",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "acknowledged", "order": "ASCENDING"},
+        {"fieldPath": "at", "order": "DESCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "destinationCountries",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

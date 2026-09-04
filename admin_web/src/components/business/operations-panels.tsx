@@ -5,8 +5,10 @@ import {
   collection,
   deleteField,
   doc,
+  getDocs,
   limit,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -6741,7 +6743,9 @@ type LotModal =
   | "types"
   | "chase"
   | "expense-line"
-  | "purchases";
+  | "purchases"
+  | "void"
+  | "history";
 
 function lotMonthKey(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -6809,6 +6813,10 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const [directStaff, setDirectStaff] = useState("");
   const [editingThreshold, setEditingThreshold] = useState(false);
   const [thresholdInput, setThresholdInput] = useState("");
+  const [voidTarget, setVoidTarget] = useState<{ type: "activity" | "expense"; id: string; label: string } | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+  const [historyRows, setHistoryRows] = useState<FirestoreRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const year = Number(month.split("-")[0]) || new Date().getUTCFullYear();
   const searching = search.trim().length > 0;
@@ -6897,7 +6905,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     const totals = new Map<string, { cents: number; count: number }>();
     for (const row of monthActivities) {
       const r = row as Record<string, unknown>;
-      if (String(r.paymentStatus) === "cancelled") continue;
+      if (String(r.paymentStatus) === "cancelled" || r.voided === true) continue;
       const key = String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? "custom" : String(r.activityTypeId);
       const prev = totals.get(key) ?? { cents: 0, count: 0 };
       totals.set(key, { cents: prev.cents + (Number(r.feeCents) || 0), count: prev.count + 1 });
@@ -6914,8 +6922,10 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const awaitingCents = useMemo(() => {
     let s = 0;
     for (const row of monthActivities) {
-      if (String((row as Record<string, unknown>).paymentStatus) === "awaiting_payment_link") {
-        s += Number((row as Record<string, unknown>).feeCents) || 0;
+      const r = row as Record<string, unknown>;
+      if (r.voided === true) continue;
+      if (String(r.paymentStatus) === "awaiting_payment_link") {
+        s += Number(r.feeCents) || 0;
       }
     }
     return s;
@@ -6925,6 +6935,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     let s = 0;
     for (const entry of expenseEntries.rows) {
       const e = entry as Record<string, unknown>;
+      if (e.voided === true) continue;
       if (String(e.month) === m || lotRowMonth(entry, "spentAt") === m) {
         s += Number(e.amountCents) || 0;
       }
@@ -6966,7 +6977,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     let s = 0;
     for (const row of activities.rows) {
       const r = row as Record<string, unknown>;
-      if (String(r.paymentStatus) === "cancelled") continue;
+      if (String(r.paymentStatus) === "cancelled" || r.voided === true) continue;
       if (lotRowMonth(row, "activityDate") === m) s += Number(r.feeCents) || 0;
     }
     return s;
@@ -6985,6 +6996,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     setDraftError("");
     setPurchaseFile(null);
     setVinHint("");
+    setVoidTarget(null);
+    setVoidReason("");
   }
 
   function openRecord() {
@@ -7134,6 +7147,38 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     });
   }
 
+  async function confirmVoid() {
+    if (!voidTarget) return;
+    const fn = voidTarget.type === "activity"
+      ? "voidLotActivity" : "voidLotExpenseEntry";
+    const payload = voidTarget.type === "activity"
+      ? { activityId: voidTarget.id, reason: voidReason.trim() }
+      : { entryId: voidTarget.id, reason: voidReason.trim() };
+    await runPanelAction(setBusy, setFlash, "Voided.", async () => {
+      await httpsCallable(functions, fn)(payload);
+      closeModal();
+    });
+  }
+
+  async function openHistory(entityId: string) {
+    setHistoryRows([]);
+    setHistoryLoading(true);
+    setModal("history");
+    try {
+      const snap = await getDocs(query(
+        collection(db, "lotLedgerAudit"),
+        where("entityId", "==", entityId),
+        orderBy("at", "desc"),
+        limit(50),
+      ));
+      setHistoryRows(snap.docs.map((d) => ({ id: d.id, ...d.data() } as FirestoreRow)));
+    } catch {
+      setHistoryRows([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   async function addExpenseLine() {
     if (!lineDraft.label.trim()) {
       setDraftError("Name the expense line.");
@@ -7265,16 +7310,24 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                   <div className="mini-table-head"><span>Vehicle</span><span>Customer</span><span>Activity</span><span>Date</span><span>Fee</span></div>
                   {scopedActivities.map((row) => {
                     const r = row as Record<string, unknown>;
+                    const voided = r.voided === true;
                     const label = text(r.activityTypeLabel, "") || (String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? text(r.customLabel, "One-off") : text(typeById.get(String(r.activityTypeId))?.label, "Activity"));
+                    const vehicle = [text(r.carYear, ""), text(r.carMake, ""), text(r.carModel, "")].filter(Boolean).join(" ") || "Vehicle";
                     return (
-                      <div className="mini-table-row" key={String(r.id)}>
-                        <span><strong>{[text(r.carYear, ""), text(r.carMake, ""), text(r.carModel, "")].filter(Boolean).join(" ") || "Vehicle"}</strong><small>{text(r.vinNumber, "")}</small></span>
+                      <div className="mini-table-row" key={String(r.id)} style={voided ? { opacity: 0.6 } : undefined}>
+                        <span><strong>{voided ? <s>{vehicle}</s> : vehicle}</strong><small>{text(r.vinNumber, "")}</small>{voided && <span className="status-pill danger compact">Voided</span>}</span>
                         <span><strong>{text(r.customerName, "")}</strong><small>{text(r.customerPhone, "")}</small></span>
                         <span><strong style={{ color: tintForType(String(r.activityTypeId)) }}>{label}</strong><small>{text(r.auctionHouse, "") ? `Auction: ${text(r.auctionHouse, "")}` : r.feeOverridden ? "Priced for this job" : "Standard rate"}</small></span>
-                        <span>{formatDate(r.activityDate)} <button className="ghost-button" type="button" onClick={() => openEdit(r)}><Pencil size={13} /> Edit</button></span>
+                        <span>{formatDate(r.activityDate)}
+                          {!voided && <button className="ghost-button" type="button" onClick={() => openEdit(r)}><Pencil size={13} /> Edit</button>}
+                          <button className="ghost-button" type="button" onClick={() => openHistory(String(r.id))}>History</button>
+                          {!voided && <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "activity", id: String(r.id), label: `${vehicle} · ${lotFormatCents(Number(r.feeCents) || 0)}` }); setVoidReason(""); setDraftError(""); setModal("void"); }}>Void</button>}
+                        </span>
                         <span>
-                          <strong>{lotFormatCents(Number(r.feeCents) || 0)}</strong>
+                          <strong>{voided ? <s>{lotFormatCents(Number(r.feeCents) || 0)}</s> : lotFormatCents(Number(r.feeCents) || 0)}</strong>
                           <small>{lotActivityPaymentLabel(r)}</small>
+                          {text(r.editedByStaffId, "") && <small>Edited by {staffName(text(r.editedByStaffId, ""))}</small>}
+                          {voided && <small>Voided by {staffName(text(r.voidedByStaffId, ""))}{text(r.voidReason, "") ? ` — ${text(r.voidReason, "")}` : ""}</small>}
                           {whoReceived(r) && <small>{whoReceived(r)}</small>}
                           {whoRecorded(r) && <small>{whoRecorded(r)}</small>}
                           {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase payment</button>)}
@@ -7324,7 +7377,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 {expenseLines.rows.map((line) => {
                   const l = line as Record<string, unknown>;
                   const metered = l.kind === "metered";
-                  const monthEntries = expenseEntries.rows.filter((e) => String((e as Record<string, unknown>).lineId) === String(l.id) && (String((e as Record<string, unknown>).month) === month || lotRowMonth(e, "spentAt") === month));
+                  const monthEntries = expenseEntries.rows.filter((e) => (e as Record<string, unknown>).voided !== true && String((e as Record<string, unknown>).lineId) === String(l.id) && (String((e as Record<string, unknown>).month) === month || lotRowMonth(e, "spentAt") === month));
                   const entriesTotal = monthEntries.reduce((s, e) => s + (Number((e as Record<string, unknown>).amountCents) || 0), 0);
                   const amount = metered ? entriesTotal : Number(l.recurringCents) || 0;
                   return (
@@ -7497,7 +7550,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             <div className="lst-modal-body">
               {expenseEntries.rows.filter((e) => String((e as Record<string, unknown>).lineId) === purchaseLineId && (String((e as Record<string, unknown>).month) === month || lotRowMonth(e, "spentAt") === month)).map((e) => {
                 const er = e as Record<string, unknown>;
-                return (<div key={String(er.id)} className="mini-table-row"><span><strong>{lotFormatCents(Number(er.amountCents) || 0)}</strong><small>{formatDate(er.spentAt)}</small></span><span>{text(er.proofUrl, "") ? <a className="status-pill good compact" href={text(er.proofUrl, "")} target="_blank" rel="noopener" title="Open the receipt"><Paperclip size={12} /> {text(er.proofFileName, "View receipt")}</a> : er.proofRequired ? <span className="status-pill danger compact">Proof missing</span> : <span className="status-pill compact">No proof needed</span>}</span><span><small>Paid by {staffName(text(er.paidByStaffId, "")) || "—"}</small><small>Recorded by {staffName(text(er.recordedByStaffId, "")) || "—"}</small>{text(er.note, "") && <small>{text(er.note, "")}</small>}</span></div>);
+                const evoided = er.voided === true;
+                return (<div key={String(er.id)} className="mini-table-row" style={evoided ? { opacity: 0.6 } : undefined}><span><strong>{evoided ? <s>{lotFormatCents(Number(er.amountCents) || 0)}</s> : lotFormatCents(Number(er.amountCents) || 0)}</strong><small>{formatDate(er.spentAt)}</small>{evoided && <span className="status-pill danger compact">Voided</span>}</span><span>{text(er.proofUrl, "") ? <a className="status-pill good compact" href={text(er.proofUrl, "")} target="_blank" rel="noopener" title="Open the receipt"><Paperclip size={12} /> {text(er.proofFileName, "View receipt")}</a> : er.proofRequired ? <span className="status-pill danger compact">Proof missing</span> : <span className="status-pill compact">No proof needed</span>}</span><span><small>Paid by {staffName(text(er.paidByStaffId, "")) || "—"}</small><small>Recorded by {staffName(text(er.recordedByStaffId, "")) || "—"}</small>{text(er.note, "") && <small>{text(er.note, "")}</small>}{evoided ? <small>Voided by {staffName(text(er.voidedByStaffId, ""))}{text(er.voidReason, "") ? ` — ${text(er.voidReason, "")}` : ""}</small> : <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "expense", id: String(er.id), label: `${lotFormatCents(Number(er.amountCents) || 0)} · ${text(purchaseLine?.label, "purchase")}` }); setVoidReason(""); setDraftError(""); setModal("void"); }}>Void</button>}</span></div>);
               })}
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
               <div style={{ borderTop: "2px solid var(--rule)", marginTop: 12, paddingTop: 12 }}>
@@ -7511,6 +7565,34 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
               </div>
             </div>
             <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Done</button><button className="lst-add" type="button" disabled={busy} onClick={addPurchase}>Add a purchase</button></footer>
+          </div>
+        </div>
+      )}
+
+      {modal === "void" && voidTarget && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+          <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head"><div><h3>Void this entry</h3><p>It stays on the record (struck through) and drops out of the totals — it is never deleted. Other staff see who voided it and why.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+            <div className="lst-modal-body">
+              <p className="panel-lede">{voidTarget.label}</p>
+              <label className="lst-field wide"><span>Reason (optional)</span><input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="e.g. entered twice, wrong amount" /></label>
+            </div>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={confirmVoid}>Void entry</button></footer>
+          </div>
+        </div>
+      )}
+
+      {modal === "history" && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+          <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head"><div><h3>Change history</h3><p>Every edit and void on this entry, most recent first.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+            <div className="lst-modal-body">
+              {historyLoading ? <p className="panel-lede">Loading…</p> : historyRows.length === 0 ? <EmptyState text="No changes recorded — nothing has been edited or voided." /> : historyRows.map((h) => {
+                const hr = h as Record<string, unknown>;
+                return (<div key={String(hr.id)} className="mini-table-row"><span><strong>{String(hr.action) === "voided" ? "Voided" : "Edited"}</strong><small>{formatDate(hr.at)}</small></span><span style={{ flex: 2 }}><small>{text(hr.summary, "")}</small><small>by {staffName(text(hr.byStaffId, ""))}</small></span></div>);
+              })}
+            </div>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" onClick={closeModal}>Done</button></footer>
           </div>
         </div>
       )}
