@@ -7582,7 +7582,17 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             <div className="lst-modal-body">
               {historyLoading ? <p className="panel-lede">Loading…</p> : historyRows.length === 0 ? <EmptyState text="No changes recorded — nothing has been edited or voided." /> : historyRows.map((h) => {
                 const hr = h as Record<string, unknown>;
-                return (<div key={String(hr.id)} className="mini-table-row"><span><strong>{String(hr.action) === "voided" ? "Voided" : "Edited"}</strong><small>{formatDate(hr.at)}</small></span><span style={{ flex: 2 }}><small>{text(hr.summary, "")}</small><small>by {staffName(text(hr.byStaffId, ""))}</small></span></div>);
+                const who = staffName(text(hr.byStaffId, "")) || "an unknown user";
+                const action = String(hr.action) === "voided" ? "Voided" : "Edited";
+                return (
+                  <div key={String(hr.id)} style={{ padding: "10px 0", borderBottom: "1px solid var(--rule)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span><strong>{action}</strong> · {who}</span>
+                      <small style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{formatDate(hr.at)}</small>
+                    </div>
+                    {text(hr.summary, "") && <div style={{ marginTop: 2 }}><small>{text(hr.summary, "")}</small></div>}
+                  </div>
+                );
               })}
             </div>
             <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" onClick={closeModal}>Done</button></footer>
