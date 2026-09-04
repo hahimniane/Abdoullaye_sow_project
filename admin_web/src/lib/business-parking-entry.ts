@@ -151,7 +151,9 @@ export function validateBusinessParkingEntryDraft(
   const start = trimmed(draft.startDate, 60);
   const end = trimmed(draft.endDate, 60);
   if (!start) errors.push("start_date_required");
-  if (!end) errors.push("end_date_required");
+  // The leave date is optional now: a stay with no end is open-ended and
+  // keeps accruing at the daily rate until staff bill or close it. Only an
+  // end that predates the start is still wrong.
   if (start && end && end < start) errors.push("end_date_before_start_date");
 
   return errors;
@@ -429,7 +431,8 @@ export function businessParkingDocumentType(row: ParkingRowLike): "receipt" | "i
 export function businessParkingEndLabel(row: ParkingRowLike, now: Date = new Date()) {
   const raw = (row as { parkingEndDate?: unknown })?.parkingEndDate;
   const end = toDateOrNull(raw);
-  if (!end) return "Ends";
+  // A null end is a deliberate open-ended stay, not a missing field.
+  if (!end) return "Open-ended";
   // Compare whole days: a parking that ends today has not ended yet.
   const endDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
