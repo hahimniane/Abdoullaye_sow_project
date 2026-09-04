@@ -58,6 +58,31 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
+import { useBusinessStaff } from "@/lib/business-data";
+import {
+  formatCents as lotFormatCents,
+  LOT_CUSTOM_ACTIVITY_ID,
+  LOT_AUCTION_HOUSES,
+  LOT_RECEIVED_VIA_OPTIONS,
+  DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS,
+  lotActivityPaymentLabel,
+  canChaseLotActivity,
+  emptyLotActivityDraft,
+  emptyLotActivityTypeDraft,
+  emptyLotExpenseEntryDraft,
+  validateLotActivityDraft,
+  validateLotActivityTypeDraft,
+  validateLotExpenseEntryDraft,
+  lotActivityPayload,
+  lotActivityTypePayload,
+  lotExpenseEntryPayload,
+  lotActivityMessage,
+  expenseProofRequired,
+  expenseProofMessage,
+  type LotActivityDraft,
+  type LotActivityTypeDraft,
+  type LotExpenseEntryDraft,
+} from "@/lib/lot-ledger";
 import {
   contentsFromRecord,
   quoteLensForBusiness,
@@ -156,7 +181,7 @@ import {
   carPurchaseCanMarkCompleted,
   carPurchaseCanMarkSold,
 } from "@/lib/car-purchase";
-import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
+import { asDate, currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import {
   normalizeTransportContainerNumber,
   transportFulfillmentErrorMessage,
@@ -4684,6 +4709,7 @@ export function ParkingPanel({
   focusRecordId = "",
 }: PanelProps) {
   const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
+  const parkingStaff = useBusinessStaff(businessId, Boolean(businessId && !previewMode), 200);
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -5234,6 +5260,7 @@ export function ParkingPanel({
                   </div>
                 </div>
               )}
+              <ParkingBillingActions row={row} staff={parkingStaff.rows} />
               <div className="pur-actions">
                 <label className="bar-field"><span>Update status</span>
                   <select value={status} disabled={busy} onChange={(event) => runPanelAction(setBusy, setMessage, "Parking status updated.", () => updateParkingStatus(row, event.target.value))}>
@@ -6688,4 +6715,820 @@ function statusLabel(value: unknown) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+// ===========================================================================
+// Lot ledger — activity log, expense ledger, and reports (design handoff).
+//
+// Read views derive from the business's own live collections
+// (lotActivityTypes, lotActivities, lotExpenseLines, lotExpenseEntries): the
+// metric cards, the type filter, the reports rows all read one source, never
+// a hand-maintained parallel list (UI-CONVENTIONS §3). The write flows —
+// record activity, activities & rates, chase payment, expense line, purchase
+// log — call the server callables that are the authority.
+// ===========================================================================
+
+type LotSegment = "activity" | "expenses" | "reports";
+type LotReportView = "month" | "year";
+type LotModal =
+  | ""
+  | "activity"
+  | "types"
+  | "chase"
+  | "expense-line"
+  | "purchases";
+
+function lotMonthKey(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function lotRowMonth(row: Record<string, unknown>, field: string): string {
+  const explicit = text((row as Record<string, unknown>)[`${field}Month`], "");
+  if (explicit) return explicit;
+  const date = asDate((row as Record<string, unknown>)[field]);
+  return date ? lotMonthKey(date) : "";
+}
+
+function lotMonthOptions(year: number): { value: string; label: string }[] {
+  const names = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  return names.map((label, i) => ({
+    value: `${year}-${String(i + 1).padStart(2, "0")}`,
+    label: `${label} ${year}`,
+  }));
+}
+
+function lotMonthLabel(month: string): string {
+  const [y] = month.split("-");
+  return lotMonthOptions(Number(y)).find((o) => o.value === month)?.label ?? month;
+}
+
+const LOT_TAG_TINTS = ["#0d9488", "#f59e0b", "#6366f1", "#db2777", "#0891b2"];
+
+export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) {
+  const enabled = Boolean(businessId && !previewMode);
+  const activityTypes = useBusinessRows("lotActivityTypes", businessId, enabled, 200);
+  const activities = useBusinessRows("lotActivities", businessId, enabled, 1000);
+  const expenseLines = useBusinessRows("lotExpenseLines", businessId, enabled, 200);
+  const expenseEntries = useBusinessRows("lotExpenseEntries", businessId, enabled, 2000);
+  const staff = useBusinessStaff(businessId, enabled, 200);
+  const business = useBusinessRows("businesses", businessId, false, 1);
+
+  const [segment, setSegment] = useState<LotSegment>("activity");
+  const [reportView, setReportView] = useState<LotReportView>("month");
+  const [month, setMonth] = useState<string>(() => lotMonthKey(new Date()));
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+
+  const [modal, setModal] = useState<LotModal>("");
+  const [editId, setEditId] = useState("");
+  const [chaseId, setChaseId] = useState("");
+  const [purchaseLineId, setPurchaseLineId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState("");
+  const [draftError, setDraftError] = useState("");
+
+  const [activityDraft, setActivityDraft] = useState<LotActivityDraft>(emptyLotActivityDraft);
+  const [newType, setNewType] = useState<LotActivityTypeDraft>(emptyLotActivityTypeDraft);
+  const [lineDraft, setLineDraft] = useState({ label: "", detail: "", kind: "metered", recurring: "" });
+  const [purchase, setPurchase] = useState<LotExpenseEntryDraft>(emptyLotExpenseEntryDraft);
+  const [purchaseFile, setPurchaseFile] = useState<File | null>(null);
+  const [chaseVia, setChaseVia] = useState("cash");
+  const [chaseStaff, setChaseStaff] = useState("");
+  const [directStaff, setDirectStaff] = useState("");
+
+  const year = Number(month.split("-")[0]) || new Date().getUTCFullYear();
+  const searching = search.trim().length > 0;
+  const thresholdCents = Number(
+    (business.rows[0] as Record<string, unknown>)?.expenseProofThresholdCents,
+  );
+  const proofThreshold = Number.isFinite(thresholdCents) && thresholdCents >= 0
+    ? thresholdCents
+    : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
+
+  const staffName = (id: string) => {
+    const row = staff.rows.find((s) => String((s as Record<string, unknown>).id) === id);
+    return row
+      ? text((row as Record<string, unknown>).fullName, "") ||
+        text((row as Record<string, unknown>).name, "") ||
+        text((row as Record<string, unknown>).email, id)
+      : id;
+  };
+
+  const orderedTypes = useMemo(
+    () =>
+      [...activityTypes.rows]
+        .filter((t) => (t as Record<string, unknown>).active !== false)
+        .sort(
+          (a, b) =>
+            (Number((a as Record<string, unknown>).sortOrder) || 0) -
+            (Number((b as Record<string, unknown>).sortOrder) || 0),
+        ),
+    [activityTypes.rows],
+  );
+
+  const typeById = useMemo(() => {
+    const map = new Map<string, Record<string, unknown>>();
+    for (const t of activityTypes.rows) {
+      map.set(String((t as Record<string, unknown>).id ?? ""), t as Record<string, unknown>);
+    }
+    return map;
+  }, [activityTypes.rows]);
+
+  const tintForType = (typeId: string) => {
+    if (typeId === LOT_CUSTOM_ACTIVITY_ID) return "#64748b";
+    const i = orderedTypes.findIndex(
+      (t) => String((t as Record<string, unknown>).id) === typeId,
+    );
+    return LOT_TAG_TINTS[i >= 0 ? i % LOT_TAG_TINTS.length : 0];
+  };
+
+  const knownTypeIds = orderedTypes.map((t) => String((t as Record<string, unknown>).id));
+
+  const scopedActivities = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return activities.rows.filter((row) => {
+      const r = row as Record<string, unknown>;
+      if (!searching && lotRowMonth(row, "activityDate") !== month) return false;
+      if (typeFilter === "custom" && String(r.activityTypeId) !== LOT_CUSTOM_ACTIVITY_ID) return false;
+      if (typeFilter !== "all" && typeFilter !== "custom" && String(r.activityTypeId) !== typeFilter) return false;
+      if (q) {
+        const hay = `${text(r.vinNumber, "")} ${text(r.customerName, "")} ${text(r.customerPhone, "")}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [activities.rows, month, searching, search, typeFilter]);
+
+  const monthActivities = useMemo(
+    () => activities.rows.filter((row) => lotRowMonth(row, "activityDate") === month),
+    [activities.rows, month],
+  );
+
+  const revenueByType = useMemo(() => {
+    const totals = new Map<string, { cents: number; count: number }>();
+    for (const row of monthActivities) {
+      const r = row as Record<string, unknown>;
+      if (String(r.paymentStatus) === "cancelled") continue;
+      const key = String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? "custom" : String(r.activityTypeId);
+      const prev = totals.get(key) ?? { cents: 0, count: 0 };
+      totals.set(key, { cents: prev.cents + (Number(r.feeCents) || 0), count: prev.count + 1 });
+    }
+    return totals;
+  }, [monthActivities]);
+
+  const monthRevenueCents = useMemo(() => {
+    let s = 0;
+    for (const v of revenueByType.values()) s += v.cents;
+    return s;
+  }, [revenueByType]);
+
+  const awaitingCents = useMemo(() => {
+    let s = 0;
+    for (const row of monthActivities) {
+      if (String((row as Record<string, unknown>).paymentStatus) === "awaiting_payment_link") {
+        s += Number((row as Record<string, unknown>).feeCents) || 0;
+      }
+    }
+    return s;
+  }, [monthActivities]);
+
+  const monthExpenseFor = (m: string) => {
+    let s = 0;
+    for (const entry of expenseEntries.rows) {
+      const e = entry as Record<string, unknown>;
+      if (String(e.month) === m || lotRowMonth(entry, "spentAt") === m) {
+        s += Number(e.amountCents) || 0;
+      }
+    }
+    for (const line of expenseLines.rows) {
+      const l = line as Record<string, unknown>;
+      if (l.kind === "fixed" && l.active !== false) {
+        const override = expenseEntries.rows.some(
+          (e) =>
+            String((e as Record<string, unknown>).lineId) === String(l.id) &&
+            String((e as Record<string, unknown>).month) === m,
+        );
+        if (!override) s += Number(l.recurringCents) || 0;
+      }
+    }
+    return s;
+  };
+
+  const monthExpenseCents = useMemo(() => monthExpenseFor(month), [expenseEntries.rows, expenseLines.rows, month]);
+  const netCents = monthRevenueCents - monthExpenseCents;
+
+  const topCards = useMemo(
+    () =>
+      [...revenueByType.entries()]
+        .filter(([k]) => k !== "custom")
+        .sort((a, b) => b[1].cents - a[1].cents)
+        .slice(0, 3)
+        .map(([k, v]) => ({
+          label: text(typeById.get(k)?.label, "Activity"),
+          cents: v.cents,
+          note: `${v.count} ${v.count === 1 ? "job" : "jobs"}`,
+        })),
+    [revenueByType, typeById],
+  );
+
+  // Year series for the reports charts.
+  const yearMonths = lotMonthOptions(year).map((o) => o.value);
+  const yearRevenueByMonth = yearMonths.map((m) => {
+    let s = 0;
+    for (const row of activities.rows) {
+      const r = row as Record<string, unknown>;
+      if (String(r.paymentStatus) === "cancelled") continue;
+      if (lotRowMonth(row, "activityDate") === m) s += Number(r.feeCents) || 0;
+    }
+    return s;
+  });
+  const yearExpenseByMonth = yearMonths.map((m) => monthExpenseFor(m));
+  const yearRevenue = yearRevenueByMonth.reduce((a, b) => a + b, 0);
+  const yearExpense = yearExpenseByMonth.reduce((a, b) => a + b, 0);
+  const yearNet = yearRevenue - yearExpense;
+
+  function closeModal() {
+    if (busy) return;
+    setModal("");
+    setEditId("");
+    setChaseId("");
+    setPurchaseLineId("");
+    setDraftError("");
+    setPurchaseFile(null);
+  }
+
+  function openRecord() {
+    setActivityDraft({ ...emptyLotActivityDraft, activityDate: `${month}-01` });
+    setEditId("");
+    setDraftError("");
+    setModal("activity");
+  }
+
+  function openEdit(row: Record<string, unknown>) {
+    setActivityDraft({
+      activityTypeId: String(row.activityTypeId ?? ""),
+      customLabel: text(row.customLabel, ""),
+      fee: String((Number(row.feeCents) || 0) / 100),
+      activityDate: lotRowMonth(row, "activityDate") ? `${lotRowMonth(row, "activityDate")}-01` : `${month}-01`,
+      customerName: text(row.customerName, ""),
+      customerPhone: text(row.customerPhone, ""),
+      customerEmail: text(row.customerEmail, ""),
+      carMake: text(row.carMake, ""),
+      carModel: text(row.carModel, ""),
+      carYear: text(row.carYear, ""),
+      vinNumber: text(row.vinNumber, ""),
+      auctionHouse: text(row.auctionHouse, ""),
+      paymentMethod: String(row.paymentMethod) === "direct" ? "direct" : "payment_link",
+      receivedVia: text(row.receivedVia, "cash") || "cash",
+      receivedByStaffId: text(row.receivedByStaffId, ""),
+    });
+    setEditId(String(row.id));
+    setDraftError("");
+    setModal("activity");
+  }
+
+  const selectedType = typeById.get(activityDraft.activityTypeId);
+
+  async function saveActivity() {
+    const errors = validateLotActivityDraft(activityDraft, [...knownTypeIds]);
+    if (errors.length) {
+      setDraftError(lotActivityMessage(errors));
+      return;
+    }
+    const payload = lotActivityPayload(activityDraft, businessId);
+    await runPanelAction(setBusy, setFlash, editId ? "Activity updated." : "Activity recorded.", async () => {
+      if (editId) {
+        await httpsCallable(functions, "updateLotActivity")({ activityId: editId, changes: payload });
+      } else {
+        await httpsCallable(functions, "createLotActivity")(payload);
+      }
+      setMonth(payload.activityDate.slice(0, 7) || month);
+      closeModal();
+    });
+  }
+
+  async function saveType(draft: LotActivityTypeDraft, typeId?: string) {
+    const errors = validateLotActivityTypeDraft(draft);
+    if (errors.length) {
+      setDraftError(errors.map((c) => (c === "activity_type_label_required" ? "Name the activity." : "Give it a fee. Use 0 if you price it job by job.")).join(" "));
+      return;
+    }
+    await runPanelAction(setBusy, setFlash, "Saved.", async () => {
+      await httpsCallable(functions, "upsertLotActivityType")({
+        businessId,
+        ...lotActivityTypePayload(draft, { typeId }),
+      });
+      if (!typeId) setNewType(emptyLotActivityTypeDraft);
+    });
+  }
+
+  async function removeType(typeId: string) {
+    await runPanelAction(setBusy, setFlash, "Removed.", async () => {
+      await httpsCallable(functions, "deleteLotActivityType")({ businessId, typeId });
+    });
+  }
+
+  async function chaseResend(activityId: string) {
+    await runPanelAction(setBusy, setFlash, "Link re-sent.", async () => {
+      await httpsCallable(functions, "resendLotActivityLink")({ activityId });
+      closeModal();
+    });
+  }
+
+  async function chaseRecordDirect(activityId: string) {
+    if (!chaseStaff) {
+      setDraftError("Say which staff member took the payment.");
+      return;
+    }
+    await runPanelAction(setBusy, setFlash, "Recorded as paid.", async () => {
+      await httpsCallable(functions, "recordLotActivityDirectPayment")({
+        activityId,
+        receivedByStaffId: chaseStaff,
+        receivedVia: chaseVia,
+      });
+      closeModal();
+    });
+  }
+
+  async function addExpenseLine() {
+    if (!lineDraft.label.trim()) {
+      setDraftError("Name the expense line.");
+      return;
+    }
+    await runPanelAction(setBusy, setFlash, "Expense line added.", async () => {
+      await httpsCallable(functions, "upsertLotExpenseLine")({
+        businessId,
+        label: lineDraft.label,
+        detail: lineDraft.detail,
+        kind: lineDraft.kind,
+        recurringCents: lineDraft.kind === "fixed" ? Math.round((Number(lineDraft.recurring) || 0) * 100) : 0,
+      });
+      setLineDraft({ label: "", detail: "", kind: "metered", recurring: "" });
+      closeModal();
+    });
+  }
+
+  async function addPurchase() {
+    const errors = validateLotExpenseEntryDraft(
+      { ...purchase, hasProof: Boolean(purchaseFile) },
+      proofThreshold,
+    );
+    if (errors.length) {
+      setDraftError(
+        errors
+          .map((c) =>
+            c === "expense_proof_required"
+              ? expenseProofMessage(proofThreshold)
+              : c === "expense_amount_required"
+                ? "Enter what was spent."
+                : c === "expense_date_required"
+                  ? "Choose the date of the purchase."
+                  : "Say who paid for it.",
+          )
+          .join(" "),
+      );
+      return;
+    }
+    await runPanelAction(setBusy, setFlash, "Purchase added.", async () => {
+      let proofUrl = "";
+      let proofFileName = "";
+      let proofContentType = "";
+      if (purchaseFile) {
+        const path = `lotExpenseProofs/${businessId}/${crypto.randomUUID()}-${purchaseFile.name}`;
+        const uploaded = await uploadBytes(storageRef(storage, path), purchaseFile);
+        proofUrl = await getDownloadURL(uploaded.ref);
+        proofFileName = purchaseFile.name;
+        proofContentType = purchaseFile.type;
+      }
+      await httpsCallable(functions, "createLotExpenseEntry")({
+        ...lotExpenseEntryPayload(purchase, { businessId, lineId: purchaseLineId, month }),
+        proofUrl,
+        proofFileName,
+        proofContentType,
+      });
+      setPurchase(emptyLotExpenseEntryDraft);
+      setPurchaseFile(null);
+      closeModal();
+    });
+  }
+
+  const staffOptions = staff.rows.map((s) => ({
+    id: String((s as Record<string, unknown>).id),
+    name: text((s as Record<string, unknown>).fullName, "") || text((s as Record<string, unknown>).name, "") || text((s as Record<string, unknown>).email, ""),
+  }));
+
+  const purchaseLine = expenseLines.rows.find((l) => String((l as Record<string, unknown>).id) === purchaseLineId) as Record<string, unknown> | undefined;
+  const purchaseCents = Math.round((Number(purchase.amount) || 0) * 100);
+
+  return (
+    <div className="lot-ledger">
+      <div className="section-intro">
+        <div>
+          <h2>Lot ledger</h2>
+          <p>Every job the lot billed for, what it costs to run, and the month-by-month picture — in one place.</p>
+        </div>
+        <div className="section-stats">
+          <div className="metric money"><span>{lotMonthLabel(month)} revenue</span><b>{lotFormatCents(monthRevenueCents)}</b></div>
+          <div className="metric"><span>{lotMonthLabel(month)} expenses</span><b>{lotFormatCents(monthExpenseCents)}</b></div>
+          <div className={`metric ${netCents < 0 ? "attention" : "good"}`}><span>Net</span><b>{lotFormatCents(netCents)}</b></div>
+        </div>
+      </div>
+
+      {flash && <div className="lst-form-error" role="status" style={{ background: "var(--mist)", color: "var(--brand-strong)" }}>{flash} <button className="ghost-button" type="button" onClick={() => setFlash("")}>Dismiss</button></div>}
+
+      <div className="service-segments" role="tablist" aria-label="Lot ledger sections">
+        {([["activity", "Activity"], ["expenses", "Expenses"], ["reports", "Reports"]] as [LotSegment, string][]).map(([id, label]) => (
+          <span key={id} role="button" tabIndex={0} className={`segment ${segment === id ? "active" : ""}`}
+            onClick={() => setSegment(id)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSegment(id); } }}>
+            {label}
+          </span>
+        ))}
+      </div>
+
+      {segment === "activity" && (
+        <>
+          <div className="metric-grid">
+            {topCards.map((c) => (
+              <div className="metric money" key={c.label}><span>{c.label}</span><b>{lotFormatCents(c.cents)}</b><small>{c.note}</small></div>
+            ))}
+            <div className="metric attention"><span>Awaiting payment</span><b>{lotFormatCents(awaitingCents)}</b><small>Website links sent and not settled</small></div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-header"><h3>Activity log</h3><span className="panel-count">{scopedActivities.length}</span></div>
+            <div className="panel-tools">
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by activity">
+                <option value="all">All activities</option>
+                {orderedTypes.map((t) => (
+                  <option key={String((t as Record<string, unknown>).id)} value={String((t as Record<string, unknown>).id)}>{text((t as Record<string, unknown>).label, "")}</option>
+                ))}
+                <option value="custom">One-off jobs</option>
+              </select>
+              <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
+                {lotMonthOptions(year).map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+              </select>
+              <input type="search" placeholder="VIN, customer, phone" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search activity" />
+              <button className="secondary-button" type="button" onClick={() => { setDraftError(""); setModal("types"); }}>Activities &amp; rates</button>
+              <button className="primary-button" type="button" onClick={openRecord}>Record activity</button>
+            </div>
+            <p className="panel-lede">{searching ? "Searching every month for this term." : `Showing ${lotMonthLabel(month)}. The figures above cover the same month.`}</p>
+            {scopedActivities.length === 0 ? (
+              <EmptyState text="No activity recorded for this scope yet." />
+            ) : (
+              <div className="mini-table">
+                <div style={{ minWidth: 760 }}>
+                  <div className="mini-table-head"><span>Vehicle</span><span>Customer</span><span>Activity</span><span>Date</span><span>Fee</span></div>
+                  {scopedActivities.map((row) => {
+                    const r = row as Record<string, unknown>;
+                    const label = text(r.activityTypeLabel, "") || (String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? text(r.customLabel, "One-off") : text(typeById.get(String(r.activityTypeId))?.label, "Activity"));
+                    return (
+                      <div className="mini-table-row" key={String(r.id)}>
+                        <span><strong>{[text(r.carYear, ""), text(r.carMake, ""), text(r.carModel, "")].filter(Boolean).join(" ") || "Vehicle"}</strong><small>{text(r.vinNumber, "")}</small></span>
+                        <span><strong>{text(r.customerName, "")}</strong><small>{text(r.customerPhone, "")}</small></span>
+                        <span><strong style={{ color: tintForType(String(r.activityTypeId)) }}>{label}</strong><small>{text(r.auctionHouse, "") ? `Auction: ${text(r.auctionHouse, "")}` : r.feeOverridden ? "Priced for this job" : "Standard rate"}</small></span>
+                        <span>{formatDate(r.activityDate)} <button className="ghost-button" type="button" onClick={() => openEdit(r)}><Pencil size={13} /> Edit</button></span>
+                        <span>
+                          <strong>{lotFormatCents(Number(r.feeCents) || 0)}</strong>
+                          <small>{lotActivityPaymentLabel(r)}</small>
+                          {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase payment</button>)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {segment === "expenses" && (
+        <div className="panel">
+          <div className="panel-header"><h3>Expenses</h3><span className="panel-count">{expenseLines.rows.length}</span></div>
+          <div className="panel-tools">
+            <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
+              {lotMonthOptions(year).map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+            </select>
+            <button className="primary-button" type="button" onClick={() => { setLineDraft({ label: "", detail: "", kind: "metered", recurring: "" }); setDraftError(""); setModal("expense-line"); }}>Add expense line</button>
+          </div>
+          <p className="panel-lede">Proof required from {lotFormatCents(proofThreshold)}. A line marked same every month fills itself in; a line that changes every month starts empty.</p>
+          {expenseLines.rows.length === 0 ? (
+            <EmptyState text="No expense lines yet." />
+          ) : (
+            <div className="mini-table">
+              <div style={{ minWidth: 680 }}>
+                <div className="mini-table-head"><span>Expense</span><span>Supplier / detail</span><span>How it behaves</span><span>{lotMonthLabel(month)}</span></div>
+                {expenseLines.rows.map((line) => {
+                  const l = line as Record<string, unknown>;
+                  const metered = l.kind === "metered";
+                  const monthEntries = expenseEntries.rows.filter((e) => String((e as Record<string, unknown>).lineId) === String(l.id) && (String((e as Record<string, unknown>).month) === month || lotRowMonth(e, "spentAt") === month));
+                  const entriesTotal = monthEntries.reduce((s, e) => s + (Number((e as Record<string, unknown>).amountCents) || 0), 0);
+                  const amount = metered ? entriesTotal : Number(l.recurringCents) || 0;
+                  return (
+                    <div className="mini-table-row" key={String(l.id)}>
+                      <span>
+                        {metered ? (<button className="ghost-button" type="button" onClick={() => { setPurchaseLineId(String(l.id)); setPurchase({ ...emptyLotExpenseEntryDraft, spentAt: `${month}-01` }); setPurchaseFile(null); setDraftError(""); setModal("purchases"); }}><strong>{text(l.label, "")}</strong></button>) : (<strong>{text(l.label, "")}</strong>)}
+                        <small>{metered ? (monthEntries.length > 0 ? `${monthEntries.length} purchase${monthEntries.length === 1 ? "" : "s"}` : `Waiting on ${lotMonthLabel(month)}'s bill`) : `${lotFormatCents(Number(l.recurringCents) || 0)} every month`}</small>
+                      </span>
+                      <span>{text(l.detail, "")}</span>
+                      <span>{metered ? "Changes every month" : "Same every month"}</span>
+                      <span style={metered && monthEntries.length === 0 ? { borderLeft: "3px solid var(--warning)", paddingLeft: 8 } : undefined}><strong>{lotFormatCents(amount)}</strong>{metered && (<button className="ghost-button" type="button" onClick={() => { setPurchaseLineId(String(l.id)); setPurchase({ ...emptyLotExpenseEntryDraft, spentAt: `${month}-01` }); setPurchaseFile(null); setDraftError(""); setModal("purchases"); }}><Plus size={13} /> Add purchase</button>)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {segment === "reports" && (
+        <div className="panel">
+          <div className="panel-header"><h3>Reports</h3></div>
+          <div className="service-segments" role="tablist" aria-label="Report view" style={{ marginTop: 4 }}>
+            {([["month", "Month by month"], ["year", "Year in summary"]] as [LotReportView, string][]).map(([id, label]) => (
+              <span key={id} role="button" tabIndex={0} className={`segment ${reportView === id ? "active" : ""}`} onClick={() => setReportView(id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setReportView(id); } }}>{label}</span>
+            ))}
+          </div>
+          <div className="metric-grid">
+            <div className="metric money"><span>Revenue {year}</span><b>{lotFormatCents(yearRevenue)}</b></div>
+            <div className="metric"><span>Expenses {year}</span><b>{lotFormatCents(yearExpense)}</b></div>
+            <div className={`metric ${yearNet < 0 ? "attention" : "good"}`}><span>Net profit</span><b>{lotFormatCents(yearNet)}</b></div>
+            <div className="metric"><span>Margin</span><b>{yearRevenue > 0 ? `${Math.round((yearNet / yearRevenue) * 100)}%` : "—"}</b></div>
+          </div>
+          {reportView === "month" ? (
+            <LotMonthlyChart revenue={yearRevenueByMonth} expenses={yearExpenseByMonth} year={year} />
+          ) : (
+            <LotYearSummary revenue={yearRevenue} expense={yearExpense} net={yearNet} />
+          )}
+        </div>
+      )}
+
+      {modal === "activity" && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+          <div className="lst-modal" style={{ maxWidth: 660 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head"><div><h3>{editId ? "Edit this activity" : "Record activity"}</h3><p>{editId ? "Changing the fee on an unpaid link re-issues it at the new amount." : "Log a job the lot billed for."}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+            <div className="lst-modal-body">
+              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              <div className="lst-form-grid">
+                <label className="lst-field wide"><span>What was done</span>
+                  <select value={activityDraft.activityTypeId} onChange={(e) => { const id = e.target.value; const t = typeById.get(id); setActivityDraft((d) => ({ ...d, activityTypeId: id, fee: t ? String((Number(t.defaultFeeCents) || 0) / 100) : d.fee })); }}>
+                    <option value="">Choose an activity</option>
+                    {orderedTypes.map((t) => (<option key={String((t as Record<string, unknown>).id)} value={String((t as Record<string, unknown>).id)}>{text((t as Record<string, unknown>).label, "")} — {lotFormatCents(Number((t as Record<string, unknown>).defaultFeeCents) || 0)}</option>))}
+                    <option value={LOT_CUSTOM_ACTIVITY_ID}>Something else — one-off</option>
+                  </select>
+                </label>
+                {activityDraft.activityTypeId === LOT_CUSTOM_ACTIVITY_ID && (
+                  <label className="lst-field wide"><span>Say what was done</span><input value={activityDraft.customLabel} onChange={(e) => setActivityDraft((d) => ({ ...d, customLabel: e.target.value }))} /></label>
+                )}
+                <label className="lst-field"><span>Fee</span><input inputMode="decimal" value={activityDraft.fee} onChange={(e) => setActivityDraft((d) => ({ ...d, fee: e.target.value }))} /><small className="lst-hint">From your activity list; edit to price this job.</small></label>
+                <label className="lst-field"><span>Date</span><input type="date" value={activityDraft.activityDate} onChange={(e) => setActivityDraft((d) => ({ ...d, activityDate: e.target.value }))} /></label>
+                <label className="lst-field"><span>VIN</span><input value={activityDraft.vinNumber} onChange={(e) => setActivityDraft((d) => ({ ...d, vinNumber: e.target.value }))} /></label>
+                <label className="lst-field"><span>Customer</span><input value={activityDraft.customerName} onChange={(e) => setActivityDraft((d) => ({ ...d, customerName: e.target.value }))} /></label>
+                <label className="lst-field"><span>Phone</span><input value={activityDraft.customerPhone} onChange={(e) => setActivityDraft((d) => ({ ...d, customerPhone: e.target.value }))} /></label>
+                <label className="lst-field"><span>Car make</span><input value={activityDraft.carMake} onChange={(e) => setActivityDraft((d) => ({ ...d, carMake: e.target.value }))} /></label>
+                <label className="lst-field"><span>Car model</span><input value={activityDraft.carModel} onChange={(e) => setActivityDraft((d) => ({ ...d, carModel: e.target.value }))} /></label>
+                <label className="lst-field"><span>Car year</span><input value={activityDraft.carYear} onChange={(e) => setActivityDraft((d) => ({ ...d, carYear: e.target.value }))} /></label>
+                {Boolean(selectedType?.needsAuctionHouse) && (
+                  <label className="lst-field"><span>Auction house</span><select value={activityDraft.auctionHouse} onChange={(e) => setActivityDraft((d) => ({ ...d, auctionHouse: e.target.value }))}><option value="">Choose</option>{LOT_AUCTION_HOUSES.map((h) => (<option key={h} value={h}>{h}</option>))}</select></label>
+                )}
+              </div>
+              <fieldset className="lst-fieldset">
+                <label className="lst-radio"><input type="radio" name="lotpay" checked={activityDraft.paymentMethod === "payment_link"} onChange={() => setActivityDraft((d) => ({ ...d, paymentMethod: "payment_link" }))} /><span>Charge through the website — a payment link goes to the customer and the money lands in your account</span></label>
+                {activityDraft.paymentMethod === "payment_link" && (
+                  <label className="lst-field wide"><span>Email</span><input value={activityDraft.customerEmail} onChange={(e) => setActivityDraft((d) => ({ ...d, customerEmail: e.target.value }))} /><small className="lst-hint">The link goes by text and email. Without one of the two there is nowhere to send it.</small></label>
+                )}
+                <label className="lst-radio"><input type="radio" name="lotpay" checked={activityDraft.paymentMethod === "direct"} onChange={() => setActivityDraft((d) => ({ ...d, paymentMethod: "direct" }))} /><span>Paid outside the website — cash, Zelle, a check. Record who took it.</span></label>
+                {activityDraft.paymentMethod === "direct" && (
+                  <div className="lst-form-grid">
+                    <label className="lst-field"><span>How it was paid</span><select value={activityDraft.receivedVia} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedVia: e.target.value }))}>{LOT_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}</select></label>
+                    <label className="lst-field"><span>Received by</span><select value={activityDraft.receivedByStaffId} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
+                  </div>
+                )}
+              </fieldset>
+            </div>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={saveActivity}>{busy ? "Saving..." : editId ? "Save changes" : "Record activity"}</button></footer>
+          </div>
+        </div>
+      )}
+
+      {modal === "types" && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+          <div className="lst-modal" style={{ maxWidth: 700 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head"><div><h3>Activities &amp; rates</h3><p>What this lot charges for.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+            <div className="lst-modal-body">
+              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              {orderedTypes.map((t) => {
+                const tr = t as Record<string, unknown>;
+                const uses = activities.rows.filter((a) => String((a as Record<string, unknown>).activityTypeId) === String(tr.id)).length;
+                return (<LotTypeRow key={String(tr.id)} row={tr} uses={uses} busy={busy} onSave={(d) => saveType(d, String(tr.id))} onRemove={() => removeType(String(tr.id))} />);
+              })}
+              <div style={{ borderTop: "2px solid var(--rule)", marginTop: 12, paddingTop: 12 }}>
+                <div className="lst-form-grid">
+                  <label className="lst-field"><span>Add an activity</span><input placeholder="e.g. Key cutting" value={newType.label} onChange={(e) => setNewType((d) => ({ ...d, label: e.target.value }))} /></label>
+                  <label className="lst-field"><span>Fee</span><input inputMode="decimal" placeholder="0" value={newType.defaultFee} onChange={(e) => setNewType((d) => ({ ...d, defaultFee: e.target.value }))} /></label>
+                  <label className="lst-field"><span>Auction field</span><input type="checkbox" checked={newType.needsAuctionHouse} onChange={(e) => setNewType((d) => ({ ...d, needsAuctionHouse: e.target.checked }))} /></label>
+                </div>
+                <button className="lst-add" type="button" disabled={busy} onClick={() => saveType(newType)}>Add</button>
+              </div>
+              <p className="lst-hint">A fee of 0 means staff type the price on every job. An activity already used by a recorded entry can be renamed but not removed, so past months keep adding up the way they did.</p>
+            </div>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" onClick={closeModal}>Done</button></footer>
+          </div>
+        </div>
+      )}
+
+      {modal === "chase" && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+          <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head"><div><h3>Chase payment</h3><p>Send the link again, or record the money if it came in another way.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+            <div className="lst-modal-body">
+              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              <div className="lst-form-grid">
+                <label className="lst-field"><span>How it was paid</span><select value={chaseVia} onChange={(e) => setChaseVia(e.target.value)}>{LOT_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}</select></label>
+                <label className="lst-field"><span>Received by</span><select value={chaseStaff} onChange={(e) => setChaseStaff(e.target.value)}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
+              </div>
+            </div>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={() => chaseRecordDirect(chaseId)}>Record as paid outside</button><button className="lst-add" type="button" disabled={busy} onClick={() => chaseResend(chaseId)}>Re-send the link</button></footer>
+          </div>
+        </div>
+      )}
+
+      {modal === "expense-line" && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+          <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head"><div><h3>Add expense line</h3><p>A cost the lot carries.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+            <div className="lst-modal-body">
+              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              <div className="lst-form-grid">
+                <label className="lst-field wide"><span>Name</span><input value={lineDraft.label} onChange={(e) => setLineDraft((d) => ({ ...d, label: e.target.value }))} placeholder="e.g. Lot rent" /></label>
+                <label className="lst-field wide"><span>Supplier / detail</span><input value={lineDraft.detail} onChange={(e) => setLineDraft((d) => ({ ...d, detail: e.target.value }))} /></label>
+                <label className="lst-field"><span>How it behaves</span><select value={lineDraft.kind} onChange={(e) => setLineDraft((d) => ({ ...d, kind: e.target.value }))}><option value="metered">Changes every month</option><option value="fixed">Same every month</option></select></label>
+                {lineDraft.kind === "fixed" && (<label className="lst-field"><span>Monthly amount</span><input inputMode="decimal" value={lineDraft.recurring} onChange={(e) => setLineDraft((d) => ({ ...d, recurring: e.target.value }))} /></label>)}
+              </div>
+            </div>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={addExpenseLine}>Add line</button></footer>
+          </div>
+        </div>
+      )}
+
+      {modal === "purchases" && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+          <div className="lst-modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head"><div><h3>{text(purchaseLine?.label, "Purchases")} — {lotMonthLabel(month)}</h3><p>Every purchase for this line this month.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+            <div className="lst-modal-body">
+              {expenseEntries.rows.filter((e) => String((e as Record<string, unknown>).lineId) === purchaseLineId && (String((e as Record<string, unknown>).month) === month || lotRowMonth(e, "spentAt") === month)).map((e) => {
+                const er = e as Record<string, unknown>;
+                return (<div key={String(er.id)} className="mini-table-row"><span><strong>{lotFormatCents(Number(er.amountCents) || 0)}</strong><small>{formatDate(er.spentAt)}</small></span><span>{text(er.proofUrl, "") ? <span className="status-pill good compact">{text(er.proofFileName, "Receipt")}</span> : er.proofRequired ? <span className="status-pill danger compact">Proof missing</span> : <span className="status-pill compact">No proof needed</span>}</span><span><small>Paid by {staffName(text(er.paidByStaffId, ""))}</small><small>{text(er.note, "")}</small></span></div>);
+              })}
+              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              <div style={{ borderTop: "2px solid var(--rule)", marginTop: 12, paddingTop: 12 }}>
+                <div className="lst-form-grid">
+                  <label className="lst-field"><span>Amount</span><input inputMode="decimal" value={purchase.amount} onChange={(e) => setPurchase((d) => ({ ...d, amount: e.target.value }))} /></label>
+                  <label className="lst-field"><span>Date</span><input type="date" value={purchase.spentAt} onChange={(e) => setPurchase((d) => ({ ...d, spentAt: e.target.value }))} /></label>
+                  <label className="lst-field"><span>Paid by</span><select value={purchase.paidByStaffId} onChange={(e) => setPurchase((d) => ({ ...d, paidByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
+                  <label className="lst-field wide"><span>Note</span><input value={purchase.note} onChange={(e) => setPurchase((d) => ({ ...d, note: e.target.value }))} /></label>
+                  <label className="lst-field wide"><span>Receipt</span><input type="file" accept="image/*,application/pdf" onChange={(e) => setPurchaseFile(e.target.files?.[0] ?? null)} /><small className="lst-hint">{expenseProofRequired(purchaseCents, proofThreshold) ? `This is at or above ${lotFormatCents(proofThreshold)}, so a receipt is required.` : `Below ${lotFormatCents(proofThreshold)} — a receipt is optional, attach one anyway if you have it.`}</small></label>
+                </div>
+              </div>
+            </div>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Done</button><button className="lst-add" type="button" disabled={busy} onClick={addPurchase}>Add a purchase</button></footer>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LotTypeRow({ row, uses, busy, onSave, onRemove }: { row: Record<string, unknown>; uses: number; busy: boolean; onSave: (d: LotActivityTypeDraft) => void; onRemove: () => void }) {
+  const [label, setLabel] = useState(text(row.label, ""));
+  const [fee, setFee] = useState(String((Number(row.defaultFeeCents) || 0) / 100));
+  const [needsAuction, setNeedsAuction] = useState(Boolean(row.needsAuctionHouse));
+  return (
+    <div className="lst-form-grid" style={{ alignItems: "end", marginBottom: 8 }}>
+      <label className="lst-field"><span>Name</span><input value={label} onChange={(e) => setLabel(e.target.value)} /></label>
+      <label className="lst-field"><span>Fee</span><input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} /></label>
+      <label className="lst-field"><span>Auction field</span><input type="checkbox" checked={needsAuction} onChange={(e) => setNeedsAuction(e.target.checked)} /></label>
+      <div><small className="lst-hint">{uses > 0 ? `${uses} ${uses === 1 ? "entry uses" : "entries use"} this` : "Not used yet"}</small></div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => onSave({ label, defaultFee: fee, needsAuctionHouse: needsAuction })}>Save</button>
+        <button className="ghost-button" type="button" disabled={busy} onClick={onRemove}>Remove</button>
+      </div>
+    </div>
+  );
+}
+
+function LotMonthlyChart({ revenue, expenses, year }: { revenue: number[]; expenses: number[]; year: number }) {
+  const w = 720; const h = 240; const pad = 34;
+  const max = Math.max(1, ...revenue, ...expenses);
+  const bw = (w - pad * 2) / 12;
+  const y = (v: number) => h - pad - (v / max) * (h - pad * 2);
+  let running = 0;
+  const netPts = revenue.map((r, i) => { running += r - expenses[i]; return running; });
+  const netMax = Math.max(1, ...netPts.map((n) => Math.abs(n)));
+  const ny = (v: number) => h / 2 - (v / netMax) * (h / 2 - pad);
+  const months = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+  return (
+    <div className="mini-table"><div style={{ minWidth: w }}>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label={`Monthly revenue and expenses for ${year}`}>
+        {[0, 0.25, 0.5, 0.75, 1].map((g) => (<g key={g}><line x1={pad} x2={w - pad} y1={y(max * g)} y2={y(max * g)} stroke="#d7e7e5" /><text x={4} y={y(max * g) + 4} fontSize="9" fill="#64748b">{`$${Math.round((max * g) / 100)}`}</text></g>))}
+        {revenue.map((r, i) => (<g key={i}><title>{`${months[i]}: rev $${(r / 100).toFixed(0)}, exp $${(expenses[i] / 100).toFixed(0)}`}</title><rect x={pad + i * bw + 4} y={y(r)} width={bw / 2 - 4} height={h - pad - y(r)} fill="#0d9488" /><rect x={pad + i * bw + bw / 2} y={y(expenses[i])} width={bw / 2 - 4} height={h - pad - y(expenses[i])} fill="#f59e0b" /><text x={pad + i * bw + bw / 2} y={h - pad + 12} fontSize="9" fill="#64748b" textAnchor="middle">{months[i]}</text></g>))}
+        <line x1={pad} x2={w - pad} y1={ny(0)} y2={ny(0)} stroke="#94a3b8" strokeDasharray="3 3" />
+        <polyline fill="none" stroke="#b42318" strokeWidth="2" points={netPts.map((n, i) => `${pad + i * bw + bw / 2},${ny(n)}`).join(" ")} />
+      </svg>
+      <p className="lst-hint">Revenue (teal), expenses (amber), running net (red).</p>
+    </div></div>
+  );
+}
+
+function LotYearSummary({ revenue, expense, net }: { revenue: number; expense: number; net: number }) {
+  const max = Math.max(1, revenue, expense, Math.abs(net));
+  const bar = (label: string, v: number, color: string) => (
+    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 90px", alignItems: "center", gap: 8, marginBottom: 6 }}>
+      <span>{label}</span>
+      <div style={{ background: "var(--paper-soft)", borderRadius: 6 }}><div style={{ width: `${(Math.abs(v) / max) * 100}%`, background: color, height: 16, borderRadius: 6 }} /></div>
+      <strong style={{ textAlign: "right" }}>{lotFormatCents(v)}</strong>
+    </div>
+  );
+  return (<div>{bar("Revenue", revenue, "#0d9488")}{bar("Expenses", expense, "#f59e0b")}{bar("Net", net, net < 0 ? "#dc2626" : "#059669")}</div>);
+}
+
+// The open-ended parking actions: bill through today, record an off-platform
+// payment, and close the stay. Rendered per parked car; the accrual is
+// computed from billedThroughDate ?? parkingDate to today at the daily rate.
+function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: FirestoreRow[] }) {
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState("");
+  const [receivedBy, setReceivedBy] = useState("");
+  const r = row as Record<string, unknown>;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const asMs = (v: unknown) => {
+    const d = asDate(v);
+    return d ? d.getTime() : null;
+  };
+  const dailyCents = Math.round((Number(r.dailyRate) || 0) * 100);
+  const fromMs = asMs(r.billedThroughDate) ?? asMs(r.parkingDate ?? r.createdAt);
+  const days = fromMs ? Math.max(0, Math.floor((Date.now() - fromMs) / dayMs)) : 0;
+  const unbilledCents = days * dailyCents;
+  const openEnded = !r.parkingEndDate;
+  const settled = ["succeeded", "paid"].includes(String(r.paymentStatus));
+  const billedThrough = asDate(r.billedThroughDate);
+  const staffOptions = staff.map((s) => ({
+    id: String((s as Record<string, unknown>).id),
+    name: text((s as Record<string, unknown>).fullName, "") || text((s as Record<string, unknown>).name, "") || text((s as Record<string, unknown>).email, ""),
+  }));
+
+  const note = unbilledCents > 0
+    ? billedThrough
+      ? `Accruing since ${formatDate(r.billedThroughDate)}. Bill it whenever you like — the car stays in place.`
+      : "Nothing billed yet. Bill through today to send the first link."
+    : "Everything up to today has been billed.";
+
+  async function bill() {
+    await runPanelAction(setBusy, setFlash, "Payment link sent.", async () => {
+      await httpsCallable(functions, "billParkingThroughToday")({ parkedCarId: row.id });
+    });
+  }
+  async function received() {
+    if (!receivedBy) { setFlash("Say who took the money so it can be reconciled."); return; }
+    await runPanelAction(setBusy, setFlash, "Recorded as received.", async () => {
+      await httpsCallable(functions, "recordParkingPaymentReceived")({ parkedCarId: row.id, receivedByStaffId: receivedBy });
+    });
+  }
+  async function close() {
+    await runPanelAction(setBusy, setFlash, "Stay closed.", async () => {
+      await httpsCallable(functions, "closeParkingStay")({ parkedCarId: row.id });
+    });
+  }
+
+  return (
+    <div className="pur-info" style={{ display: "block" }}>
+      <div className="row-detail-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+        <div><span>Leaves</span><b>{openEnded ? "Open-ended" : formatDate(r.parkingEndDate)}</b></div>
+        <div><span>Billed through</span><b>{billedThrough ? formatDate(r.billedThroughDate) : "Nothing yet"}</b></div>
+        <div><span>Unbilled</span><b>{days} {days === 1 ? "day" : "days"} · {lotFormatCents(unbilledCents)}</b></div>
+      </div>
+      <p className="lst-hint">{note}</p>
+      {flash && <div className="lst-hint" role="status">{flash}</div>}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <button className="primary-button" type="button" disabled={busy || unbilledCents <= 0} onClick={bill}>
+          {unbilledCents > 0 ? `Bill ${lotFormatCents(unbilledCents)} through today` : "Nothing to bill"}
+        </button>
+        {!settled && billedThrough && (
+          <>
+            <select value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} aria-label="Received by">
+              <option value="">Received by…</option>
+              {staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+            </select>
+            <button className="secondary-button" type="button" disabled={busy} onClick={received}>Payment received in person</button>
+          </>
+        )}
+        {openEnded && (<button className="ghost-button" type="button" disabled={busy} onClick={close}>Car left today</button>)}
+      </div>
+    </div>
+  );
 }

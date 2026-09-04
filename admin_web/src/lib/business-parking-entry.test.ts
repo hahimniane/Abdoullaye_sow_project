@@ -54,8 +54,25 @@ test("an empty draft reports every problem at once, not just the first", () => {
     "car_model_required",
     "car_year_required",
     "start_date_required",
-    "end_date_required",
   ]);
+});
+
+test("the leave date is optional: an open-ended stay is not an error", () => {
+  // A stay with no end keeps accruing at the daily rate until it is billed
+  // or closed, so the entry form must accept it.
+  const errors = validateBusinessParkingEntryDraft(
+    { ...validDraft, endDate: "" },
+    "biz-1",
+  );
+  assert.deepEqual(errors, []);
+  // An end that predates the start is still wrong.
+  assert.deepEqual(
+    validateBusinessParkingEntryDraft(
+      { ...validDraft, startDate: "2026-08-10", endDate: "2026-08-01" },
+      "biz-1",
+    ),
+    ["end_date_before_start_date"],
+  );
 });
 
 test("email is optional, but a malformed one is refused", () => {
@@ -608,7 +625,9 @@ test("a parking that has not finished says Ends, not Ended", () => {
     businessParkingEndLabel({ parkingEndDate: { toDate: () => new Date("2026-08-21T12:00:00Z") } }, now),
     "Ends",
   );
-  assert.equal(businessParkingEndLabel({}, now), "Ends");
+  // A null / missing end is now a deliberate open-ended stay.
+  assert.equal(businessParkingEndLabel({}, now), "Open-ended");
+  assert.equal(businessParkingEndLabel({ parkingEndDate: null }, now), "Open-ended");
   assert.match(panelSource, /businessParkingEndLabel\(row\)/);
 });
 

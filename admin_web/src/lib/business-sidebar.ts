@@ -8,6 +8,7 @@ export type BusinessTab =
   | "freight"
   | "transport"
   | "parking"
+  | "ledger"
   | "destinations"
   | "people"
   | "reviews"
@@ -52,6 +53,7 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   {id: "freight", label: "Freight", description: "Parcel shipping queue", group: "transport", service: "freight", permission: "freight"},
   {id: "transport", label: "Transport", description: "Vehicle moves", group: "transport", service: "carTransport", permission: "transport"},
   {id: "parking", label: "Parking", description: "Stored cars", group: "transport", service: "carParking", permission: "parking"},
+  {id: "ledger", label: "Lot ledger", description: "Activity, expenses, reports", group: "transport", service: "carParking", permission: "ledger"},
   {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "manage", permission: "reviews"},
   {id: "cases", label: "Support", description: "Customers and help", group: "manage", permission: "support"},
   {id: "growth", label: "Growth", description: "Plan and advisor", group: "manage", permission: "growth"},

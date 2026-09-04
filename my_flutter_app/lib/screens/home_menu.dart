@@ -22,6 +22,7 @@ import '../utils/business_permissions.dart';
 import 'business_assistant_screen.dart';
 import 'business_transport_screen.dart';
 import 'park_car_screen.dart';
+import 'lot_ledger_screen.dart';
 
 export '../services/business_service_overview.dart' show ServiceCategory;
 
@@ -683,6 +684,12 @@ class _ServicesSection extends StatelessWidget {
     final canRecordParkedCar = auth.hasBusinessPermission(
       BusinessPermission.parking,
     );
+    // The lot ledger — activity and expenses from the yard — is its own
+    // permission, mirroring the console's `ledger` tab.
+    final ledgerBusinessId = auth.businessId ?? '';
+    final canUseLotLedger =
+        auth.hasBusinessPermission(BusinessPermission.ledger) &&
+        ledgerBusinessId.isNotEmpty;
     // Same two gates as the Car Transport tile itself: the business offers
     // transport and this person holds the transport permission. Everything
     // behind the button - `submitTransportQuote`, `withdrawTransportQuote`,
@@ -747,6 +754,25 @@ class _ServicesSection extends StatelessWidget {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => const ParkCarScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+          if (canUseLotLedger) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const Key('open-lot-ledger'),
+                icon: const Icon(Icons.receipt_long),
+                label: const Text('Lot ledger'),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          LotLedgerScreen(businessId: ledgerBusinessId),
                     ),
                   );
                 },

@@ -175,7 +175,9 @@ function normalizeBusinessParkingEntry(raw) {
   const startDate = parseEntryDate(source.startDate);
   const endDate = parseEntryDate(source.endDate);
   if (!startDate) errors.push("start_date_required");
-  if (!endDate) errors.push("end_date_required");
+  // The leave date is optional: a null end is an open-ended stay that keeps
+  // accruing at the daily rate until billed or closed. Only an end before the
+  // start is still wrong.
   if (startDate && endDate && endDate.getTime() < startDate.getTime()) {
     errors.push("end_date_before_start_date");
   }

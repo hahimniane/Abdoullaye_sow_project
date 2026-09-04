@@ -287,6 +287,21 @@ const {
   normalizeBusinessParkingEntry,
 } = require("./business_parking_entry");
 const {
+  LOT_ACTIVITY_PAYMENT_STATUS,
+  LOT_ACTIVITY_PAYMENT_TYPE,
+  LOT_CUSTOM_ACTIVITY_ID,
+  DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS,
+  validateLotActivityType,
+  lotActivityTypeRecord,
+  validateLotActivity,
+  lotActivityRecord,
+  lotActivityInitialStatus,
+  validateLotExpenseEntry,
+  lotExpenseEntryRecord,
+  validateLotExpenseLine,
+  normalizeReceivedVia: lotNormalizeReceivedVia,
+} = require("./lot_ledger");
+const {
   sendFirebasePasswordSetupEmail,
 } = require("./firebase_auth_email");
 const {
@@ -11668,9 +11683,12 @@ exports.parkingPaymentLink = onRequest(
           .limit(1)
           .get();
       if (matches.empty) {
+        // The same durable /p link also carries lot-activity tokens, whose
+        // records live in lotActivities rather than parkedCars.
+        if (await resolveLotActivityPaymentLink(db, token, res)) return;
         return res.status(404).send(parkingPaymentLinkPage({
           title: "Link not found",
-          message: "This payment link is not valid. Ask the parking " +
+          message: "This payment link is not valid. Ask the " +
             "business to send you a new one.",
         }));
       }
@@ -13082,6 +13100,861 @@ async function computeFreightPickupFee({config, pickup, key}) {
   const fee = distancePickupFee({config, distanceKm});
   return {fee, model: "distance", distanceKm, borough: null};
 }
+
+// ===========================================================================
+// Lot ledger — activity catalogue, recorded activities, expenses (authority).
+//
+// Mirrors business_parking_entry.js: the pure rules live in lot_ledger.js and
+// the Firestore/Stripe/commission wiring stays here. Payment links reuse the
+// parking durable-link machinery (parkingPaymentLinkUrl + the /p resolver,
+// generalised to lotActivities) so a link stays valid until it is paid or
+// cancelled — never a raw Stripe URL (feedback_payment_link_rule).
+// ===========================================================================
+
+const LOT_LEDGER_MESSAGES = Object.freeze({
+  activity_type_invalid: "Choose what was done.",
+  activity_type_label_required: "Name the activity.",
+  activity_type_fee_invalid: "Give it a fee. Use 0 if you price it job by job.",
+  custom_label_required: "Say what was done.",
+  fee_required: "Enter the fee charged.",
+  activity_date_required: "Choose the date.",
+  customer_name_required: "Enter the customer's name.",
+  vin_required: "Enter the VIN.",
+  payment_method_invalid: "Choose how this gets paid.",
+  payment_link_contact_required:
+    "A payment link needs a phone number or an email address.",
+  received_by_required: "Say which staff member took the payment.",
+  expense_amount_required: "Enter what was spent.",
+  expense_date_required: "Choose the date of the purchase.",
+  expense_paid_by_required: "Say who paid for it.",
+  expense_proof_required:
+    "Attach a receipt: this business asks for proof at this amount and above.",
+  expense_line_label_required: "Name the expense line.",
+  expense_line_kind_invalid: "Choose how this expense behaves.",
+});
+
+function lotLedgerMessage(errors) {
+  return errors.map((code) => LOT_LEDGER_MESSAGES[code] || code).join(" ");
+}
+
+function lotActivityMidday(value) {
+  const raw = String(value || "").trim();
+  const date = raw ? new Date(raw) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+/**
+ * @param {Date} date A parsed activity/spend date.
+ * @return {string} The yyyy-mm month key.
+ */
+function lotMonthKeyOf(date) {
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${m}`;
+}
+
+const LOT_LINK_SECRETS = [
+  stripeSecretKey,
+  twilioAccountSid,
+  twilioAuthToken,
+  twilioFromNumber,
+];
+
+async function loadBusinessExpenseThreshold(db, businessId) {
+  const doc = await db.collection("businesses").doc(businessId).get();
+  const raw = doc.exists ? doc.data()?.expenseProofThresholdCents : undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ?
+    n : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
+}
+
+exports.upsertLotActivityType = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, "ledger");
+      const errors = validateLotActivityType(data);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", lotLedgerMessage(errors));
+      }
+      const db = admin.firestore();
+      const record = lotActivityTypeRecord(data);
+      const now = FirestoreFieldValue.serverTimestamp();
+      const typeId = String(data.typeId || "").trim();
+      if (typeId) {
+        const ref = db.collection("lotActivityTypes").doc(typeId);
+        const existing = await ref.get();
+        if (!existing.exists || existing.data()?.businessId !== businessId) {
+          throw new HttpsError("not-found", "Activity type not found");
+        }
+        await ref.set({...record, businessId, updatedAt: now}, {merge: true});
+        return {typeId, ...record};
+      }
+      const ref = db.collection("lotActivityTypes").doc();
+      await ref.set({...record, businessId, createdAt: now, updatedAt: now});
+      return {typeId: ref.id, ...record};
+    },
+);
+
+exports.deleteLotActivityType = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const typeId = String(data.typeId || "").trim();
+      await requireBusinessPermission(uid, businessId, "ledger");
+      const db = admin.firestore();
+      const ref = db.collection("lotActivityTypes").doc(typeId);
+      const doc = await ref.get();
+      if (!doc.exists || doc.data()?.businessId !== businessId) {
+        throw new HttpsError("not-found", "Activity type not found");
+      }
+      // Refuse deletion when any entry references it; report the count so the
+      // console can say "rename it instead".
+      const used = await db.collection("lotActivities")
+          .where("businessId", "==", businessId)
+          .where("activityTypeId", "==", typeId)
+          .limit(50)
+          .get();
+      if (!used.empty) {
+        const label = String(doc.data()?.label || "This activity");
+        throw new HttpsError(
+            "failed-precondition",
+            `“${label}” is on ${used.size} recorded ` +
+              `${used.size === 1 ? "entry" : "entries"}, so it stays in the ` +
+              "list. Rename it instead.",
+            {reason: "activity_type_in_use", count: used.size},
+        );
+      }
+      await ref.delete();
+      return {typeId, deleted: true};
+    },
+);
+
+/**
+ * Recompute the fee from the type's rate unless staff typed something else.
+ * The client can never silently price a job.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The scoped business.
+ * @param {object} data The activity payload (activityTypeId, feeCents).
+ * @return {Promise<object>} {feeCents, feeOverridden, label, knownTypeIds}.
+ */
+async function resolveLotActivityFee(db, businessId, data) {
+  const typeId = String(data.activityTypeId || "").trim();
+  const requested = Math.max(0, Math.round(Number(data.feeCents) || 0));
+  if (typeId === LOT_CUSTOM_ACTIVITY_ID) {
+    return {
+      feeCents: requested, feeOverridden: true, label: "", knownTypeIds: [],
+    };
+  }
+  const typeDoc = await db.collection("lotActivityTypes").doc(typeId).get();
+  if (!typeDoc.exists || typeDoc.data()?.businessId !== businessId) {
+    return {
+      feeCents: requested, feeOverridden: false, label: "",
+      knownTypeIds: [],
+    };
+  }
+  const t = typeDoc.data() || {};
+  const rate = Math.max(0, Math.round(Number(t.defaultFeeCents) || 0));
+  return {
+    feeCents: requested,
+    feeOverridden: requested !== rate,
+    label: String(t.label || ""),
+    knownTypeIds: [typeId],
+  };
+}
+
+async function issueLotActivityLink({
+  db, activityRef, businessId, business, activityId, feeCents, customerEmail,
+  customerPhone, trackingCode,
+}) {
+  const pricingDoc = await db.collection("shipmentPricing")
+      .doc("serviceFees").get();
+  const platformFeePct = servicePlatformFeePctForBusiness(
+      pricingDoc.data(), business, ["lotActivityPlatformFeePct"],
+  );
+  const payoutFields = servicePayoutFields({
+    grossCents: feeCents,
+    platformFeePct,
+    connectReady: !!business.stripeAccountId &&
+      business.payoutsEnabled === true,
+    business,
+  });
+  const session = await createStripeCustomerCheckoutSession({
+    amount: feeCents,
+    currency: SHIPMENT_CURRENCY,
+    customerEmail,
+    productName: "Laawol lot service",
+    recordId: activityId,
+    idempotencySeed: `lot-activity:${activityId}:${feeCents}`,
+    connectedAccountId: payoutFields.stripeChargeType === "direct" ?
+      payoutFields.stripeConnectedAccountId || undefined : undefined,
+    applicationFeeAmount: payoutFields.stripeChargeType === "direct" ?
+      clampedApplicationFeeAmount(payoutFields.platformFeeCents, feeCents) :
+      undefined,
+    metadata: {
+      paymentType: LOT_ACTIVITY_PAYMENT_TYPE,
+      activityId,
+      businessId,
+      trackingCode,
+    },
+    ...businessParkingReturnUrls(trackingCode),
+  });
+  const token = crypto.randomBytes(24).toString("base64url");
+  const durableUrl = parkingPaymentLinkUrl(token);
+  const sessionPaymentIntentId = String(session.payment_intent || "").trim();
+  await activityRef.update({
+    paymentLinkToken: token,
+    paymentLinkUrl: durableUrl,
+    checkoutUrl: durableUrl,
+    checkoutSessionId: String(session.id || ""),
+    stripeCheckoutUrl: String(session.url || ""),
+    checkoutStatus: "open",
+    platformFeeCents: payoutFields.platformFeeCents,
+    businessPayoutCents: payoutFields.businessPayoutCents,
+    stripeChargeType: payoutFields.stripeChargeType,
+    stripeConnectedAccountId: payoutFields.stripeConnectedAccountId,
+    ...(sessionPaymentIntentId.startsWith("pi_") && {
+      stripePaymentIntentId: sessionPaymentIntentId,
+    }),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  const name = String(business.name || "Your lot");
+  const emailed = await emailWalkUpParkingCustomer({
+    to: customerEmail,
+    subject: `Payment for ${trackingCode}`,
+    text: `${name} has recorded a service (${trackingCode}). ` +
+      `Amount due: $${(feeCents / 100).toFixed(2)}. ` +
+      `Pay securely: ${durableUrl}`,
+  });
+  const texted = await smsWalkUpParkingCustomer({
+    to: customerPhone,
+    body: `${name}: ${trackingCode}, $${(feeCents / 100).toFixed(2)} due. ` +
+      `Pay: ${durableUrl}`,
+  });
+  return {emailed, texted, durableUrl};
+}
+
+/**
+ * Resolve a durable /p link whose token belongs to a lot activity rather than
+ * a parked car. Mirrors the parkedCars branch of parkingPaymentLink: reuse a
+ * live session or mint a fresh one, redirect to Stripe, and show a plain page
+ * when the entry is already paid or cancelled.
+ *
+ * @param {object} db Firestore.
+ * @param {string} token The paymentLinkToken from the /p query.
+ * @param {object} res The Express response.
+ * @return {Promise<boolean>} true when this token was a lot activity and the
+ *   response was sent; false when it is not a lot activity (caller 404s).
+ */
+async function resolveLotActivityPaymentLink(db, token, res) {
+  const matches = await db.collection("lotActivities")
+      .where("paymentLinkToken", "==", token)
+      .limit(1)
+      .get();
+  if (matches.empty) return false;
+
+  const ref = matches.docs[0].ref;
+  const entry = matches.docs[0].data() || {};
+  const status = String(entry.paymentStatus || "");
+  if (status === LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED) {
+    res.status(200).send(parkingPaymentLinkPage({
+      title: "Already paid",
+      message: "This service is paid in full. Nothing further is owed.",
+    }));
+    return true;
+  }
+  if (status === LOT_ACTIVITY_PAYMENT_STATUS.CANCELLED) {
+    res.status(200).send(parkingPaymentLinkPage({
+      title: "Link cancelled",
+      message: "The business cancelled this payment link. Contact them if " +
+        "you think this is a mistake.",
+    }));
+    return true;
+  }
+  if (status !== LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_LINK) {
+    res.status(200).send(parkingPaymentLinkPage({
+      title: "Nothing to pay",
+      message: "There is no payment outstanding on this service.",
+    }));
+    return true;
+  }
+
+  const connectedAccountId =
+    String(entry.stripeConnectedAccountId || "").trim() || undefined;
+  const amountCents = Number(entry.feeCents || 0);
+  const existingSessionId = String(entry.checkoutSessionId || "").trim();
+  if (existingSessionId) {
+    const existing = await retrieveStripeCheckoutSession(
+        existingSessionId, connectedAccountId,
+    ).catch(() => null);
+    if (parkingCheckoutSessionReusable({
+      session: existing, nowMs: Date.now(),
+    })) {
+      res.redirect(303, String(existing.url || ""));
+      return true;
+    }
+  }
+  const mintCount = Number(entry.paymentLinkMintCount || 0) + 1;
+  const session = await createStripeCustomerCheckoutSession({
+    amount: amountCents,
+    currency: SHIPMENT_CURRENCY,
+    customerEmail: String(entry.customerEmail || "") || undefined,
+    productName: "Laawol lot service",
+    recordId: ref.id,
+    idempotencySeed: `lot-activity:${ref.id}:${mintCount}`,
+    connectedAccountId,
+    applicationFeeAmount:
+      String(entry.stripeChargeType || "") === "direct" ?
+        clampedApplicationFeeAmount(
+            Number(entry.platformFeeCents || 0), amountCents,
+        ) : undefined,
+    metadata: {
+      paymentType: LOT_ACTIVITY_PAYMENT_TYPE,
+      activityId: ref.id,
+      businessId: String(entry.businessId || ""),
+      trackingCode: String(entry.trackingCode || ""),
+    },
+    ...businessParkingReturnUrls(entry.trackingCode),
+  });
+  await ref.update({
+    checkoutSessionId: String(session.id || ""),
+    stripeCheckoutUrl: String(session.url || ""),
+    checkoutStatus: "open",
+    paymentLinkMintCount: mintCount,
+    paymentLinkRefreshedAt: FirestoreFieldValue.serverTimestamp(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  res.redirect(303, String(session.url || ""));
+  return true;
+}
+
+exports.createLotActivity = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: LOT_LINK_SECRETS,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, "ledger");
+      const db = admin.firestore();
+      const fee = await resolveLotActivityFee(db, businessId, data);
+      const errors = validateLotActivity(
+          data, {knownTypeIds: fee.knownTypeIds});
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", lotLedgerMessage(errors));
+      }
+      const businessDoc =
+          await db.collection("businesses").doc(businessId).get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      const method = String(data.paymentMethod || "").trim();
+      const {status, needsStripe} = lotActivityInitialStatus(method);
+      const trackingCode = await generateTrackingCode("LA", "lotActivities");
+      const activityRef = db.collection("lotActivities").doc();
+      const record = lotActivityRecord(data, {
+        activityTypeLabel: fee.label,
+        feeCents: fee.feeCents,
+        feeOverridden: fee.feeOverridden,
+        recordedByStaffId: uid,
+      });
+      const activityDate = lotActivityMidday(data.activityDate);
+      const now = FirestoreFieldValue.serverTimestamp();
+      await activityRef.set({
+        ...record,
+        businessId,
+        trackingCode,
+        activityDate: activityDate ?
+          FirestoreTimestamp.fromDate(activityDate) : null,
+        activityDateMonth: activityDate ? lotMonthKeyOf(activityDate) : "",
+        paymentStatus: status,
+        platformFeeCents: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const response = {
+        success: true,
+        activityId: activityRef.id,
+        trackingCode,
+        paymentStatus: status,
+      };
+      if (!needsStripe || SIMULATE_PAYMENTS) return response;
+
+      const link = await issueLotActivityLink({
+        db, activityRef, businessId, business,
+        activityId: activityRef.id, feeCents: fee.feeCents,
+        customerEmail: record.customerEmail,
+        customerPhone: record.customerPhone,
+        trackingCode,
+      });
+      return {...response, emailed: link.emailed, texted: link.texted};
+    },
+);
+
+exports.updateLotActivity = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: LOT_LINK_SECRETS,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const activityId = String(data.activityId || "").trim();
+      const changes = data.changes || {};
+      const db = admin.firestore();
+      const ref = db.collection("lotActivities").doc(activityId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Activity not found");
+      const current = doc.data() || {};
+      const businessId = String(current.businessId || "");
+      await requireBusinessPermission(uid, businessId, "ledger");
+      const fee = await resolveLotActivityFee(db, businessId, changes);
+      const errors = validateLotActivity(
+          changes, {knownTypeIds: fee.knownTypeIds});
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", lotLedgerMessage(errors));
+      }
+      const businessDoc =
+          await db.collection("businesses").doc(businessId).get();
+      const business = businessDoc.data() || {};
+      const record = lotActivityRecord(changes, {
+        activityTypeLabel: fee.label,
+        feeCents: fee.feeCents,
+        feeOverridden: fee.feeOverridden,
+        recordedByStaffId: String(current.recordedByStaffId || uid),
+      });
+      const activityDate = lotActivityMidday(changes.activityDate);
+      await ref.set({
+        ...record,
+        editedByStaffId: uid,
+        activityDate: activityDate ?
+          FirestoreTimestamp.fromDate(activityDate) : current.activityDate,
+        activityDateMonth: activityDate ?
+          lotMonthKeyOf(activityDate) : current.activityDateMonth,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+
+      // If the fee changed while a link is unpaid, re-issue the link at the
+      // new amount so the customer never holds a superseded price.
+      const unpaidLink = String(current.paymentMethod) === "payment_link" &&
+        String(current.paymentStatus) ===
+          LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_LINK;
+      let relinked = false;
+      if (unpaidLink && fee.feeCents !== Number(current.feeCents) &&
+          !SIMULATE_PAYMENTS) {
+        await issueLotActivityLink({
+          db, activityRef: ref, businessId, business,
+          activityId, feeCents: fee.feeCents,
+          customerEmail: record.customerEmail,
+          customerPhone: record.customerPhone,
+          trackingCode: String(current.trackingCode || ""),
+        });
+        relinked = true;
+      }
+      return {success: true, activityId, relinked};
+    },
+);
+
+exports.resendLotActivityLink = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: LOT_LINK_SECRETS,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const activityId = String(request.data?.activityId || "").trim();
+      const db = admin.firestore();
+      const ref = db.collection("lotActivities").doc(activityId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Activity not found");
+      const current = doc.data() || {};
+      await requireBusinessPermission(
+          uid, String(current.businessId || ""), "ledger");
+      if (String(current.paymentMethod) !== "payment_link" ||
+          String(current.paymentStatus) !==
+            LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_LINK) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This entry has no open payment link to resend.",
+        );
+      }
+      const businessDoc = await db.collection("businesses")
+          .doc(String(current.businessId)).get();
+      const link = await issueLotActivityLink({
+        db, activityRef: ref, businessId: String(current.businessId),
+        business: businessDoc.data() || {}, activityId,
+        feeCents: Number(current.feeCents) || 0,
+        customerEmail: String(current.customerEmail || ""),
+        customerPhone: String(current.customerPhone || ""),
+        trackingCode: String(current.trackingCode || ""),
+      });
+      return {success: true, emailed: link.emailed, texted: link.texted};
+    },
+);
+
+exports.recordLotActivityDirectPayment = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const activityId = String(data.activityId || "").trim();
+      const receivedByStaffId = String(data.receivedByStaffId || "").trim();
+      const db = admin.firestore();
+      const ref = db.collection("lotActivities").doc(activityId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Activity not found");
+      const current = doc.data() || {};
+      await requireBusinessPermission(
+          uid, String(current.businessId || ""), "ledger");
+      const paid = LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED;
+      if (String(current.paymentStatus) === paid) {
+        throw new HttpsError(
+            "failed-precondition", "This entry is already paid.");
+      }
+      if (!receivedByStaffId) {
+        throw new HttpsError(
+            "invalid-argument",
+            LOT_LEDGER_MESSAGES.received_by_required);
+      }
+      // Cancel the outstanding link so it can't also be paid online.
+      const sessionId = String(current.checkoutSessionId || "").trim();
+      if (sessionId && !SIMULATE_PAYMENTS) {
+        await expireStripeCheckoutSession(
+            sessionId,
+            String(current.stripeConnectedAccountId || "").trim() || undefined,
+        ).catch(() => null);
+      }
+      await ref.set({
+        paymentMethod: "direct",
+        paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED,
+        receivedVia: lotNormalizeReceivedVia(data.receivedVia),
+        receivedByStaffId,
+        recordedByStaffId: String(current.recordedByStaffId || uid),
+        editedByStaffId: uid,
+        paymentLinkToken: FirestoreFieldValue.delete(),
+        checkoutStatus: "cancelled",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {success: true, activityId};
+    },
+);
+
+exports.setExpenseProofThreshold = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, "ledger");
+      const cents = Math.max(0, Math.round(Number(data.thresholdCents) || 0));
+      await admin.firestore().collection("businesses").doc(businessId).set({
+        expenseProofThresholdCents: cents,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {success: true, thresholdCents: cents};
+    },
+);
+
+exports.upsertLotExpenseLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, "ledger");
+      const errors = validateLotExpenseLine(data);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", lotLedgerMessage(errors));
+      }
+      const db = admin.firestore();
+      const now = FirestoreFieldValue.serverTimestamp();
+      const kind = String(data.kind || "").trim();
+      const record = {
+        businessId,
+        label: String(data.label || "").trim().slice(0, 120),
+        detail: String(data.detail || "").trim().slice(0, 200),
+        kind,
+        recurringCents: kind === "fixed" ?
+          Math.max(0, Math.round(Number(data.recurringCents) || 0)) : 0,
+        onlyMonth: kind === "one_off" ?
+          String(data.onlyMonth || "").slice(0, 7) : "",
+        active: data.active !== false,
+        sortOrder: Number.isFinite(Number(data.sortOrder)) ?
+          Number(data.sortOrder) : 0,
+        updatedAt: now,
+      };
+      const lineId = String(data.lineId || "").trim();
+      if (lineId) {
+        const ref = db.collection("lotExpenseLines").doc(lineId);
+        const existing = await ref.get();
+        if (!existing.exists || existing.data()?.businessId !== businessId) {
+          throw new HttpsError("not-found", "Expense line not found");
+        }
+        await ref.set(record, {merge: true});
+        return {lineId, ...record};
+      }
+      const ref = db.collection("lotExpenseLines").doc();
+      await ref.set({...record, createdAt: now});
+      return {lineId: ref.id, ...record};
+    },
+);
+
+exports.createLotExpenseEntry = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, "ledger");
+      const db = admin.firestore();
+      const thresholdCents = await loadBusinessExpenseThreshold(db, businessId);
+      const hasProof = Boolean(String(data.proofUrl || "").trim());
+      const errors = validateLotExpenseEntry(data, {thresholdCents, hasProof});
+      if (errors.length > 0) {
+        // The proof rule is a server rule, not just a form nicety.
+        const message = errors.includes("expense_proof_required") ?
+          `Attach a receipt: this business asks for proof at ` +
+            `$${(thresholdCents / 100).toFixed(2)} and above.` :
+          lotLedgerMessage(errors);
+        throw new HttpsError("invalid-argument", message);
+      }
+      const spentAt = lotActivityMidday(data.spentAt);
+      const record = lotExpenseEntryRecord(data, {
+        recordedByStaffId: uid,
+        thresholdCents,
+      });
+      const now = FirestoreFieldValue.serverTimestamp();
+      const ref = db.collection("lotExpenseEntries").doc();
+      await ref.set({
+        ...record,
+        businessId,
+        spentAt: spentAt ? FirestoreTimestamp.fromDate(spentAt) : null,
+        proofUrl: String(data.proofUrl || "").trim(),
+        proofFileName: String(data.proofFileName || "").trim().slice(0, 200),
+        proofContentType:
+          String(data.proofContentType || "").trim().slice(0, 100),
+        overrideForFixedLine: data.overrideForFixedLine === true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return {success: true, entryId: ref.id};
+    },
+);
+
+exports.billParkingThroughToday = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: LOT_LINK_SECRETS,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const parkedCarId = String(request.data?.parkedCarId || "").trim();
+      const db = admin.firestore();
+      const ref = db.collection("parkedCars").doc(parkedCarId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Parking not found");
+      const car = doc.data() || {};
+      const businessId = String(car.businessId || "");
+      await requireBusinessPermission(uid, businessId, "parking");
+      const businessDoc =
+          await db.collection("businesses").doc(businessId).get();
+      const business = businessDoc.data() || {};
+      const dailyRateCents = Math.max(0, Math.round(
+          Number(business.parkingDailyRateCents) ||
+          centsFromDollars(car.dailyRate) || 0,
+      ));
+      const asMs = (v) => {
+        if (!v) return null;
+        if (typeof v.toDate === "function") return v.toDate().getTime();
+        const d = new Date(v);
+        return Number.isNaN(d.getTime()) ? null : d.getTime();
+      };
+      const dayMs = 24 * 60 * 60 * 1000;
+      const fromMs = asMs(car.billedThroughDate) ?? asMs(car.parkingDate);
+      const todayMs = Date.now();
+      const days = fromMs ?
+        Math.max(0, Math.floor((todayMs - fromMs) / dayMs)) : 0;
+      const amountCents = days * dailyRateCents;
+      if (amountCents <= 0) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Everything up to today has been billed.",
+            {reason: "parking_nothing_to_bill"},
+        );
+      }
+      const trackingCode = String(car.trackingCode || "") ||
+        await generateTrackingCode("PK", "parkedCars");
+      const pricingDoc = await db.collection("shipmentPricing")
+          .doc("serviceFees").get();
+      const platformFeePct = servicePlatformFeePctForBusiness(
+          pricingDoc.data(), business, ["parkingPlatformFeePct"],
+      );
+      const payoutFields = servicePayoutFields({
+        grossCents: amountCents,
+        platformFeePct,
+        connectReady: !!business.stripeAccountId &&
+      business.payoutsEnabled === true,
+        business,
+      });
+      let token = String(car.paymentLinkToken || "").trim();
+      let durableUrl = parkingPaymentLinkUrl(token);
+      if (!SIMULATE_PAYMENTS) {
+        const session = await createStripeCustomerCheckoutSession({
+          amount: amountCents,
+          currency: SHIPMENT_CURRENCY,
+          customerEmail: String(car.customerEmail || ""),
+          productName: "Laawol parking",
+          recordId: parkedCarId,
+          idempotencySeed: `parking-bill:${parkedCarId}:${todayMs}`,
+          connectedAccountId: payoutFields.stripeChargeType === "direct" ?
+            payoutFields.stripeConnectedAccountId || undefined : undefined,
+          applicationFeeAmount: payoutFields.stripeChargeType === "direct" ?
+            clampedApplicationFeeAmount(
+                payoutFields.platformFeeCents, amountCents) :
+            undefined,
+          metadata: {
+            paymentType: BUSINESS_PARKING_PAYMENT_TYPE,
+            reservationId: parkedCarId,
+            businessId,
+            trackingCode,
+          },
+          ...businessParkingReturnUrls(trackingCode),
+        });
+        token = crypto.randomBytes(24).toString("base64url");
+        durableUrl = parkingPaymentLinkUrl(token);
+        const pi = String(session.payment_intent || "").trim();
+        await ref.update({
+          paymentLinkToken: token,
+          paymentLinkUrl: durableUrl,
+          checkoutUrl: durableUrl,
+          checkoutSessionId: String(session.id || ""),
+          stripeCheckoutUrl: String(session.url || ""),
+          checkoutStatus: "open",
+          paymentStatus: "pending",
+          ...(pi.startsWith("pi_") && {stripePaymentIntentId: pi}),
+          ...payoutFields,
+        });
+      }
+      const now = FirestoreFieldValue.serverTimestamp();
+      await ref.update({
+        billedThroughDate: FirestoreTimestamp.fromDate(new Date(todayMs)),
+        billingHistory: FirestoreFieldValue.arrayUnion({
+          from: fromMs ? FirestoreTimestamp.fromDate(new Date(fromMs)) : null,
+          through: FirestoreTimestamp.fromDate(new Date(todayMs)),
+          days,
+          amountCents,
+          paymentStatus: SIMULATE_PAYMENTS ? "succeeded" : "pending",
+          checkoutSessionId: String(car.checkoutSessionId || ""),
+          recordedByStaffId: uid,
+          createdAt: FirestoreTimestamp.fromDate(new Date(todayMs)),
+        }),
+        updatedAt: now,
+      });
+      const name = String(business.name || "Your parking provider");
+      const emailed = SIMULATE_PAYMENTS ? false :
+        await emailWalkUpParkingCustomer({
+          to: String(car.customerEmail || ""),
+          subject: `Parking payment for ${trackingCode}`,
+          text: `${name}: ${days} day(s) of storage, ` +
+          `$${(amountCents / 100).toFixed(2)} due. Pay: ${durableUrl}`,
+        });
+      const texted = SIMULATE_PAYMENTS ? false :
+        await smsWalkUpParkingCustomer({
+          to: String(car.customerPhone || ""),
+          body: `${name}: parking ${trackingCode}, ` +
+          `$${(amountCents / 100).toFixed(2)} due. Pay: ${durableUrl}`,
+        });
+      return {success: true, days, amountCents, emailed, texted};
+    },
+);
+
+exports.recordParkingPaymentReceived = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const parkedCarId = String(data.parkedCarId || "").trim();
+      const receivedByStaffId = String(data.receivedByStaffId || "").trim();
+      const db = admin.firestore();
+      const ref = db.collection("parkedCars").doc(parkedCarId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Parking not found");
+      const car = doc.data() || {};
+      await requireBusinessPermission(
+          uid, String(car.businessId || ""), "parking");
+      if (!receivedByStaffId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Say who took the money so it can be reconciled.",
+        );
+      }
+      if (String(car.paymentStatus) === "succeeded" ||
+          String(car.paymentStatus) === "paid") {
+        throw new HttpsError(
+            "failed-precondition", "This parking is already settled.");
+      }
+      const sessionId = String(car.checkoutSessionId || "").trim();
+      if (sessionId && !SIMULATE_PAYMENTS) {
+        await expireStripeCheckoutSession(
+            sessionId,
+            String(car.stripeConnectedAccountId || "").trim() || undefined,
+        ).catch(() => null);
+      }
+      await ref.set({
+        paymentMethod: "direct",
+        paymentStatus: "succeeded",
+        receivedByStaffId,
+        recordedByStaffId: uid,
+        checkoutStatus: "cancelled",
+        paymentLinkToken: FirestoreFieldValue.delete(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {success: true, parkedCarId};
+    },
+);
+
+exports.closeParkingStay = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const parkedCarId = String(data.parkedCarId || "").trim();
+      const db = admin.firestore();
+      const ref = db.collection("parkedCars").doc(parkedCarId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Parking not found");
+      const car = doc.data() || {};
+      await requireBusinessPermission(
+          uid, String(car.businessId || ""), "parking");
+      const endRaw = String(data.endDate || "").trim();
+      const end = endRaw ? new Date(`${endRaw}T12:00:00`) : new Date();
+      // Does not touch the money: an unpaid balance survives the car leaving.
+      await ref.update({
+        parkingEndDate: FirestoreTimestamp.fromDate(end),
+        closedByStaffId: uid,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return {success: true, parkedCarId};
+    },
+);
 
 /**
  * Cloud Function to create a new user account
