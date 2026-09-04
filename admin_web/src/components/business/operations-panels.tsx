@@ -214,6 +214,8 @@ type PanelProps = {
   onOpenDestinations?: () => void;
   onManageServices?: () => void;
   openNewToken?: number;
+  /** The business document (settings like the expense proof threshold). */
+  business?: Record<string, unknown> | null;
 };
 
 type DestinationDraft = {
@@ -6770,7 +6772,7 @@ function lotMonthLabel(month: string): string {
 
 const LOT_TAG_TINTS = ["#0d9488", "#f59e0b", "#6366f1", "#db2777", "#0891b2"];
 
-export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) {
+export function LotLedgerPanel({ businessId, business, previewMode = false }: PanelProps) {
   const enabled = Boolean(businessId && !previewMode);
   const activityTypes = useBusinessRows("lotActivityTypes", businessId, enabled, 200);
   const activities = useBusinessRows("lotActivities", businessId, enabled, 1000);
@@ -6781,7 +6783,6 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
   // car and customer it already belongs to (reusing existing records rather
   // than re-typing) — the same reuse the handoff called for.
   const parkedCars = useBusinessRows("parkedCars", businessId, enabled, 500);
-  const business = useBusinessRows("businesses", businessId, false, 1);
 
   const [segment, setSegment] = useState<LotSegment>("activity");
   const [reportView, setReportView] = useState<LotReportView>("month");
@@ -6806,12 +6807,12 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
   const [chaseVia, setChaseVia] = useState("cash");
   const [chaseStaff, setChaseStaff] = useState("");
   const [directStaff, setDirectStaff] = useState("");
+  const [editingThreshold, setEditingThreshold] = useState(false);
+  const [thresholdInput, setThresholdInput] = useState("");
 
   const year = Number(month.split("-")[0]) || new Date().getUTCFullYear();
   const searching = search.trim().length > 0;
-  const thresholdCents = Number(
-    (business.rows[0] as Record<string, unknown>)?.expenseProofThresholdCents,
-  );
+  const thresholdCents = Number(business?.expenseProofThresholdCents);
   const proofThreshold = Number.isFinite(thresholdCents) && thresholdCents >= 0
     ? thresholdCents
     : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
@@ -7118,6 +7119,21 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
     });
   }
 
+  async function saveThreshold() {
+    const dollars = Number(thresholdInput.trim().replace(/[$,\s]/g, ""));
+    if (!Number.isFinite(dollars) || dollars < 0) {
+      setFlash("Enter an amount ($0 means never require a receipt).");
+      return;
+    }
+    await runPanelAction(setBusy, setFlash, "Receipt threshold saved.", async () => {
+      await httpsCallable(functions, "setExpenseProofThreshold")({
+        businessId,
+        thresholdCents: Math.round(dollars * 100),
+      });
+      setEditingThreshold(false);
+    });
+  }
+
   async function addExpenseLine() {
     if (!lineDraft.label.trim()) {
       setDraftError("Name the expense line.");
@@ -7282,7 +7298,23 @@ export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) 
             </select>
             <button className="primary-button" type="button" onClick={() => { setLineDraft({ label: "", detail: "", kind: "metered", recurring: "" }); setDraftError(""); setModal("expense-line"); }}>Add expense line</button>
           </div>
-          <p className="panel-lede">Proof required from {lotFormatCents(proofThreshold)}. A line marked same every month fills itself in; a line that changes every month starts empty.</p>
+          <p className="panel-lede" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {editingThreshold ? (
+              <>
+                <span>Require a receipt from $</span>
+                <input inputMode="decimal" type="number" min="0" step="0.01" value={thresholdInput} onChange={(e) => setThresholdInput(e.target.value)} style={{ width: 90 }} placeholder="75" />
+                <button className="primary-button" type="button" disabled={busy} onClick={saveThreshold}>Save</button>
+                <button className="ghost-button" type="button" disabled={busy} onClick={() => setEditingThreshold(false)}>Cancel</button>
+                <small className="lst-hint">$0 means a receipt is never required.</small>
+              </>
+            ) : (
+              <>
+                <span>Proof required from <strong>{lotFormatCents(proofThreshold)}</strong> and above.</span>
+                <button className="ghost-button" type="button" onClick={() => { setThresholdInput(String(proofThreshold / 100)); setEditingThreshold(true); }}><Pencil size={13} /> Change</button>
+                <span>A line marked same every month fills itself in; a line that changes every month starts empty.</span>
+              </>
+            )}
+          </p>
           {expenseLines.rows.length === 0 ? (
             <EmptyState text="No expense lines yet." />
           ) : (
