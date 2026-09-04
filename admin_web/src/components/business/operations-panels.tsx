@@ -59,6 +59,12 @@ import {
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import {
+  formatCents as lotFormatCents,
+  LOT_CUSTOM_ACTIVITY_ID,
+  lotActivityPaymentLabel,
+  canChaseLotActivity,
+} from "@/lib/lot-ledger";
+import {
   contentsFromRecord,
   quoteLensForBusiness,
 } from "@/lib/freight-contents";
@@ -156,7 +162,7 @@ import {
   carPurchaseCanMarkCompleted,
   carPurchaseCanMarkSold,
 } from "@/lib/car-purchase";
-import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
+import { asDate, currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import {
   normalizeTransportContainerNumber,
   transportFulfillmentErrorMessage,
@@ -6688,4 +6694,419 @@ function statusLabel(value: unknown) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+// ===========================================================================
+// Lot ledger — activity log, expense ledger, and reports (design handoff).
+//
+// Read views here derive everything from the business's own live collections
+// (lotActivityTypes, lotActivities, lotExpenseLines, lotExpenseEntries): the
+// metric cards, the type filter, the reports rows all read one source, never a
+// hand-maintained parallel list (UI-CONVENTIONS §3). The write flows (record
+// activity, purchase log, bill-through-today) are wired on top of these views.
+// ===========================================================================
+
+type LotSegment = "activity" | "expenses" | "reports";
+
+function lotMonthKey(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function lotRowMonth(row: FirestoreRow, field: string): string {
+  const explicit = text((row as Record<string, unknown>)[`${field}Month`], "");
+  if (explicit) return explicit;
+  const raw = (row as Record<string, unknown>)[field];
+  const date = asDate(raw);
+  return date ? lotMonthKey(date) : "";
+}
+
+/** Month options for a picker: January–December of the given year. */
+function lotMonthOptions(year: number): { value: string; label: string }[] {
+  const names = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  return names.map((label, i) => ({
+    value: `${year}-${String(i + 1).padStart(2, "0")}`,
+    label: `${label} ${year}`,
+  }));
+}
+
+function lotMonthLabel(month: string): string {
+  const [y, m] = month.split("-");
+  const opt = lotMonthOptions(Number(y)).find((o) => o.value === month);
+  return opt ? opt.label : month;
+}
+
+export function LotLedgerPanel({ businessId, previewMode = false }: PanelProps) {
+  const enabled = Boolean(businessId && !previewMode);
+  const activityTypes = useBusinessRows("lotActivityTypes", businessId, enabled, 200);
+  const activities = useBusinessRows("lotActivities", businessId, enabled, 1000);
+  const expenseLines = useBusinessRows("lotExpenseLines", businessId, enabled, 200);
+  const expenseEntries = useBusinessRows("lotExpenseEntries", businessId, enabled, 1000);
+
+  const [segment, setSegment] = useState<LotSegment>("activity");
+  const [month, setMonth] = useState<string>(() => lotMonthKey(new Date()));
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+
+  const year = Number(month.split("-")[0]) || new Date().getUTCFullYear();
+  const searching = search.trim().length > 0;
+
+  // Active types in the business's own order, plus a stable index for tags.
+  const orderedTypes = useMemo(() => {
+    return [...activityTypes.rows]
+      .filter((t) => (t as Record<string, unknown>).active !== false)
+      .sort(
+        (a, b) =>
+          (Number((a as Record<string, unknown>).sortOrder) || 0) -
+          (Number((b as Record<string, unknown>).sortOrder) || 0),
+      );
+  }, [activityTypes.rows]);
+
+  const typeLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of activityTypes.rows) {
+      map.set(String((t as Record<string, unknown>).id ?? ""), text((t as Record<string, unknown>).label, ""));
+    }
+    return map;
+  }, [activityTypes.rows]);
+
+  // Activities in the shown scope: the picked month, or every month while
+  // searching (stated in words below so metrics and list never disagree).
+  const scopedActivities = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return activities.rows.filter((row) => {
+      const r = row as Record<string, unknown>;
+      if (!searching && lotRowMonth(row, "activityDate") !== month) return false;
+      if (typeFilter === "custom" && String(r.activityTypeId) !== LOT_CUSTOM_ACTIVITY_ID) return false;
+      if (typeFilter !== "all" && typeFilter !== "custom" && String(r.activityTypeId) !== typeFilter) {
+        return false;
+      }
+      if (q) {
+        const hay = `${text(r.vinNumber, "")} ${text(r.customerName, "")} ${text(r.customerPhone, "")}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [activities.rows, month, searching, search, typeFilter]);
+
+  const monthActivities = useMemo(
+    () => activities.rows.filter((row) => lotRowMonth(row, "activityDate") === month),
+    [activities.rows, month],
+  );
+
+  const revenueByType = useMemo(() => {
+    const totals = new Map<string, { cents: number; count: number }>();
+    for (const row of monthActivities) {
+      const r = row as Record<string, unknown>;
+      if (String(r.paymentStatus) === "cancelled") continue;
+      const key = String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? "custom" : String(r.activityTypeId);
+      const prev = totals.get(key) ?? { cents: 0, count: 0 };
+      totals.set(key, { cents: prev.cents + (Number(r.feeCents) || 0), count: prev.count + 1 });
+    }
+    return totals;
+  }, [monthActivities]);
+
+  const monthRevenueCents = useMemo(() => {
+    let sum = 0;
+    for (const v of revenueByType.values()) sum += v.cents;
+    return sum;
+  }, [revenueByType]);
+
+  const awaitingCents = useMemo(() => {
+    let sum = 0;
+    for (const row of monthActivities) {
+      const r = row as Record<string, unknown>;
+      if (String(r.paymentStatus) === "awaiting_payment_link") sum += Number(r.feeCents) || 0;
+    }
+    return sum;
+  }, [monthActivities]);
+
+  const monthExpenseCents = useMemo(() => {
+    let sum = 0;
+    for (const entry of expenseEntries.rows) {
+      if (lotRowMonth(entry, "spentAt") === month || String((entry as Record<string, unknown>).month) === month) {
+        sum += Number((entry as Record<string, unknown>).amountCents) || 0;
+      }
+    }
+    for (const line of expenseLines.rows) {
+      const l = line as Record<string, unknown>;
+      if (l.kind === "fixed" && l.active !== false) sum += Number(l.recurringCents) || 0;
+    }
+    return sum;
+  }, [expenseEntries.rows, expenseLines.rows, month]);
+
+  // Top three earning types this month, then Awaiting payment.
+  const topCards = useMemo(() => {
+    const ranked = [...revenueByType.entries()]
+      .filter(([key]) => key !== "custom")
+      .sort((a, b) => b[1].cents - a[1].cents)
+      .slice(0, 3)
+      .map(([key, v]) => ({
+        label: typeLabelById.get(key) ?? "Activity",
+        cents: v.cents,
+        note: `${v.count} ${v.count === 1 ? "job" : "jobs"}`,
+      }));
+    return ranked;
+  }, [revenueByType, typeLabelById]);
+
+  const netCents = monthRevenueCents - monthExpenseCents;
+
+  return (
+    <div className="lot-ledger">
+      <div className="section-intro">
+        <div>
+          <h2>Lot ledger</h2>
+          <p>
+            Every job the lot billed for, what it costs to run, and the
+            month-by-month picture — in one place.
+          </p>
+        </div>
+        <div className="section-stats">
+          <div className="metric money">
+            <span>{lotMonthLabel(month)} revenue</span>
+            <b>{lotFormatCents(monthRevenueCents)}</b>
+          </div>
+          <div className="metric">
+            <span>{lotMonthLabel(month)} expenses</span>
+            <b>{lotFormatCents(monthExpenseCents)}</b>
+          </div>
+          <div className={`metric ${netCents < 0 ? "attention" : "good"}`}>
+            <span>Net</span>
+            <b>{lotFormatCents(netCents)}</b>
+          </div>
+        </div>
+      </div>
+
+      <div className="service-segments" role="tablist" aria-label="Lot ledger sections">
+        {([
+          ["activity", "Activity"],
+          ["expenses", "Expenses"],
+          ["reports", "Reports"],
+        ] as [LotSegment, string][]).map(([id, label]) => (
+          <span
+            key={id}
+            role="button"
+            tabIndex={0}
+            className={`segment ${segment === id ? "active" : ""}`}
+            onClick={() => setSegment(id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setSegment(id);
+              }
+            }}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+
+      {segment === "activity" && (
+        <>
+          <div className="metric-grid">
+            {topCards.map((card) => (
+              <div className="metric money" key={card.label}>
+                <span>{card.label}</span>
+                <b>{lotFormatCents(card.cents)}</b>
+                <small>{card.note}</small>
+              </div>
+            ))}
+            <div className="metric attention">
+              <span>Awaiting payment</span>
+              <b>{lotFormatCents(awaitingCents)}</b>
+              <small>Website links sent and not settled</small>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-header">
+              <h3>Activity log</h3>
+              <span className="panel-count">{scopedActivities.length}</span>
+            </div>
+            <div className="panel-tools">
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by activity">
+                <option value="all">All activities</option>
+                {orderedTypes.map((t) => (
+                  <option key={String((t as Record<string, unknown>).id)} value={String((t as Record<string, unknown>).id)}>
+                    {text((t as Record<string, unknown>).label, "")}
+                  </option>
+                ))}
+                <option value="custom">One-off jobs</option>
+              </select>
+              <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
+                {lotMonthOptions(year).map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <input
+                type="search"
+                placeholder="VIN, customer, phone"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search activity"
+              />
+            </div>
+            <p className="panel-lede">
+              {searching
+                ? "Searching every month for this term."
+                : `Showing ${lotMonthLabel(month)}. The figures above cover the same month.`}
+            </p>
+            {scopedActivities.length === 0 ? (
+              <EmptyState text="No activity recorded for this scope yet." />
+            ) : (
+              <div className="mini-table">
+                <div style={{ minWidth: 720 }}>
+                  <div className="mini-table-head">
+                    <span>Vehicle</span>
+                    <span>Customer</span>
+                    <span>Activity</span>
+                    <span>Date</span>
+                    <span>Fee</span>
+                  </div>
+                  {scopedActivities.map((row) => {
+                    const r = row as Record<string, unknown>;
+                    const label = text(r.activityTypeLabel, "") ||
+                      (String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID
+                        ? text(r.customLabel, "One-off")
+                        : typeLabelById.get(String(r.activityTypeId)) ?? "Activity");
+                    return (
+                      <div className="mini-table-row" key={String(r.id)}>
+                        <span>
+                          <strong>{[text(r.carYear, ""), text(r.carMake, ""), text(r.carModel, "")].filter(Boolean).join(" ") || "Vehicle"}</strong>
+                          <small>{text(r.vinNumber, "")}</small>
+                        </span>
+                        <span>
+                          <strong>{text(r.customerName, "")}</strong>
+                          <small>{text(r.customerPhone, "")}</small>
+                        </span>
+                        <span>
+                          <strong>{label}</strong>
+                          <small>
+                            {text(r.auctionHouse, "")
+                              ? `Auction: ${text(r.auctionHouse, "")}`
+                              : r.feeOverridden
+                                ? "Priced for this job"
+                                : "Standard rate"}
+                          </small>
+                        </span>
+                        <span>{formatDate(r.activityDate)}</span>
+                        <span>
+                          <strong>{lotFormatCents(Number(r.feeCents) || 0)}</strong>
+                          <small>{lotActivityPaymentLabel(r)}</small>
+                          {canChaseLotActivity(r) && (
+                            <span className="status-pill warning compact">Awaiting</span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {segment === "expenses" && (
+        <div className="panel">
+          <div className="panel-header">
+            <h3>Expenses</h3>
+            <span className="panel-count">{expenseLines.rows.length}</span>
+          </div>
+          <div className="panel-tools">
+            <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
+              {lotMonthOptions(year).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <p className="panel-lede">
+            A line marked same every month fills itself in; a line that changes
+            every month starts empty.
+          </p>
+          {expenseLines.rows.length === 0 ? (
+            <EmptyState text="No expense lines yet." />
+          ) : (
+            <div className="mini-table">
+                <div style={{ minWidth: 640 }}>
+                <div className="mini-table-head">
+                  <span>Expense</span>
+                  <span>Supplier / detail</span>
+                  <span>How it behaves</span>
+                  <span>{lotMonthLabel(month)}</span>
+                </div>
+                {expenseLines.rows.map((line) => {
+                  const l = line as Record<string, unknown>;
+                  const monthEntries = expenseEntries.rows.filter(
+                    (e) =>
+                      String((e as Record<string, unknown>).lineId) === String(l.id) &&
+                      (String((e as Record<string, unknown>).month) === month ||
+                        lotRowMonth(e, "spentAt") === month),
+                  );
+                  const metered = l.kind === "metered";
+                  const entriesTotal = monthEntries.reduce(
+                    (sum, e) => sum + (Number((e as Record<string, unknown>).amountCents) || 0),
+                    0,
+                  );
+                  const amount = metered ? entriesTotal : Number(l.recurringCents) || 0;
+                  return (
+                    <div className="mini-table-row" key={String(l.id)}>
+                      <span>
+                        <strong>{text(l.label, "")}</strong>
+                        <small>
+                          {metered
+                            ? monthEntries.length > 0
+                              ? `${monthEntries.length} purchase${monthEntries.length === 1 ? "" : "s"}`
+                              : `Waiting on ${lotMonthLabel(month)}'s bill`
+                            : `${lotFormatCents(Number(l.recurringCents) || 0)} every month`}
+                        </small>
+                      </span>
+                      <span>{text(l.detail, "")}</span>
+                      <span>{metered ? "Changes every month" : "Same every month"}</span>
+                      <span>
+                        <strong>{lotFormatCents(amount)}</strong>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {segment === "reports" && (
+        <div className="panel">
+          <div className="panel-header">
+            <h3>Reports</h3>
+          </div>
+          <div className="metric-grid">
+            <div className="metric money">
+              <span>Revenue {year}</span>
+              <b>{lotFormatCents(monthRevenueCents)}</b>
+              <small>{lotMonthLabel(month)}</small>
+            </div>
+            <div className="metric">
+              <span>Expenses {year}</span>
+              <b>{lotFormatCents(monthExpenseCents)}</b>
+              <small>{lotMonthLabel(month)}</small>
+            </div>
+            <div className={`metric ${netCents < 0 ? "attention" : "good"}`}>
+              <span>Net profit</span>
+              <b>{lotFormatCents(netCents)}</b>
+            </div>
+            <div className="metric">
+              <span>Margin</span>
+              <b>{monthRevenueCents > 0 ? `${Math.round((netCents / monthRevenueCents) * 100)}%` : "—"}</b>
+            </div>
+          </div>
+          <p className="panel-lede">
+            Month-by-month and annual charts are computed from the rows above.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -9,6 +9,7 @@ import { httpsCallable } from "firebase/functions";
 import {
   BarChart3,
   Banknote,
+  BookOpen,
   Building2,
   CalendarClock,
   Car,
@@ -37,6 +38,7 @@ import {
   ListingsPanel,
   OfficeLocationsPanel,
   ParkingPanel,
+  LotLedgerPanel,
   PurchasesPanel,
   TransportPanel,
 } from "@/components/business/operations-panels";
@@ -590,6 +592,13 @@ export function BusinessConsole({
               businessId={businessId}
               businessName={businessName}
               focusRecordId={notificationFocusId}
+              previewMode={previewMode}
+            />
+          )}
+          {activeTab === "ledger" && (
+            <LotLedgerPanel
+              businessId={businessId}
+              businessName={businessName}
               previewMode={previewMode}
             />
           )}
@@ -1561,6 +1570,7 @@ function tabIcon(tab: BusinessTab) {
     freight: <Package {...props} />,
     transport: <Truck {...props} />,
     parking: <ParkingCircle {...props} />,
+    ledger: <BookOpen {...props} />,
     destinations: <MapPinned {...props} />,
     people: <UserCog {...props} />,
     reviews: <Star {...props} />,
