@@ -5,6 +5,7 @@ const {describe, it} = require("node:test");
 
 const {
   LOT_CUSTOM_ACTIVITY_ID,
+  LOT_ACTIVITY_SEED_TYPES,
   normalizeReceivedVia,
   normalizeAuctionHouse,
   validateLotActivityType,
@@ -34,12 +35,12 @@ describe("activity type catalogue", () => {
       "activity_type_fee_invalid",
     ]);
     assert.deepEqual(
-      validateLotActivityType({label: "Key cutting", defaultFeeCents: 0}),
-      [],
+        validateLotActivityType({label: "Key cutting", defaultFeeCents: 0}),
+        [],
     );
     assert.deepEqual(
-      validateLotActivityType({label: "Dispatch", defaultFeeCents: -1}),
-      ["activity_type_fee_invalid"],
+        validateLotActivityType({label: "Dispatch", defaultFeeCents: -1}),
+        ["activity_type_fee_invalid"],
     );
   });
 
@@ -75,36 +76,42 @@ describe("recording an activity", () => {
 
   it("rejects a stale type id and requires a custom label for one-offs", () => {
     assert.ok(
-      validateLotActivity({...ACTIVITY, activityTypeId: "gone"}, {knownTypeIds: ["t1"]})
-        .includes("activity_type_invalid"),
+        validateLotActivity(
+            {...ACTIVITY, activityTypeId: "gone"},
+            {knownTypeIds: ["t1"]},
+        ).includes("activity_type_invalid"),
     );
     assert.ok(
-      validateLotActivity(
-        {...ACTIVITY, activityTypeId: LOT_CUSTOM_ACTIVITY_ID},
-        {knownTypeIds: ["t1"]},
-      ).includes("custom_label_required"),
+        validateLotActivity(
+            {...ACTIVITY, activityTypeId: LOT_CUSTOM_ACTIVITY_ID},
+            {knownTypeIds: ["t1"]},
+        ).includes("custom_label_required"),
     );
   });
 
   it("a link needs contact; direct needs a staff collector", () => {
     assert.ok(
-      validateLotActivity(
-        {...ACTIVITY, customerPhone: "", customerEmail: ""},
-        {knownTypeIds: ["t1"]},
-      ).includes("payment_link_contact_required"),
+        validateLotActivity(
+            {...ACTIVITY, customerPhone: "", customerEmail: ""},
+            {knownTypeIds: ["t1"]},
+        ).includes("payment_link_contact_required"),
     );
     assert.ok(
-      validateLotActivity(
-        {...ACTIVITY, paymentMethod: "direct", receivedByStaffId: ""},
-        {knownTypeIds: ["t1"]},
-      ).includes("received_by_required"),
+        validateLotActivity(
+            {...ACTIVITY, paymentMethod: "direct", receivedByStaffId: ""},
+            {knownTypeIds: ["t1"]},
+        ).includes("received_by_required"),
     );
   });
 
-  it("the record denormalizes the label, uppercases the VIN, and drops mismatched fields", () => {
+  it("the record denormalizes label, uppercases VIN, drops mismatches", () => {
     const r = lotActivityRecord(
-      {...ACTIVITY, receivedByStaffId: "drop-me"},
-      {activityTypeLabel: "Dispatch", feeCents: 15000, recordedByStaffId: "s1"},
+        {...ACTIVITY, receivedByStaffId: "drop-me"},
+        {
+          activityTypeLabel: "Dispatch",
+          feeCents: 15000,
+          recordedByStaffId: "s1",
+        },
     );
     assert.equal(r.activityTypeLabel, "Dispatch");
     assert.equal(r.vinNumber, "EC035066");
@@ -132,6 +139,28 @@ describe("recording an activity", () => {
   });
 });
 
+describe("seed activity types", () => {
+  it("seeds four Keren activities; only title needs an auction house", () => {
+    assert.equal(LOT_ACTIVITY_SEED_TYPES.length, 4);
+    const labels = LOT_ACTIVITY_SEED_TYPES.map((t) => t.label);
+    assert.deepEqual(labels, [
+      "Title purchase at auction",
+      "Dispatch",
+      "Reassignment",
+      "Storage release",
+    ]);
+    const needAuction = LOT_ACTIVITY_SEED_TYPES.filter(
+        (t) => t.needsAuctionHouse,
+    );
+    assert.equal(needAuction.length, 1);
+    assert.equal(needAuction[0].label, "Title purchase at auction");
+    // Each seed validates against the same rule the callable enforces.
+    for (const seed of LOT_ACTIVITY_SEED_TYPES) {
+      assert.deepEqual(validateLotActivityType(seed), []);
+    }
+  });
+});
+
 describe("expenses", () => {
   it("requires proof at and above the threshold, allows below and at 0", () => {
     assert.equal(expenseProofRequired(7500, 7500), true);
@@ -146,25 +175,39 @@ describe("expenses", () => {
       "expense_paid_by_required",
     ]);
     assert.deepEqual(
-      validateLotExpenseEntry(
-        {amountCents: 12000, spentAt: "2026-08-01T12:00:00", paidByStaffId: "s1"},
-        {thresholdCents: 7500, hasProof: false},
-      ),
-      ["expense_proof_required"],
+        validateLotExpenseEntry(
+            {
+              amountCents: 12000,
+              spentAt: "2026-08-01T12:00:00",
+              paidByStaffId: "s1",
+            },
+            {thresholdCents: 7500, hasProof: false},
+        ),
+        ["expense_proof_required"],
     );
     assert.deepEqual(
-      validateLotExpenseEntry(
-        {amountCents: 12000, spentAt: "2026-08-01T12:00:00", paidByStaffId: "s1"},
-        {thresholdCents: 7500, hasProof: true},
-      ),
-      [],
+        validateLotExpenseEntry(
+            {
+              amountCents: 12000,
+              spentAt: "2026-08-01T12:00:00",
+              paidByStaffId: "s1",
+            },
+            {thresholdCents: 7500, hasProof: true},
+        ),
+        [],
     );
   });
 
   it("snapshots the proof rule at entry time", () => {
     const r = lotExpenseEntryRecord(
-      {lineId: "water", month: "2026-08", amountCents: 12000, paidByStaffId: "s1", note: "jugs"},
-      {recordedByStaffId: "s2", thresholdCents: 7500},
+        {
+          lineId: "water",
+          month: "2026-08",
+          amountCents: 12000,
+          paidByStaffId: "s1",
+          note: "jugs",
+        },
+        {recordedByStaffId: "s2", thresholdCents: 7500},
     );
     assert.equal(r.proofRequired, true);
     assert.equal(r.recordedByStaffId, "s2");

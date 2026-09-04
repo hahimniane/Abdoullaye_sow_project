@@ -53,6 +53,22 @@ const LOT_ACTIVITY_PAYMENT_STATUS = Object.freeze({
 const LOT_ACTIVITY_PAYMENT_TYPE = "lot_activity";
 const DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS = 7500;
 
+/**
+ * The four activities a new lot business starts with (the Keren workbook).
+ * Seed data, nothing more: a business renames, reprices, or adds its own from
+ * here. Only "Title purchase at auction" needs the auction-house field.
+ */
+const LOT_ACTIVITY_SEED_TYPES = Object.freeze([
+  {label: "Title purchase at auction", defaultFeeCents: 0,
+    needsAuctionHouse: true, sortOrder: 0},
+  {label: "Dispatch", defaultFeeCents: 0, needsAuctionHouse: false,
+    sortOrder: 1},
+  {label: "Reassignment", defaultFeeCents: 0, needsAuctionHouse: false,
+    sortOrder: 2},
+  {label: "Storage release", defaultFeeCents: 0, needsAuctionHouse: false,
+    sortOrder: 3},
+]);
+
 const MAX_TEXT = 200;
 const MAX_LABEL = 120;
 const MAX_NOTE = 500;
@@ -305,6 +321,7 @@ module.exports = {
   LOT_ACTIVITY_PAYMENT_STATUS,
   LOT_ACTIVITY_PAYMENT_TYPE,
   DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS,
+  LOT_ACTIVITY_SEED_TYPES,
   normalizeReceivedVia,
   normalizeAuctionHouse,
   validateLotActivityType,
