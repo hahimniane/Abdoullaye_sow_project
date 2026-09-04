@@ -8231,11 +8231,19 @@ exports.startBusinessBillingCardSetup = onCall(
       const customerId = await ensureBusinessBillingCustomer(
           db, businessId, businessDoc.data() || {},
       );
-      const setupIntent = await createStripeSetupIntent({
+      // A Stripe-hosted setup page saves the card with no Stripe.js in the
+      // console: the console opens the URL and calls finalize on return.
+      const base = String(request.data?.returnUrl || "").trim() ||
+        "https://business.laawoldigital.com/";
+      const joiner = base.includes("?") ? "&" : "?";
+      const session = await createStripeSetupCheckoutSession({
         customerId,
+        successUrl:
+          `${base}${joiner}billingCard=done&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${base}${joiner}billingCard=cancelled`,
         metadata: {businessId, purpose: "subscription_billing"},
       });
-      return {clientSecret: setupIntent.client_secret, customerId};
+      return {url: String(session.url || ""), sessionId: String(session.id)};
     },
 );
 
@@ -8247,9 +8255,18 @@ exports.finalizeBusinessBillingCard = onCall(
     async (request) => {
       const uid = requireAuth(request);
       const businessId = String(request.data?.businessId || "").trim();
-      const setupIntentId = String(request.data?.setupIntentId || "").trim();
+      const sessionId = String(request.data?.sessionId || "").trim();
       await requireBusinessPermission(uid, businessId, "profile");
-      const intent = await retrieveStripeSetupIntent(setupIntentId);
+      const session = await retrieveStripeCheckoutSession(sessionId);
+      if (session?.mode !== "setup" ||
+          String(session?.metadata?.businessId || "") !== businessId) {
+        throw new HttpsError(
+            "permission-denied", "This card setup does not belong here.",
+        );
+      }
+      const intent = await retrieveStripeSetupIntent(
+          String(session.setup_intent || ""),
+      );
       const paymentMethodId = String(intent?.payment_method || "").trim();
       if (intent?.status !== "succeeded" || !paymentMethodId) {
         throw new HttpsError(
