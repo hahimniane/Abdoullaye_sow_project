@@ -45,9 +45,14 @@ function parkingRangeOverlaps(row, start, end) {
   const rowStart = toDate(row?.parkingDate);
   if (!rowStart) return false;
   const rowEnd = toDate(row?.parkingEndDate);
-  const startsBeforeWindowEnds = rowStart.getTime() <= end.getTime();
+  // The WINDOW can be open-ended too: recording an open-ended walk-up asks
+  // "is there a space from today onward", with no end date at all.
+  const windowEnd = toDate(end);
+  const windowStart = toDate(start) || windowEnd || new Date();
+  const startsBeforeWindowEnds =
+    !windowEnd || rowStart.getTime() <= windowEnd.getTime();
   if (!rowEnd) return startsBeforeWindowEnds;
-  return rowEnd.getTime() >= start.getTime() && startsBeforeWindowEnds;
+  return rowEnd.getTime() >= windowStart.getTime() && startsBeforeWindowEnds;
 }
 
 function isActiveParkingRow(row) {

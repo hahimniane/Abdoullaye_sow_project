@@ -4455,6 +4455,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Ledger entry voided": "Entrée du registre invalidée",
   "Ledger entry edited": "Entrée du registre modifiée",
   "Ledger payment received": "Paiement du registre reçu",
+  "Priced for its leave date when it was recorded; nothing accrues day by day.":
+    "Tarifé jusqu’à sa date de départ lors de l’enregistrement ; rien ne s’accumule au jour le jour.",
   "This entry was voided. Record a new one instead.":
     "Cette entrée a été invalidée. Enregistrez-en une nouvelle à la place.",
   "This entry is paid, so the amount can't change. Void it and record a new one if the price was wrong.":

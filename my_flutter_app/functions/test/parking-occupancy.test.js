@@ -63,6 +63,26 @@ describe("open-ended stays keep their space", () => {
   });
 });
 
+describe("an open-ended window (a walk-up with no leave date)", () => {
+  it("does not crash and counts every car still on the lot", () => {
+    const rows = [
+      {parkingDate: day("2026-08-01")}, // open-ended, still here
+      {parkingDate: day("2026-08-01"), parkingEndDate: day("2026-08-10")},
+      {parkingDate: day("2026-09-20")}, // arrives after the window opens
+    ];
+    const from = day("2026-09-05");
+    assert.equal(parkingRangeOverlaps(rows[0], from, null), true);
+    assert.equal(parkingRangeOverlaps(rows[1], from, null), false);
+    assert.equal(parkingRangeOverlaps(rows[2], from, null), true);
+    assert.equal(parkingAvailability({
+      business: {parkingTotalSpaces: 5},
+      reservations: rows,
+      start: day("2026-09-05"),
+      end: null,
+    }), 3);
+  });
+});
+
 describe("availability counts every active overlapping stay", () => {
   it("subtracts blocked spaces and each active overlapping car", () => {
     const reservations = [
