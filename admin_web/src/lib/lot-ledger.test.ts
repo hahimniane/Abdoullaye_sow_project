@@ -181,3 +181,25 @@ test("an expense needs an amount, a date, and who paid", () => {
     ["expense_amount_required", "expense_date_required", "expense_paid_by_required"],
   );
 });
+
+test("the edit form keeps the day the activity happened, not the 1st", async () => {
+  const { dateInputValue } = await import("./lot-ledger.ts");
+  const stamp = { toDate: () => new Date(2026, 7, 15, 8, 0, 0) };
+  assert.equal(dateInputValue(stamp), "2026-08-15");
+  assert.equal(dateInputValue(new Date(2026, 0, 3)), "2026-01-03");
+  assert.equal(dateInputValue(""), "");
+  assert.equal(dateInputValue("not a date"), "");
+});
+
+test("an expense counts in exactly one month", async () => {
+  const { lotExpenseEntryMonth } = await import("./lot-ledger.ts");
+  const boughtInSeptember = new Date(2026, 8, 2, 12);
+  // Logged against August's bill but bought in September: August only.
+  assert.equal(
+    lotExpenseEntryMonth({ month: "2026-08", spentAt: boughtInSeptember }),
+    "2026-08",
+  );
+  // No bill month recorded: the purchase date decides.
+  assert.equal(lotExpenseEntryMonth({ spentAt: boughtInSeptember }), "2026-09");
+  assert.equal(lotExpenseEntryMonth({ month: "garbage", spentAt: boughtInSeptember }), "2026-09");
+});

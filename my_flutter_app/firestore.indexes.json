@@ -146,6 +146,20 @@
       ]
     },
     {
+      "collectionGroup": "parkedCars",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "parkingDate",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "participants",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

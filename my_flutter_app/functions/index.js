@@ -296,11 +296,14 @@ const {
   validateLotActivity,
   lotActivityRecord,
   lotActivityInitialStatus,
+  lotActivityEditRefusal,
+  lotActivityLockedPaymentFields,
   validateLotExpenseEntry,
   lotExpenseEntryRecord,
   validateLotExpenseLine,
   normalizeReceivedVia: lotNormalizeReceivedVia,
 } = require("./lot_ledger");
+const {parkingAvailability} = require("./parking_occupancy");
 const {
   resolveBillingPlan,
   subscriptionAccrualDelta,
@@ -7849,6 +7852,7 @@ const PAYMENT_COMPLETION_EXPORTS = Object.freeze({
 // handler instead. Both maps are consulted by runPaymentCompletion.
 const PAYMENT_COMPLETION_HANDLERS = Object.freeze({
   [BUSINESS_PARKING_PAYMENT_TYPE]: completeBusinessParkingEntryPayment,
+  [LOT_ACTIVITY_PAYMENT_TYPE]: completeLotActivityPayment,
 });
 
 function isReconcilablePaymentType(paymentType) {
@@ -11001,15 +11005,8 @@ async function generateTrackingCode(prefix, collectionPath) {
   throw new HttpsError("internal", "Could not generate tracking code");
 }
 
-const ACTIVE_PARKING_STATUSES = new Set([
-  "pending_payment",
-  "requested",
-  "reserved",
-  "vehicle_received",
-  "parked",
-  "scheduled_for_transport",
-  "active",
-]);
+// Which rows hold a space, and for how long, lives in ./parking_occupancy
+// (pure, unit-tested). Open-ended stays occupy their space until closed.
 
 function parseParkingDate(value, field) {
   const parsed = value instanceof Date ? value : new Date(String(value || ""));
@@ -11022,22 +11019,6 @@ function parseParkingDate(value, field) {
 function parkingBillableDays(start, end) {
   const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
   return Math.max(1, Math.ceil(hours / 24));
-}
-
-function parkingRangeOverlaps(row, start, end) {
-  const rawStart = row.parkingDate?.toDate?.() ||
-    new Date(String(row.parkingDate || ""));
-  if (!(rawStart instanceof Date) || Number.isNaN(rawStart.getTime())) {
-    return false;
-  }
-  const rawEnd = row.parkingEndDate?.toDate?.() ||
-    new Date(String(row.parkingEndDate || ""));
-  const rowStart = rawStart;
-  const rowEnd = rawEnd instanceof Date && !Number.isNaN(rawEnd.getTime()) ?
-    rawEnd :
-    rowStart;
-  return rowEnd.getTime() >= start.getTime() &&
-    rowStart.getTime() <= end.getTime();
 }
 
 function businessOffersParking(business) {
@@ -11072,20 +11053,21 @@ function parkingEstimateCents({business, start, end, pickupRequested}) {
   return Math.max(0, total);
 }
 
-function parkingAvailability({business, reservations, start, end}) {
-  const totalSpaces = Math.max(0, intOrFallback(
-      business.parkingTotalSpaces,
-      0,
-  ));
-  const blockedSpaces = Math.max(0, intOrFallback(
-      business.parkingBlockedSpaces,
-      0,
-  ));
-  const overlapping = reservations.filter((row) =>
-    ACTIVE_PARKING_STATUSES.has(String(row.status || "reserved")) &&
-    parkingRangeOverlaps(row, start, end),
-  ).length;
-  return Math.max(0, totalSpaces - blockedSpaces - overlapping);
+/**
+ * The parkedCars rows that can still hold a space for a business. Newest
+ * arrivals first, so the bound covers the cars that could be on the lot; an
+ * unordered limit could drop an active car behind old history and report a
+ * space that is taken.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The lot.
+ * @return {object} A query to get() or transaction.get().
+ */
+function parkedCarsForAvailability(db, businessId) {
+  return db.collection("parkedCars")
+      .where("businessId", "==", businessId)
+      .orderBy("parkingDate", "desc")
+      .limit(1000);
 }
 
 function distanceMiles(latA, lonA, latB, lonB) {
@@ -11198,9 +11180,7 @@ async function parkingOptionsForRequest(data) {
     ) {
       continue;
     }
-    const reservations = await db.collection("parkedCars")
-        .where("businessId", "==", doc.id)
-        .limit(500)
+    const reservations = await parkedCarsForAvailability(db, doc.id)
         .get();
     const option = parkingOptionFromBusiness({
       businessId: doc.id,
@@ -11334,9 +11314,7 @@ exports.createParkingReservation = onCall(
           );
         }
         const reservations = await transaction.get(
-            db.collection("parkedCars")
-                .where("businessId", "==", cleanBusinessId)
-                .limit(500),
+            parkedCarsForAvailability(db, cleanBusinessId),
         );
         option = parkingOptionFromBusiness({
           businessId: cleanBusinessId,
@@ -11779,9 +11757,7 @@ exports.createBusinessParkingEntry = onCall(
           );
         }
         const reservations = await transaction.get(
-            db.collection("parkedCars")
-                .where("businessId", "==", input.businessId)
-                .limit(500),
+            parkedCarsForAvailability(db, input.businessId),
         );
         // Same option/pricing path the customer gets - parkingEstimateCents
         // runs inside parkingOptionFromBusiness, so a walk-up is never
@@ -12441,9 +12417,7 @@ exports.updateBusinessParkingEntry = onCall(
         }
         const business = businessDoc.data() || {};
         const reservations = await transaction.get(
-            db.collection("parkedCars")
-                .where("businessId", "==", businessId)
-                .limit(500),
+            parkedCarsForAvailability(db, businessId),
         );
         // This record must not count against its own availability, or moving
         // a car's dates by a day would report the lot as full.
@@ -13450,6 +13424,13 @@ const LOT_LEDGER_MESSAGES = Object.freeze({
     "Attach a receipt: this business asks for proof at this amount and above.",
   expense_line_label_required: "Name the expense line.",
   expense_line_kind_invalid: "Choose how this expense behaves.",
+  activity_voided: "This entry was voided. Record a new one instead.",
+  paid_amount_locked:
+    "This entry is paid, so the amount can't change. Void it and record a " +
+    "new one if the price was wrong.",
+  payment_method_locked:
+    "Use Chase payment to change how this gets paid; it closes the other " +
+    "path so the customer can't pay twice.",
 });
 
 function lotLedgerMessage(errors) {
@@ -13654,6 +13635,16 @@ async function issueLotActivityLink({
   db, activityRef, businessId, business, activityId, feeCents, customerEmail,
   customerPhone, trackingCode,
 }) {
+  // One live session at a time: a superseded session left open in Stripe
+  // could still be paid alongside the new one.
+  const previous = (await activityRef.get()).data() || {};
+  const previousSessionId = String(previous.checkoutSessionId || "").trim();
+  if (previousSessionId && !SIMULATE_PAYMENTS) {
+    await expireStripeCheckoutSession(
+        previousSessionId,
+        String(previous.stripeConnectedAccountId || "").trim() || undefined,
+    ).catch(() => null);
+  }
   const pricingDoc = await db.collection("shipmentPricing")
       .doc("serviceFees").get();
   const platformFeePct = servicePlatformFeePctForBusiness(
@@ -13750,7 +13741,8 @@ async function resolveLotActivityPaymentLink(db, token, res) {
     }));
     return true;
   }
-  if (status === LOT_ACTIVITY_PAYMENT_STATUS.CANCELLED) {
+  if (entry.voided === true ||
+      status === LOT_ACTIVITY_PAYMENT_STATUS.CANCELLED) {
     res.status(200).send(parkingPaymentLinkPage({
       title: "Link cancelled",
       message: "The business cancelled this payment link. Contact them if " +
@@ -13815,6 +13807,67 @@ async function resolveLotActivityPaymentLink(db, token, res) {
   return true;
 }
 
+/**
+ * A lot activity paid through its /p link. Runs from the Stripe webhook (and
+ * the stale-payment sweep) once the PaymentIntent has succeeded. Idempotent:
+ * a replayed event settles nothing twice and sends no second receipt.
+ *
+ * Without this handler the payment type was unknown to the reconciler, so a
+ * customer could pay and the ledger kept saying "Awaiting payment".
+ *
+ * @param {object} target The routed payment target (lotActivities/{id}).
+ * @return {Promise<void>}
+ */
+async function completeLotActivityPayment(target) {
+  const ref = admin.firestore().doc(target.path);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) {
+    throw new Error(`Payment target not found: ${target.path}`);
+  }
+  const entry = snapshot.data() || {};
+  const paid = LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED;
+  const firstSettlement = entry.paymentStatus !== paid;
+  await ref.update({
+    paymentStatus: paid,
+    checkoutStatus: "completed",
+    ...(firstSettlement && {paidAt: FirestoreFieldValue.serverTimestamp()}),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  await issueBusinessPayoutTransfer({
+    ref,
+    data: {...entry, paymentStatus: paid},
+    serviceType: LOT_ACTIVITY_PAYMENT_TYPE,
+  });
+  if (!firstSettlement) return;
+  const amountCents = Number(entry.feeCents || 0);
+  const dollars = `$${(amountCents / 100).toFixed(2)}`;
+  const code = String(entry.trackingCode || "");
+  const businessId = String(entry.businessId || "");
+  await writeLotLedgerAudit({
+    businessId,
+    entityType: "activity",
+    entityId: ref.id,
+    action: "paid",
+    byStaffId: "",
+    summary: `Paid ${dollars} on the website`,
+    changes: [],
+  });
+  const businessDoc = await admin.firestore()
+      .collection("businesses").doc(businessId).get();
+  const name = String(businessDoc.data()?.name || "The lot");
+  await emailWalkUpParkingCustomer({
+    to: entry.customerEmail,
+    subject: `Payment received - ${code}`,
+    text: `${name} has received your payment of ${dollars} for ${code}. ` +
+      "Keep this email as your receipt.",
+  });
+  await smsWalkUpParkingCustomer({
+    to: entry.customerPhone,
+    body: `${name}: payment of ${dollars} received for ${code}. ` +
+      "This is your receipt.",
+  });
+}
+
 exports.createLotActivity = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -13860,6 +13913,7 @@ exports.createLotActivity = onCall(
         activityDateMonth: activityDate ? lotMonthKeyOf(activityDate) : "",
         paymentStatus: status,
         platformFeeCents: 0,
+        currency: SHIPMENT_CURRENCY,
         createdAt: now,
         updatedAt: now,
       });
@@ -13907,15 +13961,27 @@ exports.updateLotActivity = onCall(
       if (errors.length > 0) {
         throw new HttpsError("invalid-argument", lotLedgerMessage(errors));
       }
+      const refusal = lotActivityEditRefusal(current, changes, fee.feeCents);
+      if (refusal) {
+        throw new HttpsError(
+            "failed-precondition", lotLedgerMessage([refusal]),
+            {reason: refusal},
+        );
+      }
       const businessDoc =
           await db.collection("businesses").doc(businessId).get();
       const business = businessDoc.data() || {};
-      const record = lotActivityRecord(changes, {
-        activityTypeLabel: fee.label,
-        feeCents: fee.feeCents,
-        feeOverridden: fee.feeOverridden,
-        recordedByStaffId: String(current.recordedByStaffId || uid),
-      });
+      // Payment fields never change through an edit - only through the
+      // payment actions, which cancel the other path.
+      const record = {
+        ...lotActivityRecord(changes, {
+          activityTypeLabel: fee.label,
+          feeCents: fee.feeCents,
+          feeOverridden: fee.feeOverridden,
+          recordedByStaffId: String(current.recordedByStaffId || uid),
+        }),
+        ...lotActivityLockedPaymentFields(current),
+      };
       const activityDate = lotActivityMidday(changes.activityDate);
       await ref.set({
         ...record,
@@ -13981,6 +14047,10 @@ exports.resendLotActivityLink = onCall(
       const current = doc.data() || {};
       await requireBusinessPermission(
           uid, String(current.businessId || ""), "ledger");
+      if (current.voided === true) {
+        throw new HttpsError(
+            "failed-precondition", LOT_LEDGER_MESSAGES.activity_voided);
+      }
       if (String(current.paymentMethod) !== "payment_link" ||
           String(current.paymentStatus) !==
             LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_LINK) {
@@ -14020,6 +14090,10 @@ exports.recordLotActivityDirectPayment = onCall(
       const current = doc.data() || {};
       await requireBusinessPermission(
           uid, String(current.businessId || ""), "ledger");
+      if (current.voided === true) {
+        throw new HttpsError(
+            "failed-precondition", LOT_LEDGER_MESSAGES.activity_voided);
+      }
       const paid = LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED;
       if (String(current.paymentStatus) === paid) {
         throw new HttpsError(
@@ -14159,7 +14233,10 @@ exports.createLotExpenseEntry = onCall(
 // marked with who/when/why, excluded from totals, and it lands in the Needs-
 // attention feed so others see the change.
 exports.voidLotActivity = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      secrets: [stripeSecretKey],
+    },
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
@@ -14175,11 +14252,28 @@ exports.voidLotActivity = onCall(
       if (current.voided === true) {
         throw new HttpsError("failed-precondition", "Already voided.");
       }
+      // An unpaid link dies with the entry: the /p page answers "cancelled"
+      // and no new checkout is ever minted for it. A paid entry keeps its
+      // payment record - the money was real - and is only marked void.
+      const unpaidLink = String(current.paymentMethod) === "payment_link" &&
+        String(current.paymentStatus) ===
+          LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_LINK;
+      const sessionId = String(current.checkoutSessionId || "").trim();
+      if (unpaidLink && sessionId && !SIMULATE_PAYMENTS) {
+        await expireStripeCheckoutSession(
+            sessionId,
+            String(current.stripeConnectedAccountId || "").trim() || undefined,
+        ).catch(() => null);
+      }
       await ref.set({
         voided: true,
         voidedByStaffId: uid,
         voidReason: reason,
         voidedAt: FirestoreFieldValue.serverTimestamp(),
+        ...(unpaidLink && {
+          paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.CANCELLED,
+          checkoutStatus: "cancelled",
+        }),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       }, {merge: true});
       await writeLotLedgerAudit({
@@ -14311,6 +14405,7 @@ exports.billParkingThroughToday = onCall(
       });
       let token = String(car.paymentLinkToken || "").trim();
       let durableUrl = parkingPaymentLinkUrl(token);
+      let newSessionId = "";
       if (!SIMULATE_PAYMENTS) {
         const session = await createStripeCustomerCheckoutSession({
           amount: amountCents,
@@ -14335,15 +14430,25 @@ exports.billParkingThroughToday = onCall(
         });
         token = crypto.randomBytes(24).toString("base64url");
         durableUrl = parkingPaymentLinkUrl(token);
+        newSessionId = String(session.id || "");
         const pi = String(session.payment_intent || "").trim();
         await ref.update({
           paymentLinkToken: token,
           paymentLinkUrl: durableUrl,
           checkoutUrl: durableUrl,
-          checkoutSessionId: String(session.id || ""),
+          checkoutSessionId: newSessionId,
           stripeCheckoutUrl: String(session.url || ""),
           checkoutStatus: "open",
           paymentStatus: "pending",
+          // This bill is what the link now collects. Without these the
+          // durable link re-minted the previous amount, a car once settled
+          // in person (paymentMethod "direct") answered "nothing to pay",
+          // and the webhook rejected the payment as a mismatch.
+          paymentMethod: "payment_link",
+          amountDueCents: amountCents,
+          amountDue: amountCents / 100,
+          paymentLinkMintCount: 0,
+          paymentLinkCancelledAt: FirestoreFieldValue.delete(),
           ...(pi.startsWith("pi_") && {stripePaymentIntentId: pi}),
           ...payoutFields,
         });
@@ -14357,7 +14462,7 @@ exports.billParkingThroughToday = onCall(
           days,
           amountCents,
           paymentStatus: SIMULATE_PAYMENTS ? "succeeded" : "pending",
-          checkoutSessionId: String(car.checkoutSessionId || ""),
+          checkoutSessionId: newSessionId,
           recordedByStaffId: uid,
           createdAt: FirestoreTimestamp.fromDate(new Date(todayMs)),
         }),

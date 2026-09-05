@@ -4443,6 +4443,26 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Avec un forfait mensuel, Laawol prend en charge les frais Stripe par transaction et l’entreprise conserve 100 % de chaque versement pendant le mois. En fin de mois, l’entreprise est débitée du plus petit des deux montants entre son coût cumulé (la commission qu’elle aurait payée + les frais Stripe pris en charge par Laawol) et le forfait mensuel, sur sa carte enregistrée. S’applique immédiatement à toute l’entreprise.",
 });
 
+// Review fixes for the lot ledger: locked payment fields on edit, the
+// customer's own payment in the change history, and the alert labels.
+Object.assign(TEXT_TRANSLATIONS, {
+  "the customer, on the website": "le client, sur le site web",
+  "How it gets paid": "Mode de règlement",
+  "Change that from Chase payment, not here: it closes the other path so the customer can't pay twice.":
+    "Modifiez-le depuis Relancer le paiement, pas ici : cela ferme l’autre voie pour que le client ne paie pas deux fois.",
+  "Paid, so the amount is locked. Void this entry and record a new one if the price was wrong.":
+    "Payé : le montant est verrouillé. Invalidez cette entrée et enregistrez-en une nouvelle si le prix était faux.",
+  "Ledger entry voided": "Entrée du registre invalidée",
+  "Ledger entry edited": "Entrée du registre modifiée",
+  "Ledger payment received": "Paiement du registre reçu",
+  "This entry was voided. Record a new one instead.":
+    "Cette entrée a été invalidée. Enregistrez-en une nouvelle à la place.",
+  "This entry is paid, so the amount can't change. Void it and record a new one if the price was wrong.":
+    "Cette entrée est payée : le montant ne peut pas changer. Invalidez-la et enregistrez-en une nouvelle si le prix était faux.",
+  "Use Chase payment to change how this gets paid; it closes the other path so the customer can't pay twice.":
+    "Utilisez Relancer le paiement pour changer le mode de règlement ; cela ferme l’autre voie pour que le client ne paie pas deux fois.",
+});
+
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "17 characters": "17 caractères",
   "Add a photo by URL": "Ajouter une photo par URL",

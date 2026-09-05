@@ -297,6 +297,54 @@ function lotExpenseEntryRecord(input, opts) {
 }
 
 /**
+ * Why an ordinary edit of a recorded activity must be refused, if it must.
+ *
+ * Money rules, not form rules:
+ * - a voided row is history; record a new one instead of reviving it;
+ * - a paid row's amount is what the customer actually paid, so it cannot be
+ *   edited into a different number after the fact;
+ * - how a row is paid changes only through the payment actions ("record as
+ *   paid outside" / re-send the link), which cancel the other path. An edit
+ *   that flips the method would skip those checks.
+ *
+ * @param {object} current The stored activity.
+ * @param {object} changes The proposed edit (validated callable data).
+ * @param {number} nextFeeCents The fee the edit would store.
+ * @return {string|null} An error code, or null when the edit may proceed.
+ */
+function lotActivityEditRefusal(current, changes, nextFeeCents) {
+  const row = current && typeof current === "object" ? current : {};
+  if (row.voided === true) return "activity_voided";
+  const currentMethod = text(row.paymentMethod, 40);
+  const nextMethod = text(changes?.paymentMethod, 40);
+  if (currentMethod && nextMethod && nextMethod !== currentMethod) {
+    return "payment_method_locked";
+  }
+  const paid = text(row.paymentStatus, 40) ===
+    LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED;
+  const currentFee = Math.max(0, intCents(row.feeCents) || 0);
+  const nextFee = Math.max(0, intCents(nextFeeCents) || 0);
+  if (paid && nextFee !== currentFee) return "paid_amount_locked";
+  return null;
+}
+
+/**
+ * The payment fields an edit may never rewrite. Spread over the new record
+ * so an edit keeps how (and by whom) the money was taken exactly as stored.
+ *
+ * @param {object} current The stored activity.
+ * @return {object} paymentMethod/receivedVia/receivedByStaffId as stored.
+ */
+function lotActivityLockedPaymentFields(current) {
+  const row = current && typeof current === "object" ? current : {};
+  return {
+    paymentMethod: text(row.paymentMethod, 40),
+    receivedVia: text(row.receivedVia, 40),
+    receivedByStaffId: text(row.receivedByStaffId, MAX_LABEL),
+  };
+}
+
+/**
  * @param {object} input Raw callable data.
  * @return {string[]} Error codes.
  */
@@ -329,6 +377,8 @@ module.exports = {
   validateLotActivity,
   lotActivityRecord,
   lotActivityInitialStatus,
+  lotActivityEditRefusal,
+  lotActivityLockedPaymentFields,
   expenseProofRequired,
   validateLotExpenseEntry,
   lotExpenseEntryRecord,
