@@ -7680,10 +7680,12 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
     return d ? d.getTime() : null;
   };
   const dailyCents = Math.round((Number(r.dailyRate) || 0) * 100);
-  const fromMs = asMs(r.billedThroughDate) ?? asMs(r.parkingDate ?? r.createdAt);
-  const days = fromMs ? Math.max(0, Math.floor((Date.now() - fromMs) / dayMs)) : 0;
-  const unbilledCents = days * dailyCents;
   const openEnded = !r.parkingEndDate;
+  const fromMs = asMs(r.billedThroughDate) ?? asMs(r.parkingDate ?? r.createdAt);
+  // Only an open-ended stay accrues: a stay with a leave date was priced for
+  // its whole range when it was recorded.
+  const days = openEnded && fromMs ? Math.max(0, Math.floor((Date.now() - fromMs) / dayMs)) : 0;
+  const unbilledCents = days * dailyCents;
   const settled = ["succeeded", "paid"].includes(String(r.paymentStatus));
   const billedThrough = asDate(r.billedThroughDate);
   const staffOptions = staff.map((s) => ({
@@ -7691,11 +7693,13 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
     name: text((s as Record<string, unknown>).fullName, "") || text((s as Record<string, unknown>).name, "") || text((s as Record<string, unknown>).email, ""),
   }));
 
-  const note = unbilledCents > 0
-    ? billedThrough
-      ? `Accruing since ${formatDate(r.billedThroughDate)}. Bill it whenever you like — the car stays in place.`
-      : "Nothing billed yet. Bill through today to send the first link."
-    : "Everything up to today has been billed.";
+  const note = !openEnded
+    ? "Priced for its leave date when it was recorded; nothing accrues day by day."
+    : unbilledCents > 0
+      ? billedThrough
+        ? `Accruing since ${formatDate(r.billedThroughDate)}. Bill it whenever you like — the car stays in place.`
+        : "Nothing billed yet. Bill through today to send the first link."
+      : "Everything up to today has been billed.";
 
   async function bill() {
     await runPanelAction(setBusy, setFlash, "Payment link sent.", async () => {
@@ -7724,9 +7728,11 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
       <p className="lst-hint">{note}</p>
       {flash && <div className="lst-hint" role="status">{flash}</div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        <button className="primary-button" type="button" disabled={busy || unbilledCents <= 0} onClick={bill}>
-          {unbilledCents > 0 ? `Bill ${lotFormatCents(unbilledCents)} through today` : "Nothing to bill"}
-        </button>
+        {openEnded && (
+          <button className="primary-button" type="button" disabled={busy || unbilledCents <= 0} onClick={bill}>
+            {unbilledCents > 0 ? `Bill ${lotFormatCents(unbilledCents)} through today` : "Nothing to bill"}
+          </button>
+        )}
         {!settled && billedThrough && (
           <>
             <select value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} aria-label="Received by">

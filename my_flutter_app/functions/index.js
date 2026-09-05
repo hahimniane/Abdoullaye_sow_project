@@ -14397,6 +14397,18 @@ exports.billParkingThroughToday = onCall(
         const d = new Date(v);
         return Number.isNaN(d.getTime()) ? null : d.getTime();
       };
+      // Only an OPEN-ENDED stay accrues day by day. A stay with a leave
+      // date was priced for that whole range when it was recorded, so
+      // billing it "through today" would charge those days a second time
+      // (the console offered "$175" on a paid two-night reservation).
+      if (asMs(car.parkingEndDate)) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This stay has a leave date, so its price already covers it. " +
+              "Nothing accrues day by day.",
+            {reason: "parking_not_open_ended"},
+        );
+      }
       const dayMs = 24 * 60 * 60 * 1000;
       const fromMs = asMs(car.billedThroughDate) ?? asMs(car.parkingDate);
       const todayMs = Date.now();
