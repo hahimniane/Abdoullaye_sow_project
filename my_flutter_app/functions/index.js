@@ -8039,7 +8039,28 @@ async function runPaymentCompletion(target) {
   });
 }
 
+// Payment types whose customer link is OURS (the durable /p link), not the
+// Stripe session. A Checkout Session dying is routine - Stripe caps them at
+// 24 hours - and the next visit to the link mints a fresh one. So a session
+// expiring must never rewrite the record's payment status: an unpaid link
+// stays payable, a voided entry stays cancelled, and money recorded in
+// person stays succeeded. (Before this, the generic branch below wrote
+// "failed", which made the lot-activity link answer "Nothing to pay" a day
+// after it was sent, and turned a just-voided entry back into "failed".)
+const DURABLE_LINK_PAYMENT_TYPES = new Set([
+  BUSINESS_PARKING_PAYMENT_TYPE,
+  LOT_ACTIVITY_PAYMENT_TYPE,
+]);
+
 async function runPaymentCancellation(target, eventType) {
+  if (DURABLE_LINK_PAYMENT_TYPES.has(target.paymentType)) {
+    await admin.firestore().doc(target.path).set({
+      checkoutStatus:
+        eventType === "checkout.session.expired" ? "expired" : "failed",
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+    return;
+  }
   const exportName = PAYMENT_CANCELLATION_EXPORTS[target.paymentType];
   if (exportName) {
     const callable = exports[exportName];
