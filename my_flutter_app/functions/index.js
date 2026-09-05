@@ -11038,6 +11038,10 @@ function parseParkingDate(value, field) {
 }
 
 function parkingBillableDays(start, end) {
+  // An OPEN-ENDED stay (no leave date) has nothing to price up front: it is
+  // billed day by day later, through "bill through today". Before this,
+  // recording one from the console crashed here and answered INTERNAL.
+  if (!(end instanceof Date) || Number.isNaN(end.getTime())) return 0;
   const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
   return Math.max(1, Math.ceil(hours / 24));
 }
@@ -11056,12 +11060,12 @@ function parkingEstimateCents({business, start, end, pickupRequested}) {
   const monthly = centsFromDollars(business.parkingMonthlyRate || 0);
   const weekly = centsFromDollars(business.parkingWeeklyRate || 0);
   const daily = centsFromDollars(business.parkingDailyRate || 0);
-  if (monthly > 0) {
+  if (days > 0 && monthly > 0) {
     const months = Math.floor(days / 30);
     total += months * monthly;
     days -= months * 30;
   }
-  if (weekly > 0) {
+  if (days > 0 && weekly > 0) {
     const weeks = Math.floor(days / 7);
     total += weeks * weekly;
     days -= weeks * 7;
