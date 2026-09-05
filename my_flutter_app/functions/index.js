@@ -11844,7 +11844,10 @@ exports.createBusinessParkingEntry = onCall(
             currency: SHIPMENT_CURRENCY,
           }),
           parkingDate: FirestoreTimestamp.fromDate(input.startDate),
-          parkingEndDate: FirestoreTimestamp.fromDate(input.endDate),
+          // null = open-ended: the car stays until the business closes the
+          // stay, and it is billed day by day through "bill through today".
+          parkingEndDate: input.endDate ?
+            FirestoreTimestamp.fromDate(input.endDate) : null,
           enteredByUid: uid,
           ...payoutFields,
           createdAt: now,
