@@ -41,6 +41,29 @@ const CASES = [
     },
   },
   {
+    // A lot-ledger activity paid through the durable /p link. Same shape as
+    // the walk-up above: no customer account, the business is the identity,
+    // and no PaymentIntent id is stored until the webhook binds it. This
+    // type was missing from the routes entirely, so a paid job stayed
+    // "Awaiting payment" forever.
+    paymentType: "lot_activity",
+    metadata: {
+      activityId: "act_1",
+      businessId: "business_1",
+    },
+    path: "lotActivities/act_1",
+    type: "lot_activity",
+    document: {
+      id: "act_1",
+      data: {
+        businessId: "business_1",
+        feeCents: 5000,
+        paymentStatus: "awaiting_payment_link",
+        checkoutSessionId: "cs_test_lot_1",
+      },
+    },
+  },
+  {
     paymentType: "parking_deposit",
     metadata: {
       reservationId: "park_1",
@@ -649,8 +672,14 @@ describe("stale pending scan pagination", () => {
       "freight_settlement_adjustments",
       "car_purchases",
       "hold_extensions",
+      "lot_activities",
     ]);
     assert.ok(scans.every((scan) => scan.limit === 200));
+    // Lot activities wait under their own state name; the scan must look
+    // for it or those rows are never swept.
+    const lot = scans.find((scan) => scan.id === "lot_activities");
+    assert.deepEqual(lot.pendingStates, ["awaiting_payment_link"]);
+    assert.deepEqual(scans[0].pendingStates, ["pending", "processing"]);
     assert.deepEqual(scans[0].orderBy, ["updatedAt", "__name__"]);
     assert.equal(scans[0].cursor.documentId, "park_1");
   });

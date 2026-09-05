@@ -74,6 +74,8 @@ import {
   lotActivityPaid,
   lotActivityAwaitingLink,
   canChaseLotActivity,
+  dateInputValue as lotDateInputValue,
+  lotExpenseEntryMonth,
   emptyLotActivityDraft,
   emptyLotActivityTypeDraft,
   emptyLotExpenseEntryDraft,
@@ -6920,23 +6922,20 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     return s;
   }, [monthActivities]);
 
+  // Every purchase counts in exactly one month (lotExpenseEntryMonth), and
+  // a fixed line's standing amount is replaced - not added to - when a live
+  // purchase was logged against it that month. A voided purchase neither
+  // counts nor suppresses the standing amount.
   const monthExpenseFor = (m: string) => {
     let s = 0;
-    for (const entry of expenseEntries.rows) {
-      const e = entry as Record<string, unknown>;
-      if (e.voided === true) continue;
-      if (String(e.month) === m || lotRowMonth(entry, "spentAt") === m) {
-        s += Number(e.amountCents) || 0;
-      }
+    const live = expenseEntries.rows.filter((e) => (e as Record<string, unknown>).voided !== true) as Record<string, unknown>[];
+    for (const e of live) {
+      if (lotExpenseEntryMonth(e) === m) s += Number(e.amountCents) || 0;
     }
     for (const line of expenseLines.rows) {
       const l = line as Record<string, unknown>;
       if (l.kind === "fixed" && l.active !== false) {
-        const override = expenseEntries.rows.some(
-          (e) =>
-            String((e as Record<string, unknown>).lineId) === String(l.id) &&
-            String((e as Record<string, unknown>).month) === m,
-        );
+        const override = live.some((e) => String(e.lineId) === String(l.id) && lotExpenseEntryMonth(e) === m);
         if (!override) s += Number(l.recurringCents) || 0;
       }
     }
@@ -7002,7 +7001,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       activityTypeId: String(row.activityTypeId ?? ""),
       customLabel: text(row.customLabel, ""),
       fee: String((Number(row.feeCents) || 0) / 100),
-      activityDate: lotRowMonth(row, "activityDate") ? `${lotRowMonth(row, "activityDate")}-01` : `${month}-01`,
+      activityDate: lotDateInputValue(row.activityDate) || `${month}-01`,
       customerName: text(row.customerName, ""),
       customerPhone: text(row.customerPhone, ""),
       customerEmail: text(row.customerEmail, ""),
@@ -7021,6 +7020,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   }
 
   const selectedType = typeById.get(activityDraft.activityTypeId);
+  const editRow = editId ? (activities.rows.find((r) => String(r.id) === editId) as Record<string, unknown> | undefined) : undefined;
+  const editingPaid = Boolean(editRow && lotActivityPaid(editRow));
 
   // Typing a VIN pulls the car and customer from an existing record for this
   // business (a parked car or a past activity), so staff don't re-key what the
@@ -7370,9 +7371,10 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 {expenseLines.rows.map((line) => {
                   const l = line as Record<string, unknown>;
                   const metered = l.kind === "metered";
-                  const monthEntries = expenseEntries.rows.filter((e) => (e as Record<string, unknown>).voided !== true && String((e as Record<string, unknown>).lineId) === String(l.id) && (String((e as Record<string, unknown>).month) === month || lotRowMonth(e, "spentAt") === month));
+                  const monthEntries = expenseEntries.rows.filter((e) => (e as Record<string, unknown>).voided !== true && String((e as Record<string, unknown>).lineId) === String(l.id) && lotExpenseEntryMonth(e as Record<string, unknown>) === month);
                   const entriesTotal = monthEntries.reduce((s, e) => s + (Number((e as Record<string, unknown>).amountCents) || 0), 0);
-                  const amount = metered ? entriesTotal : Number(l.recurringCents) || 0;
+                  // A fixed line shows what the month actually cost: the purchase logged against it, else its standing amount - the same number the totals use.
+                  const amount = metered || monthEntries.length > 0 ? entriesTotal : Number(l.recurringCents) || 0;
                   return (
                     <div className="mini-table-row" key={String(l.id)}>
                       <span>
@@ -7430,7 +7432,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 {activityDraft.activityTypeId === LOT_CUSTOM_ACTIVITY_ID && (
                   <label className="lst-field wide"><span>Say what was done</span><input value={activityDraft.customLabel} onChange={(e) => setActivityDraft((d) => ({ ...d, customLabel: e.target.value }))} /></label>
                 )}
-                <label className="lst-field"><span>Fee</span><input inputMode="decimal" value={activityDraft.fee} onChange={(e) => setActivityDraft((d) => ({ ...d, fee: e.target.value }))} /><small className="lst-hint">From your activity list; edit to price this job.</small></label>
+                <label className="lst-field"><span>Fee</span><input inputMode="decimal" value={activityDraft.fee} disabled={editingPaid} onChange={(e) => setActivityDraft((d) => ({ ...d, fee: e.target.value }))} /><small className="lst-hint">{editingPaid ? "Paid, so the amount is locked. Void this entry and record a new one if the price was wrong." : "From your activity list; edit to price this job."}</small></label>
                 <label className="lst-field"><span>Date</span><input type="date" value={activityDraft.activityDate} onChange={(e) => setActivityDraft((d) => ({ ...d, activityDate: e.target.value }))} /></label>
                 <label className="lst-field wide"><span>VIN</span><input value={activityDraft.vinNumber} onChange={(e) => applyVin(e.target.value)} placeholder="17 characters" />{vinHint && <small className="lst-hint" style={{ color: "var(--money)" }}>{vinHint}</small>}</label>
                 <label className="lst-field"><span>Customer</span><input value={activityDraft.customerName} onChange={(e) => setActivityDraft((d) => ({ ...d, customerName: e.target.value }))} /></label>
@@ -7457,6 +7459,12 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                   <label className="lst-field"><span>Auction house</span><select value={activityDraft.auctionHouse} onChange={(e) => setActivityDraft((d) => ({ ...d, auctionHouse: e.target.value }))}><option value="">Choose</option>{LOT_AUCTION_HOUSES.map((h) => (<option key={h} value={h}>{h}</option>))}</select></label>
                 )}
               </div>
+              {editRow ? (
+                <fieldset className="lst-fieldset">
+                  <p className="lst-hint"><span>How it gets paid</span> <strong>{lotActivityPaymentLabel(editRow)}</strong></p>
+                  <p className="lst-hint">Change that from Chase payment, not here: it closes the other path so the customer can't pay twice.</p>
+                </fieldset>
+              ) : (
               <fieldset className="lst-fieldset">
                 <label className="lst-radio"><input type="radio" name="lotpay" checked={activityDraft.paymentMethod === "payment_link"} onChange={() => setActivityDraft((d) => ({ ...d, paymentMethod: "payment_link" }))} /><span>Charge through the website — a payment link goes to the customer and the money lands in your account</span></label>
                 {activityDraft.paymentMethod === "payment_link" && (
@@ -7470,6 +7478,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                   </div>
                 )}
               </fieldset>
+              )}
             </div>
             <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={saveActivity}>{busy ? "Saving..." : editId ? "Save changes" : "Record activity"}</button></footer>
           </div>
@@ -7541,7 +7550,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
           <div className="lst-modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>{text(purchaseLine?.label, "Purchases")} — {lotMonthLabel(month)}</h3><p>Every purchase for this line this month.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
-              {expenseEntries.rows.filter((e) => String((e as Record<string, unknown>).lineId) === purchaseLineId && (String((e as Record<string, unknown>).month) === month || lotRowMonth(e, "spentAt") === month)).map((e) => {
+              {expenseEntries.rows.filter((e) => String((e as Record<string, unknown>).lineId) === purchaseLineId && lotExpenseEntryMonth(e as Record<string, unknown>) === month).map((e) => {
                 const er = e as Record<string, unknown>;
                 const evoided = er.voided === true;
                 return (<div key={String(er.id)} className="mini-table-row" style={evoided ? { opacity: 0.6 } : undefined}><span><strong>{evoided ? <s>{lotFormatCents(Number(er.amountCents) || 0)}</s> : lotFormatCents(Number(er.amountCents) || 0)}</strong><small>{formatDate(er.spentAt)}</small>{evoided && <span className="status-pill danger compact">Voided</span>}</span><span>{text(er.proofUrl, "") ? <a className="status-pill good compact" href={text(er.proofUrl, "")} target="_blank" rel="noopener" title="Open the receipt"><Paperclip size={12} /> {text(er.proofFileName, "View receipt")}</a> : er.proofRequired ? <span className="status-pill danger compact">Proof missing</span> : <span className="status-pill compact">No proof needed</span>}</span><span><small>Paid by {staffName(text(er.paidByStaffId, "")) || "—"}</small><small>Recorded by {staffName(text(er.recordedByStaffId, "")) || "—"}</small>{text(er.note, "") && <small>{text(er.note, "")}</small>}{evoided ? <small>Voided by {staffName(text(er.voidedByStaffId, ""))}{text(er.voidReason, "") ? ` — ${text(er.voidReason, "")}` : ""}</small> : <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "expense", id: String(er.id), label: `${lotFormatCents(Number(er.amountCents) || 0)} · ${text(purchaseLine?.label, "purchase")}` }); setVoidReason(""); setDraftError(""); setModal("void"); }}>Void</button>}</span></div>);
@@ -7582,8 +7591,9 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             <div className="lst-modal-body">
               {historyLoading ? <p className="panel-lede">Loading…</p> : historyRows.length === 0 ? <EmptyState text="No changes recorded — nothing has been edited or voided." /> : historyRows.map((h) => {
                 const hr = h as Record<string, unknown>;
-                const who = staffName(text(hr.byStaffId, "")) || "an unknown user";
-                const action = String(hr.action) === "voided" ? "Voided" : "Edited";
+                const rawAction = String(hr.action);
+                const action = rawAction === "voided" ? "Voided" : rawAction === "paid" ? "Paid" : "Edited";
+                const who = rawAction === "paid" ? "the customer, on the website" : staffName(text(hr.byStaffId, "")) || "an unknown user";
                 return (
                   <div key={String(hr.id)} style={{ padding: "10px 0", borderBottom: "1px solid var(--rule)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>

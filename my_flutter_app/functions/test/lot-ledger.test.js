@@ -214,3 +214,60 @@ describe("expenses", () => {
     assert.equal(r.amountCents, 12000);
   });
 });
+
+describe("editing a recorded activity protects the money", () => {
+  const {
+    lotActivityEditRefusal,
+    lotActivityLockedPaymentFields,
+  } = require("../lot_ledger");
+  const paidLink = {
+    paymentMethod: "payment_link", paymentStatus: "succeeded",
+    feeCents: 11000,
+  };
+
+  it("refuses to revive a voided entry", () => {
+    assert.equal(
+        lotActivityEditRefusal({...paidLink, voided: true}, {}, 11000),
+        "activity_voided",
+    );
+  });
+
+  it("locks the amount once the customer has paid", () => {
+    assert.equal(
+        lotActivityEditRefusal(
+            paidLink, {paymentMethod: "payment_link"}, 12000),
+        "paid_amount_locked",
+    );
+    assert.equal(
+        lotActivityEditRefusal(
+            paidLink, {paymentMethod: "payment_link"}, 11000),
+        null,
+    );
+  });
+
+  it("does not let an edit switch how the money is taken", () => {
+    const unpaid = {
+      paymentMethod: "payment_link", paymentStatus: "awaiting_payment_link",
+      feeCents: 11000,
+    };
+    assert.equal(
+        lotActivityEditRefusal(unpaid, {paymentMethod: "direct"}, 11000),
+        "payment_method_locked",
+    );
+    // A price change on an unpaid link is allowed (the link is re-issued).
+    assert.equal(
+        lotActivityEditRefusal(unpaid, {paymentMethod: "payment_link"}, 9000),
+        null,
+    );
+  });
+
+  it("keeps the stored payment fields over whatever the edit sent", () => {
+    assert.deepEqual(lotActivityLockedPaymentFields({
+      paymentMethod: "direct", receivedVia: "zelle",
+      receivedByStaffId: "staff_9",
+    }), {
+      paymentMethod: "direct", receivedVia: "zelle",
+      receivedByStaffId: "staff_9",
+    });
+  });
+});

@@ -392,6 +392,45 @@ export function lotExpenseEntryPayload(
 
 type Row = Record<string, unknown>;
 
+function rowDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "object" && typeof (value as { toDate?: unknown }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+/**
+ * `yyyy-mm-dd` for an <input type="date"> from a stored date (Timestamp,
+ * Date, or ISO string), in the viewer's local calendar. Empty when unset.
+ * The edit form used to rebuild this as the 1st of the month, silently
+ * moving every edited entry's date.
+ */
+export function dateInputValue(value: unknown): string {
+  const date = rowDate(value);
+  if (!date) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * The one month an expense entry counts in: the bill month it was logged
+ * against, else the month it was bought. Never both — matching either used
+ * to count a September purchase logged against August's bill twice.
+ */
+export function lotExpenseEntryMonth(entry: Row): string {
+  const explicit = String(entry?.month ?? "").trim().slice(0, 7);
+  if (/^\d{4}-\d{2}$/.test(explicit)) return explicit;
+  return dateInputValue(entry?.spentAt).slice(0, 7);
+}
+
 export function lotActivityPaid(row: Row): boolean {
   return String(row?.paymentStatus ?? "") === "succeeded";
 }

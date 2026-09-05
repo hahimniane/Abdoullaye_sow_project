@@ -49,6 +49,26 @@ const PAYMENT_ROUTES = Object.freeze({
     cancelledDomainStatus: "cancelled",
     operationKeys: ["reservationId"],
   }),
+  // A lot-ledger activity (a job the lot billed for) paid through the durable
+  // /p link. Like a business parking entry it has no customer account: the
+  // business that recorded the job is the identity every Stripe event is
+  // checked against. There is no domain status to flip - paymentStatus is
+  // the whole story for these rows.
+  lot_activity: Object.freeze({
+    kind: "lot_activity",
+    identityKeys: ["activityId"],
+    collection: "lotActivities",
+    documentIdKey: "activityId",
+    customerMetadataKey: "businessId",
+    customerField: "businessId",
+    businessField: "businessId",
+    amountCentsField: "feeCents",
+    currencyField: "currency",
+    defaultCurrency: "usd",
+    intentField: "stripePaymentIntentId",
+    paymentStatusField: "paymentStatus",
+    operationKeys: ["activityId"],
+  }),
   barrel_pool_deposit: Object.freeze({
     kind: "shared_barrel_deposit",
     identityKeys: ["poolId", "participantUid"],
@@ -315,6 +335,14 @@ const STALE_SCAN_DEFINITIONS = Object.freeze([
     id: "hold_extensions",
     collection: "carPurchases",
     statusField: "extensionPaymentStatus",
+  }),
+  // Lot activities wait in their own state name, so the scan must be told
+  // which value means "still unpaid" or it would never look at them.
+  Object.freeze({
+    id: "lot_activities",
+    collection: "lotActivities",
+    statusField: "paymentStatus",
+    pendingStates: ["awaiting_payment_link"],
   }),
 ]);
 
@@ -714,7 +742,8 @@ function buildStalePendingScanPlan({
   }
   return STALE_SCAN_DEFINITIONS.map((definition) => ({
     ...definition,
-    pendingStates: [PAYMENT_STATES.PENDING, PAYMENT_STATES.PROCESSING],
+    pendingStates: definition.pendingStates ||
+      [PAYMENT_STATES.PENDING, PAYMENT_STATES.PROCESSING],
     cutoffMillis: cutoff,
     orderBy: ["updatedAt", "__name__"],
     cursor: cursorsByScan[definition.id] || null,
