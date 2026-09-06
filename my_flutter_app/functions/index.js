@@ -8760,6 +8760,20 @@ exports.handleBusinessProStripeWebhook = onRequest(
         return;
       }
 
+      // This function runs with the LIVE Stripe key. A sandbox (test-mode)
+      // endpoint was pointed at it (Stripe notice, 2026-09-06): its events
+      // verify when their signing secret is configured, then run live code
+      // paths against test-mode ids - payout retries, account status writes.
+      // Acknowledge so Stripe stops retrying, and touch nothing.
+      if (event && event.livemode === false) {
+        logger.info("Ignoring test-mode Stripe event", {
+          eventType: String(event.type || ""),
+          eventId: String(event.id || ""),
+        });
+        res.status(200).json({received: true, ignored: "test_mode"});
+        return;
+      }
+
       const object = event?.data?.object || {};
       try {
         const claimed = await claimStripeWebhookEvent(event);
