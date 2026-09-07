@@ -277,3 +277,52 @@ describe("real Firestore shapes", () => {
     assert.equal(model.businessAddress, "12 Main St, Bronx, NY 10467");
   });
 });
+
+describe("the business's own logo, and lot-ledger documents", () => {
+  const {
+    documentLogo, lotActivityDocumentType, lotActivityDocumentModel,
+  } = require("../parking_document");
+
+  it("prints the business logo when it has one, else the Laawol mark", () => {
+    assert.deepEqual(documentLogo({logoUrl: "https://cdn.x/logo.png"}),
+        {url: "https://cdn.x/logo.png", own: true});
+    assert.equal(documentLogo({}).own, false);
+    // Only https: a document is public HTML, never a script vector.
+    assert.equal(documentLogo({logoUrl: "javascript:alert(1)"}).own, false);
+    assert.equal(documentLogo({logoUrl: "http://x/logo.png"}).own, false);
+  });
+
+  it("paid is a receipt, an open link an invoice, voided nothing", () => {
+    assert.equal(lotActivityDocumentType({paymentStatus: "succeeded"}),
+        "receipt");
+    assert.equal(lotActivityDocumentType(
+        {paymentStatus: "awaiting_payment_link"}), "invoice");
+    assert.equal(lotActivityDocumentType(
+        {paymentStatus: "succeeded", voided: true}), "");
+    assert.equal(lotActivityDocumentType({paymentStatus: "cancelled"}), "");
+  });
+
+  it("flattens an activity into the shared document model", () => {
+    const model = lotActivityDocumentModel({
+      entry: {
+        trackingCode: "LA-XYZ", paymentStatus: "succeeded", feeCents: 12000,
+        paymentMethod: "direct", receivedVia: "zelle", customerName: "Amadou",
+        activityTypeLabel: "Title purchase at auction", auctionHouse: "Copart",
+        carYear: "2019", carMake: "Toyota", carModel: "Camry", vinNumber: "1HG",
+      },
+      business: {name: "Conakry Express", logoUrl: "https://cdn.x/l.png"},
+      paymentLinkUrl: "https://laawoldigital.com/p?t=abc",
+    });
+    assert.equal(model.title, "Receipt");
+    assert.equal(model.reference, "REC-LA-XYZ");
+    assert.equal(model.amount, "$120.00");
+    assert.equal(model.methodLabel, "Zelle, paid to the business");
+    assert.equal(model.paymentLinkUrl, ""); // never a pay link on a receipt
+    assert.equal(model.logo.own, true);
+    const labels = model.rows.map(([l]) => l);
+    assert.ok(labels.includes("Service") && labels.includes("Auction house"));
+    const html = renderParkingDocument(model);
+    assert.match(html, /Title purchase at auction/);
+    assert.match(html, /https:\/\/cdn\.x\/l\.png/);
+  });
+});

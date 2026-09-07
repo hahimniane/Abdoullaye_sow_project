@@ -4455,6 +4455,14 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Ledger entry voided": "Entrée du registre invalidée",
   "Ledger entry edited": "Entrée du registre modifiée",
   "Ledger payment received": "Paiement du registre reçu",
+  "Saved customers": "Clients enregistrés",
+  "Their cars:": "Leurs véhicules :",
+  "Receipt": "Reçu",
+  "Invoice": "Facture",
+  "The document is not ready yet. Try again in a moment.":
+    "Le document n’est pas encore prêt. Réessayez dans un instant.",
+  "A cancelled or voided entry has no receipt or invoice.":
+    "Une entrée annulée ou invalidée n’a ni reçu ni facture.",
   "Priced for its leave date when it was recorded; nothing accrues day by day.":
     "Tarifé jusqu’à sa date de départ lors de l’enregistrement ; rien ne s’accumule au jour le jour.",
   "This entry was voided. Record a new one instead.":

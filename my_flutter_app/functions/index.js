@@ -304,6 +304,7 @@ const {
   normalizeReceivedVia: lotNormalizeReceivedVia,
 } = require("./lot_ledger");
 const {parkingAvailability} = require("./parking_occupancy");
+const {lotCustomerKey, mergeLotCustomer} = require("./lot_customers");
 const {
   resolveBillingPlan,
   subscriptionAccrualDelta,
@@ -332,6 +333,8 @@ const {
   parkingDocumentType,
   parkingDocumentModel,
   renderParkingDocument,
+  lotActivityDocumentType,
+  lotActivityDocumentModel,
 } = require("./parking_document");
 const {
   toolsForOpenAi,
@@ -11869,6 +11872,10 @@ exports.createBusinessParkingEntry = onCall(
         });
       });
 
+      await rememberLotCustomer(db, {
+        businessId: input.businessId, seen: input, source: "parking",
+        staffId: uid,
+      });
       const response = {
         success: true,
         entryId: entryRef.id,
@@ -12205,7 +12212,44 @@ exports.parkingDocument = onRequest(
           .where("paymentLinkToken", "==", token)
           .limit(1)
           .get();
-      if (matches.empty) return notFound();
+      if (matches.empty) {
+        // The same /d link also serves lot-ledger receipts and invoices,
+        // whose records live in lotActivities (same token space as /p).
+        const lot = await db.collection("lotActivities")
+            .where("paymentLinkToken", "==", token)
+            .limit(1)
+            .get();
+        if (lot.empty) return notFound();
+        const activity = lot.docs[0].data() || {};
+        const kind = lotActivityDocumentType(activity);
+        if (!kind) {
+          return res.status(200).send(parkingPaymentLinkPage({
+            title: "Nothing to print",
+            message: "This entry was cancelled or voided, so it has no " +
+              "receipt or invoice.",
+          }));
+        }
+        const lotBusiness = await db.collection("businesses")
+            .doc(String(activity.businessId || "")).get().catch(() => null);
+        const lotPayUrl = kind === "invoice" ?
+          parkingPaymentLinkUrl(token) : "";
+        let lotQr = "";
+        if (lotPayUrl) {
+          lotQr = await QRCode.toString(lotPayUrl, {
+            type: "svg", margin: 0, errorCorrectionLevel: "M",
+          }).catch(() => "");
+        }
+        res.set("Content-Type", "text/html; charset=utf-8");
+        return res.status(200).send(renderParkingDocument(
+            lotActivityDocumentModel({
+              entry: activity,
+              business: lotBusiness && lotBusiness.exists ?
+                lotBusiness.data() : {},
+              paymentLinkUrl: lotPayUrl,
+              paymentLinkQrSvg: lotQr,
+            }),
+        ));
+      }
 
       const entry = matches.docs[0].data() || {};
       const businessDoc = await db.collection("businesses")
@@ -12270,6 +12314,52 @@ exports.getParkingDocumentUrl = onCall(
       return {
         success: true,
         documentType: parkingDocumentType(entry),
+        url: `${base}?t=${encodeURIComponent(token)}`,
+      };
+    },
+);
+
+// The receipt (paid) or invoice (link still open) for a lot-ledger activity,
+// at the same durable /d link parking uses. Mints the token for entries that
+// never had one (paid in person). Permission-checked like the parking one.
+exports.getLotActivityDocumentUrl = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const activityId = cleanText(request.data?.activityId, 180);
+      if (!activityId) {
+        throw new HttpsError("invalid-argument", "Activity is required");
+      }
+      const db = admin.firestore();
+      const ref = db.collection("lotActivities").doc(activityId);
+      const snapshot = await ref.get();
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Activity not found");
+      }
+      const entry = snapshot.data() || {};
+      await requireBusinessPermission(
+          uid, String(entry.businessId || ""), "ledger",
+      );
+      const documentType = lotActivityDocumentType(entry);
+      if (!documentType) {
+        throw new HttpsError(
+            "failed-precondition",
+            "A cancelled or voided entry has no receipt or invoice.",
+        );
+      }
+      let token = String(entry.paymentLinkToken || "").trim();
+      if (!token) {
+        token = crypto.randomBytes(24).toString("base64url");
+        await ref.update({
+          paymentLinkToken: token,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      }
+      const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
+        "https://laawoldigital.com/d";
+      return {
+        success: true,
+        documentType,
         url: `${base}?t=${encodeURIComponent(token)}`,
       };
     },
@@ -12635,6 +12725,9 @@ exports.updateBusinessParkingEntry = onCall(
           `$${amountDue.toFixed(2)} due. Pay here: ${durableUrl}`,
       });
 
+      await rememberLotCustomer(db, {
+        businessId, seen: input, source: "parking", staffId: uid,
+      });
       return {
         success: true,
         entryId,
@@ -13565,6 +13658,43 @@ const LOT_LINK_SECRETS = [
   twilioFromNumber,
 ];
 
+/**
+ * Remember the customer just typed onto an activity or a walk-up, with the
+ * car seen against them, so the next entry can pick them instead of re-keying
+ * name, phone, email and vehicle. Best-effort: a memory write must never fail
+ * the record it came from.
+ *
+ * @param {object} db Firestore.
+ * @param {object} params businessId, seen (customer, car and vin fields),
+ *   source ("activity" | "parking"), staffId.
+ * @return {Promise<void>}
+ */
+async function rememberLotCustomer(db, {businessId, seen, source, staffId}) {
+  try {
+    const key = lotCustomerKey(seen);
+    if (!businessId || !key) return;
+    const ref = db.collection("lotCustomers")
+        .doc(`${businessId}__${key.replace(/[^A-Za-z0-9:_@.+-]/g, "_")}`);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const body = mergeLotCustomer(
+          snap.exists ? snap.data() : null, seen,
+          {businessId, source, staffId},
+      );
+      tx.set(ref, {
+        ...body,
+        lastSeenAt: FirestoreFieldValue.serverTimestamp(),
+        ...(!snap.exists && {createdAt: FirestoreFieldValue.serverTimestamp()}),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+    });
+  } catch (error) {
+    logger.warn("Lot customer not remembered", {
+      businessId, error: String(error?.message || error),
+    });
+  }
+}
+
 async function loadBusinessExpenseThreshold(db, businessId) {
   const doc = await db.collection("businesses").doc(businessId).get();
   const raw = doc.exists ? doc.data()?.expenseProofThresholdCents : undefined;
@@ -13897,11 +14027,18 @@ async function completeLotActivityPayment(target) {
   const businessDoc = await admin.firestore()
       .collection("businesses").doc(businessId).get();
   const name = String(businessDoc.data()?.name || "The lot");
+  const receiptToken = String(entry.paymentLinkToken || "").trim();
+  const receiptBase =
+    String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
+    "https://laawoldigital.com/d";
+  const receiptUrl = receiptToken ?
+    `${receiptBase}?t=${encodeURIComponent(receiptToken)}` : "";
   await emailWalkUpParkingCustomer({
     to: entry.customerEmail,
     subject: `Payment received - ${code}`,
     text: `${name} has received your payment of ${dollars} for ${code}. ` +
-      "Keep this email as your receipt.",
+      (receiptUrl ? `Your receipt: ${receiptUrl}` :
+        "Keep this email as your receipt."),
   });
   await smsWalkUpParkingCustomer({
     to: entry.customerPhone,
@@ -13960,6 +14097,9 @@ exports.createLotActivity = onCall(
         updatedAt: now,
       });
 
+      await rememberLotCustomer(db, {
+        businessId, seen: record, source: "activity", staffId: uid,
+      });
       const response = {
         success: true,
         activityId: activityRef.id,
@@ -14051,6 +14191,10 @@ exports.updateLotActivity = onCall(
           changes: diff,
         });
       }
+
+      await rememberLotCustomer(db, {
+        businessId, seen: record, source: "activity", staffId: uid,
+      });
 
       // If the fee changed while a link is unpaid, re-issue the link at the
       // new amount so the customer never holds a superseded price.

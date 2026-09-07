@@ -3902,6 +3902,42 @@ abstract class AppLocalizations {
   /// **'Parking End Date'**
   String get parkingEndDate;
 
+  /// No description provided for @lotSavedCustomers.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved customers'**
+  String get lotSavedCustomers;
+
+  /// No description provided for @lotTheirCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Their cars'**
+  String get lotTheirCars;
+
+  /// No description provided for @lotOpenReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get lotOpenReceipt;
+
+  /// No description provided for @lotOpenInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice'**
+  String get lotOpenInvoice;
+
+  /// No description provided for @lotDocumentCouldNotBeOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'The receipt could not be opened. Try again in a moment.'**
+  String get lotDocumentCouldNotBeOpened;
+
+  /// No description provided for @lotUseThisCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this customer'**
+  String get lotUseThisCustomer;
+
   /// No description provided for @parkingEndDateOptional.
   ///
   /// In en, this message translates to:

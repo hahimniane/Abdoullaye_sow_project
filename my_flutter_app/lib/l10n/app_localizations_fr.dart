@@ -2129,6 +2129,25 @@ class AppLocalizationsFr extends AppLocalizations {
   String get parkingEndDate => 'Date de fin du stationnement';
 
   @override
+  String get lotSavedCustomers => 'Clients enregistrés';
+
+  @override
+  String get lotTheirCars => 'Leurs véhicules';
+
+  @override
+  String get lotOpenReceipt => 'Reçu';
+
+  @override
+  String get lotOpenInvoice => 'Facture';
+
+  @override
+  String get lotDocumentCouldNotBeOpened =>
+      'Le reçu n’a pas pu être ouvert. Réessayez dans un instant.';
+
+  @override
+  String get lotUseThisCustomer => 'Utiliser ce client';
+
+  @override
   String get parkingEndDateOptional =>
       'Date de fin du stationnement (facultative)';
 
