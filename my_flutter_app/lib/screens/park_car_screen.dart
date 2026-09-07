@@ -65,6 +65,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
 
   DateTime _selectedDateTime = DateTime.now();
   DateTime _selectedEndDateTime = DateTime.now().add(const Duration(days: 7));
+  // Walk-up leave date. null = OPEN-ENDED: the car stays until the business
+  // closes the stay and is billed day by day ("bill through today"). Same
+  // rule as the console; the customer reservation flow keeps its own end.
+  DateTime? _walkUpEndDate;
   bool _isLoading = false;
   bool _isSearchingParking = false;
   bool _isCatalogLoading = true;
@@ -795,19 +799,24 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   /// window is what the server prices - a parking entry with no end date has
   /// no amount, and the lot would be recording nothing.
   Future<void> _selectBusinessEndDate() async {
+    final current = _walkUpEndDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedEndDateTime.isBefore(_selectedDateTime)
+      initialDate: current == null || current.isBefore(_selectedDateTime)
           ? _selectedDateTime
-          : _selectedEndDateTime,
+          : current,
       firstDate: DateTime(_selectedDateTime.year, _selectedDateTime.month,
           _selectedDateTime.day),
       lastDate: DateTime.now().add(const Duration(days: 730)),
     );
     if (picked == null || !mounted) return;
     setState(() {
-      _selectedEndDateTime = DateTime(picked.year, picked.month, picked.day, 17);
+      _walkUpEndDate = DateTime(picked.year, picked.month, picked.day, 17);
     });
+  }
+
+  void _clearWalkUpEndDate() {
+    setState(() => _walkUpEndDate = null);
   }
 
   BusinessParkingEntryDraft _walkUpDraft(AuthProvider auth) {
@@ -823,7 +832,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       carYear: _selectedYear ?? '',
       vinNumber: _vinController.text,
       startDate: _selectedDateTime,
-      endDate: _selectedEndDateTime,
+      endDate: _walkUpEndDate,
       paymentMethod: _paymentMethod,
     );
   }
@@ -1424,8 +1433,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
 
                               const SizedBox(height: 16),
 
-                              // End date - the window is what the server
-                              // prices, so it is asked for, never defaulted.
+                              // Leave date - optional. Blank means an
+                              // open-ended stay billed day by day; a date
+                              // prices the whole window up front.
                               GestureDetector(
                                 onTap: _selectBusinessEndDate,
                                 child: Container(
@@ -1457,7 +1467,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                             Text(
                                               AppLocalizations.of(
                                                 context,
-                                              )!.parkingEndDate,
+                                              )!.parkingEndDateOptional,
                                               style: TextStyle(
                                                 fontSize: 12,
                                                 color: Colors.grey.shade600,
@@ -1465,11 +1475,15 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              DateFormat.yMMMd(
-                                                Localizations.localeOf(
-                                                  context,
-                                                ).toLanguageTag(),
-                                              ).format(_selectedEndDateTime),
+                                              _walkUpEndDate == null
+                                                  ? AppLocalizations.of(
+                                                      context,
+                                                    )!.parkingOpenEnded
+                                                  : DateFormat.yMMMd(
+                                                      Localizations.localeOf(
+                                                        context,
+                                                      ).toLanguageTag(),
+                                                    ).format(_walkUpEndDate!),
                                               style: const TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w500,
@@ -1478,12 +1492,35 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                           ],
                                         ),
                                       ),
-                                      Icon(
-                                        Icons.arrow_drop_down,
-                                        color: Colors.grey.shade600,
-                                      ),
+                                      if (_walkUpEndDate != null)
+                                        IconButton(
+                                          tooltip: AppLocalizations.of(
+                                            context,
+                                          )!.parkingClearEndDate,
+                                          icon: Icon(
+                                            Icons.close,
+                                            color: Colors.grey.shade600,
+                                            size: 20,
+                                          ),
+                                          onPressed: _clearWalkUpEndDate,
+                                        )
+                                      else
+                                        Icon(
+                                          Icons.arrow_drop_down,
+                                          color: Colors.grey.shade600,
+                                        ),
                                     ],
                                   ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                AppLocalizations.of(
+                                  context,
+                                )!.parkingOpenEndedHint,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
                                 ),
                               ),
 

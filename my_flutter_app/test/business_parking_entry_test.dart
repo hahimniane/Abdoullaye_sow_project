@@ -22,6 +22,7 @@ BusinessParkingEntryDraft draft({
   String vinNumber = '1hgcm82633a004352',
   DateTime? startDate,
   DateTime? endDate,
+  bool openEnded = false,
   BusinessParkingPaymentMethod paymentMethod =
       BusinessParkingPaymentMethod.direct,
 }) => BusinessParkingEntryDraft(
@@ -34,7 +35,7 @@ BusinessParkingEntryDraft draft({
   carYear: carYear,
   vinNumber: vinNumber,
   startDate: startDate ?? DateTime(2026, 8, 10),
-  endDate: endDate ?? DateTime(2026, 8, 20),
+  endDate: openEnded ? null : (endDate ?? DateTime(2026, 8, 20)),
   paymentMethod: paymentMethod,
 );
 
@@ -63,8 +64,14 @@ void main() {
         BusinessParkingEntryError.carModelRequired,
         BusinessParkingEntryError.carYearRequired,
         BusinessParkingEntryError.startDateRequired,
-        BusinessParkingEntryError.endDateRequired,
       ]);
+    });
+
+    test('the leave date is optional: an open-ended stay is valid and sends '
+        'an empty endDate', () {
+      final openEnded = draft(openEnded: true);
+      expect(validateBusinessParkingEntry(openEnded), isEmpty);
+      expect(businessParkingEntryPayload(openEnded)['endDate'], '');
     });
 
     test('email is optional, but a malformed one is refused', () {

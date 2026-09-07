@@ -1130,7 +1130,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       ),
       subtitle: Text(
         _parkingEndDate == null
-            ? 'Select a date'
+            ? l10n.parkingOpenEnded
             : DateFormat.yMMMd().format(_parkingEndDate!),
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),

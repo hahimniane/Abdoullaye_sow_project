@@ -2129,6 +2129,20 @@ class AppLocalizationsFr extends AppLocalizations {
   String get parkingEndDate => 'Date de fin du stationnement';
 
   @override
+  String get parkingEndDateOptional =>
+      'Date de fin du stationnement (facultative)';
+
+  @override
+  String get parkingOpenEnded => 'Sans date de fin';
+
+  @override
+  String get parkingOpenEndedHint =>
+      'Laissez vide pour un séjour sans date de fin — facturez-le jusqu’à aujourd’hui quand vous voulez.';
+
+  @override
+  String get parkingClearEndDate => 'Effacer la date de fin';
+
+  @override
   String get costPerDay => 'Coût par jour (\$)';
 
   @override

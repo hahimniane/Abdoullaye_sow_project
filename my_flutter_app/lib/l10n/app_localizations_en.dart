@@ -2082,6 +2082,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get parkingEndDate => 'Parking End Date';
 
   @override
+  String get parkingEndDateOptional => 'Parking end date (optional)';
+
+  @override
+  String get parkingOpenEnded => 'Open-ended';
+
+  @override
+  String get parkingOpenEndedHint =>
+      'Leave blank for an open-ended stay — bill it through today whenever you like.';
+
+  @override
+  String get parkingClearEndDate => 'Clear end date';
+
+  @override
   String get costPerDay => 'Cost Per Day (\$)';
 
   @override
