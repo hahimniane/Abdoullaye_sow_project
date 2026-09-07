@@ -597,6 +597,13 @@ service cloud.firestore {
       allow create: if lotLedgerWrite(request.resource.data.businessId);
       allow update, delete: if lotLedgerWrite(resource.data.businessId);
     }
+    // The lot's customer memory (name, contact, cars seen), written only by
+    // the callables when an activity or walk-up is recorded. Managers of the
+    // business read it to pick a customer instead of re-keying them.
+    match /lotCustomers/{customerId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
     // The change log (edits and voids) — read-only to a business's managers;
     // every write is made by the ledger callables as admin.
     match /lotLedgerAudit/{eventId} {

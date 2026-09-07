@@ -2082,6 +2082,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get parkingEndDate => 'Parking End Date';
 
   @override
+  String get lotSavedCustomers => 'Saved customers';
+
+  @override
+  String get lotTheirCars => 'Their cars';
+
+  @override
+  String get lotOpenReceipt => 'Receipt';
+
+  @override
+  String get lotOpenInvoice => 'Invoice';
+
+  @override
+  String get lotDocumentCouldNotBeOpened =>
+      'The receipt could not be opened. Try again in a moment.';
+
+  @override
+  String get lotUseThisCustomer => 'Use this customer';
+
+  @override
   String get parkingEndDateOptional => 'Parking end date (optional)';
 
   @override

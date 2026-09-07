@@ -68,6 +68,14 @@
       ]
     },
     {
+      "collectionGroup": "lotCustomers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "lastSeenAt", "order": "DESCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "destinationCountries",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

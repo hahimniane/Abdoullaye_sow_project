@@ -34,6 +34,7 @@ import {
   Ban,
   History,
   Paperclip,
+  FileText,
   Pencil,
   Plane,
   Plus,
@@ -92,6 +93,13 @@ import {
   type LotActivityTypeDraft,
   type LotExpenseEntryDraft,
 } from "@/lib/lot-ledger";
+import {
+  lotCustomerCarLabel,
+  lotCustomerFromRow,
+  matchLotCustomers,
+  type LotCustomer,
+  type LotCustomerCar,
+} from "@/lib/lot-customers";
 import {
   contentsFromRecord,
   quoteLensForBusiness,
@@ -6793,6 +6801,9 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   // car and customer it already belongs to (reusing existing records rather
   // than re-typing) — the same reuse the handoff called for.
   const parkedCars = useBusinessRows("parkedCars", businessId, enabled, 500);
+  // The lot's customer memory: everyone recorded on an activity or a walk-up,
+  // with the cars seen against them, offered back as staff type.
+  const lotCustomers = useBusinessRows("lotCustomers", businessId, enabled, 500);
 
   const [segment, setSegment] = useState<LotSegment>("activity");
   const [reportView, setReportView] = useState<LotReportView>("month");
@@ -6810,6 +6821,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
 
   const [activityDraft, setActivityDraft] = useState<LotActivityDraft>(emptyLotActivityDraft);
   const [vinHint, setVinHint] = useState("");
+  const [customerPick, setCustomerPick] = useState<LotCustomer | null>(null);
+  const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
   const [newType, setNewType] = useState<LotActivityTypeDraft>(emptyLotActivityTypeDraft);
   const [lineDraft, setLineDraft] = useState({ label: "", detail: "", kind: "metered", recurring: "" });
   const [purchase, setPurchase] = useState<LotExpenseEntryDraft>(emptyLotExpenseEntryDraft);
@@ -6989,6 +7002,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   }
 
   function openRecord() {
+    setCustomerPick(null);
+    setCustomerMenuOpen(false);
     setActivityDraft({ ...emptyLotActivityDraft, activityDate: `${month}-01` });
     setEditId("");
     setDraftError("");
@@ -7026,6 +7041,53 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   // Typing a VIN pulls the car and customer from an existing record for this
   // business (a parked car or a past activity), so staff don't re-key what the
   // lot already knows. Everything prefilled stays editable.
+  const knownCustomers = useMemo(
+    () => lotCustomers.rows.map((r) => lotCustomerFromRow(r as Record<string, unknown>)),
+    [lotCustomers.rows],
+  );
+  const customerMatches = useMemo(
+    () => (customerMenuOpen && !customerPick ? matchLotCustomers(knownCustomers, activityDraft.customerName) : []),
+    [knownCustomers, activityDraft.customerName, customerMenuOpen, customerPick],
+  );
+
+  function applyCustomerCar(car: LotCustomerCar) {
+    setActivityDraft((d) => ({
+      ...d,
+      vinNumber: car.vin || d.vinNumber,
+      carMake: car.make || d.carMake,
+      carModel: car.model || d.carModel,
+      carYear: car.year || d.carYear,
+    }));
+    setVinHint("");
+  }
+
+  // Picking a saved customer fills their contact details; their car is filled
+  // too when they only have one, otherwise the cars are offered as chips.
+  function pickCustomer(c: LotCustomer) {
+    setCustomerPick(c);
+    setCustomerMenuOpen(false);
+    setActivityDraft((d) => ({
+      ...d,
+      customerName: c.name || d.customerName,
+      customerPhone: c.phone || d.customerPhone,
+      customerEmail: c.email || d.customerEmail,
+    }));
+    if (c.cars.length === 1) applyCustomerCar(c.cars[0]);
+  }
+
+  async function openLotDocument(row: Record<string, unknown>) {
+    await runPanelAction(setBusy, setFlash, "", async () => {
+      const response = await httpsCallable(functions, "getLotActivityDocumentUrl")({ activityId: String(row.id) });
+      const data = (response.data ?? {}) as { documentType?: string; url?: string };
+      const url = text(data.url, "");
+      if (!url) throw new Error("The document is not ready yet. Try again in a moment.");
+      // Awaited call, so this open is outside the click gesture; a blocker can
+      // refuse it. Leave the link on screen rather than a button that did nothing.
+      const opened = window.open(url, "_blank", "noopener");
+      if (!opened) setFlash(`Open it here: ${url}`);
+    });
+  }
+
   function applyVin(rawVin: string) {
     const clean = rawVin.toUpperCase().slice(0, 17);
     setActivityDraft((d) => ({ ...d, vinNumber: clean }));
@@ -7317,6 +7379,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                           <span className="lot-row-actions">
                             {!voided && <button className="ghost-button" type="button" onClick={() => openEdit(r)} title="Edit"><Pencil size={14} /></button>}
                             <button className="ghost-button" type="button" onClick={() => openHistory(String(r.id))} title="Change history"><History size={14} /></button>
+                            {!voided && (lotActivityPaid(r) || lotActivityAwaitingLink(r)) && <button className="ghost-button" type="button" onClick={() => openLotDocument(r)} title={lotActivityPaid(r) ? "Receipt" : "Invoice"}><FileText size={14} /></button>}
                             {!voided && <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "activity", id: String(r.id), label: `${vehicle} · ${lotFormatCents(Number(r.feeCents) || 0)}` }); setVoidReason(""); setDraftError(""); setModal("void"); }} title="Void"><Ban size={14} /></button>}
                           </span>
                         </span>
@@ -7435,7 +7498,22 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 <label className="lst-field"><span>Fee</span><input inputMode="decimal" value={activityDraft.fee} disabled={editingPaid} onChange={(e) => setActivityDraft((d) => ({ ...d, fee: e.target.value }))} /><small className="lst-hint">{editingPaid ? "Paid, so the amount is locked. Void this entry and record a new one if the price was wrong." : "From your activity list; edit to price this job."}</small></label>
                 <label className="lst-field"><span>Date</span><input type="date" value={activityDraft.activityDate} onChange={(e) => setActivityDraft((d) => ({ ...d, activityDate: e.target.value }))} /></label>
                 <label className="lst-field wide"><span>VIN</span><input value={activityDraft.vinNumber} onChange={(e) => applyVin(e.target.value)} placeholder="17 characters" />{vinHint && <small className="lst-hint" style={{ color: "var(--money)" }}>{vinHint}</small>}</label>
-                <label className="lst-field"><span>Customer</span><input value={activityDraft.customerName} onChange={(e) => setActivityDraft((d) => ({ ...d, customerName: e.target.value }))} /></label>
+                <label className="lst-field" style={{ position: "relative" }}><span>Customer</span>
+                  <input value={activityDraft.customerName} autoComplete="off" onFocus={() => setCustomerMenuOpen(true)} onBlur={() => window.setTimeout(() => setCustomerMenuOpen(false), 150)} onChange={(e) => { setCustomerPick(null); setCustomerMenuOpen(true); setActivityDraft((d) => ({ ...d, customerName: e.target.value })); }} />
+                  {customerMatches.length > 0 && (
+                    <ul className="lst-suggest" role="listbox" aria-label="Saved customers">
+                      {customerMatches.map((c) => (
+                        <li key={c.id} role="option" aria-selected={false}><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickCustomer(c)}><strong>{c.name}</strong><small>{[c.phone, c.email, c.cars[0] ? lotCustomerCarLabel(c.cars[0]) : ""].filter(Boolean).join(" · ")}{c.cars.length > 1 ? ` · +${c.cars.length - 1}` : ""}</small></button></li>
+                      ))}
+                    </ul>
+                  )}
+                  {customerPick && customerPick.cars.length > 1 && (
+                    <div className="lst-chiprow">
+                      <small className="lst-hint">Their cars:</small>
+                      {customerPick.cars.map((car) => (<button key={`${car.vin}-${car.make}-${car.model}-${car.year}`} type="button" className="status-pill compact" onClick={() => applyCustomerCar(car)}>{lotCustomerCarLabel(car)}</button>))}
+                    </div>
+                  )}
+                </label>
                 <label className="lst-field"><span>Phone</span><input value={activityDraft.customerPhone} onChange={(e) => setActivityDraft((d) => ({ ...d, customerPhone: e.target.value }))} /></label>
                 <label className="lst-field"><span>Car make</span>
                   <select value={canonicalMake(activityDraft.carMake) || activityDraft.carMake} onChange={(e) => setActivityDraft((d) => ({ ...d, carMake: e.target.value, carModel: "", carYear: "" }))}>

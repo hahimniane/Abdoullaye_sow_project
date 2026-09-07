@@ -15,6 +15,21 @@
 
 const LOGO_URL = "https://laawoldigital.com/assets/logo.png";
 
+/**
+ * The logo a document prints in its header: the business's own when it has
+ * uploaded one (an https URL only - a document is public HTML), else the
+ * Laawol mark. Both logos on the same sheet would read as co-branding the
+ * business never asked for, so the platform mark moves to the footer.
+ * @param {Object} business A businesses document.
+ * @return {{url: string, own: boolean}} The logo to print.
+ */
+function documentLogo(business) {
+  const org = business && typeof business === "object" ? business : {};
+  const own = text(org.logoUrl || org.profileImageUrl, 600);
+  if (/^https:\/\/[^\s"'<>]+$/i.test(own)) return {url: own, own: true};
+  return {url: LOGO_URL, own: false};
+}
+
 const PARKING_DOCUMENT_TYPES = Object.freeze({
   RECEIPT: "receipt",
   INVOICE: "invoice",
@@ -168,6 +183,105 @@ function parkingDocumentModel({
     paymentLinkUrl: paid ? "" : text(paymentLinkUrl, 400),
     paymentLinkQrSvg: paid ? "" : String(paymentLinkQrSvg || ""),
     issuedAt: formatDate(record.documentIssuedAt),
+    logo: documentLogo(org),
+    rows: [
+      ["Customer", text(record.customerName || record.ownerName, 120)],
+      ["Phone", text(record.customerPhone, 40)],
+      ["Email", text(record.customerEmail, 180)],
+      ["Vehicle", car],
+      ["VIN", text(record.vinNumber, 40)],
+      ["Parked from", formatDate(record.parkingDate)],
+      ["Parked until", formatDate(record.parkingEndDate) ||
+        (record.parkingDate ? "Open-ended" : "")],
+      ["Tracking code", text(record.trackingCode, 40)],
+      ["Payment method", methodLabel],
+    ],
+    dueNote: "Please settle this invoice to complete your parking booking.",
+    subject: "parking",
+  };
+}
+
+/**
+ * Which document a lot-ledger activity produces right now: a receipt once
+ * paid (online or in person), an invoice while a payment link is open, and
+ * nothing printable for a cancelled or voided entry.
+ * @param {Object} entry A lotActivities document.
+ * @return {string|""} One of PARKING_DOCUMENT_TYPES, or "" when none applies.
+ */
+function lotActivityDocumentType(entry) {
+  const record = entry && typeof entry === "object" ? entry : {};
+  if (record.voided === true) return "";
+  const status = text(record.paymentStatus, 40);
+  if (status === "succeeded") return PARKING_DOCUMENT_TYPES.RECEIPT;
+  if (status === "awaiting_payment_link") return PARKING_DOCUMENT_TYPES.INVOICE;
+  return "";
+}
+
+const LOT_RECEIVED_VIA_LABELS = Object.freeze({
+  zelle: "Zelle", cash: "Cash", cashapp: "Cash App", venmo: "Venmo",
+  check: "Check", card_in_person: "Card, in person", other: "Other",
+});
+
+/**
+ * Flattens a lot-ledger activity into the same document model a parking
+ * record produces, so one template prints both.
+ * @param {Object} args entry, business, paymentLinkUrl, paymentLinkQrSvg.
+ * @return {Object} The document model.
+ */
+function lotActivityDocumentModel({
+  entry, business, paymentLinkUrl, paymentLinkQrSvg,
+}) {
+  const record = entry && typeof entry === "object" ? entry : {};
+  const org = business && typeof business === "object" ? business : {};
+  const type = lotActivityDocumentType(record) ||
+    PARKING_DOCUMENT_TYPES.INVOICE;
+  const paid = type === PARKING_DOCUMENT_TYPES.RECEIPT;
+  const amountCents = Number(record.feeCents || 0);
+  const car = [record.carYear, record.carMake, record.carModel]
+      .map((part) => text(part, 60)).filter(Boolean).join(" ");
+  const method = text(record.paymentMethod, 40);
+  const via = LOT_RECEIVED_VIA_LABELS[text(record.receivedVia, 40)] || "";
+  const methodLabel = method === "payment_link" ?
+    "Card payment (Stripe)" :
+    method === "direct" ? (via ? `${via}, paid to the business` :
+      "Paid directly to the business") : "";
+  const service = text(record.customLabel || record.activityTypeLabel, 120);
+  return {
+    type,
+    paid,
+    title: parkingDocumentTitle(type),
+    reference: `${paid ? "REC" : "INV"}-${text(record.trackingCode, 40)}`,
+    trackingCode: text(record.trackingCode, 40),
+    businessName: text(org.name, 160),
+    businessAddress: formatBusinessAddress({business: org, entry: {}}),
+    businessPhone: text(org.phone, 40),
+    businessEmail: text(org.email, 180),
+    customerName: text(record.customerName, 120),
+    customerPhone: text(record.customerPhone, 40),
+    customerEmail: text(record.customerEmail, 180),
+    car,
+    vin: text(record.vinNumber, 40),
+    amount: money(amountCents),
+    amountCents,
+    methodLabel,
+    paymentLinkUrl: paid ? "" : text(paymentLinkUrl, 400),
+    paymentLinkQrSvg: paid ? "" : String(paymentLinkQrSvg || ""),
+    issuedAt: formatDate(record.paidAt || record.activityDate),
+    logo: documentLogo(org),
+    rows: [
+      ["Customer", text(record.customerName, 120)],
+      ["Phone", text(record.customerPhone, 40)],
+      ["Email", text(record.customerEmail, 180)],
+      ["Service", service],
+      ["Date", formatDate(record.activityDate)],
+      ["Vehicle", car],
+      ["VIN", text(record.vinNumber, 40)],
+      ["Auction house", text(record.auctionHouse, 60)],
+      ["Reference", text(record.trackingCode, 40)],
+      ["Payment method", methodLabel],
+    ],
+    dueNote: "Please settle this invoice for the service above.",
+    subject: "service",
   };
 }
 
@@ -207,6 +321,15 @@ function renderParkingDocument(model) {
        </div>
      </div>` :
     "";
+
+  // Older callers hand in a model without rows; rebuild the parking rows.
+  const rows = model.rows || [
+    ["Customer", model.customerName], ["Phone", model.customerPhone],
+    ["Email", model.customerEmail], ["Vehicle", model.car],
+    ["VIN", model.vin], ["Parked from", model.startDate],
+    ["Parked until", model.endDate], ["Tracking code", model.trackingCode],
+    ["Payment method", model.methodLabel],
+  ];
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -273,7 +396,8 @@ function renderParkingDocument(model) {
 <div class="sheet">
   <header>
     <div class="brand">
-      <img src="${LOGO_URL}" alt="Laawol Digital">
+      <img src="${escapeHtml((model.logo && model.logo.url) || LOGO_URL)}"
+        alt="${escapeHtml(model.businessName || "Laawol Digital")}">
       <div><b>${escapeHtml(model.businessName || "Laawol Digital")}</b>
         <span>${escapeHtml(model.businessAddress)}</span>
         <span>${escapeHtml([model.businessPhone, model.businessEmail]
@@ -286,15 +410,7 @@ function renderParkingDocument(model) {
   </header>
   ${paidBanner}
   <table>
-    ${row("Customer", model.customerName)}
-    ${row("Phone", model.customerPhone)}
-    ${row("Email", model.customerEmail)}
-    ${row("Vehicle", model.car)}
-    ${row("VIN", model.vin)}
-    ${row("Parked from", model.startDate)}
-    ${row("Parked until", model.endDate)}
-    ${row("Tracking code", model.trackingCode)}
-    ${row("Payment method", model.methodLabel)}
+    ${rows.map(([label, value]) => row(label, value)).join("")}
   </table>
   <div class="total"><span>${model.paid ? "Amount paid" : "Amount due"}</span>
     <b>${escapeHtml(model.amount)}</b></div>
@@ -302,7 +418,8 @@ function renderParkingDocument(model) {
   <footer>
     ${model.paid ?
       "Thank you. This document confirms payment was received in full." :
-      "Please settle this invoice to complete your parking booking."}
+      escapeHtml(model.dueNote ||
+        "Please settle this invoice to complete your parking booking.")}
     <br>Issued through Laawol Digital &middot; laawoldigital.com
   </footer>
 </div>
@@ -311,6 +428,9 @@ function renderParkingDocument(model) {
 
 module.exports = {
   PARKING_DOCUMENT_TYPES,
+  documentLogo,
+  lotActivityDocumentType,
+  lotActivityDocumentModel,
   parkingDocumentType,
   parkingDocumentTitle,
   parkingDocumentModel,

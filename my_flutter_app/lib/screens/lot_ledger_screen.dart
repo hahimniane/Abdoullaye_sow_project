@@ -2,7 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/app_localizations.dart';
+import '../services/lot_customers.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
@@ -144,6 +147,10 @@ class _RecordActivityFormState extends State<_RecordActivityForm> {
   final _carMake = TextEditingController();
   final _carModel = TextEditingController();
   final _carYear = TextEditingController();
+  final _customerFocus = FocusNode();
+
+  List<LotCustomer> _customers = const [];
+  LotCustomer? _customerPick;
 
   String? _typeId;
   bool _typeNeedsAuction = false;
@@ -162,12 +169,83 @@ class _RecordActivityFormState extends State<_RecordActivityForm> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadCustomers();
+  }
+
+  // The lot's customer memory: everyone recorded on an activity or a walk-up,
+  // with the cars seen against them, offered back as staff type.
+  Future<void> _loadCustomers() async {
+    try {
+      final snap = await widget.db
+          .collection('lotCustomers')
+          .where('businessId', isEqualTo: widget.businessId)
+          .orderBy('lastSeenAt', descending: true)
+          .limit(500)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _customers = [
+          for (final d in snap.docs) LotCustomer.fromMap(d.id, d.data()),
+        ];
+      });
+    } catch (_) {
+      // No memory yet, or no permission: the form still works by hand.
+    }
+  }
+
+  void _applyCustomerCar(LotCustomerCar car) {
+    setState(() {
+      if (car.vin.isNotEmpty) _vin.text = car.vin;
+      if (car.make.isNotEmpty) _carMake.text = car.make;
+      if (car.model.isNotEmpty) _carModel.text = car.model;
+      if (car.year.isNotEmpty) _carYear.text = car.year;
+    });
+  }
+
+  // Picking a saved customer fills their contact details; their car is filled
+  // too when they only have one, otherwise the cars are offered as chips.
+  void _pickCustomer(LotCustomer c) {
+    setState(() {
+      _customerPick = c;
+      _customer.text = c.name;
+      if (c.phone.isNotEmpty) _phone.text = c.phone;
+      if (c.email.isNotEmpty) _email.text = c.email;
+    });
+    if (c.cars.length == 1) _applyCustomerCar(c.cars.first);
+  }
+
+  Future<void> _openDocument(String activityId, bool paid) async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('getLotActivityDocumentUrl')
+          .call<Object?>(<String, dynamic>{'activityId': activityId});
+      final data = response.data;
+      final url = data is Map ? (data['url'] ?? '').toString() : '';
+      final uri = url.isNotEmpty ? Uri.tryParse(url) : null;
+      if (uri == null || !mounted) {
+        if (mounted) showErrorSnackBar(context, l10n.lotDocumentCouldNotBeOpened);
+        return;
+      }
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        showErrorSnackBar(context, l10n.lotDocumentCouldNotBeOpened);
+      }
+    } catch (_) {
+      if (mounted) showErrorSnackBar(context, l10n.lotDocumentCouldNotBeOpened);
+    }
+  }
+
+  @override
   void dispose() {
     for (final c in [
       _fee, _vin, _customer, _phone, _email, _carMake, _carModel, _carYear,
     ]) {
       c.dispose();
     }
+    _customerFocus.dispose();
     super.dispose();
   }
 
@@ -200,7 +278,9 @@ class _RecordActivityFormState extends State<_RecordActivityForm> {
     }
     setState(() => _busy = true);
     try {
-      await FirebaseFunctions.instance.httpsCallable('createLotActivity').call({
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('createLotActivity')
+          .call<Object?>({
         'businessId': widget.businessId,
         'activityTypeId': _typeId,
         'feeCents': feeCents,
@@ -218,8 +298,26 @@ class _RecordActivityFormState extends State<_RecordActivityForm> {
         'receivedByStaffId': _method == 'direct' ? _receivedBy : '',
       });
       if (!mounted) return;
-      showSuccessSnackBar(context, 'Activity recorded.');
+      final data = result.data;
+      final activityId =
+          data is Map ? (data['activityId'] ?? '').toString() : '';
+      final paid = data is Map && data['paymentStatus'] == 'succeeded';
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Activity recorded.'),
+          duration: const Duration(seconds: 8),
+          action: activityId.isEmpty
+              ? null
+              : SnackBarAction(
+                  label: paid ? l10n.lotOpenReceipt : l10n.lotOpenInvoice,
+                  onPressed: () => _openDocument(activityId, paid),
+                ),
+        ),
+      );
+      _loadCustomers();
       setState(() {
+        _customerPick = null;
         _fee.clear();
         _vin.clear();
         _customer.clear();
@@ -312,10 +410,93 @@ class _RecordActivityFormState extends State<_RecordActivityForm> {
             decoration: const InputDecoration(labelText: 'VIN'),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _customer,
-            decoration: const InputDecoration(labelText: 'Customer'),
+          RawAutocomplete<LotCustomer>(
+            textEditingController: _customer,
+            focusNode: _customerFocus,
+            optionsBuilder: (value) =>
+                _customerPick != null && _customerPick!.name == value.text
+                    ? const Iterable<LotCustomer>.empty()
+                    : matchLotCustomers(_customers, value.text),
+            displayStringForOption: (c) => c.name,
+            onSelected: _pickCustomer,
+            fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+              return TextField(
+                controller: controller,
+                focusNode: focusNode,
+                onChanged: (_) {
+                  if (_customerPick != null) {
+                    setState(() => _customerPick = null);
+                  }
+                },
+                decoration: const InputDecoration(labelText: 'Customer'),
+              );
+            },
+            optionsViewBuilder: (context, onSelected, options) {
+              final l10n = AppLocalizations.of(context)!;
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(12),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxHeight: 260,
+                      maxWidth: 420,
+                    ),
+                    child: ListView(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+                          child: Text(
+                            l10n.lotSavedCustomers,
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ),
+                        for (final c in options)
+                          ListTile(
+                            dense: true,
+                            title: Text(c.name),
+                            subtitle: Text(
+                              [
+                                c.phone,
+                                c.email,
+                                if (c.cars.isNotEmpty) c.cars.first.label,
+                                if (c.cars.length > 1)
+                                  '+${c.cars.length - 1}',
+                              ].where((p) => p.isNotEmpty).join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => onSelected(c),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
+          if (_customerPick != null && _customerPick!.cars.length > 1) ...[
+            const SizedBox(height: 8),
+            Text(
+              AppLocalizations.of(context)!.lotTheirCars,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final car in _customerPick!.cars)
+                  ActionChip(
+                    label: Text(car.label),
+                    onPressed: () => _applyCustomerCar(car),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: _phone,

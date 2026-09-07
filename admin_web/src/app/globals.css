@@ -5732,6 +5732,12 @@ button[data-loading="true"]::before {
 .lst-radio input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--brand); cursor: pointer; flex: 0 0 auto; }
 .lst-hint { font-size: 13px; color: var(--muted); line-height: 1.45; margin: 6px 0 0; }
 .lst-modal-body > .lst-hint { margin-bottom: 12px; }
+.lst-suggest { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; background: var(--surface, #fff); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.12); max-height: 240px; overflow-y: auto; }
+.lst-suggest li button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.lst-suggest li button:hover, .lst-suggest li button:focus { background: var(--surface-2, #f3f5f4); outline: none; }
+.lst-suggest li button small { color: var(--muted); font-size: 12px; }
+.lst-chiprow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.lst-chiprow .status-pill { cursor: pointer; }
 
 .lst-field { display: flex; flex-direction: column; gap: 6px; }
 .lst-field.wide { grid-column: 1 / -1; }
