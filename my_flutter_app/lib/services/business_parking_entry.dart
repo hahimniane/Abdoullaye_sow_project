@@ -153,7 +153,10 @@ List<BusinessParkingEntryError> validateBusinessParkingEntry(
   final start = draft.startDate;
   final end = draft.endDate;
   if (start == null) errors.add(BusinessParkingEntryError.startDateRequired);
-  if (end == null) errors.add(BusinessParkingEntryError.endDateRequired);
+  // The leave date is optional: no end date is an OPEN-ENDED stay that is
+  // billed day by day ("bill through today") until the business closes it.
+  // Same rule as the console and the server. Only an end before the start
+  // is still wrong.
   if (start != null && end != null && _dayOnly(end).isBefore(_dayOnly(start))) {
     errors.add(BusinessParkingEntryError.endDateBeforeStartDate);
   }

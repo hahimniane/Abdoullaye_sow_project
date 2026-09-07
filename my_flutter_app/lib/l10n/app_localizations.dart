@@ -3902,6 +3902,30 @@ abstract class AppLocalizations {
   /// **'Parking End Date'**
   String get parkingEndDate;
 
+  /// No description provided for @parkingEndDateOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking end date (optional)'**
+  String get parkingEndDateOptional;
+
+  /// No description provided for @parkingOpenEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Open-ended'**
+  String get parkingOpenEnded;
+
+  /// No description provided for @parkingOpenEndedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave blank for an open-ended stay — bill it through today whenever you like.'**
+  String get parkingOpenEndedHint;
+
+  /// No description provided for @parkingClearEndDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear end date'**
+  String get parkingClearEndDate;
+
   /// No description provided for @costPerDay.
   ///
   /// In en, this message translates to:
