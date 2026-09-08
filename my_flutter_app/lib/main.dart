@@ -23,6 +23,10 @@ import 'screens/splash_screen.dart';
 import 'screens/customer_home_screen.dart';
 import 'screens/staff_home_screen.dart';
 import 'screens/home_menu.dart';
+import 'screens/business_record_screen.dart';
+import 'screens/business_reviews_screen.dart';
+import 'screens/business_transport_screen.dart';
+import 'services/business_service_overview.dart';
 import 'screens/park_car_screen.dart';
 import 'screens/send_barrel_screen.dart';
 import 'screens/open_barrels_screen.dart';
@@ -327,6 +331,30 @@ class MyApp extends StatelessWidget {
               },
               '/staff-home': (context) => const StaffHomeScreen(),
               '/home-menu': (context) => const HomeMenu(),
+              // Business destinations for notification taps.
+              '/business-home': (context) {
+                final args = ModalRoute.of(context)!.settings.arguments
+                    as BusinessHomeArguments?;
+                return HomeMenu(
+                  initialCategory: serviceCategoryFromKey(args?.category),
+                  showBackButton: true,
+                );
+              },
+              '/business-record': (context) {
+                final args = ModalRoute.of(context)!.settings.arguments
+                    as BusinessRecordArguments;
+                return BusinessRecordScreen(arguments: args);
+              },
+              '/business-transport': (context) {
+                final businessId =
+                    context.read<AuthProvider>().businessId ?? '';
+                return BusinessTransportScreen(businessId: businessId);
+              },
+              '/business-reviews': (context) {
+                final businessId =
+                    context.read<AuthProvider>().businessId ?? '';
+                return BusinessReviewsScreen(businessId: businessId);
+              },
               '/user-management': (context) => const UserManagementScreen(),
               '/add-staff': (context) => const AddStaffScreen(),
               '/business-support': (context) =>

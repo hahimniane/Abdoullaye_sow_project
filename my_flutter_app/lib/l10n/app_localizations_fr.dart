@@ -2129,6 +2129,49 @@ class AppLocalizationsFr extends AppLocalizations {
   String get parkingEndDate => 'Date de fin du stationnement';
 
   @override
+  String get businessMoreTools => 'Autres outils';
+
+  @override
+  String get businessReviewsTitle => 'Avis';
+
+  @override
+  String get businessReviewsEmpty =>
+      'Pas encore d’avis. Ils apparaissent ici dès que des clients notent une prestation.';
+
+  @override
+  String businessReviewsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count avis',
+      one: '1 avis',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get businessPeopleTitle => 'Équipe';
+
+  @override
+  String get businessServicesCoverageTitle => 'Services et couverture';
+
+  @override
+  String get businessListingsTitle => 'Annonces de véhicules';
+
+  @override
+  String get businessPurchasesTitle => 'Achats et visites';
+
+  @override
+  String get businessRecordNotFound =>
+      'Cette fiche n’est plus disponible ; voici la liste dont elle venait.';
+
+  @override
+  String get lotLedgerTitle => 'Registre du parc';
+
+  @override
+  String get businessOfficesTitle => 'Agences et points de retrait';
+
+  @override
   String get lotSavedCustomers => 'Clients enregistrés';
 
   @override

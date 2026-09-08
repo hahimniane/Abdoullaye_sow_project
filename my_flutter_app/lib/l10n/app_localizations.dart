@@ -3902,6 +3902,72 @@ abstract class AppLocalizations {
   /// **'Parking End Date'**
   String get parkingEndDate;
 
+  /// No description provided for @businessMoreTools.
+  ///
+  /// In en, this message translates to:
+  /// **'More tools'**
+  String get businessMoreTools;
+
+  /// No description provided for @businessReviewsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviews'**
+  String get businessReviewsTitle;
+
+  /// No description provided for @businessReviewsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No reviews yet. They appear here once customers rate a job.'**
+  String get businessReviewsEmpty;
+
+  /// No description provided for @businessReviewsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 review} other{{count} reviews}}'**
+  String businessReviewsCount(int count);
+
+  /// No description provided for @businessPeopleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get businessPeopleTitle;
+
+  /// No description provided for @businessServicesCoverageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Services & coverage'**
+  String get businessServicesCoverageTitle;
+
+  /// No description provided for @businessListingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle listings'**
+  String get businessListingsTitle;
+
+  /// No description provided for @businessPurchasesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchases & viewings'**
+  String get businessPurchasesTitle;
+
+  /// No description provided for @businessRecordNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That record is no longer available, so here is the list it came from.'**
+  String get businessRecordNotFound;
+
+  /// No description provided for @lotLedgerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lot ledger'**
+  String get lotLedgerTitle;
+
+  /// No description provided for @businessOfficesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Offices & pickup points'**
+  String get businessOfficesTitle;
+
   /// No description provided for @lotSavedCustomers.
   ///
   /// In en, this message translates to:

@@ -2082,6 +2082,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get parkingEndDate => 'Parking End Date';
 
   @override
+  String get businessMoreTools => 'More tools';
+
+  @override
+  String get businessReviewsTitle => 'Reviews';
+
+  @override
+  String get businessReviewsEmpty =>
+      'No reviews yet. They appear here once customers rate a job.';
+
+  @override
+  String businessReviewsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count reviews',
+      one: '1 review',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get businessPeopleTitle => 'People';
+
+  @override
+  String get businessServicesCoverageTitle => 'Services & coverage';
+
+  @override
+  String get businessListingsTitle => 'Vehicle listings';
+
+  @override
+  String get businessPurchasesTitle => 'Purchases & viewings';
+
+  @override
+  String get businessRecordNotFound =>
+      'That record is no longer available, so here is the list it came from.';
+
+  @override
+  String get lotLedgerTitle => 'Lot ledger';
+
+  @override
+  String get businessOfficesTitle => 'Offices & pickup points';
+
+  @override
   String get lotSavedCustomers => 'Saved customers';
 
   @override

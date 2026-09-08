@@ -7,6 +7,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/notification_preferences.dart';
 import '../models/platform_access.dart';
+import '../services/notification_routing.dart';
 import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/business_permissions.dart';
@@ -250,6 +251,12 @@ class AuthProvider extends ChangeNotifier {
           _businessName = data?['businessName'] as String?;
           _businessServices = _stringList(data?['businessServices']);
           _businessPermissions = _stringList(data?['businessPermissions']);
+          // Notification taps route by who is signed in: a lot's staff and
+          // owners land on business screens, everyone else on customer ones.
+          PushNotificationService.instance.audienceResolver = () =>
+              hasBusinessDashboardAccess
+                  ? NotificationAudience.business
+                  : NotificationAudience.customer;
           _customerName = data?['fullName'] as String?;
           _customerPhone = data?['phone'] as String?;
           _normalizedPhone = data?['normalizedPhone'] as String?;
@@ -319,6 +326,8 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _clearProfileState() {
+    PushNotificationService.instance.audienceResolver = () =>
+        NotificationAudience.customer;
     _isStaff = false;
     _isAdmin = false;
     _isBusinessOwner = false;

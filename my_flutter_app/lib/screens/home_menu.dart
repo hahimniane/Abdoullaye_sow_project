@@ -19,10 +19,14 @@ import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
+import '../widgets/customer_notification_bell.dart';
 import 'business_assistant_screen.dart';
+import 'business_reviews_screen.dart';
 import 'business_transport_screen.dart';
+import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
+import 'staff_car_management_screen.dart';
 
 export '../services/business_service_overview.dart' show ServiceCategory;
 
@@ -79,7 +83,15 @@ String _categoryLabel(ServiceCategory category, AppLocalizations l10n) {
 }
 
 class HomeMenu extends StatefulWidget {
-  const HomeMenu({super.key});
+  const HomeMenu({super.key, this.initialCategory, this.showBackButton = false});
+
+  /// Open on one service's list (a notification about freight lands on the
+  /// freight list, not on "all").
+  final ServiceCategory? initialCategory;
+
+  /// True when pushed on top of the shell (from a notification) rather than
+  /// shown as the Home tab, so there is a way back.
+  final bool showBackButton;
 
   @override
   State<HomeMenu> createState() => _HomeMenuState();
@@ -160,6 +172,9 @@ class _HomeMenuState extends State<HomeMenu> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialCategory != null) {
+      _selectedCategory = widget.initialCategory!;
+    }
     _subscribeToRecords();
   }
 
@@ -508,9 +523,17 @@ class _HomeMenuState extends State<HomeMenu> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Align(
-                  alignment: Alignment.topRight,
-                  child: const LanguageToggle(),
+                Row(
+                  children: [
+                    if (widget.showBackButton) const BackButton(),
+                    const Spacer(),
+                    // Same bell customers have: a business's notifications
+                    // (paid links, new opportunities, viewing requests) were
+                    // stored but reachable only from a push banner.
+                    const CustomerNotificationBell(),
+                    const SizedBox(width: 4),
+                    const LanguageToggle(),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 // "Services. / Choose a service to get started" is an
@@ -703,6 +726,77 @@ class _ServicesSection extends StatelessWidget {
         ) &&
         auth.hasBusinessPermission(BusinessPermission.transport) &&
         transportBusinessId.isNotEmpty;
+    final businessId = auth.businessId ?? '';
+    final hasCarSales = business_services.hasBusinessService(
+      services,
+      business_services.BusinessServiceKey.carSales,
+    );
+    void go(Widget screen) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => screen),
+      );
+    }
+    final moreTools = <_BusinessTool>[
+      if (hasCarSales &&
+          auth.hasBusinessPermission(BusinessPermission.listings))
+        _BusinessTool(
+          'listings',
+          Icons.directions_car_outlined,
+          l10n.businessListingsTitle,
+          () => go(const StaffCarManagementScreen(showBackButton: true)),
+        ),
+      if (hasCarSales &&
+          auth.hasBusinessPermission(BusinessPermission.purchases))
+        _BusinessTool(
+          'purchases',
+          Icons.handshake_outlined,
+          l10n.businessPurchasesTitle,
+          () => Navigator.of(context).pushNamed('/purchase-management'),
+        ),
+      if (auth.hasBusinessPermission(BusinessPermission.profile))
+        _BusinessTool(
+          'profile',
+          Icons.storefront_outlined,
+          l10n.businessProfile,
+          () => Navigator.of(context).pushNamed('/business-profile'),
+        ),
+      if (auth.hasBusinessPermission(BusinessPermission.destinations))
+        _BusinessTool(
+          'destinations',
+          Icons.public,
+          l10n.businessServicesCoverageTitle,
+          () => Navigator.of(context).pushNamed('/destination-countries'),
+        ),
+      if (businessId.isNotEmpty &&
+          auth.hasBusinessPermission(BusinessPermission.destinations))
+        _BusinessTool(
+          'offices',
+          Icons.place_outlined,
+          l10n.businessOfficesTitle,
+          () => go(OfficeLocationsScreen(businessId: businessId)),
+        ),
+      if (auth.hasBusinessPermission(BusinessPermission.people))
+        _BusinessTool(
+          'people',
+          Icons.group_outlined,
+          l10n.businessPeopleTitle,
+          () => Navigator.of(context).pushNamed('/add-staff'),
+        ),
+      if (businessId.isNotEmpty)
+        _BusinessTool(
+          'reviews',
+          Icons.star_outline_rounded,
+          l10n.businessReviewsTitle,
+          () => go(BusinessReviewsScreen(businessId: businessId)),
+        ),
+      if (auth.hasBusinessPermission(BusinessPermission.support))
+        _BusinessTool(
+          'support',
+          Icons.forum_outlined,
+          l10n.supportInbox,
+          () => Navigator.of(context).pushNamed('/business-support'),
+        ),
+    ];
     return Container(
       padding: EdgeInsets.all(width * 0.06),
       decoration: BoxDecoration(
@@ -767,7 +861,7 @@ class _ServicesSection extends StatelessWidget {
               child: FilledButton.icon(
                 key: const Key('open-lot-ledger'),
                 icon: const Icon(Icons.receipt_long),
-                label: const Text('Lot ledger'),
+                label: Text(l10n.lotLedgerTitle),
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
@@ -801,6 +895,33 @@ class _ServicesSection extends StatelessWidget {
                   );
                 },
               ),
+            ),
+          ],
+          // Everything else the console offers, by the same permissions it
+          // uses. Before this the phone said "use the web console" for most
+          // of it, even though the screens already existed in the app.
+          if (moreTools.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              l10n.businessMoreTools,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: AppColors.muted,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final tool in moreTools)
+                  OutlinedButton.icon(
+                    key: Key('business-tool-${tool.key}'),
+                    icon: Icon(tool.icon, size: 18),
+                    label: Text(tool.label),
+                    onPressed: tool.onPressed,
+                  ),
+              ],
             ),
           ],
           // Occasional, and it leaves the app - so it is outlined, and it says
@@ -1539,4 +1660,14 @@ class _RecordCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One "more tools" button: the console section it stands in for.
+class _BusinessTool {
+  const _BusinessTool(this.key, this.icon, this.label, this.onPressed);
+
+  final String key;
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
 }
