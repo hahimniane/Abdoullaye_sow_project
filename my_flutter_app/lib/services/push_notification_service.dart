@@ -48,6 +48,11 @@ class PushNotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications;
   bool _initialized = false;
 
+  /// Who the signed-in person is, for routing. AuthProvider sets this once
+  /// the profile is known; until then a tap routes as a customer would.
+  NotificationAudience Function() audienceResolver =
+      () => NotificationAudience.customer;
+
   /// Sets up local-notification display for foreground messages and
   /// tap-to-navigate handling for background/terminated messages. Safe to
   /// call once at app startup regardless of sign-in state - permission and
@@ -134,7 +139,7 @@ class PushNotificationService {
   }
 
   void _route(Map<String, dynamic> data) {
-    final route = routeForNotificationData(data);
+    final route = routeForNotificationData(data, audience: audienceResolver());
     if (route == null) return;
     final navigator = rootNavigatorKey.currentState;
     if (navigator == null) {
@@ -159,7 +164,7 @@ class PushNotificationService {
     final data = _pendingRouteData;
     _pendingRouteData = null;
     if (data == null) return null;
-    return routeForNotificationData(data);
+    return routeForNotificationData(data, audience: audienceResolver());
   }
 
   Future<NotificationSettings> requestPermissionAndRegister() async {

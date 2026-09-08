@@ -1,6 +1,39 @@
 import '../screens/review_composer_screen.dart';
 import '../screens/tracking_screen.dart';
 
+/// Who is holding the phone. The same notification type can mean two
+/// different screens: a parking status update sends a customer to their
+/// Orders, but sends the lot that recorded the car to that car's details.
+enum NotificationAudience { customer, business }
+
+/// A business record to open by id. Several business detail screens want a
+/// fully loaded model, so the route loads the document first
+/// (BusinessRecordScreen) and then shows the right screen for it.
+class BusinessRecordArguments {
+  const BusinessRecordArguments({
+    required this.collection,
+    required this.id,
+    this.fallbackCategory,
+  });
+
+  /// parkedCars | barrelShipments | transportRequests | freightShipments |
+  /// freightQuoteRequests | carPurchases
+  final String collection;
+  final String id;
+
+  /// Where to land when the record cannot be opened: the business home,
+  /// filtered to this service (`parking`, `barrels`, `freight`, ...).
+  final String? fallbackCategory;
+}
+
+/// The business home, opened on one service's list.
+class BusinessHomeArguments {
+  const BusinessHomeArguments({this.category});
+
+  /// `parking` | `barrels` | `freight` | `transport` | `sales`
+  final String? category;
+}
+
 /// Where to navigate for a given push notification's `data` payload.
 class NotificationRoute {
   const NotificationRoute(this.name, {this.arguments});
@@ -96,8 +129,15 @@ NotificationRoute _ordersRoute(Map<String, dynamic> data) {
 /// argument rather than just an id, so this opens the closest list/hub
 /// screen instead of fetching and constructing the full object here.
 /// Returns null when the type is unrecognized or required data is missing.
-NotificationRoute? routeForNotificationData(Map<String, dynamic> data) {
+NotificationRoute? routeForNotificationData(
+  Map<String, dynamic> data, {
+  NotificationAudience audience = NotificationAudience.customer,
+}) {
   final type = data['type']?.toString() ?? '';
+  if (audience == NotificationAudience.business) {
+    final business = _businessRouteForNotificationData(type, data);
+    if (business != null) return business;
+  }
   switch (type) {
     case 'car_purchase_status':
       return const NotificationRoute('/my-purchases');
@@ -173,6 +213,131 @@ NotificationRoute? routeForNotificationData(Map<String, dynamic> data) {
       return NotificationRoute('/support-thread', arguments: caseId);
     default:
       return null;
+  }
+}
+
+String _firstNonEmpty(Map<String, dynamic> data, List<String> keys) {
+  for (final key in keys) {
+    final value = data[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
+
+NotificationRoute _businessRecord(
+  String collection,
+  String id,
+  String fallbackCategory,
+) {
+  if (id.isEmpty) {
+    return NotificationRoute(
+      '/business-home',
+      arguments: BusinessHomeArguments(category: fallbackCategory),
+    );
+  }
+  return NotificationRoute(
+    '/business-record',
+    arguments: BusinessRecordArguments(
+      collection: collection,
+      id: id,
+      fallbackCategory: fallbackCategory,
+    ),
+  );
+}
+
+/// The business side of the table. Every type the backend sends to a
+/// business owner or staff member lands somewhere useful; before this only
+/// customer types had routes, so a business tapping "You've been paid" or
+/// "New transport opportunity" got nothing at all.
+NotificationRoute? _businessRouteForNotificationData(
+  String type,
+  Map<String, dynamic> data,
+) {
+  switch (type) {
+    case 'business_order_paid':
+      final service = data['service']?.toString() ?? '';
+      switch (service) {
+        case 'parking':
+        case 'business_parking_entry':
+          return _businessRecord(
+            'parkedCars',
+            _firstNonEmpty(data, ['reservationId', 'requestId', 'recordId']),
+            'parking',
+          );
+        case 'barrel':
+        case 'barrels':
+        case 'barrel_shipment':
+          return _businessRecord(
+            'barrelShipments',
+            _firstNonEmpty(data, ['shipmentId', 'requestId', 'recordId']),
+            'barrels',
+          );
+        case 'freight':
+        case 'freight_shipment':
+          return _businessRecord(
+            'freightShipments',
+            _firstNonEmpty(data, ['shipmentId', 'requestId', 'recordId']),
+            'freight',
+          );
+        case 'transport':
+        case 'transport_job':
+          return _businessRecord(
+            'transportRequests',
+            _firstNonEmpty(data, ['requestId', 'recordId']),
+            'transport',
+          );
+        case 'car_sales':
+        case 'car_purchase':
+        case 'sales':
+          return const NotificationRoute('/purchase-management');
+        default:
+          return const NotificationRoute('/business-home');
+      }
+    case 'parking_reservation_status':
+      return _businessRecord(
+        'parkedCars',
+        _firstNonEmpty(data, ['reservationId', 'relatedId', 'recordId']),
+        'parking',
+      );
+    case 'transport_opportunity':
+    case 'transport_job_paid':
+    case 'transport_request_status':
+      return const NotificationRoute('/business-transport');
+    case 'freight_quote_request':
+    case 'freight_quote_won':
+    case 'freight_quote_lost':
+    case 'freight_shipment_status':
+    case 'freight_balance_due':
+      return const NotificationRoute(
+        '/business-home',
+        arguments: BusinessHomeArguments(category: 'freight'),
+      );
+    case 'barrel_shipment_status':
+    case 'barrel_pool_deposit':
+    case 'barrel_pool_join':
+    case 'barrel_pool_balance_due':
+    case 'deposit_refund_due':
+      return const NotificationRoute(
+        '/business-home',
+        arguments: BusinessHomeArguments(category: 'barrels'),
+      );
+    case 'car_viewing_status':
+    case 'car_purchase_status':
+    case 'payment_hold_capture_notice':
+    case 'secured_order_cancelled_by_business':
+      return const NotificationRoute('/purchase-management');
+    case 'business_support_request':
+      return const NotificationRoute('/business-support');
+    case 'business_verification_document':
+    case 'business_verification_review':
+    case 'business_application_status':
+    case 'business_application':
+      return const NotificationRoute('/business-profile');
+    case 'review_request':
+      // A business is told about a review left for it, not asked to write one.
+      return const NotificationRoute('/business-reviews');
+    default:
+      return null; // support_* types share the customer routes below.
   }
 }
 

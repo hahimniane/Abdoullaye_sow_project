@@ -233,7 +233,10 @@ class _SignedInBell extends StatelessWidget {
   }
 
   void _openRoute(BuildContext context, Map<String, dynamic> data) {
-    final route = routeForNotificationData(data);
+    final audience = context.read<AuthProvider>().hasBusinessDashboardAccess
+        ? NotificationAudience.business
+        : NotificationAudience.customer;
+    final route = routeForNotificationData(data, audience: audience);
     if (route == null) return;
     Navigator.of(context).pushNamed(route.name, arguments: route.arguments);
   }

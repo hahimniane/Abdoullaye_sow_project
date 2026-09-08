@@ -4,6 +4,7 @@ import 'package:my_flutter_app/screens/tracking_screen.dart';
 import 'package:my_flutter_app/services/notification_routing.dart';
 
 void main() {
+  businessRoutingTests();
   group('routeForNotificationData', () {
     test('routes a car purchase update to My purchases', () {
       final route = routeForNotificationData({
@@ -255,6 +256,88 @@ void main() {
       expect(
         routeForNotificationData({'type': 'freight_quote_received'}),
         isNull,
+      );
+    });
+  });
+}
+
+void businessRoutingTests() {
+  group('routeForNotificationData for a business', () {
+    const business = NotificationAudience.business;
+
+    test('a paid parking link opens that parked car', () {
+      final route = routeForNotificationData({
+        'type': 'business_order_paid',
+        'service': 'parking',
+        'reservationId': 'car-1',
+      }, audience: business);
+      expect(route?.name, '/business-record');
+      final args = route?.arguments as BusinessRecordArguments;
+      expect(args.collection, 'parkedCars');
+      expect(args.id, 'car-1');
+      expect(args.fallbackCategory, 'parking');
+    });
+
+    test('a paid barrel or transport job opens its record', () {
+      final barrel = routeForNotificationData({
+        'type': 'business_order_paid',
+        'service': 'barrel',
+        'shipmentId': 'b-1',
+      }, audience: business);
+      expect((barrel?.arguments as BusinessRecordArguments).collection,
+          'barrelShipments');
+      final transport = routeForNotificationData({
+        'type': 'business_order_paid',
+        'service': 'transport',
+        'requestId': 't-1',
+      }, audience: business);
+      expect((transport?.arguments as BusinessRecordArguments).collection,
+          'transportRequests');
+    });
+
+    test('a transport opportunity opens the transport jobs screen', () {
+      expect(
+        routeForNotificationData({'type': 'transport_opportunity'},
+            audience: business)?.name,
+        '/business-transport',
+      );
+    });
+
+    test('quote and pool notices land on the business home list', () {
+      final freight = routeForNotificationData({'type': 'freight_quote_request'},
+          audience: business);
+      expect(freight?.name, '/business-home');
+      expect((freight?.arguments as BusinessHomeArguments).category, 'freight');
+      final pool = routeForNotificationData({'type': 'barrel_pool_join'},
+          audience: business);
+      expect((pool?.arguments as BusinessHomeArguments).category, 'barrels');
+    });
+
+    test('viewing requests, verification and support go to their screens', () {
+      expect(routeForNotificationData({'type': 'car_viewing_status'},
+              audience: business)?.name,
+          '/purchase-management');
+      expect(routeForNotificationData({'type': 'business_verification_review'},
+              audience: business)?.name,
+          '/business-profile');
+      expect(routeForNotificationData({'type': 'business_support_request'},
+              audience: business)?.name,
+          '/business-support');
+      expect(routeForNotificationData(
+              {'type': 'support_message', 'caseId': 'c1'}, audience: business)
+          ?.name,
+          '/support-thread');
+    });
+
+    test('a customer still gets the customer screens for shared types', () {
+      expect(routeForNotificationData({'type': 'car_viewing_status'})?.name,
+          '/my-viewings');
+      expect(
+        routeForNotificationData({
+          'type': 'parking_reservation_status',
+          'reservationId': 'r1',
+        })?.name,
+        '/orders',
       );
     });
   });

@@ -12,6 +12,24 @@ import 'business_transport_jobs.dart';
 /// constructed in a widget test.
 enum ServiceCategory { all, parking, barrels, freight, transport, sales }
 
+/// The category a notification names (`parking`, `barrels`, ...), or null.
+ServiceCategory? serviceCategoryFromKey(String? key) {
+  switch (key) {
+    case 'parking':
+      return ServiceCategory.parking;
+    case 'barrels':
+      return ServiceCategory.barrels;
+    case 'freight':
+      return ServiceCategory.freight;
+    case 'transport':
+      return ServiceCategory.transport;
+    case 'sales':
+      return ServiceCategory.sales;
+    default:
+      return null;
+  }
+}
+
 /// The order the tiles are laid out in.
 ///
 /// Parking leads because it is the only service with a create action on the
