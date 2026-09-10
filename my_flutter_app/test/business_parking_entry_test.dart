@@ -551,9 +551,27 @@ void main() {
       expect(screen, contains('LotCustomer.fromMap('));
     });
 
-    test('typing offers matches, and the same ranking the ledger uses', () {
-      expect(screen, contains('matchLotCustomers(_lotCustomers, value)'));
-      expect(screen, contains('_customerSuggestions'));
+    test('the field opens on a list, not on nothing', () {
+      // A picker that only answers after two characters is a search box, and
+      // reads as broken to someone who tapped expecting a list.
+      expect(screen, contains('List<LotCustomer> _suggestFor(String value)'));
+      final suggest = screen.indexOf('List<LotCustomer> _suggestFor(');
+      final body = screen.substring(suggest, screen.indexOf('\n  }', suggest));
+      expect(body, contains('if (typed.length < 2) return _lotCustomers.take(6)'));
+      expect(body, contains('matchLotCustomers(_lotCustomers, typed)'));
+      expect(body, contains('if (!_nameFocus.hasFocus) return const []'));
+      expect(screen, contains('_nameFocus.addListener('));
+      expect(screen, contains('focusNode: _nameFocus'));
+    });
+
+    test('the lot own people are offered too, and are labelled', () {
+      // A colleague parking here should not have to be filed as a customer
+      // first. Reading the team needs the 'people' permission, so it is
+      // best-effort and silent.
+      expect(screen, contains('lotCustomerSources('));
+      expect(screen, contains('LotCustomer.fromStaff('));
+      expect(screen, contains("collection('users')"));
+      expect(screen, contains(r"'${customer.name} · Staff'"));
     });
 
     test('picking one fills the contact details it knows', () {

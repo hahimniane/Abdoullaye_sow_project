@@ -15,6 +15,10 @@ export type LotCustomer = {
   email: string;
   cars: LotCustomerCar[];
   lastSeenMs: number;
+  /** True when this is one of the business's own people rather than a
+   * remembered customer. A lot parks its own staff's cars, and nobody should
+   * have to be "saved" as a customer first. */
+  staff?: boolean;
 };
 
 type Row = Record<string, unknown>;
@@ -85,4 +89,49 @@ export function matchLotCustomers(customers: LotCustomer[], query: string, limit
 export function lotCustomerCarLabel(car: LotCustomerCar): string {
   const name = [car.year, car.make, car.model].filter(Boolean).join(" ");
   return [name, car.vin].filter(Boolean).join(" · ");
+}
+
+/**
+ * One of the business's own people, offered as someone who can be the
+ * customer. A yard parks cars for its own staff, and making someone a saved
+ * customer first would be filing paperwork to describe a colleague.
+ *
+ * Returns null for a row with nothing to show or nothing to fill.
+ */
+export function lotCustomerFromStaffRow(row: Row): LotCustomer | null {
+  const name = s(row.fullName ?? row.displayName ?? row.name, 120);
+  const email = s(row.email, 180).toLowerCase();
+  const phone = s(row.phone ?? row.phoneNumber, 40);
+  if (!name && !email) return null;
+  return {
+    id: `staff:${s(row.id, 120) || email || name}`,
+    name: name || email,
+    phone,
+    email,
+    cars: [],
+    lastSeenMs: 0,
+    staff: true,
+  };
+}
+
+/**
+ * The people the picker can offer: everyone the lot remembers, plus its own
+ * staff. Saved customers win a tie, because they carry cars and a real last
+ * seen; a staff row only carries contact details.
+ */
+export function lotCustomerSources(
+  saved: LotCustomer[],
+  staff: LotCustomer[],
+): LotCustomer[] {
+  const identity = (c: LotCustomer) =>
+    digits(c.phone) || c.email.toLowerCase() || c.name.trim().toLowerCase();
+  const seen = new Set<string>();
+  const out: LotCustomer[] = [];
+  for (const customer of [...saved, ...staff]) {
+    const key = identity(customer);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(customer);
+  }
+  return out;
 }
