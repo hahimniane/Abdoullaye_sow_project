@@ -17,6 +17,7 @@ import '../models/parked_car.dart';
 import '../providers/auth_provider.dart';
 import '../screens/vin_scanner_screen.dart';
 import '../services/vin_catalog_matcher.dart';
+import '../services/lot_customers.dart';
 import '../services/vin_decoder_service.dart';
 import '../services/business_parking_entry.dart';
 import '../services/parking_service.dart';
@@ -69,6 +70,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   // closes the stay and is billed day by day ("bill through today"). Same
   // rule as the console; the customer reservation flow keeps its own end.
   DateTime? _walkUpEndDate;
+  // The lot's customer memory, and what it offers for what has been typed.
+  // Only ever loaded for the business intake: a customer parking their own
+  // car must never be shown the lot's other customers.
+  List<LotCustomer> _lotCustomers = const [];
+  List<LotCustomer> _customerSuggestions = const [];
   bool _isLoading = false;
   bool _isSearchingParking = false;
   bool _isCatalogLoading = true;
@@ -99,6 +105,74 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     _businessParkingService =
         widget.businessParkingService ?? BusinessParkingService();
     _loadCatalog();
+    _loadLotCustomers();
+  }
+
+  /// A one-shot read of who this lot has taken cars from before. Silent on
+  /// failure: every field still works by hand, so a business with no memory
+  /// yet - or no permission to read it - simply gets no suggestions.
+  Future<void> _loadLotCustomers() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.hasBusinessDashboardAccess) return;
+    final businessId = auth.businessId ?? '';
+    if (businessId.isEmpty) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('lotCustomers')
+          .where('businessId', isEqualTo: businessId)
+          .orderBy('lastSeenAt', descending: true)
+          .limit(500)
+          .get();
+      if (!mounted) return;
+      setState(() => _lotCustomers = [
+            for (final d in snap.docs) LotCustomer.fromMap(d.id, d.data()),
+          ]);
+    } catch (_) {
+      // Nothing to offer; the form is unaffected.
+    }
+  }
+
+  /// Picking a regular fills their contact details, and their car too when
+  /// they only have one. Everything stays editable - the memory is a
+  /// suggestion, never a record that outranks the person at the desk.
+  void _applyLotCustomer(LotCustomer customer) {
+    setState(() {
+      _nameController.text = customer.name;
+      if (customer.phone.isNotEmpty) _phoneController.text = customer.phone;
+      if (customer.email.isNotEmpty) _emailController.text = customer.email;
+      _customerSuggestions = const [];
+    });
+    if (customer.cars.length == 1) _applyLotCustomerCar(customer.cars.first);
+  }
+
+  void _applyLotCustomerCar(LotCustomerCar car) {
+    // Make, model and year are catalog pickers, so a remembered car goes
+    // through the same matcher a VIN decode uses rather than being forced
+    // into options that may not exist. Unlike a decode this says nothing when
+    // it cannot match: the staff member chose this car, they can see the
+    // fields, and an alert here would be scolding them for their own lot's
+    // memory.
+    final match = matchDecodedVehicleToCatalog(
+      decoded: DecodedVehicleInfo(
+        vin: car.vin,
+        make: car.make.isEmpty ? null : car.make,
+        model: car.model.isEmpty ? null : car.model,
+        year: car.year.isEmpty ? null : car.year,
+      ),
+      makeOptions: _makeOptions,
+      modelsForMake: CarCatalog.instance.getModels,
+      yearsForModel: CarCatalog.instance.getYears,
+    );
+    setState(() {
+      if (car.vin.isNotEmpty) _vinController.text = car.vin;
+      if (match.make != null) {
+        _selectedMake = match.make;
+        _modelOptions = match.modelOptions;
+        _selectedModel = match.model;
+        _yearOptions = match.yearOptions;
+        _selectedYear = match.year;
+      }
+    });
   }
 
   Future<void> _loadCatalog() async {
@@ -1174,6 +1248,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                               _RoundedTextField(
                                 controller: _nameController,
                                 label: AppLocalizations.of(context)!.name,
+                                onChanged: (value) {
+                                  setState(() => _customerSuggestions =
+                                      matchLotCustomers(_lotCustomers, value)
+                                          .toList());
+                                },
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
                                     return AppLocalizations.of(
@@ -1183,6 +1262,46 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                   return null;
                                 },
                               ),
+                              // The lot's memory, offered inline rather than
+                              // in a menu that floats over the field being
+                              // typed into. Typing a name nobody recognises
+                              // is still how a new customer is added.
+                              if (_customerSuggestions.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    AppLocalizations.of(
+                                      context,
+                                    )!.lotSavedCustomers,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      for (final customer
+                                          in _customerSuggestions.take(4))
+                                        _CustomerSuggestionChip(
+                                          key: Key(
+                                            'parking-customer-${customer.id}',
+                                          ),
+                                          customer: customer,
+                                          onTap: () =>
+                                              _applyLotCustomer(customer),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 16),
                               CountryPhoneField(
                                 controller: _phoneController,
@@ -2189,12 +2308,64 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   }
 }
 
+/// One remembered customer, offered as something to tap. It shows the phone
+/// under the name because two people share a name more often than a number.
+class _CustomerSuggestionChip extends StatelessWidget {
+  const _CustomerSuggestionChip({
+    super.key,
+    required this.customer,
+    required this.onTap,
+  });
+
+  final LotCustomer customer;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = customer.phone.isNotEmpty
+        ? customer.phone
+        : (customer.cars.isNotEmpty ? customer.cars.first.label : '');
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF1D4ED8).withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              customer.name,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E3A8A),
+              ),
+            ),
+            if (detail.isNotEmpty)
+              Text(
+                detail,
+                style: const TextStyle(fontSize: 10.5, color: Color(0xFF6B7280)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RoundedTextField extends StatelessWidget {
   final String label;
   final TextEditingController? controller;
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
   final TextCapitalization textCapitalization;
+  final ValueChanged<String>? onChanged;
 
   const _RoundedTextField({
     required this.label,
@@ -2202,6 +2373,7 @@ class _RoundedTextField extends StatelessWidget {
     this.validator,
     this.suffixIcon,
     this.textCapitalization = TextCapitalization.none,
+    this.onChanged,
   });
 
   @override
@@ -2209,6 +2381,7 @@ class _RoundedTextField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       validator: validator,
+      onChanged: onChanged,
       textCapitalization: textCapitalization,
       decoration: InputDecoration(
         labelText: label,
