@@ -508,7 +508,17 @@ export function optionLabel(value: string) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
-const parkingStatuses = ["active", "completed", "cancelled"];
+// What the server actually writes. It never wrote "active" or "completed":
+// a stay is reserved until it is cancelled, and a car that has left is one
+// with a leave date in the past, not a status. Filtering by "Active" matched
+// nothing, because nothing has ever been active.
+const parkingStatuses = ["reserved", "pending_payment", "cancelled"];
+
+// What a person may set by hand. "Pending payment" is the server's word for
+// "a link is out and unpaid" - letting staff pick it would have a record
+// claim a payment link that does not exist. It stays filterable, not
+// settable.
+const parkingSettableStatuses = ["reserved", "cancelled"];
 
 const emptyDestinationDraft: DestinationDraft = {
   countryId: countries[0].id,
@@ -4810,6 +4820,15 @@ export function ParkingPanel({
       // to collect ("none") is not something to chase.
       return inRange.filter((row) => businessParkingPaymentTone(row) === "awaiting");
     }
+    // Whether the car is still on the lot is the question staff actually ask,
+    // and no status carries it: a departed car is one whose leave date has
+    // passed. closeParkingStay writes that date and nothing else.
+    if (filter === "here:in") {
+      return inRange.filter((row) => businessParkingEndLabel(row) !== "Ended");
+    }
+    if (filter === "here:gone") {
+      return inRange.filter((row) => businessParkingEndLabel(row) === "Ended");
+    }
     return inRange.filter((row) => text(row.status, "") === filter);
   }, [searched, filter, rangeFrom, rangeTo]);
   useEffect(() => {
@@ -5261,6 +5280,10 @@ export function ParkingPanel({
           <optgroup label="Parking status">
             {parkingStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
           </optgroup>
+          <optgroup label="In the lot">
+            <option value="here:in">Still here</option>
+            <option value="here:gone">Left</option>
+          </optgroup>
           <optgroup label="Payment">
             <option value="payment:paid">Paid</option>
             <option value="payment:unpaid">Not paid</option>
@@ -5470,7 +5493,7 @@ export function ParkingPanel({
               <div className="pur-actions">
                 <label className="bar-field"><span>Update status</span>
                   <select value={status} disabled={busy} onChange={(event) => runPanelAction(setBusy, setMessage, "Parking status updated.", () => updateParkingStatus(row, event.target.value))}>
-                    {parkingStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
+                    {parkingSettableStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
                   </select>
                 </label>
                 {awaitingDirect && (
@@ -5590,7 +5613,7 @@ export function ParkingPanel({
                 </label>
                 <label className="lst-field"><span>Status</span>
                   <select value={draft.status} onChange={(event) => setDraft((value) => ({ ...value, status: event.target.value }))}>
-                    {parkingStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+                    {parkingSettableStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
                   </select>
                 </label>
               </div>

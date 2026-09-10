@@ -849,3 +849,30 @@ test("only one parking view renders at a time", () => {
   // And the list only draws in list view.
   assert.match(panelSource, /\{parkingView === "list" && filteredRows\.length > 0 && \(/);
 });
+
+// The filter offered "Active" and "Completed". The server has never written
+// either: a stay is reserved until it is cancelled, and a car that has left is
+// one whose leave date has passed. So filtering by status matched nothing.
+test("the parking filter speaks the vocabulary the server writes", () => {
+  assert.match(panelSource, /const parkingStatuses = \["reserved", "pending_payment", "cancelled"\]/);
+  assert.ok(
+    !/const parkingStatuses = \[[^\]]*"active"/.test(panelSource),
+    "no record has ever had status active",
+  );
+  // Whether the car is still on the lot is the question staff actually ask,
+  // and no status carries it.
+  assert.match(panelSource, /filter === "here:in"/);
+  assert.match(panelSource, /filter === "here:gone"/);
+  assert.match(panelSource, /businessParkingEndLabel\(row\) === "Ended"/);
+});
+
+// Filterable and settable are not the same set: "pending payment" is the
+// server's word for "a link is out and unpaid", and a person picking it would
+// have the record claim a payment link that does not exist.
+test("staff can set only the statuses that are theirs to set", () => {
+  assert.match(panelSource, /const parkingSettableStatuses = \["reserved", "cancelled"\]/);
+  const settable = (panelSource.match(/parkingSettableStatuses\.map/g) || []).length;
+  assert.equal(settable, 2, "the row control and the edit form both use it");
+  const filterable = (panelSource.match(/parkingStatuses\.map/g) || []).length;
+  assert.equal(filterable, 1, "only the filter offers the full vocabulary");
+});
