@@ -675,11 +675,24 @@ test("the walk-up form offers the customers the lot already remembers", () => {
   // The panel reads the memory, scoped to this business like every other row
   // source in it.
   assert.match(panelSource, /useBusinessRows\("lotCustomers", businessId/);
-  assert.match(panelSource, /matchLotCustomers\(entryKnownCustomers, entryDraft\.customerName\)/);
+  assert.match(panelSource, /matchLotCustomers\(entryKnownCustomers, typed\)/);
+
+  // An empty field opens on the people most recently seen. A picker that only
+  // answers after two characters is a search box, and reads as broken to
+  // someone who clicked expecting a list.
+  assert.match(panelSource, /if \(typed\.length < 2\) return entryKnownCustomers\.slice\(0, 6\)/);
+  assert.match(panelSource, /\.sort\(\(a, b\) => b\.lastSeenMs - a\.lastSeenMs\)/);
+
+  // The lot's own people are offered too - a colleague parking here should
+  // not have to be filed as a customer first - and they are labelled so the
+  // person at the desk can tell which is which.
+  assert.match(panelSource, /lotCustomerSources\(/);
+  assert.match(panelSource, /lotCustomerFromStaffRow\(/);
+  assert.match(panelSource, /customer\.staff \? " · Staff" : ""/);
 
   // The suggestion list closes once someone is picked, so it cannot sit over
   // the fields it just filled.
-  assert.match(panelSource, /entryCustomerMenuOpen && !entryCustomerPick/);
+  assert.match(panelSource, /entryCustomerMenuOpen \|\| entryCustomerPick/);
 
   // Picking fills the contact details the lot knows, and never blanks what is
   // already typed.

@@ -97,6 +97,8 @@ import {
 } from "@/lib/lot-ledger";
 import {
   lotCustomerCarLabel,
+  lotCustomerFromStaffRow,
+  lotCustomerSources,
   lotCustomerFromRow,
   matchLotCustomers,
   type LotCustomer,
@@ -4950,18 +4952,34 @@ export function ParkingPanel({
     setLinkCopied(false);
   }
 
+  // Everyone this desk can hand the keys back to: the customers the lot
+  // remembers, plus the business's own people. Staff park cars here too, and
+  // nobody should have to be filed as a customer before their colleague can
+  // write their name down.
   const entryKnownCustomers = useMemo(
-    () => parkingCustomers.rows.map((row) => lotCustomerFromRow(row as Record<string, unknown>)),
-    [parkingCustomers.rows],
+    () => lotCustomerSources(
+        parkingCustomers.rows
+            .map((row) => lotCustomerFromRow(row as Record<string, unknown>))
+            .sort((a, b) => b.lastSeenMs - a.lastSeenMs),
+        parkingStaff.rows
+            .map((row) => lotCustomerFromStaffRow(row as Record<string, unknown>))
+            .filter((entry): entry is LotCustomer => entry !== null),
+    ),
+    [parkingCustomers.rows, parkingStaff.rows],
   );
   // Suggestions close once someone has been picked, so the list does not sit
   // over the fields it just filled.
-  const entryCustomerMatches = useMemo(
-    () => (entryCustomerMenuOpen && !entryCustomerPick
-      ? matchLotCustomers(entryKnownCustomers, entryDraft.customerName)
-      : []),
-    [entryKnownCustomers, entryDraft.customerName, entryCustomerMenuOpen, entryCustomerPick],
-  );
+  //
+  // An empty field opens on the most recent customers rather than nothing:
+  // this is a list you can look through, not a search box that only rewards
+  // people who already know the name they are looking for. Two characters in,
+  // the shared matcher takes over and ranks properly.
+  const entryCustomerMatches = useMemo(() => {
+    if (!entryCustomerMenuOpen || entryCustomerPick) return [];
+    const typed = entryDraft.customerName.trim();
+    if (typed.length < 2) return entryKnownCustomers.slice(0, 6);
+    return matchLotCustomers(entryKnownCustomers, typed);
+  }, [entryKnownCustomers, entryDraft.customerName, entryCustomerMenuOpen, entryCustomerPick]);
 
   function applyEntryCustomerCar(car: LotCustomerCar) {
     setEntryDraft((value) => ({
@@ -5528,7 +5546,7 @@ export function ParkingPanel({
                         {entryCustomerMatches.map((customer) => (
                           <li key={customer.id} role="option" aria-selected={false}>
                             <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => pickEntryCustomer(customer)}>
-                              <strong>{customer.name}</strong>
+                              <strong>{customer.name}{customer.staff ? " · Staff" : ""}</strong>
                               <small>{[customer.phone, customer.email, customer.cars[0] ? lotCustomerCarLabel(customer.cars[0]) : ""].filter(Boolean).join(" · ")}{customer.cars.length > 1 ? ` · +${customer.cars.length - 1}` : ""}</small>
                             </button>
                           </li>

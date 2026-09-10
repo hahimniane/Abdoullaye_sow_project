@@ -32,6 +32,7 @@ class LotCustomer {
     required this.email,
     required this.cars,
     required this.lastSeenMs,
+    this.staff = false,
   });
 
   final String id;
@@ -40,6 +41,11 @@ class LotCustomer {
   final String email;
   final List<LotCustomerCar> cars;
   final int lastSeenMs;
+
+  /// True when this is one of the business's own people rather than a
+  /// remembered customer. A lot parks its own staff's cars, and nobody should
+  /// have to be filed as a customer first.
+  final bool staff;
 
   static String _s(Object? v, [int max = 200]) {
     final t = (v ?? '').toString().trim();
@@ -82,6 +88,48 @@ class LotCustomer {
       lastSeenMs: ms,
     );
   }
+
+  /// One of the business's own people, offered as someone who can be the
+  /// customer. Returns null for a row with nothing to show or nothing to fill.
+  static LotCustomer? fromStaff(String id, Map<String, dynamic> data) {
+    final name = _s(data['fullName'] ?? data['displayName'] ?? data['name'], 120);
+    final email = _s(data['email'], 180).toLowerCase();
+    final phone = _s(data['phone'] ?? data['phoneNumber'], 40);
+    if (name.isEmpty && email.isEmpty) return null;
+    return LotCustomer(
+      id: 'staff:${id.isNotEmpty ? id : (email.isNotEmpty ? email : name)}',
+      name: name.isNotEmpty ? name : email,
+      phone: phone,
+      email: email,
+      cars: const [],
+      lastSeenMs: 0,
+      staff: true,
+    );
+  }
+}
+
+/// The people the picker can offer: everyone the lot remembers, plus its own
+/// staff. A saved customer wins a tie because they carry cars and a real last
+/// seen; a staff row only carries contact details.
+List<LotCustomer> lotCustomerSources(
+  List<LotCustomer> saved,
+  List<LotCustomer> staff,
+) {
+  String identity(LotCustomer c) {
+    final d = _digits(c.phone);
+    if (d.isNotEmpty) return d;
+    if (c.email.isNotEmpty) return c.email.toLowerCase();
+    return c.name.trim().toLowerCase();
+  }
+
+  final seen = <String>{};
+  final out = <LotCustomer>[];
+  for (final customer in [...saved, ...staff]) {
+    final key = identity(customer);
+    if (key.isEmpty || !seen.add(key)) continue;
+    out.add(customer);
+  }
+  return out;
 }
 
 String _digits(String v) => v.replaceAll(RegExp(r'\D+'), '');

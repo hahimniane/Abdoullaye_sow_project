@@ -74,6 +74,8 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   // Only ever loaded for the business intake: a customer parking their own
   // car must never be shown the lot's other customers.
   List<LotCustomer> _lotCustomers = const [];
+  List<LotCustomer> _staffCustomers = const [];
+  final _nameFocus = FocusNode();
   List<LotCustomer> _customerSuggestions = const [];
   bool _isLoading = false;
   bool _isSearchingParking = false;
@@ -106,6 +108,20 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
         widget.businessParkingService ?? BusinessParkingService();
     _loadCatalog();
     _loadLotCustomers();
+    // An empty field opens on the people most recently seen rather than
+    // nothing: this is a list to look through, not a search box that only
+    // rewards someone who already knows the name.
+    _nameFocus.addListener(() {
+      if (!mounted) return;
+      setState(() => _customerSuggestions = _suggestFor(_nameController.text));
+    });
+  }
+
+  List<LotCustomer> _suggestFor(String value) {
+    if (!_nameFocus.hasFocus) return const [];
+    final typed = value.trim();
+    if (typed.length < 2) return _lotCustomers.take(6).toList();
+    return matchLotCustomers(_lotCustomers, typed).toList();
   }
 
   /// A one-shot read of who this lot has taken cars from before. Silent on
@@ -124,11 +140,41 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
           .limit(500)
           .get();
       if (!mounted) return;
-      setState(() => _lotCustomers = [
-            for (final d in snap.docs) LotCustomer.fromMap(d.id, d.data()),
-          ]);
+      final saved = [
+        for (final d in snap.docs) LotCustomer.fromMap(d.id, d.data()),
+      ];
+      setState(() => _lotCustomers = lotCustomerSources(saved, _staffCustomers));
     } catch (_) {
       // Nothing to offer; the form is unaffected.
+    }
+    await _loadStaffAsCustomers(businessId);
+  }
+
+  /// The lot's own people, offered as customers too. Reading the team needs
+  /// the 'people' permission, so this is best-effort: a parking-only staff
+  /// member simply gets the remembered customers and types the rest.
+  Future<void> _loadStaffAsCustomers(String businessId) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('businessId', isEqualTo: businessId)
+          .limit(200)
+          .get();
+      if (!mounted) return;
+      final staff = <LotCustomer>[];
+      for (final d in snap.docs) {
+        final entry = LotCustomer.fromStaff(d.id, d.data());
+        if (entry != null) staff.add(entry);
+      }
+      setState(() {
+        _staffCustomers = staff;
+        _lotCustomers = lotCustomerSources(
+          [for (final c in _lotCustomers) if (!c.staff) c],
+          staff,
+        );
+      });
+    } catch (_) {
+      // No permission to see the team: the memory alone still works.
     }
   }
 
@@ -193,6 +239,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
 
   @override
   void dispose() {
+    _nameFocus.dispose();
     _nameController.dispose();
     _phoneController.dispose();
     _parkingCityController.dispose();
@@ -1248,10 +1295,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                               _RoundedTextField(
                                 controller: _nameController,
                                 label: AppLocalizations.of(context)!.name,
+                                focusNode: _nameFocus,
                                 onChanged: (value) {
-                                  setState(() => _customerSuggestions =
-                                      matchLotCustomers(_lotCustomers, value)
-                                          .toList());
+                                  setState(() =>
+                                      _customerSuggestions = _suggestFor(value));
                                 },
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
@@ -2340,7 +2387,7 @@ class _CustomerSuggestionChip extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              customer.name,
+              customer.staff ? '${customer.name} · Staff' : customer.name,
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -2366,6 +2413,7 @@ class _RoundedTextField extends StatelessWidget {
   final Widget? suffixIcon;
   final TextCapitalization textCapitalization;
   final ValueChanged<String>? onChanged;
+  final FocusNode? focusNode;
 
   const _RoundedTextField({
     required this.label,
@@ -2374,12 +2422,14 @@ class _RoundedTextField extends StatelessWidget {
     this.suffixIcon,
     this.textCapitalization = TextCapitalization.none,
     this.onChanged,
+    this.focusNode,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
       validator: validator,
       onChanged: onChanged,
       textCapitalization: textCapitalization,

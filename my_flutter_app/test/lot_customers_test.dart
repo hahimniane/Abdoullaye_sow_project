@@ -24,4 +24,66 @@ void main() {
     expect(rows[0].cars.first.vin, '1HGCM8');
     expect(rows[0].cars.first.label, '2003 Honda Accord · 1HGCM8');
   });
+
+
+  group('the lot own people can be the customer', () {
+    test('a staff row becomes someone the picker can offer', () {
+      final staff = LotCustomer.fromStaff('u1', {
+        'fullName': 'Mariama Bah',
+        'email': 'M.Bah@Example.com',
+        'phone': '917-555-0100',
+      });
+      expect(staff, isNotNull);
+      expect(staff!.name, 'Mariama Bah');
+      expect(staff.email, 'm.bah@example.com');
+      expect(staff.staff, isTrue);
+      expect(staff.cars, isEmpty);
+
+      // Nothing to show, nothing to offer.
+      expect(LotCustomer.fromStaff('u2', {'phone': '917-555-0101'}), isNull);
+      // A colleague with only a name is still worth offering.
+      expect(LotCustomer.fromStaff('u3', {'fullName': 'Sekou'})?.name, 'Sekou');
+    });
+
+    test('the same person is never offered twice', () {
+      final saved = LotCustomer.fromMap('c1', {
+        'name': 'Mariama Bah',
+        'phone': '(917) 555-0100',
+        'email': 'm.bah@example.com',
+        'cars': [
+          {'vin': '1HGCM82633A004352', 'make': 'Honda', 'model': 'Accord', 'year': '2019'},
+        ],
+      });
+      final asStaff = LotCustomer.fromStaff('u1', {
+        'fullName': 'Mariama Bah',
+        'email': 'm.bah@example.com',
+        'phone': '917-555-0100',
+      })!;
+      final other = LotCustomer.fromStaff('u2', {
+        'fullName': 'Sekou Camara',
+        'email': 'sekou@example.com',
+      })!;
+
+      final merged = lotCustomerSources([saved], [asStaff, other]);
+      expect(merged.length, 2, reason: 'one phone number is one person');
+      // The remembered record wins: it carries the cars.
+      expect(merged.first.cars.length, 1);
+      expect(merged.first.staff, isFalse);
+      expect(merged.last.name, 'Sekou Camara');
+
+      // A colleague nobody has parked for yet is still findable.
+      expect(matchLotCustomers(merged, 'sek').first.name, 'Sekou Camara');
+    });
+
+    test('someone with no phone, email or name is not a person to offer', () {
+      expect(
+        lotCustomerSources(const [], [
+          const LotCustomer(
+            id: 'x', name: '', phone: '', email: '', cars: [], lastSeenMs: 0,
+          ),
+        ]),
+        isEmpty,
+      );
+    });
+  });
 }
