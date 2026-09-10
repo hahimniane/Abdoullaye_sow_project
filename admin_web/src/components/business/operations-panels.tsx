@@ -7925,8 +7925,17 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
     <div className="pur-info" style={{ display: "block" }}>
       <div className="row-detail-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
         <div><span>Leaves</span><b>{openEnded ? "Open-ended" : formatDate(r.parkingEndDate)}</b></div>
-        <div><span>Billed through</span><b>{billedThrough ? formatDate(r.billedThroughDate) : "Nothing yet"}</b></div>
-        <div><span>Unbilled</span><b>{days} {days === 1 ? "day" : "days"} · {lotFormatCents(unbilledCents)}</b></div>
+        {/* Both of these describe day-by-day accrual, which only an
+            open-ended stay does. On a stay priced for its leave date they are
+            forced to "Nothing yet" and "0 days · $0.00" - and sitting under an
+            amount that is genuinely owed, they read as "nothing is owed".
+            A field that can only say one thing is not worth the space. */}
+        {openEnded && (
+          <>
+            <div><span>Billed through</span><b>{billedThrough ? formatDate(r.billedThroughDate) : "Nothing yet"}</b></div>
+            <div><span>Unbilled</span><b>{days} {days === 1 ? "day" : "days"} · {lotFormatCents(unbilledCents)}</b></div>
+          </>
+        )}
       </div>
       <p className="lst-hint">{note}</p>
       {flash && <div className="lst-hint" role="status">{flash}</div>}

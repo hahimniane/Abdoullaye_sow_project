@@ -714,3 +714,29 @@ test("the walk-up form offers the customers the lot already remembers", () => {
     "the walk-up picker must live inside ParkingPanel",
   );
 });
+
+// A stay with a leave date is priced for its whole window when it is
+// recorded; only an open-ended stay accrues day by day. The accrual figures
+// are therefore pinned at "Nothing yet" and "0 days · $0.00" on a fixed-term
+// stay - which, sitting directly under an amount that IS owed and a payment
+// link that HAS been sent, reads as "nothing is owed".
+test("a stay priced for its leave date does not show accrual figures", () => {
+  const actions = panelSource.slice(panelSource.indexOf("function ParkingBillingActions"));
+  const body = actions.slice(0, actions.indexOf("\n}\n"));
+
+  // The accrual is computed only for an open-ended stay...
+  assert.match(body, /const openEnded = !r\.parkingEndDate/);
+  assert.match(body, /const days = openEnded && fromMs \?/);
+
+  // ...and the two tiles that report it are rendered only for one.
+  const grid = body.slice(body.indexOf("<span>Leaves</span>"));
+  const tiles = grid.slice(0, grid.indexOf("</div>\n      <p"));
+  assert.match(tiles, /\{openEnded && \(/, "the accrual tiles must be gated on openEnded");
+  const billedAt = tiles.indexOf("Billed through");
+  const gateAt = tiles.indexOf("{openEnded && (");
+  assert.ok(gateAt !== -1 && gateAt < billedAt, "the gate must come before the tiles it hides");
+  assert.ok(tiles.indexOf("Unbilled") > gateAt, "Unbilled sits inside the same gate");
+
+  // The leave date itself is always worth showing.
+  assert.match(tiles, /openEnded \? "Open-ended" : formatDate\(r\.parkingEndDate\)/);
+});
