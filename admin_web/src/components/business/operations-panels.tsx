@@ -26,6 +26,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   Clock3,
+  ChevronRight,
   Copy,
   Download,
   MapPinned,
@@ -131,6 +132,7 @@ import {
   businessParkingEntryResult,
   businessParkingDocumentType,
   businessParkingEndLabel,
+  businessParkingStayDays,
   businessParkingWithinRange,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
@@ -4726,6 +4728,11 @@ function useTransientMessage(setMessage: (value: string) => void, ms = ROW_MESSA
 // `businessName` is no longer destructured: the panel used to stamp it onto
 // the parkedCars document it wrote itself, and every write now goes through a
 // callable that reads the business record server-side.
+/** Whether this row is waiting on money the business collects itself. */
+function awaitingDirectRow(row: FirestoreRow) {
+  return canMarkBusinessParkingPaid(row);
+}
+
 export function ParkingPanel({
   businessId,
   previewMode = false,
@@ -4756,6 +4763,18 @@ export function ParkingPanel({
   const [entryBusy, setEntryBusy] = useState(false);
   const [entryMessage, setEntryMessage] = useState("");
   const [entryResult, setEntryResult] = useState<BusinessParkingEntryResult | null>(null);
+  // "Pays us directly" answers how, not whether. A lot takes the cash at the
+  // desk as often as it waits for it, and recording both as "awaiting" left
+  // money that was already in the till showing as outstanding.
+  // A lot with thirty cars in it wants to see thirty cars, not scroll thirty
+  // cards. The list is the working view; a card is what you open when you
+  // need to act on one.
+  const [parkingView, setParkingView] = useState<"list" | "cards">("list");
+  // Which card the list sent us to, so opening a row lands on that car
+  // rather than at the top of thirty of them.
+  const [openRowId, setOpenRowId] = useState("");
+  const [entryAlreadyPaid, setEntryAlreadyPaid] = useState(false);
+  const [entryReceivedVia, setEntryReceivedVia] = useState("cash");
   const [entryCustomerMenuOpen, setEntryCustomerMenuOpen] = useState(false);
   const [entryCustomerPick, setEntryCustomerPick] = useState<LotCustomer | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -4801,9 +4820,15 @@ export function ParkingPanel({
     setRangeTo("");
   }, [focusRecordId]);
   useEffect(() => {
-    if (!focusRecordId || !focusedCardRef.current) return;
+    const target = focusRecordId || openRowId;
+    if (!target || !focusedCardRef.current) return;
     focusedCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [focusRecordId, filteredRows]);
+  }, [focusRecordId, openRowId, filteredRows, parkingView]);
+  // A record arriving from a notification opens its card; the list would
+  // otherwise swallow the link.
+  useEffect(() => {
+    if (focusRecordId) setParkingView("cards");
+  }, [focusRecordId]);
   const activeCount = parkedCars.rows.filter((row) => text(row.status, "active") === "active").length;
 
   function closeForm() {
@@ -4950,6 +4975,12 @@ export function ParkingPanel({
     setEntryMessage("");
     setEntryResult(null);
     setLinkCopied(false);
+    // The next car is a different car: "already paid" must never carry over,
+    // or a stay nobody paid for is settled by a leftover radio.
+    setEntryAlreadyPaid(false);
+    setEntryReceivedVia("cash");
+    setEntryCustomerPick(null);
+    setEntryCustomerMenuOpen(false);
   }
 
   // Everyone this desk can hand the keys back to: the customers the lot
@@ -5022,7 +5053,27 @@ export function ParkingPanel({
         functions,
         "createBusinessParkingEntry",
       )(businessParkingEntryPayload(entryDraft, businessId));
-      setEntryResult(businessParkingEntryResult(response.data));
+      const created = businessParkingEntryResult(response.data);
+      setEntryResult(created);
+      // Settling goes through the same callable the "payment received"
+      // button uses, so a walk-up paid at the desk lands in exactly the state
+      // it would have reached a minute later. If this second step fails the
+      // car is still recorded and still owed - which is the safe way round,
+      // and staff can mark it received from the row.
+      if (entryDraft.paymentMethod === "direct" && entryAlreadyPaid && created.entryId) {
+        try {
+          await httpsCallable(functions, "markBusinessParkingPaid")({
+            entryId: created.entryId,
+            receivedVia: entryReceivedVia,
+          });
+          setEntryMessage("Recorded, and marked as paid.");
+        } catch {
+          setEntryMessage(
+            "The car was recorded, but marking it paid failed. Use " +
+            "\"Payment received\" on the row to settle it.",
+          );
+        }
+      }
     } catch (error) {
       setEntryMessage(error instanceof Error ? error.message : "The car could not be recorded.");
     } finally {
@@ -5229,6 +5280,10 @@ export function ParkingPanel({
         <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("parking-receipts.csv", filteredRows, ["trackingCode", "ownerName", "carMake", "carModel", "carYear", "vinNumber", "parkingDate", "parkingEndDate", "totalCost", "status", "updatedAt"])}>
           <Download size={15} /> Export receipts
         </button>
+        <div className="pk-view" role="group" aria-label="Parking layout">
+          <button type="button" className={parkingView === "list" ? "on" : ""} aria-pressed={parkingView === "list"} onClick={() => setParkingView("list")}>List</button>
+          <button type="button" className={parkingView === "cards" ? "on" : ""} aria-pressed={parkingView === "cards"} onClick={() => setParkingView("cards")}>Cards</button>
+        </div>
       </div>
 
       {parkedCars.loading && <LoadingState />}
@@ -5244,7 +5299,70 @@ export function ParkingPanel({
         <EmptyState text="No parking records match this filter." />
       )}
 
-      <div className="pur-grid">
+      {parkingView === "list" && filteredRows.length > 0 && (
+        <div className="pk-list">
+          <div className="pk-list-scroll">
+            <div className="pk-row pk-head" role="row">
+              <span>Vehicle</span>
+              <span>Depositor</span>
+              <span>In</span>
+              <span>Out</span>
+              <span className="num">Days</span>
+              <span className="num">Rate</span>
+              <span className="num">Total</span>
+              <span>Status</span>
+              <span className="pk-acts-head">Actions</span>
+            </div>
+            {filteredRows.map((row) => {
+              const vehicle = [text(row.carYear, ""), text(row.carMake, ""), text(row.carModel, "")]
+                .filter(Boolean).join(" ") || text(row.trackingCode, "Vehicle");
+              const openEnded = !row.parkingEndDate;
+              const badge = isBusinessEnteredParking(row) ? businessParkingPaymentBadge(row) : "";
+              const tone = businessParkingPaymentTone(row);
+              const rate = Number(row.dailyRate) || 0;
+              const total = Number(row.totalCost ?? row.amountDue) || 0;
+              const linkUrl = text(row.paymentLinkUrl ?? row.checkoutUrl, "");
+              const rowBusy = paidBusyId === row.id;
+              const isReceipt = businessParkingDocumentType(row) === "receipt";
+              return (
+                <div className="pk-row" key={String(row.id)} role="row">
+                  <span><b>{vehicle}</b><small>{text(row.vinNumber, "") || text(row.trackingCode, "")}</small></span>
+                  <span><b>{text(row.customerName ?? row.ownerName, "—")}</b><small>{text(row.customerPhone, "")}</small></span>
+                  <span>{formatDate(row.parkingDate) || "—"}</span>
+                  <span className={openEnded ? "muted" : undefined}>{openEnded ? "Open" : formatDate(row.parkingEndDate)}</span>
+                  <span className="num">{businessParkingStayDays(row)}</span>
+                  <span className="num">{rate > 0 ? formatMoney(rate, "USD") : "—"}</span>
+                  <span className="num"><b>{total > 0 ? formatMoney(total, "USD") : "—"}</b></span>
+                  <span>{badge
+                    ? <em className={`pk-pill ${tone === "paid" ? "ok" : "warn"}`}>{badge}</em>
+                    : <em className="pk-pill">{text(row.status, "active")}</em>}</span>
+                  <span className="pk-acts">
+                    <button type="button" className="pk-act" disabled={rowBusy} title={isReceipt ? "Print receipt" : "Print invoice"} aria-label={isReceipt ? "Print receipt" : "Print invoice"} onClick={() => void openParkingDocument(row)}>
+                      {rowBusy ? <RefreshCw className="spin" size={13} /> : <Printer size={13} />}
+                    </button>
+                    {linkUrl && tone !== "paid" && (
+                      <button type="button" className="pk-act" title="Copy payment link" aria-label="Copy payment link" onClick={() => void copyCheckoutUrl(linkUrl)}>
+                        <Copy size={13} />
+                      </button>
+                    )}
+                    <button type="button" className="pk-act" title="Edit this record" aria-label="Edit this record" onClick={() => editParking(row)}>
+                      <Pencil size={13} />
+                    </button>
+                    {/* Settling money asks how it arrived, and that choice
+                        lives on the card. This opens the card at this car so
+                        the answer is deliberate rather than a default. */}
+                    <button type="button" className="pk-act open" title={awaitingDirectRow(row) ? "Settle payment and more" : "Open this record"} aria-label="Open this record" onClick={() => { setParkingView("cards"); setOpenRowId(String(row.id)); }}>
+                      <ChevronRight size={14} />
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="pur-grid" hidden={parkingView === "list"}>
         {filteredRows.map((row) => {
           const status = text(row.status, "active");
           const businessEntered = isBusinessEnteredParking(row);
@@ -5252,9 +5370,9 @@ export function ParkingPanel({
           const rowBusy = paidBusyId === row.id;
           return (
             <article
-              className={`pur-card${focusRecordId === row.id ? " focused" : ""}`}
+              className={`pur-card${(focusRecordId || openRowId) === row.id ? " focused" : ""}`}
               key={row.id}
-              ref={focusRecordId === row.id ? focusedCardRef : undefined}
+              ref={(focusRecordId || openRowId) === row.id ? focusedCardRef : undefined}
             >
               <div className="pur-head">
                 <div className="pur-title">
@@ -5610,9 +5728,32 @@ export function ParkingPanel({
                     <input type="radio" name="parking-payment-method" value="payment_link" checked={entryDraft.paymentMethod === "payment_link"} onChange={() => setEntryDraft((value) => ({...value, paymentMethod: "payment_link"}))} />
                     <span>Send the customer a payment link</span>
                   </label>
+                  {entryDraft.paymentMethod === "direct" && (
+                    <div className="lst-subchoice">
+                      <label className="lst-radio">
+                        <input type="radio" name="parking-direct-settled" value="later" checked={!entryAlreadyPaid} onChange={() => setEntryAlreadyPaid(false)} />
+                        <span>They have not paid yet</span>
+                      </label>
+                      <label className="lst-radio">
+                        <input type="radio" name="parking-direct-settled" value="paid" checked={entryAlreadyPaid} onChange={() => setEntryAlreadyPaid(true)} />
+                        <span>They have already paid</span>
+                      </label>
+                      {entryAlreadyPaid && (
+                        <label className="lst-field"><span>How did they pay?</span>
+                          <select value={entryReceivedVia} onChange={(event) => setEntryReceivedVia(event.target.value)}>
+                            {BUSINESS_PARKING_RECEIVED_VIA_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
+                  )}
                   <p className="lst-hint">
                     {entryDraft.paymentMethod === "direct"
-                      ? "We record what the customer owes you and take no cut. You mark it received when the money arrives."
+                      ? entryAlreadyPaid
+                        ? "We take no cut. The car is recorded and settled in one go — this cannot be undone here."
+                        : "We record what the customer owes you and take no cut. You mark it received when the money arrives."
                       : "We bill the customer for you and send you the rest."}
                   </p>
                 </fieldset>
@@ -7923,8 +8064,12 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
 
   return (
     <div className="pur-info" style={{ display: "block" }}>
-      <div className="row-detail-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-        <div><span>Leaves</span><b>{openEnded ? "Open-ended" : formatDate(r.parkingEndDate)}</b></div>
+      {/* dt/dd, like every other row-detail-grid in both consoles. As a
+          span/b pair these inherited the label colour but not the stacking -
+          .pur-info > div only reaches a direct child - so each tile rendered
+          as "LEAVESOpen-ended" with the label glued to its value. */}
+      <dl className="row-detail-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+        <div><dt>Leaves</dt><dd>{openEnded ? "Open-ended" : formatDate(r.parkingEndDate)}</dd></div>
         {/* Both of these describe day-by-day accrual, which only an
             open-ended stay does. On a stay priced for its leave date they are
             forced to "Nothing yet" and "0 days · $0.00" - and sitting under an
@@ -7932,11 +8077,11 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
             A field that can only say one thing is not worth the space. */}
         {openEnded && (
           <>
-            <div><span>Billed through</span><b>{billedThrough ? formatDate(r.billedThroughDate) : "Nothing yet"}</b></div>
-            <div><span>Unbilled</span><b>{days} {days === 1 ? "day" : "days"} · {lotFormatCents(unbilledCents)}</b></div>
+            <div><dt>Billed through</dt><dd>{billedThrough ? formatDate(r.billedThroughDate) : "Nothing yet"}</dd></div>
+            <div><dt>Unbilled</dt><dd>{days} {days === 1 ? "day" : "days"} · {lotFormatCents(unbilledCents)}</dd></div>
           </>
         )}
-      </div>
+      </dl>
       <p className="lst-hint">{note}</p>
       {flash && <div className="lst-hint" role="status">{flash}</div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>

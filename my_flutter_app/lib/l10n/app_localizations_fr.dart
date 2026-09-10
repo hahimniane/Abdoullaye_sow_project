@@ -8122,4 +8122,24 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get businessTransportRowSubtitle =>
       'Demandes à chiffrer et missions à livrer.';
+
+  @override
+  String get parkingNotPaidYet => 'Ils n\'ont pas encore payé';
+
+  @override
+  String get parkingAlreadyPaid => 'Ils ont déjà payé';
+
+  @override
+  String get parkingHowDidTheyPay => 'Comment ont-ils payé ?';
+
+  @override
+  String get directPaymentSettledExplainer =>
+      'Nous ne prenons aucune commission. La voiture est enregistrée et réglée en une fois - action irréversible ici.';
+
+  @override
+  String get parkingRecordedAndPaid => 'Enregistré et marqué comme payé.';
+
+  @override
+  String get parkingRecordedNotSettled =>
+      'La voiture a été enregistrée, mais le marquage du paiement a échoué. Marquez le paiement reçu sur la fiche.';
 }

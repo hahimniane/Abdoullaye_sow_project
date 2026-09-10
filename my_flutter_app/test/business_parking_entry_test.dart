@@ -630,4 +630,56 @@ void main() {
       expect(screen, contains('pleaseEnterOwnerName'));
     });
   });
+
+  // "Pays us directly" answers how, not whether. A lot takes the cash at the
+  // desk as often as it waits for it, and recording both the same way left
+  // money already in the till showing as outstanding.
+  group('cash at the desk can be recorded as already paid', () {
+    final screen = File('lib/screens/park_car_screen.dart').readAsStringSync();
+
+    test('the question is only asked for a direct payment', () {
+      expect(screen, contains('if (_paymentMethod == BusinessParkingPaymentMethod.direct)'));
+      expect(screen, contains('l10n.parkingNotPaidYet'));
+      expect(screen, contains('l10n.parkingAlreadyPaid'));
+      expect(screen, contains('l10n.parkingHowDidTheyPay'));
+    });
+
+    test('it offers the methods the record screen already reconciles', () {
+      expect(screen, contains('businessParkingReceivedViaValues'));
+      expect(screen, contains('businessParkingReceivedViaLabel(l10n, value)'));
+    });
+
+    test('settling reuses the shared callable, after the car exists', () {
+      final record = screen.indexOf('Future<void> _recordWalkUpParking()');
+      final body = screen.substring(record, screen.indexOf('\n  }', record));
+      expect(body, contains('_businessParkingService.createEntry(draft)'));
+      expect(body, contains('_businessParkingService.markPaid('));
+      expect(
+        body.indexOf('createEntry(draft)'),
+        lessThan(body.indexOf('markPaid(')),
+        reason: 'the car is recorded before it can be settled',
+      );
+      // A failed settle leaves the car recorded and still owed - never
+      // silently paid.
+      expect(body, contains('l10n.parkingRecordedNotSettled'));
+    });
+
+    test('every new string is in both catalogs', () {
+      final en = jsonDecode(File('lib/l10n/app_en.arb').readAsStringSync())
+          as Map<String, dynamic>;
+      final fr = jsonDecode(File('lib/l10n/app_fr.arb').readAsStringSync())
+          as Map<String, dynamic>;
+      for (final key in [
+        'parkingNotPaidYet',
+        'parkingAlreadyPaid',
+        'parkingHowDidTheyPay',
+        'directPaymentSettledExplainer',
+        'parkingRecordedAndPaid',
+        'parkingRecordedNotSettled',
+      ]) {
+        expect(en[key], isNotNull, reason: '$key missing from English');
+        expect(fr[key], isNotNull, reason: '$key missing from French');
+      }
+    });
+  });
 }

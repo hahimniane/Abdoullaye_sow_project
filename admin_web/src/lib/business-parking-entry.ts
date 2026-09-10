@@ -502,3 +502,27 @@ function toDayString(date: Date | null): string {
   if (!date) return "";
   return date.toISOString().slice(0, 10);
 }
+
+/**
+ * How many days a stay covers, the way the lot counts them.
+ *
+ * A fixed stay is billed for its whole window, so it counts start to end. An
+ * open-ended stay has not finished, so it counts start to today - the same
+ * figure the card accrues against. Never negative, and a stay recorded today
+ * counts as its minimum of one day rather than zero.
+ */
+export function businessParkingStayDays(
+  row: ParkingRowLike,
+  now: Date = new Date(),
+): number {
+  const record = row as { parkingDate?: unknown; parkingEndDate?: unknown; minimumDays?: unknown };
+  const start = toDateOrNull(record.parkingDate);
+  if (!start) return 0;
+  const end = toDateOrNull(record.parkingEndDate) ?? now;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const startDay = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const endDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  const days = Math.round((endDay - startDay) / dayMs);
+  const minimum = Number(record.minimumDays) > 0 ? Number(record.minimumDays) : 1;
+  return Math.max(minimum, days);
+}

@@ -7989,4 +7989,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get businessTransportRowSubtitle =>
       'Requests to quote, and jobs to move.';
+
+  @override
+  String get parkingNotPaidYet => 'They have not paid yet';
+
+  @override
+  String get parkingAlreadyPaid => 'They have already paid';
+
+  @override
+  String get parkingHowDidTheyPay => 'How did they pay?';
+
+  @override
+  String get directPaymentSettledExplainer =>
+      'We take no cut. The car is recorded and settled in one go - this cannot be undone here.';
+
+  @override
+  String get parkingRecordedAndPaid => 'Recorded, and marked as paid.';
+
+  @override
+  String get parkingRecordedNotSettled =>
+      'The car was recorded, but marking it paid failed. Mark the payment received on the record.';
 }

@@ -14207,6 +14207,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Requests to quote, and jobs to move.'**
   String get businessTransportRowSubtitle;
+
+  /// No description provided for @parkingNotPaidYet.
+  ///
+  /// In en, this message translates to:
+  /// **'They have not paid yet'**
+  String get parkingNotPaidYet;
+
+  /// No description provided for @parkingAlreadyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'They have already paid'**
+  String get parkingAlreadyPaid;
+
+  /// No description provided for @parkingHowDidTheyPay.
+  ///
+  /// In en, this message translates to:
+  /// **'How did they pay?'**
+  String get parkingHowDidTheyPay;
+
+  /// No description provided for @directPaymentSettledExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'We take no cut. The car is recorded and settled in one go - this cannot be undone here.'**
+  String get directPaymentSettledExplainer;
+
+  /// No description provided for @parkingRecordedAndPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded, and marked as paid.'**
+  String get parkingRecordedAndPaid;
+
+  /// No description provided for @parkingRecordedNotSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'The car was recorded, but marking it paid failed. Mark the payment received on the record.'**
+  String get parkingRecordedNotSettled;
 }
 
 class _AppLocalizationsDelegate

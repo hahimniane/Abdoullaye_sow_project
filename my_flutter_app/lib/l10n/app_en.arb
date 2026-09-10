@@ -3473,5 +3473,11 @@
   "lotVinMatchedExisting": "Filled in from a vehicle you already have.",
   "lotDecodingVin": "Reading the VIN…",
   "lotLedgerSubtitle": "What the lot earned and spent.",
-  "businessTransportRowSubtitle": "Requests to quote, and jobs to move."
+  "businessTransportRowSubtitle": "Requests to quote, and jobs to move.",
+  "parkingNotPaidYet": "They have not paid yet",
+  "parkingAlreadyPaid": "They have already paid",
+  "parkingHowDidTheyPay": "How did they pay?",
+  "directPaymentSettledExplainer": "We take no cut. The car is recorded and settled in one go - this cannot be undone here.",
+  "parkingRecordedAndPaid": "Recorded, and marked as paid.",
+  "parkingRecordedNotSettled": "The car was recorded, but marking it paid failed. Mark the payment received on the record."
 }

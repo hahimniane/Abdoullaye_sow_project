@@ -95,6 +95,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   late final BusinessParkingService _businessParkingService;
   BusinessParkingPaymentMethod _paymentMethod =
       BusinessParkingPaymentMethod.direct;
+  // "Pays us directly" answers how, not whether. A lot takes the cash at the
+  // desk as often as it waits for it, and recording both as awaiting left
+  // money already in the till showing as outstanding.
+  bool _alreadyPaid = false;
+  String _receivedVia = businessParkingReceivedViaValues.first;
   bool _isRecordingEntry = false;
   BusinessParkingEntryResult? _entryResult;
   final VinDecoderService _vinDecoderService = NhtsaVinDecoderService();
@@ -981,6 +986,27 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       final result = await _businessParkingService.createEntry(draft);
       if (!mounted) return;
       setState(() => _entryResult = result);
+      // Settling goes through the same callable the "payment received" button
+      // uses, so a walk-up paid at the desk lands in exactly the state it
+      // would have reached a minute later. If this second step fails the car
+      // is still recorded and still owed - the safe way round - and staff can
+      // settle it from the record.
+      if (_paymentMethod == BusinessParkingPaymentMethod.direct &&
+          _alreadyPaid &&
+          result.entryId.isNotEmpty) {
+        try {
+          await _businessParkingService.markPaid(
+            entryId: result.entryId,
+            receivedVia: _receivedVia,
+          );
+          if (!mounted) return;
+          showSuccessSnackBar(context, l10n.parkingRecordedAndPaid);
+        } catch (_) {
+          if (!mounted) return;
+          showErrorSnackBar(context, l10n.parkingRecordedNotSettled);
+        }
+        return;
+      }
       showSuccessSnackBar(
         context,
         l10n.parkedCarRecordedWithCode(result.trackingCode),
@@ -1088,11 +1114,66 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
               ],
             ),
           ),
+          if (_paymentMethod == BusinessParkingPaymentMethod.direct)
+            Padding(
+              padding: const EdgeInsets.only(left: 8, bottom: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RadioGroup<bool>(
+                    groupValue: _alreadyPaid,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _alreadyPaid = value);
+                    },
+                    child: Column(
+                      children: [
+                        RadioListTile<bool>(
+                          value: false,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(
+                            l10n.parkingNotPaidYet,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        RadioListTile<bool>(
+                          value: true,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(
+                            l10n.parkingAlreadyPaid,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_alreadyPaid)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 4),
+                      child: _RoundedDropdownField(
+                        label: l10n.parkingHowDidTheyPay,
+                        value: _receivedVia,
+                        items: businessParkingReceivedViaValues,
+                        itemLabel: (value) =>
+                            businessParkingReceivedViaLabel(l10n, value),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() => _receivedVia = value);
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Text(
               _paymentMethod == BusinessParkingPaymentMethod.direct
-                  ? l10n.directPaymentExplainer
+                  ? (_alreadyPaid
+                      ? l10n.directPaymentSettledExplainer
+                      : l10n.directPaymentExplainer)
                   : l10n.paymentLinkExplainer,
               style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
             ),
@@ -2516,6 +2597,10 @@ class _RoundedDropdownField extends StatelessWidget {
   final String? Function(String?)? validator;
   final bool enabled;
 
+  /// How an item reads to a person. Makes, models and years are already the
+  /// words on the screen; a stored value like "card_in_person" is not.
+  final String Function(String value)? itemLabel;
+
   const _RoundedDropdownField({
     required this.label,
     required this.items,
@@ -2523,6 +2608,7 @@ class _RoundedDropdownField extends StatelessWidget {
     this.onChanged,
     this.validator,
     this.enabled = true,
+    this.itemLabel,
   });
 
   @override
@@ -2535,7 +2621,10 @@ class _RoundedDropdownField extends StatelessWidget {
       isExpanded: true,
       items: items
           .map(
-            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
+            (item) => DropdownMenuItem<String>(
+              value: item,
+              child: Text(itemLabel != null ? itemLabel!(item) : item),
+            ),
           )
           .toList(),
       decoration: InputDecoration(
