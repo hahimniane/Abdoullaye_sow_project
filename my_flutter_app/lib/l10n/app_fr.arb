@@ -3473,5 +3473,11 @@
   "lotVinMatchedExisting": "Rempli à partir d’un véhicule déjà enregistré.",
   "lotDecodingVin": "Lecture du NIV…",
   "lotLedgerSubtitle": "Ce que le parc a gagné et dépensé.",
-  "businessTransportRowSubtitle": "Demandes à chiffrer et missions à livrer."
+  "businessTransportRowSubtitle": "Demandes à chiffrer et missions à livrer.",
+  "parkingNotPaidYet": "Ils n'ont pas encore payé",
+  "parkingAlreadyPaid": "Ils ont déjà payé",
+  "parkingHowDidTheyPay": "Comment ont-ils payé ?",
+  "directPaymentSettledExplainer": "Nous ne prenons aucune commission. La voiture est enregistrée et réglée en une fois - action irréversible ici.",
+  "parkingRecordedAndPaid": "Enregistré et marqué comme payé.",
+  "parkingRecordedNotSettled": "La voiture a été enregistrée, mais le marquage du paiement a échoué. Marquez le paiement reçu sur la fiche."
 }

@@ -4756,6 +4756,11 @@ export function ParkingPanel({
   const [entryBusy, setEntryBusy] = useState(false);
   const [entryMessage, setEntryMessage] = useState("");
   const [entryResult, setEntryResult] = useState<BusinessParkingEntryResult | null>(null);
+  // "Pays us directly" answers how, not whether. A lot takes the cash at the
+  // desk as often as it waits for it, and recording both as "awaiting" left
+  // money that was already in the till showing as outstanding.
+  const [entryAlreadyPaid, setEntryAlreadyPaid] = useState(false);
+  const [entryReceivedVia, setEntryReceivedVia] = useState("cash");
   const [entryCustomerMenuOpen, setEntryCustomerMenuOpen] = useState(false);
   const [entryCustomerPick, setEntryCustomerPick] = useState<LotCustomer | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -4950,6 +4955,12 @@ export function ParkingPanel({
     setEntryMessage("");
     setEntryResult(null);
     setLinkCopied(false);
+    // The next car is a different car: "already paid" must never carry over,
+    // or a stay nobody paid for is settled by a leftover radio.
+    setEntryAlreadyPaid(false);
+    setEntryReceivedVia("cash");
+    setEntryCustomerPick(null);
+    setEntryCustomerMenuOpen(false);
   }
 
   // Everyone this desk can hand the keys back to: the customers the lot
@@ -5022,7 +5033,27 @@ export function ParkingPanel({
         functions,
         "createBusinessParkingEntry",
       )(businessParkingEntryPayload(entryDraft, businessId));
-      setEntryResult(businessParkingEntryResult(response.data));
+      const created = businessParkingEntryResult(response.data);
+      setEntryResult(created);
+      // Settling goes through the same callable the "payment received"
+      // button uses, so a walk-up paid at the desk lands in exactly the state
+      // it would have reached a minute later. If this second step fails the
+      // car is still recorded and still owed - which is the safe way round,
+      // and staff can mark it received from the row.
+      if (entryDraft.paymentMethod === "direct" && entryAlreadyPaid && created.entryId) {
+        try {
+          await httpsCallable(functions, "markBusinessParkingPaid")({
+            entryId: created.entryId,
+            receivedVia: entryReceivedVia,
+          });
+          setEntryMessage("Recorded, and marked as paid.");
+        } catch {
+          setEntryMessage(
+            "The car was recorded, but marking it paid failed. Use " +
+            "\"Payment received\" on the row to settle it.",
+          );
+        }
+      }
     } catch (error) {
       setEntryMessage(error instanceof Error ? error.message : "The car could not be recorded.");
     } finally {
@@ -5610,9 +5641,32 @@ export function ParkingPanel({
                     <input type="radio" name="parking-payment-method" value="payment_link" checked={entryDraft.paymentMethod === "payment_link"} onChange={() => setEntryDraft((value) => ({...value, paymentMethod: "payment_link"}))} />
                     <span>Send the customer a payment link</span>
                   </label>
+                  {entryDraft.paymentMethod === "direct" && (
+                    <div className="lst-subchoice">
+                      <label className="lst-radio">
+                        <input type="radio" name="parking-direct-settled" value="later" checked={!entryAlreadyPaid} onChange={() => setEntryAlreadyPaid(false)} />
+                        <span>They have not paid yet</span>
+                      </label>
+                      <label className="lst-radio">
+                        <input type="radio" name="parking-direct-settled" value="paid" checked={entryAlreadyPaid} onChange={() => setEntryAlreadyPaid(true)} />
+                        <span>They have already paid</span>
+                      </label>
+                      {entryAlreadyPaid && (
+                        <label className="lst-field"><span>How did they pay?</span>
+                          <select value={entryReceivedVia} onChange={(event) => setEntryReceivedVia(event.target.value)}>
+                            {BUSINESS_PARKING_RECEIVED_VIA_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
+                  )}
                   <p className="lst-hint">
                     {entryDraft.paymentMethod === "direct"
-                      ? "We record what the customer owes you and take no cut. You mark it received when the money arrives."
+                      ? entryAlreadyPaid
+                        ? "We take no cut. The car is recorded and settled in one go — this cannot be undone here."
+                        : "We record what the customer owes you and take no cut. You mark it received when the money arrives."
                       : "We bill the customer for you and send you the rest."}
                   </p>
                 </fieldset>
@@ -7923,8 +7977,12 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
 
   return (
     <div className="pur-info" style={{ display: "block" }}>
-      <div className="row-detail-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-        <div><span>Leaves</span><b>{openEnded ? "Open-ended" : formatDate(r.parkingEndDate)}</b></div>
+      {/* dt/dd, like every other row-detail-grid in both consoles. As a
+          span/b pair these inherited the label colour but not the stacking -
+          .pur-info > div only reaches a direct child - so each tile rendered
+          as "LEAVESOpen-ended" with the label glued to its value. */}
+      <dl className="row-detail-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+        <div><dt>Leaves</dt><dd>{openEnded ? "Open-ended" : formatDate(r.parkingEndDate)}</dd></div>
         {/* Both of these describe day-by-day accrual, which only an
             open-ended stay does. On a stay priced for its leave date they are
             forced to "Nothing yet" and "0 days · $0.00" - and sitting under an
@@ -7932,11 +7990,11 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
             A field that can only say one thing is not worth the space. */}
         {openEnded && (
           <>
-            <div><span>Billed through</span><b>{billedThrough ? formatDate(r.billedThroughDate) : "Nothing yet"}</b></div>
-            <div><span>Unbilled</span><b>{days} {days === 1 ? "day" : "days"} · {lotFormatCents(unbilledCents)}</b></div>
+            <div><dt>Billed through</dt><dd>{billedThrough ? formatDate(r.billedThroughDate) : "Nothing yet"}</dd></div>
+            <div><dt>Unbilled</dt><dd>{days} {days === 1 ? "day" : "days"} · {lotFormatCents(unbilledCents)}</dd></div>
           </>
         )}
-      </div>
+      </dl>
       <p className="lst-hint">{note}</p>
       {flash && <div className="lst-hint" role="status">{flash}</div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>

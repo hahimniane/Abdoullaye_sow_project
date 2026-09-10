@@ -729,8 +729,8 @@ test("a stay priced for its leave date does not show accrual figures", () => {
   assert.match(body, /const days = openEnded && fromMs \?/);
 
   // ...and the two tiles that report it are rendered only for one.
-  const grid = body.slice(body.indexOf("<span>Leaves</span>"));
-  const tiles = grid.slice(0, grid.indexOf("</div>\n      <p"));
+  const grid = body.slice(body.indexOf("<dt>Leaves</dt>"));
+  const tiles = grid.slice(0, grid.indexOf("</dl>"));
   assert.match(tiles, /\{openEnded && \(/, "the accrual tiles must be gated on openEnded");
   const billedAt = tiles.indexOf("Billed through");
   const gateAt = tiles.indexOf("{openEnded && (");
@@ -738,5 +738,47 @@ test("a stay priced for its leave date does not show accrual figures", () => {
   assert.ok(tiles.indexOf("Unbilled") > gateAt, "Unbilled sits inside the same gate");
 
   // The leave date itself is always worth showing.
-  assert.match(tiles, /openEnded \? "Open-ended" : formatDate\(r\.parkingEndDate\)/);
+  assert.match(body, /openEnded \? "Open-ended" : formatDate\(r\.parkingEndDate\)/);
+});
+
+// "Customer pays us directly" answers HOW, not WHETHER. A lot takes the cash
+// at the desk as often as it waits for it, and recording both the same way
+// left money already in the till showing as outstanding.
+test("cash at the desk can be recorded as already paid", () => {
+  // The follow-up question only exists under the direct method.
+  assert.match(panelSource, /entryDraft\.paymentMethod === "direct" && \(/);
+  assert.match(panelSource, /They have not paid yet/);
+  assert.match(panelSource, /They have already paid/);
+  assert.match(panelSource, /How did they pay\?/);
+  // And it offers the same methods the "payment received" button does, so a
+  // walk-up settled at the desk is reconciled the same way as one settled an
+  // hour later.
+  assert.match(panelSource, /entryReceivedVia/);
+
+  // Settling reuses the shared callable rather than inventing a second path.
+  const submit = panelSource.slice(panelSource.indexOf("async function submitEntry"));
+  const body = submit.slice(0, submit.indexOf("\n  }"));
+  assert.match(body, /entryDraft\.paymentMethod === "direct" && entryAlreadyPaid/);
+  assert.match(body, /"markBusinessParkingPaid"/);
+  // A failed settle must leave the car recorded and still owed, never
+  // silently paid.
+  assert.match(body, /marking it paid failed/);
+  assert.ok(
+    body.indexOf("createBusinessParkingEntry") < body.indexOf("markBusinessParkingPaid"),
+    "the car is recorded before it can be settled",
+  );
+
+  // The next car is a different car: the flag must not carry over.
+  const close = panelSource.slice(panelSource.indexOf("function closeEntry"));
+  assert.match(close.slice(0, close.indexOf("\n  }")), /setEntryAlreadyPaid\(false\)/);
+});
+
+// The card's own tiles stack their label above their value like every other
+// row-detail-grid; as a span/b pair they rendered as "LEAVESOpen-ended".
+test("the parking card tiles use the shared label/value markup", () => {
+  const actions = panelSource.slice(panelSource.indexOf("function ParkingBillingActions"));
+  const body = actions.slice(0, actions.indexOf("\n}\n"));
+  assert.match(body, /<dl className="row-detail-grid"/);
+  assert.match(body, /<dt>Leaves<\/dt>/);
+  assert.ok(!/<span>Leaves<\/span>/.test(body), "span/b never picks up the stacking");
 });

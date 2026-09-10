@@ -13273,3 +13273,20 @@ button[data-loading="true"]::before {
 @media (prefers-reduced-motion: reduce) {
   .lot-spend-track > .lot-spend-fill { transition: none; }
 }
+
+/* The follow-up question under "customer pays us directly": whether the money
+   is already in the till. Indented and ruled so it reads as a consequence of
+   the choice above it rather than a third payment method. */
+.lst-subchoice {
+  border-left: 2px solid var(--rule, #e5e7eb);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 0 10px;
+  padding: 2px 0 2px 12px;
+}
+
+.lst-subchoice .lst-field {
+  margin-top: 2px;
+  max-width: 260px;
+}
