@@ -166,12 +166,58 @@ def submit(build_number, version_string, notes_path=None):
          data=json.dumps({"data": {"type": "builds", "id": build["id"]}}))
 
     print("submitting for review")
-    call("POST", "/appStoreVersionSubmissions", data=json.dumps({"data": {
-        "type": "appStoreVersionSubmissions",
-        "relationships": {"appStoreVersion": {
-            "data": {"type": "appStoreVersions", "id": target["id"]}}},
-    }}))
+    submit_for_review(target["id"])
     print(f"submitted {version_string} (build {build_number})")
+
+
+def submit_for_review(version_id):
+    """Apple retired appStoreVersionSubmissions/CREATE. The current flow is a
+    reviewSubmission holding one reviewSubmissionItem per version, flipped to
+    submitted with a PATCH."""
+    open_states = {"READY_FOR_REVIEW", "UNRESOLVED_ISSUES"}
+    existing = call("GET", f"/apps/{APP_ID}/reviewSubmissions"
+                           "?filter[platform]=IOS&limit=20").get("data", [])
+    submission = next(
+        (r for r in existing
+         if r["attributes"]["state"] in open_states), None)
+
+    if submission is None:
+        submission = call("POST", "/reviewSubmissions", data=json.dumps({
+            "data": {
+                "type": "reviewSubmissions",
+                "attributes": {"platform": "IOS"},
+                "relationships": {
+                    "app": {"data": {"type": "apps", "id": APP_ID}}},
+            }}))["data"]
+        print(f"  opened review submission {submission['id']}")
+    else:
+        print(f"  reusing review submission {submission['id']} "
+              f"({submission['attributes']['state']})")
+
+    items = call("GET", f"/reviewSubmissions/{submission['id']}"
+                        "/items").get("data", [])
+    already = any(
+        (i.get("relationships", {}).get("appStoreVersion", {}).get("data")
+         or {}).get("id") == version_id
+        for i in items)
+    if already:
+        print("  version already on the submission")
+    else:
+        call("POST", "/reviewSubmissionItems", data=json.dumps({"data": {
+            "type": "reviewSubmissionItems",
+            "relationships": {
+                "reviewSubmission": {"data": {
+                    "type": "reviewSubmissions", "id": submission["id"]}},
+                "appStoreVersion": {"data": {
+                    "type": "appStoreVersions", "id": version_id}},
+            }}}))
+        print("  version added to the submission")
+
+    call("PATCH", f"/reviewSubmissions/{submission['id']}",
+         data=json.dumps({"data": {
+             "type": "reviewSubmissions",
+             "id": submission["id"],
+             "attributes": {"submitted": True}}}))
 
 
 if __name__ == "__main__":
