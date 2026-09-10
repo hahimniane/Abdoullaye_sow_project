@@ -836,3 +836,16 @@ test("each list row carries the actions the card offers", () => {
   assert.match(body, /<div className="pk-row" key=\{String\(row\.id\)\} role="row">/);
   assert.ok(!/<button[^>]*className="pk-row"/.test(body), "the row must not be a button");
 });
+
+// The two views must not draw at once. `hidden` cannot do this job: .pur-grid
+// sets display:grid, and author CSS beats the browser's [hidden] rule — so the
+// cards kept rendering underneath the list.
+test("only one parking view renders at a time", () => {
+  assert.match(panelSource, /\{parkingView === "cards" && \(\s*\n\s*<div className="pur-grid">/);
+  assert.ok(
+    !/className="pur-grid" hidden=/.test(panelSource),
+    "hidden does not hide an element whose CSS sets a display",
+  );
+  // And the list only draws in list view.
+  assert.match(panelSource, /\{parkingView === "list" && filteredRows\.length > 0 && \(/);
+});

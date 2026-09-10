@@ -5362,7 +5362,12 @@ export function ParkingPanel({
         </div>
       )}
 
-      <div className="pur-grid" hidden={parkingView === "list"}>
+      {/* Rendered only in card view. `hidden` does not hide this: .pur-grid
+          sets display:grid, and author CSS beats the browser's [hidden] rule,
+          so both views drew at once. Not rendering also spares thirty cards
+          nobody is looking at. */}
+      {parkingView === "cards" && (
+      <div className="pur-grid">
         {filteredRows.map((row) => {
           const status = text(row.status, "active");
           const businessEntered = isBusinessEnteredParking(row);
@@ -5520,6 +5525,7 @@ export function ParkingPanel({
           );
         })}
       </div>
+      )}
 
       {formOpen && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
