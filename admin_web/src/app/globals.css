@@ -13290,3 +13290,204 @@ button[data-loading="true"]::before {
   margin-top: 2px;
   max-width: 260px;
 }
+
+/* Parking, as a list. A lot with thirty cars in it wants to read thirty cars
+   at once, the way its own spreadsheet does - so the type is small, the rows
+   are tight, and the money is right-aligned on tabular figures so the column
+   scans as a column. A row is a button: it opens that car's card. */
+.pk-view {
+  border: 1px solid var(--rule, #e5e7eb);
+  border-radius: 8px;
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.pk-view button {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  padding: 5px 11px;
+  transition: background .15s ease, color .15s ease;
+}
+
+.pk-view button:hover { color: var(--ink); }
+
+.pk-view button.on {
+  background: var(--brand-strong, #0f766e);
+  color: #fff;
+}
+
+.pk-list {
+  border: 1px solid var(--rule, #e5e7eb);
+  border-radius: 10px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.pk-list-scroll { overflow-x: auto; }
+
+.pk-row {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  /* The horizontal padding has to live inside the 100% width, or the last
+     column hangs 24px past the list and the actions get clipped. */
+  box-sizing: border-box;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  display: grid;
+  gap: 8px;
+  grid-template-columns:
+    minmax(140px, 1.7fr)
+    minmax(104px, 1.15fr)
+    minmax(68px, .62fr)
+    minmax(68px, .62fr)
+    minmax(38px, .32fr)
+    minmax(54px, .44fr)
+    minmax(62px, .52fr)
+    minmax(66px, .5fr)
+    108px;
+  min-width: 760px;
+  padding: 5px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.pk-row:not(.pk-head) { cursor: pointer; }
+.pk-row:not(.pk-head):hover { background: rgba(13, 148, 136, 0.055); }
+.pk-row:not(.pk-head):focus-visible {
+  background: rgba(13, 148, 136, 0.09);
+  outline: 2px solid var(--brand-strong, #0f766e);
+  outline-offset: -2px;
+}
+
+.pk-head {
+  background: rgba(248, 250, 252, 0.95);
+  padding-bottom: 6px;
+  padding-top: 6px;
+  border-top: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 1;
+}
+
+.pk-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.pk-row b {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pk-row small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pk-row > span:not(:has(b)) {
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* A whisper of a stripe. Eight columns is a long way for an eye to travel,
+   and a row it can keep hold of beats a ruled grid shouting at it. */
+.pk-row:not(.pk-head):nth-child(even) { background: rgba(15, 23, 42, 0.014); }
+.pk-row:not(.pk-head):nth-child(even):hover { background: rgba(13, 148, 136, 0.055); }
+
+.pk-row .muted { color: var(--muted); }
+
+.pk-row .num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pk-row .num b { font-size: 12px; font-weight: 700; }
+
+.pk-pill {
+  background: rgba(15, 23, 42, 0.05);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .03em;
+  padding: 2px 7px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  width: fit-content;
+}
+
+.pk-pill.ok {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.pk-pill.warn {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+/* The actions a row can take without opening anything. Icon-only, quiet
+   until the row is under the cursor - eight columns of data should not have
+   a row of buttons shouting beside it. */
+.pk-acts {
+  align-items: center;
+  flex-direction: row !important;
+  gap: 2px;
+  justify-content: flex-end;
+}
+
+.pk-acts-head { text-align: right; }
+
+.pk-act {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  opacity: .62;
+  transition: opacity .15s ease, background .15s ease, color .15s ease, border-color .15s ease;
+  width: 24px;
+}
+
+.pk-row:hover .pk-act { opacity: 1; }
+
+.pk-act:hover {
+  background: #fff;
+  border-color: var(--rule, #e5e7eb);
+  color: var(--brand-strong, #0f766e);
+}
+
+.pk-act:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--brand-strong, #0f766e);
+  outline-offset: 1px;
+}
+
+.pk-act:disabled { cursor: default; opacity: .3; }
+.pk-act.open { color: var(--brand-strong, #0f766e); }

@@ -11,6 +11,7 @@ import {
   businessParkingEntryResult,
   businessParkingDocumentType,
   businessParkingEndLabel,
+  businessParkingStayDays,
   businessParkingWithinRange,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
@@ -781,4 +782,57 @@ test("the parking card tiles use the shared label/value markup", () => {
   assert.match(body, /<dl className="row-detail-grid"/);
   assert.match(body, /<dt>Leaves<\/dt>/);
   assert.ok(!/<span>Leaves<\/span>/.test(body), "span/b never picks up the stacking");
+});
+
+// A lot with thirty cars in it wants to read thirty cars at once, the way its
+// own spreadsheet does — not scroll thirty cards.
+test("parking has a dense list view, and a row opens that car", () => {
+  assert.match(panelSource, /useState<"list" \| "cards">\("list"\)/, "the list is the working view");
+  // The columns a lot actually tracks, in the order its own sheet uses.
+  for (const column of ["Vehicle", "Depositor", "In", "Out", "Days", "Rate", "Total", "Status"]) {
+    assert.match(panelSource, new RegExp(`<span[^>]*>${column}</span>`), `missing the ${column} column`);
+  }
+  // A row is a button that opens the card for that car, so nothing the cards
+  // can do is lost by preferring the list.
+  assert.match(panelSource, /setParkingView\("cards"\); setOpenRowId\(String\(row\.id\)\)/);
+  assert.match(panelSource, /\(focusRecordId \|\| openRowId\) === row\.id/);
+  // A record arriving from a notification must not be swallowed by the list.
+  assert.match(panelSource, /if \(focusRecordId\) setParkingView\("cards"\)/);
+});
+
+test("a stay counts the days the lot would count", () => {
+  const day = (d: string) => new Date(`${d}T12:00:00Z`);
+  // A fixed stay counts its whole window.
+  assert.equal(
+    businessParkingStayDays({ parkingDate: day("2026-09-01"), parkingEndDate: day("2026-09-11") }),
+    10,
+  );
+  // An open-ended stay counts up to today, and keeps counting.
+  assert.equal(
+    businessParkingStayDays({ parkingDate: day("2026-09-01") }, day("2026-09-06")),
+    5,
+  );
+  // A car parked today is one day, never zero — the lot's minimum.
+  assert.equal(
+    businessParkingStayDays({ parkingDate: day("2026-09-10") }, day("2026-09-10")),
+    1,
+  );
+  // And a record with no start cannot be counted at all.
+  assert.equal(businessParkingStayDays({}), 0);
+});
+
+// A list you cannot act on just makes you open the card anyway.
+test("each list row carries the actions the card offers", () => {
+  const list = panelSource.slice(panelSource.indexOf('className="pk-list"'));
+  const body = list.slice(0, list.indexOf("<div className=\"pur-grid\""));
+  // Print, copy the link, edit — the three a desk reaches for all day.
+  assert.match(body, /openParkingDocument\(row\)/);
+  assert.match(body, /copyCheckoutUrl\(linkUrl\)/);
+  assert.match(body, /editParking\(row\)/);
+  // The copy button only exists where there is a link and money still owed.
+  assert.match(body, /\{linkUrl && tone !== "paid" &&/);
+  // A row is a div, not a button: a button inside a button is invalid, and
+  // the row would swallow every action click.
+  assert.match(body, /<div className="pk-row" key=\{String\(row\.id\)\} role="row">/);
+  assert.ok(!/<button[^>]*className="pk-row"/.test(body), "the row must not be a button");
 });
