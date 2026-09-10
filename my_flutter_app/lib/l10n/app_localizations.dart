@@ -14249,6 +14249,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Price'**
   String get parkingPriceLabel;
+
+  /// No description provided for @parkingState.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get parkingState;
+
+  /// No description provided for @parkingPlacesNearby.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} places to park'**
+  String parkingPlacesNearby(int count);
 }
 
 class _AppLocalizationsDelegate

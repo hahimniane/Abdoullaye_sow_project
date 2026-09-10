@@ -8145,4 +8145,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get parkingPriceLabel => 'Tarif';
+
+  @override
+  String get parkingState => 'État';
+
+  @override
+  String parkingPlacesNearby(int count) {
+    return '$count endroits pour se garer';
+  }
 }

@@ -8,10 +8,16 @@ import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
 
 abstract class ParkingRepository {
+  /// Every lot a customer could use, narrowed by whatever they have said.
+  ///
+  /// Nothing is required. With no city, no state and no dates this is the
+  /// whole list - which is what someone who does not already know the name
+  /// of a town needs.
   Future<List<ParkingBusinessOption>> searchParking({
-    required String city,
-    required DateTime startDate,
-    required DateTime endDate,
+    String city = '',
+    String state = '',
+    DateTime? startDate,
+    DateTime? endDate,
     double? customerLatitude,
     double? customerLongitude,
     bool pickupRequested = false,
@@ -52,9 +58,10 @@ class FirebaseParkingService implements ParkingRepository {
 
   @override
   Future<List<ParkingBusinessOption>> searchParking({
-    required String city,
-    required DateTime startDate,
-    required DateTime endDate,
+    String city = '',
+    String state = '',
+    DateTime? startDate,
+    DateTime? endDate,
     double? customerLatitude,
     double? customerLongitude,
     bool pickupRequested = false,
@@ -63,8 +70,12 @@ class FirebaseParkingService implements ParkingRepository {
         .httpsCallable('listParkingOptions')
         .call<Map<String, dynamic>>({
           'city': city.trim(),
-          'startDate': startDate.toUtc().toIso8601String(),
-          'endDate': endDate.toUtc().toIso8601String(),
+          'state': state.trim(),
+          // Absent while browsing: the server reads that as "no dates yet"
+          // and lists every lot rather than quoting a window.
+          if (startDate != null)
+            'startDate': startDate.toUtc().toIso8601String(),
+          if (endDate != null) 'endDate': endDate.toUtc().toIso8601String(),
           'customerLatitude': customerLatitude,
           'customerLongitude': customerLongitude,
           'pickupRequested': pickupRequested,
@@ -78,7 +89,11 @@ class FirebaseParkingService implements ParkingRepository {
             Map<String, dynamic>.from(option),
           ),
         )
-        .where((option) => option.hasAvailability)
+        // A lot with no room for the chosen dates is not an option. While
+        // browsing there are no dates, and a lot full today may still be the
+        // one they want next week - the server already decides this, so the
+        // client must not filter it out a second time.
+        .where((option) => option.quotedForDates ? option.hasAvailability : true)
         .toList();
   }
 

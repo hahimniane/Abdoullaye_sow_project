@@ -109,6 +109,8 @@ class ParkingBusinessOption {
     this.phone,
     this.email,
     this.distanceMiles,
+    this.state = '',
+    this.quotedForDates = false,
   });
 
   final String businessId;
@@ -127,6 +129,13 @@ class ParkingBusinessOption {
   final String? email;
   final double? distanceMiles;
 
+  /// The state the lot is in, so a customer can pick one and then a town.
+  final String state;
+
+  /// False while browsing: the total shown is one day at the lot's rate,
+  /// not a quote for dates the customer chose.
+  final bool quotedForDates;
+
   bool get hasAvailability => availableSpaces > 0;
 
   factory ParkingBusinessOption.fromFunctionData(Map<String, dynamic> data) {
@@ -143,6 +152,8 @@ class ParkingBusinessOption {
         BusinessProfile.defaultBusinessName,
       ),
       city: _string(data['city']),
+      state: _string(data['state']),
+      quotedForDates: data['quotedForDates'] == true,
       address: _string(data['address']),
       totalSpaces: _int(data['totalSpaces']),
       blockedSpaces: _int(data['blockedSpaces']),

@@ -3480,5 +3480,14 @@
   "directPaymentSettledExplainer": "We take no cut. The car is recorded and settled in one go - this cannot be undone here.",
   "parkingRecordedAndPaid": "Recorded, and marked as paid.",
   "parkingRecordedNotSettled": "The car was recorded, but marking it paid failed. Mark the payment received on the record.",
-  "parkingPriceLabel": "Price"
+  "parkingPriceLabel": "Price",
+  "parkingState": "State",
+  "parkingPlacesNearby": "{count} places to park",
+  "@parkingPlacesNearby": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }
