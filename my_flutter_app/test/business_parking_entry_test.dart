@@ -537,4 +537,79 @@ void main() {
       },
     );
   });
+
+  // Staff at the desk are often taking a car from someone the lot already
+  // knows. The lot remembers every walk-up customer (createBusinessParkingEntry
+  // calls rememberLotCustomer), so a regular is someone to pick, not someone
+  // to key in again.
+  group('the walk-up form offers the customers the lot already knows', () {
+    final screen = File('lib/screens/park_car_screen.dart').readAsStringSync();
+
+    test('it reads the lot own customer memory, scoped to the business', () {
+      expect(screen, contains("collection('lotCustomers')"));
+      expect(screen, contains("where('businessId', isEqualTo: businessId)"));
+      expect(screen, contains('LotCustomer.fromMap('));
+    });
+
+    test('typing offers matches, and the same ranking the ledger uses', () {
+      expect(screen, contains('matchLotCustomers(_lotCustomers, value)'));
+      expect(screen, contains('_customerSuggestions'));
+    });
+
+    test('picking one fills the contact details it knows', () {
+      final apply = screen.indexOf('void _applyLotCustomer(');
+      expect(apply, greaterThan(-1));
+      final body = screen.substring(apply, screen.indexOf('\n  }', apply));
+      expect(body, contains('_nameController.text = customer.name'));
+      expect(body, contains('_phoneController.text = customer.phone'));
+      expect(body, contains('_emailController.text = customer.email'));
+      // Blank remembered fields must not wipe what is already typed.
+      expect(body, contains('if (customer.phone.isNotEmpty)'));
+      expect(body, contains('if (customer.email.isNotEmpty)'));
+    });
+
+    test('their car comes too when there is exactly one of them', () {
+      expect(screen, contains('if (customer.cars.length == 1)'));
+      expect(screen, contains('_applyLotCustomerCar('));
+      // Make/model/year are catalog pickers here, so a remembered car goes
+      // through the same matcher a decode uses instead of being forced into
+      // options the catalog may not have.
+      final applyCar = screen.indexOf('void _applyLotCustomerCar(');
+      final body = screen.substring(
+        applyCar,
+        screen.indexOf('\n  }', applyCar),
+      );
+      expect(body, contains('matchDecodedVehicleToCatalog('));
+      expect(body, contains('_vinController.text = car.vin'));
+    });
+
+    test('a customer parking their own car never sees the lot memory', () {
+      // Two guards: the read refuses without business access, and the chips
+      // render inside the business intake only.
+      final load = screen.indexOf('Future<void> _loadLotCustomers()');
+      expect(load, greaterThan(-1));
+      expect(
+        screen.substring(load, load + 260),
+        contains('if (!auth.hasBusinessDashboardAccess) return;'),
+        reason: 'the lot customer list must not be read for a customer',
+      );
+      final businessIntake =
+          screen.indexOf('_buildBusinessParkingIntake(BuildContext');
+      final customerIntake =
+          screen.indexOf('_buildCustomerParkingReservation(BuildContext');
+      final chip = screen.indexOf('_CustomerSuggestionChip(\n');
+      expect(businessIntake, greaterThan(-1));
+      expect(customerIntake, greaterThan(businessIntake));
+      expect(chip, greaterThan(businessIntake));
+      expect(chip, lessThan(customerIntake),
+          reason: 'the picker belongs to the business intake only');
+    });
+
+    test('a name nobody recognises is still how a new customer is added', () {
+      // The suggestions sit beside the field, never replace it: the name
+      // input keeps its own validator and controller.
+      expect(screen, contains('controller: _nameController'));
+      expect(screen, contains('pleaseEnterOwnerName'));
+    });
+  });
 }

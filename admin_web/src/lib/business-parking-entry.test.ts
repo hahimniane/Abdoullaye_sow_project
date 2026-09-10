@@ -667,3 +667,37 @@ test("the date window matches cars present during it, not only those inside it",
   assert.equal(businessParkingWithinRange({}, "2026-08-10", "2026-08-15"), false);
   assert.match(panelSource, /businessParkingWithinRange\(row, rangeFrom, rangeTo\)/);
 });
+
+// Staff at the desk are usually taking a car from someone the lot already
+// knows - createBusinessParkingEntry remembers every walk-up customer. So the
+// walk-up form offers them back instead of asking for the same name twice.
+test("the walk-up form offers the customers the lot already remembers", () => {
+  // The panel reads the memory, scoped to this business like every other row
+  // source in it.
+  assert.match(panelSource, /useBusinessRows\("lotCustomers", businessId/);
+  assert.match(panelSource, /matchLotCustomers\(entryKnownCustomers, entryDraft\.customerName\)/);
+
+  // The suggestion list closes once someone is picked, so it cannot sit over
+  // the fields it just filled.
+  assert.match(panelSource, /entryCustomerMenuOpen && !entryCustomerPick/);
+
+  // Picking fills the contact details the lot knows, and never blanks what is
+  // already typed.
+  const pick = panelSource.slice(panelSource.indexOf("function pickEntryCustomer"));
+  const body = pick.slice(0, pick.indexOf("\n  }"));
+  assert.match(body, /customerName: customer\.name \|\| value\.customerName/);
+  assert.match(body, /customerPhone: customer\.phone \|\| value\.customerPhone/);
+  assert.match(body, /customerEmail: customer\.email \|\| value\.customerEmail/);
+  // One car fills itself; more than one is offered rather than guessed at.
+  assert.match(body, /if \(customer\.cars\.length === 1\) applyEntryCustomerCar/);
+  assert.match(panelSource, /entryCustomerPick\.cars\.length > 1/);
+
+  // The picker belongs to the walk-up entry form, not the manual record form
+  // beside it, and it is a suggestion over a plain input - typing a name
+  // nobody recognises is still how a new customer is added.
+  assert.match(panelSource, /value=\{entryDraft\.customerName\}/);
+  assert.ok(
+    panelSource.indexOf("pickEntryCustomer") < panelSource.indexOf("function PurchasesPanel"),
+    "the walk-up picker must live inside ParkingPanel",
+  );
+});

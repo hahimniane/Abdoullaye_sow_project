@@ -4731,6 +4731,10 @@ export function ParkingPanel({
 }: PanelProps) {
   const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
   const parkingStaff = useBusinessStaff(businessId, Boolean(businessId && !previewMode), 200);
+  // The lot already remembers everyone it has taken a car from - walk-ups
+  // write to lotCustomers through createBusinessParkingEntry. A regular is
+  // therefore someone to pick, not someone to re-type.
+  const parkingCustomers = useBusinessRows("lotCustomers", businessId, Boolean(businessId && !previewMode), 500);
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -4750,6 +4754,8 @@ export function ParkingPanel({
   const [entryBusy, setEntryBusy] = useState(false);
   const [entryMessage, setEntryMessage] = useState("");
   const [entryResult, setEntryResult] = useState<BusinessParkingEntryResult | null>(null);
+  const [entryCustomerMenuOpen, setEntryCustomerMenuOpen] = useState(false);
+  const [entryCustomerPick, setEntryCustomerPick] = useState<LotCustomer | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [receivedVia, setReceivedVia] = useState<Record<string, string>>({});
   const [paidBusyId, setPaidBusyId] = useState("");
@@ -4942,6 +4948,44 @@ export function ParkingPanel({
     setEntryMessage("");
     setEntryResult(null);
     setLinkCopied(false);
+  }
+
+  const entryKnownCustomers = useMemo(
+    () => parkingCustomers.rows.map((row) => lotCustomerFromRow(row as Record<string, unknown>)),
+    [parkingCustomers.rows],
+  );
+  // Suggestions close once someone has been picked, so the list does not sit
+  // over the fields it just filled.
+  const entryCustomerMatches = useMemo(
+    () => (entryCustomerMenuOpen && !entryCustomerPick
+      ? matchLotCustomers(entryKnownCustomers, entryDraft.customerName)
+      : []),
+    [entryKnownCustomers, entryDraft.customerName, entryCustomerMenuOpen, entryCustomerPick],
+  );
+
+  function applyEntryCustomerCar(car: LotCustomerCar) {
+    setEntryDraft((value) => ({
+      ...value,
+      vinNumber: car.vin || value.vinNumber,
+      carMake: car.make || value.carMake,
+      carModel: car.model || value.carModel,
+      carYear: car.year || value.carYear,
+    }));
+  }
+
+  // Picking a regular fills their contact details, and their car too when
+  // there is only one. Everything stays editable: the lot's memory is a
+  // suggestion, not a record that outranks the person at the desk.
+  function pickEntryCustomer(customer: LotCustomer) {
+    setEntryCustomerPick(customer);
+    setEntryCustomerMenuOpen(false);
+    setEntryDraft((value) => ({
+      ...value,
+      customerName: customer.name || value.customerName,
+      customerPhone: customer.phone || value.customerPhone,
+      customerEmail: customer.email || value.customerEmail,
+    }));
+    if (customer.cars.length === 1) applyEntryCustomerCar(customer.cars[0]);
   }
 
   async function submitEntry() {
@@ -5466,8 +5510,39 @@ export function ParkingPanel({
               <div className="lst-modal-body">
                 {entryMessage && <div className="lst-form-error" role="alert">{entryMessage}</div>}
                 <div className="lst-form-grid">
-                  <label className="lst-field wide"><span>Customer name</span>
-                    <input value={entryDraft.customerName} onChange={(event) => setEntryDraft((value) => ({...value, customerName: event.target.value}))} placeholder="Customer name" />
+                  <label className="lst-field wide" style={{ position: "relative" }}><span>Customer name</span>
+                    <input
+                      value={entryDraft.customerName}
+                      autoComplete="off"
+                      placeholder="Customer name"
+                      onFocus={() => setEntryCustomerMenuOpen(true)}
+                      onBlur={() => window.setTimeout(() => setEntryCustomerMenuOpen(false), 150)}
+                      onChange={(event) => {
+                        setEntryCustomerPick(null);
+                        setEntryCustomerMenuOpen(true);
+                        setEntryDraft((value) => ({...value, customerName: event.target.value}));
+                      }}
+                    />
+                    {entryCustomerMatches.length > 0 && (
+                      <ul className="lst-suggest" role="listbox" aria-label="Saved customers">
+                        {entryCustomerMatches.map((customer) => (
+                          <li key={customer.id} role="option" aria-selected={false}>
+                            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => pickEntryCustomer(customer)}>
+                              <strong>{customer.name}</strong>
+                              <small>{[customer.phone, customer.email, customer.cars[0] ? lotCustomerCarLabel(customer.cars[0]) : ""].filter(Boolean).join(" · ")}{customer.cars.length > 1 ? ` · +${customer.cars.length - 1}` : ""}</small>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {entryCustomerPick && entryCustomerPick.cars.length > 1 && (
+                      <div className="lst-chiprow">
+                        <small className="lst-hint">Their cars:</small>
+                        {entryCustomerPick.cars.map((car) => (
+                          <button key={`${car.vin}-${car.make}-${car.model}-${car.year}`} type="button" className="status-pill compact" onClick={() => applyEntryCustomerCar(car)}>{lotCustomerCarLabel(car)}</button>
+                        ))}
+                      </div>
+                    )}
                   </label>
                   <label className="lst-field"><span>Customer phone</span>
                     <input value={entryDraft.customerPhone} onChange={(event) => setEntryDraft((value) => ({...value, customerPhone: event.target.value}))} placeholder="Phone number" />
