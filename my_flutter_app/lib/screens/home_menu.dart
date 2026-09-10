@@ -15,6 +15,8 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/business_parking_payment_badge.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_motion.dart';
+import '../theme/app_spacing.dart';
 import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
 import '../utils/business_parking_localization.dart';
@@ -826,9 +828,10 @@ class _ServicesSection extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               l10n.businessCarsMobileNote,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.cobalt,
-                fontWeight: FontWeight.w700,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: 12.5,
+                height: 1.4,
+                color: AppColors.muted,
               ),
             ),
           ],
@@ -838,63 +841,61 @@ class _ServicesSection extends StatelessWidget {
           // intake for a business - no flag to pass, and no named customer route.
           if (canRecordParkedCar) ...[
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('record-parked-car'),
-                icon: const Icon(Icons.local_parking),
-                label: Text(l10n.recordAParkedCar),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ParkCarScreen(),
-                    ),
-                  );
-                },
-              ),
+            _PrimaryAction(
+              buttonKey: const Key('record-parked-car'),
+              icon: Icons.add,
+              label: l10n.recordAParkedCar,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ParkCarScreen(),
+                  ),
+                );
+              },
             ),
           ],
-          if (canUseLotLedger) ...[
+          // The ledger and the transport board are places, not commands, so
+          // they read as a list you can walk into rather than as two more
+          // buttons competing with the one action above them. Each says what
+          // is inside, because a name alone makes people guess.
+          if (canUseLotLedger || canWorkTransport) ...[
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('open-lot-ledger'),
-                icon: const Icon(Icons.receipt_long),
-                label: Text(l10n.lotLedgerTitle),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          LotLedgerScreen(businessId: ledgerBusinessId),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-          // The other daily action, for a carrier rather than a lot: bid on
-          // what came in, move what was won. Before this the Car Transport tile
-          // opened a read-only feed and the console was the only place a
-          // business could actually quote.
-          if (canWorkTransport) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('open-transport-jobs'),
-                icon: const Icon(Icons.local_shipping),
-                label: Text(l10n.businessTransportTitle),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => BusinessTransportScreen(
-                        businessId: transportBusinessId,
-                      ),
-                    ),
-                  );
-                },
-              ),
+            _DestinationGroup(
+              rows: [
+                if (canUseLotLedger)
+                  _Destination(
+                    rowKey: const Key('open-lot-ledger'),
+                    icon: Icons.receipt_long_outlined,
+                    title: l10n.lotLedgerTitle,
+                    subtitle: l10n.lotLedgerSubtitle,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              LotLedgerScreen(businessId: ledgerBusinessId),
+                        ),
+                      );
+                    },
+                  ),
+                // For a carrier rather than a lot: quote what came in, move
+                // what was won.
+                if (canWorkTransport)
+                  _Destination(
+                    rowKey: const Key('open-transport-jobs'),
+                    icon: Icons.local_shipping_outlined,
+                    title: l10n.businessTransportTitle,
+                    subtitle: l10n.businessTransportRowSubtitle,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => BusinessTransportScreen(
+                            businessId: transportBusinessId,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
             ),
           ],
           // Everything else the console offers, by the same permissions it
@@ -1670,4 +1671,181 @@ class _BusinessTool {
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+}
+
+/// The one thing this screen is for, and the only filled button on it.
+///
+/// A filled button is a commit: it does something. When three of them stack up
+/// the eye has no entry point and the screen reads as a menu of equals, which
+/// is how the business home used to look. Everything else on the page is
+/// quieter than this by design.
+class _PrimaryAction extends StatelessWidget {
+  const _PrimaryAction({
+    required this.buttonKey,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final Key buttonKey;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      key: buttonKey,
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.cobalt,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.cobaltDeep.withValues(alpha: 0.18),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 19, color: Colors.white),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One place the business can go.
+class _Destination {
+  const _Destination({
+    required this.rowKey,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final Key rowKey;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+}
+
+/// Destinations, grouped the way a list of places is grouped everywhere else
+/// on the platform: one surface, hairlines between the rows, a chevron saying
+/// each one leads somewhere.
+class _DestinationGroup extends StatelessWidget {
+  const _DestinationGroup({required this.rows});
+
+  final List<_Destination> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0)
+              // Inset to start under the text, so the icons read as one column.
+              const Padding(
+                padding: EdgeInsets.only(left: 60),
+                child: Divider(height: 1, thickness: 1),
+              ),
+            _DestinationRow(row: rows[i]),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DestinationRow extends StatelessWidget {
+  const _DestinationRow({required this.row});
+
+  final _Destination row;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      key: row.rowKey,
+      onTap: row.onTap,
+      scale: 0.99,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: 14,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.mist,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              ),
+              child: Icon(row.icon, size: 18, color: AppColors.cobaltDeep),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    row.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    row.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
 }

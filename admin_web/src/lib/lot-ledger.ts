@@ -460,3 +460,113 @@ export function lotActivityPaymentLabel(row: Row): string {
   const option = LOT_RECEIVED_VIA_OPTIONS.find((o) => o.value === via);
   return option ? option.label : "Paid outside the platform";
 }
+
+// ---------------------------------------------------------------------------
+// What a month cost, and which line cost it.
+//
+// A line that charges the same every month is owed for the months it has
+// actually existed for — not for months before it was set up, and not for
+// months that have not happened. Without that window, creating a $2,000 rent
+// line in September billed the whole of 2026 the moment it was saved: one
+// month of rent read as twelve, and the year's margin came out at -13989%.
+// ---------------------------------------------------------------------------
+
+/** `yyyy-mm` of the month a line was created, or "" when unknown. */
+export function lotLineFirstMonth(line: Row): string {
+  return dateInputValue(line?.createdAt).slice(0, 7);
+}
+
+/** Whether a standing monthly charge is owed for `month`. */
+export function fixedLineAppliesTo(
+  line: Row,
+  month: string,
+  nowMonth: string,
+): boolean {
+  if (String(line?.kind ?? "") !== "fixed") return false;
+  if (line?.active === false) return false;
+  if (month > nowMonth) return false;
+  const from = lotLineFirstMonth(line);
+  if (from && month < from) return false;
+  return true;
+}
+
+function liveLotEntries(entries: readonly Row[]): Row[] {
+  return entries.filter((e) => e?.voided !== true);
+}
+
+function loggedAgainst(entries: readonly Row[], lineId: string, month: string) {
+  return entries.some(
+    (e) => String(e?.lineId ?? "") === lineId && lotExpenseEntryMonth(e) === month,
+  );
+}
+
+/**
+ * What one month cost: every purchase logged into it, plus the standing
+ * amount of each fixed line that month did not already have a purchase
+ * against. A voided purchase neither counts nor suppresses the standing
+ * amount.
+ */
+export function lotMonthExpenseCents(
+  lines: readonly Row[],
+  entries: readonly Row[],
+  month: string,
+  nowMonth: string,
+): number {
+  const live = liveLotEntries(entries);
+  let sum = 0;
+  for (const entry of live) {
+    if (lotExpenseEntryMonth(entry) === month) {
+      sum += Number(entry?.amountCents) || 0;
+    }
+  }
+  for (const line of lines) {
+    if (!fixedLineAppliesTo(line, month, nowMonth)) continue;
+    if (loggedAgainst(live, String(line?.id ?? ""), month)) continue;
+    sum += Number(line?.recurringCents) || 0;
+  }
+  return sum;
+}
+
+export type LotLineSpend = { lineId: string; label: string; cents: number };
+
+/**
+ * What each line cost across `months`, largest first — built from the same
+ * per-month rules as `lotMonthExpenseCents`, so the parts always add up to
+ * the total they are shown beneath.
+ */
+export function lotExpenseByLine(
+  lines: readonly Row[],
+  entries: readonly Row[],
+  months: readonly string[],
+  nowMonth: string,
+): LotLineSpend[] {
+  const live = liveLotEntries(entries);
+  const totals = new Map<string, number>();
+  const add = (lineId: string, cents: number) => {
+    if (!cents) return;
+    totals.set(lineId, (totals.get(lineId) ?? 0) + cents);
+  };
+
+  for (const month of months) {
+    for (const entry of live) {
+      if (lotExpenseEntryMonth(entry) === month) {
+        add(String(entry?.lineId ?? ""), Number(entry?.amountCents) || 0);
+      }
+    }
+    for (const line of lines) {
+      if (!fixedLineAppliesTo(line, month, nowMonth)) continue;
+      const id = String(line?.id ?? "");
+      if (loggedAgainst(live, id, month)) continue;
+      add(id, Number(line?.recurringCents) || 0);
+    }
+  }
+
+  const labelFor = (id: string) => {
+    const line = lines.find((l) => String(l?.id ?? "") === id);
+    return line ? String(line.label ?? "") : "";
+  };
+
+  return [...totals.entries()]
+    .map(([lineId, cents]) => ({ lineId, label: labelFor(lineId), cents }))
+    .sort((a, b) => b.cents - a.cents);
+}

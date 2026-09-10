@@ -440,6 +440,10 @@ const VALID_BUSINESS_SERVICES = [
   "carParking",
   "carTransport",
 ];
+// Every section a business console or the app can gate on. The web sidebar
+// (admin_web/src/lib/business-sidebar.ts) and the Flutter menu each check one
+// of these keys per tab; a key missing here is silently stripped from every
+// invitation and permission edit, so staff can never reach that tab.
 const VALID_BUSINESS_PERMISSIONS = [
   "profile",
   "listings",
@@ -448,8 +452,10 @@ const VALID_BUSINESS_PERMISSIONS = [
   "freight",
   "transport",
   "parking",
+  "ledger",
   "destinations",
   "people",
+  "reviews",
   "support",
   "growth",
 ];

@@ -17,6 +17,9 @@ import {
   validateLotActivityDraft,
   validateLotActivityTypeDraft,
   validateLotExpenseEntryDraft,
+  fixedLineAppliesTo,
+  lotMonthExpenseCents,
+  lotExpenseByLine,
 } from "./lot-ledger.ts";
 
 test("money renders a true minus with the sign outside the symbol", () => {
@@ -202,4 +205,88 @@ test("an expense counts in exactly one month", async () => {
   // No bill month recorded: the purchase date decides.
   assert.equal(lotExpenseEntryMonth({ spentAt: boughtInSeptember }), "2026-09");
   assert.equal(lotExpenseEntryMonth({ month: "garbage", spentAt: boughtInSeptember }), "2026-09");
+});
+
+
+// ---------------------------------------------------------------------------
+// What a month cost, and which line cost it.
+// ---------------------------------------------------------------------------
+
+const rent = {
+  id: "rent",
+  label: "Rent",
+  kind: "fixed",
+  recurringCents: 200000,
+  active: true,
+  createdAt: new Date(2026, 8, 4), // September 2026
+};
+const water = {
+  id: "water",
+  label: "Water",
+  kind: "metered",
+  recurringCents: 0,
+  active: true,
+  createdAt: new Date(2026, 8, 4),
+};
+const purchase = (id: string, lineId: string, cents: number, month: string, voided = false) => ({
+  id,
+  lineId,
+  month,
+  amountCents: cents,
+  voided,
+});
+
+test("a standing charge is not owed before its line existed", () => {
+  assert.equal(fixedLineAppliesTo(rent, "2026-08", "2026-09"), false);
+  assert.equal(fixedLineAppliesTo(rent, "2026-09", "2026-09"), true);
+});
+
+test("a standing charge is not owed for a month that has not happened", () => {
+  assert.equal(fixedLineAppliesTo(rent, "2026-10", "2026-09"), false);
+});
+
+test("the year bills only the months a standing charge was actually owed", () => {
+  const months = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}`);
+  const year = months.reduce(
+    (sum, m) => sum + lotMonthExpenseCents([rent], [], m, "2026-09"),
+    0,
+  );
+  // One month of rent, not twelve — the bug that reported $24,092 for a lot
+  // that had spent $2,092.
+  assert.equal(year, 200000);
+});
+
+test("a logged purchase replaces a standing amount, and a voided one does not", () => {
+  assert.equal(
+    lotMonthExpenseCents([rent], [purchase("e1", "rent", 180000, "2026-09")], "2026-09", "2026-09"),
+    180000,
+  );
+  assert.equal(
+    lotMonthExpenseCents([rent], [purchase("e1", "rent", 180000, "2026-09", true)], "2026-09", "2026-09"),
+    200000,
+  );
+});
+
+test("the breakdown ranks lines and adds up to the total above it", () => {
+  const months = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}`);
+  const entries = [
+    purchase("e1", "water", 6000, "2026-09"),
+    purchase("e2", "water", 2000, "2026-09"),
+  ];
+  const spend = lotExpenseByLine([rent, water], entries, months, "2026-09");
+  assert.deepEqual(spend.map((s) => s.label), ["Rent", "Water"]);
+  assert.deepEqual(spend.map((s) => s.cents), [200000, 8000]);
+
+  const total = months.reduce(
+    (sum, m) => sum + lotMonthExpenseCents([rent, water], entries, m, "2026-09"),
+    0,
+  );
+  assert.equal(spend.reduce((sum, s) => sum + s.cents, 0), total);
+});
+
+test("a purchase against a line that is gone still counts, unnamed", () => {
+  const spend = lotExpenseByLine([], [purchase("e1", "deleted", 4200, "2026-09")], ["2026-09"], "2026-09");
+  assert.equal(spend.length, 1);
+  assert.equal(spend[0].cents, 4200);
+  assert.equal(spend[0].label, "");
 });

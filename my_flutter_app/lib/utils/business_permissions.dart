@@ -9,6 +9,7 @@ abstract final class BusinessPermission {
   static const ledger = 'ledger';
   static const destinations = 'destinations';
   static const people = 'people';
+  static const reviews = 'reviews';
   static const support = 'support';
   static const growth = 'growth';
 }

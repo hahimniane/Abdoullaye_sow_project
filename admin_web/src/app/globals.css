@@ -13200,3 +13200,76 @@ button[data-loading="true"]::before {
   padding-left: 0;
   padding-right: 0;
 }
+
+/* Lot ledger — "Where the money goes": each line's share of the year's spend.
+   One colour across every bar, because the ranking is the information; the
+   percentage sits at the end of its own track so the numbers line up. */
+.lot-spend-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px 2px;
+}
+.lot-spend-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lot-spend-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lot-spend-head strong {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lot-spend-head b {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.lot-spend-track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lot-spend-track > .lot-spend-fill {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--warning, #f59e0b);
+  transition: width 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.lot-spend-track {
+  position: relative;
+}
+.lot-spend-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 48px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--mist, #e2e8f0);
+}
+.lot-spend-fill {
+  position: relative;
+  z-index: 1;
+}
+.lot-spend-track > span {
+  margin-left: auto;
+  min-width: 38px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #64748b);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lot-spend-track > .lot-spend-fill { transition: none; }
+}

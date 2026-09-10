@@ -718,6 +718,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get orderReviewedBadge => 'Avis laissé';
 
   @override
+  String get reviews => 'Avis';
+
+  @override
   String get reviewComposerTitle => 'Laisser un avis';
 
   @override
@@ -7713,4 +7716,410 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get markAllNotificationsRead => 'Tout marquer comme lu';
+
+  @override
+  String get lotTabActivity => 'Activité';
+
+  @override
+  String get lotTabExpenses => 'Dépenses';
+
+  @override
+  String get lotTabReports => 'Rapports';
+
+  @override
+  String get lotPreviousMonth => 'Mois précédent';
+
+  @override
+  String get lotNextMonth => 'Mois suivant';
+
+  @override
+  String get lotMoreActions => 'Plus';
+
+  @override
+  String get lotRevenue => 'Recettes';
+
+  @override
+  String get lotExpensesLabel => 'Dépenses';
+
+  @override
+  String get lotNet => 'Net';
+
+  @override
+  String lotAwaitingPaymentBanner(String amount) {
+    return '$amount en attente de paiement';
+  }
+
+  @override
+  String get lotAwaitingPaymentNote => 'Liens envoyés, pas encore réglés';
+
+  @override
+  String get lotSearchHint => 'NIV, client, téléphone';
+
+  @override
+  String get lotFilterAll => 'Tout';
+
+  @override
+  String get lotFilterOneOff => 'Ponctuel';
+
+  @override
+  String get lotRecordActivity => 'Enregistrer une activité';
+
+  @override
+  String get lotEditActivity => 'Modifier cette activité';
+
+  @override
+  String lotNoActivityForMonth(String month) {
+    return 'Rien enregistré en $month.';
+  }
+
+  @override
+  String get lotNoActivityHint =>
+      'Enregistrez le premier travail facturé par le parc.';
+
+  @override
+  String get lotNoSearchMatch =>
+      'Aucune entrée ne correspond à cette recherche.';
+
+  @override
+  String lotEntriesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count entrées',
+      one: '1 entrée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lotPaidOnPlatform => 'Payé';
+
+  @override
+  String get lotPaidOutsideShort => 'Payé hors site';
+
+  @override
+  String get lotAwaitingShort => 'En attente';
+
+  @override
+  String get lotCancelledStatus => 'Annulé';
+
+  @override
+  String get lotVoidedStatus => 'Annulée';
+
+  @override
+  String get lotChasePayment => 'Relancer le paiement';
+
+  @override
+  String get lotSendLinkAgain => 'Renvoyer le lien';
+
+  @override
+  String get lotRecordAsPaid => 'Marquer comme payé';
+
+  @override
+  String get lotLinkResent => 'Le lien a été renvoyé.';
+
+  @override
+  String get lotVoid => 'Annuler l’entrée';
+
+  @override
+  String get lotVoidTitle => 'Annuler cette entrée';
+
+  @override
+  String get lotVoidExplain =>
+      'Elle reste au registre, barrée, et sort des totaux. Elle n’est jamais supprimée.';
+
+  @override
+  String get lotVoidReason => 'Motif (facultatif)';
+
+  @override
+  String get lotVoidDone => 'Entrée annulée.';
+
+  @override
+  String get lotHistory => 'Historique des modifications';
+
+  @override
+  String get lotNoHistory => 'Aucune modification.';
+
+  @override
+  String get lotWhatWasDone => 'Ce qui a été fait';
+
+  @override
+  String get lotChooseActivity => 'Choisissez une activité';
+
+  @override
+  String get lotOneOffOption => 'Autre chose — ponctuel';
+
+  @override
+  String get lotSayWhatWasDone => 'Précisez ce qui a été fait';
+
+  @override
+  String get lotFee => 'Montant facturé';
+
+  @override
+  String get lotDate => 'Date';
+
+  @override
+  String get lotVin => 'NIV';
+
+  @override
+  String get lotVinHint => '17 caractères';
+
+  @override
+  String get lotCustomer => 'Client';
+
+  @override
+  String get lotPhone => 'Téléphone';
+
+  @override
+  String get lotEmail => 'E-mail';
+
+  @override
+  String get lotMake => 'Marque';
+
+  @override
+  String get lotModel => 'Modèle';
+
+  @override
+  String get lotYearField => 'Année';
+
+  @override
+  String get lotAuctionHouse => 'Maison de vente';
+
+  @override
+  String get lotHowItGetsPaid => 'Mode de paiement';
+
+  @override
+  String get lotChargeThroughWebsite => 'Encaisser via le site';
+
+  @override
+  String get lotChargeThroughWebsiteNote =>
+      'Un lien de paiement part au client et l’argent arrive sur votre compte.';
+
+  @override
+  String get lotPaidOutsideWebsite => 'Payé en dehors du site';
+
+  @override
+  String get lotPaidOutsideWebsiteNote =>
+      'Espèces, Zelle, chèque. Indiquez qui l’a reçu.';
+
+  @override
+  String get lotLinkGoesByTextAndEmail => 'Le lien part par SMS et par e-mail.';
+
+  @override
+  String get lotHowItWasPaid => 'Moyen de paiement';
+
+  @override
+  String get lotReceivedBy => 'Reçu par';
+
+  @override
+  String get lotActivityRecorded => 'Activité enregistrée.';
+
+  @override
+  String get lotActivityUpdated => 'Activité mise à jour.';
+
+  @override
+  String get lotSave => 'Enregistrer';
+
+  @override
+  String get lotSaving => 'Enregistrement…';
+
+  @override
+  String get lotCancelAction => 'Annuler';
+
+  @override
+  String get lotDone => 'Terminé';
+
+  @override
+  String get lotViaCash => 'Espèces';
+
+  @override
+  String get lotViaZelle => 'Zelle';
+
+  @override
+  String get lotViaCashApp => 'Cash App';
+
+  @override
+  String get lotViaVenmo => 'Venmo';
+
+  @override
+  String get lotViaCheck => 'Chèque';
+
+  @override
+  String get lotViaCardInPerson => 'Carte sur place';
+
+  @override
+  String get lotViaOther => 'Autre';
+
+  @override
+  String get lotExpenseLinesTitle => 'Postes de dépense';
+
+  @override
+  String get lotAddExpenseLine => 'Ajouter un poste';
+
+  @override
+  String get lotAddPurchase => 'Ajouter un achat';
+
+  @override
+  String get lotPurchaseAdded => 'Achat ajouté.';
+
+  @override
+  String get lotExpenseLineSaved => 'Poste enregistré.';
+
+  @override
+  String get lotSameEveryMonth => 'Identique chaque mois';
+
+  @override
+  String get lotChangesEveryMonth => 'Variable chaque mois';
+
+  @override
+  String lotEveryMonth(String amount) {
+    return '$amount chaque mois';
+  }
+
+  @override
+  String get lotWaitingOnBill => 'En attente de la facture du mois';
+
+  @override
+  String lotPurchasesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count achats',
+      one: '1 achat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lotNoExpenseLines => 'Aucun poste de dépense.';
+
+  @override
+  String get lotNoExpenseLinesHint =>
+      'Ajoutez ce que le parc paie : loyer, eau, déplacement.';
+
+  @override
+  String lotProofRequiredFrom(String amount) {
+    return 'Reçu exigé à partir de $amount.';
+  }
+
+  @override
+  String get lotAmount => 'Montant';
+
+  @override
+  String get lotPaidBy => 'Payé par';
+
+  @override
+  String get lotNote => 'Note';
+
+  @override
+  String get lotReceipt => 'Reçu';
+
+  @override
+  String get lotAttachReceipt => 'Joindre un reçu';
+
+  @override
+  String get lotReceiptAttached => 'Reçu joint';
+
+  @override
+  String get lotUploadingReceipt => 'Envoi du reçu…';
+
+  @override
+  String lotNoPurchasesForMonth(String month) {
+    return 'Aucun achat enregistré en $month.';
+  }
+
+  @override
+  String get lotExpenseName => 'Nom';
+
+  @override
+  String get lotExpenseSupplier => 'Fournisseur ou détail';
+
+  @override
+  String get lotHowItBehaves => 'Comportement';
+
+  @override
+  String get lotMonthlyAmount => 'Montant mensuel';
+
+  @override
+  String lotRevenueForYear(String year) {
+    return 'Recettes $year';
+  }
+
+  @override
+  String lotExpensesForYear(String year) {
+    return 'Dépenses $year';
+  }
+
+  @override
+  String get lotNetProfit => 'Bénéfice net';
+
+  @override
+  String get lotMargin => 'Marge';
+
+  @override
+  String get lotMonthByMonth => 'Mois par mois';
+
+  @override
+  String get lotErrActivityType => 'Choisissez ce qui a été fait.';
+
+  @override
+  String get lotErrCustomLabel => 'Précisez ce qui a été fait.';
+
+  @override
+  String get lotErrFee => 'Saisissez le montant facturé.';
+
+  @override
+  String get lotErrCustomerName => 'Saisissez le nom du client.';
+
+  @override
+  String get lotErrVin => 'Saisissez le NIV.';
+
+  @override
+  String get lotErrLinkContact =>
+      'Un lien de paiement exige un numéro de téléphone ou un e-mail.';
+
+  @override
+  String get lotErrReceivedBy => 'Indiquez quel employé a reçu le paiement.';
+
+  @override
+  String get lotErrExpenseAmount => 'Saisissez le montant dépensé.';
+
+  @override
+  String get lotErrExpensePaidBy => 'Indiquez qui a payé.';
+
+  @override
+  String lotErrExpenseProof(String amount) {
+    return 'Joignez un reçu : cette entreprise l’exige à partir de $amount.';
+  }
+
+  @override
+  String get lotCouldNotSave => 'Enregistrement impossible. Réessayez.';
+
+  @override
+  String get lotWhereTheMoneyGoes => 'Où va l’argent';
+
+  @override
+  String get lotOtherExpense => 'Autre';
+
+  @override
+  String lotNothingSpentYear(String year) {
+    return 'Aucune dépense en $year.';
+  }
+
+  @override
+  String get lotShareUnderOnePercent => '<1 %';
+
+  @override
+  String get lotVinMatchedExisting =>
+      'Rempli à partir d’un véhicule déjà enregistré.';
+
+  @override
+  String get lotDecodingVin => 'Lecture du NIV…';
+
+  @override
+  String get lotLedgerSubtitle => 'Ce que le parc a gagné et dépensé.';
+
+  @override
+  String get businessTransportRowSubtitle =>
+      'Demandes à chiffrer et missions à livrer.';
 }

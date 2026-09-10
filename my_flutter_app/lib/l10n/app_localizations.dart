@@ -1400,6 +1400,12 @@ abstract class AppLocalizations {
   /// **'Reviewed'**
   String get orderReviewedBadge;
 
+  /// No description provided for @reviews.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviews'**
+  String get reviews;
+
   /// No description provided for @reviewComposerTitle.
   ///
   /// In en, this message translates to:
@@ -13475,6 +13481,732 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mark all read'**
   String get markAllNotificationsRead;
+
+  /// No description provided for @lotTabActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get lotTabActivity;
+
+  /// No description provided for @lotTabExpenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses'**
+  String get lotTabExpenses;
+
+  /// No description provided for @lotTabReports.
+  ///
+  /// In en, this message translates to:
+  /// **'Reports'**
+  String get lotTabReports;
+
+  /// No description provided for @lotPreviousMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous month'**
+  String get lotPreviousMonth;
+
+  /// No description provided for @lotNextMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Next month'**
+  String get lotNextMonth;
+
+  /// No description provided for @lotMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get lotMoreActions;
+
+  /// No description provided for @lotRevenue.
+  ///
+  /// In en, this message translates to:
+  /// **'Revenue'**
+  String get lotRevenue;
+
+  /// No description provided for @lotExpensesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses'**
+  String get lotExpensesLabel;
+
+  /// No description provided for @lotNet.
+  ///
+  /// In en, this message translates to:
+  /// **'Net'**
+  String get lotNet;
+
+  /// No description provided for @lotAwaitingPaymentBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} awaiting payment'**
+  String lotAwaitingPaymentBanner(String amount);
+
+  /// No description provided for @lotAwaitingPaymentNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Links sent that have not settled'**
+  String get lotAwaitingPaymentNote;
+
+  /// No description provided for @lotSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN, customer, phone'**
+  String get lotSearchHint;
+
+  /// No description provided for @lotFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get lotFilterAll;
+
+  /// No description provided for @lotFilterOneOff.
+  ///
+  /// In en, this message translates to:
+  /// **'One-off'**
+  String get lotFilterOneOff;
+
+  /// No description provided for @lotRecordActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Record activity'**
+  String get lotRecordActivity;
+
+  /// No description provided for @lotEditActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit this activity'**
+  String get lotEditActivity;
+
+  /// No description provided for @lotNoActivityForMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing recorded in {month}.'**
+  String lotNoActivityForMonth(String month);
+
+  /// No description provided for @lotNoActivityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Record the first job the lot billed for.'**
+  String get lotNoActivityHint;
+
+  /// No description provided for @lotNoSearchMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No entry matches that search.'**
+  String get lotNoSearchMatch;
+
+  /// No description provided for @lotEntriesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 entry} other{{count} entries}}'**
+  String lotEntriesCount(int count);
+
+  /// No description provided for @lotPaidOnPlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get lotPaidOnPlatform;
+
+  /// No description provided for @lotPaidOutsideShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid outside'**
+  String get lotPaidOutsideShort;
+
+  /// No description provided for @lotAwaitingShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting'**
+  String get lotAwaitingShort;
+
+  /// No description provided for @lotCancelledStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get lotCancelledStatus;
+
+  /// No description provided for @lotVoidedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get lotVoidedStatus;
+
+  /// No description provided for @lotChasePayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Chase payment'**
+  String get lotChasePayment;
+
+  /// No description provided for @lotSendLinkAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the link again'**
+  String get lotSendLinkAgain;
+
+  /// No description provided for @lotRecordAsPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Record as paid'**
+  String get lotRecordAsPaid;
+
+  /// No description provided for @lotLinkResent.
+  ///
+  /// In en, this message translates to:
+  /// **'The link was sent again.'**
+  String get lotLinkResent;
+
+  /// No description provided for @lotVoid.
+  ///
+  /// In en, this message translates to:
+  /// **'Void'**
+  String get lotVoid;
+
+  /// No description provided for @lotVoidTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this entry'**
+  String get lotVoidTitle;
+
+  /// No description provided for @lotVoidExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'It stays on the record, struck through, and drops out of the totals. It is never deleted.'**
+  String get lotVoidExplain;
+
+  /// No description provided for @lotVoidReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (optional)'**
+  String get lotVoidReason;
+
+  /// No description provided for @lotVoidDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided.'**
+  String get lotVoidDone;
+
+  /// No description provided for @lotHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Change history'**
+  String get lotHistory;
+
+  /// No description provided for @lotNoHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'No changes yet.'**
+  String get lotNoHistory;
+
+  /// No description provided for @lotWhatWasDone.
+  ///
+  /// In en, this message translates to:
+  /// **'What was done'**
+  String get lotWhatWasDone;
+
+  /// No description provided for @lotChooseActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an activity'**
+  String get lotChooseActivity;
+
+  /// No description provided for @lotOneOffOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else — one-off'**
+  String get lotOneOffOption;
+
+  /// No description provided for @lotSayWhatWasDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what was done'**
+  String get lotSayWhatWasDone;
+
+  /// No description provided for @lotFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Fee'**
+  String get lotFee;
+
+  /// No description provided for @lotDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get lotDate;
+
+  /// No description provided for @lotVin.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN'**
+  String get lotVin;
+
+  /// No description provided for @lotVinHint.
+  ///
+  /// In en, this message translates to:
+  /// **'17 characters'**
+  String get lotVinHint;
+
+  /// No description provided for @lotCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer'**
+  String get lotCustomer;
+
+  /// No description provided for @lotPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get lotPhone;
+
+  /// No description provided for @lotEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get lotEmail;
+
+  /// No description provided for @lotMake.
+  ///
+  /// In en, this message translates to:
+  /// **'Make'**
+  String get lotMake;
+
+  /// No description provided for @lotModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get lotModel;
+
+  /// No description provided for @lotYearField.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get lotYearField;
+
+  /// No description provided for @lotAuctionHouse.
+  ///
+  /// In en, this message translates to:
+  /// **'Auction house'**
+  String get lotAuctionHouse;
+
+  /// No description provided for @lotHowItGetsPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'How it gets paid'**
+  String get lotHowItGetsPaid;
+
+  /// No description provided for @lotChargeThroughWebsite.
+  ///
+  /// In en, this message translates to:
+  /// **'Charge through the website'**
+  String get lotChargeThroughWebsite;
+
+  /// No description provided for @lotChargeThroughWebsiteNote.
+  ///
+  /// In en, this message translates to:
+  /// **'A payment link goes to the customer and the money lands in your account.'**
+  String get lotChargeThroughWebsiteNote;
+
+  /// No description provided for @lotPaidOutsideWebsite.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid outside the website'**
+  String get lotPaidOutsideWebsite;
+
+  /// No description provided for @lotPaidOutsideWebsiteNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash, Zelle, a check. Record who took it.'**
+  String get lotPaidOutsideWebsiteNote;
+
+  /// No description provided for @lotLinkGoesByTextAndEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'The link goes by text and email.'**
+  String get lotLinkGoesByTextAndEmail;
+
+  /// No description provided for @lotHowItWasPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'How it was paid'**
+  String get lotHowItWasPaid;
+
+  /// No description provided for @lotReceivedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Received by'**
+  String get lotReceivedBy;
+
+  /// No description provided for @lotActivityRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity recorded.'**
+  String get lotActivityRecorded;
+
+  /// No description provided for @lotActivityUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity updated.'**
+  String get lotActivityUpdated;
+
+  /// No description provided for @lotSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get lotSave;
+
+  /// No description provided for @lotSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get lotSaving;
+
+  /// No description provided for @lotCancelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get lotCancelAction;
+
+  /// No description provided for @lotDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get lotDone;
+
+  /// No description provided for @lotViaCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get lotViaCash;
+
+  /// No description provided for @lotViaZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle'**
+  String get lotViaZelle;
+
+  /// No description provided for @lotViaCashApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash App'**
+  String get lotViaCashApp;
+
+  /// No description provided for @lotViaVenmo.
+  ///
+  /// In en, this message translates to:
+  /// **'Venmo'**
+  String get lotViaVenmo;
+
+  /// No description provided for @lotViaCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check'**
+  String get lotViaCheck;
+
+  /// No description provided for @lotViaCardInPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Card in person'**
+  String get lotViaCardInPerson;
+
+  /// No description provided for @lotViaOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get lotViaOther;
+
+  /// No description provided for @lotExpenseLinesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Expense lines'**
+  String get lotExpenseLinesTitle;
+
+  /// No description provided for @lotAddExpenseLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Add expense line'**
+  String get lotAddExpenseLine;
+
+  /// No description provided for @lotAddPurchase.
+  ///
+  /// In en, this message translates to:
+  /// **'Add purchase'**
+  String get lotAddPurchase;
+
+  /// No description provided for @lotPurchaseAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase added.'**
+  String get lotPurchaseAdded;
+
+  /// No description provided for @lotExpenseLineSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Expense line saved.'**
+  String get lotExpenseLineSaved;
+
+  /// No description provided for @lotSameEveryMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Same every month'**
+  String get lotSameEveryMonth;
+
+  /// No description provided for @lotChangesEveryMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes every month'**
+  String get lotChangesEveryMonth;
+
+  /// No description provided for @lotEveryMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} every month'**
+  String lotEveryMonth(String amount);
+
+  /// No description provided for @lotWaitingOnBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on this month\'s bill'**
+  String get lotWaitingOnBill;
+
+  /// No description provided for @lotPurchasesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 purchase} other{{count} purchases}}'**
+  String lotPurchasesCount(int count);
+
+  /// No description provided for @lotNoExpenseLines.
+  ///
+  /// In en, this message translates to:
+  /// **'No expense lines yet.'**
+  String get lotNoExpenseLines;
+
+  /// No description provided for @lotNoExpenseLinesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add what the lot pays for — rent, water, moving.'**
+  String get lotNoExpenseLinesHint;
+
+  /// No description provided for @lotProofRequiredFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt required from {amount} and above.'**
+  String lotProofRequiredFrom(String amount);
+
+  /// No description provided for @lotAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get lotAmount;
+
+  /// No description provided for @lotPaidBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid by'**
+  String get lotPaidBy;
+
+  /// No description provided for @lotNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get lotNote;
+
+  /// No description provided for @lotReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get lotReceipt;
+
+  /// No description provided for @lotAttachReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach a receipt'**
+  String get lotAttachReceipt;
+
+  /// No description provided for @lotReceiptAttached.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt attached'**
+  String get lotReceiptAttached;
+
+  /// No description provided for @lotUploadingReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading the receipt…'**
+  String get lotUploadingReceipt;
+
+  /// No description provided for @lotNoPurchasesForMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'No purchases logged for {month}.'**
+  String lotNoPurchasesForMonth(String month);
+
+  /// No description provided for @lotExpenseName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get lotExpenseName;
+
+  /// No description provided for @lotExpenseSupplier.
+  ///
+  /// In en, this message translates to:
+  /// **'Supplier or detail'**
+  String get lotExpenseSupplier;
+
+  /// No description provided for @lotHowItBehaves.
+  ///
+  /// In en, this message translates to:
+  /// **'How it behaves'**
+  String get lotHowItBehaves;
+
+  /// No description provided for @lotMonthlyAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly amount'**
+  String get lotMonthlyAmount;
+
+  /// No description provided for @lotRevenueForYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Revenue {year}'**
+  String lotRevenueForYear(String year);
+
+  /// No description provided for @lotExpensesForYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses {year}'**
+  String lotExpensesForYear(String year);
+
+  /// No description provided for @lotNetProfit.
+  ///
+  /// In en, this message translates to:
+  /// **'Net profit'**
+  String get lotNetProfit;
+
+  /// No description provided for @lotMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Margin'**
+  String get lotMargin;
+
+  /// No description provided for @lotMonthByMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month by month'**
+  String get lotMonthByMonth;
+
+  /// No description provided for @lotErrActivityType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what was done.'**
+  String get lotErrActivityType;
+
+  /// No description provided for @lotErrCustomLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what was done.'**
+  String get lotErrCustomLabel;
+
+  /// No description provided for @lotErrFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the fee charged.'**
+  String get lotErrFee;
+
+  /// No description provided for @lotErrCustomerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the customer\'s name.'**
+  String get lotErrCustomerName;
+
+  /// No description provided for @lotErrVin.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the VIN.'**
+  String get lotErrVin;
+
+  /// No description provided for @lotErrLinkContact.
+  ///
+  /// In en, this message translates to:
+  /// **'A payment link needs a phone number or an email address.'**
+  String get lotErrLinkContact;
+
+  /// No description provided for @lotErrReceivedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Say which staff member took the payment.'**
+  String get lotErrReceivedBy;
+
+  /// No description provided for @lotErrExpenseAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter what was spent.'**
+  String get lotErrExpenseAmount;
+
+  /// No description provided for @lotErrExpensePaidBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Say who paid for it.'**
+  String get lotErrExpensePaidBy;
+
+  /// No description provided for @lotErrExpenseProof.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach a receipt: this business asks for proof at {amount} and above.'**
+  String lotErrExpenseProof(String amount);
+
+  /// No description provided for @lotCouldNotSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save it. Try again.'**
+  String get lotCouldNotSave;
+
+  /// No description provided for @lotWhereTheMoneyGoes.
+  ///
+  /// In en, this message translates to:
+  /// **'Where the money goes'**
+  String get lotWhereTheMoneyGoes;
+
+  /// No description provided for @lotOtherExpense.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get lotOtherExpense;
+
+  /// No description provided for @lotNothingSpentYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing spent in {year}.'**
+  String lotNothingSpentYear(String year);
+
+  /// No description provided for @lotShareUnderOnePercent.
+  ///
+  /// In en, this message translates to:
+  /// **'<1%'**
+  String get lotShareUnderOnePercent;
+
+  /// No description provided for @lotVinMatchedExisting.
+  ///
+  /// In en, this message translates to:
+  /// **'Filled in from a vehicle you already have.'**
+  String get lotVinMatchedExisting;
+
+  /// No description provided for @lotDecodingVin.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the VIN…'**
+  String get lotDecodingVin;
+
+  /// No description provided for @lotLedgerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What the lot earned and spent.'**
+  String get lotLedgerSubtitle;
+
+  /// No description provided for @businessTransportRowSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests to quote, and jobs to move.'**
+  String get businessTransportRowSubtitle;
 }
 
 class _AppLocalizationsDelegate

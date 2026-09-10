@@ -176,16 +176,18 @@ const businessStaffPermissionOptions = [
   "freight",
   "transport",
   "parking",
+  "ledger",
   "destinations",
   "people",
+  "reviews",
   "support",
   "growth",
 ] as const;
 
 function businessPermissionLabel(permission: string) {
-  return permission === "carSales"
-    ? "Car sales"
-    : permission.charAt(0).toUpperCase() + permission.slice(1);
+  if (permission === "carSales") return "Car sales";
+  if (permission === "ledger") return "Lot ledger";
+  return permission.charAt(0).toUpperCase() + permission.slice(1);
 }
 
 // Which service must be active before a permission actually does anything.
@@ -197,6 +199,7 @@ const businessPermissionRequiredService: Partial<Record<string, string>> = {
   freight: "freight",
   transport: "carTransport",
   parking: "carParking",
+  ledger: "carParking",
   listings: "carSales",
   purchases: "carSales",
 };
