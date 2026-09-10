@@ -4,75 +4,138 @@
       "collectionGroup": "lotActivities",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "activityDate", "order": "DESCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "activityDate",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "lotActivities",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "activityDate", "order": "DESCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "activityDate",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "lotActivityTypes",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "sortOrder", "order": "ASCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sortOrder",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "lotExpenseLines",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "sortOrder", "order": "ASCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sortOrder",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "lotExpenseEntries",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "month", "order": "ASCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "month",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "lotExpenseEntries",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "lineId", "order": "ASCENDING"},
-        {"fieldPath": "month", "order": "ASCENDING"}
+        {
+          "fieldPath": "lineId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "month",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "lotLedgerAudit",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "entityId", "order": "ASCENDING"},
-        {"fieldPath": "at", "order": "DESCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "entityId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "lotLedgerAudit",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "acknowledged", "order": "ASCENDING"},
-        {"fieldPath": "at", "order": "DESCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "acknowledged",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "lotCustomers",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "lastSeenAt", "order": "DESCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastSeenAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
@@ -397,6 +460,20 @@
         },
         {
           "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "barrelPools",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "joinDeadline",
           "order": "ASCENDING"
         }
       ]

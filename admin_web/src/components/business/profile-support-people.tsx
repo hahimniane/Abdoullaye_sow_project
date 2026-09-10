@@ -185,6 +185,7 @@ const businessPermissionOptions = [
   {id: "freight", label: "Freight"},
   {id: "transport", label: "Transport"},
   {id: "parking", label: "Parking"},
+  {id: "ledger", label: "Lot ledger"},
   {id: "destinations", label: "Services & coverage"},
   {id: "people", label: "People"},
   {id: "reviews", label: "Reviews"},
@@ -201,6 +202,7 @@ const businessPermissionRequiredService: Partial<Record<string, string>> = {
   freight: "freight",
   transport: "carTransport",
   parking: "carParking",
+  ledger: "carParking",
   listings: "carSales",
   purchases: "carSales",
 };

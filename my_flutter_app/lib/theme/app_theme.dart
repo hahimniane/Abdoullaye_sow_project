@@ -100,6 +100,20 @@ abstract final class AppTheme {
         ),
         labelStyle: TextStyle(color: muted),
         hintStyle: TextStyle(color: muted.withValues(alpha: 0.7)),
+        // A field's helper and its error are sentences, and sentences belong
+        // in the reading face. Flutter falls back to bodySmall here, which is
+        // the mono used for short meta labels — set even and wide, so a line
+        // of guidance under a field came out looking like code.
+        helperStyle: AppTypography.textTheme(brightness).bodyMedium?.copyWith(
+          fontSize: 12,
+          height: 1.35,
+          color: muted,
+        ),
+        errorStyle: AppTypography.textTheme(brightness).bodyMedium?.copyWith(
+          fontSize: 12,
+          height: 1.35,
+          color: AppColors.errorRed,
+        ),
       ),
       cardTheme: CardThemeData(
         color: surface,

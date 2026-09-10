@@ -252,6 +252,7 @@
   "orderStatusRefunded": "Refunded",
   "orderLeaveReviewCta": "Leave a review",
   "orderReviewedBadge": "Reviewed",
+  "reviews": "Reviews",
   "reviewComposerTitle": "Leave a review",
   "reviewRatingLabel": "How would you rate this service?",
   "reviewRatingRequired": "Please select a star rating.",
@@ -849,7 +850,13 @@
   "businessReviewsTitle": "Reviews",
   "businessReviewsEmpty": "No reviews yet. They appear here once customers rate a job.",
   "businessReviewsCount": "{count, plural, =1{1 review} other{{count} reviews}}",
-  "@businessReviewsCount": {"placeholders": {"count": {"type": "int"}}},
+  "@businessReviewsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "businessPeopleTitle": "People",
   "businessServicesCoverageTitle": "Services & coverage",
   "businessListingsTitle": "Vehicle listings",
@@ -3116,19 +3123,43 @@
   "freightAddAnotherPricedItem": "Add another priced item",
   "freightPriceEach": "{price} each",
   "trackWithCode": "Track with a code",
-  "@freightPriceEach": {"placeholders": {"price": {"type": "String"}}},
+  "@freightPriceEach": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
   "freightWeighedAtRateHelper": "Charged per kg once the business weighs the box.",
   "freightContentsTooMany": "List at most 10 kinds of item in one box.",
   "freightContentsLabelInvalid": "Name each item in under 60 characters.",
   "freightContentsQuantityInvalid": "Item counts must be between 1 and 99.",
   "freightContentsCategoryInvalid": "Pick each item's category from the list.",
   "freightItemWeighedByBusiness": "{item} is weighed by this business. Include it in the weighed kilos instead.",
-  "@freightItemWeighedByBusiness": {"placeholders": {"item": {"type": "String"}}},
+  "@freightItemWeighedByBusiness": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
   "freightItemUnpricedByBusiness": "{item} has no price from this business. Ask for a price instead.",
-  "@freightItemUnpricedByBusiness": {"placeholders": {"item": {"type": "String"}}},
+  "@freightItemUnpricedByBusiness": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
   "guestQuoteOneAnswer": "1 business has answered with a price.",
   "guestQuoteManyAnswers": "{count} businesses have answered with a price.",
-  "@guestQuoteManyAnswers": {"placeholders": {"count": {"type": "int"}}},
+  "@guestQuoteManyAnswers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "guestQuoteSeeHint": "Enter the email you gave with this request to see the prices and choose one.",
   "guestQuoteNoAnswers": "No prices yet. Businesses have been asked, and answers usually arrive within a day. Enter the email you gave to open this request on this device.",
   "guestQuoteEmailLabel": "The email you gave with the request",
@@ -3244,5 +3275,203 @@
   "openingSecurePayment": "Opening secure payment...",
   "checkoutResumeFailed": "That did not open. Try again in a moment.",
   "noNotificationsYet": "No notifications yet",
-  "markAllNotificationsRead": "Mark all read"
+  "markAllNotificationsRead": "Mark all read",
+  "lotTabActivity": "Activity",
+  "lotTabExpenses": "Expenses",
+  "lotTabReports": "Reports",
+  "lotPreviousMonth": "Previous month",
+  "lotNextMonth": "Next month",
+  "lotMoreActions": "More",
+  "lotRevenue": "Revenue",
+  "lotExpensesLabel": "Expenses",
+  "lotNet": "Net",
+  "lotAwaitingPaymentBanner": "{amount} awaiting payment",
+  "@lotAwaitingPaymentBanner": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotAwaitingPaymentNote": "Links sent that have not settled",
+  "lotSearchHint": "VIN, customer, phone",
+  "lotFilterAll": "All",
+  "lotFilterOneOff": "One-off",
+  "lotRecordActivity": "Record activity",
+  "lotEditActivity": "Edit this activity",
+  "lotNoActivityForMonth": "Nothing recorded in {month}.",
+  "@lotNoActivityForMonth": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "lotNoActivityHint": "Record the first job the lot billed for.",
+  "lotNoSearchMatch": "No entry matches that search.",
+  "lotEntriesCount": "{count, plural, =1{1 entry} other{{count} entries}}",
+  "@lotEntriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lotPaidOnPlatform": "Paid",
+  "lotPaidOutsideShort": "Paid outside",
+  "lotAwaitingShort": "Awaiting",
+  "lotCancelledStatus": "Cancelled",
+  "lotVoidedStatus": "Voided",
+  "lotChasePayment": "Chase payment",
+  "lotSendLinkAgain": "Send the link again",
+  "lotRecordAsPaid": "Record as paid",
+  "lotLinkResent": "The link was sent again.",
+  "lotVoid": "Void",
+  "lotVoidTitle": "Void this entry",
+  "lotVoidExplain": "It stays on the record, struck through, and drops out of the totals. It is never deleted.",
+  "lotVoidReason": "Reason (optional)",
+  "lotVoidDone": "Voided.",
+  "lotHistory": "Change history",
+  "lotNoHistory": "No changes yet.",
+  "lotWhatWasDone": "What was done",
+  "lotChooseActivity": "Choose an activity",
+  "lotOneOffOption": "Something else — one-off",
+  "lotSayWhatWasDone": "Say what was done",
+  "lotFee": "Fee",
+  "lotDate": "Date",
+  "lotVin": "VIN",
+  "lotVinHint": "17 characters",
+  "lotCustomer": "Customer",
+  "lotPhone": "Phone",
+  "lotEmail": "Email",
+  "lotMake": "Make",
+  "lotModel": "Model",
+  "lotYearField": "Year",
+  "lotAuctionHouse": "Auction house",
+  "lotHowItGetsPaid": "How it gets paid",
+  "lotChargeThroughWebsite": "Charge through the website",
+  "lotChargeThroughWebsiteNote": "A payment link goes to the customer and the money lands in your account.",
+  "lotPaidOutsideWebsite": "Paid outside the website",
+  "lotPaidOutsideWebsiteNote": "Cash, Zelle, a check. Record who took it.",
+  "lotLinkGoesByTextAndEmail": "The link goes by text and email.",
+  "lotHowItWasPaid": "How it was paid",
+  "lotReceivedBy": "Received by",
+  "lotActivityRecorded": "Activity recorded.",
+  "lotActivityUpdated": "Activity updated.",
+  "lotSave": "Save",
+  "lotSaving": "Saving…",
+  "lotCancelAction": "Cancel",
+  "lotDone": "Done",
+  "lotViaCash": "Cash",
+  "lotViaZelle": "Zelle",
+  "lotViaCashApp": "Cash App",
+  "lotViaVenmo": "Venmo",
+  "lotViaCheck": "Check",
+  "lotViaCardInPerson": "Card in person",
+  "lotViaOther": "Other",
+  "lotExpenseLinesTitle": "Expense lines",
+  "lotAddExpenseLine": "Add expense line",
+  "lotAddPurchase": "Add purchase",
+  "lotPurchaseAdded": "Purchase added.",
+  "lotExpenseLineSaved": "Expense line saved.",
+  "lotSameEveryMonth": "Same every month",
+  "lotChangesEveryMonth": "Changes every month",
+  "lotEveryMonth": "{amount} every month",
+  "@lotEveryMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotWaitingOnBill": "Waiting on this month's bill",
+  "lotPurchasesCount": "{count, plural, =1{1 purchase} other{{count} purchases}}",
+  "@lotPurchasesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lotNoExpenseLines": "No expense lines yet.",
+  "lotNoExpenseLinesHint": "Add what the lot pays for — rent, water, moving.",
+  "lotProofRequiredFrom": "Receipt required from {amount} and above.",
+  "@lotProofRequiredFrom": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotAmount": "Amount",
+  "lotPaidBy": "Paid by",
+  "lotNote": "Note",
+  "lotReceipt": "Receipt",
+  "lotAttachReceipt": "Attach a receipt",
+  "lotReceiptAttached": "Receipt attached",
+  "lotUploadingReceipt": "Uploading the receipt…",
+  "lotNoPurchasesForMonth": "No purchases logged for {month}.",
+  "@lotNoPurchasesForMonth": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "lotExpenseName": "Name",
+  "lotExpenseSupplier": "Supplier or detail",
+  "lotHowItBehaves": "How it behaves",
+  "lotMonthlyAmount": "Monthly amount",
+  "lotRevenueForYear": "Revenue {year}",
+  "@lotRevenueForYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotExpensesForYear": "Expenses {year}",
+  "@lotExpensesForYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotNetProfit": "Net profit",
+  "lotMargin": "Margin",
+  "lotMonthByMonth": "Month by month",
+  "lotErrActivityType": "Choose what was done.",
+  "lotErrCustomLabel": "Say what was done.",
+  "lotErrFee": "Enter the fee charged.",
+  "lotErrCustomerName": "Enter the customer's name.",
+  "lotErrVin": "Enter the VIN.",
+  "lotErrLinkContact": "A payment link needs a phone number or an email address.",
+  "lotErrReceivedBy": "Say which staff member took the payment.",
+  "lotErrExpenseAmount": "Enter what was spent.",
+  "lotErrExpensePaidBy": "Say who paid for it.",
+  "lotErrExpenseProof": "Attach a receipt: this business asks for proof at {amount} and above.",
+  "@lotErrExpenseProof": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotCouldNotSave": "Could not save it. Try again.",
+  "lotWhereTheMoneyGoes": "Where the money goes",
+  "lotOtherExpense": "Other",
+  "lotNothingSpentYear": "Nothing spent in {year}.",
+  "@lotNothingSpentYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotShareUnderOnePercent": "<1%",
+  "lotVinMatchedExisting": "Filled in from a vehicle you already have.",
+  "lotDecodingVin": "Reading the VIN…",
+  "lotLedgerSubtitle": "What the lot earned and spent.",
+  "businessTransportRowSubtitle": "Requests to quote, and jobs to move."
 }

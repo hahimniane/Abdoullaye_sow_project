@@ -300,6 +300,11 @@ final _permissionOptions = <_PermissionOption>[
     (l10n) => l10n.parking,
   ),
   _PermissionOption(
+    BusinessPermission.ledger,
+    Icons.menu_book_outlined,
+    (l10n) => l10n.lotLedgerTitle,
+  ),
+  _PermissionOption(
     BusinessPermission.destinations,
     Icons.public_outlined,
     (l10n) => l10n.destinations,
@@ -308,6 +313,11 @@ final _permissionOptions = <_PermissionOption>[
     BusinessPermission.people,
     Icons.people_outline,
     (l10n) => l10n.people,
+  ),
+  _PermissionOption(
+    BusinessPermission.reviews,
+    Icons.star_outline,
+    (l10n) => l10n.reviews,
   ),
   _PermissionOption(
     BusinessPermission.support,

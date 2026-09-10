@@ -434,14 +434,23 @@ void main() {
       expect(push, lessThan(console));
       expect(console, lessThan(heading));
 
-      // It is the filled control; the console it now outranks is outlined.
+      // It is the one filled control on the page; the console it outranks is
+      // outlined. Three identical filled slabs meant nothing read as primary,
+      // so the filled costume is now worn by this action alone.
+      final action = home.indexOf('_PrimaryAction(');
+      expect(action, greaterThan(-1));
+      expect(button, greaterThan(action));
       expect(
-        home,
-        contains(
-          'child: FilledButton.icon(\n'
-          "                key: const Key('record-parked-car'),",
-        ),
+        button - action,
+        lessThan(60),
+        reason: 'the record action is itself the filled control',
       );
+      expect(
+        'buttonKey: const Key('.allMatches(home).length,
+        1,
+        reason: 'exactly one filled action on the business home',
+      );
+      expect(home, contains('AsyncActionButton.outlined('));
 
       expect(home, contains('l10n.recordAParkedCar'));
       // Not through the named customer route - business_mobile_role_safety

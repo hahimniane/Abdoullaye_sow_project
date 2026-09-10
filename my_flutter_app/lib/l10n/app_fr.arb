@@ -252,6 +252,7 @@
   "orderStatusRefunded": "Remboursé",
   "orderLeaveReviewCta": "Laisser un avis",
   "orderReviewedBadge": "Avis laissé",
+  "reviews": "Avis",
   "reviewComposerTitle": "Laisser un avis",
   "reviewRatingLabel": "Comment évalueriez-vous ce service ?",
   "reviewRatingRequired": "Veuillez sélectionner une note en étoiles.",
@@ -849,7 +850,13 @@
   "businessReviewsTitle": "Avis",
   "businessReviewsEmpty": "Pas encore d’avis. Ils apparaissent ici dès que des clients notent une prestation.",
   "businessReviewsCount": "{count, plural, =1{1 avis} other{{count} avis}}",
-  "@businessReviewsCount": {"placeholders": {"count": {"type": "int"}}},
+  "@businessReviewsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "businessPeopleTitle": "Équipe",
   "businessServicesCoverageTitle": "Services et couverture",
   "businessListingsTitle": "Annonces de véhicules",
@@ -3116,19 +3123,43 @@
   "freightAddAnotherPricedItem": "Ajouter un autre article au prix fixé",
   "freightPriceEach": "{price} l'unité",
   "trackWithCode": "Suivre avec un code",
-  "@freightPriceEach": {"placeholders": {"price": {"type": "String"}}},
+  "@freightPriceEach": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
   "freightWeighedAtRateHelper": "Facturé au kilo une fois le colis pesé par l'entreprise.",
   "freightContentsTooMany": "Indiquez au plus 10 types d'articles par colis.",
   "freightContentsLabelInvalid": "Nommez chaque article en moins de 60 caractères.",
   "freightContentsQuantityInvalid": "Les quantités doivent être entre 1 et 99.",
   "freightContentsCategoryInvalid": "Choisissez la catégorie de chaque article dans la liste.",
   "freightItemWeighedByBusiness": "{item} est pesé par cette entreprise. Incluez-le plutôt dans les kilos pesés.",
-  "@freightItemWeighedByBusiness": {"placeholders": {"item": {"type": "String"}}},
+  "@freightItemWeighedByBusiness": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
   "freightItemUnpricedByBusiness": "{item} n'a pas de prix chez cette entreprise. Demandez plutôt un prix.",
-  "@freightItemUnpricedByBusiness": {"placeholders": {"item": {"type": "String"}}},
+  "@freightItemUnpricedByBusiness": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
   "guestQuoteOneAnswer": "1 entreprise a répondu avec un prix.",
   "guestQuoteManyAnswers": "{count} entreprises ont répondu avec un prix.",
-  "@guestQuoteManyAnswers": {"placeholders": {"count": {"type": "int"}}},
+  "@guestQuoteManyAnswers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "guestQuoteSeeHint": "Entrez l'e-mail donné avec cette demande pour voir les prix et en choisir un.",
   "guestQuoteNoAnswers": "Pas encore de prix. Les entreprises ont été sollicitées ; les réponses arrivent généralement sous un jour. Entrez l'e-mail donné pour ouvrir cette demande sur cet appareil.",
   "guestQuoteEmailLabel": "L'e-mail donné avec la demande",
@@ -3244,5 +3275,203 @@
   "openingSecurePayment": "Ouverture du paiement sécurisé...",
   "checkoutResumeFailed": "Cela ne s’est pas ouvert. Réessayez dans un instant.",
   "noNotificationsYet": "Aucune notification pour le moment",
-  "markAllNotificationsRead": "Tout marquer comme lu"
+  "markAllNotificationsRead": "Tout marquer comme lu",
+  "lotTabActivity": "Activité",
+  "lotTabExpenses": "Dépenses",
+  "lotTabReports": "Rapports",
+  "lotPreviousMonth": "Mois précédent",
+  "lotNextMonth": "Mois suivant",
+  "lotMoreActions": "Plus",
+  "lotRevenue": "Recettes",
+  "lotExpensesLabel": "Dépenses",
+  "lotNet": "Net",
+  "lotAwaitingPaymentBanner": "{amount} en attente de paiement",
+  "@lotAwaitingPaymentBanner": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotAwaitingPaymentNote": "Liens envoyés, pas encore réglés",
+  "lotSearchHint": "NIV, client, téléphone",
+  "lotFilterAll": "Tout",
+  "lotFilterOneOff": "Ponctuel",
+  "lotRecordActivity": "Enregistrer une activité",
+  "lotEditActivity": "Modifier cette activité",
+  "lotNoActivityForMonth": "Rien enregistré en {month}.",
+  "@lotNoActivityForMonth": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "lotNoActivityHint": "Enregistrez le premier travail facturé par le parc.",
+  "lotNoSearchMatch": "Aucune entrée ne correspond à cette recherche.",
+  "lotEntriesCount": "{count, plural, =1{1 entrée} other{{count} entrées}}",
+  "@lotEntriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lotPaidOnPlatform": "Payé",
+  "lotPaidOutsideShort": "Payé hors site",
+  "lotAwaitingShort": "En attente",
+  "lotCancelledStatus": "Annulé",
+  "lotVoidedStatus": "Annulée",
+  "lotChasePayment": "Relancer le paiement",
+  "lotSendLinkAgain": "Renvoyer le lien",
+  "lotRecordAsPaid": "Marquer comme payé",
+  "lotLinkResent": "Le lien a été renvoyé.",
+  "lotVoid": "Annuler l’entrée",
+  "lotVoidTitle": "Annuler cette entrée",
+  "lotVoidExplain": "Elle reste au registre, barrée, et sort des totaux. Elle n’est jamais supprimée.",
+  "lotVoidReason": "Motif (facultatif)",
+  "lotVoidDone": "Entrée annulée.",
+  "lotHistory": "Historique des modifications",
+  "lotNoHistory": "Aucune modification.",
+  "lotWhatWasDone": "Ce qui a été fait",
+  "lotChooseActivity": "Choisissez une activité",
+  "lotOneOffOption": "Autre chose — ponctuel",
+  "lotSayWhatWasDone": "Précisez ce qui a été fait",
+  "lotFee": "Montant facturé",
+  "lotDate": "Date",
+  "lotVin": "NIV",
+  "lotVinHint": "17 caractères",
+  "lotCustomer": "Client",
+  "lotPhone": "Téléphone",
+  "lotEmail": "E-mail",
+  "lotMake": "Marque",
+  "lotModel": "Modèle",
+  "lotYearField": "Année",
+  "lotAuctionHouse": "Maison de vente",
+  "lotHowItGetsPaid": "Mode de paiement",
+  "lotChargeThroughWebsite": "Encaisser via le site",
+  "lotChargeThroughWebsiteNote": "Un lien de paiement part au client et l’argent arrive sur votre compte.",
+  "lotPaidOutsideWebsite": "Payé en dehors du site",
+  "lotPaidOutsideWebsiteNote": "Espèces, Zelle, chèque. Indiquez qui l’a reçu.",
+  "lotLinkGoesByTextAndEmail": "Le lien part par SMS et par e-mail.",
+  "lotHowItWasPaid": "Moyen de paiement",
+  "lotReceivedBy": "Reçu par",
+  "lotActivityRecorded": "Activité enregistrée.",
+  "lotActivityUpdated": "Activité mise à jour.",
+  "lotSave": "Enregistrer",
+  "lotSaving": "Enregistrement…",
+  "lotCancelAction": "Annuler",
+  "lotDone": "Terminé",
+  "lotViaCash": "Espèces",
+  "lotViaZelle": "Zelle",
+  "lotViaCashApp": "Cash App",
+  "lotViaVenmo": "Venmo",
+  "lotViaCheck": "Chèque",
+  "lotViaCardInPerson": "Carte sur place",
+  "lotViaOther": "Autre",
+  "lotExpenseLinesTitle": "Postes de dépense",
+  "lotAddExpenseLine": "Ajouter un poste",
+  "lotAddPurchase": "Ajouter un achat",
+  "lotPurchaseAdded": "Achat ajouté.",
+  "lotExpenseLineSaved": "Poste enregistré.",
+  "lotSameEveryMonth": "Identique chaque mois",
+  "lotChangesEveryMonth": "Variable chaque mois",
+  "lotEveryMonth": "{amount} chaque mois",
+  "@lotEveryMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotWaitingOnBill": "En attente de la facture du mois",
+  "lotPurchasesCount": "{count, plural, =1{1 achat} other{{count} achats}}",
+  "@lotPurchasesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lotNoExpenseLines": "Aucun poste de dépense.",
+  "lotNoExpenseLinesHint": "Ajoutez ce que le parc paie : loyer, eau, déplacement.",
+  "lotProofRequiredFrom": "Reçu exigé à partir de {amount}.",
+  "@lotProofRequiredFrom": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotAmount": "Montant",
+  "lotPaidBy": "Payé par",
+  "lotNote": "Note",
+  "lotReceipt": "Reçu",
+  "lotAttachReceipt": "Joindre un reçu",
+  "lotReceiptAttached": "Reçu joint",
+  "lotUploadingReceipt": "Envoi du reçu…",
+  "lotNoPurchasesForMonth": "Aucun achat enregistré en {month}.",
+  "@lotNoPurchasesForMonth": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "lotExpenseName": "Nom",
+  "lotExpenseSupplier": "Fournisseur ou détail",
+  "lotHowItBehaves": "Comportement",
+  "lotMonthlyAmount": "Montant mensuel",
+  "lotRevenueForYear": "Recettes {year}",
+  "@lotRevenueForYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotExpensesForYear": "Dépenses {year}",
+  "@lotExpensesForYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotNetProfit": "Bénéfice net",
+  "lotMargin": "Marge",
+  "lotMonthByMonth": "Mois par mois",
+  "lotErrActivityType": "Choisissez ce qui a été fait.",
+  "lotErrCustomLabel": "Précisez ce qui a été fait.",
+  "lotErrFee": "Saisissez le montant facturé.",
+  "lotErrCustomerName": "Saisissez le nom du client.",
+  "lotErrVin": "Saisissez le NIV.",
+  "lotErrLinkContact": "Un lien de paiement exige un numéro de téléphone ou un e-mail.",
+  "lotErrReceivedBy": "Indiquez quel employé a reçu le paiement.",
+  "lotErrExpenseAmount": "Saisissez le montant dépensé.",
+  "lotErrExpensePaidBy": "Indiquez qui a payé.",
+  "lotErrExpenseProof": "Joignez un reçu : cette entreprise l’exige à partir de {amount}.",
+  "@lotErrExpenseProof": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotCouldNotSave": "Enregistrement impossible. Réessayez.",
+  "lotWhereTheMoneyGoes": "Où va l’argent",
+  "lotOtherExpense": "Autre",
+  "lotNothingSpentYear": "Aucune dépense en {year}.",
+  "@lotNothingSpentYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotShareUnderOnePercent": "<1 %",
+  "lotVinMatchedExisting": "Rempli à partir d’un véhicule déjà enregistré.",
+  "lotDecodingVin": "Lecture du NIV…",
+  "lotLedgerSubtitle": "Ce que le parc a gagné et dépensé.",
+  "businessTransportRowSubtitle": "Demandes à chiffrer et missions à livrer."
 }

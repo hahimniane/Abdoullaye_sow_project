@@ -89,6 +89,8 @@ import {
   lotActivityMessage,
   expenseProofRequired,
   expenseProofMessage,
+  lotMonthExpenseCents,
+  lotExpenseByLine,
   type LotActivityDraft,
   type LotActivityTypeDraft,
   type LotExpenseEntryDraft,
@@ -6935,25 +6937,13 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     return s;
   }, [monthActivities]);
 
-  // Every purchase counts in exactly one month (lotExpenseEntryMonth), and
-  // a fixed line's standing amount is replaced - not added to - when a live
-  // purchase was logged against it that month. A voided purchase neither
-  // counts nor suppresses the standing amount.
-  const monthExpenseFor = (m: string) => {
-    let s = 0;
-    const live = expenseEntries.rows.filter((e) => (e as Record<string, unknown>).voided !== true) as Record<string, unknown>[];
-    for (const e of live) {
-      if (lotExpenseEntryMonth(e) === m) s += Number(e.amountCents) || 0;
-    }
-    for (const line of expenseLines.rows) {
-      const l = line as Record<string, unknown>;
-      if (l.kind === "fixed" && l.active !== false) {
-        const override = live.some((e) => String(e.lineId) === String(l.id) && lotExpenseEntryMonth(e) === m);
-        if (!override) s += Number(l.recurringCents) || 0;
-      }
-    }
-    return s;
-  };
+  // Every purchase counts in exactly one month (lotExpenseEntryMonth); a fixed
+  // line's standing amount is replaced - not added to - when a live purchase
+  // was logged against it that month, and is only owed for the months the line
+  // has actually existed for. The rules live in lot-ledger.ts, tested there.
+  const nowMonth = lotMonthKey(new Date());
+  const monthExpenseFor = (m: string) =>
+    lotMonthExpenseCents(expenseLines.rows, expenseEntries.rows, m, nowMonth);
 
   const monthExpenseCents = useMemo(() => monthExpenseFor(month), [expenseEntries.rows, expenseLines.rows, month]);
   const netCents = monthRevenueCents - monthExpenseCents;
@@ -7475,6 +7465,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
           ) : (
             <LotYearSummary revenue={yearRevenue} expense={yearExpense} net={yearNet} />
           )}
+          <LotExpenseBreakdown
+            spend={lotExpenseByLine(expenseLines.rows, expenseEntries.rows, yearMonths, nowMonth)}
+            totalCents={yearExpense}
+            year={year}
+          />
         </div>
       )}
 
@@ -7729,6 +7724,43 @@ function LotMonthlyChart({ revenue, expenses, year }: { revenue: number[]; expen
       </svg>
       <p className="lst-hint">Revenue (teal), expenses (amber), running net (red).</p>
     </div></div>
+  );
+}
+
+// Which line is eating the money, ranked, with each share drawn against the
+// same total the tiles above show. One colour on purpose: the ranking is the
+// information, a palette would only decorate it.
+function LotExpenseBreakdown({ spend, totalCents, year }: { spend: { lineId: string; label: string; cents: number }[]; totalCents: number; year: number }) {
+  if (spend.length === 0 || totalCents <= 0) {
+    return (
+      <>
+        <div className="panel-header" style={{ marginTop: 20 }}><h3>Where the money goes</h3></div>
+        <EmptyState text={`Nothing spent in ${year}.`} />
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="panel-header" style={{ marginTop: 20 }}><h3>Where the money goes</h3></div>
+      <div className="lot-spend-breakdown">
+        {spend.map((row) => {
+          const fraction = row.cents / totalCents;
+          const percent = Math.round(fraction * 100);
+          return (
+            <div className="lot-spend-row" key={row.lineId}>
+              <div className="lot-spend-head">
+                <strong>{row.label || "Other"}</strong>
+                <b>{lotFormatCents(row.cents)}</b>
+              </div>
+              <div className="lot-spend-track">
+                <div className="lot-spend-fill" style={{ width: `${Math.max(fraction * 100, 1.2)}%` }} />
+                <span>{percent < 1 ? "<1%" : `${percent}%`}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
