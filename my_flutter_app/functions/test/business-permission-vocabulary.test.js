@@ -41,20 +41,25 @@ function peoplePanelPermissions() {
 }
 
 function flutterPermissions() {
-  const source = read("my_flutter_app", "lib", "utils", "business_permissions.dart");
+  const source = read(
+      "my_flutter_app", "lib", "utils", "business_permissions.dart");
   return [...source.matchAll(/static const [a-z]+ = '([a-z]+)';/g)]
       .map((m) => m[1]);
 }
 
-test("every permission a console tab gates on is accepted by the backend", () => {
-  const backend = new Set(backendPermissions());
-  for (const key of sidebarPermissions()) {
-    assert.ok(backend.has(key), `sidebar tab permission "${key}" is stripped by the backend`);
-  }
-});
+test("every permission a console tab gates on is accepted by the backend",
+    () => {
+      const backend = new Set(backendPermissions());
+      for (const key of sidebarPermissions()) {
+        assert.ok(
+            backend.has(key),
+            `sidebar tab permission "${key}" is stripped by the backend`);
+      }
+    });
 
 test("the web People panel offers exactly the backend vocabulary", () => {
-  assert.deepEqual(peoplePanelPermissions().sort(), backendPermissions().sort());
+  assert.deepEqual(
+      peoplePanelPermissions().sort(), backendPermissions().sort());
 });
 
 test("the Flutter permission constants match the backend vocabulary", () => {
