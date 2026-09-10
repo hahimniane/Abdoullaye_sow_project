@@ -12061,6 +12061,26 @@ exports.parkingPaymentLink = onRequest(
         }));
       }
       if (state !== PARKING_LINK_STATES.PAYABLE) {
+        // A record set to "paid in person" is not payable online, but that is
+        // not the same as nothing being owed - and the two must never be
+        // confused. A customer standing in the lot with an unpaid invoice
+        // read "no payment outstanding" and walked away.
+        const outstandingCents = Number(entry.amountDueCents || 0);
+        const directOutstanding =
+          String(entry.paymentMethod || "") !== "payment_link" &&
+          Number.isFinite(outstandingCents) &&
+          outstandingCents > 0;
+        if (directOutstanding) {
+          const owed = (outstandingCents / 100).toFixed(2);
+          return res.status(200).send(parkingPaymentLinkPage({
+            title: "Pay at the parking lot",
+            message: `Parking ${String(entry.trackingCode || "")} is ` +
+              "settled directly with " +
+              `${String(entry.businessName || "the business")}. $${owed} is ` +
+              "still owed - please pay them in person. This code cannot " +
+              "take card payments.",
+          }));
+        }
         return res.status(200).send(parkingPaymentLinkPage({
           title: "Nothing to pay",
           message: "There is no payment outstanding on this parking.",
@@ -12261,8 +12281,15 @@ exports.parkingDocument = onRequest(
       const businessDoc = await db.collection("businesses")
           .doc(String(entry.businessId || "")).get().catch(() => null);
       // An invoice must carry a way to pay; a receipt renders without one.
+      // A "paid in person" record is unpaid, so it is an invoice - but it can
+      // never be paid through the link, so printing a QR on it hands the
+      // customer a code that refuses their money.
       const isInvoice = parkingDocumentType(entry) === "invoice";
-      const payUrl = isInvoice ? parkingPaymentLinkUrl(token) : "";
+      const payableOnline =
+        parkingPaymentLinkState(entry) === PARKING_LINK_STATES.PAYABLE;
+      const payUrl = isInvoice && payableOnline ?
+        parkingPaymentLinkUrl(token) :
+        "";
       // Inline SVG, so a printed invoice needs no network and no third
       // party ever sees the payment URL.
       let qrSvg = "";
