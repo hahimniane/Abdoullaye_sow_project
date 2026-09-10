@@ -20,6 +20,7 @@ import '../services/vin_catalog_matcher.dart';
 import '../services/lot_customers.dart';
 import '../services/vin_decoder_service.dart';
 import '../services/business_parking_entry.dart';
+import '../services/parking_rates.dart';
 import '../services/parking_service.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
@@ -99,6 +100,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   // desk as often as it waits for it, and recording both as awaiting left
   // money already in the till showing as outstanding.
   bool _alreadyPaid = false;
+  // The prices this lot can quote. With only its standard rate there is
+  // nothing to choose, and the picker stays out of the way entirely.
+  List<ParkingRateChoice> _rateChoices = const [];
+  String _rateId = '';
   String _receivedVia = businessParkingReceivedViaValues.first;
   bool _isRecordingEntry = false;
   BusinessParkingEntryResult? _entryResult;
@@ -113,6 +118,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
         widget.businessParkingService ?? BusinessParkingService();
     _loadCatalog();
     _loadLotCustomers();
+    _loadParkingRates();
     // An empty field opens on the people most recently seen rather than
     // nothing: this is a list to look through, not a search box that only
     // rewards someone who already knows the name.
@@ -127,6 +133,25 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     final typed = value.trim();
     if (typed.length < 2) return _lotCustomers.take(6).toList();
     return matchLotCustomers(_lotCustomers, typed).toList();
+  }
+
+  /// The lot's own price cards. Silent on failure: with none loaded the
+  /// standard rate applies, which is what the server does anyway.
+  Future<void> _loadParkingRates() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.hasBusinessDashboardAccess) return;
+    final businessId = auth.businessId ?? '';
+    if (businessId.isEmpty) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .get();
+      if (!mounted) return;
+      setState(() => _rateChoices = parkingRateChoices(snap.data()));
+    } catch (_) {
+      // The standard rate still applies.
+    }
   }
 
   /// A one-shot read of who this lot has taken cars from before. Silent on
@@ -960,6 +985,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       startDate: _selectedDateTime,
       endDate: _walkUpEndDate,
       paymentMethod: _paymentMethod,
+      parkingRateId: _rateId,
     );
   }
 
@@ -1087,6 +1113,18 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
               color: Colors.grey.shade800,
             ),
           ),
+          if (_rateChoices.length > 1) ...[
+            _RoundedDropdownField(
+              label: AppLocalizations.of(context)!.parkingPriceLabel,
+              value: _rateId,
+              items: [for (final choice in _rateChoices) choice.id],
+              itemLabel: (id) => _rateChoices
+                  .firstWhere((choice) => choice.id == id)
+                  .optionLabel,
+              onChanged: (value) => setState(() => _rateId = value ?? ''),
+            ),
+            const SizedBox(height: 16),
+          ],
           RadioGroup<BusinessParkingPaymentMethod>(
             groupValue: _paymentMethod,
             onChanged: (value) {

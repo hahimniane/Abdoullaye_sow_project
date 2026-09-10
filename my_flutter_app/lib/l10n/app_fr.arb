@@ -3479,5 +3479,6 @@
   "parkingHowDidTheyPay": "Comment ont-ils payé ?",
   "directPaymentSettledExplainer": "Nous ne prenons aucune commission. La voiture est enregistrée et réglée en une fois - action irréversible ici.",
   "parkingRecordedAndPaid": "Enregistré et marqué comme payé.",
-  "parkingRecordedNotSettled": "La voiture a été enregistrée, mais le marquage du paiement a échoué. Marquez le paiement reçu sur la fiche."
+  "parkingRecordedNotSettled": "La voiture a été enregistrée, mais le marquage du paiement a échoué. Marquez le paiement reçu sur la fiche.",
+  "parkingPriceLabel": "Tarif"
 }

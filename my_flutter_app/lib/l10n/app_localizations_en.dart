@@ -8009,4 +8009,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get parkingRecordedNotSettled =>
       'The car was recorded, but marking it paid failed. Mark the payment received on the record.';
+
+  @override
+  String get parkingPriceLabel => 'Price';
 }

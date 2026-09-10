@@ -14243,6 +14243,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The car was recorded, but marking it paid failed. Mark the payment received on the record.'**
   String get parkingRecordedNotSettled;
+
+  /// No description provided for @parkingPriceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Price'**
+  String get parkingPriceLabel;
 }
 
 class _AppLocalizationsDelegate
