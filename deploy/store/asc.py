@@ -5,8 +5,9 @@ No secrets live here. The signing key stays at
 ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8; the key id and issuer id
 are identifiers, not credentials.
 
-    asc.py state                     what the store thinks right now
-    asc.py submit <build> <version>  attach a build to a version and submit
+    asc.py state                          what the store thinks right now
+    asc.py notes <version> <notes.json>   set "What's New" per locale
+    asc.py submit <build> <version>       attach a build to a version and submit
 
 `submit` handles the case this app is usually in: a previous submission is
 still WAITING_FOR_REVIEW. It withdraws that one, retitles the version, attaches
@@ -74,6 +75,26 @@ def state():
               f"release={a['releaseType']}  id={v['id']}")
 
 
+def localizations(version_id):
+    return call("GET", f"/appStoreVersions/{version_id}"
+                       "/appStoreVersionLocalizations")["data"]
+
+
+def set_notes(version_id, notes):
+    """notes: {"en-US": "...", "fr-FR": "..."} - locales absent from the app
+    fall back to the "en-US" text, because a locale left blank blocks review."""
+    default = notes.get("en-US") or next(iter(notes.values()))
+    for loc in localizations(version_id):
+        locale = loc["attributes"]["locale"]
+        text = notes.get(locale, default)
+        call("PATCH", f"/appStoreVersionLocalizations/{loc['id']}",
+             data=json.dumps({"data": {
+                 "type": "appStoreVersionLocalizations",
+                 "id": loc["id"],
+                 "attributes": {"whatsNew": text}}}))
+        print(f"  what's new set for {locale}")
+
+
 def find_build(number):
     for b in builds(limit=20):
         if b["attributes"]["version"] == str(number):
@@ -88,7 +109,17 @@ EDITABLE = {
 WITHDRAWABLE = {"WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE"}
 
 
-def submit(build_number, version_string):
+def notes_cmd(version_string, notes_path):
+    with open(notes_path) as fh:
+        notes = json.load(fh)
+    for v in versions():
+        if v["attributes"]["versionString"] == version_string:
+            set_notes(v["id"], notes)
+            return
+    raise SystemExit(f"version {version_string} not found")
+
+
+def submit(build_number, version_string, notes_path=None):
     build = find_build(build_number)
     if build["attributes"]["processingState"] != "VALID":
         raise SystemExit(
@@ -126,6 +157,10 @@ def submit(build_number, version_string):
             "data": {"type": "appStoreVersions", "id": target["id"],
                      "attributes": {"versionString": version_string}}}))
 
+    if notes_path:
+        with open(notes_path) as fh:
+            set_notes(target["id"], json.load(fh))
+
     print(f"attaching build {build_number}")
     call("PATCH", f"/appStoreVersions/{target['id']}/relationships/build",
          data=json.dumps({"data": {"type": "builds", "id": build["id"]}}))
@@ -143,7 +178,10 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "state"
     if cmd == "state":
         state()
+    elif cmd == "notes":
+        notes_cmd(sys.argv[2], sys.argv[3])
     elif cmd == "submit":
-        submit(sys.argv[2], sys.argv[3])
+        submit(sys.argv[2], sys.argv[3],
+               sys.argv[4] if len(sys.argv) > 4 else None)
     else:
         raise SystemExit(__doc__)

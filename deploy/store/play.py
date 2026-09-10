@@ -5,8 +5,9 @@ Authenticates as the play-publisher service account directly from
 ~/.play-publisher/key.json, so it never disturbs the machine's active gcloud
 account. No secrets live in this file.
 
-    play.py state                 what each track is serving
-    play.py release <aab> <build> upload the bundle and roll it to production
+    play.py state                          what each track is serving
+    play.py release <aab> <build> <name> [notes.json] [fraction]
+                                  upload the bundle and roll it to production
 
 Two traps this script exists to avoid:
   * the tracks PUT can 503 transiently. The edit is committed ONLY if the
@@ -61,7 +62,11 @@ def state():
     sess.delete(f"{API}/edits/{edit}", timeout=60)
 
 
-def release(aab_path, build, version_name, track="production", fraction=None):
+PLAY_LOCALES = {"en-US": "en-US", "fr-FR": "fr-FR"}
+
+
+def release(aab_path, build, version_name, notes_path=None,
+            track="production", fraction=None):
     sess = session()
     edit = new_edit(sess)
     print(f"edit {edit}: uploading {os.path.basename(aab_path)}")
@@ -75,6 +80,14 @@ def release(aab_path, build, version_name, track="production", fraction=None):
         raise SystemExit(f"uploaded code {code} is not the expected build {build}")
 
     rel = {"name": version_name, "versionCodes": [str(code)], "status": "completed"}
+    if notes_path:
+        with open(notes_path) as fh:
+            notes = json.load(fh)
+        default = notes.get("en-US") or next(iter(notes.values()))
+        rel["releaseNotes"] = [
+            {"language": lang, "text": notes.get(key, default)}
+            for key, lang in PLAY_LOCALES.items()
+        ]
     if fraction:
         rel["status"] = "inProgress"
         rel["userFraction"] = float(fraction)
@@ -98,6 +111,7 @@ if __name__ == "__main__":
         state()
     elif cmd == "release":
         release(sys.argv[2], sys.argv[3], sys.argv[4],
-                fraction=sys.argv[5] if len(sys.argv) > 5 else None)
+                notes_path=sys.argv[5] if len(sys.argv) > 5 else None,
+                fraction=sys.argv[6] if len(sys.argv) > 6 else None)
     else:
         raise SystemExit(__doc__)
