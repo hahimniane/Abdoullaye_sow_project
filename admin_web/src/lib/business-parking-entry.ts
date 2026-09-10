@@ -32,6 +32,9 @@ export const BUSINESS_PARKING_RECEIVED_VIA_OPTIONS = [
 ] as const;
 
 export type BusinessParkingEntryDraft = {
+  /** Which of the lot's price cards this stay is quoted on. "" = the lot's
+   *  standard rate, which is what the server reads as "no card chosen". */
+  parkingRateId?: string;
   customerName: string;
   customerPhone: string;
   customerEmail: string;
@@ -56,6 +59,7 @@ export const emptyBusinessParkingEntryDraft: BusinessParkingEntryDraft = {
   startDate: "",
   endDate: "",
   paymentMethod: "direct",
+  parkingRateId: "",
 };
 
 /** Error codes, in the server's own vocabulary so the two never drift. */
@@ -182,8 +186,12 @@ export function businessParkingEntryPayload(
   draft: BusinessParkingEntryDraft,
   businessId: string,
 ) {
+  const rateId = trimmed(draft.parkingRateId, 60);
   return {
     businessId: trimmed(businessId, 180),
+    // Only sent when a card was actually chosen. An empty id means the lot's
+    // standard rate, and the server reads an absent field as exactly that.
+    ...(rateId ? {parkingRateId: rateId} : {}),
     ...businessParkingUpdateChanges(draft),
   };
 }

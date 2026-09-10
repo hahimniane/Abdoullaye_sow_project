@@ -4,6 +4,10 @@ import {
   validateFreightSettings,
   type FreightSettingsDraft,
 } from "./freight-categories.ts";
+import {
+  normalizeParkingRates,
+  type ParkingRate,
+} from "./parking-rates.ts";
 import type { FirestoreRow } from "@/types/admin";
 
 export const BUSINESS_SERVICE_IDS = [
@@ -14,6 +18,7 @@ export const BUSINESS_SERVICE_IDS = [
   "carTransport",
   "carParking",
 ] as const;
+
 
 export type BusinessServiceId = (typeof BUSINESS_SERVICE_IDS)[number];
 
@@ -142,6 +147,8 @@ export type BusinessServiceSettingsDraft = {
   parkingWeeklyRate: string;
   parkingMonthlyRate: string;
   parkingMinimumDays: string;
+  /** Extra named prices this lot can quote, beyond its standard daily rate. */
+  parkingRates: ParkingRate[];
   parkingPickupAvailable: boolean;
   parkingPickupFee: string;
   parkingInstructions: string;
@@ -265,6 +272,7 @@ export function businessServiceSettingsFromRow(
     parkingState: stringValue(business?.parkingState ?? business?.state),
     parkingTotalSpaces: numberText(business?.parkingTotalSpaces),
     parkingBlockedSpaces: numberText(business?.parkingBlockedSpaces),
+    parkingRates: normalizeParkingRates(business?.parkingRates),
     parkingDailyRate: numberText(business?.parkingDailyRate),
     parkingWeeklyRate: numberText(business?.parkingWeeklyRate),
     parkingMonthlyRate: numberText(business?.parkingMonthlyRate),
@@ -584,6 +592,9 @@ export function buildBusinessServiceSettingsPayload(
       0,
       Math.trunc(numberValue(draft.parkingBlockedSpaces)),
     ),
+    // Cards are cleaned on the way out, so a half-typed row never reaches the
+    // pricing: a card with no name or no daily rate simply is not saved.
+    parkingRates: normalizeParkingRates(draft.parkingRates),
     parkingDailyRate: nonNegative(draft.parkingDailyRate),
     parkingWeeklyRate: nonNegative(draft.parkingWeeklyRate),
     parkingMonthlyRate: nonNegative(draft.parkingMonthlyRate),
