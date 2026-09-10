@@ -620,7 +620,7 @@ const emptyParkingDraft: ParkingDraft = {
   startDate: "",
   endDate: "",
   paymentMethod: "direct",
-  status: "active",
+  status: "reserved",
 };
 
 const emptyTransportQuoteDraft: TransportQuoteDraft = {
@@ -4848,7 +4848,13 @@ export function ParkingPanel({
   useEffect(() => {
     if (focusRecordId) setParkingView("cards");
   }, [focusRecordId]);
-  const activeCount = parkedCars.rows.filter((row) => text(row.status, "active") === "active").length;
+  // Counting status === "active" always returned zero: no parking record has
+  // ever had that status. What the header should say is how many cars are
+  // actually on the lot - not cancelled, and not yet departed.
+  const inLotCount = parkedCars.rows.filter(
+    (row) => text(row.status, "reserved") !== "cancelled" &&
+      businessParkingEndLabel(row) !== "Ended",
+  ).length;
 
   function closeForm() {
     setDraft(emptyParkingDraft);
@@ -4869,7 +4875,7 @@ export function ParkingPanel({
       endDate: dateInputValue(row.parkingEndDate),
       paymentMethod:
         text(row.paymentMethod, "direct") === "payment_link" ? "payment_link" : "direct",
-      status: text(row.status, "active"),
+      status: text(row.status, "reserved"),
     });
     setEditErrors([]);
     setMessage("");
@@ -5256,7 +5262,7 @@ export function ParkingPanel({
       <header className="lst-head">
         <div className="lst-head-text">
           <h2>Parked cars</h2>
-          <p>{parkedCars.rows.length === 0 ? "Log cars you're storing and issue receipts to owners." : `${parkedCars.rows.length} record${parkedCars.rows.length === 1 ? "" : "s"} · ${activeCount} active`}</p>
+          <p>{parkedCars.rows.length === 0 ? "Log cars you're storing and issue receipts to owners." : `${parkedCars.rows.length} record${parkedCars.rows.length === 1 ? "" : "s"} · ${inLotCount} in the lot`}</p>
         </div>
         <div className="lst-head-actions">
           <StatusText busy={busy} message={message} />
@@ -5278,7 +5284,14 @@ export function ParkingPanel({
         <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={filter} onChange={(event) => setFilter(event.target.value)}>
           <option value="all">All statuses</option>
           <optgroup label="Parking status">
-            {parkingStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+            {/* "Reserved" is the stored word and covers both a walk-up sitting
+                in the yard and a booking that has not arrived, so the option
+                names both rather than picking one. */}
+            {parkingStatuses.map((status) => (
+              <option key={status} value={status}>
+                {status === "reserved" ? "In the lot or reserved" : statusLabel(status)}
+              </option>
+            ))}
           </optgroup>
           <optgroup label="In the lot">
             <option value="here:in">Still here</option>
@@ -5358,7 +5371,7 @@ export function ParkingPanel({
                   <span className="num"><b>{total > 0 ? formatMoney(total, "USD") : "—"}</b></span>
                   <span>{badge
                     ? <em className={`pk-pill ${tone === "paid" ? "ok" : "warn"}`}>{badge}</em>
-                    : <em className="pk-pill">{text(row.status, "active")}</em>}</span>
+                    : <em className="pk-pill">{parkingStatusLabel(row)}</em>}</span>
                   <span className="pk-acts">
                     <button type="button" className="pk-act" disabled={rowBusy} title={isReceipt ? "Print receipt" : "Print invoice"} aria-label={isReceipt ? "Print receipt" : "Print invoice"} onClick={() => void openParkingDocument(row)}>
                       {rowBusy ? <RefreshCw className="spin" size={13} /> : <Printer size={13} />}
@@ -5392,7 +5405,7 @@ export function ParkingPanel({
       {parkingView === "cards" && (
       <div className="pur-grid">
         {filteredRows.map((row) => {
-          const status = text(row.status, "active");
+          const status = text(row.status, "reserved");
           const businessEntered = isBusinessEnteredParking(row);
           const awaitingDirect = canMarkBusinessParkingPaid(row);
           const rowBusy = paidBusyId === row.id;
@@ -6868,6 +6881,22 @@ function numberString(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   if (typeof value === "string") return value;
   return "";
+}
+
+/**
+ * What a parking record's status should be *called*.
+ *
+ * "Reserved" is the word the booking flow needs: a customer holds a space and
+ * the car has not arrived. A walk-up writes the same value, but the car is
+ * standing in the yard while staff type - so the word reads as though a car
+ * could be recorded without a spot, which cannot happen. Only the label
+ * changes; the stored value is untouched.
+ */
+function parkingStatusLabel(row: FirestoreRow) {
+  const status = text((row as Record<string, unknown>).status, "") || "reserved";
+  if (status !== "reserved") return statusLabel(status);
+  if (!isBusinessEnteredParking(row)) return statusLabel("reserved");
+  return currentLanguage() === "fr" ? "Au parc" : "In the lot";
 }
 
 function statusLabel(value: unknown) {
