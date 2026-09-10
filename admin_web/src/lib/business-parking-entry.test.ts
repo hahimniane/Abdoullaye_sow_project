@@ -876,3 +876,29 @@ test("staff can set only the statuses that are theirs to set", () => {
   const filterable = (panelSource.match(/parkingStatuses\.map/g) || []).length;
   assert.equal(filterable, 1, "only the filter offers the full vocabulary");
 });
+
+// "Reserved" is the booking flow's word: a customer holds a space and the car
+// has not arrived. A walk-up writes the same value with the car standing in
+// the yard, so the label read as though a car could be recorded without a
+// spot — which cannot happen.
+test("a walk-up reads as in the lot, a booking as reserved", () => {
+  const fn = panelSource.slice(panelSource.indexOf("function parkingStatusLabel"));
+  const body = fn.slice(0, fn.indexOf("\n}\n"));
+  assert.match(body, /if \(status !== "reserved"\) return statusLabel\(status\)/);
+  assert.match(body, /if \(!isBusinessEnteredParking\(row\)\) return statusLabel\("reserved"\)/);
+  assert.match(body, /"Au parc" : "In the lot"/);
+  // The stored value is never rewritten — this is a label, not a migration.
+  assert.ok(!/status: "in_the_lot"/.test(panelSource));
+});
+
+// Counting status === "active" always returned zero, because no parking record
+// has ever had that status. The header read "31 records · 0 active".
+test("the header counts cars that are actually in the lot", () => {
+  assert.match(panelSource, /const inLotCount = parkedCars\.rows\.filter\(/);
+  assert.match(panelSource, /businessParkingEndLabel\(row\) !== "Ended"/);
+  assert.match(panelSource, /\$\{inLotCount\} in the lot/);
+  assert.ok(
+    !/text\(row\.status, "active"\)/.test(panelSource),
+    "nothing should default a parking status to a value the server never writes",
+  );
+});
