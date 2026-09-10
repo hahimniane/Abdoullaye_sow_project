@@ -125,6 +125,10 @@ import {
   freightStatusChangeAllowed,
 } from "@/lib/freight-fulfillment";
 import {
+  parkingRateChoices,
+  parkingRateOptionLabel,
+} from "@/lib/parking-rates";
+import {
   BUSINESS_PARKING_ENTRY_MESSAGES,
   BUSINESS_PARKING_RECEIVED_VIA_OPTIONS,
   businessParkingAmountDue,
@@ -4745,6 +4749,7 @@ function awaitingDirectRow(row: FirestoreRow) {
 
 export function ParkingPanel({
   businessId,
+  business = null,
   previewMode = false,
   focusRecordId = "",
 }: PanelProps) {
@@ -4779,6 +4784,10 @@ export function ParkingPanel({
   // A lot with thirty cars in it wants to see thirty cars, not scroll thirty
   // cards. The list is the working view; a card is what you open when you
   // need to act on one.
+  // The prices this lot can quote: its standard rate, plus any card it keeps.
+  // With only the standard rate there is nothing to choose, so the picker
+  // stays out of the way entirely.
+  const rateChoices = useMemo(() => parkingRateChoices(business), [business]);
   const [parkingView, setParkingView] = useState<"list" | "cards">("list");
   // Which card the list sent us to, so opening a row lands on that car
   // rather than at the top of thirty of them.
@@ -5759,6 +5768,22 @@ export function ParkingPanel({
                     <small className="lst-hint">Leave blank for an open-ended stay — bill it through today whenever you like.</small>
                   </label>
                 </div>
+
+                {rateChoices.length > 1 && (
+                  <label className="lst-field wide"><span>Price</span>
+                    <select
+                      value={entryDraft.parkingRateId ?? ""}
+                      onChange={(event) => setEntryDraft((value) => ({...value, parkingRateId: event.target.value}))}
+                    >
+                      {rateChoices.map((choice) => (
+                        <option key={choice.id || "standard"} value={choice.id}>
+                          {parkingRateOptionLabel(choice)}
+                        </option>
+                      ))}
+                    </select>
+                    <small className="lst-hint">The lot&apos;s standard rate unless this car is on a different price.</small>
+                  </label>
+                )}
 
                 <fieldset className="lst-fieldset">
                   <legend>How does this parking get paid?</legend>

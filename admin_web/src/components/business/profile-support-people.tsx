@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { nextParkingRateId } from "@/lib/parking-rates";
 import { httpsCallable } from "firebase/functions";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
@@ -27,6 +28,7 @@ import {
   Save,
   Send,
   Ship,
+  Trash2,
   Truck,
   Upload,
   UserPlus,
@@ -1398,6 +1400,87 @@ export function BusinessServicesPanel({
                       value={draft.parkingDailyRate}
                     />
                   </label>
+                  <div className="lst-field wide pk-rates">
+                    <span>Other prices (optional)</span>
+                    <p className="lst-hint" style={{ margin: "0 0 6px" }}>
+                      A bigger space, a long-stay deal, a rate for a dealer who
+                      brings several cars. Staff pick one when they record a
+                      car; anything without a name and a daily rate is not
+                      saved.
+                    </p>
+                    {draft.parkingRates.map((rate, index) => (
+                      <div className="pk-rate-row" key={rate.id}>
+                        <input
+                          aria-label="Price name"
+                          placeholder="Name (e.g. SUV / oversize)"
+                          value={rate.label}
+                          onChange={(event) => update(
+                            "parkingRates",
+                            draft.parkingRates.map((row, i) => i === index
+                              ? { ...row, label: event.target.value }
+                              : row),
+                          )}
+                        />
+                        <input
+                          aria-label="Daily rate"
+                          inputMode="decimal"
+                          min="0"
+                          placeholder="Per day"
+                          type="number"
+                          value={rate.dailyRate || ""}
+                          onChange={(event) => update(
+                            "parkingRates",
+                            draft.parkingRates.map((row, i) => i === index
+                              ? { ...row, dailyRate: Number(event.target.value) || 0 }
+                              : row),
+                          )}
+                        />
+                        <input
+                          aria-label="Minimum days"
+                          inputMode="numeric"
+                          min="1"
+                          placeholder="Min days"
+                          type="number"
+                          value={rate.minimumDays || ""}
+                          onChange={(event) => update(
+                            "parkingRates",
+                            draft.parkingRates.map((row, i) => i === index
+                              ? { ...row, minimumDays: Math.max(1, Math.trunc(Number(event.target.value) || 1)) }
+                              : row),
+                          )}
+                        />
+                        <button
+                          className="lst-btn ghost"
+                          type="button"
+                          title="Remove this price"
+                          aria-label={`Remove ${rate.label || "this price"}`}
+                          onClick={() => update(
+                            "parkingRates",
+                            draft.parkingRates.filter((_, i) => i !== index),
+                          )}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      className="lst-btn ghost"
+                      type="button"
+                      onClick={() => update("parkingRates", [
+                        ...draft.parkingRates,
+                        {
+                          id: nextParkingRateId(draft.parkingRates),
+                          label: "",
+                          dailyRate: 0,
+                          weeklyRate: 0,
+                          monthlyRate: 0,
+                          minimumDays: 1,
+                        },
+                      ])}
+                    >
+                      <Plus size={14} /> Add a price
+                    </button>
+                  </div>
                   <label className="lst-field">
                     <span>Minimum stay (days)</span>
                     <input

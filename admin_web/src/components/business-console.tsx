@@ -598,6 +598,7 @@ export function BusinessConsole({
             <ParkingPanel
               businessId={businessId}
               businessName={businessName}
+              business={business}
               focusRecordId={notificationFocusId}
               previewMode={previewMode}
             />

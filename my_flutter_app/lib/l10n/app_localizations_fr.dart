@@ -8142,4 +8142,7 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get parkingRecordedNotSettled =>
       'La voiture a été enregistrée, mais le marquage du paiement a échoué. Marquez le paiement reçu sur la fiche.';
+
+  @override
+  String get parkingPriceLabel => 'Tarif';
 }

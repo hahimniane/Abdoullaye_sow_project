@@ -279,6 +279,7 @@ const {
   businessParkingEditPlan,
   PARKING_LINK_STATES,
   parkingPaymentLinkState,
+  parkingRateSelection,
   parkingCheckoutSessionReusable,
   buildBusinessParkingEntryRecord,
   businessParkingPaidUpdate,
@@ -11791,6 +11792,7 @@ exports.createBusinessParkingEntry = onCall(
       let plan;
       let payoutFields;
       let entryBusinessName = "";
+      let entryRate = null;
       await db.runTransaction(async (transaction) => {
         const businessDoc = await transaction.get(businessRef);
         if (!businessDoc.exists) {
@@ -11804,6 +11806,19 @@ exports.createBusinessParkingEntry = onCall(
               "This business is not set up to take parking",
           );
         }
+        // A lot can keep more than one price. The chosen card stands in for
+        // the business's own rates for this stay only; with none chosen the
+        // business prices exactly as it always has. A card the lot does not
+        // have must refuse - falling back would charge a different price
+        // from the one the staff member picked.
+        const selection = parkingRateSelection(business, input.parkingRateId);
+        if (selection.missing) {
+          throw new HttpsError(
+              "failed-precondition",
+              "That parking price no longer exists. Pick another.",
+          );
+        }
+        entryRate = selection.rate;
         const reservations = await transaction.get(
             parkedCarsForAvailability(db, input.businessId),
         );
@@ -11812,7 +11827,7 @@ exports.createBusinessParkingEntry = onCall(
         // quoted off a second, drifting price model.
         const option = parkingOptionFromBusiness({
           businessId: input.businessId,
-          business,
+          business: selection.business,
           reservations: reservations.docs.map((reservation) =>
             reservation.data() || {},
           ),
@@ -11865,6 +11880,12 @@ exports.createBusinessParkingEntry = onCall(
             plan,
             option,
             currency: SHIPMENT_CURRENCY,
+          }),
+          // Which price this stay was quoted on, so a receipt can name it and
+          // a later reader can tell why two cars on the same day differ.
+          ...(entryRate && {
+            parkingRateId: entryRate.id,
+            parkingRateLabel: entryRate.label,
           }),
           parkingDate: FirestoreTimestamp.fromDate(input.startDate),
           // null = open-ended: the car stays until the business closes the

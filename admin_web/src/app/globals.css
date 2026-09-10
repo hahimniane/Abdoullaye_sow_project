@@ -13491,3 +13491,17 @@ button[data-loading="true"]::before {
 
 .pk-act:disabled { cursor: default; opacity: .3; }
 .pk-act.open { color: var(--brand-strong, #0f766e); }
+
+/* A lot's extra price cards. One row per price, narrow fields, because a
+   name and two numbers is the whole of it. */
+.pk-rates { display: flex; flex-direction: column; gap: 6px; }
+
+.pk-rate-row {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(120px, 1fr) 92px 88px 34px;
+}
+
+.pk-rate-row input { min-width: 0; }
+.pk-rate-row .lst-btn { justify-content: center; padding: 6px; }

@@ -75,6 +75,7 @@ class BusinessParkingEntryDraft {
     this.startDate,
     this.endDate,
     this.paymentMethod = BusinessParkingPaymentMethod.direct,
+    this.parkingRateId = '',
   });
 
   final String businessId;
@@ -85,6 +86,10 @@ class BusinessParkingEntryDraft {
   final String carModel;
   final String carYear;
   final String vinNumber;
+
+  /// Which of the lot's price cards this stay is quoted on. Empty means the
+  /// lot's standard rate, which is what the server reads as "no card chosen".
+  final String parkingRateId;
   final DateTime? startDate;
   final DateTime? endDate;
   final BusinessParkingPaymentMethod paymentMethod;
@@ -199,6 +204,10 @@ Map<String, dynamic> businessParkingEntryPayload(
     'startDate': businessParkingMiddayIso(draft.startDate),
     'endDate': businessParkingMiddayIso(draft.endDate),
     'paymentMethod': draft.paymentMethod.wireValue,
+    // Only sent when a card was actually chosen: an absent field is exactly
+    // how the server hears "the lot's standard rate".
+    if (_trimmed(draft.parkingRateId, 60).isNotEmpty)
+      'parkingRateId': _trimmed(draft.parkingRateId, 60),
   };
 }
 
