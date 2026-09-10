@@ -172,6 +172,10 @@ function normalizeBusinessParkingEntry(raw) {
   // already in the lot.
   const vinNumber = text(source.vinNumber, MAX_VIN).toUpperCase();
 
+  // Optional: which of the lot's price cards this stay is quoted on. An
+  // unknown id is refused later, where the business document is in hand.
+  const parkingRateId = text(source.parkingRateId, 60);
+
   const startDate = parseEntryDate(source.startDate);
   const endDate = parseEntryDate(source.endDate);
   if (!startDate) errors.push("start_date_required");
@@ -194,6 +198,7 @@ function normalizeBusinessParkingEntry(raw) {
       carModel,
       carYear,
       vinNumber,
+      parkingRateId,
       startDate,
       endDate,
     },
@@ -580,6 +585,79 @@ function businessParkingEditPlan({entry, changes}) {
   };
 }
 
+
+/**
+ * A lot can charge more than one price - a bigger space, a long-stay deal, a
+ * rate for a dealer who brings six cars at once. Each is a named card of the
+ * same four numbers the business already sets once.
+ *
+ * @param {*} raw The stored parkingRates array.
+ * @return {!Array<!Object>} Clean cards, bad rows dropped.
+ */
+function normalizeParkingRates(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const id = text(entry.id, 60);
+    const label = text(entry.label, 80);
+    const daily = Number(entry.dailyRate);
+    // A card with no name cannot be chosen, and one with no daily rate cannot
+    // price the days a stay is actually billed in.
+    if (!id || !label || !Number.isFinite(daily) || daily <= 0) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const positive = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const minimum = Math.floor(Number(entry.minimumDays));
+    out.push({
+      id,
+      label,
+      dailyRate: daily,
+      weeklyRate: positive(entry.weeklyRate),
+      monthlyRate: positive(entry.monthlyRate),
+      minimumDays: Number.isFinite(minimum) && minimum > 0 ? minimum : 1,
+    });
+  }
+  return out;
+}
+
+/**
+ * The business as the pricing should see it for one stay.
+ *
+ * With no card chosen this is the business unchanged, so a customer booking
+ * and every existing record price exactly as they did before. With a card
+ * chosen, its four numbers stand in for the business's own.
+ *
+ * @param {!Object} business The businesses document.
+ * @param {string} rateId The chosen card, or "".
+ * @return {{business: !Object, rate: ?Object, missing: boolean}} missing is
+ *   true when a card was asked for and the lot does not have it - which must
+ *   refuse, never quietly fall back to a different price.
+ */
+function parkingRateSelection(business, rateId) {
+  const source = business && typeof business === "object" ? business : {};
+  const wanted = text(rateId, 60);
+  if (!wanted) return {business: source, rate: null, missing: false};
+  const rate = normalizeParkingRates(source.parkingRates)
+      .find((card) => card.id === wanted) || null;
+  if (!rate) return {business: source, rate: null, missing: true};
+  return {
+    business: {
+      ...source,
+      parkingDailyRate: rate.dailyRate,
+      parkingWeeklyRate: rate.weeklyRate,
+      parkingMonthlyRate: rate.monthlyRate,
+      parkingMinimumDays: rate.minimumDays,
+    },
+    rate,
+    missing: false,
+  };
+}
+
 module.exports = {
   BUSINESS_PARKING_EDITABLE_FIELDS,
   BUSINESS_PARKING_EDIT_REFUSALS,
@@ -599,4 +677,6 @@ module.exports = {
   directPaymentPayoutFields,
   normalizeBusinessParkingEntry,
   normalizeDirectPaymentMethod,
+  normalizeParkingRates,
+  parkingRateSelection,
 };
