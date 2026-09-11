@@ -166,6 +166,11 @@ class _HomeMenuState extends State<HomeMenu> {
   StreamSubscription<QuerySnapshot>? _transportRequestsSubscription;
   StreamSubscription<QuerySnapshot>? _transportOpportunitiesSubscription;
   bool _parkedLoaded = false;
+
+  /// The lot's capacity, from the business record. Read once when parking is
+  /// in scope; drives the "Spaces" tile, which stays hidden while it is zero
+  /// (unknown) - exactly as the console does.
+  int _parkingTotalSpaces = 0;
   bool _barrelsLoaded = false;
   bool _freightLoaded = false;
   bool _transportLoaded = false;
@@ -195,6 +200,7 @@ class _HomeMenuState extends State<HomeMenu> {
     }
 
     if (auth.hasBusinessPermission(BusinessPermission.parking)) {
+      _loadParkingSpaces(auth.businessId);
       _parkedCarsSubscription =
           scope(
             FirebaseFirestore.instance.collection('parkedCars'),
@@ -342,6 +348,41 @@ class _HomeMenuState extends State<HomeMenu> {
       _transportOpportunitiesLoaded = true;
     }
     _rebuildActivityRecords();
+  }
+
+  /// A one-shot read of the lot's capacity. Silent on failure: the scoreboard
+  /// simply drops its "Spaces" tile, which is also what it does when the field
+  /// was never set.
+  Future<void> _loadParkingSpaces(String? businessId) async {
+    if (businessId == null || businessId.isEmpty) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .get();
+      if (!mounted) return;
+      final spaces =
+          num.tryParse('${snap.data()?['parkingTotalSpaces'] ?? ''}') ?? 0;
+      setState(() => _parkingTotalSpaces = spaces > 0 ? spaces.round() : 0);
+    } catch (_) {
+      // No capacity to show; the rest of the scoreboard is unaffected.
+    }
+  }
+
+  /// The scoreboard over the parked cars currently in view, or null when
+  /// parking is not the selected service or there is nothing to total. It
+  /// reads the SAME filtered records the feed shows, so a filter re-totals the
+  /// numbers - mirroring the console.
+  BusinessParkingTotals? get _parkingTotals {
+    if (_selectedCategory != ServiceCategory.parking) return null;
+    final rows = <Map<String, dynamic>>[
+      for (final record in _filteredRecords)
+        if (record.category == ServiceCategory.parking &&
+            record.payload is ParkedCar)
+          (record.payload as ParkedCar).paymentFields,
+    ];
+    if (rows.isEmpty) return null;
+    return businessParkingTotals(rows, spacesTotal: _parkingTotalSpaces);
   }
 
   void _rebuildActivityRecords() {
@@ -594,6 +635,7 @@ class _HomeMenuState extends State<HomeMenu> {
                       _parkedTo = to;
                     });
                   },
+                  parkingTotals: _parkingTotals,
                 ),
               ],
             ),
@@ -1178,6 +1220,7 @@ class _ActivitySection extends StatelessWidget {
     required this.parkedFrom,
     required this.parkedTo,
     required this.onParkedRangeChanged,
+    required this.parkingTotals,
   });
 
   final AppLocalizations l10n;
@@ -1198,6 +1241,11 @@ class _ActivitySection extends StatelessWidget {
   final DateTime? parkedFrom;
   final DateTime? parkedTo;
   final void Function(DateTime? from, DateTime? to) onParkedRangeChanged;
+
+  /// The scoreboard over the parked cars in view, or null when there is
+  /// nothing to total. Re-computed as filters narrow the feed, so the numbers
+  /// always describe what the owner is looking at.
+  final BusinessParkingTotals? parkingTotals;
 
   /// Picks one end of the window.
   ///
@@ -1284,6 +1332,13 @@ class _ActivitySection extends StatelessWidget {
         // question is "who still owes me", and scrolling a mixed activity
         // list for amber badges was the only way to answer it.
         if (selectedCategory == ServiceCategory.parking) ...[
+          // The lot's spreadsheet kept totals in the margin - at the lot,
+          // left, collected, owed. This is the live version, re-totalling to
+          // whatever the filters below leave in view, the same as the console.
+          if (parkingTotals != null) ...[
+            const SizedBox(height: 12),
+            _ParkingScoreboard(l10n: l10n, totals: parkingTotals!),
+          ],
           // Tracking code, owner, car, VIN - the same fields the console
           // searches, in the same order, so the same query finds the same car
           // on both.
@@ -1537,6 +1592,100 @@ class _ActivitySection extends StatelessWidget {
             }
             return card;
           }),
+      ],
+    );
+  }
+}
+
+/// The lot's margin totals, made live. Cars in the lot and departed as counts;
+/// money collected and still owed as amounts; capacity when the lot has set
+/// it. The whole thing re-totals to whatever the filters below leave in view,
+/// the same numbers the console shows over its table.
+class _ParkingScoreboard extends StatelessWidget {
+  const _ParkingScoreboard({required this.l10n, required this.totals});
+
+  final AppLocalizations l10n;
+  final BusinessParkingTotals totals;
+
+  @override
+  Widget build(BuildContext context) {
+    final money = NumberFormat.simpleCurrency(
+      locale: Localizations.localeOf(context).toString(),
+      name: 'USD',
+    );
+    final stats = <Widget>[
+      _ParkingStat(label: l10n.parkingScoreInLot, value: '${totals.inLot}'),
+      _ParkingStat(label: l10n.parkingScoreLeft, value: '${totals.left}'),
+      _ParkingStat(
+        label: l10n.parkingScoreCollected,
+        value: money.format(totals.collected),
+      ),
+      _ParkingStat(
+        label: l10n.parkingScoreOwed,
+        value: money.format(totals.owed),
+        emphasis: totals.owed > 0,
+      ),
+      if (totals.spacesTotal > 0)
+        _ParkingStat(
+          label: l10n.parkingScoreSpaces,
+          value: '${totals.spacesUsed} / ${totals.spacesTotal}',
+        ),
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Wrap(
+        spacing: 22,
+        runSpacing: 12,
+        children: stats,
+      ),
+    );
+  }
+}
+
+class _ParkingStat extends StatelessWidget {
+  const _ParkingStat({
+    required this.label,
+    required this.value,
+    this.emphasis = false,
+  });
+
+  final String label;
+  final String value;
+
+  /// Owed is drawn in the warning colour when there is anything to chase, so
+  /// the one number a lot acts on stands out - like the console's amber.
+  final bool emphasis;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: AppColors.muted,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: TextStyle(
+            color: emphasis ? AppColors.warn : AppColors.ink,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ],
     );
   }

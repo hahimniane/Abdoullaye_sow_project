@@ -7991,6 +7991,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Requests to quote, and jobs to move.';
 
   @override
+  String get parkingScoreInLot => 'In the lot';
+
+  @override
+  String get parkingScoreLeft => 'Left';
+
+  @override
+  String get parkingScoreCollected => 'Collected';
+
+  @override
+  String get parkingScoreOwed => 'Owed';
+
+  @override
+  String get parkingScoreSpaces => 'Spaces';
+
+  @override
   String get parkingNotPaidYet => 'They have not paid yet';
 
   @override

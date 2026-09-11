@@ -8124,6 +8124,21 @@ class AppLocalizationsFr extends AppLocalizations {
       'Demandes à chiffrer et missions à livrer.';
 
   @override
+  String get parkingScoreInLot => 'Au parc';
+
+  @override
+  String get parkingScoreLeft => 'Partis';
+
+  @override
+  String get parkingScoreCollected => 'Encaissé';
+
+  @override
+  String get parkingScoreOwed => 'Dû';
+
+  @override
+  String get parkingScoreSpaces => 'Places';
+
+  @override
   String get parkingNotPaidYet => 'Ils n\'ont pas encore payé';
 
   @override

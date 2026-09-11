@@ -14208,6 +14208,36 @@ abstract class AppLocalizations {
   /// **'Requests to quote, and jobs to move.'**
   String get businessTransportRowSubtitle;
 
+  /// No description provided for @parkingScoreInLot.
+  ///
+  /// In en, this message translates to:
+  /// **'In the lot'**
+  String get parkingScoreInLot;
+
+  /// No description provided for @parkingScoreLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get parkingScoreLeft;
+
+  /// No description provided for @parkingScoreCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get parkingScoreCollected;
+
+  /// No description provided for @parkingScoreOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed'**
+  String get parkingScoreOwed;
+
+  /// No description provided for @parkingScoreSpaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Spaces'**
+  String get parkingScoreSpaces;
+
   /// No description provided for @parkingNotPaidYet.
   ///
   /// In en, this message translates to:

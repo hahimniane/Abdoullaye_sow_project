@@ -928,6 +928,111 @@ double businessParkingAmountDue(Map<String, dynamic> row) {
   return (dollars ?? 0).toDouble();
 }
 
+/// How many days a stay spans, whole days, in UTC - the same arithmetic as
+/// the console's `businessParkingStayDays`. A closed stay counts start to
+/// leave date; an open-ended one counts start to [now]. Never below the
+/// record's minimum (default one day), so a same-day walk-up is one day, not
+/// zero.
+int businessParkingStayDays(Map<String, dynamic> row, {DateTime? now}) {
+  final start = _toDateOrNull(row['parkingDate']);
+  if (start == null) return 0;
+  final end = _toDateOrNull(row['parkingEndDate']) ?? (now ?? DateTime.now());
+  final startUtc = start.toUtc();
+  final endUtc = end.toUtc();
+  final startDay = DateTime.utc(startUtc.year, startUtc.month, startUtc.day);
+  final endDay = DateTime.utc(endUtc.year, endUtc.month, endUtc.day);
+  final days = endDay.difference(startDay).inDays;
+  final minimumRaw = num.tryParse(_trimmed(row['minimumDays'], 20)) ?? 0;
+  final minimum = minimumRaw > 0 ? minimumRaw.round() : 1;
+  return days > minimum ? days : minimum;
+}
+
+/// What a stay has run up so far, in dollars. A stay with a leave date was
+/// priced for its whole range when it was recorded, so its accrual is just
+/// that recorded total. Only an open-ended stay grows day by day at its daily
+/// rate. Mirrors the console's `businessParkingAccrued`.
+double businessParkingAccrued(Map<String, dynamic> row, {DateTime? now}) {
+  final openEnded = _toDateOrNull(row['parkingEndDate']) == null;
+  if (!openEnded) return businessParkingAmountDue(row);
+  final daily = num.tryParse(_trimmed(row['dailyRate'], 20)) ?? 0;
+  if (daily <= 0) return 0;
+  return businessParkingStayDays(row, now: now) * daily.toDouble();
+}
+
+/// What the lot is still owed on a stay, floored at zero. Accrued minus what
+/// has been paid (part payments included); a cancelled record owes nothing.
+/// Mirrors the console's `businessParkingBalance`.
+double businessParkingBalance(Map<String, dynamic> row, {DateTime? now}) {
+  if (_trimmed(row['status'], 40) == 'cancelled') return 0;
+  final owed = businessParkingAccrued(row, now: now) -
+      businessParkingAmountPaid(row);
+  return owed > 0 ? (owed * 100).round() / 100 : 0;
+}
+
+/// The scoreboard over a set of parking rows - the live version of the totals
+/// the lot's own spreadsheet kept in the margin, computed from the records
+/// rather than from a formula that can rot. Mirrors the console's
+/// `ParkingTotals` / `businessParkingTotals`.
+class BusinessParkingTotals {
+  const BusinessParkingTotals({
+    required this.inLot,
+    required this.left,
+    required this.collected,
+    required this.owed,
+    required this.spacesTotal,
+    required this.spacesUsed,
+  });
+
+  /// Cars on the lot now: not cancelled and not yet departed.
+  final int inLot;
+
+  /// Cars whose leave date has passed.
+  final int left;
+
+  /// Money actually taken in, in dollars.
+  final double collected;
+
+  /// Money still owed across the rows, in dollars.
+  final double owed;
+
+  /// The lot's capacity, from the business record (0 when unknown).
+  final int spacesTotal;
+
+  /// Spaces in use - the same count as [inLot].
+  final int spacesUsed;
+}
+
+/// Totals over [rows], re-computed from the records in view so a filter
+/// re-totals to what the owner is looking at. [spacesTotal] comes from the
+/// business record, not the rows.
+BusinessParkingTotals businessParkingTotals(
+  List<Map<String, dynamic>> rows, {
+  int spacesTotal = 0,
+  DateTime? now,
+}) {
+  var inLot = 0;
+  var left = 0;
+  var collected = 0.0;
+  var owed = 0.0;
+  for (final row in rows) {
+    final cancelled = _trimmed(row['status'], 40) == 'cancelled';
+    final ended =
+        businessParkingEndLabel(row, now: now) == BusinessParkingEndLabel.ended;
+    if (!cancelled && !ended) inLot += 1;
+    if (ended) left += 1;
+    collected += businessParkingAmountPaid(row);
+    owed += businessParkingBalance(row, now: now);
+  }
+  return BusinessParkingTotals(
+    inLot: inLot,
+    left: left,
+    collected: (collected * 100).round() / 100,
+    owed: (owed * 100).round() / 100,
+    spacesTotal: spacesTotal > 0 ? spacesTotal : 0,
+    spacesUsed: inLot,
+  );
+}
+
 /// The callables, behind an injectable [FirebaseFunctions] so widget tests
 /// can drive the screens without a network - the same shape
 /// `FirebaseParkingService` already uses.
