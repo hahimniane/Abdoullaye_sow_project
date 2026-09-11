@@ -754,7 +754,8 @@ test("cash at the desk can be recorded as already paid", () => {
   // The follow-up question only exists under the direct method.
   assert.match(panelSource, /entryDraft\.paymentMethod === "direct" && \(/);
   assert.match(panelSource, /They have not paid yet/);
-  assert.match(panelSource, /They have already paid/);
+  assert.match(panelSource, /They paid part of it/);
+  assert.match(panelSource, /They have already paid in full/);
   assert.match(panelSource, /How did they pay\?/);
   // And it offers the same methods the "payment received" button does, so a
   // walk-up settled at the desk is reconciled the same way as one settled an
@@ -764,7 +765,7 @@ test("cash at the desk can be recorded as already paid", () => {
   // Settling reuses the shared callable rather than inventing a second path.
   const submit = panelSource.slice(panelSource.indexOf("async function submitEntry"));
   const body = submit.slice(0, submit.indexOf("\n  }"));
-  assert.match(body, /entryDraft\.paymentMethod === "direct" && entryAlreadyPaid/);
+  assert.match(body, /entryDraft\.paymentMethod === "direct" && entryPaid === "full"/);
   assert.match(body, /"markBusinessParkingPaid"/);
   // A failed settle must leave the car recorded and still owed, never
   // silently paid.
@@ -776,7 +777,30 @@ test("cash at the desk can be recorded as already paid", () => {
 
   // The next car is a different car: the flag must not carry over.
   const close = panelSource.slice(panelSource.indexOf("function closeEntry"));
-  assert.match(close.slice(0, close.indexOf("\n  }")), /setEntryAlreadyPaid\(false\)/);
+  assert.match(close.slice(0, close.indexOf("\n  }")), /setEntryPaid\("later"\)/);
+});
+
+// A walk-up can be part-paid at the desk too: days or a dollar amount taken
+// now, the rest still owed. It rides the same partial-payment callable the
+// row's control uses, and only after the car exists.
+test("the record form can take a part payment at the desk", () => {
+  assert.match(panelSource, /entryPaid === "part"/);
+  // The amount is a days-or-dollars choice, like the row control.
+  assert.match(panelSource, /How much did they pay\?/);
+  assert.match(panelSource, /setEntryPartMode/);
+  assert.match(panelSource, /setEntryPartValue/);
+
+  const submit = panelSource.slice(panelSource.indexOf("async function submitEntry"));
+  const body = submit.slice(0, submit.indexOf("\n  }"));
+  // Guarded before the record exists, so an invalid part payment never leaves
+  // an un-settled car behind.
+  assert.match(body, /entryPaid === "part"/);
+  assert.match(body, /"recordBusinessParkingPartialPayment"/);
+  assert.ok(
+    body.indexOf("createBusinessParkingEntry") <
+      body.indexOf("recordBusinessParkingPartialPayment"),
+    "the car is recorded before the part payment is taken",
+  );
 });
 
 // The card's own tiles stack their label above their value like every other
@@ -980,7 +1004,8 @@ test("the record form asks who received an already-paid walk-up", () => {
   // The gap: settling at record time never captured the staff member.
   const entry = panelSource.slice(panelSource.indexOf("How does this parking get paid?"));
   const block = entry.slice(0, entry.indexOf("</fieldset>"));
-  assert.match(block, /entryAlreadyPaid && \(/);
+  // Any settled walk-up - part or full - asks who took the money.
+  assert.match(block, /entryPaid !== "later" && \(/);
   assert.match(block, /<span>Received by<\/span>/);
   assert.match(block, /setEntryReceivedBy/);
   // and it is threaded into the settle call

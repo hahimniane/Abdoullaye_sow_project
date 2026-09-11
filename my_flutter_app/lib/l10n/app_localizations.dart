@@ -14220,6 +14220,42 @@ abstract class AppLocalizations {
   /// **'They have already paid'**
   String get parkingAlreadyPaid;
 
+  /// No description provided for @parkingPaidPartOfIt.
+  ///
+  /// In en, this message translates to:
+  /// **'They paid part of it'**
+  String get parkingPaidPartOfIt;
+
+  /// No description provided for @parkingAlreadyPaidInFull.
+  ///
+  /// In en, this message translates to:
+  /// **'They have already paid in full'**
+  String get parkingAlreadyPaidInFull;
+
+  /// No description provided for @parkingHowMuchDidTheyPay.
+  ///
+  /// In en, this message translates to:
+  /// **'How much did they pay?'**
+  String get parkingHowMuchDidTheyPay;
+
+  /// No description provided for @parkingSayWhoReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Say who took the money so it can be reconciled.'**
+  String get parkingSayWhoReceived;
+
+  /// No description provided for @parkingEnterDaysPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter how many days they paid for.'**
+  String get parkingEnterDaysPaid;
+
+  /// No description provided for @parkingEnterAmountPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter how much they paid.'**
+  String get parkingEnterAmountPaid;
+
   /// No description provided for @parkingHowDidTheyPay.
   ///
   /// In en, this message translates to:
@@ -14232,17 +14268,35 @@ abstract class AppLocalizations {
   /// **'We take no cut. The car is recorded and settled in one go - this cannot be undone here.'**
   String get directPaymentSettledExplainer;
 
+  /// No description provided for @directPaymentPartPaidExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'We take no cut. The car is recorded, the part payment is taken, and the rest stays owed.'**
+  String get directPaymentPartPaidExplainer;
+
   /// No description provided for @parkingRecordedAndPaid.
   ///
   /// In en, this message translates to:
   /// **'Recorded, and marked as paid.'**
   String get parkingRecordedAndPaid;
 
+  /// No description provided for @parkingRecordedAndPartPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded, and the part payment was taken.'**
+  String get parkingRecordedAndPartPaid;
+
   /// No description provided for @parkingRecordedNotSettled.
   ///
   /// In en, this message translates to:
   /// **'The car was recorded, but marking it paid failed. Mark the payment received on the record.'**
   String get parkingRecordedNotSettled;
+
+  /// No description provided for @parkingRecordedNotPartPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'The car was recorded, but the part payment failed. Record it on the car.'**
+  String get parkingRecordedNotPartPaid;
 
   /// No description provided for @parkingPriceLabel.
   ///

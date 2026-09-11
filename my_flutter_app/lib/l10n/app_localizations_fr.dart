@@ -8130,6 +8130,25 @@ class AppLocalizationsFr extends AppLocalizations {
   String get parkingAlreadyPaid => 'Ils ont déjà payé';
 
   @override
+  String get parkingPaidPartOfIt => 'Ils ont payé une partie';
+
+  @override
+  String get parkingAlreadyPaidInFull => 'Ils ont déjà tout payé';
+
+  @override
+  String get parkingHowMuchDidTheyPay => 'Combien ont-ils payé ?';
+
+  @override
+  String get parkingSayWhoReceived =>
+      'Indiquez qui a reçu l\'argent pour le rapprochement.';
+
+  @override
+  String get parkingEnterDaysPaid => 'Saisissez le nombre de jours payés.';
+
+  @override
+  String get parkingEnterAmountPaid => 'Saisissez le montant payé.';
+
+  @override
   String get parkingHowDidTheyPay => 'Comment ont-ils payé ?';
 
   @override
@@ -8137,11 +8156,23 @@ class AppLocalizationsFr extends AppLocalizations {
       'Nous ne prenons aucune commission. La voiture est enregistrée et réglée en une fois - action irréversible ici.';
 
   @override
+  String get directPaymentPartPaidExplainer =>
+      'Nous ne prenons aucune commission. La voiture est enregistrée, le paiement partiel est encaissé et le reste demeure dû.';
+
+  @override
   String get parkingRecordedAndPaid => 'Enregistré et marqué comme payé.';
+
+  @override
+  String get parkingRecordedAndPartPaid =>
+      'Enregistré, et le paiement partiel a été encaissé.';
 
   @override
   String get parkingRecordedNotSettled =>
       'La voiture a été enregistrée, mais le marquage du paiement a échoué. Marquez le paiement reçu sur la fiche.';
+
+  @override
+  String get parkingRecordedNotPartPaid =>
+      'La voiture a été enregistrée, mais le paiement partiel a échoué. Enregistrez-le sur la fiche.';
 
   @override
   String get parkingPriceLabel => 'Tarif';

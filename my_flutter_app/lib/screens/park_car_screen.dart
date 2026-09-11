@@ -102,9 +102,12 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   BusinessParkingPaymentMethod _paymentMethod =
       BusinessParkingPaymentMethod.direct;
   // "Pays us directly" answers how, not whether. A lot takes the cash at the
-  // desk as often as it waits for it, and recording both as awaiting left
-  // money already in the till showing as outstanding.
-  bool _alreadyPaid = false;
+  // desk as often as it waits for it, and recording every walk-up as awaiting
+  // left money already in the till showing as outstanding. A desk can also
+  // take part of it now — days or a dollar amount — with the rest still owed.
+  String _paidChoice = 'later'; // 'later' | 'part' | 'full'
+  bool _partByDays = true;
+  final _partValueController = TextEditingController();
   String _receivedByStaffId = '';
   // The prices this lot can quote. With only its standard rate there is
   // nothing to choose, and the picker stays out of the way entirely.
@@ -282,6 +285,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     _parkingCityController.dispose();
     _vinController.dispose();
     _emailController.dispose();
+    _partValueController.dispose();
     super.dispose();
   }
 
@@ -1081,6 +1085,25 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       return;
     }
 
+    // A part payment is settled right after the car is recorded, so catch a
+    // missing amount or missing staff here - before the record exists - rather
+    // than record the car and then fail to take the money.
+    final num? partValue = num.tryParse(_partValueController.text.trim());
+    if (_paymentMethod == BusinessParkingPaymentMethod.direct &&
+        _paidChoice == 'part') {
+      if (partValue == null || partValue <= 0) {
+        showErrorSnackBar(
+          context,
+          _partByDays ? l10n.parkingEnterDaysPaid : l10n.parkingEnterAmountPaid,
+        );
+        return;
+      }
+      if (_receivedByStaffId.isEmpty) {
+        showErrorSnackBar(context, l10n.parkingSayWhoReceived);
+        return;
+      }
+    }
+
     setState(() => _isRecordingEntry = true);
     try {
       final result = await _businessParkingService.createEntry(draft);
@@ -1092,7 +1115,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       // is still recorded and still owed - the safe way round - and staff can
       // settle it from the record.
       if (_paymentMethod == BusinessParkingPaymentMethod.direct &&
-          _alreadyPaid &&
+          _paidChoice == 'full' &&
           result.entryId.isNotEmpty) {
         try {
           await _businessParkingService.markPaid(
@@ -1105,6 +1128,31 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
         } catch (_) {
           if (!mounted) return;
           showErrorSnackBar(context, l10n.parkingRecordedNotSettled);
+        }
+        return;
+      }
+      if (_paymentMethod == BusinessParkingPaymentMethod.direct &&
+          _paidChoice == 'part' &&
+          result.entryId.isNotEmpty) {
+        try {
+          await _businessParkingService.recordPartialPayment(
+            entryId: result.entryId,
+            receivedByStaffId: _receivedByStaffId,
+            receivedVia: _receivedVia,
+            days: _partByDays ? partValue!.round() : null,
+            amountCents: _partByDays ? null : (partValue! * 100).round(),
+          );
+          if (!mounted) return;
+          showSuccessSnackBar(context, l10n.parkingRecordedAndPartPaid);
+        } catch (error) {
+          if (!mounted) return;
+          showErrorSnackBar(
+            context,
+            error is FirebaseFunctionsException &&
+                    (error.message ?? '').isNotEmpty
+                ? error.message!
+                : l10n.parkingRecordedNotPartPaid,
+          );
         }
         return;
       }
@@ -1233,16 +1281,16 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  RadioGroup<bool>(
-                    groupValue: _alreadyPaid,
+                  RadioGroup<String>(
+                    groupValue: _paidChoice,
                     onChanged: (value) {
                       if (value == null) return;
-                      setState(() => _alreadyPaid = value);
+                      setState(() => _paidChoice = value);
                     },
                     child: Column(
                       children: [
-                        RadioListTile<bool>(
-                          value: false,
+                        RadioListTile<String>(
+                          value: 'later',
                           contentPadding: EdgeInsets.zero,
                           dense: true,
                           title: Text(
@@ -1250,19 +1298,79 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                             style: const TextStyle(fontSize: 14),
                           ),
                         ),
-                        RadioListTile<bool>(
-                          value: true,
+                        RadioListTile<String>(
+                          value: 'part',
                           contentPadding: EdgeInsets.zero,
                           dense: true,
                           title: Text(
-                            l10n.parkingAlreadyPaid,
+                            l10n.parkingPaidPartOfIt,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        RadioListTile<String>(
+                          value: 'full',
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(
+                            l10n.parkingAlreadyPaidInFull,
                             style: const TextStyle(fontSize: 14),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  if (_alreadyPaid) ...[
+                  if (_paidChoice == 'part') ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.parkingHowMuchDidTheyPay,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SegmentedButton<bool>(
+                                  segments: [
+                                    ButtonSegment<bool>(
+                                      value: true,
+                                      label: Text(l10n.parkingDays),
+                                    ),
+                                    ButtonSegment<bool>(
+                                      value: false,
+                                      label: Text(l10n.parkingAmount),
+                                    ),
+                                  ],
+                                  selected: {_partByDays},
+                                  onSelectionChanged: (set) =>
+                                      setState(() => _partByDays = set.first),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _partValueController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: _partByDays
+                                  ? l10n.parkingDaysPaid
+                                  : l10n.parkingAmountPaid,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_paidChoice != 'later') ...[
                     Padding(
                       padding: const EdgeInsets.only(top: 4, bottom: 4),
                       child: _RoundedDropdownField(
@@ -1309,9 +1417,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
             padding: const EdgeInsets.only(bottom: 10),
             child: Text(
               _paymentMethod == BusinessParkingPaymentMethod.direct
-                  ? (_alreadyPaid
+                  ? (_paidChoice == 'full'
                       ? l10n.directPaymentSettledExplainer
-                      : l10n.directPaymentExplainer)
+                      : _paidChoice == 'part'
+                          ? l10n.directPaymentPartPaidExplainer
+                          : l10n.directPaymentExplainer)
                   : l10n.paymentLinkExplainer,
               style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
             ),
