@@ -3,12 +3,14 @@ import 'package:my_flutter_app/services/lot_customers.dart';
 
 void main() {
   final rows = [
+    // A legacy row may still carry a `cars` array on disk; it is ignored - a
+    // customer is a name and a phone number.
     LotCustomer.fromMap('1', {
       'name': 'Amadou Ba', 'phone': '2015550100', 'email': '',
       'cars': [{'vin': '1hgcm8', 'make': 'Honda', 'model': 'Accord', 'year': '2003'}],
       'lastSeenAt': null,
     }),
-    LotCustomer.fromMap('2', {'name': 'Fatou Diallo', 'phone': '9175550123', 'email': 'fatou@x.co', 'cars': []}),
+    LotCustomer.fromMap('2', {'name': 'Fatou Diallo', 'phone': '9175550123', 'email': 'fatou@x.co'}),
     LotCustomer.fromMap('3', {'name': 'Ibrahima Amadou', 'phone': '', 'email': ''}),
   ];
 
@@ -17,14 +19,12 @@ void main() {
     expect(matchLotCustomers(rows, 'am').map((r) => r.name), ['Amadou Ba', 'Ibrahima Amadou']);
   });
 
-  test('phone digits, email and a car VIN find the customer too', () {
+  test('phone digits and email find the customer; a car never does', () {
     expect(matchLotCustomers(rows, '917-555').first.name, 'Fatou Diallo');
     expect(matchLotCustomers(rows, 'fatou@').first.name, 'Fatou Diallo');
-    expect(matchLotCustomers(rows, '1HGCM').first.name, 'Amadou Ba');
-    expect(rows[0].cars.first.vin, '1HGCM8');
-    expect(rows[0].cars.first.label, '2003 Honda Accord · 1HGCM8');
+    // A car's VIN is not part of a customer any more, so it finds no one.
+    expect(matchLotCustomers(rows, '1HGCM'), isEmpty);
   });
-
 
   group('the lot own people can be the customer', () {
     test('a staff row becomes someone the picker can offer', () {
@@ -37,7 +37,6 @@ void main() {
       expect(staff!.name, 'Mariama Bah');
       expect(staff.email, 'm.bah@example.com');
       expect(staff.staff, isTrue);
-      expect(staff.cars, isEmpty);
 
       // Nothing to show, nothing to offer.
       expect(LotCustomer.fromStaff('u2', {'phone': '917-555-0101'}), isNull);
@@ -50,9 +49,6 @@ void main() {
         'name': 'Mariama Bah',
         'phone': '(917) 555-0100',
         'email': 'm.bah@example.com',
-        'cars': [
-          {'vin': '1HGCM82633A004352', 'make': 'Honda', 'model': 'Accord', 'year': '2019'},
-        ],
       });
       final asStaff = LotCustomer.fromStaff('u1', {
         'fullName': 'Mariama Bah',
@@ -66,8 +62,7 @@ void main() {
 
       final merged = lotCustomerSources([saved], [asStaff, other]);
       expect(merged.length, 2, reason: 'one phone number is one person');
-      // The remembered record wins: it carries the cars.
-      expect(merged.first.cars.length, 1);
+      // The remembered record wins the tie: it carries a real last seen.
       expect(merged.first.staff, isFalse);
       expect(merged.last.name, 'Sekou Camara');
 
@@ -79,7 +74,7 @@ void main() {
       expect(
         lotCustomerSources(const [], [
           const LotCustomer(
-            id: 'x', name: '', phone: '', email: '', cars: [], lastSeenMs: 0,
+            id: 'x', name: '', phone: '', email: '', lastSeenMs: 0,
           ),
         ]),
         isEmpty,

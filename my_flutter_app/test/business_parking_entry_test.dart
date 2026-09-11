@@ -574,31 +574,29 @@ void main() {
       expect(screen, contains(r"'${customer.name} · Staff'"));
     });
 
-    test('picking one fills the contact details it knows', () {
+    test('picking one fills the name and phone it knows, and no car', () {
       final apply = screen.indexOf('void _applyLotCustomer(');
       expect(apply, greaterThan(-1));
       final body = screen.substring(apply, screen.indexOf('\n  }', apply));
       expect(body, contains('_nameController.text = customer.name'));
       expect(body, contains('_phoneController.text = customer.phone'));
-      expect(body, contains('_emailController.text = customer.email'));
+      // A customer is a name and a phone number - no car is stored against
+      // them, and none is filled from them.
+      expect(body, isNot(contains('.cars')));
       // Blank remembered fields must not wipe what is already typed.
       expect(body, contains('if (customer.phone.isNotEmpty)'));
-      expect(body, contains('if (customer.email.isNotEmpty)'));
     });
 
-    test('their car comes too when there is exactly one of them', () {
-      expect(screen, contains('if (customer.cars.length == 1)'));
-      expect(screen, contains('_applyLotCustomerCar('));
-      // Make/model/year are catalog pickers here, so a remembered car goes
-      // through the same matcher a decode uses instead of being forced into
-      // options the catalog may not have.
-      final applyCar = screen.indexOf('void _applyLotCustomerCar(');
-      final body = screen.substring(
-        applyCar,
-        screen.indexOf('\n  }', applyCar),
-      );
-      expect(body, contains('matchDecodedVehicleToCatalog('));
-      expect(body, contains('_vinController.text = car.vin'));
+    test('the vehicle comes from the VIN, not the person', () {
+      // Typing a full VIN decodes make, model and year onto the record - the
+      // car belongs to the parking entry, filled from its VIN.
+      expect(screen, contains('void _onVinChanged('));
+      expect(screen, contains('onChanged: _onVinChanged'));
+      final on = screen.indexOf('void _onVinChanged(');
+      final body = screen.substring(on, screen.indexOf('\n  }', on));
+      expect(body, contains('vin.length == 17'));
+      expect(body, contains('isValidVin(vin)'));
+      expect(body, contains('_decodeCurrentVin('));
     });
 
     test('a customer parking their own car never sees the lot memory', () {

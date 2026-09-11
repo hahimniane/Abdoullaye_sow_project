@@ -98,13 +98,11 @@ import {
   type LotExpenseEntryDraft,
 } from "@/lib/lot-ledger";
 import {
-  lotCustomerCarLabel,
   lotCustomerFromStaffRow,
   lotCustomerSources,
   lotCustomerFromRow,
   matchLotCustomers,
   type LotCustomer,
-  type LotCustomerCar,
 } from "@/lib/lot-customers";
 import {
   contentsFromRecord,
@@ -4838,6 +4836,12 @@ export function ParkingPanel({
   const [entryReceivedBy, setEntryReceivedBy] = useState("");
   const [entryCustomerMenuOpen, setEntryCustomerMenuOpen] = useState(false);
   const [entryCustomerPick, setEntryCustomerPick] = useState<LotCustomer | null>(null);
+  // VIN decode for the record form: a full VIN fills make/model/year from the
+  // public NHTSA database, matched to the lot's catalog. `entryVinNote` reports
+  // the outcome; `lastEntryVin` stops it re-firing for the same VIN.
+  const [entryVinBusy, setEntryVinBusy] = useState(false);
+  const [entryVinNote, setEntryVinNote] = useState("");
+  const lastEntryVinRef = useRef("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [receivedVia, setReceivedVia] = useState<Record<string, string>>({});
   const [paidBusyId, setPaidBusyId] = useState("");
@@ -5084,19 +5088,9 @@ export function ParkingPanel({
     return matchLotCustomers(entryKnownCustomers, typed);
   }, [entryKnownCustomers, entryDraft.customerName, entryCustomerMenuOpen, entryCustomerPick]);
 
-  function applyEntryCustomerCar(car: LotCustomerCar) {
-    setEntryDraft((value) => ({
-      ...value,
-      vinNumber: car.vin || value.vinNumber,
-      carMake: car.make || value.carMake,
-      carModel: car.model || value.carModel,
-      carYear: car.year || value.carYear,
-    }));
-  }
-
-  // Picking a regular fills their contact details, and their car too when
-  // there is only one. Everything stays editable: the lot's memory is a
-  // suggestion, not a record that outranks the person at the desk.
+  // Picking a regular fills their name and phone — nothing else. A customer is
+  // a person, not a car; the vehicle comes from the VIN entered on this
+  // record. Everything stays editable: the memory is a suggestion.
   function pickEntryCustomer(customer: LotCustomer) {
     setEntryCustomerPick(customer);
     setEntryCustomerMenuOpen(false);
@@ -5104,9 +5098,59 @@ export function ParkingPanel({
       ...value,
       customerName: customer.name || value.customerName,
       customerPhone: customer.phone || value.customerPhone,
-      customerEmail: customer.email || value.customerEmail,
     }));
-    if (customer.cars.length === 1) applyEntryCustomerCar(customer.cars[0]);
+  }
+
+  // Fill make/model/year from a full VIN, matched to the lot's own catalog so
+  // the selects hold a real option. Public NHTSA lookup; on anything it can't
+  // resolve it says so and leaves the fields for the staff member.
+  async function decodeEntryVin(rawVin: string) {
+    const vin = rawVin.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (vin.length < 17) { lastEntryVinRef.current = ""; return; }
+    if (vin.length !== 17 || vin === lastEntryVinRef.current) return;
+    lastEntryVinRef.current = vin;
+    setEntryVinBusy(true);
+    setEntryVinNote("");
+    try {
+      const res = await fetch(
+        `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`,
+      );
+      const data = await res.json();
+      const r = (data?.Results?.[0] ?? {}) as Record<string, unknown>;
+      const dMake = text(r.Make, "");
+      const dModel = text(r.Model, "");
+      const dYear = text(r.ModelYear, "");
+      const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
+      let model = "";
+      let year = "";
+      if (make) {
+        const canon = canonicalModel(make, dModel);
+        const models = getModels(make);
+        model = models.find((m) => m.toLowerCase() === (canon || dModel).toLowerCase()) ?? "";
+        if (model) year = getYears(make, model).find((y) => String(y) === dYear) ?? "";
+      }
+      if (!make) {
+        const seen = [dYear, dMake, dModel].filter(Boolean).join(" ");
+        setEntryVinNote(seen
+          ? `VIN reads ${seen} — we don't carry that make; pick the closest.`
+          : "Couldn't read that VIN. Enter the vehicle by hand.");
+        return;
+      }
+      setEntryDraft((value) => ({
+        ...value,
+        carMake: make,
+        carModel: model || value.carModel,
+        carYear: year || value.carYear,
+      }));
+      const filled = [year, make, model].filter(Boolean).join(" ");
+      setEntryVinNote(model && year
+        ? `Filled from VIN: ${filled}.`
+        : `Filled the make from VIN: ${filled} — set the model/year.`);
+    } catch {
+      setEntryVinNote("Couldn't reach the VIN service. Enter the vehicle by hand.");
+    } finally {
+      setEntryVinBusy(false);
+    }
   }
 
   async function submitEntry() {
@@ -5849,19 +5893,11 @@ export function ParkingPanel({
                           <li key={customer.id} role="option" aria-selected={false}>
                             <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => pickEntryCustomer(customer)}>
                               <strong>{customer.name}{customer.staff ? " · Staff" : ""}</strong>
-                              <small>{[customer.phone, customer.email, customer.cars[0] ? lotCustomerCarLabel(customer.cars[0]) : ""].filter(Boolean).join(" · ")}{customer.cars.length > 1 ? ` · +${customer.cars.length - 1}` : ""}</small>
+                              <small>{customer.phone}</small>
                             </button>
                           </li>
                         ))}
                       </ul>
-                    )}
-                    {entryCustomerPick && entryCustomerPick.cars.length > 1 && (
-                      <div className="lst-chiprow">
-                        <small className="lst-hint">Their cars:</small>
-                        {entryCustomerPick.cars.map((car) => (
-                          <button key={`${car.vin}-${car.make}-${car.model}-${car.year}`} type="button" className="status-pill compact" onClick={() => applyEntryCustomerCar(car)}>{lotCustomerCarLabel(car)}</button>
-                        ))}
-                      </div>
                     )}
                   </label>
                   <label className="lst-field"><span>Customer phone</span>
@@ -5891,7 +5927,9 @@ export function ParkingPanel({
                     </select>
                   </label>
                   <label className="lst-field"><span>VIN (optional)</span>
-                    <input value={entryDraft.vinNumber} onChange={(event) => setEntryDraft((value) => ({...value, vinNumber: event.target.value}))} placeholder="17 characters" />
+                    <input value={entryDraft.vinNumber} onChange={(event) => { const v = event.target.value; setEntryDraft((value) => ({...value, vinNumber: v})); void decodeEntryVin(v); }} placeholder="17 characters — fills the vehicle" />
+                    {entryVinBusy && <small className="lst-hint">Looking up the VIN…</small>}
+                    {!entryVinBusy && entryVinNote && <small className="lst-hint">{entryVinNote}</small>}
                   </label>
                   <label className="lst-field"><span>Start date</span>
                     <input type="date" value={entryDraft.startDate} onChange={(event) => setEntryDraft((value) => ({...value, startDate: event.target.value}))} />
@@ -7530,19 +7568,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     [knownCustomers, activityDraft.customerName, customerMenuOpen, customerPick],
   );
 
-  function applyCustomerCar(car: LotCustomerCar) {
-    setActivityDraft((d) => ({
-      ...d,
-      vinNumber: car.vin || d.vinNumber,
-      carMake: car.make || d.carMake,
-      carModel: car.model || d.carModel,
-      carYear: car.year || d.carYear,
-    }));
-    setVinHint("");
-  }
-
-  // Picking a saved customer fills their contact details; their car is filled
-  // too when they only have one, otherwise the cars are offered as chips.
+  // Picking a saved customer fills their name and phone — a customer is a
+  // person, not a car. The vehicle is entered on the activity itself.
   function pickCustomer(c: LotCustomer) {
     setCustomerPick(c);
     setCustomerMenuOpen(false);
@@ -7552,7 +7579,6 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       customerPhone: c.phone || d.customerPhone,
       customerEmail: c.email || d.customerEmail,
     }));
-    if (c.cars.length === 1) applyCustomerCar(c.cars[0]);
   }
 
   async function openLotDocument(row: Record<string, unknown>) {
@@ -8006,15 +8032,9 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                   {customerMatches.length > 0 && (
                     <ul className="lst-suggest" role="listbox" aria-label="Saved customers">
                       {customerMatches.map((c) => (
-                        <li key={c.id} role="option" aria-selected={false}><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickCustomer(c)}><strong>{c.name}</strong><small>{[c.phone, c.email, c.cars[0] ? lotCustomerCarLabel(c.cars[0]) : ""].filter(Boolean).join(" · ")}{c.cars.length > 1 ? ` · +${c.cars.length - 1}` : ""}</small></button></li>
+                        <li key={c.id} role="option" aria-selected={false}><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickCustomer(c)}><strong>{c.name}</strong><small>{c.phone}</small></button></li>
                       ))}
                     </ul>
-                  )}
-                  {customerPick && customerPick.cars.length > 1 && (
-                    <div className="lst-chiprow">
-                      <small className="lst-hint">Their cars:</small>
-                      {customerPick.cars.map((car) => (<button key={`${car.vin}-${car.make}-${car.model}-${car.year}`} type="button" className="status-pill compact" onClick={() => applyCustomerCar(car)}>{lotCustomerCarLabel(car)}</button>))}
-                    </div>
                   )}
                 </label>
                 <label className="lst-field"><span>Phone</span><input value={activityDraft.customerPhone} onChange={(e) => setActivityDraft((d) => ({ ...d, customerPhone: e.target.value }))} /></label>

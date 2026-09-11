@@ -13915,13 +13915,14 @@ const LOT_LINK_SECRETS = [
 ];
 
 /**
- * Remember the customer just typed onto an activity or a walk-up, with the
- * car seen against them, so the next entry can pick them instead of re-keying
- * name, phone, email and vehicle. Best-effort: a memory write must never fail
- * the record it came from.
+ * Remember the customer just typed onto an activity or a walk-up - a name and
+ * a phone number, never a car - so the next entry can pick them instead of
+ * re-keying it. The vehicle belongs to the record, filled from its VIN, not
+ * to the person. Best-effort: a memory write must never fail the record it
+ * came from.
  *
  * @param {object} db Firestore.
- * @param {object} params businessId, seen (customer, car and vin fields),
+ * @param {object} params businessId, seen (name and phone fields),
  *   source ("activity" | "parking"), staffId.
  * @return {Promise<void>}
  */
