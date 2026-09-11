@@ -146,16 +146,21 @@ void main() {
   group('the list screen spends the decisions it is given', () {
     final source = File('lib/screens/home_menu.dart').readAsStringSync();
 
-    test('the parked-car list is searched and narrowed by status', () {
+    test('the parked-car list is searched and narrowed by facets', () {
       expect(source, contains('businessParkingMatchesSearch('));
-      expect(source, contains('businessParkingMatchesStatusFilter('));
+      // Status and payment are now composable facets, one predicate.
+      expect(source, contains('businessParkingMatchesFacets('));
       expect(source, contains("Key('parking-search')"));
-      expect(source, contains("Key('parking-status-filter')"));
+      expect(source, contains("Key('parking-kind-filter')"));
+      expect(source, contains("Key('parking-payment-filter')"));
       expect(source, contains('l10n.searchParkedCars'));
     });
 
     test('an empty list says which kind of empty it is', () {
-      expect(source, contains('businessParkingListIsNarrowed('));
+      // The narrowed check is now the getter that ORs the facets, search and
+      // the date bounds together.
+      expect(source, contains('bool get _parkingListIsNarrowed'));
+      expect(source, contains('!_parkingFacets.isEmpty'));
       expect(source, contains('l10n.noParkingRecordsMatchFilter'));
       expect(source, contains('l10n.noRecordsYet'));
     });
@@ -169,10 +174,7 @@ void main() {
         source.indexOf('void _selectCategory(ServiceCategory category) {'),
         source.indexOf('@override\n  void dispose() {'),
       );
-      expect(
-        handler,
-        contains('_parkingStatusFilter = businessParkingStatusFilterAll'),
-      );
+      expect(handler, contains('_parkingFacets = const ParkingFacets();'));
       expect(handler, contains("_parkingSearch = ''"));
       expect(handler, contains('_parkedFrom = null'));
     });

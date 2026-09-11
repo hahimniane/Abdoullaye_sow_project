@@ -14214,6 +14214,36 @@ abstract class AppLocalizations {
   /// **'In the lot'**
   String get parkingScoreInLot;
 
+  /// No description provided for @parkingKindReserved.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserved'**
+  String get parkingKindReserved;
+
+  /// No description provided for @parkingKindPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending payment'**
+  String get parkingKindPending;
+
+  /// No description provided for @parkingKindCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get parkingKindCancelled;
+
+  /// No description provided for @parkingPayPart.
+  ///
+  /// In en, this message translates to:
+  /// **'Part paid'**
+  String get parkingPayPart;
+
+  /// No description provided for @parkingFiltersClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get parkingFiltersClear;
+
   /// No description provided for @parkingScoreLeft.
   ///
   /// In en, this message translates to:

@@ -136,17 +136,12 @@ class _HomeMenuState extends State<HomeMenu> {
   bool _isLoading = true;
   ServiceCategory _selectedCategory = ServiceCategory.all;
 
-  /// Narrows the parked-car list to what the lot is still owed, or to what is
-  /// settled. Only ever offered while parking is the selected category, and
-  /// reset whenever the category changes so a narrowing can never be in force
-  /// while its control is off screen.
-  BusinessParkingPaymentFilter _paymentFilter =
-      BusinessParkingPaymentFilter.all;
-
-  /// Where the car is in its stay, as opposed to whether it has been paid
-  /// for - the console asks both questions and so must this. `all` is "do not
-  /// narrow" rather than a status.
-  String _parkingStatusFilter = businessParkingStatusFilterAll;
+  /// Two composable facets - which status kinds and which payment classes to
+  /// keep - so the lot can ask "in the lot AND not paid" in one go. Only ever
+  /// offered while parking is the selected category, and reset when the
+  /// category changes so a narrowing can never be in force while its control is
+  /// off screen.
+  ParkingFacets _parkingFacets = const ParkingFacets();
 
   /// Free text over tracking code, owner, car and VIN. A lot with a windscreen
   /// slip in its hand looks the car up by its code; without this the only way
@@ -448,13 +443,11 @@ class _HomeMenuState extends State<HomeMenu> {
   /// An empty list means two different things - "you have no parked cars" and
   /// "none of them match what you asked for" - and only one of them is fixed
   /// by clearing a filter, so the empty state has to know which.
-  bool get _parkingListIsNarrowed => businessParkingListIsNarrowed(
-    search: _parkingSearch,
-    statusFilter: _parkingStatusFilter,
-    paymentFilter: _paymentFilter,
-    from: _parkedFrom,
-    to: _parkedTo,
-  );
+  bool get _parkingListIsNarrowed =>
+      _parkingSearch.trim().isNotEmpty ||
+      !_parkingFacets.isEmpty ||
+      _parkedFrom != null ||
+      _parkedTo != null;
 
   List<ActivityRecord> get _filteredRecords {
     final enabled = _enabledActivityCategories();
@@ -479,16 +472,8 @@ class _HomeMenuState extends State<HomeMenu> {
       if (!businessParkingMatchesSearch(car.paymentFields, _parkingSearch)) {
         return false;
       }
-      if (!businessParkingMatchesStatusFilter(
-        car.paymentFields,
-        _parkingStatusFilter,
-      )) {
-        return false;
-      }
-      if (!businessParkingMatchesPaymentFilter(
-        car.paymentFields,
-        _paymentFilter,
-      )) {
+      // Status kind AND payment class, each an OR within itself.
+      if (!businessParkingMatchesFacets(car.paymentFields, _parkingFacets)) {
         return false;
       }
       // Overlap, not containment: a car that arrived before the window and
@@ -532,8 +517,7 @@ class _HomeMenuState extends State<HomeMenu> {
   void _selectCategory(ServiceCategory category) {
     setState(() {
       _selectedCategory = category;
-      _paymentFilter = BusinessParkingPaymentFilter.all;
-      _parkingStatusFilter = businessParkingStatusFilterAll;
+      _parkingFacets = const ParkingFacets();
       _parkingSearch = '';
       _parkingSearchController.clear();
       _parkedFrom = null;
@@ -608,16 +592,20 @@ class _HomeMenuState extends State<HomeMenu> {
                   isLoading: _isLoading,
                   selectedCategory: _selectedCategory,
                   onCategoryChanged: _selectCategory,
-                  paymentFilter: _paymentFilter,
-                  onPaymentFilterChanged: (filter) {
+                  facets: _parkingFacets,
+                  onToggleKind: (kind) {
                     setState(() {
-                      _paymentFilter = filter;
+                      _parkingFacets = _parkingFacets.toggleKind(kind);
                     });
                   },
-                  statusFilter: _parkingStatusFilter,
-                  onStatusFilterChanged: (status) {
+                  onTogglePayment: (payment) {
                     setState(() {
-                      _parkingStatusFilter = status;
+                      _parkingFacets = _parkingFacets.togglePayment(payment);
+                    });
+                  },
+                  onClearFacets: () {
+                    setState(() {
+                      _parkingFacets = const ParkingFacets();
                     });
                   },
                   searchController: _parkingSearchController,
@@ -1210,10 +1198,10 @@ class _ActivitySection extends StatelessWidget {
     required this.isLoading,
     required this.selectedCategory,
     required this.onCategoryChanged,
-    required this.paymentFilter,
-    required this.onPaymentFilterChanged,
-    required this.statusFilter,
-    required this.onStatusFilterChanged,
+    required this.facets,
+    required this.onToggleKind,
+    required this.onTogglePayment,
+    required this.onClearFacets,
     required this.searchController,
     required this.onSearchChanged,
     required this.isNarrowed,
@@ -1228,10 +1216,10 @@ class _ActivitySection extends StatelessWidget {
   final bool isLoading;
   final ServiceCategory selectedCategory;
   final ValueChanged<ServiceCategory> onCategoryChanged;
-  final BusinessParkingPaymentFilter paymentFilter;
-  final ValueChanged<BusinessParkingPaymentFilter> onPaymentFilterChanged;
-  final String statusFilter;
-  final ValueChanged<String> onStatusFilterChanged;
+  final ParkingFacets facets;
+  final ValueChanged<ParkingKind> onToggleKind;
+  final ValueChanged<ParkingPaymentClass> onTogglePayment;
+  final VoidCallback onClearFacets;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
 
@@ -1281,18 +1269,59 @@ class _ActivitySection extends StatelessWidget {
       ? '$prefix: ${l10n.anyDate}'
       : '$prefix: ${DateFormat.yMMMd().format(value)}';
 
-  String _paymentFilterLabel(
-    BusinessParkingPaymentFilter filter,
-    AppLocalizations l10n,
-  ) {
-    switch (filter) {
-      case BusinessParkingPaymentFilter.all:
-        return l10n.filterAll;
-      case BusinessParkingPaymentFilter.paid:
-        return l10n.paid;
-      case BusinessParkingPaymentFilter.notPaid:
-        return l10n.notPaid;
+  String _kindLabel(AppLocalizations l10n, ParkingKind kind) {
+    switch (kind) {
+      case ParkingKind.inLot:
+        return l10n.parkingScoreInLot;
+      case ParkingKind.reserved:
+        return l10n.parkingKindReserved;
+      case ParkingKind.pending:
+        return l10n.parkingKindPending;
+      case ParkingKind.left:
+        return l10n.parkingScoreLeft;
+      case ParkingKind.cancelled:
+        return l10n.parkingKindCancelled;
     }
+  }
+
+  String _paymentLabel(AppLocalizations l10n, ParkingPaymentClass pay) {
+    switch (pay) {
+      case ParkingPaymentClass.paid:
+        return l10n.paid;
+      case ParkingPaymentClass.part:
+        return l10n.parkingPayPart;
+      case ParkingPaymentClass.unpaid:
+        return l10n.notPaid;
+      case ParkingPaymentClass.none:
+        return '';
+    }
+  }
+
+  /// A square toggle chip in the app's house style - the same look the payment
+  /// and status chips had, now driven by a facet set so several can be on.
+  Widget _facetChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+    required Color fill,
+    required Color selectedText,
+  }) {
+    return FilterChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      labelStyle: TextStyle(
+        color: selected ? selectedText : AppColors.ink,
+        fontWeight: FontWeight.w600,
+      ),
+      showCheckmark: false,
+      backgroundColor: AppColors.paper,
+      selectedColor: fill,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: fill.withValues(alpha: selected ? 1 : 0.5)),
+      ),
+    );
   }
 
   @override
@@ -1363,88 +1392,74 @@ class _ActivitySection extends StatelessWidget {
                     ),
             ),
           ),
-          // Where the car is in its stay. A separate question from whether it
-          // has been paid for, and the console asks both.
+          // Two composable facets: which status kind, and which payment class.
+          // Each toggles on its own and they AND together, so "In the lot" +
+          // "Not paid" narrows to unpaid walk-ups - the compound question a
+          // single dropdown could never ask. The console does exactly this.
           const SizedBox(height: 12),
           SingleChildScrollView(
-            key: const Key('parking-status-filter'),
+            key: const Key('parking-kind-filter'),
             scrollDirection: Axis.horizontal,
             child: Row(
-              children:
-                  <String>[
-                    businessParkingStatusFilterAll,
-                    ...businessParkingStatusOptions,
-                  ].map((status) {
-                    final isSelected = status == statusFilter;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(
-                          status == businessParkingStatusFilterAll
-                              ? l10n.filterAll
-                              : businessParkingStatusLabel(l10n, status),
-                        ),
-                        selected: isSelected,
-                        onSelected: (_) => onStatusFilterChanged(status),
-                        labelStyle: TextStyle(
-                          color: isSelected ? AppColors.paper : AppColors.ink,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        backgroundColor: AppColors.paper,
-                        selectedColor: AppColors.ink,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.zero,
-                          side: BorderSide(
-                            color: AppColors.ink.withValues(
-                              alpha: isSelected ? 1 : 0.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+              children: [
+                for (final kind in ParkingKind.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _facetChip(
+                      label: _kindLabel(l10n, kind),
+                      selected: facets.kinds.contains(kind),
+                      onTap: () => onToggleKind(kind),
+                      fill: AppColors.ink,
+                      selectedText: AppColors.paper,
+                    ),
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           SingleChildScrollView(
             key: const Key('parking-payment-filter'),
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: BusinessParkingPaymentFilter.values.map((filter) {
-                final isSelected = filter == paymentFilter;
-                // Mirrors the badge: sage carries white text, amber carries
-                // dark ink. brandRed is an alias for the teal brand colour,
-                // so an unpaid control painted with it would read as settled.
-                final fill = switch (filter) {
-                  BusinessParkingPaymentFilter.all => AppColors.ink,
-                  BusinessParkingPaymentFilter.paid => AppColors.sage,
-                  BusinessParkingPaymentFilter.notPaid => AppColors.warn,
-                };
-                final selectedText =
-                    filter == BusinessParkingPaymentFilter.notPaid
-                    ? AppColors.ink
-                    : AppColors.paper;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(_paymentFilterLabel(filter, l10n)),
-                    selected: isSelected,
-                    onSelected: (_) => onPaymentFilterChanged(filter),
-                    labelStyle: TextStyle(
-                      color: isSelected ? selectedText : AppColors.ink,
-                      fontWeight: FontWeight.w600,
+              children: [
+                for (final pay in const [
+                  ParkingPaymentClass.paid,
+                  ParkingPaymentClass.part,
+                  ParkingPaymentClass.unpaid,
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    // Mirrors the badge: sage for paid, teal for part, amber
+                    // for unpaid (which carries dark ink for contrast).
+                    child: _facetChip(
+                      label: _paymentLabel(l10n, pay),
+                      selected: facets.payments.contains(pay),
+                      onTap: () => onTogglePayment(pay),
+                      fill: switch (pay) {
+                        ParkingPaymentClass.paid => AppColors.sage,
+                        ParkingPaymentClass.part => AppColors.cobalt,
+                        _ => AppColors.warn,
+                      },
+                      selectedText: pay == ParkingPaymentClass.unpaid
+                          ? AppColors.ink
+                          : AppColors.paper,
                     ),
-                    backgroundColor: AppColors.paper,
-                    selectedColor: fill,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                      side: BorderSide(
-                        color: fill.withValues(alpha: isSelected ? 1 : 0.5),
+                  ),
+                if (!facets.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ActionChip(
+                      label: Text(l10n.parkingFiltersClear),
+                      onPressed: onClearFacets,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                        side: BorderSide(
+                          color: AppColors.ink.withValues(alpha: 0.5),
+                        ),
                       ),
                     ),
                   ),
-                );
-              }).toList(),
+              ],
             ),
           ),
           // "Which cars were parked that week." A stay that OVERLAPS the
@@ -1615,6 +1630,11 @@ class _ParkingScoreboard extends StatelessWidget {
     );
     final stats = <Widget>[
       _ParkingStat(label: l10n.parkingScoreInLot, value: '${totals.inLot}'),
+      if (totals.reserved > 0)
+        _ParkingStat(
+          label: l10n.parkingKindReserved,
+          value: '${totals.reserved}',
+        ),
       _ParkingStat(label: l10n.parkingScoreLeft, value: '${totals.left}'),
       _ParkingStat(
         label: l10n.parkingScoreCollected,

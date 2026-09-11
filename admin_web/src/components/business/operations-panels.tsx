@@ -145,8 +145,12 @@ import {
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
   businessParkingResendMessage,
+  businessParkingMatchesFacets,
   businessParkingUpdateChanges,
   businessParkingUpdateResult,
+  type ParkingFacets,
+  type ParkingKind,
+  type ParkingPaymentClass,
   canMarkBusinessParkingPaid,
   canResendBusinessParkingLink,
   emptyBusinessParkingEntryDraft,
@@ -515,11 +519,6 @@ export function optionLabel(value: string) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
-// What the server actually writes. It never wrote "active" or "completed":
-// a stay is reserved until it is cancelled, and a car that has left is one
-// with a leave date in the past, not a status. Filtering by "Active" matched
-// nothing, because nothing has ever been active.
-const parkingStatuses = ["reserved", "pending_payment", "cancelled"];
 
 // What a person may set by hand. "Pending payment" is the server's word for
 // "a link is out and unpaid" - letting staff pick it would have a record
@@ -4764,7 +4763,22 @@ export function ParkingPanel({
   const parkingCustomers = useBusinessRows("lotCustomers", businessId, Boolean(businessId && !previewMode), 500);
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
+  // Two facets that compose: which status kinds and which payment classes to
+  // keep. Empty means "do not narrow", so no chips shows everything, and a
+  // chip from each facet answers a compound question ("in the lot, not paid").
+  const [facets, setFacets] = useState<ParkingFacets>({ kinds: [], payments: [] });
+  const toggleKind = (kind: ParkingKind) =>
+    setFacets((f) => ({
+      ...f,
+      kinds: f.kinds.includes(kind) ? f.kinds.filter((k) => k !== kind) : [...f.kinds, kind],
+    }));
+  const togglePayment = (payment: ParkingPaymentClass) =>
+    setFacets((f) => ({
+      ...f,
+      payments: f.payments.includes(payment)
+        ? f.payments.filter((p) => p !== payment)
+        : [...f.payments, payment],
+    }));
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -4846,30 +4860,14 @@ export function ParkingPanel({
     const inRange = (rangeFrom || rangeTo)
       ? searched.filter((row) => businessParkingWithinRange(row, rangeFrom, rangeTo))
       : searched;
-    if (filter === "all") return inRange;
-    if (filter === "payment:paid") {
-      return inRange.filter((row) => businessParkingPaymentTone(row) === "paid");
-    }
-    if (filter === "payment:unpaid") {
-      // "Not paid" is money still owed — a cancelled car or one with nothing
-      // to collect ("none") is not something to chase.
-      return inRange.filter((row) => businessParkingPaymentTone(row) === "awaiting");
-    }
-    // Whether the car is still on the lot is the question staff actually ask,
-    // and no status carries it: a departed car is one whose leave date has
-    // passed. closeParkingStay writes that date and nothing else.
-    if (filter === "here:in") {
-      return inRange.filter((row) => businessParkingEndLabel(row) !== "Ended");
-    }
-    if (filter === "here:gone") {
-      return inRange.filter((row) => businessParkingEndLabel(row) === "Ended");
-    }
-    return inRange.filter((row) => text(row.status, "") === filter);
-  }, [searched, filter, rangeFrom, rangeTo]);
+    // Status kind AND payment class, each an OR within itself. "In the lot"
+    // plus "Not paid" keeps only unpaid walk-ups; no chips keeps everything.
+    return inRange.filter((row) => businessParkingMatchesFacets(row, facets));
+  }, [searched, facets, rangeFrom, rangeTo]);
   useEffect(() => {
     if (!focusRecordId) return;
     setSearch("");
-    setFilter("all");
+    setFacets({ kinds: [], payments: [] });
     setRangeFrom("");
     setRangeTo("");
   }, [focusRecordId]);
@@ -5367,27 +5365,48 @@ export function ParkingPanel({
         <div className="lst-search">
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tracking, owner, car, VIN…" />
         </div>
-        <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={filter} onChange={(event) => setFilter(event.target.value)}>
-          <option value="all">All statuses</option>
-          <optgroup label="Parking status">
-            {/* "Reserved" is the stored word and covers both a walk-up sitting
-                in the yard and a booking that has not arrived, so the option
-                names both rather than picking one. */}
-            {parkingStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status === "reserved" ? "In the lot or reserved" : statusLabel(status)}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="In the lot">
-            <option value="here:in">Still here</option>
-            <option value="here:gone">Left</option>
-          </optgroup>
-          <optgroup label="Payment">
-            <option value="payment:paid">Paid</option>
-            <option value="payment:unpaid">Not paid</option>
-          </optgroup>
-        </select>
+        {/* Two facets of toggle chips that compose: a status kind AND a
+            payment class. Picking "In the lot" and "Not paid" answers "which
+            cars in my lot still owe me" in one glance - the question a single
+            dropdown could never ask. Nothing selected shows everything. */}
+        <div className="pk-facets" role="group" aria-label="Filter parked cars">
+          {([
+            ["in_lot", "In the lot"],
+            ["reserved", "Reserved"],
+            ["pending", "Pending payment"],
+            ["left", "Left"],
+            ["cancelled", "Cancelled"],
+          ] as [ParkingKind, string][]).map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              className={`pk-chip${facets.kinds.includes(kind) ? " on" : ""}`}
+              aria-pressed={facets.kinds.includes(kind)}
+              onClick={() => toggleKind(kind)}
+            >{label}</button>
+          ))}
+          <span className="pk-facet-sep" aria-hidden="true" />
+          {([
+            ["paid", "Paid"],
+            ["part", "Part paid"],
+            ["unpaid", "Not paid"],
+          ] as [ParkingPaymentClass, string][]).map(([payment, label]) => (
+            <button
+              key={payment}
+              type="button"
+              className={`pk-chip${facets.payments.includes(payment) ? " on" : ""}`}
+              aria-pressed={facets.payments.includes(payment)}
+              onClick={() => togglePayment(payment)}
+            >{label}</button>
+          ))}
+          {(facets.kinds.length > 0 || facets.payments.length > 0) && (
+            <button
+              type="button"
+              className="pk-chip clear"
+              onClick={() => setFacets({ kinds: [], payments: [] })}
+            >Clear</button>
+          )}
+        </div>
         {/* Which cars were in the lot during a window - overlapping, not
             only those entirely inside it, or a long stay disappears. */}
         <label className="bar-field" style={{ flex: "0 0 auto" }}><span>Parked between</span>
@@ -5420,6 +5439,9 @@ export function ParkingPanel({
       {!parkedCars.loading && parkedCars.rows.length > 0 && (
         <div className="pk-scoreboard" role="group" aria-label="Parking totals">
           <div className="pk-stat"><span>In the lot</span><b>{parkingTotals.inLot}</b></div>
+          {parkingTotals.reserved > 0 && (
+            <div className="pk-stat"><span>Reserved</span><b>{parkingTotals.reserved}</b></div>
+          )}
           <div className="pk-stat"><span>Left</span><b>{parkingTotals.left}</b></div>
           <div className="pk-stat"><span>Collected</span><b>{formatMoney(parkingTotals.collected)}</b></div>
           <div className="pk-stat"><span>Owed</span><b className={parkingTotals.owed > 0 ? "owed" : undefined}>{formatMoney(parkingTotals.owed)}</b></div>
