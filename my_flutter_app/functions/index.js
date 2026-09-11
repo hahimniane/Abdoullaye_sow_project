@@ -288,6 +288,7 @@ const {
   normalizeDirectPaymentMethod,
   normalizeBusinessParkingEntry,
   businessParkingPartialPaymentPlan,
+  normalizeParkingRates,
 } = require("./business_parking_entry");
 const {
   LOT_ACTIVITY_PAYMENT_STATUS,
@@ -10675,6 +10676,7 @@ exports.updateBusinessProfile = onCall(
         parkingWeeklyRate,
         parkingMonthlyRate,
         parkingMinimumDays,
+        parkingRates,
         parkingPickupAvailable,
         parkingPickupFee,
         parkingInstructions,
@@ -10800,6 +10802,9 @@ exports.updateBusinessProfile = onCall(
             parkingMonthlyRate,
             current.parkingMonthlyRate || 0,
         )),
+        parkingRates: normalizeParkingRates(
+            parkingRates === undefined ? current.parkingRates : parkingRates,
+        ),
         parkingMinimumDays: Math.min(365, Math.max(1, intOrFallback(
             parkingMinimumDays,
             current.parkingMinimumDays || 1,

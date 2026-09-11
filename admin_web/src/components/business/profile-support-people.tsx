@@ -1404,15 +1404,23 @@ export function BusinessServicesPanel({
                     <span>Other prices (optional)</span>
                     <p className="lst-hint" style={{ margin: "0 0 6px" }}>
                       A bigger space, a long-stay deal, a rate for a dealer who
-                      brings several cars. Staff pick one when they record a
-                      car; anything without a name and a daily rate is not
-                      saved.
+                      brings several cars. Give each one a name and a price per
+                      day; staff pick it when they record a car. A row without a
+                      name and a price is not saved.
                     </p>
+                    {draft.parkingRates.length > 0 && (
+                      <div className="pk-rate-head">
+                        <span>Name</span>
+                        <span>Price / day ($)</span>
+                        <span>Min days</span>
+                        <span />
+                      </div>
+                    )}
                     {draft.parkingRates.map((rate, index) => (
                       <div className="pk-rate-row" key={rate.id}>
                         <input
                           aria-label="Price name"
-                          placeholder="Name (e.g. SUV / oversize)"
+                          placeholder="e.g. SUV / oversize"
                           value={rate.label}
                           onChange={(event) => update(
                             "parkingRates",
@@ -1425,7 +1433,7 @@ export function BusinessServicesPanel({
                           aria-label="Daily rate"
                           inputMode="decimal"
                           min="0"
-                          placeholder="Per day"
+                          placeholder="e.g. 30"
                           type="number"
                           value={rate.dailyRate || ""}
                           onChange={(event) => update(
@@ -1439,7 +1447,7 @@ export function BusinessServicesPanel({
                           aria-label="Minimum days"
                           inputMode="numeric"
                           min="1"
-                          placeholder="Min days"
+                          placeholder="1"
                           type="number"
                           value={rate.minimumDays || ""}
                           onChange={(event) => update(
@@ -1474,7 +1482,7 @@ export function BusinessServicesPanel({
                           dailyRate: 0,
                           weeklyRate: 0,
                           monthlyRate: 0,
-                          minimumDays: 1,
+                          minimumDays: 0,
                         },
                       ])}
                     >

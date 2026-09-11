@@ -68,3 +68,26 @@ describe("a lot with more than one price", () => {
     assert.equal(parkingRateSelection(plain, "suv").missing, true);
   });
 });
+
+// The price cards are worthless if the save drops them. updateBusinessProfile
+// built its update from an explicit field list and never included
+// parkingRates, so a business could add a price, see it, and lose it on save.
+describe("the profile save persists the price cards", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const source = fs.readFileSync(
+      path.join(__dirname, "..", "index.js"), "utf8");
+  const fn = source.slice(source.indexOf("exports.updateBusinessProfile"));
+  const body = fn.slice(0, fn.indexOf("\n);\n"));
+
+  it("reads parkingRates from the request", () => {
+    assert.match(body, /\n\s+parkingRates,\n/);
+  });
+  it("writes normalized rates, keeping the stored ones when absent", () => {
+    assert.match(body, /parkingRates: normalizeParkingRates\(/);
+    assert.match(
+        body,
+        /parkingRates === undefined \? current\.parkingRates : parkingRates/,
+    );
+  });
+});
