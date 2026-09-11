@@ -13818,6 +13818,36 @@ abstract class AppLocalizations {
   /// **'Cash, Zelle, a check.'**
   String get lotPaidOutsideWebsiteNote;
 
+  /// No description provided for @lotMarkNotReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as not received'**
+  String get lotMarkNotReceived;
+
+  /// No description provided for @lotMarkNotReceivedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set back to not received'**
+  String get lotMarkNotReceivedTitle;
+
+  /// No description provided for @lotMarkNotReceivedExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this if the money did not actually come in. The activity goes back to owed, and the change is logged under your name in the history.'**
+  String get lotMarkNotReceivedExplain;
+
+  /// No description provided for @lotMarkNotReceivedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get lotMarkNotReceivedNote;
+
+  /// No description provided for @lotMarkNotReceivedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Set back to not received.'**
+  String get lotMarkNotReceivedDone;
+
   /// No description provided for @lotMoneyReceived.
   ///
   /// In en, this message translates to:

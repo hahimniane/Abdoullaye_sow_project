@@ -14562,10 +14562,79 @@ exports.recordLotActivityDirectPayment = onCall(
         receivedByStaffId,
         recordedByStaffId: String(current.recordedByStaffId || uid),
         editedByStaffId: uid,
+        // A prior "not received" reversal no longer applies once the money is
+        // back in; the audit log keeps the full history either way.
+        paymentRevertedByStaffId: FirestoreFieldValue.delete(),
+        paymentRevertedAt: FirestoreFieldValue.delete(),
         paymentLinkToken: FirestoreFieldValue.delete(),
         checkoutStatus: "cancelled",
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       }, {merge: true});
+      await writeLotLedgerAudit({
+        businessId: String(current.businessId || ""),
+        entityType: "activity",
+        entityId: activityId,
+        action: "payment_received",
+        byStaffId: uid,
+        summary: "Marked as received",
+        changes: [],
+      });
+      return {success: true, activityId};
+    },
+);
+
+// Reverse a "received" mark: the money turned out not to have come in. Only an
+// off-platform (direct) settlement can be undone here - money taken online is
+// Stripe's record, not a staff note. Every reversal is written to the ledger
+// audit with who did it, so the change is always traceable.
+exports.revertLotActivityDirectPayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const activityId = String(data.activityId || "").trim();
+      const note = String(data.note || "").trim().slice(0, 300);
+      const db = admin.firestore();
+      const ref = db.collection("lotActivities").doc(activityId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Activity not found");
+      const current = doc.data() || {};
+      const businessId = String(current.businessId || "");
+      await requireBusinessPermission(uid, businessId, "ledger");
+      if (current.voided === true) {
+        throw new HttpsError(
+            "failed-precondition", LOT_LEDGER_MESSAGES.activity_voided);
+      }
+      if (String(current.paymentMethod) !== "direct" ||
+          String(current.paymentStatus) !==
+            LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Only an activity marked received off-platform can be set back " +
+              "to not received.",
+        );
+      }
+      const previousReceiver = String(current.receivedByStaffId || "");
+      await ref.set({
+        paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_DIRECT,
+        receivedVia: "",
+        receivedByStaffId: "",
+        paymentRevertedByStaffId: uid,
+        paymentRevertedAt: FirestoreFieldValue.serverTimestamp(),
+        editedByStaffId: uid,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      await writeLotLedgerAudit({
+        businessId,
+        entityType: "activity",
+        entityId: activityId,
+        action: "payment_reverted",
+        byStaffId: uid,
+        summary: note ?
+          `Marked as not received — ${note}` : "Marked as not received",
+        changes: previousReceiver ?
+          [{field: "receivedBy", from: previousReceiver, to: ""}] : [],
+      });
       return {success: true, activityId};
     },
 );
