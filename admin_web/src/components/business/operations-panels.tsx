@@ -140,6 +140,7 @@ import {
   businessParkingTotals,
   businessParkingAmountPaid,
   businessParkingIsPartlyPaid,
+  businessParkingBalance,
   businessParkingWithinRange,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
@@ -8273,6 +8274,8 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
   const [partMode, setPartMode] = useState<"days" | "amount">("days");
   const [partValue, setPartValue] = useState("");
   const [partReceivedBy, setPartReceivedBy] = useState("");
+  // Settling the whole balance in one move: who took it.
+  const [settleReceivedBy, setSettleReceivedBy] = useState("");
   const r = row as Record<string, unknown>;
   const dayMs = 24 * 60 * 60 * 1000;
   const asMs = (v: unknown) => {
@@ -8326,6 +8329,26 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
   async function close() {
     await runPanelAction(setBusy, setFlash, "Stay closed.", async () => {
       await httpsCallable(functions, "closeParkingStay")({ parkedCarId: row.id });
+    });
+  }
+  // What the car still owes right now: a fixed stay's total minus payments, or
+  // an open-ended stay's accrual-to-date minus payments. Reuses the same pure
+  // calculation the scoreboard and the card's "still owed" line use.
+  const outstandingCents = Math.round(businessParkingBalance(row) * 100);
+  // "They have now paid it all" - record the whole outstanding balance in one
+  // go, through the same partial-payment callable. A fixed stay reaches its
+  // total and settles to Paid; an open-ended stay is brought fully caught up
+  // (it will accrue again tomorrow, which is why it is not marked Paid). No
+  // separate settle callable, so Collected and Owed both stay correct.
+  async function markFullyPaid() {
+    if (!settleReceivedBy) { setFlash("Say who took the money so it can be reconciled."); return; }
+    if (outstandingCents <= 0) { setFlash("Nothing is outstanding on this car."); return; }
+    await runPanelAction(setBusy, setFlash, "Marked as paid.", async () => {
+      await httpsCallable(functions, "recordBusinessParkingPartialPayment")({
+        entryId: row.id,
+        amountCents: outstandingCents,
+        receivedByStaffId: settleReceivedBy,
+      });
     });
   }
   async function recordPart() {
@@ -8389,6 +8412,21 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
           <button className="ghost-button" type="button" disabled={busy} onClick={() => setPartOpen(true)}>Record a part payment</button>
         )}
       </div>
+      {/* The whole balance in one move: the plain "they've paid it all" the
+          card was missing. Only on a record that is actually awaiting direct
+          payment and has something outstanding - an imported record marked
+          "no payment required" has nothing to settle. */}
+      {canPartPay && String(r.paymentStatus) === "awaiting_direct_payment" && outstandingCents > 0 && (
+        <div className="pk-partpay-row">
+          <select value={settleReceivedBy} onChange={(e) => setSettleReceivedBy(e.target.value)} aria-label="Received by">
+            <option value="">Received by…</option>
+            {staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+          </select>
+          <button className="primary-button" type="button" disabled={busy} onClick={markFullyPaid}>
+            Mark as fully paid ({lotFormatCents(outstandingCents)})
+          </button>
+        </div>
+      )}
       {canPartPay && partOpen && (
         <div className="pk-partpay">
           <div className="pk-partpay-row">
