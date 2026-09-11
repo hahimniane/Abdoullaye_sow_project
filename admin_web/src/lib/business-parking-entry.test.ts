@@ -705,16 +705,19 @@ test("the walk-up form offers the customers the lot already remembers", () => {
   // the fields it just filled.
   assert.match(panelSource, /entryCustomerMenuOpen \|\| entryCustomerPick/);
 
-  // Picking fills the contact details the lot knows, and never blanks what is
-  // already typed.
+  // Picking fills the name and phone the lot knows, and never blanks what is
+  // already typed. A customer is a name and a phone number - no car is stored
+  // against them, and none is filled from them.
   const pick = panelSource.slice(panelSource.indexOf("function pickEntryCustomer"));
   const body = pick.slice(0, pick.indexOf("\n  }"));
   assert.match(body, /customerName: customer\.name \|\| value\.customerName/);
   assert.match(body, /customerPhone: customer\.phone \|\| value\.customerPhone/);
-  assert.match(body, /customerEmail: customer\.email \|\| value\.customerEmail/);
-  // One car fills itself; more than one is offered rather than guessed at.
-  assert.match(body, /if \(customer\.cars\.length === 1\) applyEntryCustomerCar/);
-  assert.match(panelSource, /entryCustomerPick\.cars\.length > 1/);
+  assert.doesNotMatch(body, /\.cars/, "a customer carries no car to fill");
+
+  // The vehicle comes from the VIN, not the person: a full VIN decodes into
+  // make, model and year.
+  assert.match(panelSource, /function decodeEntryVin\(/);
+  assert.match(panelSource, /void decodeEntryVin\(/);
 
   // The picker belongs to the walk-up entry form, not the manual record form
   // beside it, and it is a suggestion over a plain input - typing a name

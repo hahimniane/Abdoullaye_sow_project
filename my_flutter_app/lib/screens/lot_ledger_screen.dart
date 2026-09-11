@@ -87,16 +87,6 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
             customerName: a.customerName,
             customerPhone: a.customerPhone,
           ),
-        for (final c in _customers)
-          for (final car in c.cars)
-            LotKnownCar(
-              vin: car.vin.toUpperCase(),
-              make: car.make,
-              model: car.model,
-              year: car.year,
-              customerName: c.name,
-              customerPhone: c.phone,
-            ),
       ];
 
   @override
@@ -1865,26 +1855,22 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
   }
 
   void _applyCustomer(LotCustomer c) {
+    // A customer is a name and a phone number (email too, since the ledger's
+    // link goes by text and email). The vehicle is never taken from the
+    // person - it comes from the VIN, which decodes make, model and year.
     setState(() {
       _customer.text = c.name;
       if (c.phone.isNotEmpty) _phone.text = c.phone;
       if (c.email.isNotEmpty) _email.text = c.email;
       _suggestions = const [];
-      if (c.cars.length == 1) {
-        final car = c.cars.first;
-        if (car.vin.isNotEmpty) _vin.text = car.vin;
-        if (car.make.isNotEmpty) _make.text = car.make;
-        if (car.model.isNotEmpty) _model.text = car.model;
-        if (car.year.isNotEmpty) _year.text = car.year;
-      }
     });
   }
 
   /// A VIN is the vehicle's identity, so typing one should end the typing.
   ///
-  /// First the business's own records — a parked car, a past activity, a
-  /// customer's saved car — because those also carry who owns it. Only when
-  /// the yard has never seen the VIN does this fall back to decoding it.
+  /// First the business's own records — a parked car or a past activity —
+  /// because those also carry who owns it. Only when the yard has never seen
+  /// the VIN does this fall back to decoding it.
   void _applyVin(String raw) {
     final l10n = AppLocalizations.of(context)!;
     var clean = normalizeVin(raw);

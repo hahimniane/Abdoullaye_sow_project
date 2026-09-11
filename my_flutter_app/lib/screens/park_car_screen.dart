@@ -118,6 +118,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   BusinessParkingEntryResult? _entryResult;
   final VinDecoderService _vinDecoderService = NhtsaVinDecoderService();
   DecodedVehicleInfo? _decodedVehicleInfo;
+  // The last VIN we auto-decoded, so typing past 17 characters or re-focusing
+  // the field does not fire the lookup again for the same number.
+  String _lastAutoDecodedVin = '';
 
   @override
   void initState() {
@@ -222,42 +225,13 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   /// they only have one. Everything stays editable - the memory is a
   /// suggestion, never a record that outranks the person at the desk.
   void _applyLotCustomer(LotCustomer customer) {
+    // A customer is only a name and a phone number. The car is never taken
+    // from the person — it comes from the VIN the staff member enters, which
+    // decodes make, model and year onto this record.
     setState(() {
       _nameController.text = customer.name;
       if (customer.phone.isNotEmpty) _phoneController.text = customer.phone;
-      if (customer.email.isNotEmpty) _emailController.text = customer.email;
       _customerSuggestions = const [];
-    });
-    if (customer.cars.length == 1) _applyLotCustomerCar(customer.cars.first);
-  }
-
-  void _applyLotCustomerCar(LotCustomerCar car) {
-    // Make, model and year are catalog pickers, so a remembered car goes
-    // through the same matcher a VIN decode uses rather than being forced
-    // into options that may not exist. Unlike a decode this says nothing when
-    // it cannot match: the staff member chose this car, they can see the
-    // fields, and an alert here would be scolding them for their own lot's
-    // memory.
-    final match = matchDecodedVehicleToCatalog(
-      decoded: DecodedVehicleInfo(
-        vin: car.vin,
-        make: car.make.isEmpty ? null : car.make,
-        model: car.model.isEmpty ? null : car.model,
-        year: car.year.isEmpty ? null : car.year,
-      ),
-      makeOptions: _makeOptions,
-      modelsForMake: CarCatalog.instance.getModels,
-      yearsForModel: CarCatalog.instance.getYears,
-    );
-    setState(() {
-      if (car.vin.isNotEmpty) _vinController.text = car.vin;
-      if (match.make != null) {
-        _selectedMake = match.make;
-        _modelOptions = match.modelOptions;
-        _selectedModel = match.model;
-        _yearOptions = match.yearOptions;
-        _selectedYear = match.year;
-      }
     });
   }
 
@@ -447,6 +421,19 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     if (vin == null || !mounted) return;
     _vinController.text = vin;
     await _decodeCurrentVin();
+  }
+
+  // Fill the vehicle from the VIN the moment a full, valid one is entered -
+  // no button press needed. Fires once per distinct VIN.
+  void _onVinChanged(String value) {
+    final vin = normalizeVin(value);
+    if (vin.length == 17 && isValidVin(vin) && vin != _lastAutoDecodedVin) {
+      _lastAutoDecodedVin = vin;
+      _decodeCurrentVin();
+    } else if (vin.length < 17) {
+      // Let a corrected VIN decode again after being cleared/shortened.
+      _lastAutoDecodedVin = '';
+    }
   }
 
   Future<void> _decodeCurrentVin() async {
@@ -1809,6 +1796,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                 )!.vinNumberOptional,
                                 textCapitalization:
                                     TextCapitalization.characters,
+                                onChanged: _onVinChanged,
                                 suffixIcon: IconButton(
                                   tooltip: AppLocalizations.of(
                                     context,
@@ -2859,9 +2847,7 @@ class _CustomerSuggestionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final detail = customer.phone.isNotEmpty
-        ? customer.phone
-        : (customer.cars.isNotEmpty ? customer.cars.first.label : '');
+    final detail = customer.phone;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
