@@ -818,6 +818,24 @@ test("the parking card tiles use the shared label/value markup", () => {
   assert.ok(!/<span>Leaves<\/span>/.test(body), "span/b never picks up the stacking");
 });
 
+// A car recorded unpaid or part-paid needs a plain "they've now paid it all"
+// - the card only had "record a part payment" and a settle gated on billing.
+test("the card can mark the whole balance paid in one move", () => {
+  const actions = panelSource.slice(panelSource.indexOf("function ParkingBillingActions"));
+  const body = actions.slice(0, actions.indexOf("\n}\n"));
+  // The button settles the full outstanding balance through the same partial
+  // callable, so Collected and Owed stay correct and no partial is wiped.
+  assert.match(body, /const outstandingCents = Math\.round\(businessParkingBalance\(row\) \* 100\)/);
+  assert.match(body, /Mark as fully paid/);
+  assert.match(body, /amountCents: outstandingCents/);
+  assert.match(body, /"recordBusinessParkingPartialPayment"/);
+  // Only offered on a record that is genuinely awaiting direct payment with
+  // something still outstanding.
+  assert.match(body, /paymentStatus\) === "awaiting_direct_payment" && outstandingCents > 0/);
+  // And it is present in the edit popup too, not only the card.
+  assert.match(panelSource, /<h4>Payments<\/h4>/);
+});
+
 // A lot with thirty cars in it wants to read thirty cars at once, the way its
 // own spreadsheet does — not scroll thirty cards.
 test("parking has a dense list view, and a row opens that car", () => {
