@@ -1001,6 +1001,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
   String? _selectedMake;
   String? _selectedModel;
   String? _selectedYear;
+  String _lastAutoDecodedVin = '';
   String? _condition;
   String? _bodyType;
   String? _transmission;
@@ -1223,6 +1224,19 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     if (vin == null || !mounted) return;
     _vinController.text = vin;
     await _decodeCurrentVin();
+  }
+
+  // Fill make/model/year the moment a full, valid VIN is typed — no button
+  // press needed. Fires once per distinct VIN so it does not re-decode on
+  // every keystroke or when the field is edited back down.
+  void _onVinChanged(String value) {
+    final vin = normalizeVin(value);
+    if (vin.length == 17 && isValidVin(vin) && vin != _lastAutoDecodedVin) {
+      _lastAutoDecodedVin = vin;
+      _decodeCurrentVin();
+    } else if (vin.length < 17) {
+      _lastAutoDecodedVin = '';
+    }
   }
 
   Future<void> _decodeCurrentVin() async {
@@ -2118,6 +2132,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
               controller: _vinController,
               label: l10n.vinOptional,
               icon: Icons.pin_outlined,
+              onChanged: _onVinChanged,
               suffixIcon: IconButton(
                 tooltip: l10n.scanVin,
                 onPressed: _isVinDecoding ? null : _scanVin,
