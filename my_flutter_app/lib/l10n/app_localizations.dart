@@ -13815,8 +13815,26 @@ abstract class AppLocalizations {
   /// No description provided for @lotPaidOutsideWebsiteNote.
   ///
   /// In en, this message translates to:
-  /// **'Cash, Zelle, a check. Record who took it.'**
+  /// **'Cash, Zelle, a check.'**
   String get lotPaidOutsideWebsiteNote;
+
+  /// No description provided for @lotMoneyReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'The money has been received'**
+  String get lotMoneyReceived;
+
+  /// No description provided for @lotMoneyReceivedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Record how it was paid and who took it.'**
+  String get lotMoneyReceivedNote;
+
+  /// No description provided for @lotLoggedAsOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not paid yet — logged as owed. Mark it received when the money comes in.'**
+  String get lotLoggedAsOwed;
 
   /// No description provided for @lotLinkGoesByTextAndEmail.
   ///

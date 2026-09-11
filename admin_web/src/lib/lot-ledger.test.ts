@@ -14,6 +14,7 @@ import {
   lotActivityPayload,
   lotActivityPaymentLabel,
   canChaseLotActivity,
+  lotActivityAwaitsDirect,
   validateLotActivityDraft,
   validateLotActivityTypeDraft,
   validateLotExpenseEntryDraft,
@@ -112,9 +113,35 @@ test("payment method drives which contact/staff fields are required", () => {
   assert.ok(validateLotActivityDraft(link, ["t1"]).includes("payment_link_contact_required"));
   assert.deepEqual(validateLotActivityDraft({ ...link, customerPhone: "2015551234" }, ["t1"]), []);
 
-  // Direct with no staff member named is refused.
+  // Direct, money already received, with no staff member named is refused.
   const direct = { ...link, paymentMethod: "direct" as const, receivedByStaffId: "" };
   assert.ok(validateLotActivityDraft(direct, ["t1"]).includes("received_by_required"));
+
+  // But a direct activity logged as not-yet-paid names no one, and passes -
+  // the money is not in hand, so there is nobody who received it.
+  const owed = { ...direct, paymentReceived: false };
+  assert.deepEqual(validateLotActivityDraft(owed, ["t1"]), []);
+});
+
+test("a not-yet-paid direct activity carries no receiver and sends the flag", () => {
+  const owed = lotActivityPayload(
+    {
+      ...emptyLotActivityDraft,
+      activityTypeId: "t1",
+      fee: "50",
+      activityDate: "2026-09-11",
+      customerName: "Sow",
+      vinNumber: "abc123",
+      paymentMethod: "direct",
+      paymentReceived: false,
+      receivedVia: "cash",
+      receivedByStaffId: "s1",
+    },
+    "biz1",
+  );
+  assert.equal(owed.paymentReceived, false);
+  assert.equal(owed.receivedByStaffId, "");
+  assert.equal(owed.receivedVia, "");
 });
 
 test("the activity payload strips a staff/method mismatch and freezes the date at midday", () => {
@@ -153,10 +180,21 @@ test("the payment badge reads the money, not the status colour", () => {
     lotActivityPaymentLabel({ paymentMethod: "direct", paymentStatus: "succeeded", receivedVia: "zelle" }),
     "Zelle transfer",
   );
-  // Chase only on an unpaid link.
+  // A direct activity logged before its cash arrived reads as awaiting, and
+  // can be settled - not "Paid outside the platform".
+  assert.equal(
+    lotActivityPaymentLabel({ paymentMethod: "direct", paymentStatus: "awaiting_direct_payment" }),
+    "Awaiting payment",
+  );
+  // Chase/settle: an unpaid link OR a direct activity still owed. Not a
+  // settled row of either kind.
   assert.ok(canChaseLotActivity({ paymentMethod: "payment_link", paymentStatus: "awaiting_payment_link" }));
   assert.ok(!canChaseLotActivity({ paymentMethod: "payment_link", paymentStatus: "succeeded" }));
-  assert.ok(!canChaseLotActivity({ paymentMethod: "direct", paymentStatus: "awaiting_direct_payment" }));
+  assert.ok(canChaseLotActivity({ paymentMethod: "direct", paymentStatus: "awaiting_direct_payment" }));
+  assert.ok(!canChaseLotActivity({ paymentMethod: "direct", paymentStatus: "succeeded" }));
+  // Only a direct-awaiting row is "settle only" (no link to re-send).
+  assert.ok(lotActivityAwaitsDirect({ paymentMethod: "direct", paymentStatus: "awaiting_direct_payment" }));
+  assert.ok(!lotActivityAwaitsDirect({ paymentMethod: "payment_link", paymentStatus: "awaiting_payment_link" }));
 });
 
 test("proof is required at and above the threshold, allowed below, and off at 0", () => {

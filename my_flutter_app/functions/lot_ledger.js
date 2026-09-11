@@ -173,11 +173,27 @@ function validateLotActivity(input, opts = {}) {
   if (method === "payment_link" && !phone && !email) {
     errors.push("payment_link_contact_required");
   }
-  if (method === "direct" && !text(input?.receivedByStaffId, MAX_LABEL)) {
+  // Money taken off-platform must say who held it - but only when it has
+  // actually been received. An activity can be logged before the money comes
+  // in (paymentReceived === false), and then there is no one to name yet.
+  if (method === "direct" &&
+      input?.paymentReceived !== false &&
+      !text(input?.receivedByStaffId, MAX_LABEL)) {
     errors.push("received_by_required");
   }
 
   return errors;
+}
+
+/**
+ * Whether a direct activity's fee is already in hand. Absent means yes, so a
+ * record written before this flag existed still reads as paid.
+ *
+ * @param {object} input The callable data.
+ * @return {boolean} True when the money has been received.
+ */
+function lotActivityDirectReceived(input) {
+  return (input || {}).paymentReceived !== false;
 }
 
 /**
@@ -192,7 +208,9 @@ function lotActivityRecord(input, opts) {
   const method = text(input.paymentMethod, 40);
   const typeId = text(input.activityTypeId, MAX_LABEL);
   const isCustom = typeId === LOT_CUSTOM_ACTIVITY_ID;
-  const direct = method === "direct";
+  // Received fields are stored only when the money is actually in hand; a
+  // direct activity logged as not-yet-paid carries none of them.
+  const direct = method === "direct" && lotActivityDirectReceived(input);
   return {
     activityTypeId: typeId,
     activityTypeLabel: text(opts.activityTypeLabel, MAX_LABEL),
@@ -220,11 +238,20 @@ function lotActivityRecord(input, opts) {
  * taken off-platform is already in hand.
  *
  * @param {string} method payment_link | direct.
+ * @param {boolean} [received] For a direct activity, whether the money is
+ *   already in hand. Absent means yes.
  * @return {{status: string, needsStripe: boolean}} The initial state.
  */
-function lotActivityInitialStatus(method) {
+function lotActivityInitialStatus(method, received = true) {
   if (method === "direct") {
-    return {status: LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED, needsStripe: false};
+    // Direct money already in hand is settled; a direct activity logged before
+    // the money arrives waits as awaiting-direct until it is marked received.
+    return {
+      status: received ?
+        LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED :
+        LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_DIRECT,
+      needsStripe: false,
+    };
   }
   return {
     status: LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_LINK,
@@ -377,6 +404,7 @@ module.exports = {
   validateLotActivity,
   lotActivityRecord,
   lotActivityInitialStatus,
+  lotActivityDirectReceived,
   lotActivityEditRefusal,
   lotActivityLockedPaymentFields,
   expenseProofRequired,

@@ -76,6 +76,7 @@ import {
   lotActivityPaid,
   lotActivityAwaitingLink,
   canChaseLotActivity,
+  lotActivityAwaitsDirect,
   dateInputValue as lotDateInputValue,
   lotExpenseEntryMonth,
   emptyLotActivityDraft,
@@ -7504,6 +7505,9 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       paymentMethod: String(row.paymentMethod) === "direct" ? "direct" : "payment_link",
       receivedVia: text(row.receivedVia, "cash") || "cash",
       receivedByStaffId: text(row.receivedByStaffId, ""),
+      // A direct row that is still awaiting payment loads as not-yet-received,
+      // so the edit form does not demand a staff member it never had.
+      paymentReceived: String(row.paymentStatus) !== "awaiting_direct_payment",
     });
     setEditId(String(row.id));
     setDraftError("");
@@ -8029,11 +8033,22 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 {activityDraft.paymentMethod === "payment_link" && (
                   <label className="lst-field wide"><span>Email</span><input value={activityDraft.customerEmail} onChange={(e) => setActivityDraft((d) => ({ ...d, customerEmail: e.target.value }))} /><small className="lst-hint">The link goes by text and email. Without one of the two there is nowhere to send it.</small></label>
                 )}
-                <label className="lst-radio"><input type="radio" name="lotpay" checked={activityDraft.paymentMethod === "direct"} onChange={() => setActivityDraft((d) => ({ ...d, paymentMethod: "direct" }))} /><span>Paid outside the website — cash, Zelle, a check. Record who took it.</span></label>
+                <label className="lst-radio"><input type="radio" name="lotpay" checked={activityDraft.paymentMethod === "direct"} onChange={() => setActivityDraft((d) => ({ ...d, paymentMethod: "direct" }))} /><span>Paid outside the website — cash, Zelle, a check.</span></label>
                 {activityDraft.paymentMethod === "direct" && (
-                  <div className="lst-form-grid">
-                    <label className="lst-field"><span>How it was paid</span><select value={activityDraft.receivedVia} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedVia: e.target.value }))}>{LOT_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}</select></label>
-                    <label className="lst-field"><span>Received by</span><select value={activityDraft.receivedByStaffId} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
+                  <div className="lst-subchoice">
+                    {/* The money is not always in hand when the job is logged.
+                        Only when it has been received do we ask who took it. */}
+                    <label className="lst-radio"><input type="radio" name="lotreceived" checked={!activityDraft.paymentReceived} onChange={() => setActivityDraft((d) => ({ ...d, paymentReceived: false }))} /><span>Not paid yet — record it as owed</span></label>
+                    <label className="lst-radio"><input type="radio" name="lotreceived" checked={activityDraft.paymentReceived} onChange={() => setActivityDraft((d) => ({ ...d, paymentReceived: true }))} /><span>The money has been received</span></label>
+                    {activityDraft.paymentReceived && (
+                      <div className="lst-form-grid">
+                        <label className="lst-field"><span>How it was paid</span><select value={activityDraft.receivedVia} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedVia: e.target.value }))}>{LOT_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}</select></label>
+                        <label className="lst-field"><span>Received by</span><select value={activityDraft.receivedByStaffId} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
+                      </div>
+                    )}
+                    {!activityDraft.paymentReceived && (
+                      <p className="lst-hint">Logged as owed. Mark it received from the row when the money comes in.</p>
+                    )}
                   </div>
                 )}
               </fieldset>
@@ -8070,10 +8085,15 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
         </div>
       )}
 
-      {modal === "chase" && (
+      {modal === "chase" && (() => {
+        // A direct activity logged as owed has no link to re-send - it can
+        // only be marked received. A link row offers both.
+        const chaseRow = activities.rows.find((r) => String(r.id) === chaseId) as Record<string, unknown> | undefined;
+        const chaseDirectOnly = chaseRow ? lotActivityAwaitsDirect(chaseRow) : false;
+        return (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-            <header className="lst-modal-head"><div><h3>Chase payment</h3><p>Send the link again, or record the money if it came in another way.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+            <header className="lst-modal-head"><div><h3>{chaseDirectOnly ? "Record payment" : "Chase payment"}</h3><p>{chaseDirectOnly ? "Mark this activity's money as received." : "Send the link again, or record the money if it came in another way."}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
               <div className="lst-form-grid">
@@ -8081,10 +8101,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 <label className="lst-field"><span>Received by</span><select value={chaseStaff} onChange={(e) => setChaseStaff(e.target.value)}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
               </div>
             </div>
-            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={() => chaseRecordDirect(chaseId)}>Record as paid outside</button><button className="lst-add" type="button" disabled={busy} onClick={() => chaseResend(chaseId)}>Re-send the link</button></footer>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={() => chaseRecordDirect(chaseId)}>Record as received</button>{!chaseDirectOnly && (<button className="lst-add" type="button" disabled={busy} onClick={() => chaseResend(chaseId)}>Re-send the link</button>)}</footer>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {modal === "expense-line" && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>

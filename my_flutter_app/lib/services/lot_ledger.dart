@@ -257,10 +257,16 @@ class LotActivity {
   bool get awaitingLink => paymentStatus == lotStatusAwaitingLink;
   bool get cancelled => paymentStatus == lotStatusCancelled;
 
-  /// Chase is offered only on an unpaid link — never on a settled or direct
-  /// row.
-  bool get canChase =>
-      !voided && paymentMethod == lotPaymentMethodLink && awaitingLink;
+  /// A direct activity logged before its cash arrived: still owed, and settled
+  /// only by marking it received (there is no link to re-send).
+  bool get awaitingDirect =>
+      paymentMethod == lotPaymentMethodDirect &&
+      paymentStatus == lotStatusAwaitingDirect;
+
+  /// Still has money to collect: an unpaid link, or a direct activity logged
+  /// as owed. Both are settled from the same control; only a link can also be
+  /// re-sent. Never a settled, cancelled or voided row.
+  bool get canChase => !voided && (awaitingLink || awaitingDirect);
 
   /// Counts toward revenue: neither voided nor cancelled.
   bool get countsAsRevenue => !voided && !cancelled;
@@ -684,6 +690,7 @@ class LotActivityDraft {
     required this.customerPhone,
     required this.customerEmail,
     required this.receivedByStaffId,
+    this.paymentReceived = true,
   });
 
   final String activityTypeId;
@@ -695,6 +702,10 @@ class LotActivityDraft {
   final String customerPhone;
   final String customerEmail;
   final String receivedByStaffId;
+
+  /// Direct only: whether the money is already in hand. When false the activity
+  /// is logged as owed and names no one as having received it.
+  final bool paymentReceived;
 }
 
 List<String> validateLotActivityDraft(
@@ -715,7 +726,10 @@ List<String> validateLotActivityDraft(
         d.customerEmail.trim().isEmpty) {
       errors.add('payment_link_contact_required');
     }
+    // Money taken off-platform must say who held it - but only once it has
+    // been received. An activity logged before the money arrives names no one.
     if (d.paymentMethod == lotPaymentMethodDirect &&
+        d.paymentReceived &&
         d.receivedByStaffId.trim().isEmpty) {
       errors.add('received_by_required');
     }

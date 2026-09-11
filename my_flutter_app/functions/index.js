@@ -300,6 +300,7 @@ const {
   validateLotActivity,
   lotActivityRecord,
   lotActivityInitialStatus,
+  lotActivityDirectReceived,
   lotActivityEditRefusal,
   lotActivityLockedPaymentFields,
   validateLotExpenseEntry,
@@ -14319,7 +14320,8 @@ exports.createLotActivity = onCall(
       }
       const business = businessDoc.data() || {};
       const method = String(data.paymentMethod || "").trim();
-      const {status, needsStripe} = lotActivityInitialStatus(method);
+      const {status, needsStripe} = lotActivityInitialStatus(
+          method, lotActivityDirectReceived(data));
       const trackingCode = await generateTrackingCode("LA", "lotActivities");
       const activityRef = db.collection("lotActivities").doc();
       const record = lotActivityRecord(data, {

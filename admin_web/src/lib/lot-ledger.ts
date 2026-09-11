@@ -164,6 +164,9 @@ export type LotActivityDraft = {
   /** direct only. */
   receivedVia: string;
   receivedByStaffId: string;
+  /** Direct only: whether the money is already in hand. When false the
+   *  activity is logged as owed and no one is named as having received it. */
+  paymentReceived: boolean;
 };
 
 export const emptyLotActivityDraft: LotActivityDraft = {
@@ -182,6 +185,7 @@ export const emptyLotActivityDraft: LotActivityDraft = {
   paymentMethod: "payment_link",
   receivedVia: "cash",
   receivedByStaffId: "",
+  paymentReceived: true,
 };
 
 export type LotActivityError =
@@ -243,8 +247,13 @@ export function validateLotActivityDraft(
     errors.push("payment_link_contact_required");
   }
   // A link settles itself and never names a staff member; money taken off the
-  // platform must say who held it.
-  if (method === "direct" && !trimmed(draft.receivedByStaffId, 120)) {
+  // platform must say who held it - but only once it has actually been
+  // received. An activity logged before the money arrives names no one yet.
+  if (
+    method === "direct" &&
+    draft.paymentReceived &&
+    !trimmed(draft.receivedByStaffId, 120)
+  ) {
     errors.push("received_by_required");
   }
 
@@ -282,9 +291,17 @@ export function lotActivityPayload(
     vinNumber: trimmed(draft.vinNumber, 17).toUpperCase(),
     auctionHouse: trimmed(draft.auctionHouse, 40),
     paymentMethod: method,
-    receivedVia: method === "direct" ? trimmed(draft.receivedVia, 40) : "",
+    // Absent-means-received on the server, so send it explicitly; a direct
+    // activity that has not been paid yet carries no received fields.
+    paymentReceived: method === "direct" ? draft.paymentReceived : true,
+    receivedVia:
+      method === "direct" && draft.paymentReceived
+        ? trimmed(draft.receivedVia, 40)
+        : "",
     receivedByStaffId:
-      method === "direct" ? trimmed(draft.receivedByStaffId, 120) : "",
+      method === "direct" && draft.paymentReceived
+        ? trimmed(draft.receivedByStaffId, 120)
+        : "",
   };
 }
 
@@ -439,11 +456,27 @@ export function lotActivityAwaitingLink(row: Row): boolean {
   return String(row?.paymentStatus ?? "") === "awaiting_payment_link";
 }
 
-/** Chase is offered only on an unpaid link — never on a settled or direct row. */
+/**
+ * Whether a row still has money to collect: an unpaid link, or a direct
+ * activity logged before its cash came in. Both are chased/settled from the
+ * same control (a link can be re-sent or marked received; a direct one is
+ * just marked received) — never a settled or cancelled row.
+ */
 export function canChaseLotActivity(row: Row): boolean {
+  const status = String(row?.paymentStatus ?? "");
+  const method = String(row?.paymentMethod ?? "");
   return (
-    String(row?.paymentMethod ?? "") === "payment_link" &&
-    String(row?.paymentStatus ?? "") === "awaiting_payment_link"
+    (method === "payment_link" && status === "awaiting_payment_link") ||
+    (method === "direct" && status === "awaiting_direct_payment")
+  );
+}
+
+/** A row awaiting an off-platform payment can only be marked received - there
+ *  is no link to re-send. Splits the two so the chase UI shows the right one. */
+export function lotActivityAwaitsDirect(row: Row): boolean {
+  return (
+    String(row?.paymentMethod ?? "") === "direct" &&
+    String(row?.paymentStatus ?? "") === "awaiting_direct_payment"
   );
 }
 
@@ -455,7 +488,8 @@ export function lotActivityPaymentLabel(row: Row): string {
   if (method === "payment_link") {
     return status === "succeeded" ? "Paid on the platform" : "Awaiting payment";
   }
-  // direct
+  // direct: logged before the cash arrived reads as awaiting, not paid.
+  if (status === "awaiting_direct_payment") return "Awaiting payment";
   const via = String(row?.receivedVia ?? "");
   const option = LOT_RECEIVED_VIA_OPTIONS.find((o) => o.value === via);
   return option ? option.label : "Paid outside the platform";

@@ -102,6 +102,35 @@ describe("recording an activity", () => {
             {knownTypeIds: ["t1"]},
         ).includes("received_by_required"),
     );
+    // But a direct activity logged before the money arrives names no one and
+    // passes - there is nobody who received it yet.
+    assert.deepEqual(
+        validateLotActivity(
+            {
+              ...ACTIVITY,
+              paymentMethod: "direct",
+              receivedByStaffId: "",
+              paymentReceived: false,
+            },
+            {knownTypeIds: ["t1"]},
+        ),
+        [],
+    );
+  });
+
+  it("a not-yet-paid direct activity awaits, names no one", () => {
+    assert.deepEqual(lotActivityInitialStatus("direct", false), {
+      status: "awaiting_direct_payment",
+      needsStripe: false,
+    });
+    const r = lotActivityRecord(
+        {...ACTIVITY, paymentMethod: "direct", receivedByStaffId: "s2",
+          receivedVia: "cash", paymentReceived: false},
+        {activityTypeLabel: "Dispatch", feeCents: 15000,
+          recordedByStaffId: "s1"},
+    );
+    assert.equal(r.receivedByStaffId, "");
+    assert.equal(r.receivedVia, "");
   });
 
   it("the record denormalizes label, uppercases VIN, drops mismatches", () => {
