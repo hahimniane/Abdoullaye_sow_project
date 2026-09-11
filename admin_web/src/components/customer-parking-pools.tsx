@@ -64,7 +64,12 @@ type ParkingOption = {
   businessId: string;
   businessName: string;
   city: string;
+  /** So a customer can pick a state, then a town that is actually in it. */
+  state: string;
   address: string;
+  /** False while browsing: the total is one day at the lot's rate, not a
+   *  quote for dates the customer chose. */
+  quotedForDates: boolean;
   availableSpaces: number;
   estimatedTotal: number;
   reviewWeightedScore: number;
@@ -175,6 +180,12 @@ function ParkingWorkspace({
     .toISOString()
     .slice(0, 10);
   const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  // Every lot there is, loaded before the customer names anywhere. The state
+  // and town pickers are built from it, so they only ever offer places that
+  // actually have a lot - the free-text box let someone type "Bronx" and get
+  // nothing while a lot in New York City sat a mile away.
+  const [allPlaces, setAllPlaces] = useState<ParkingOption[]>([]);
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(tomorrow);
   const [pickupRequested, setPickupRequested] = useState(false);
@@ -194,13 +205,55 @@ function ParkingWorkspace({
   );
 
   const validSearch =
-    city.trim().length > 1 &&
     Boolean(startDate) &&
     Boolean(endDate) &&
     new Date(endDate).getTime() >= new Date(startDate).getTime();
 
-  async function searchParking() {
-    if (!validSearch || loading) return;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await withTimeout(
+          httpsCallable<Record<string, never>, { options?: unknown[] }>(
+            functions,
+            authenticated ? "listParkingOptions" : "listPublicParkingOptions",
+          )({}),
+        );
+        if (cancelled) return;
+        setAllPlaces(
+          (Array.isArray(response.data.options) ? response.data.options : [])
+            .map(parkingOptionFromData),
+        );
+      } catch {
+        // Nothing to browse; the search still works.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authenticated]);
+
+  const browseStates = useMemo(
+    () => [...new Set(allPlaces.map((p) => p.state.trim()).filter(Boolean))].sort(),
+    [allPlaces],
+  );
+  const browseCities = useMemo(
+    () => [...new Set(allPlaces
+      .filter((p) => !state || p.state.trim() === state)
+      .map((p) => p.city.trim())
+      .filter(Boolean))].sort(),
+    [allPlaces, state],
+  );
+  const browsedPlaces = useMemo(
+    () => allPlaces.filter((p) =>
+      (!state || p.state.trim() === state) && (!city || p.city.trim() === city)),
+    [allPlaces, state, city],
+  );
+
+  async function searchParking(
+    narrow?: { city: string; state: string },
+  ): Promise<ParkingOption[]> {
+    if (!validSearch || loading) return [];
+    const searchCity = narrow ? narrow.city : city;
+    const searchState = narrow ? narrow.state : state;
     setLoading(true);
     setError("");
     setSearched(true);
@@ -209,7 +262,8 @@ function ParkingWorkspace({
       const response = await withTimeout(
         httpsCallable<
           {
-            city: string;
+            city?: string;
+            state?: string;
             startDate: string;
             endDate: string;
             pickupRequested: boolean;
@@ -221,23 +275,42 @@ function ParkingWorkspace({
             ? "listParkingOptions"
             : "listPublicParkingOptions",
         )({
-          city: city.trim(),
+          // Each only narrows when it was chosen. Nothing chosen is "every
+          // lot with room for these dates".
+          ...(searchCity.trim() ? {city: searchCity.trim()} : {}),
+          ...(searchState.trim() ? {state: searchState.trim()} : {}),
           startDate: localDateToIso(startDate, 9),
           endDate: localDateToIso(endDate, 17),
           pickupRequested,
         }),
       );
-      setOptions(
-        (Array.isArray(response.data.options) ? response.data.options : [])
-          .map(parkingOptionFromData)
-          .filter((option) => option.availableSpaces > 0),
-      );
+      const found = (Array.isArray(response.data.options) ? response.data.options : [])
+        .map(parkingOptionFromData)
+        .filter((option) => option.availableSpaces > 0);
+      setOptions(found);
+      return found;
     } catch {
       setOptions([]);
       setError("Parking options could not be loaded. Try again.");
+      return [];
     } finally {
       setLoading(false);
     }
+  }
+
+  // Tapping a lot in the list picks that lot. It is priced for the dates on
+  // the form first - a browsing row only knows one day at the lot's rate, and
+  // the reservation must be quoted on the real window. If the lot has no room
+  // for those dates, the customer sees the results for that town instead of
+  // being dropped into a booking that cannot happen.
+  async function chooseBrowsedPlace(place: ParkingOption) {
+    const placeCity = place.city.trim();
+    const placeState = place.state.trim();
+    setState(placeState);
+    setCity(placeCity);
+    const found = await searchParking({ city: placeCity, state: placeState });
+    const match = found.find((option) => option.businessId === place.businessId);
+    if (match) setSelected(match);
   }
 
   return (
@@ -251,14 +324,27 @@ function ParkingWorkspace({
           <CalendarDays aria-hidden="true" size={20} />
         </div>
         <div className="customer-parking-search-grid">
+          {browseStates.length > 0 && (
+            <label>
+              State
+              <select
+                onChange={(event) => { setState(event.target.value); setCity(""); setSearched(false); }}
+                value={state}
+              >
+                <option value="">Any state</option>
+                {browseStates.map((name) => (<option key={name} value={name}>{name}</option>))}
+              </select>
+            </label>
+          )}
           <label>
             City
-            <input
-              autoComplete="address-level2"
-              onChange={(event) => setCity(event.target.value)}
-              placeholder="Enter a city"
+            <select
+              onChange={(event) => { setCity(event.target.value); setSearched(false); }}
               value={city}
-            />
+            >
+              <option value="">Any city</option>
+              {browseCities.map((name) => (<option key={name} value={name}>{name}</option>))}
+            </select>
           </label>
           <label>
             Start date
@@ -305,11 +391,40 @@ function ParkingWorkspace({
         {error && <div className="error-box">{error}</div>}
       </section>
 
+      {!searched && browsedPlaces.length > 0 && (
+        <section aria-label="Places to park" className="customer-browse-list">
+          <h3>{browsedPlaces.length} {browsedPlaces.length === 1 ? "place" : "places"} to park</h3>
+          {browsedPlaces.map((place) => (
+            <button
+              className="customer-browse-row"
+              key={place.businessId}
+              aria-label={`Choose ${place.businessName}`}
+              disabled={loading}
+              onClick={() => void chooseBrowsedPlace(place)}
+              type="button"
+            >
+              <span>
+                <strong>{place.businessName}</strong>
+                <small>{[place.city, place.state].map((part) => part.trim()).filter(Boolean).join(", ")}</small>
+              </span>
+              <span className="customer-browse-meta">
+                <strong>{formatMoney(place.dailyRate)}/day</strong>
+                {/* Distance only when the customer shared where they are;
+                    an invented number is worse than none. */}
+                {place.distanceMiles !== null
+                  ? <small>{place.distanceMiles.toFixed(place.distanceMiles < 10 ? 1 : 0)} mi away</small>
+                  : place.availableSpaces > 0 ? <small>{place.availableSpaces} free today</small> : <small>Full today</small>}
+              </span>
+            </button>
+          ))}
+        </section>
+      )}
+
       {!loading && searched && !error && options.length === 0 && (
         <div className="empty-state customer-service-empty">
           <MapPin aria-hidden="true" size={23} />
           <strong>No parking is available for these dates.</strong>
-          <span>Try another city or adjust your dates.</span>
+          <span>Try other dates, or clear the city to see every lot.</span>
         </div>
       )}
 
@@ -353,7 +468,7 @@ function ParkingWorkspace({
                   <h3>{option.businessName}</h3>
                   <p>
                     <MapPin size={13} />
-                    {option.address || option.city}
+                    {[option.address || option.city, option.state].map((part) => part.trim()).filter(Boolean).join(", ")}
                   </p>
                 </div>
                 <span className="status-pill compact">
@@ -1545,7 +1660,9 @@ function parkingOptionFromData(value: unknown): ParkingOption {
     businessId: text(data.businessId, ""),
     businessName: text(data.businessName, "Approved business"),
     city: text(data.city, ""),
+    state: text(data.state, ""),
     address: text(data.address, ""),
+    quotedForDates: data.quotedForDates === true,
     availableSpaces: numberValue(data.availableSpaces),
     estimatedTotal: numberValue(data.estimatedTotal),
     reviewWeightedScore: numberValue(data.reviewWeightedScore),

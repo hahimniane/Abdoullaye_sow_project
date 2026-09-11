@@ -548,11 +548,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
 
   Future<void> _searchParkingOptions() async {
     final l10n = AppLocalizations.of(context)!;
+    // No city required: with nothing chosen this is every lot with room for
+    // the dates, which is what someone who knows no town name needs.
     final city = _parkingCityController.text.trim();
-    if (city.isEmpty) {
-      showErrorSnackBar(context, l10n.pleaseEnterParkingCity);
-      return;
-    }
     if (_selectedEndDateTime.isBefore(_selectedDateTime)) {
       showErrorSnackBar(context, l10n.parkingDateRangeInvalid);
       return;
@@ -564,6 +562,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     try {
       final options = await _parkingRepository.searchParking(
         city: city,
+        state: _browseState,
         startDate: _selectedDateTime,
         endDate: _selectedEndDateTime,
         customerLatitude: _customerLatitude,
@@ -587,17 +586,39 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   // the "choose a spot" step (which shows results or an empty-state notice).
   Future<void> _findParkingAndAdvance() async {
     final l10n = AppLocalizations.of(context)!;
-    final city = _parkingCityController.text.trim();
-    if (city.isEmpty) {
-      showErrorSnackBar(context, l10n.pleaseEnterParkingCity);
-      return;
-    }
     if (_selectedEndDateTime.isBefore(_selectedDateTime)) {
       showErrorSnackBar(context, l10n.parkingDateRangeInvalid);
       return;
     }
     await _searchParkingOptions();
     if (mounted) setState(() => _customerStep = 1);
+  }
+
+  /// Tapping a lot in the list picks that lot. It is priced for the dates on
+  /// the form first - a browsing row only knows one day at the lot's rate,
+  /// and the reservation must be quoted on the real window. If the lot has
+  /// no room for those dates, the customer lands on that town's results
+  /// rather than in a booking that cannot happen.
+  Future<void> _chooseBrowsedPlace(ParkingBusinessOption place) async {
+    setState(() {
+      _browseState = place.state.trim();
+      _browseCity = place.city.trim();
+      _parkingCityController.text = place.city.trim();
+      _selectedParkingOption = null;
+    });
+    await _searchParkingOptions();
+    if (!mounted) return;
+    ParkingBusinessOption? match;
+    for (final option in _parkingOptions) {
+      if (option.businessId == place.businessId) {
+        match = option;
+        break;
+      }
+    }
+    setState(() {
+      _selectedParkingOption = match;
+      _customerStep = 1;
+    });
   }
 
   void _goToParkingStep(int step) {
@@ -2154,16 +2175,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
             ..._browsedPlaces.take(8).map(
                   (place) => _ParkingPlaceTile(
                     place: place,
-                    selected: _browseCity == place.city.trim(),
-                    onTap: () {
-                      setState(() {
-                        _browseState = place.state.trim();
-                        _browseCity = place.city.trim();
-                        _parkingCityController.text = place.city.trim();
-                        _parkingOptions = const [];
-                        _selectedParkingOption = null;
-                      });
-                    },
+                    selected: _selectedParkingOption?.businessId ==
+                        place.businessId,
+                    onTap: _isSearchingParking
+                        ? () {}
+                        : () => _chooseBrowsedPlace(place),
                   ),
                 ),
           ],
