@@ -941,7 +941,10 @@ int businessParkingStayDays(Map<String, dynamic> row, {DateTime? now}) {
   final endUtc = end.toUtc();
   final startDay = DateTime.utc(startUtc.year, startUtc.month, startUtc.day);
   final endDay = DateTime.utc(endUtc.year, endUtc.month, endUtc.day);
-  final days = endDay.difference(startDay).inDays;
+  // Inclusive: the arrival day and the leave day both count, the way the
+  // lot's own sheet bills. Same-day in/out is one day; the 1st to the 5th is
+  // five.
+  final days = endDay.difference(startDay).inDays + 1;
   final minimumRaw = num.tryParse(_trimmed(row['minimumDays'], 20)) ?? 0;
   final minimum = minimumRaw > 0 ? minimumRaw.round() : 1;
   return days > minimum ? days : minimum;

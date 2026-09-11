@@ -552,7 +552,10 @@ export function businessParkingStayDays(
   const dayMs = 24 * 60 * 60 * 1000;
   const startDay = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
   const endDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
-  const days = Math.round((endDay - startDay) / dayMs);
+  // Inclusive: the arrival day and the leave day both count, the way the
+  // lot's own sheet bills. A car in and out the same day is one day; in on
+  // the 1st and out on the 5th is five.
+  const days = Math.round((endDay - startDay) / dayMs) + 1;
   const minimum = Number(record.minimumDays) > 0 ? Number(record.minimumDays) : 1;
   return Math.max(minimum, days);
 }

@@ -2805,7 +2805,8 @@ describe("car parking service callable lifecycle", () => {
       row.businessId === businessId);
     assert.ok(option);
     assert.equal(option.availableSpaces, 5);
-    assert.equal(option.estimatedTotal, 50);
+    // 3 days inclusive (day+2..day+4) x $25/day
+    assert.equal(option.estimatedTotal, 75);
 
     const publicListed = await functions.listPublicParkingOptions.run({
       data: {city: "Bronx", startDate, endDate, pickupRequested: false},
@@ -2840,7 +2841,8 @@ describe("car parking service callable lifecycle", () => {
     assert.equal(reservation.get("customerUid"), CUSTOMER_UID);
     assert.equal(reservation.get("status"), "reserved");
     assert.equal(reservation.get("paymentStatus"), "succeeded");
-    assert.equal(reservation.get("totalCost"), 50);
+    assert.equal(reservation.get("totalCost"), 75);
+    // Deposit is capped at $50 (min(total, 5000)), not the full stay.
     assert.equal(reservation.get("depositAmount"), 50);
     assert.match(reservation.get("trackingCode"), /^PK/);
   });

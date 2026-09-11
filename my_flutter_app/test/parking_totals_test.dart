@@ -45,7 +45,7 @@ void main() {
     expect(t.inLot, 1);
     expect(t.left, 1);
     expect(t.collected, 108); // 60 + 48
-    expect(t.owed, 60); // open stay's 120 accrued - 60 paid; others settled/cancelled
+    expect(t.owed, 72); // open stay's 132 accrued (11d x 12) - 60 paid; others settled/cancelled
     expect(t.spacesTotal, 50);
     expect(t.spacesUsed, 1);
   });
@@ -56,11 +56,11 @@ void main() {
       'parkingDate': day('2026-09-01'),
       'dailyRate': 12,
     };
-    expect(businessParkingAccrued(open, now: now), 120); // 10 days x 12
-    expect(businessParkingBalance(open, now: now), 120);
+    expect(businessParkingAccrued(open, now: now), 132); // Sep 1..11 inclusive = 11d x 12
+    expect(businessParkingBalance(open, now: now), 132);
     expect(
       businessParkingBalance({...open, 'amountPaidCents': 5000}, now: now),
-      70,
+      82,
     );
 
     // A fixed stay is priced for its whole range up front; a part payment
@@ -138,12 +138,12 @@ void main() {
       }, now: now),
       1,
     );
-    // Ten calendar days.
+    // Sep 1 through Sep 11 inclusive = 11 days.
     expect(
       businessParkingStayDays({
         'parkingDate': day('2026-09-01'),
       }, now: now),
-      10,
+      11,
     );
     // A recorded minimum wins when the span is shorter.
     expect(
