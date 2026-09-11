@@ -137,6 +137,7 @@ import {
   businessParkingDocumentType,
   businessParkingEndLabel,
   businessParkingStayDays,
+  businessParkingTotals,
   businessParkingAmountPaid,
   businessParkingIsPartlyPaid,
   businessParkingWithinRange,
@@ -4814,6 +4815,7 @@ export function ParkingPanel({
   const [openRowId, setOpenRowId] = useState("");
   const [entryAlreadyPaid, setEntryAlreadyPaid] = useState(false);
   const [entryReceivedVia, setEntryReceivedVia] = useState("cash");
+  const [entryReceivedBy, setEntryReceivedBy] = useState("");
   const [entryCustomerMenuOpen, setEntryCustomerMenuOpen] = useState(false);
   const [entryCustomerPick, setEntryCustomerPick] = useState<LotCustomer | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -4880,6 +4882,15 @@ export function ParkingPanel({
   // Counting status === "active" always returned zero: no parking record has
   // ever had that status. What the header should say is how many cars are
   // actually on the lot - not cancelled, and not yet departed.
+  // The scoreboard reads the rows in view, so a filter re-totals to what the
+  // owner is looking at. Spaces come from the business record, not the rows.
+  const parkingTotals = useMemo(
+    () => businessParkingTotals(
+      filteredRows as Parameters<typeof businessParkingTotals>[0],
+      Number((business as Record<string, unknown> | null)?.parkingTotalSpaces) || 0,
+    ),
+    [filteredRows, business],
+  );
   const inLotCount = parkedCars.rows.filter(
     (row) => text(row.status, "reserved") !== "cancelled" &&
       businessParkingEndLabel(row) !== "Ended",
@@ -5033,6 +5044,7 @@ export function ParkingPanel({
     // or a stay nobody paid for is settled by a leftover radio.
     setEntryAlreadyPaid(false);
     setEntryReceivedVia("cash");
+    setEntryReceivedBy("");
     setEntryCustomerPick(null);
     setEntryCustomerMenuOpen(false);
   }
@@ -5119,6 +5131,7 @@ export function ParkingPanel({
           await httpsCallable(functions, "markBusinessParkingPaid")({
             entryId: created.entryId,
             receivedVia: entryReceivedVia,
+            ...(entryReceivedBy ? {receivedByStaffId: entryReceivedBy} : {}),
           });
           setEntryMessage("Recorded, and marked as paid.");
         } catch {
@@ -5358,6 +5371,17 @@ export function ParkingPanel({
           <h3>No parked cars yet</h3>
           <p>Add a car you're storing to start a parking record.</p>
           <button className="lst-add" type="button" onClick={openEntry}><Plus size={17} /> Record a parked car</button>
+        </div>
+      )}
+      {!parkedCars.loading && parkedCars.rows.length > 0 && (
+        <div className="pk-scoreboard" role="group" aria-label="Parking totals">
+          <div className="pk-stat"><span>In the lot</span><b>{parkingTotals.inLot}</b></div>
+          <div className="pk-stat"><span>Left</span><b>{parkingTotals.left}</b></div>
+          <div className="pk-stat"><span>Collected</span><b>{formatMoney(parkingTotals.collected)}</b></div>
+          <div className="pk-stat"><span>Owed</span><b className={parkingTotals.owed > 0 ? "owed" : undefined}>{formatMoney(parkingTotals.owed)}</b></div>
+          {parkingTotals.spacesTotal > 0 && (
+            <div className="pk-stat"><span>Spaces</span><b>{parkingTotals.spacesUsed} / {parkingTotals.spacesTotal}</b></div>
+          )}
         </div>
       )}
       {!parkedCars.loading && parkedCars.rows.length > 0 && filteredRows.length === 0 && (
@@ -5832,13 +5856,25 @@ export function ParkingPanel({
                         <span>They have already paid</span>
                       </label>
                       {entryAlreadyPaid && (
-                        <label className="lst-field"><span>How did they pay?</span>
-                          <select value={entryReceivedVia} onChange={(event) => setEntryReceivedVia(event.target.value)}>
-                            {BUSINESS_PARKING_RECEIVED_VIA_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>{option.label}</option>
-                            ))}
-                          </select>
-                        </label>
+                        <>
+                          <label className="lst-field"><span>How did they pay?</span>
+                            <select value={entryReceivedVia} onChange={(event) => setEntryReceivedVia(event.target.value)}>
+                              {BUSINESS_PARKING_RECEIVED_VIA_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="lst-field"><span>Received by</span>
+                            <select value={entryReceivedBy} onChange={(event) => setEntryReceivedBy(event.target.value)}>
+                              <option value="">Choose staff…</option>
+                              {parkingStaff.rows.map((row) => {
+                                const r = row as Record<string, unknown>;
+                                const id = String(r.id ?? "");
+                                return <option key={id} value={id}>{text(r.fullName, "") || text(r.name, "") || text(r.email, "") || id}</option>;
+                              })}
+                            </select>
+                          </label>
+                        </>
                       )}
                     </div>
                   )}

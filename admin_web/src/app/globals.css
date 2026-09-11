@@ -13601,3 +13601,40 @@ button[data-loading="true"]::before {
 .pk-partpay-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .pk-partpay-row select, .pk-partpay-row input { min-width: 0; }
 .pk-partpay-row input[type="number"] { max-width: 130px; }
+
+/* A live scoreboard over the parking list - the totals the lot's own sheet
+   kept in the margin, read from the records so they cannot rot, and re-totalled
+   to whatever the filter is showing. */
+.pk-scoreboard {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin: 12px 0;
+}
+
+.pk-stat {
+  background: var(--paper, #fff);
+  border: 1px solid var(--rule, #e5e7eb);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.pk-stat span {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.pk-stat b {
+  color: var(--ink);
+  display: block;
+  font-size: 18px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+.pk-stat b.owed { color: #b45309; }
