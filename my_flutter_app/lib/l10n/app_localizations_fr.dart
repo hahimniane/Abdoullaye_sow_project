@@ -8121,6 +8121,39 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get lotActivityGenerated => 'Généré à ce jour';
+
+  @override
+  String get lotActivityCollected => 'Encaissé';
+
+  @override
+  String get lotActivityAwaiting => 'En attente';
+
+  @override
+  String get lotActivityJobs => 'Tâches';
+
+  @override
+  String get lotRevenueSources => 'D\'où viennent les revenus';
+
+  @override
+  String get lotRevenueSourcesNote =>
+      'Activités de cette année, plus le stationnement généré à ce jour.';
+
+  @override
+  String get lotRevenueCarParking => 'Stationnement';
+
+  @override
+  String get lotRevenueOneOff => 'Tâches ponctuelles';
+
+  @override
+  String get lotRevenueTotal => 'Revenu total';
+
+  @override
+  String lotNoRevenueYear(String year) {
+    return 'Aucun revenu enregistré en $year pour l\'instant.';
+  }
+
+  @override
   String get lotMonthByMonth => 'Mois par mois';
 
   @override

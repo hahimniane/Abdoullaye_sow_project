@@ -3465,6 +3465,23 @@
       }
     }
   },
+  "lotActivityGenerated": "Generated so far",
+  "lotActivityCollected": "Collected",
+  "lotActivityAwaiting": "Awaiting",
+  "lotActivityJobs": "Jobs",
+  "lotRevenueSources": "Where the revenue comes from",
+  "lotRevenueSourcesNote": "Activities this year, plus car parking generated to date.",
+  "lotRevenueCarParking": "Car parking",
+  "lotRevenueOneOff": "One-off jobs",
+  "lotRevenueTotal": "Total revenue",
+  "lotNoRevenueYear": "No revenue recorded in {year} yet.",
+  "@lotNoRevenueYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
   "lotMonthByMonth": "Month by month",
   "lotErrActivityType": "Choose what was done.",
   "lotErrCustomLabel": "Say what was done.",

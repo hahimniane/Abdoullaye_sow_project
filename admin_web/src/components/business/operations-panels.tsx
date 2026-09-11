@@ -7562,6 +7562,62 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   // collected plus everything still owed on cars that have run it up.
   const parkingGenerated = Math.round((parkingTotals.collected + parkingTotals.owed) * 100) / 100;
 
+  // Activity money to date, for the scoreboard above the Activity list — the
+  // ledger's own version of "how much has this generated so far". Cancelled and
+  // voided jobs never billed, so they are left out.
+  const activityMoney = useMemo(() => {
+    let generatedCents = 0;
+    let collectedCents = 0;
+    let awaitingCentsAll = 0;
+    let jobs = 0;
+    for (const row of activities.rows) {
+      const r = row as Record<string, unknown>;
+      if (r.voided === true) continue;
+      const status = String(r.paymentStatus);
+      if (status === "cancelled") continue;
+      const fee = Number(r.feeCents) || 0;
+      generatedCents += fee;
+      jobs += 1;
+      if (status === "succeeded" || status === "paid") collectedCents += fee;
+      else if (status === "awaiting_payment_link" || status === "awaiting_direct_payment") awaitingCentsAll += fee;
+    }
+    return { generatedCents, collectedCents, awaitingCentsAll, jobs };
+  }, [activities.rows]);
+
+  // Revenue by source for the report year: one figure per activity type, plus
+  // car parking, so the owner sees where the year's money came from — titles,
+  // parking and the rest — not one lumped "revenue" bar.
+  const yearRevenueByType = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const row of activities.rows) {
+      const r = row as Record<string, unknown>;
+      if (String(r.paymentStatus) === "cancelled" || r.voided === true) continue;
+      if (lotRowMonth(row, "activityDate").slice(0, 4) !== String(year)) continue;
+      const key = String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? "custom" : String(r.activityTypeId);
+      totals.set(key, (totals.get(key) ?? 0) + (Number(r.feeCents) || 0));
+    }
+    return totals;
+  }, [activities.rows, year]);
+
+  // The breakdown rows: every activity type that billed this year, plus a car
+  // parking line (generated to date). Sorted biggest first, "Other" last.
+  const revenueBreakdown = useMemo(() => {
+    const rows: { key: string; label: string; cents: number }[] = [];
+    for (const [key, cents] of yearRevenueByType.entries()) {
+      if (cents <= 0) continue;
+      rows.push({
+        key,
+        label: key === "custom" ? "One-off jobs" : text(typeById.get(key)?.label, "Activity"),
+        cents,
+      });
+    }
+    const parkingCents = Math.round(parkingGenerated * 100);
+    if (parkingCents > 0) rows.push({ key: "__parking", label: "Car parking", cents: parkingCents });
+    rows.sort((a, b) => b.cents - a.cents);
+    return rows;
+  }, [yearRevenueByType, typeById, parkingGenerated]);
+  const revenueBreakdownTotal = revenueBreakdown.reduce((s, r) => s + r.cents, 0);
+
   const topCards = useMemo(
     () =>
       [...revenueByType.entries()]
@@ -7941,17 +7997,15 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
 
       {segment === "activity" && (
         <>
-          {/* Parked cars are the other half of what the lot makes. This is the
-              same scoreboard the Parking screen shows, surfaced here so the
-              ledger opens on the whole money picture, not just billed jobs. */}
-          <div className="pk-scoreboard" role="group" aria-label="Parked-car money">
-            <div className="pk-stat"><span>In the lot</span><b>{parkingTotals.inLot}</b></div>
-            <div className="pk-stat"><span>Generated so far</span><b>{formatMoney(parkingGenerated)}</b></div>
-            <div className="pk-stat"><span>Collected</span><b>{formatMoney(parkingTotals.collected)}</b></div>
-            <div className="pk-stat"><span>Still owed</span><b className={parkingTotals.owed > 0 ? "owed" : undefined}>{formatMoney(parkingTotals.owed)}</b></div>
-            {parkingOverdue.count > 0 && (
-              <div className="pk-stat"><span>Overdue</span><b className="owed">{formatMoney(parkingOverdue.amount)}</b><small>{parkingOverdue.count} car{parkingOverdue.count === 1 ? "" : "s"} past due</small></div>
-            )}
+          {/* How much the lot's activities have generated so far — the same kind
+              of scoreboard the Parking screen shows, but about the jobs on this
+              tab: total billed to date, what has been collected, what is still
+              owed, and how many jobs. */}
+          <div className="pk-scoreboard" role="group" aria-label="Activity money">
+            <div className="pk-stat"><span>Generated so far</span><b>{lotFormatCents(activityMoney.generatedCents)}</b></div>
+            <div className="pk-stat"><span>Collected</span><b>{lotFormatCents(activityMoney.collectedCents)}</b></div>
+            <div className="pk-stat"><span>Awaiting</span><b className={activityMoney.awaitingCentsAll > 0 ? "owed" : undefined}>{lotFormatCents(activityMoney.awaitingCentsAll)}</b></div>
+            <div className="pk-stat"><span>Jobs</span><b>{activityMoney.jobs}</b></div>
           </div>
 
           <div className="metric-grid">
@@ -8091,7 +8145,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             ))}
           </div>
           <div className="metric-grid">
-            <div className="metric money"><span>Revenue {year}</span><b>{lotFormatCents(yearRevenue)}</b></div>
+            <div className="metric money"><span>Activity revenue {year}</span><b>{lotFormatCents(yearRevenue)}</b></div>
             <div className="metric"><span>Expenses {year}</span><b>{lotFormatCents(yearExpense)}</b></div>
             <div className={`metric ${yearNet < 0 ? "attention" : "good"}`}><span>Net profit</span><b>{lotFormatCents(yearNet)}</b></div>
             <div className="metric"><span>Margin</span><b>{yearRevenue > 0 ? `${Math.round((yearNet / yearRevenue) * 100)}%` : "—"}</b></div>
@@ -8116,6 +8170,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
           ) : (
             <LotYearSummary revenue={yearRevenue} expense={yearExpense} net={yearNet} />
           )}
+          <LotRevenueBreakdown rows={revenueBreakdown} totalCents={revenueBreakdownTotal} year={year} />
           <LotExpenseBreakdown
             spend={lotExpenseByLine(expenseLines.rows, expenseEntries.rows, yearMonths, nowMonth)}
             totalCents={yearExpense}
@@ -8392,6 +8447,43 @@ function LotMonthlyChart({ revenue, expenses, year }: { revenue: number[]; expen
 // Which line is eating the money, ranked, with each share drawn against the
 // same total the tiles above show. One colour on purpose: the ranking is the
 // information, a palette would only decorate it.
+function LotRevenueBreakdown({ rows, totalCents, year }: { rows: { key: string; label: string; cents: number }[]; totalCents: number; year: number }) {
+  return (
+    <>
+      <div className="panel-header" style={{ marginTop: 20 }}><h3>Where the revenue comes from</h3></div>
+      {rows.length === 0 || totalCents <= 0 ? (
+        <EmptyState text={`No revenue recorded in ${year} yet.`} />
+      ) : (
+        <div className="lot-spend-breakdown">
+          {rows.map((row) => {
+            const fraction = row.cents / totalCents;
+            const percent = Math.round(fraction * 100);
+            return (
+              <div className="lot-spend-row" key={row.key}>
+                <div className="lot-spend-head">
+                  <strong>{row.label || "Other"}</strong>
+                  <b>{lotFormatCents(row.cents)}</b>
+                </div>
+                <div className="lot-spend-track">
+                  <div className="lot-spend-fill" style={{ width: `${Math.max(fraction * 100, 1.2)}%`, background: "var(--money, #0d9488)" }} />
+                  <span>{percent < 1 ? "<1%" : `${percent}%`}</span>
+                </div>
+              </div>
+            );
+          })}
+          <div className="lot-spend-row" style={{ marginTop: 4 }}>
+            <div className="lot-spend-head">
+              <strong>Total revenue</strong>
+              <b>{lotFormatCents(totalCents)}</b>
+            </div>
+            <small className="lst-hint">Activities for {year} plus car parking generated to date.</small>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function LotExpenseBreakdown({ spend, totalCents, year }: { spend: { lineId: string; label: string; cents: number }[]; totalCents: number; year: number }) {
   if (spend.length === 0 || totalCents <= 0) {
     return (
