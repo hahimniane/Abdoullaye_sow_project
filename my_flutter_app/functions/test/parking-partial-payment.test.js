@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const {describe, it} = require("node:test");
-const {businessParkingPartialPaymentPlan} = require("../business_parking_entry");
+const {businessParkingPartialPaymentPlan} =
+  require("../business_parking_entry");
 
 // A twenty-day stay can be paid five or ten days at a time. Staff give days or
 // dollars; the running total moves, and a fixed stay flips to fully paid only
@@ -9,7 +10,7 @@ describe("a part payment against parking", () => {
   const fixed = {
     source: "business", paymentMethod: "direct", status: "reserved",
     paymentStatus: "awaiting_direct_payment",
-    parkingEndDate: {seconds: 1},                 // a leave date = fixed total
+    parkingEndDate: {seconds: 1}, // a leave date = fixed total
     amountDueCents: 24000, dailyRateCents: 1200,
   };
 
@@ -17,9 +18,9 @@ describe("a part payment against parking", () => {
     const plan = businessParkingPartialPaymentPlan(
         {entry: fixed, days: 5, dailyRateCents: 1200});
     assert.equal(plan.ok, true);
-    assert.equal(plan.appliedCents, 6000);        // 5 x $12
+    assert.equal(plan.appliedCents, 6000); // 5 x $12
     assert.equal(plan.newPaidCents, 6000);
-    assert.equal(plan.fullyCovered, false);       // 60 of 240
+    assert.equal(plan.fullyCovered, false); // 60 of 240
   });
 
   it("accepts a dollar amount directly", () => {
@@ -28,7 +29,7 @@ describe("a part payment against parking", () => {
     assert.equal(plan.appliedCents, 5000);
   });
 
-  it("adds to what was already paid, and marks fully covered at the total", () => {
+  it("adds to what was paid, and covers fully at the total", () => {
     const half = {...fixed, amountPaidCents: 18000};
     const plan = businessParkingPartialPaymentPlan(
         {entry: half, days: 5, dailyRateCents: 1200});
@@ -39,8 +40,8 @@ describe("a part payment against parking", () => {
   it("clamps an overpayment on a fixed stay to the balance", () => {
     const almost = {...fixed, amountPaidCents: 22000};
     const plan = businessParkingPartialPaymentPlan(
-        {entry: almost, days: 10, dailyRateCents: 1200});   // would be $120
-    assert.equal(plan.appliedCents, 2000);        // only $20 was owed
+        {entry: almost, days: 10, dailyRateCents: 1200}); // would be $120
+    assert.equal(plan.appliedCents, 2000); // only $20 was owed
     assert.equal(plan.fullyCovered, true);
   });
 
@@ -54,7 +55,7 @@ describe("a part payment against parking", () => {
     assert.equal(plan.ok, true);
     assert.equal(plan.appliedCents, 6000);
     assert.equal(plan.openEnded, true);
-    assert.equal(plan.fullyCovered, false);       // it keeps accruing
+    assert.equal(plan.fullyCovered, false); // it keeps accruing
   });
 
   it("refuses days when the car has no daily rate", () => {
@@ -70,7 +71,7 @@ describe("a part payment against parking", () => {
             .reason, "no_amount");
   });
 
-  it("refuses a payment-link entry, a cancelled one, and one already paid", () => {
+  it("refuses a link entry, a cancelled one, and one already paid", () => {
     assert.equal(businessParkingPartialPaymentPlan(
         {entry: {...fixed, paymentMethod: "payment_link"}, amountCents: 1000})
         .reason, "payment_link_is_stripe_owned");

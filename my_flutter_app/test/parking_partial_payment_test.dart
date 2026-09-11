@@ -11,7 +11,7 @@ void main() {
         'source': 'business',
         'paymentMethod': 'direct',
         'paymentStatus': 'awaiting_direct_payment',
-        if (paidCents != null) 'amountPaidCents': paidCents,
+        'amountPaidCents': ?paidCents,
       };
 
   test('amount paid reads cents, defaults to zero', () {
