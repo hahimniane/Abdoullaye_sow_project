@@ -3448,6 +3448,23 @@
   },
   "lotNetProfit": "Net profit",
   "lotMargin": "Margin",
+  "lotParkingIncome": "Parked-car income",
+  "lotParkingIncomeNote": "Paid, still to come, and past due. Current standing.",
+  "lotParkingInLot": "In the lot",
+  "lotParkingGenerated": "Generated so far",
+  "lotParkingCollected": "Collected",
+  "lotParkingCollectedNote": "Already paid",
+  "lotParkingOwed": "Still owed",
+  "lotParkingOwedNote": "Money yet to come",
+  "lotParkingOverdue": "Overdue",
+  "lotParkingOverdueCars": "{count, plural, =1{1 car past the end date, still owing} other{{count} cars past the end date, still owing}}",
+  "@lotParkingOverdueCars": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "lotMonthByMonth": "Month by month",
   "lotErrActivityType": "Choose what was done.",
   "lotErrCustomLabel": "Say what was done.",

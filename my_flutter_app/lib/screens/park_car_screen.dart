@@ -1700,6 +1700,82 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                 )!.customerEmailOptional,
                               ),
                               const SizedBox(height: 16),
+                              // VIN first: a full VIN fills the make, model and
+                              // year below, so it leads the vehicle fields.
+                              _RoundedTextField(
+                                controller: _vinController,
+                                label: AppLocalizations.of(
+                                  context,
+                                )!.vinNumberOptional,
+                                textCapitalization:
+                                    TextCapitalization.characters,
+                                onChanged: _onVinChanged,
+                                suffixIcon: IconButton(
+                                  tooltip: AppLocalizations.of(
+                                    context,
+                                  )!.scanVin,
+                                  onPressed: _isVinDecoding ? null : _scanVin,
+                                  icon: const Icon(Icons.qr_code_scanner),
+                                ),
+                                // Optional, the way the console has it: a car
+                                // dropped off at night with the plate out of
+                                // reach still has to be recordable. A VIN that
+                                // IS typed still has to be a real one.
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return null;
+                                  }
+                                  if (!isValidVin(value)) {
+                                    return AppLocalizations.of(
+                                      context,
+                                    )!.invalidVinNumber;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: _isVinDecoding
+                                          ? null
+                                          : _decodeCurrentVin,
+                                      icon: _isVinDecoding
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(Icons.manage_search),
+                                      label: Text(
+                                        AppLocalizations.of(context)!.decodeVin,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: _isVinDecoding
+                                          ? null
+                                          : _scanVin,
+                                      icon: const Icon(Icons.document_scanner),
+                                      label: Text(
+                                        AppLocalizations.of(context)!.scanVin,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_decodedVehicleInfo != null) ...[
+                                const SizedBox(height: 12),
+                                _DecodedVinPanel(info: _decodedVehicleInfo!),
+                              ],
+                              const SizedBox(height: 16),
                               if (_isCatalogLoading)
                                 const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 24.0),
@@ -1787,80 +1863,6 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                     return null;
                                   },
                                 ),
-                              ],
-                              const SizedBox(height: 16),
-                              _RoundedTextField(
-                                controller: _vinController,
-                                label: AppLocalizations.of(
-                                  context,
-                                )!.vinNumberOptional,
-                                textCapitalization:
-                                    TextCapitalization.characters,
-                                onChanged: _onVinChanged,
-                                suffixIcon: IconButton(
-                                  tooltip: AppLocalizations.of(
-                                    context,
-                                  )!.scanVin,
-                                  onPressed: _isVinDecoding ? null : _scanVin,
-                                  icon: const Icon(Icons.qr_code_scanner),
-                                ),
-                                // Optional, the way the console has it: a car
-                                // dropped off at night with the plate out of
-                                // reach still has to be recordable. A VIN that
-                                // IS typed still has to be a real one.
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return null;
-                                  }
-                                  if (!isValidVin(value)) {
-                                    return AppLocalizations.of(
-                                      context,
-                                    )!.invalidVinNumber;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: _isVinDecoding
-                                          ? null
-                                          : _decodeCurrentVin,
-                                      icon: _isVinDecoding
-                                          ? const SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(Icons.manage_search),
-                                      label: Text(
-                                        AppLocalizations.of(context)!.decodeVin,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: _isVinDecoding
-                                          ? null
-                                          : _scanVin,
-                                      icon: const Icon(Icons.document_scanner),
-                                      label: Text(
-                                        AppLocalizations.of(context)!.scanVin,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (_decodedVehicleInfo != null) ...[
-                                const SizedBox(height: 12),
-                                _DecodedVinPanel(info: _decodedVehicleInfo!),
                               ],
                               const SizedBox(height: 16),
 
@@ -2456,6 +2458,58 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                 ? l10n.phoneNumberRequired
                 : null,
           ),
+          // VIN first: a full VIN fills the make, model and year
+          // below, so it leads the vehicle fields.
+          _RoundedTextField(
+            controller: _vinController,
+            label: l10n.vinNumber,
+            textCapitalization: TextCapitalization.characters,
+            onChanged: _onVinChanged,
+            suffixIcon: IconButton(
+              tooltip: l10n.scanVin,
+              onPressed: _isVinDecoding ? null : _scanVin,
+              icon: const Icon(Icons.qr_code_scanner),
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return l10n.pleaseEnterVinNumber;
+              }
+              if (!isValidVin(value)) {
+                return l10n.invalidVinNumber;
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isVinDecoding ? null : _decodeCurrentVin,
+                  icon: _isVinDecoding
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.manage_search),
+                  label: Text(l10n.decodeVin, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isVinDecoding ? null : _scanVin,
+                  icon: const Icon(Icons.document_scanner),
+                  label: Text(l10n.scanVin, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+            ],
+          ),
+          if (_decodedVehicleInfo != null) ...[
+            const SizedBox(height: 12),
+            _DecodedVinPanel(info: _decodedVehicleInfo!),
+          ],
           const SizedBox(height: 12),
           if (_isCatalogLoading)
             const Padding(
@@ -2514,55 +2568,6 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
             ),
           ],
           const SizedBox(height: 12),
-          _RoundedTextField(
-            controller: _vinController,
-            label: l10n.vinNumber,
-            textCapitalization: TextCapitalization.characters,
-            suffixIcon: IconButton(
-              tooltip: l10n.scanVin,
-              onPressed: _isVinDecoding ? null : _scanVin,
-              icon: const Icon(Icons.qr_code_scanner),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return l10n.pleaseEnterVinNumber;
-              }
-              if (!isValidVin(value)) {
-                return l10n.invalidVinNumber;
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isVinDecoding ? null : _decodeCurrentVin,
-                  icon: _isVinDecoding
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.manage_search),
-                  label: Text(l10n.decodeVin, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isVinDecoding ? null : _scanVin,
-                  icon: const Icon(Icons.document_scanner),
-                  label: Text(l10n.scanVin, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ],
-          ),
-          if (_decodedVehicleInfo != null) ...[
-            const SizedBox(height: 12),
-            _DecodedVinPanel(info: _decodedVehicleInfo!),
-          ],
         ],
       ),
     );

@@ -643,6 +643,41 @@ export function businessParkingTotals(
   };
 }
 
+export type ParkingOverdue = {
+  /** How many cars are past their end date and still owe money. */
+  count: number;
+  /** The balance still owed across those cars, in dollars. */
+  amount: number;
+};
+
+/**
+ * The cars whose deadline has passed but that have not settled — end date in
+ * the past, still owing money, not cancelled. This is the lot's collection
+ * risk: a car that was due to leave and has not paid what it ran up. An
+ * open-ended stay has no deadline to pass, so it is "still owed", not overdue.
+ *
+ * @param rows parkedCars documents.
+ * @param now Injected so the boundary is testable.
+ * @return The count and the dollars still owed on overdue cars.
+ */
+export function businessParkingOverdue(
+  rows: ParkingRowLike[],
+  now: Date = new Date(),
+): ParkingOverdue {
+  let count = 0;
+  let amount = 0;
+  for (const row of rows) {
+    if (trimmed((row as { status?: unknown })?.status, 40) === "cancelled") continue;
+    if (businessParkingEndLabel(row, now) !== "Ended") continue;
+    const balance = businessParkingBalance(row, now);
+    if (balance > 0) {
+      count += 1;
+      amount += balance;
+    }
+  }
+  return { count, amount: Math.round(amount * 100) / 100 };
+}
+
 // The facets a parking row can be filtered on. Each row has exactly one status
 // kind and one payment class, so a filter is "which kinds AND which payment
 // classes to keep" - that is what lets a lot ask a compound question like

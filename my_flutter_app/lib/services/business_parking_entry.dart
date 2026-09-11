@@ -1051,6 +1051,42 @@ BusinessParkingTotals businessParkingTotals(
   );
 }
 
+/// The lot's collection risk: cars past their end date that still owe money.
+/// Mirrors the console's `ParkingOverdue` / `businessParkingOverdue`.
+class BusinessParkingOverdue {
+  const BusinessParkingOverdue({required this.count, required this.amount});
+
+  /// How many cars are past their end date and still owe money.
+  final int count;
+
+  /// The balance still owed across those cars, in dollars.
+  final double amount;
+}
+
+/// The cars whose deadline has passed but that have not settled - end date in
+/// the past, still owing money, not cancelled. An open-ended stay has no
+/// deadline to pass, so it is "still owed", not overdue. Mirrors the console's
+/// `businessParkingOverdue`.
+BusinessParkingOverdue businessParkingOverdue(
+  List<Map<String, dynamic>> rows, {
+  DateTime? now,
+}) {
+  var count = 0;
+  var amount = 0.0;
+  for (final row in rows) {
+    if (_trimmed(row['status'], 40) == 'cancelled') continue;
+    if (businessParkingEndLabel(row, now: now) != BusinessParkingEndLabel.ended) {
+      continue;
+    }
+    final balance = businessParkingBalance(row, now: now);
+    if (balance > 0) {
+      count += 1;
+      amount += balance;
+    }
+  }
+  return BusinessParkingOverdue(count: count, amount: (amount * 100).round() / 100);
+}
+
 /// The one status kind a row belongs to. Mirrors the console's
 /// `parkingRowKind`: cancelled or departed first (whatever it once was), then a
 /// booking still in checkout, then the live split - a staff walk-up stands in

@@ -85,6 +85,24 @@ void main() {
     );
   });
 
+  // A car past its end date that still owes money is the lot's collection
+  // risk. Mirrors the console's `overdue counts ended cars that still owe`.
+  test('overdue counts ended cars that still owe', () {
+    final rows = <Map<String, dynamic>>[
+      // ended Sep 5, fixed $48, only $12 paid -> overdue, owes 36
+      {'source': 'business', 'paymentMethod': 'direct', 'paymentStatus': 'awaiting_direct_payment', 'parkingDate': day('2026-09-01'), 'parkingEndDate': day('2026-09-05'), 'amountDueCents': 4800, 'amountPaidCents': 1200},
+      // ended Sep 5, paid in full -> settled, not overdue
+      {'source': 'business', 'paymentMethod': 'direct', 'paymentStatus': 'paid', 'parkingDate': day('2026-09-01'), 'parkingEndDate': day('2026-09-05'), 'amountDueCents': 4800, 'amountPaidCents': 4800},
+      // open-ended, still owing -> no deadline, not overdue
+      {'source': 'business', 'paymentMethod': 'direct', 'paymentStatus': 'awaiting_direct_payment', 'parkingDate': day('2026-09-01'), 'dailyRate': 12},
+      // ended but cancelled -> owes nothing
+      {'source': 'business', 'status': 'cancelled', 'paymentStatus': 'awaiting_direct_payment', 'parkingDate': day('2026-09-01'), 'parkingEndDate': day('2026-09-05'), 'amountDueCents': 4800},
+    ];
+    final o = businessParkingOverdue(rows, now: now);
+    expect(o.count, 1);
+    expect(o.amount, 36);
+  });
+
   test('the scoreboard counts walk-ups and bookings apart', () {
     final rows = <Map<String, dynamic>>[
       {'source': 'business', 'paymentStatus': 'awaiting_direct_payment', 'parkingDate': day('2026-09-01'), 'dailyRate': 12},
