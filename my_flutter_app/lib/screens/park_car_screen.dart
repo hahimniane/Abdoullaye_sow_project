@@ -105,6 +105,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   // desk as often as it waits for it, and recording both as awaiting left
   // money already in the till showing as outstanding.
   bool _alreadyPaid = false;
+  String _receivedByStaffId = '';
   // The prices this lot can quote. With only its standard rate there is
   // nothing to choose, and the picker stays out of the way entirely.
   List<ParkingRateChoice> _rateChoices = const [];
@@ -1097,6 +1098,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
           await _businessParkingService.markPaid(
             entryId: result.entryId,
             receivedVia: _receivedVia,
+            receivedByStaffId: _receivedByStaffId,
           );
           if (!mounted) return;
           showSuccessSnackBar(context, l10n.parkingRecordedAndPaid);
@@ -1260,7 +1262,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                       ],
                     ),
                   ),
-                  if (_alreadyPaid)
+                  if (_alreadyPaid) ...[
                     Padding(
                       padding: const EdgeInsets.only(top: 4, bottom: 4),
                       child: _RoundedDropdownField(
@@ -1275,6 +1277,31 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                         },
                       ),
                     ),
+                    if (_staffCustomers.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: _RoundedDropdownField(
+                          label: l10n.parkingReceivedBy,
+                          value: _receivedByStaffId.isEmpty
+                              ? null
+                              : _receivedByStaffId,
+                          items: [
+                            for (final c in _staffCustomers)
+                              c.id.replaceFirst('staff:', ''),
+                          ],
+                          itemLabel: (id) {
+                            for (final c in _staffCustomers) {
+                              if (c.id.replaceFirst('staff:', '') == id) {
+                                return c.name;
+                              }
+                            }
+                            return id;
+                          },
+                          onChanged: (value) => setState(
+                              () => _receivedByStaffId = value ?? ''),
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),

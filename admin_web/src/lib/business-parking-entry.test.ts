@@ -16,6 +16,9 @@ import {
   businessParkingPaymentBadge,
   businessParkingIsPartlyPaid,
   businessParkingAmountPaid,
+  businessParkingAccrued,
+  businessParkingBalance,
+  businessParkingTotals,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
   businessParkingResendMessage,
@@ -934,4 +937,52 @@ test("the card can record a part payment by days or amount, with who took it", (
   assert.match(panelSource, /amountCents: Math\.round\(n \* 100\)/);
   // and it refuses to send without a staff member
   assert.match(panelSource, /if \(!partReceivedBy\)/);
+});
+
+// The lot's spreadsheet kept totals in the margin (at the lot, left, collected,
+// accrued) with formulas that had rotted to #NAME?. The live version reads the
+// records instead.
+test("the parking scoreboard totals the records", () => {
+  const day = (d: string) => new Date(`${d}T12:00:00Z`);
+  const now = day("2026-09-11");
+  const rows = [
+    // open-ended, 10 days at $12, $60 paid -> in lot, owed 60
+    { source: "business", paymentMethod: "direct", paymentStatus: "awaiting_direct_payment", parkingDate: day("2026-09-01"), dailyRate: 12, amountPaidCents: 6000 },
+    // fixed, ended, paid in full -> left, collected 48
+    { source: "business", paymentMethod: "direct", paymentStatus: "paid", parkingDate: day("2026-09-01"), parkingEndDate: day("2026-09-05"), dailyRate: 12, amountDueCents: 4800, amountPaidCents: 4800 },
+    // cancelled -> neither in lot nor owed
+    { source: "business", paymentMethod: "direct", status: "cancelled", paymentStatus: "awaiting_direct_payment", parkingDate: day("2026-09-02"), dailyRate: 12 },
+  ];
+  const t = businessParkingTotals(rows, 50, now);
+  assert.equal(t.inLot, 1);
+  assert.equal(t.left, 1);
+  assert.equal(t.collected, 108);          // 60 + 48
+  assert.equal(t.owed, 60);                // open stay's 120 accrued - 60 paid; fixed is settled; cancelled owes nothing
+  assert.equal(t.spacesTotal, 50);
+  assert.equal(t.spacesUsed, 1);
+});
+
+test("balance and accrued handle open, fixed, and cancelled stays", () => {
+  const day = (d: string) => new Date(`${d}T12:00:00Z`);
+  const now = day("2026-09-11");
+  const open = { paymentStatus: "awaiting_direct_payment", parkingDate: day("2026-09-01"), dailyRate: 12 };
+  assert.equal(businessParkingAccrued(open, now), 120);   // 10 days x 12
+  assert.equal(businessParkingBalance(open, now), 120);
+  assert.equal(businessParkingBalance({ ...open, amountPaidCents: 5000 }, now), 70);
+  // fixed stay uses its recorded total
+  const fixed = { parkingEndDate: day("2026-09-05"), amountDueCents: 4800, amountPaidCents: 1200 };
+  assert.equal(businessParkingBalance(fixed, now), 36);
+  // cancelled owes nothing
+  assert.equal(businessParkingBalance({ ...open, status: "cancelled" }, now), 0);
+});
+
+test("the record form asks who received an already-paid walk-up", () => {
+  // The gap: settling at record time never captured the staff member.
+  const entry = panelSource.slice(panelSource.indexOf("How does this parking get paid?"));
+  const block = entry.slice(0, entry.indexOf("</fieldset>"));
+  assert.match(block, /entryAlreadyPaid && \(/);
+  assert.match(block, /<span>Received by<\/span>/);
+  assert.match(block, /setEntryReceivedBy/);
+  // and it is threaded into the settle call
+  assert.match(panelSource, /receivedByStaffId: entryReceivedBy/);
 });

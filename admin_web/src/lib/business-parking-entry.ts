@@ -556,3 +556,74 @@ export function businessParkingStayDays(
   const minimum = Number(record.minimumDays) > 0 ? Number(record.minimumDays) : 1;
   return Math.max(minimum, days);
 }
+
+/**
+ * What a car has run up so far, in dollars - what the lot is owed before any
+ * payment. A fixed stay is its recorded total; an open-ended stay is the days
+ * it has sat times the daily rate (never below the minimum), which is the same
+ * figure the card accrues against.
+ */
+export function businessParkingAccrued(
+  row: ParkingRowLike,
+  now: Date = new Date(),
+): number {
+  const openEnded = !(row as { parkingEndDate?: unknown })?.parkingEndDate;
+  if (!openEnded) return businessParkingAmountDue(row);
+  const daily = Number((row as { dailyRate?: unknown })?.dailyRate) || 0;
+  return daily > 0 ? businessParkingStayDays(row, now) * daily : 0;
+}
+
+/**
+ * Still owed on a car, in dollars: what it has run up, minus what has been
+ * paid, never negative. A cancelled car owes nothing.
+ */
+export function businessParkingBalance(
+  row: ParkingRowLike,
+  now: Date = new Date(),
+): number {
+  if (trimmed((row as { status?: unknown })?.status, 40) === "cancelled") return 0;
+  const owed = businessParkingAccrued(row, now) - businessParkingAmountPaid(row);
+  return owed > 0 ? Math.round(owed * 100) / 100 : 0;
+}
+
+export type ParkingTotals = {
+  inLot: number;
+  left: number;
+  collected: number;
+  owed: number;
+  spacesTotal: number;
+  spacesUsed: number;
+};
+
+/**
+ * The scoreboard over a set of parking rows - the live version of the totals
+ * the lot's own spreadsheet kept in the margin, computed from the records
+ * rather than from a formula that can rot. `spacesTotal` comes from the
+ * business, so it is passed in.
+ */
+export function businessParkingTotals(
+  rows: ParkingRowLike[],
+  spacesTotal = 0,
+  now: Date = new Date(),
+): ParkingTotals {
+  let inLot = 0;
+  let left = 0;
+  let collected = 0;
+  let owed = 0;
+  for (const row of rows) {
+    const cancelled = trimmed((row as { status?: unknown })?.status, 40) === "cancelled";
+    const ended = businessParkingEndLabel(row, now) === "Ended";
+    if (!cancelled && !ended) inLot += 1;
+    if (ended) left += 1;
+    collected += businessParkingAmountPaid(row);
+    owed += businessParkingBalance(row, now);
+  }
+  return {
+    inLot,
+    left,
+    collected: Math.round(collected * 100) / 100,
+    owed: Math.round(owed * 100) / 100,
+    spacesTotal: Math.max(0, Math.trunc(spacesTotal)),
+    spacesUsed: inLot,
+  };
+}
