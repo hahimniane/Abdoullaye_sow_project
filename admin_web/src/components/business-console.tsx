@@ -397,15 +397,23 @@ export function BusinessConsole({
             <Menu size={20} />
           </button>
           <div className="brand-badge">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="Laawol"
-              width={20}
-              height={20}
-              style={{ borderRadius: 5, display: "block" }}
-            />
-            <span>Laawol Digital</span>
+            {/* The dashboard is the business's own, so it wears the business's
+                logo - not Laawol's. A lot without an uploaded logo gets a
+                tile with its initial rather than falling back to Laawol. */}
+            {text(business?.profileImageUrl, "") ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={text(business?.profileImageUrl, "")}
+                alt={businessName}
+                width={20}
+                height={20}
+                style={{ borderRadius: 5, display: "block", objectFit: "cover" }}
+              />
+            ) : (
+              <span className="brand-initial" aria-hidden="true">
+                {businessName.trim().charAt(0).toUpperCase() || "B"}
+              </span>
+            )}
           </div>
           <div className="topbar-heading">
             <h1>{businessName}</h1>

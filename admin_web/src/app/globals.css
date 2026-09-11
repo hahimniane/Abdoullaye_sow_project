@@ -165,7 +165,23 @@ button[data-loading="true"]::before {
   font-weight: 900;
   gap: 8px;
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 12px;
+}
+
+/* Shown in place of an uploaded logo: the business's initial on a tile the
+   same 20x20 as the logo image, so the header lockup never falls back to
+   Laawol's mark. */
+.brand-initial {
+  align-items: center;
+  background: rgba(204, 251, 241, 0.18);
+  border-radius: 5px;
+  color: #ffffff;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
 }
 
 .admin-chip,
