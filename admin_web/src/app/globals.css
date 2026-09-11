@@ -13498,6 +13498,21 @@ button[data-loading="true"]::before {
    name and two numbers is the whole of it. */
 .pk-rates { display: flex; flex-direction: column; gap: 6px; }
 
+.pk-rate-head {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(120px, 1fr) 92px 88px 34px;
+}
+
+.pk-rate-head span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
 .pk-rate-row {
   align-items: center;
   display: grid;
