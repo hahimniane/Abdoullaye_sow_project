@@ -14,6 +14,8 @@ import {
   businessParkingStayDays,
   businessParkingWithinRange,
   businessParkingPaymentBadge,
+  businessParkingIsPartlyPaid,
+  businessParkingAmountPaid,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
   businessParkingResendMessage,
@@ -901,4 +903,35 @@ test("the header counts cars that are actually in the lot", () => {
     !/text\(row\.status, "active"\)/.test(panelSource),
     "nothing should default a parking status to a value the server never writes",
   );
+});
+
+// A twenty-day stay may be paid five or ten days at a time. The paid-so-far
+// total drives a "Part paid" badge, and each column names a person.
+test("part payments and attribution", () => {
+  const owed = { source: "business", paymentMethod: "direct", paymentStatus: "awaiting_direct_payment" };
+  // Money in but not settled reads as part-paid, not paid.
+  assert.equal(businessParkingIsPartlyPaid({ ...owed, amountPaidCents: 6000 }), true);
+  assert.equal(businessParkingIsPartlyPaid({ ...owed, amountPaidCents: 0 }), false);
+  assert.equal(businessParkingPaymentBadge({ ...owed, amountPaidCents: 6000 }), "Part paid");
+  assert.equal(businessParkingPaymentBadge({ ...owed, amountPaidCents: 0 }), "Not paid");
+  assert.equal(businessParkingAmountPaid({ amountPaidCents: 6000 }), 60);
+  assert.equal(businessParkingAmountPaid({}), 0);
+  // A settled record is not "part paid".
+  assert.equal(businessParkingIsPartlyPaid({ ...owed, paymentStatus: "paid", amountPaidCents: 24000 }), false);
+});
+
+test("the parking table names who registered and who received", () => {
+  assert.match(panelSource, /<span>Registered by<\/span>/);
+  assert.match(panelSource, /<span>Received by<\/span>/);
+  assert.match(panelSource, /nameForStaff\(row\.enteredByUid\)/);
+  assert.match(panelSource, /nameForStaff\(row\.receivedByStaffId \?\? row\.directPaymentMarkedByUid\)/);
+});
+
+test("the card can record a part payment by days or amount, with who took it", () => {
+  assert.match(panelSource, /"recordBusinessParkingPartialPayment"/);
+  // days path and amount path both reach the callable
+  assert.match(panelSource, /days: Math\.round\(n\)/);
+  assert.match(panelSource, /amountCents: Math\.round\(n \* 100\)/);
+  // and it refuses to send without a staff member
+  assert.match(panelSource, /if \(!partReceivedBy\)/);
 });

@@ -285,7 +285,9 @@ const {
   businessParkingPaidUpdate,
   businessParkingPaymentPlan,
   directPaymentPayoutFields,
+  normalizeDirectPaymentMethod,
   normalizeBusinessParkingEntry,
+  businessParkingPartialPaymentPlan,
 } = require("./business_parking_entry");
 const {
   LOT_ACTIVITY_PAYMENT_STATUS,
@@ -11728,6 +11730,18 @@ const BUSINESS_PARKING_ENTRY_ERRORS = Object.freeze({
     "The parking end date must be on or after the start date",
 });
 
+const BUSINESS_PARKING_PARTIAL_REFUSALS = Object.freeze({
+  not_a_business_entry: "This parking record was not entered by the business",
+  payment_link_is_stripe_owned:
+    "This entry is paid through its payment link, so a part payment cannot " +
+    "be recorded by hand",
+  entry_cancelled: "This parking entry was cancelled",
+  already_paid: "This parking is already paid in full",
+  no_daily_rate:
+    "This car has no daily rate, so days cannot be priced - enter an amount",
+  no_amount: "Enter the days paid or the amount received",
+});
+
 const BUSINESS_PARKING_PAID_REFUSALS = Object.freeze({
   not_a_business_entry:
     "This parking record was not entered by the business",
@@ -13112,6 +13126,9 @@ exports.markBusinessParkingPaid = onCall(
       }
       const receivedVia = cleanText(request.data?.receivedVia, 40);
       const note = cleanText(request.data?.note, 500);
+      // Who physically took the cash - not always the person clicking, so it
+      // is asked rather than assumed. Optional for backward compatibility.
+      const receivedByStaffId = cleanText(request.data?.receivedByStaffId, 180);
 
       const db = admin.firestore();
       const entryRef = db.collection("parkedCars").doc(entryId);
@@ -13155,6 +13172,8 @@ exports.markBusinessParkingPaid = onCall(
         }
         transaction.update(entryRef, {
           ...decision.update,
+          ...(receivedByStaffId ? {receivedByStaffId} : {}),
+          recordedByStaffId: uid,
           directPaymentReceivedAt: FirestoreFieldValue.serverTimestamp(),
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
@@ -13173,6 +13192,120 @@ exports.markBusinessParkingPaid = onCall(
         amountPaid: dollarsFromCents(result.amountPaidCents),
         amountPaidCents: result.amountPaidCents,
         paymentStatus: "paid",
+      };
+    },
+);
+
+/**
+ * Records a part payment against a walk-up parking record.
+ *
+ * A twenty-day stay might be paid five or ten days at a time. Staff give
+ * either a number of days (priced from this car's own daily rate) or a dollar
+ * amount, and say who took the money. Each payment is appended and the running
+ * total moves; when a fixed stay's payments reach its total the record flips
+ * to fully paid, on the same transition markBusinessParkingPaid uses.
+ */
+exports.recordBusinessParkingPartialPayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const entryId = cleanText(request.data?.entryId, 180);
+      if (!entryId) {
+        throw new HttpsError("invalid-argument", "Parking entry is required");
+      }
+      const receivedVia = cleanText(request.data?.receivedVia, 40);
+      const note = cleanText(request.data?.note, 500);
+      const receivedByStaffId = cleanText(request.data?.receivedByStaffId, 180);
+      if (!receivedByStaffId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Say who took the money so it can be reconciled.",
+        );
+      }
+      const daysRaw = Number(request.data?.days);
+      const amountCentsRaw = Number(request.data?.amountCents);
+
+      const db = admin.firestore();
+      const entryRef = db.collection("parkedCars").doc(entryId);
+      const first = await entryRef.get();
+      if (!first.exists) {
+        throw new HttpsError("not-found", "Parking entry not found");
+      }
+      const businessId = String(first.data()?.businessId || "");
+      await requireBusinessPermission(uid, businessId, "parking");
+
+      const result = await db.runTransaction(async (transaction) => {
+        const snap = await transaction.get(entryRef);
+        if (!snap.exists) {
+          throw new HttpsError("not-found", "Parking entry not found");
+        }
+        const entry = snap.data() || {};
+        const dailyRateCents = Math.max(0, Math.round(
+            centsFromDollars(entry.dailyRate) ||
+            Number(entry.dailyRateCents) || 0,
+        ));
+        const plan = businessParkingPartialPaymentPlan({
+          entry,
+          days: Number.isFinite(daysRaw) ? daysRaw : undefined,
+          amountCents: Number.isFinite(amountCentsRaw) ?
+            amountCentsRaw : undefined,
+          dailyRateCents,
+        });
+        if (!plan.ok) {
+          throw new HttpsError(
+              "failed-precondition",
+              BUSINESS_PARKING_PARTIAL_REFUSALS[plan.reason] ||
+                "This payment cannot be recorded",
+          );
+        }
+        const payment = {
+          amountCents: plan.appliedCents,
+          amount: dollarsFromCents(plan.appliedCents),
+          receivedVia: normalizeDirectPaymentMethod(receivedVia),
+          receivedByStaffId,
+          recordedByUid: uid,
+          note,
+          at: FirestoreTimestamp.now(),
+        };
+        const update = {
+          amountPaidCents: plan.newPaidCents,
+          amountPaid: dollarsFromCents(plan.newPaidCents),
+          parkingPayments: FirestoreFieldValue.arrayUnion(payment),
+          receivedByStaffId,
+          recordedByStaffId: uid,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        };
+        if (plan.fullyCovered) {
+          // Same settled shape as a full mark-paid, so a record that reached
+          // its total by instalments is indistinguishable from one paid once.
+          Object.assign(update, {
+            paymentStatus: "paid",
+            status: "reserved",
+            directPaymentReceived: true,
+            directPaymentMethod: normalizeDirectPaymentMethod(receivedVia),
+            directPaymentMarkedByUid: uid,
+            directPaymentReceivedAt: FirestoreFieldValue.serverTimestamp(),
+            ...directPaymentPayoutFields(plan.newPaidCents),
+          });
+        }
+        transaction.update(entryRef, update);
+        return {
+          appliedCents: plan.appliedCents,
+          newPaidCents: plan.newPaidCents,
+          fullyCovered: plan.fullyCovered,
+          trackingCode: String(entry.trackingCode || ""),
+        };
+      });
+
+      return {
+        success: true,
+        entryId,
+        amountApplied: dollarsFromCents(result.appliedCents),
+        amountAppliedCents: result.appliedCents,
+        amountPaid: dollarsFromCents(result.newPaidCents),
+        amountPaidCents: result.newPaidCents,
+        fullyCovered: result.fullyCovered,
+        trackingCode: result.trackingCode,
       };
     },
 );

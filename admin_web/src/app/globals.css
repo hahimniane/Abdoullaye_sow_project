@@ -13343,14 +13343,16 @@ button[data-loading="true"]::before {
   grid-template-columns:
     minmax(140px, 1.7fr)
     minmax(104px, 1.15fr)
-    minmax(68px, .62fr)
-    minmax(68px, .62fr)
-    minmax(38px, .32fr)
-    minmax(54px, .44fr)
-    minmax(62px, .52fr)
-    minmax(66px, .5fr)
+    minmax(66px, .6fr)
+    minmax(66px, .6fr)
+    minmax(36px, .3fr)
+    minmax(52px, .42fr)
+    minmax(60px, .5fr)
+    minmax(64px, .5fr)
+    minmax(84px, .7fr)
+    minmax(84px, .7fr)
     108px;
-  min-width: 760px;
+  min-width: 940px;
   padding: 5px 12px;
   text-align: left;
   width: 100%;
@@ -13568,3 +13570,19 @@ button[data-loading="true"]::before {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
 }
+
+/* Recording part of a stay's cost: a mode (days or dollars), the number, and
+   who took it. Two tidy rows rather than a sprawl of inline controls. */
+.pk-partpay {
+  border: 1px solid var(--rule, #e5e7eb);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 10px;
+}
+
+.pk-partpay-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pk-partpay-row select, .pk-partpay-row input { min-width: 0; }
+.pk-partpay-row input[type="number"] { max-width: 130px; }

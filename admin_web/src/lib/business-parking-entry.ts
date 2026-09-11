@@ -390,11 +390,33 @@ export function businessParkingPaymentTone(
   return "awaiting";
 }
 
+/**
+ * What has actually been handed over so far, in dollars. A stay paid in
+ * instalments carries a running amountPaidCents; a stay paid in one go carries
+ * the whole amount once it settles.
+ */
+export function businessParkingAmountPaid(row: ParkingRowLike) {
+  const cents = Number((row as { amountPaidCents?: unknown })?.amountPaidCents);
+  return Number.isFinite(cents) && cents > 0 ? Math.round(cents) / 100 : 0;
+}
+
+/**
+ * True when money has come in but the record is not settled - a part payment
+ * against a balance still owed. Tone stays "awaiting" for this (it is still an
+ * invoice, still chaseable), so this is asked separately.
+ */
+export function businessParkingIsPartlyPaid(row: ParkingRowLike) {
+  return businessParkingPaymentTone(row) === "awaiting" &&
+    businessParkingAmountPaid(row) > 0;
+}
+
 /** Two-word badge text for the payment state: what a lot scans for. */
 export function businessParkingPaymentBadge(row: ParkingRowLike) {
   const tone = businessParkingPaymentTone(row);
   if (tone === "paid") return "Paid";
-  if (tone === "awaiting") return "Not paid";
+  if (tone === "awaiting") {
+    return businessParkingAmountPaid(row) > 0 ? "Part paid" : "Not paid";
+  }
   return "";
 }
 
