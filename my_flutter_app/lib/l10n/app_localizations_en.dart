@@ -7949,6 +7949,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lotMargin => 'Margin';
 
   @override
+  String get lotParkingIncome => 'Parked-car income';
+
+  @override
+  String get lotParkingIncomeNote =>
+      'Paid, still to come, and past due. Current standing.';
+
+  @override
+  String get lotParkingInLot => 'In the lot';
+
+  @override
+  String get lotParkingGenerated => 'Generated so far';
+
+  @override
+  String get lotParkingCollected => 'Collected';
+
+  @override
+  String get lotParkingCollectedNote => 'Already paid';
+
+  @override
+  String get lotParkingOwed => 'Still owed';
+
+  @override
+  String get lotParkingOwedNote => 'Money yet to come';
+
+  @override
+  String get lotParkingOverdue => 'Overdue';
+
+  @override
+  String lotParkingOverdueCars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cars past the end date, still owing',
+      one: '1 car past the end date, still owing',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get lotMonthByMonth => 'Month by month';
 
   @override

@@ -3448,6 +3448,23 @@
   },
   "lotNetProfit": "Bénéfice net",
   "lotMargin": "Marge",
+  "lotParkingIncome": "Revenus du stationnement",
+  "lotParkingIncomeNote": "Payé, à venir et en retard. État actuel.",
+  "lotParkingInLot": "Au parc",
+  "lotParkingGenerated": "Généré à ce jour",
+  "lotParkingCollected": "Encaissé",
+  "lotParkingCollectedNote": "Déjà payé",
+  "lotParkingOwed": "Restant dû",
+  "lotParkingOwedNote": "Argent à venir",
+  "lotParkingOverdue": "En retard",
+  "lotParkingOverdueCars": "{count, plural, =1{1 voiture après la date de fin, non réglée} other{{count} voitures après la date de fin, non réglées}}",
+  "@lotParkingOverdueCars": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "lotMonthByMonth": "Mois par mois",
   "lotErrActivityType": "Choisissez ce qui a été fait.",
   "lotErrCustomLabel": "Précisez ce qui a été fait.",

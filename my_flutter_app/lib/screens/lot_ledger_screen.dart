@@ -11,6 +11,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/business_parking_entry.dart';
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/vin_decoder_service.dart';
@@ -56,6 +57,10 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   List<LotStaff> _staff = const [];
   List<LotCustomer> _customers = const [];
   List<LotKnownCar> _parkedCars = const [];
+  // The raw parkedCars documents, kept alongside the VIN-lookup list above so
+  // the ledger can total parked-car money the same way the Parking screen does.
+  List<Map<String, dynamic>> _parkedCarRows = const [];
+  int _parkingSpaces = 0;
 
   String _businessName = '';
   int _proofThresholdCents = lotDefaultProofThresholdCents;
@@ -160,20 +165,25 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
 
     _subs.add(scoped('parkedCars').limit(500).snapshots().listen((snap) {
       if (!mounted) return;
-      setState(() => _parkedCars = [
-            for (final d in snap.docs) LotKnownCar.fromMap(d.data()),
-          ]);
+      setState(() {
+        _parkedCars = [
+          for (final d in snap.docs) LotKnownCar.fromMap(d.data()),
+        ];
+        _parkedCarRows = [for (final d in snap.docs) d.data()];
+      });
     }, onError: (_) {}));
 
     _subs.add(_db.collection('businesses').doc(id).snapshots().listen((doc) {
       if (!mounted) return;
       final data = doc.data() ?? const <String, dynamic>{};
       final threshold = data['expenseProofThresholdCents'];
+      final spaces = data['parkingTotalSpaces'];
       setState(() {
         _businessName = (data['name'] ?? data['businessName'] ?? '').toString();
         _proofThresholdCents = threshold is num
             ? threshold.round()
             : lotDefaultProofThresholdCents;
+        _parkingSpaces = spaces is num ? spaces.toInt() : 0;
       });
     }));
 
@@ -292,6 +302,12 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   }
 
   Widget _segmentBody(LotLedgerMath math) {
+    // Parked-car money, read from the same rows the VIN lookup uses. Figures
+    // are the live standing (to date): a stay accrues and is paid across
+    // months, so a running balance is the honest number to show.
+    final parkingTotals =
+        businessParkingTotals(_parkedCarRows, spacesTotal: _parkingSpaces);
+    final parkingOverdue = businessParkingOverdue(_parkedCarRows);
     switch (_segment) {
       case 1:
         return _ExpensesPanel(
@@ -312,11 +328,15 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
             setState(() => _month = m);
           },
           monthLabel: _monthLabel,
+          parkingTotals: parkingTotals,
+          parkingOverdue: parkingOverdue,
         );
       default:
         return _ActivityPanel(
           businessId: widget.businessId,
           knownCars: _knownCars,
+          parkingTotals: parkingTotals,
+          parkingOverdue: parkingOverdue,
           loading: _loading,
           month: _month,
           monthLabel: _monthLabel(_month),
@@ -643,6 +663,111 @@ class _MoneyTile extends StatelessWidget {
                 color: color,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The parked-car scoreboard, the same figures the Parking screen shows,
+/// surfaced in the ledger: how many cars are in the lot, what parking has
+/// generated so far, what has been collected, what is still owed, and — when
+/// there is any — what is past due. "Generated so far" is collected plus owed.
+class _ParkingMoneyBoard extends StatelessWidget {
+  const _ParkingMoneyBoard({
+    required this.totals,
+    required this.overdue,
+    this.showInLot = true,
+  });
+
+  final BusinessParkingTotals totals;
+  final BusinessParkingOverdue overdue;
+  final bool showInLot;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final generatedCents =
+        ((totals.collected + totals.owed) * 100).round();
+    final chips = <Widget>[
+      if (showInLot)
+        _ParkingStatChip(label: l10n.lotParkingInLot, value: '${totals.inLot}'),
+      _ParkingStatChip(
+        label: l10n.lotParkingGenerated,
+        value: formatLotCents(generatedCents),
+      ),
+      _ParkingStatChip(
+        label: l10n.lotParkingCollected,
+        value: formatLotCents((totals.collected * 100).round()),
+      ),
+      _ParkingStatChip(
+        label: l10n.lotParkingOwed,
+        value: formatLotCents((totals.owed * 100).round()),
+        alert: totals.owed > 0,
+      ),
+      if (overdue.count > 0)
+        _ParkingStatChip(
+          label: l10n.lotParkingOverdue,
+          value: formatLotCents((overdue.amount * 100).round()),
+          alert: true,
+        ),
+    ];
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: chips,
+    );
+  }
+}
+
+class _ParkingStatChip extends StatelessWidget {
+  const _ParkingStatChip({
+    required this.label,
+    required this.value,
+    this.alert = false,
+  });
+
+  final String label;
+  final String value;
+  final bool alert;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 96),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 9,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: alert ? AppColors.errorRed : AppColors.ink,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -1407,6 +1532,8 @@ class _ActivityPanel extends StatelessWidget {
   const _ActivityPanel({
     required this.businessId,
     required this.knownCars,
+    required this.parkingTotals,
+    required this.parkingOverdue,
     required this.loading,
     required this.month,
     required this.monthLabel,
@@ -1423,6 +1550,8 @@ class _ActivityPanel extends StatelessWidget {
 
   final String businessId;
   final List<LotKnownCar> knownCars;
+  final BusinessParkingTotals parkingTotals;
+  final BusinessParkingOverdue parkingOverdue;
   final bool loading;
   final String month;
   final String monthLabel;
@@ -1452,6 +1581,14 @@ class _ActivityPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 120),
           children: [
+            // Parked cars are the other half of what the lot makes, so the
+            // ledger opens on the whole money picture, not just billed jobs.
+            _ParkingMoneyBoard(
+              totals: parkingTotals,
+              overdue: parkingOverdue,
+              showInLot: true,
+            ),
+            const SizedBox(height: AppSpacing.md),
             _SearchField(value: search, onChanged: onSearch),
             const SizedBox(height: AppSpacing.md),
             _FilterChips(
@@ -3680,12 +3817,16 @@ class _ReportsPanel extends StatelessWidget {
     required this.month,
     required this.onPickMonth,
     required this.monthLabel,
+    required this.parkingTotals,
+    required this.parkingOverdue,
   });
 
   final LotLedgerMath math;
   final String month;
   final ValueChanged<String> onPickMonth;
   final String Function(String) monthLabel;
+  final BusinessParkingTotals parkingTotals;
+  final BusinessParkingOverdue parkingOverdue;
 
   @override
   Widget build(BuildContext context) {
@@ -3770,6 +3911,53 @@ class _ReportsPanel extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.lg),
+        // Parked-car income sits apart from the activity revenue above: a stay
+        // accrues and is paid across months, so these are the live standing
+        // totals, not a figure for the report year.
+        Text(
+          l10n.lotParkingIncome,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+            color: AppColors.ink,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          l10n.lotParkingIncomeNote,
+          style: const TextStyle(fontSize: 11, color: AppColors.muted),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: _MoneyTile(
+                label: l10n.lotParkingCollected,
+                cents: (parkingTotals.collected * 100).round(),
+                tone: _Tone.good,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _MoneyTile(
+                label: l10n.lotParkingOwed,
+                cents: (parkingTotals.owed * 100).round(),
+                tone: parkingTotals.owed > 0 ? _Tone.warn : _Tone.neutral,
+              ),
+            ),
+          ],
+        ),
+        if (parkingOverdue.count > 0) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _MoneyTile(
+            label:
+                '${l10n.lotParkingOverdue} · ${l10n.lotParkingOverdueCars(parkingOverdue.count)}',
+            cents: (parkingOverdue.amount * 100).round(),
+            tone: _Tone.warn,
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         Text(
           l10n.lotMonthByMonth,

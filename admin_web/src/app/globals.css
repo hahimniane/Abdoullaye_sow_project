@@ -13655,6 +13655,13 @@ button[data-loading="true"]::before {
 
 .pk-stat b.owed { color: #b45309; }
 
+.pk-stat small {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  margin-top: 1px;
+}
+
 /* The payments block inside the edit modal - the same billing control the
    card carries, set off from the vehicle/date fields above it. */
 .lst-edit-payments {

@@ -14136,6 +14136,66 @@ abstract class AppLocalizations {
   /// **'Margin'**
   String get lotMargin;
 
+  /// No description provided for @lotParkingIncome.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked-car income'**
+  String get lotParkingIncome;
+
+  /// No description provided for @lotParkingIncomeNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid, still to come, and past due. Current standing.'**
+  String get lotParkingIncomeNote;
+
+  /// No description provided for @lotParkingInLot.
+  ///
+  /// In en, this message translates to:
+  /// **'In the lot'**
+  String get lotParkingInLot;
+
+  /// No description provided for @lotParkingGenerated.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated so far'**
+  String get lotParkingGenerated;
+
+  /// No description provided for @lotParkingCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get lotParkingCollected;
+
+  /// No description provided for @lotParkingCollectedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Already paid'**
+  String get lotParkingCollectedNote;
+
+  /// No description provided for @lotParkingOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Still owed'**
+  String get lotParkingOwed;
+
+  /// No description provided for @lotParkingOwedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Money yet to come'**
+  String get lotParkingOwedNote;
+
+  /// No description provided for @lotParkingOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get lotParkingOverdue;
+
+  /// No description provided for @lotParkingOverdueCars.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 car past the end date, still owing} other{{count} cars past the end date, still owing}}'**
+  String lotParkingOverdueCars(int count);
+
   /// No description provided for @lotMonthByMonth.
   ///
   /// In en, this message translates to:

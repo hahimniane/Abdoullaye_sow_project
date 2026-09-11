@@ -137,6 +137,7 @@ import {
   businessParkingEndLabel,
   businessParkingStayDays,
   businessParkingTotals,
+  businessParkingOverdue,
   businessParkingAmountPaid,
   businessParkingIsPartlyPaid,
   businessParkingBalance,
@@ -4842,6 +4843,11 @@ export function ParkingPanel({
   const [entryVinBusy, setEntryVinBusy] = useState(false);
   const [entryVinNote, setEntryVinNote] = useState("");
   const lastEntryVinRef = useRef("");
+  // The edit form gets its own VIN decode: a correction on an existing record
+  // should fill the vehicle the same way recording a new one does.
+  const [draftVinBusy, setDraftVinBusy] = useState(false);
+  const [draftVinNote, setDraftVinNote] = useState("");
+  const lastDraftVinRef = useRef("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [receivedVia, setReceivedVia] = useState<Record<string, string>>({});
   const [paidBusyId, setPaidBusyId] = useState("");
@@ -4908,6 +4914,8 @@ export function ParkingPanel({
     setDraft(emptyParkingDraft);
     setEditErrors([]);
     setFormOpen(false);
+    setDraftVinNote("");
+    lastDraftVinRef.current = "";
   }
   function editParking(row: FirestoreRow) {
     setDraft({
@@ -5150,6 +5158,58 @@ export function ParkingPanel({
       setEntryVinNote("Couldn't reach the VIN service. Enter the vehicle by hand.");
     } finally {
       setEntryVinBusy(false);
+    }
+  }
+
+  // The same decode for the edit form, writing to `draft` instead of the
+  // record draft. Kept as its own function so the two forms cannot share a
+  // "last VIN seen" and swallow each other's lookups.
+  async function decodeDraftVin(rawVin: string) {
+    const vin = rawVin.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (vin.length < 17) { lastDraftVinRef.current = ""; return; }
+    if (vin.length !== 17 || vin === lastDraftVinRef.current) return;
+    lastDraftVinRef.current = vin;
+    setDraftVinBusy(true);
+    setDraftVinNote("");
+    try {
+      const res = await fetch(
+        `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`,
+      );
+      const data = await res.json();
+      const r = (data?.Results?.[0] ?? {}) as Record<string, unknown>;
+      const dMake = text(r.Make, "");
+      const dModel = text(r.Model, "");
+      const dYear = text(r.ModelYear, "");
+      const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
+      let model = "";
+      let year = "";
+      if (make) {
+        const canon = canonicalModel(make, dModel);
+        const models = getModels(make);
+        model = models.find((m) => m.toLowerCase() === (canon || dModel).toLowerCase()) ?? "";
+        if (model) year = getYears(make, model).find((y) => String(y) === dYear) ?? "";
+      }
+      if (!make) {
+        const seen = [dYear, dMake, dModel].filter(Boolean).join(" ");
+        setDraftVinNote(seen
+          ? `VIN reads ${seen} — we don't carry that make; pick the closest.`
+          : "Couldn't read that VIN. Enter the vehicle by hand.");
+        return;
+      }
+      setDraft((value) => ({
+        ...value,
+        carMake: make,
+        carModel: model || value.carModel,
+        carYear: year || value.carYear,
+      }));
+      const filled = [year, make, model].filter(Boolean).join(" ");
+      setDraftVinNote(model && year
+        ? `Filled from VIN: ${filled}.`
+        : `Filled the make from VIN: ${filled} — set the model/year.`);
+    } catch {
+      setDraftVinNote("Couldn't reach the VIN service. Enter the vehicle by hand.");
+    } finally {
+      setDraftVinBusy(false);
     }
   }
 
@@ -5757,8 +5817,16 @@ export function ParkingPanel({
                 <label className="lst-field"><span>Customer email</span>
                   <input value={draft.customerEmail} onChange={(event) => setDraft((value) => ({ ...value, customerEmail: event.target.value }))} placeholder="Email address" />
                 </label>
+                {/* VIN first: it fills make, model and year, so it leads the
+                    vehicle fields here just as it does on the record form. */}
+                <label className="lst-field wide"><span>VIN</span>
+                  <input value={draft.vinNumber} onChange={(event) => { const v = event.target.value; setDraft((value) => ({ ...value, vinNumber: v })); void decodeDraftVin(v); }} placeholder="17 characters — fills the make, model and year" />
+                  {draftVinBusy && <small className="lst-hint">Looking up the VIN…</small>}
+                  {!draftVinBusy && draftVinNote && <small className="lst-hint">{draftVinNote}</small>}
+                </label>
                 {/* Catalog pickers, not free text - this file already uses
-                    them for listings; the parking form was the last holdout. */}
+                    them for listings. The VIN above fills these; they stay
+                    editable for a correction or a VIN it couldn't place. */}
                 <label className="lst-field"><span>Make</span>
                   <select value={canonicalMake(draft.carMake) || draft.carMake} onChange={(event) => setDraft((value) => ({ ...value, carMake: event.target.value, carModel: "", carYear: "" }))}>
                     <option value="">Select a make</option>
@@ -5776,9 +5844,6 @@ export function ParkingPanel({
                     <option value="">Select a year</option>
                     {getYears(draft.carMake, draft.carModel).map((year) => (<option key={year} value={year}>{year}</option>))}
                   </select>
-                </label>
-                <label className="lst-field"><span>VIN</span>
-                  <input value={draft.vinNumber} onChange={(event) => setDraft((value) => ({ ...value, vinNumber: event.target.value }))} placeholder="17 characters" />
                 </label>
                 {/* Both ends of the stay: the server re-prices from these, so
                     a corrected pick-up day changes what is owed. */}
@@ -5906,8 +5971,17 @@ export function ParkingPanel({
                   <label className="lst-field"><span>Customer email (optional)</span>
                     <input value={entryDraft.customerEmail} onChange={(event) => setEntryDraft((value) => ({...value, customerEmail: event.target.value}))} placeholder="Email address" />
                   </label>
+                  {/* VIN first: it fills make, model and year in one step, so it
+                      leads the vehicle fields rather than trailing them. */}
+                  <label className="lst-field wide"><span>VIN (optional)</span>
+                    <input value={entryDraft.vinNumber} onChange={(event) => { const v = event.target.value; setEntryDraft((value) => ({...value, vinNumber: v})); void decodeEntryVin(v); }} placeholder="17 characters — fills the make, model and year" />
+                    {entryVinBusy && <small className="lst-hint">Looking up the VIN…</small>}
+                    {!entryVinBusy && entryVinNote && <small className="lst-hint">{entryVinNote}</small>}
+                  </label>
                   {/* Catalog pickers, never free text — a typed make breaks
-                      search, filters and every later match on this record. */}
+                      search, filters and every later match on this record. The
+                      VIN above fills these; they stay editable for a correction
+                      or a VIN the lookup couldn't place. */}
                   <label className="lst-field"><span>Make</span>
                     <select value={canonicalMake(entryDraft.carMake) || entryDraft.carMake} onChange={(event) => setEntryDraft((value) => ({...value, carMake: event.target.value, carModel: "", carYear: ""}))}>
                       <option value="">Select a make</option>
@@ -5925,11 +5999,6 @@ export function ParkingPanel({
                       <option value="">Select a year</option>
                       {getYears(entryDraft.carMake, entryDraft.carModel).map((year) => (<option key={year} value={year}>{year}</option>))}
                     </select>
-                  </label>
-                  <label className="lst-field"><span>VIN (optional)</span>
-                    <input value={entryDraft.vinNumber} onChange={(event) => { const v = event.target.value; setEntryDraft((value) => ({...value, vinNumber: v})); void decodeEntryVin(v); }} placeholder="17 characters — fills the vehicle" />
-                    {entryVinBusy && <small className="lst-hint">Looking up the VIN…</small>}
-                    {!entryVinBusy && entryVinNote && <small className="lst-hint">{entryVinNote}</small>}
                   </label>
                   <label className="lst-field"><span>Start date</span>
                     <input type="date" value={entryDraft.startDate} onChange={(event) => setEntryDraft((value) => ({...value, startDate: event.target.value}))} />
@@ -7473,6 +7542,26 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const monthExpenseCents = useMemo(() => monthExpenseFor(month), [expenseEntries.rows, expenseLines.rows, month]);
   const netCents = monthRevenueCents - monthExpenseCents;
 
+  // Parked-car money, read from the same parkedCars the panel already loads.
+  // The ledger is where a lot looks for "what has this made" — activities and
+  // expenses were only ever half that picture; parking is the other half.
+  // Figures are the live standing (to date), not month-sliced: a stay accrues
+  // and is paid across months, so a running balance is the honest number.
+  const parkingTotals = useMemo(
+    () => businessParkingTotals(
+      parkedCars.rows as Parameters<typeof businessParkingTotals>[0],
+      Number((business as Record<string, unknown> | null)?.parkingTotalSpaces) || 0,
+    ),
+    [parkedCars.rows, business],
+  );
+  const parkingOverdue = useMemo(
+    () => businessParkingOverdue(parkedCars.rows as Parameters<typeof businessParkingOverdue>[0]),
+    [parkedCars.rows],
+  );
+  // What the lot's parking has generated so far, in dollars: everything
+  // collected plus everything still owed on cars that have run it up.
+  const parkingGenerated = Math.round((parkingTotals.collected + parkingTotals.owed) * 100) / 100;
+
   const topCards = useMemo(
     () =>
       [...revenueByType.entries()]
@@ -7852,6 +7941,19 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
 
       {segment === "activity" && (
         <>
+          {/* Parked cars are the other half of what the lot makes. This is the
+              same scoreboard the Parking screen shows, surfaced here so the
+              ledger opens on the whole money picture, not just billed jobs. */}
+          <div className="pk-scoreboard" role="group" aria-label="Parked-car money">
+            <div className="pk-stat"><span>In the lot</span><b>{parkingTotals.inLot}</b></div>
+            <div className="pk-stat"><span>Generated so far</span><b>{formatMoney(parkingGenerated)}</b></div>
+            <div className="pk-stat"><span>Collected</span><b>{formatMoney(parkingTotals.collected)}</b></div>
+            <div className="pk-stat"><span>Still owed</span><b className={parkingTotals.owed > 0 ? "owed" : undefined}>{formatMoney(parkingTotals.owed)}</b></div>
+            {parkingOverdue.count > 0 && (
+              <div className="pk-stat"><span>Overdue</span><b className="owed">{formatMoney(parkingOverdue.amount)}</b><small>{parkingOverdue.count} car{parkingOverdue.count === 1 ? "" : "s"} past due</small></div>
+            )}
+          </div>
+
           <div className="metric-grid">
             {topCards.map((c) => (
               <div className="metric money" key={c.label}><span>{c.label}</span><b>{lotFormatCents(c.cents)}</b><small>{c.note}</small></div>
@@ -7993,6 +8095,21 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             <div className="metric"><span>Expenses {year}</span><b>{lotFormatCents(yearExpense)}</b></div>
             <div className={`metric ${yearNet < 0 ? "attention" : "good"}`}><span>Net profit</span><b>{lotFormatCents(yearNet)}</b></div>
             <div className="metric"><span>Margin</span><b>{yearRevenue > 0 ? `${Math.round((yearNet / yearRevenue) * 100)}%` : "—"}</b></div>
+          </div>
+
+          {/* Parked-car income sits apart from the activity revenue above: a
+              stay accrues and is paid across months, so these are the live
+              standing totals (to date), not a figure for the report year.
+              Folding a running balance into the year's Net would misstate both. */}
+          <div style={{ marginTop: 20, marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>Parked-car income</h3>
+            <small style={{ color: "var(--muted)" }}>What the lot is holding cars for — paid, still to come, and past due. Current standing.</small>
+          </div>
+          <div className="metric-grid">
+            <div className="metric money"><span>Generated so far</span><b>{formatMoney(parkingGenerated)}</b></div>
+            <div className="metric good"><span>Collected</span><b>{formatMoney(parkingTotals.collected)}</b><small>Already paid</small></div>
+            <div className={`metric ${parkingTotals.owed > 0 ? "attention" : ""}`}><span>Still owed</span><b>{formatMoney(parkingTotals.owed)}</b><small>Money yet to come</small></div>
+            <div className={`metric ${parkingOverdue.count > 0 ? "attention" : ""}`}><span>Overdue</span><b>{formatMoney(parkingOverdue.amount)}</b><small>{parkingOverdue.count} car{parkingOverdue.count === 1 ? "" : "s"} past the end date, still owing</small></div>
           </div>
           {reportView === "month" ? (
             <LotMonthlyChart revenue={yearRevenueByMonth} expenses={yearExpenseByMonth} year={year} />
