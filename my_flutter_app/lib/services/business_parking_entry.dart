@@ -377,6 +377,22 @@ BusinessParkingPaymentTone businessParkingPaymentTone(
   return BusinessParkingPaymentTone.awaiting;
 }
 
+/// What has actually been handed over so far, in dollars. A stay paid in
+/// instalments carries a running amountPaidCents.
+double businessParkingAmountPaid(Map<String, dynamic> row) {
+  final cents = num.tryParse('${row['amountPaidCents'] ?? ''}') ?? 0;
+  return cents.isFinite && cents > 0 ? cents.round() / 100 : 0;
+}
+
+/// Money is in but the record is not settled - a part payment against a
+/// balance still owed. Tone stays [BusinessParkingPaymentTone.awaiting] for
+/// this, so it is asked separately.
+bool businessParkingIsPartlyPaid(Map<String, dynamic> row) {
+  return businessParkingPaymentTone(row) ==
+          BusinessParkingPaymentTone.awaiting &&
+      businessParkingAmountPaid(row) > 0;
+}
+
 /// Whether "Cancel payment link" applies.
 ///
 /// The owner's rule is that a parking payment link stays good until the
@@ -933,6 +949,7 @@ class BusinessParkingService {
   Future<BusinessParkingPaidResult> markPaid({
     required String entryId,
     required String receivedVia,
+    String receivedByStaffId = '',
   }) async {
     final response = await _functions
         .httpsCallable('markBusinessParkingPaid')
@@ -941,8 +958,30 @@ class BusinessParkingService {
           'receivedVia': businessParkingReceivedViaValues.contains(receivedVia)
               ? receivedVia
               : 'other',
+          if (receivedByStaffId.trim().isNotEmpty)
+            'receivedByStaffId': receivedByStaffId.trim(),
         });
     return BusinessParkingPaidResult.fromCallable(response.data);
+  }
+
+  /// Records part of a stay's cost: either a number of days (priced from the
+  /// car's own daily rate on the server) or a dollar amount, and who took it.
+  Future<void> recordPartialPayment({
+    required String entryId,
+    required String receivedByStaffId,
+    int? days,
+    int? amountCents,
+    String receivedVia = 'cash',
+  }) async {
+    await _functions
+        .httpsCallable('recordBusinessParkingPartialPayment')
+        .call<Object?>(<String, dynamic>{
+          'entryId': entryId,
+          'receivedByStaffId': receivedByStaffId,
+          'receivedVia': receivedVia,
+          'days': ?days,
+          'amountCents': ?amountCents,
+        });
   }
 
   /// Kills a payment link the customer has not used. The callable refuses a

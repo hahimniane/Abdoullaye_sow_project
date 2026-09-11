@@ -8153,4 +8153,40 @@ class AppLocalizationsFr extends AppLocalizations {
   String parkingPlacesNearby(int count) {
     return '$count endroits pour se garer';
   }
+
+  @override
+  String get parkingRecordPartPayment => 'Enregistrer un paiement partiel';
+
+  @override
+  String parkingPaidSoFar(String amount) {
+    return 'Payé à ce jour : $amount';
+  }
+
+  @override
+  String get parkingDays => 'Jours';
+
+  @override
+  String get parkingAmount => 'Montant (\$)';
+
+  @override
+  String get parkingDaysPaid => 'Jours payés';
+
+  @override
+  String get parkingAmountPaid => 'Montant payé (\$)';
+
+  @override
+  String get parkingRecordPayment => 'Enregistrer le paiement';
+
+  @override
+  String get parkingPartPaymentRecorded => 'Paiement partiel enregistré.';
+
+  @override
+  String get parkingEnterDaysOrAmount =>
+      'Saisissez les jours ou le montant payé.';
+
+  @override
+  String get parkingReceivedBy => 'Reçu par';
+
+  @override
+  String get parkingRegisteredBy => 'Enregistré par';
 }

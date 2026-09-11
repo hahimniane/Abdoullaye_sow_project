@@ -3489,5 +3489,23 @@
         "type": "int"
       }
     }
-  }
+  },
+  "parkingRecordPartPayment": "Record a part payment",
+  "parkingPaidSoFar": "Paid so far: {amount}",
+  "parkingDays": "Days",
+  "parkingAmount": "Amount ($)",
+  "parkingDaysPaid": "Days paid",
+  "parkingAmountPaid": "Amount paid ($)",
+  "parkingRecordPayment": "Record payment",
+  "parkingPartPaymentRecorded": "Part payment recorded.",
+  "parkingEnterDaysOrAmount": "Enter the days or the amount paid.",
+  "@parkingPaidSoFar": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingReceivedBy": "Received by",
+  "parkingRegisteredBy": "Registered by"
 }

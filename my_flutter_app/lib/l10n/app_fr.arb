@@ -3489,5 +3489,23 @@
         "type": "int"
       }
     }
-  }
+  },
+  "parkingRecordPartPayment": "Enregistrer un paiement partiel",
+  "parkingPaidSoFar": "Payé à ce jour : {amount}",
+  "parkingDays": "Jours",
+  "parkingAmount": "Montant ($)",
+  "parkingDaysPaid": "Jours payés",
+  "parkingAmountPaid": "Montant payé ($)",
+  "parkingRecordPayment": "Enregistrer le paiement",
+  "parkingPartPaymentRecorded": "Paiement partiel enregistré.",
+  "parkingEnterDaysOrAmount": "Saisissez les jours ou le montant payé.",
+  "@parkingPaidSoFar": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingReceivedBy": "Reçu par",
+  "parkingRegisteredBy": "Enregistré par"
 }
