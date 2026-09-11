@@ -2550,6 +2550,20 @@ class _ActivityDetailSheet extends StatelessWidget {
                 ),
               ),
             ),
+          // Money marked received off-platform can be set back to not-received
+          // if it never actually came in; the change is logged under whoever
+          // does it (visible in History).
+          if (!activity.voided &&
+              activity.paid &&
+              activity.paymentMethod == lotPaymentMethodDirect)
+            _ActionRow(
+              icon: Icons.undo_outlined,
+              label: l10n.lotMarkNotReceived,
+              onTap: () => showLotSheet(
+                context,
+                _RevertSheet(activityId: activity.id, onDone: onChanged),
+              ),
+            ),
           if (!activity.voided)
             _ActionRow(
               icon: Icons.edit_outlined,
@@ -2882,6 +2896,73 @@ class _VoidSheetState extends State<_VoidSheet> {
       ),
       footer: _SheetButton(
         label: l10n.lotVoid,
+        tone: _Tone.warn,
+        busy: _busy,
+        busyLabel: l10n.lotSaving,
+        onTap: _submit,
+      ),
+    );
+  }
+}
+
+/// Undo a "received" mark when the money never actually came in. Off-platform
+/// only, and logged under whoever does it - the History sheet shows it.
+class _RevertSheet extends StatefulWidget {
+  const _RevertSheet({required this.activityId, required this.onDone});
+
+  final String activityId;
+  final VoidCallback onDone;
+
+  @override
+  State<_RevertSheet> createState() => _RevertSheetState();
+}
+
+class _RevertSheetState extends State<_RevertSheet> {
+  final _note = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _busy = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('revertLotActivityDirectPayment')
+          .call<Object?>({
+            'activityId': widget.activityId,
+            'note': _note.text.trim(),
+          });
+      if (!mounted) return;
+      AppHaptics.commit();
+      widget.onDone();
+      Navigator.of(context).pop(true);
+      showSuccessSnackBar(context, l10n.lotMarkNotReceivedDone);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      showErrorSnackBar(context, error.message ?? l10n.lotCouldNotSave);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _SheetShell(
+      title: l10n.lotMarkNotReceivedTitle,
+      subtitle: l10n.lotMarkNotReceivedExplain,
+      body: TextField(
+        controller: _note,
+        decoration: InputDecoration(labelText: l10n.lotMarkNotReceivedNote),
+      ),
+      footer: _SheetButton(
+        label: l10n.lotMarkNotReceived,
         tone: _Tone.warn,
         busy: _busy,
         busyLabel: l10n.lotSaving,

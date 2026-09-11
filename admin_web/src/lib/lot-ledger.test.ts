@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -327,4 +328,20 @@ test("a purchase against a line that is gone still counts, unnamed", () => {
   assert.equal(spend.length, 1);
   assert.equal(spend[0].cents, 4200);
   assert.equal(spend[0].label, "");
+});
+
+// A "received" mark can be undone when the money never came in, and the
+// reversal is logged under whoever did it (writeLotLedgerAudit on the server).
+test("a paid activity can be set back to not received, from the panel", () => {
+  const panel = readFileSync(
+    "src/components/business/operations-panels.tsx", "utf8");
+  // The action shows only on a paid, direct (off-platform) activity.
+  assert.match(
+    panel,
+    /lotActivityPaid\(r\) && String\(r\.paymentMethod\) === "direct" && \(<button[^>]*>[\s\S]*?revertActivityPayment/,
+  );
+  // It goes through the dedicated callable, behind a confirmation.
+  assert.match(panel, /"revertLotActivityDirectPayment"/);
+  assert.match(panel, /async function revertActivityPayment\(/);
+  assert.match(panel, /confirmImportantAction\(/);
 });

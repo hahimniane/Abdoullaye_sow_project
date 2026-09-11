@@ -7902,6 +7902,22 @@ class AppLocalizationsFr extends AppLocalizations {
   String get lotPaidOutsideWebsiteNote => 'Espèces, Zelle, chèque.';
 
   @override
+  String get lotMarkNotReceived => 'Marquer comme non reçu';
+
+  @override
+  String get lotMarkNotReceivedTitle => 'Remettre en non reçu';
+
+  @override
+  String get lotMarkNotReceivedExplain =>
+      'À utiliser si l’argent n’est pas réellement arrivé. L’activité redevient due, et le changement est enregistré à votre nom dans l’historique.';
+
+  @override
+  String get lotMarkNotReceivedNote => 'Note (facultatif)';
+
+  @override
+  String get lotMarkNotReceivedDone => 'Remis en non reçu.';
+
+  @override
   String get lotMoneyReceived => 'L’argent a été reçu';
 
   @override

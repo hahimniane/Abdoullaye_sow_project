@@ -7664,6 +7664,20 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     });
   }
 
+  async function revertActivityPayment(activityId: string, label: string) {
+    const ok = await confirmImportantAction(
+      `Set "${label}" back to not received? This records that the money did ` +
+        "not actually come in — and it is logged under your name in the " +
+        "change history.",
+      `Remettre « ${label} » en « non reçu » ? Cela indique que l'argent ` +
+        "n'est pas arrivé — et c'est enregistré à votre nom dans l'historique.",
+    );
+    if (!ok) return;
+    await runPanelAction(setBusy, setFlash, "Set back to not received.", async () => {
+      await httpsCallable(functions, "revertLotActivityDirectPayment")({ activityId });
+    });
+  }
+
   async function saveThreshold() {
     const dollars = Number(thresholdInput.trim().replace(/[$,\s]/g, ""));
     if (!Number.isFinite(dollars) || dollars < 0) {
@@ -7868,6 +7882,10 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                           <span className={`status-pill compact ${lotActivityPaid(r) ? "good" : lotActivityAwaitingLink(r) ? "warning" : ""}`}>{lotActivityPaymentLabel(r)}</span>
                           {!voided && String(r.paymentMethod) === "direct" && staffName(text(r.receivedByStaffId, "")) && <small>by {staffName(text(r.receivedByStaffId, ""))}</small>}
                           {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase</button>)}
+                          {/* Money marked received off-platform can be set back
+                              to not-received if it never actually came in; the
+                              change is logged under whoever does it. */}
+                          {!voided && lotActivityPaid(r) && String(r.paymentMethod) === "direct" && (<button className="ghost-button" type="button" onClick={() => void revertActivityPayment(String(r.id), vehicle)} title="Set back to not received"><RotateCcw size={13} /> Mark not received</button>)}
                         </span>
                       </div>
                     );
