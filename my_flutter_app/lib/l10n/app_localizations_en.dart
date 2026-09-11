@@ -7994,6 +7994,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get parkingScoreInLot => 'In the lot';
 
   @override
+  String get parkingKindReserved => 'Reserved';
+
+  @override
+  String get parkingKindPending => 'Pending payment';
+
+  @override
+  String get parkingKindCancelled => 'Cancelled';
+
+  @override
+  String get parkingPayPart => 'Part paid';
+
+  @override
+  String get parkingFiltersClear => 'Clear';
+
+  @override
   String get parkingScoreLeft => 'Left';
 
   @override

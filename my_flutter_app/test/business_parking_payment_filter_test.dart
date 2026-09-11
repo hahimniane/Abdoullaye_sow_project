@@ -143,8 +143,10 @@ void main() {
     final source = File('lib/screens/home_menu.dart').readAsStringSync();
 
     test('the list narrows through the shared decision', () {
-      expect(source, contains('businessParkingMatchesPaymentFilter('));
-      expect(source, contains('BusinessParkingPaymentFilter.all'));
+      // Payment is now a facet that composes with the status facet, so the
+      // list narrows through the one faceted predicate.
+      expect(source, contains('businessParkingMatchesFacets('));
+      expect(source, contains('ParkingPaymentClass.unpaid'));
     });
 
     test('the control is offered only where it means something', () {
@@ -156,17 +158,18 @@ void main() {
     });
 
     test('it reuses the existing paid / not paid wording', () {
-      expect(source, contains('l10n.filterAll'));
       expect(source, contains('l10n.paid'));
       expect(source, contains('l10n.notPaid'));
+      // Plus the new part-paid class, mirroring the console's third chip.
+      expect(source, contains('l10n.parkingPayPart'));
     });
 
     test('leaving parking clears the narrowing', () {
       // A filter still in force with its control off screen reads as records
-      // having gone missing.
+      // having gone missing. Both facets clear together.
       expect(
         source,
-        contains('_paymentFilter = BusinessParkingPaymentFilter.all;'),
+        contains('_parkingFacets = const ParkingFacets();'),
       );
     });
 

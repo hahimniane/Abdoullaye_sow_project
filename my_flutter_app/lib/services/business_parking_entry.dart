@@ -976,6 +976,7 @@ double businessParkingBalance(Map<String, dynamic> row, {DateTime? now}) {
 class BusinessParkingTotals {
   const BusinessParkingTotals({
     required this.inLot,
+    required this.reserved,
     required this.left,
     required this.collected,
     required this.owed,
@@ -983,8 +984,11 @@ class BusinessParkingTotals {
     required this.spacesUsed,
   });
 
-  /// Cars on the lot now: not cancelled and not yet departed.
+  /// Staff walk-ups standing in the lot now: not cancelled, not departed.
   final int inLot;
+
+  /// Customer bookings holding a space whose car has not arrived.
+  final int reserved;
 
   /// Cars whose leave date has passed.
   final int left;
@@ -1011,6 +1015,7 @@ BusinessParkingTotals businessParkingTotals(
   DateTime? now,
 }) {
   var inLot = 0;
+  var reserved = 0;
   var left = 0;
   var collected = 0.0;
   var owed = 0.0;
@@ -1018,19 +1023,104 @@ BusinessParkingTotals businessParkingTotals(
     final cancelled = _trimmed(row['status'], 40) == 'cancelled';
     final ended =
         businessParkingEndLabel(row, now: now) == BusinessParkingEndLabel.ended;
-    if (!cancelled && !ended) inLot += 1;
+    // A staff walk-up stands in the yard the moment it is recorded; a customer
+    // booking holds a space but the car has not arrived. Both use a space, but
+    // only one is actually "in the lot".
+    if (!cancelled && !ended) {
+      if (isBusinessEnteredParking(row)) {
+        inLot += 1;
+      } else {
+        reserved += 1;
+      }
+    }
     if (ended) left += 1;
     collected += businessParkingAmountPaid(row);
     owed += businessParkingBalance(row, now: now);
   }
   return BusinessParkingTotals(
     inLot: inLot,
+    reserved: reserved,
     left: left,
     collected: (collected * 100).round() / 100,
     owed: (owed * 100).round() / 100,
     spacesTotal: spacesTotal > 0 ? spacesTotal : 0,
-    spacesUsed: inLot,
+    spacesUsed: inLot + reserved,
   );
+}
+
+/// The one status kind a row belongs to. Mirrors the console's
+/// `parkingRowKind`: cancelled or departed first (whatever it once was), then a
+/// booking still in checkout, then the live split - a staff walk-up stands in
+/// the lot, a customer booking is reserved.
+enum ParkingKind { inLot, reserved, pending, left, cancelled }
+
+/// How a row sits on money. Mirrors the console's `parkingRowPayment`.
+enum ParkingPaymentClass { paid, part, unpaid, none }
+
+/// The facets a parking row can be filtered on - a status kind and a payment
+/// class. Empty lists do not narrow.
+class ParkingFacets {
+  const ParkingFacets({this.kinds = const {}, this.payments = const {}});
+
+  final Set<ParkingKind> kinds;
+  final Set<ParkingPaymentClass> payments;
+
+  bool get isEmpty => kinds.isEmpty && payments.isEmpty;
+
+  ParkingFacets toggleKind(ParkingKind kind) => ParkingFacets(
+        kinds: kinds.contains(kind)
+            ? ({...kinds}..remove(kind))
+            : {...kinds, kind},
+        payments: payments,
+      );
+
+  ParkingFacets togglePayment(ParkingPaymentClass payment) => ParkingFacets(
+        kinds: kinds,
+        payments: payments.contains(payment)
+            ? ({...payments}..remove(payment))
+            : {...payments, payment},
+      );
+}
+
+/// Which status kind [row] is, in precedence order. Mirrors the console.
+ParkingKind parkingRowKind(Map<String, dynamic> row, {DateTime? now}) {
+  if (_trimmed(row['status'], 40) == 'cancelled') return ParkingKind.cancelled;
+  if (businessParkingEndLabel(row, now: now) == BusinessParkingEndLabel.ended) {
+    return ParkingKind.left;
+  }
+  if (_trimmed(row['status'], 40) == 'pending_payment') {
+    return ParkingKind.pending;
+  }
+  return isBusinessEnteredParking(row) ? ParkingKind.inLot : ParkingKind.reserved;
+}
+
+/// How [row] sits on money. Mirrors the console's `parkingRowPayment`.
+ParkingPaymentClass parkingRowPayment(Map<String, dynamic> row) {
+  switch (businessParkingPaymentTone(row)) {
+    case BusinessParkingPaymentTone.paid:
+      return ParkingPaymentClass.paid;
+    case BusinessParkingPaymentTone.awaiting:
+      return businessParkingAmountPaid(row) > 0
+          ? ParkingPaymentClass.part
+          : ParkingPaymentClass.unpaid;
+    case BusinessParkingPaymentTone.none:
+      return ParkingPaymentClass.none;
+  }
+}
+
+/// Whether [row] survives [facets]. Within a facet the choices are OR, across
+/// facets they are AND, and an empty facet does not narrow - so "in the lot"
+/// plus "not paid" keeps only unpaid walk-ups. Mirrors the console.
+bool businessParkingMatchesFacets(
+  Map<String, dynamic> row,
+  ParkingFacets facets, {
+  DateTime? now,
+}) {
+  final kindOk =
+      facets.kinds.isEmpty || facets.kinds.contains(parkingRowKind(row, now: now));
+  final payOk = facets.payments.isEmpty ||
+      facets.payments.contains(parkingRowPayment(row));
+  return kindOk && payOk;
 }
 
 /// The callables, behind an injectable [FirebaseFunctions] so widget tests

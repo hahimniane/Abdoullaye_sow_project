@@ -13638,3 +13638,45 @@ button[data-loading="true"]::before {
 }
 
 .pk-stat b.owed { color: #b45309; }
+
+/* Composable filter chips: a status kind AND a payment class, each toggled on
+   its own, so a lot can ask "in the lot and not paid" in one row. */
+.pk-facets {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pk-chip {
+  background: var(--paper, #fff);
+  border: 1px solid var(--rule, #e5e7eb);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 5px 12px;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+  white-space: nowrap;
+}
+
+.pk-chip:hover { color: var(--ink); border-color: var(--muted); }
+
+.pk-chip.on {
+  background: var(--brand-strong, #0f766e);
+  border-color: var(--brand-strong, #0f766e);
+  color: #fff;
+}
+
+.pk-chip.clear {
+  border-style: dashed;
+  font-weight: 600;
+}
+
+.pk-facet-sep {
+  align-self: stretch;
+  border-left: 1px solid var(--rule, #e5e7eb);
+  margin: 2px 4px;
+}

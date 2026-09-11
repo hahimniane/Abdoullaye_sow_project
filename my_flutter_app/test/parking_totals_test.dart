@@ -85,6 +85,51 @@ void main() {
     );
   });
 
+  test('the scoreboard counts walk-ups and bookings apart', () {
+    final rows = <Map<String, dynamic>>[
+      {'source': 'business', 'paymentStatus': 'awaiting_direct_payment', 'parkingDate': day('2026-09-01'), 'dailyRate': 12},
+      {'source': 'customer', 'paymentStatus': 'succeeded', 'status': 'reserved', 'parkingDate': day('2026-09-02')},
+      {'source': 'customer', 'paymentStatus': 'succeeded', 'status': 'reserved', 'parkingDate': day('2026-09-03')},
+    ];
+    final t = businessParkingTotals(rows, spacesTotal: 10, now: now);
+    expect(t.inLot, 1);
+    expect(t.reserved, 2);
+    expect(t.spacesUsed, 3); // both kinds occupy a space
+  });
+
+  // The compound question a single dropdown could never ask: "cars in the lot
+  // that have not paid yet" is a status facet AND a payment facet.
+  test('facets classify a row and compose with AND', () {
+    final walkUpUnpaid = <String, dynamic>{'source': 'business', 'paymentMethod': 'direct', 'paymentStatus': 'awaiting_direct_payment', 'parkingDate': day('2026-09-01'), 'dailyRate': 12};
+    final walkUpPart = {...walkUpUnpaid, 'amountPaidCents': 3000};
+    final walkUpPaid = <String, dynamic>{'source': 'business', 'paymentMethod': 'direct', 'paymentStatus': 'paid', 'parkingDate': day('2026-09-01'), 'parkingEndDate': day('2026-09-30'), 'amountDueCents': 4800, 'amountPaidCents': 4800};
+    final booking = <String, dynamic>{'source': 'customer', 'paymentStatus': 'succeeded', 'status': 'reserved', 'parkingDate': day('2026-09-02')};
+    final departed = <String, dynamic>{'source': 'business', 'paymentStatus': 'paid', 'parkingDate': day('2026-09-01'), 'parkingEndDate': day('2026-09-05')};
+    final cancelled = <String, dynamic>{'source': 'business', 'status': 'cancelled', 'paymentStatus': 'awaiting_direct_payment', 'parkingDate': day('2026-09-01')};
+
+    expect(parkingRowKind(walkUpUnpaid, now: now), ParkingKind.inLot);
+    expect(parkingRowKind(booking, now: now), ParkingKind.reserved);
+    expect(parkingRowKind(departed, now: now), ParkingKind.left);
+    expect(parkingRowKind(cancelled, now: now), ParkingKind.cancelled);
+    expect(parkingRowPayment(walkUpUnpaid), ParkingPaymentClass.unpaid);
+    expect(parkingRowPayment(walkUpPart), ParkingPaymentClass.part);
+    expect(parkingRowPayment(walkUpPaid), ParkingPaymentClass.paid);
+    expect(parkingRowPayment(booking), ParkingPaymentClass.none);
+
+    // Empty facets never narrow.
+    expect(businessParkingMatchesFacets(walkUpUnpaid, const ParkingFacets(), now: now), isTrue);
+    // "In the lot" AND "Not paid" keeps the unpaid walk-up only.
+    const inLotUnpaid = ParkingFacets(kinds: {ParkingKind.inLot}, payments: {ParkingPaymentClass.unpaid});
+    expect(businessParkingMatchesFacets(walkUpUnpaid, inLotUnpaid, now: now), isTrue);
+    expect(businessParkingMatchesFacets(walkUpPart, inLotUnpaid, now: now), isFalse);
+    expect(businessParkingMatchesFacets(booking, inLotUnpaid, now: now), isFalse);
+    // OR within a facet: in the lot OR reserved keeps both live kinds.
+    const live = ParkingFacets(kinds: {ParkingKind.inLot, ParkingKind.reserved});
+    expect(businessParkingMatchesFacets(walkUpUnpaid, live, now: now), isTrue);
+    expect(businessParkingMatchesFacets(booking, live, now: now), isTrue);
+    expect(businessParkingMatchesFacets(departed, live, now: now), isFalse);
+  });
+
   test('stay days floor at the minimum, whole UTC days', () {
     // Same-day walk-up: one day, not zero.
     expect(

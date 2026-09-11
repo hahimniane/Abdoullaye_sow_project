@@ -8127,6 +8127,21 @@ class AppLocalizationsFr extends AppLocalizations {
   String get parkingScoreInLot => 'Au parc';
 
   @override
+  String get parkingKindReserved => 'Réservé';
+
+  @override
+  String get parkingKindPending => 'Paiement en attente';
+
+  @override
+  String get parkingKindCancelled => 'Annulé';
+
+  @override
+  String get parkingPayPart => 'Partiel';
+
+  @override
+  String get parkingFiltersClear => 'Effacer';
+
+  @override
   String get parkingScoreLeft => 'Partis';
 
   @override

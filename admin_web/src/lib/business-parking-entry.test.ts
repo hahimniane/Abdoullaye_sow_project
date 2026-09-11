@@ -19,6 +19,9 @@ import {
   businessParkingAccrued,
   businessParkingBalance,
   businessParkingTotals,
+  businessParkingMatchesFacets,
+  parkingRowKind,
+  parkingRowPayment,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
   businessParkingResendMessage,
@@ -240,6 +243,7 @@ test("every string this module renders is translated to French", () => {
 });
 
 const panelSource = readFileSync("src/components/business/operations-panels.tsx", "utf8");
+const libSource = readFileSync("src/lib/business-parking-entry.ts", "utf8");
 
 test("the parking panel records walk-ups through the callable, not a raw write", () => {
   assert.match(panelSource, /"createBusinessParkingEntry"/);
@@ -343,22 +347,23 @@ test("row results expire; the timer is cleared before reuse and on unmount", () 
   }
 });
 
-test("the parking filter asks about payment as well as parking status", () => {
-  assert.match(panelSource, /<optgroup label="Parking status">/);
-  assert.match(panelSource, /<optgroup label="Payment">/);
-  assert.match(panelSource, /<option value="payment:paid">Paid<\/option>/);
-  assert.match(panelSource, /<option value="payment:unpaid">Not paid<\/option>/);
-  // And the values are honoured by the same memo that filters by status.
+test("the parking filter composes status and payment facets", () => {
+  // Two facets of toggle chips, not one dropdown: a status kind AND a payment
+  // class, so "in the lot" and "not paid" can both be on at once.
+  assert.match(panelSource, /className="pk-facets"/);
+  assert.match(panelSource, /\["in_lot", "In the lot"\]/);
+  assert.match(panelSource, /\["reserved", "Reserved"\]/);
+  assert.match(panelSource, /\["unpaid", "Not paid"\]/);
+  assert.match(panelSource, /\["part", "Part paid"\]/);
+  assert.match(panelSource, /toggleKind\(/);
+  assert.match(panelSource, /togglePayment\(/);
+  // And the memo narrows through the shared predicate, so the two facets AND.
   const memo = panelSource.slice(
     panelSource.indexOf("const filteredRows = useMemo("),
     panelSource.indexOf("const activeCount = parkedCars.rows"),
   );
   assert.ok(memo.length > 0, "the filter memo must exist");
-  assert.match(memo, /filter === "payment:paid"/);
-  assert.match(memo, /filter === "payment:unpaid"/);
-  assert.match(memo, /businessParkingPaymentTone\(row\) === "paid"/);
-  assert.match(memo, /businessParkingPaymentTone\(row\) === "awaiting"/);
-  assert.match(memo, /text\(row\.status, ""\) === filter/);
+  assert.match(memo, /businessParkingMatchesFacets\(row, facets\)/);
 });
 
 test("every business-entered card can print its own paper", () => {
@@ -882,28 +887,34 @@ test("only one parking view renders at a time", () => {
 // The filter offered "Active" and "Completed". The server has never written
 // either: a stay is reserved until it is cancelled, and a car that has left is
 // one whose leave date has passed. So filtering by status matched nothing.
-test("the parking filter speaks the vocabulary the server writes", () => {
-  assert.match(panelSource, /const parkingStatuses = \["reserved", "pending_payment", "cancelled"\]/);
+test("the status facet speaks the vocabulary the server writes", () => {
+  // The kinds are derived from what the server really writes
+  // (reserved/pending_payment/cancelled) plus the two states carried by dates
+  // and source: departed, and walk-up vs booking. Never the phantom "active"
+  // or "completed" statuses no record has ever had.
+  for (const kind of ["in_lot", "reserved", "pending", "left", "cancelled"]) {
+    assert.match(panelSource, new RegExp(`\\["${kind}", `), `the ${kind} chip is offered`);
+  }
+  // The classifier keys off real fields, never a phantom "active" status.
   assert.ok(
-    !/const parkingStatuses = \[[^\]]*"active"/.test(panelSource),
-    "no record has ever had status active",
+    !/parkingRowKind[\s\S]{0,400}"active"/.test(libSource),
+    "the kind classifier never invents an active status",
   );
-  // Whether the car is still on the lot is the question staff actually ask,
-  // and no status carries it.
-  assert.match(panelSource, /filter === "here:in"/);
-  assert.match(panelSource, /filter === "here:gone"/);
-  assert.match(panelSource, /businessParkingEndLabel\(row\) === "Ended"/);
 });
 
 // Filterable and settable are not the same set: "pending payment" is the
 // server's word for "a link is out and unpaid", and a person picking it would
-// have the record claim a payment link that does not exist.
+// have the record claim a payment link that does not exist. So it is a filter
+// facet but never a status a person can hand-set.
 test("staff can set only the statuses that are theirs to set", () => {
   assert.match(panelSource, /const parkingSettableStatuses = \["reserved", "cancelled"\]/);
   const settable = (panelSource.match(/parkingSettableStatuses\.map/g) || []).length;
   assert.equal(settable, 2, "the row control and the edit form both use it");
-  const filterable = (panelSource.match(/parkingStatuses\.map/g) || []).length;
-  assert.equal(filterable, 1, "only the filter offers the full vocabulary");
+  // The filter no longer offers a hand-set dropdown at all - it is faceted.
+  assert.ok(
+    !/parkingStatuses\.map/.test(panelSource),
+    "the old status dropdown is gone",
+  );
 });
 
 // "Reserved" is the booking flow's word: a customer holds a space and the car
@@ -984,6 +995,59 @@ test("the parking scoreboard totals the records", () => {
   assert.equal(t.owed, 60);                // open stay's 120 accrued - 60 paid; fixed is settled; cancelled owes nothing
   assert.equal(t.spacesTotal, 50);
   assert.equal(t.spacesUsed, 1);
+});
+
+// A staff walk-up stands in the lot; a customer booking is reserved. Both hold
+// a space, but they are counted apart so "in the lot" means physically here.
+test("the scoreboard counts walk-ups and bookings apart", () => {
+  const day = (d: string) => new Date(`${d}T12:00:00Z`);
+  const now = day("2026-09-11");
+  const rows = [
+    { source: "business", paymentMethod: "direct", paymentStatus: "awaiting_direct_payment", parkingDate: day("2026-09-01"), dailyRate: 12 },
+    // a customer booking, active - reserved, not "in the lot"
+    { source: "customer", paymentStatus: "succeeded", status: "reserved", parkingDate: day("2026-09-02"), dailyRate: 12 },
+    { source: "customer", paymentStatus: "succeeded", status: "reserved", parkingDate: day("2026-09-03"), dailyRate: 12 },
+  ];
+  const t = businessParkingTotals(rows, 10, now);
+  assert.equal(t.inLot, 1);
+  assert.equal(t.reserved, 2);
+  assert.equal(t.spacesUsed, 3);           // both kinds occupy a space
+});
+
+// The compound question a single dropdown could never ask: "cars in the lot
+// that have not paid yet" is a status facet AND a payment facet.
+test("facets classify a row and compose with AND", () => {
+  const day = (d: string) => new Date(`${d}T12:00:00Z`);
+  const now = day("2026-09-11");
+  const walkUpUnpaid = { source: "business", paymentMethod: "direct", paymentStatus: "awaiting_direct_payment", parkingDate: day("2026-09-01"), dailyRate: 12 };
+  const walkUpPart = { ...walkUpUnpaid, amountPaidCents: 3000 };
+  const walkUpPaid = { source: "business", paymentMethod: "direct", paymentStatus: "paid", parkingDate: day("2026-09-01"), parkingEndDate: day("2026-09-30"), amountDueCents: 4800, amountPaidCents: 4800 };
+  const booking = { source: "customer", paymentStatus: "succeeded", status: "reserved", parkingDate: day("2026-09-02") };
+  const departed = { source: "business", paymentStatus: "paid", parkingDate: day("2026-09-01"), parkingEndDate: day("2026-09-05") };
+  const cancelled = { source: "business", status: "cancelled", paymentStatus: "awaiting_direct_payment", parkingDate: day("2026-09-01") };
+
+  assert.equal(parkingRowKind(walkUpUnpaid, now), "in_lot");
+  assert.equal(parkingRowKind(booking, now), "reserved");
+  assert.equal(parkingRowKind(departed, now), "left");
+  assert.equal(parkingRowKind(cancelled, now), "cancelled");
+  assert.equal(parkingRowPayment(walkUpUnpaid), "unpaid");
+  assert.equal(parkingRowPayment(walkUpPart), "part");
+  assert.equal(parkingRowPayment(walkUpPaid), "paid");
+  assert.equal(parkingRowPayment(booking), "none");
+
+  // Empty facets never narrow.
+  assert.equal(businessParkingMatchesFacets(walkUpUnpaid, { kinds: [], payments: [] }, now), true);
+  // "In the lot" AND "Not paid" keeps the unpaid walk-up, drops the part-paid
+  // one and the booking.
+  const inLotUnpaid = { kinds: ["in_lot" as const], payments: ["unpaid" as const] };
+  assert.equal(businessParkingMatchesFacets(walkUpUnpaid, inLotUnpaid, now), true);
+  assert.equal(businessParkingMatchesFacets(walkUpPart, inLotUnpaid, now), false);
+  assert.equal(businessParkingMatchesFacets(booking, inLotUnpaid, now), false);
+  // OR within a facet: in the lot OR reserved keeps both live kinds.
+  const live = { kinds: ["in_lot" as const, "reserved" as const], payments: [] };
+  assert.equal(businessParkingMatchesFacets(walkUpUnpaid, live, now), true);
+  assert.equal(businessParkingMatchesFacets(booking, live, now), true);
+  assert.equal(businessParkingMatchesFacets(departed, live, now), false);
 });
 
 test("balance and accrued handle open, fixed, and cancelled stays", () => {

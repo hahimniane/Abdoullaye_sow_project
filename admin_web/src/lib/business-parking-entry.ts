@@ -588,6 +588,7 @@ export function businessParkingBalance(
 
 export type ParkingTotals = {
   inLot: number;
+  reserved: number;
   left: number;
   collected: number;
   owed: number;
@@ -607,23 +608,99 @@ export function businessParkingTotals(
   now: Date = new Date(),
 ): ParkingTotals {
   let inLot = 0;
+  let reserved = 0;
   let left = 0;
   let collected = 0;
   let owed = 0;
   for (const row of rows) {
     const cancelled = trimmed((row as { status?: unknown })?.status, 40) === "cancelled";
     const ended = businessParkingEndLabel(row, now) === "Ended";
-    if (!cancelled && !ended) inLot += 1;
+    // A staff walk-up stands in the yard the moment it is recorded; a customer
+    // booking holds a space but the car has not arrived. Both are active, so
+    // both use up a space - but only one is actually "in the lot".
+    if (!cancelled && !ended) {
+      if (isBusinessEnteredParking(row)) {
+        inLot += 1;
+      } else {
+        reserved += 1;
+      }
+    }
     if (ended) left += 1;
     collected += businessParkingAmountPaid(row);
     owed += businessParkingBalance(row, now);
   }
   return {
     inLot,
+    reserved,
     left,
     collected: Math.round(collected * 100) / 100,
     owed: Math.round(owed * 100) / 100,
     spacesTotal: Math.max(0, Math.trunc(spacesTotal)),
-    spacesUsed: inLot,
+    spacesUsed: inLot + reserved,
   };
+}
+
+// The facets a parking row can be filtered on. Each row has exactly one status
+// kind and one payment class, so a filter is "which kinds AND which payment
+// classes to keep" - that is what lets a lot ask a compound question like
+// "cars in the lot that have not paid yet".
+export type ParkingKind =
+  | "in_lot"
+  | "reserved"
+  | "pending"
+  | "left"
+  | "cancelled";
+export type ParkingPaymentClass = "paid" | "part" | "unpaid" | "none";
+export type ParkingFacets = {
+  kinds: ParkingKind[];
+  payments: ParkingPaymentClass[];
+};
+
+/**
+ * The one status kind a row belongs to, in precedence order: a cancelled or
+ * departed record is that first (whatever it once was), then a booking still
+ * in checkout, then the live split - a staff walk-up stands in the lot, a
+ * customer booking is reserved.
+ */
+export function parkingRowKind(
+  row: ParkingRowLike,
+  now: Date = new Date(),
+): ParkingKind {
+  if (trimmed((row as { status?: unknown })?.status, 40) === "cancelled") return "cancelled";
+  if (businessParkingEndLabel(row, now) === "Ended") return "left";
+  if (trimmed((row as { status?: unknown })?.status, 40) === "pending_payment") return "pending";
+  return isBusinessEnteredParking(row) ? "in_lot" : "reserved";
+}
+
+/**
+ * How a row sits on money: paid in full, part paid, still owed, or nothing to
+ * collect (a customer's prepaid booking, a cancelled record, a record with no
+ * charge). Keyed off the same tone the badge uses so the filter and the badge
+ * never disagree.
+ */
+export function parkingRowPayment(row: ParkingRowLike): ParkingPaymentClass {
+  const tone = businessParkingPaymentTone(row);
+  if (tone === "paid") return "paid";
+  if (tone === "awaiting") return businessParkingAmountPaid(row) > 0 ? "part" : "unpaid";
+  return "none";
+}
+
+/**
+ * Whether a row survives a set of facets. Within a facet the choices are OR
+ * (any listed kind), across facets they are AND (a listed kind AND a listed
+ * payment class). An empty facet does not narrow, so no selection shows
+ * everything and the two facets compose - "in the lot" plus "not paid" keeps
+ * only unpaid walk-ups.
+ */
+export function businessParkingMatchesFacets(
+  row: ParkingRowLike,
+  facets: ParkingFacets,
+  now: Date = new Date(),
+): boolean {
+  const kindOk =
+    facets.kinds.length === 0 || facets.kinds.includes(parkingRowKind(row, now));
+  const payOk =
+    facets.payments.length === 0 ||
+    facets.payments.includes(parkingRowPayment(row));
+  return kindOk && payOk;
 }
