@@ -4813,7 +4813,11 @@ export function ParkingPanel({
   // Which card the list sent us to, so opening a row lands on that car
   // rather than at the top of thirty of them.
   const [openRowId, setOpenRowId] = useState("");
-  const [entryAlreadyPaid, setEntryAlreadyPaid] = useState(false);
+  // How much of this walk-up has been paid at the desk: nothing, part of it,
+  // or the whole thing. A part payment carries days-or-amount alongside.
+  const [entryPaid, setEntryPaid] = useState<"later" | "part" | "full">("later");
+  const [entryPartMode, setEntryPartMode] = useState<"days" | "amount">("days");
+  const [entryPartValue, setEntryPartValue] = useState("");
   const [entryReceivedVia, setEntryReceivedVia] = useState("cash");
   const [entryReceivedBy, setEntryReceivedBy] = useState("");
   const [entryCustomerMenuOpen, setEntryCustomerMenuOpen] = useState(false);
@@ -5042,7 +5046,9 @@ export function ParkingPanel({
     setLinkCopied(false);
     // The next car is a different car: "already paid" must never carry over,
     // or a stay nobody paid for is settled by a leftover radio.
-    setEntryAlreadyPaid(false);
+    setEntryPaid("later");
+    setEntryPartMode("days");
+    setEntryPartValue("");
     setEntryReceivedVia("cash");
     setEntryReceivedBy("");
     setEntryCustomerPick(null);
@@ -5112,6 +5118,22 @@ export function ParkingPanel({
       setEntryMessage("");
       return;
     }
+    // A part payment is settled right after the car is recorded, so catch a
+    // missing amount or missing staff here — before the record exists — rather
+    // than record the car and then fail to take the money.
+    if (entryDraft.paymentMethod === "direct" && entryPaid === "part") {
+      const n = Number(entryPartValue);
+      if (!Number.isFinite(n) || n <= 0) {
+        setEntryMessage(entryPartMode === "days"
+          ? "Enter how many days they paid for."
+          : "Enter how much they paid.");
+        return;
+      }
+      if (!entryReceivedBy) {
+        setEntryMessage("Say who took the money so it can be reconciled.");
+        return;
+      }
+    }
     setEntryBusy(true);
     setEntryMessage("");
     try {
@@ -5126,7 +5148,7 @@ export function ParkingPanel({
       // it would have reached a minute later. If this second step fails the
       // car is still recorded and still owed - which is the safe way round,
       // and staff can mark it received from the row.
-      if (entryDraft.paymentMethod === "direct" && entryAlreadyPaid && created.entryId) {
+      if (entryDraft.paymentMethod === "direct" && entryPaid === "full" && created.entryId) {
         try {
           await httpsCallable(functions, "markBusinessParkingPaid")({
             entryId: created.entryId,
@@ -5138,6 +5160,28 @@ export function ParkingPanel({
           setEntryMessage(
             "The car was recorded, but marking it paid failed. Use " +
             "\"Payment received\" on the row to settle it.",
+          );
+        }
+      } else if (entryDraft.paymentMethod === "direct" && entryPaid === "part" && created.entryId) {
+        // The part payment settles against the record we just created, through
+        // the same callable the row's "part payment" control uses. If it fails
+        // the car is still recorded and still owed in full — staff can take the
+        // instalment from the row.
+        const n = Number(entryPartValue);
+        try {
+          await httpsCallable(functions, "recordBusinessParkingPartialPayment")({
+            entryId: created.entryId,
+            receivedVia: entryReceivedVia,
+            ...(entryReceivedBy ? {receivedByStaffId: entryReceivedBy} : {}),
+            ...(entryPartMode === "days"
+              ? {days: Math.round(n)}
+              : {amountCents: Math.round(n * 100)}),
+          });
+          setEntryMessage("Recorded, and the part payment was taken.");
+        } catch (error) {
+          setEntryMessage(
+            (error instanceof Error ? error.message : "The car was recorded, but the part payment failed.") +
+            " Use \"Record a part payment\" on the row to take it.",
           );
         }
       }
@@ -5848,14 +5892,37 @@ export function ParkingPanel({
                   {entryDraft.paymentMethod === "direct" && (
                     <div className="lst-subchoice">
                       <label className="lst-radio">
-                        <input type="radio" name="parking-direct-settled" value="later" checked={!entryAlreadyPaid} onChange={() => setEntryAlreadyPaid(false)} />
+                        <input type="radio" name="parking-direct-settled" value="later" checked={entryPaid === "later"} onChange={() => setEntryPaid("later")} />
                         <span>They have not paid yet</span>
                       </label>
                       <label className="lst-radio">
-                        <input type="radio" name="parking-direct-settled" value="paid" checked={entryAlreadyPaid} onChange={() => setEntryAlreadyPaid(true)} />
-                        <span>They have already paid</span>
+                        <input type="radio" name="parking-direct-settled" value="part" checked={entryPaid === "part"} onChange={() => setEntryPaid("part")} />
+                        <span>They paid part of it</span>
                       </label>
-                      {entryAlreadyPaid && (
+                      <label className="lst-radio">
+                        <input type="radio" name="parking-direct-settled" value="paid" checked={entryPaid === "full"} onChange={() => setEntryPaid("full")} />
+                        <span>They have already paid in full</span>
+                      </label>
+                      {entryPaid === "part" && (
+                        <label className="lst-field"><span>How much did they pay?</span>
+                          <div style={{display: "flex", gap: 8}}>
+                            <select value={entryPartMode} onChange={(event) => setEntryPartMode(event.target.value === "amount" ? "amount" : "days")} aria-label="Pay by" style={{flex: "0 0 auto"}}>
+                              <option value="days">Days</option>
+                              <option value="amount">Amount ($)</option>
+                            </select>
+                            <input
+                              type="number" min="1" inputMode="decimal"
+                              value={entryPartValue}
+                              placeholder={entryPartMode === "days" ? "e.g. 5" : "e.g. 60"}
+                              onChange={(event) => setEntryPartValue(event.target.value)}
+                              aria-label={entryPartMode === "days" ? "Days paid" : "Amount paid"}
+                              style={{flex: "1 1 auto", minWidth: 0}}
+                            />
+                          </div>
+                          <small className="lst-hint">{entryPartMode === "days" ? "The number of days they paid for now." : "Anything over the balance is trimmed to what is owed."}</small>
+                        </label>
+                      )}
+                      {entryPaid !== "later" && (
                         <>
                           <label className="lst-field"><span>How did they pay?</span>
                             <select value={entryReceivedVia} onChange={(event) => setEntryReceivedVia(event.target.value)}>
@@ -5880,9 +5947,11 @@ export function ParkingPanel({
                   )}
                   <p className="lst-hint">
                     {entryDraft.paymentMethod === "direct"
-                      ? entryAlreadyPaid
+                      ? entryPaid === "full"
                         ? "We take no cut. The car is recorded and settled in one go — this cannot be undone here."
-                        : "We record what the customer owes you and take no cut. You mark it received when the money arrives."
+                        : entryPaid === "part"
+                          ? "We take no cut. The car is recorded, the part payment is taken, and the rest stays owed."
+                          : "We record what the customer owes you and take no cut. You mark it received when the money arrives."
                       : "We bill the customer for you and send you the rest."}
                   </p>
                 </fieldset>

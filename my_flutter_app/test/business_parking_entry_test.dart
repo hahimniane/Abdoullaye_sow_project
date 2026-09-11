@@ -640,7 +640,8 @@ void main() {
     test('the question is only asked for a direct payment', () {
       expect(screen, contains('if (_paymentMethod == BusinessParkingPaymentMethod.direct)'));
       expect(screen, contains('l10n.parkingNotPaidYet'));
-      expect(screen, contains('l10n.parkingAlreadyPaid'));
+      expect(screen, contains('l10n.parkingPaidPartOfIt'));
+      expect(screen, contains('l10n.parkingAlreadyPaidInFull'));
       expect(screen, contains('l10n.parkingHowDidTheyPay'));
     });
 
@@ -672,14 +673,51 @@ void main() {
       for (final key in [
         'parkingNotPaidYet',
         'parkingAlreadyPaid',
+        'parkingPaidPartOfIt',
+        'parkingAlreadyPaidInFull',
+        'parkingHowMuchDidTheyPay',
+        'parkingSayWhoReceived',
+        'parkingEnterDaysPaid',
+        'parkingEnterAmountPaid',
         'parkingHowDidTheyPay',
         'directPaymentSettledExplainer',
+        'directPaymentPartPaidExplainer',
         'parkingRecordedAndPaid',
+        'parkingRecordedAndPartPaid',
         'parkingRecordedNotSettled',
+        'parkingRecordedNotPartPaid',
       ]) {
         expect(en[key], isNotNull, reason: '$key missing from English');
         expect(fr[key], isNotNull, reason: '$key missing from French');
       }
+    });
+  });
+
+  // A walk-up can be part-paid at the desk: days or a dollar amount now, the
+  // rest still owed. It rides the same partial-payment callable the record
+  // screen uses, and only after the car exists.
+  group('a part payment can be taken on the record form', () {
+    final screen = File('lib/screens/park_car_screen.dart').readAsStringSync();
+
+    test('the record form offers a part-payment choice with days or amount', () {
+      expect(screen, contains("_paidChoice == 'part'"));
+      expect(screen, contains('l10n.parkingHowMuchDidTheyPay'));
+      expect(screen, contains('_partByDays'));
+      expect(screen, contains('_partValueController'));
+    });
+
+    test('the part payment rides the shared callable, after the car exists', () {
+      final record = screen.indexOf('Future<void> _recordWalkUpParking()');
+      final body = screen.substring(record, screen.indexOf('\n  }', record));
+      expect(body, contains('_businessParkingService.recordPartialPayment('));
+      expect(
+        body.indexOf('createEntry(draft)'),
+        lessThan(body.indexOf('recordPartialPayment(')),
+        reason: 'the car is recorded before the part payment is taken',
+      );
+      // Guarded before the record exists, so an invalid part payment never
+      // leaves an un-settled car behind.
+      expect(body, contains('l10n.parkingSayWhoReceived'));
     });
   });
 }

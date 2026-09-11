@@ -7997,6 +7997,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get parkingAlreadyPaid => 'They have already paid';
 
   @override
+  String get parkingPaidPartOfIt => 'They paid part of it';
+
+  @override
+  String get parkingAlreadyPaidInFull => 'They have already paid in full';
+
+  @override
+  String get parkingHowMuchDidTheyPay => 'How much did they pay?';
+
+  @override
+  String get parkingSayWhoReceived =>
+      'Say who took the money so it can be reconciled.';
+
+  @override
+  String get parkingEnterDaysPaid => 'Enter how many days they paid for.';
+
+  @override
+  String get parkingEnterAmountPaid => 'Enter how much they paid.';
+
+  @override
   String get parkingHowDidTheyPay => 'How did they pay?';
 
   @override
@@ -8004,11 +8023,23 @@ class AppLocalizationsEn extends AppLocalizations {
       'We take no cut. The car is recorded and settled in one go - this cannot be undone here.';
 
   @override
+  String get directPaymentPartPaidExplainer =>
+      'We take no cut. The car is recorded, the part payment is taken, and the rest stays owed.';
+
+  @override
   String get parkingRecordedAndPaid => 'Recorded, and marked as paid.';
+
+  @override
+  String get parkingRecordedAndPartPaid =>
+      'Recorded, and the part payment was taken.';
 
   @override
   String get parkingRecordedNotSettled =>
       'The car was recorded, but marking it paid failed. Mark the payment received on the record.';
+
+  @override
+  String get parkingRecordedNotPartPaid =>
+      'The car was recorded, but the part payment failed. Record it on the car.';
 
   @override
   String get parkingPriceLabel => 'Price';
