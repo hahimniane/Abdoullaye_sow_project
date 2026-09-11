@@ -854,15 +854,16 @@ test("parking has a dense list view, and a row opens that car", () => {
 
 test("a stay counts the days the lot would count", () => {
   const day = (d: string) => new Date(`${d}T12:00:00Z`);
-  // A fixed stay counts its whole window.
+  // A fixed stay counts its whole window, inclusive of both endpoints - the
+  // 1st through the 11th is eleven days, the way the lot's own sheet bills.
   assert.equal(
     businessParkingStayDays({ parkingDate: day("2026-09-01"), parkingEndDate: day("2026-09-11") }),
-    10,
+    11,
   );
-  // An open-ended stay counts up to today, and keeps counting.
+  // An open-ended stay counts up to today (inclusive), and keeps counting.
   assert.equal(
     businessParkingStayDays({ parkingDate: day("2026-09-01") }, day("2026-09-06")),
-    5,
+    6,
   );
   // A car parked today is one day, never zero — the lot's minimum.
   assert.equal(
@@ -999,7 +1000,7 @@ test("the parking scoreboard totals the records", () => {
   const day = (d: string) => new Date(`${d}T12:00:00Z`);
   const now = day("2026-09-11");
   const rows = [
-    // open-ended, 10 days at $12, $60 paid -> in lot, owed 60
+    // open-ended, Sep 1..Sep 11 inclusive = 11 days at $12 = $132, $60 paid -> in lot, owed 72
     { source: "business", paymentMethod: "direct", paymentStatus: "awaiting_direct_payment", parkingDate: day("2026-09-01"), dailyRate: 12, amountPaidCents: 6000 },
     // fixed, ended, paid in full -> left, collected 48
     { source: "business", paymentMethod: "direct", paymentStatus: "paid", parkingDate: day("2026-09-01"), parkingEndDate: day("2026-09-05"), dailyRate: 12, amountDueCents: 4800, amountPaidCents: 4800 },
@@ -1010,7 +1011,7 @@ test("the parking scoreboard totals the records", () => {
   assert.equal(t.inLot, 1);
   assert.equal(t.left, 1);
   assert.equal(t.collected, 108);          // 60 + 48
-  assert.equal(t.owed, 60);                // open stay's 120 accrued - 60 paid; fixed is settled; cancelled owes nothing
+  assert.equal(t.owed, 72);                // open stay's 132 accrued (11d x 12) - 60 paid; fixed is settled; cancelled owes nothing
   assert.equal(t.spacesTotal, 50);
   assert.equal(t.spacesUsed, 1);
 });
@@ -1072,9 +1073,9 @@ test("balance and accrued handle open, fixed, and cancelled stays", () => {
   const day = (d: string) => new Date(`${d}T12:00:00Z`);
   const now = day("2026-09-11");
   const open = { paymentStatus: "awaiting_direct_payment", parkingDate: day("2026-09-01"), dailyRate: 12 };
-  assert.equal(businessParkingAccrued(open, now), 120);   // 10 days x 12
-  assert.equal(businessParkingBalance(open, now), 120);
-  assert.equal(businessParkingBalance({ ...open, amountPaidCents: 5000 }, now), 70);
+  assert.equal(businessParkingAccrued(open, now), 132);   // Sep 1..11 inclusive = 11 days x 12
+  assert.equal(businessParkingBalance(open, now), 132);
+  assert.equal(businessParkingBalance({ ...open, amountPaidCents: 5000 }, now), 82);
   // fixed stay uses its recorded total
   const fixed = { parkingEndDate: day("2026-09-05"), amountDueCents: 4800, amountPaidCents: 1200 };
   assert.equal(businessParkingBalance(fixed, now), 36);

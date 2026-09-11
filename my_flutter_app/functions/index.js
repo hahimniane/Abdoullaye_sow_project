@@ -11081,8 +11081,16 @@ function parkingBillableDays(start, end) {
   // billed day by day later, through "bill through today". Before this,
   // recording one from the console crashed here and answered INTERNAL.
   if (!(end instanceof Date) || Number.isNaN(end.getTime())) return 0;
-  const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-  return Math.max(1, Math.ceil(hours / 24));
+  // Inclusive whole-calendar-day count: the arrival day and the leave day
+  // both count, the way the lot's own sheet bills (1st to the 5th = 5 days,
+  // same-day in/out = 1). Compared on UTC day boundaries so the time of day a
+  // record is stored at cannot shift the count.
+  const dayMs = 24 * 60 * 60 * 1000;
+  const startDay = Date.UTC(
+      start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const endDay = Date.UTC(
+      end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  return Math.max(1, Math.round((endDay - startDay) / dayMs) + 1);
 }
 
 function businessOffersParking(business) {
