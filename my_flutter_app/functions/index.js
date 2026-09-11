@@ -11160,6 +11160,7 @@ function parkingOptionFromBusiness({
     businessId,
     businessName: business.name || DEFAULT_BUSINESS_NAME,
     city: business.parkingCity || business.city || "",
+    state: business.parkingState || business.state || "",
     address: business.parkingAddressLine1 || business.addressLine1 || "",
     totalSpaces: Math.max(0, intOrFallback(business.parkingTotalSpaces, 0)),
     blockedSpaces: Math.max(0, intOrFallback(
@@ -11191,9 +11192,27 @@ function parkingOptionFromBusiness({
   };
 }
 
+/**
+ * Every lot a customer could use, narrowed by whatever they have told us.
+ *
+ * A customer who does not already know the name of a town cannot search for
+ * it. City used to be required and matched exactly, so "Bronx" or "NYC"
+ * found nothing while a lot sat a mile away. Now nothing is required: with
+ * no filter at all this returns every approved lot that takes parking, and
+ * state and city narrow it when the customer picks them.
+ *
+ * Dates are optional too. Someone browsing has not chosen them yet, so the
+ * listing prices a single day to show a rate, and only quotes a real total
+ * once a window exists.
+ *
+ * @param {*} data The callable payload.
+ * @return {!Promise<!Array<!Object>>} Nearest first when we know where they
+ *   are, otherwise by town and name so the list has a stable order.
+ */
 async function parkingOptionsForRequest(data) {
   const {
     city,
+    state,
     startDate,
     endDate,
     pickupRequested,
@@ -11201,11 +11220,19 @@ async function parkingOptionsForRequest(data) {
     customerLongitude,
   } = data || {};
   const normalizedCity = String(city || "").trim().toLowerCase();
-  if (!normalizedCity) {
-    throw new HttpsError("invalid-argument", "Parking city is required");
-  }
-  const start = parseParkingDate(startDate, "Parking start date");
-  const end = parseParkingDate(endDate, "Parking end date");
+  const normalizedState = String(state || "").trim().toLowerCase();
+  const hasWindow = Boolean(startDate) && Boolean(endDate);
+  // Browsing has no dates yet. Availability and the rate still need a window
+  // to mean anything, so an unbrowsed listing is priced for one day from
+  // today - and estimatedTotal is only reported when the customer chose the
+  // dates themselves.
+  const now = new Date();
+  const start = hasWindow ?
+    parseParkingDate(startDate, "Parking start date") :
+    now;
+  const end = hasWindow ?
+    parseParkingDate(endDate, "Parking end date") :
+    new Date(now.getTime() + 24 * 60 * 60 * 1000);
   if (end.getTime() < start.getTime()) {
     throw new HttpsError(
         "invalid-argument",
@@ -11220,15 +11247,16 @@ async function parkingOptionsForRequest(data) {
   const options = [];
   for (const doc of businesses.docs) {
     const business = doc.data() || {};
+    if (!businessOffersParking(business)) continue;
     const businessCity = String(
         business.parkingCity || business.city || "",
     ).trim().toLowerCase();
-    if (
-      !businessOffersParking(business) ||
-      businessCity !== normalizedCity
-    ) {
-      continue;
-    }
+    const businessState = String(
+        business.parkingState || business.state || "",
+    ).trim().toLowerCase();
+    // Each filter only bites when the customer set it.
+    if (normalizedCity && businessCity !== normalizedCity) continue;
+    if (normalizedState && businessState !== normalizedState) continue;
     const reservations = await parkedCarsForAvailability(db, doc.id)
         .get();
     const option = parkingOptionFromBusiness({
@@ -11243,7 +11271,13 @@ async function parkingOptionsForRequest(data) {
       customerLatitude,
       customerLongitude,
     });
-    if (option.availableSpaces > 0) options.push(option);
+    // With dates chosen, a lot with no room for them is not an option. While
+    // browsing there are no dates yet, so a lot full today is still worth
+    // showing - the customer may want it next week. availableSpaces travels
+    // with it either way, so the list can say which is which.
+    if (!hasWindow || option.availableSpaces > 0) {
+      options.push({...option, quotedForDates: hasWindow});
+    }
   }
   options.sort((a, b) => {
     if (a.distanceMiles !== null && b.distanceMiles !== null) {

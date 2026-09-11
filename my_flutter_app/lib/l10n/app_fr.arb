@@ -3480,5 +3480,14 @@
   "directPaymentSettledExplainer": "Nous ne prenons aucune commission. La voiture est enregistrée et réglée en une fois - action irréversible ici.",
   "parkingRecordedAndPaid": "Enregistré et marqué comme payé.",
   "parkingRecordedNotSettled": "La voiture a été enregistrée, mais le marquage du paiement a échoué. Marquez le paiement reçu sur la fiche.",
-  "parkingPriceLabel": "Tarif"
+  "parkingPriceLabel": "Tarif",
+  "parkingState": "État",
+  "parkingPlacesNearby": "{count} endroits pour se garer",
+  "@parkingPlacesNearby": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

@@ -24,7 +24,6 @@ import '../services/parking_rates.dart';
 import '../services/parking_service.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
-import '../data/business_location_catalog.dart';
 import '../data/car_catalog.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/tracking_code_generator.dart';
@@ -80,6 +79,12 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   List<LotCustomer> _customerSuggestions = const [];
   bool _isLoading = false;
   bool _isSearchingParking = false;
+  // Every lot the customer could use, loaded without them naming anywhere.
+  // The state and town pickers are built from this, so they only ever offer
+  // places that actually have a lot in them.
+  List<ParkingBusinessOption> _allParkingPlaces = const [];
+  String _browseState = '';
+  String _browseCity = '';
   bool _isCatalogLoading = true;
   bool _isVinDecoding = false;
   bool _isLocating = false;
@@ -119,6 +124,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     _loadCatalog();
     _loadLotCustomers();
     _loadParkingRates();
+    _loadAllParkingPlaces();
     // An empty field opens on the people most recently seen rather than
     // nothing: this is a list to look through, not a search box that only
     // rewards someone who already knows the name.
@@ -494,13 +500,57 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     }
   }
 
+  /// Every lot, with no city and no dates - which is what someone who does
+  /// not already know the name of a town needs. Silent on failure: the
+  /// search still works by hand.
+  Future<void> _loadAllParkingPlaces() async {
+    try {
+      final places = await _parkingRepository.searchParking(
+        customerLatitude: _customerLatitude,
+        customerLongitude: _customerLongitude,
+      );
+      if (!mounted) return;
+      setState(() => _allParkingPlaces = places);
+    } catch (_) {
+      // Nothing to browse; the city box still searches.
+    }
+  }
+
+  /// The states that actually have a lot in them, in alphabetical order.
+  List<String> get _browseStates {
+    final states = <String>{
+      for (final place in _allParkingPlaces)
+        if (place.state.trim().isNotEmpty) place.state.trim(),
+    }.toList()
+      ..sort();
+    return states;
+  }
+
+  /// The towns with a lot in them, narrowed to the chosen state.
+  List<String> get _browseCities {
+    final cities = <String>{
+      for (final place in _allParkingPlaces)
+        if (place.city.trim().isNotEmpty &&
+            (_browseState.isEmpty || place.state.trim() == _browseState))
+          place.city.trim(),
+    }.toList()
+      ..sort();
+    return cities;
+  }
+
+  /// What the browse list shows right now.
+  List<ParkingBusinessOption> get _browsedPlaces => [
+        for (final place in _allParkingPlaces)
+          if ((_browseState.isEmpty || place.state.trim() == _browseState) &&
+              (_browseCity.isEmpty || place.city.trim() == _browseCity))
+            place,
+      ];
+
   Future<void> _searchParkingOptions() async {
     final l10n = AppLocalizations.of(context)!;
+    // No city required: with nothing chosen this is every lot with room for
+    // the dates, which is what someone who knows no town name needs.
     final city = _parkingCityController.text.trim();
-    if (city.isEmpty) {
-      showErrorSnackBar(context, l10n.pleaseEnterParkingCity);
-      return;
-    }
     if (_selectedEndDateTime.isBefore(_selectedDateTime)) {
       showErrorSnackBar(context, l10n.parkingDateRangeInvalid);
       return;
@@ -512,6 +562,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     try {
       final options = await _parkingRepository.searchParking(
         city: city,
+        state: _browseState,
         startDate: _selectedDateTime,
         endDate: _selectedEndDateTime,
         customerLatitude: _customerLatitude,
@@ -535,17 +586,39 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   // the "choose a spot" step (which shows results or an empty-state notice).
   Future<void> _findParkingAndAdvance() async {
     final l10n = AppLocalizations.of(context)!;
-    final city = _parkingCityController.text.trim();
-    if (city.isEmpty) {
-      showErrorSnackBar(context, l10n.pleaseEnterParkingCity);
-      return;
-    }
     if (_selectedEndDateTime.isBefore(_selectedDateTime)) {
       showErrorSnackBar(context, l10n.parkingDateRangeInvalid);
       return;
     }
     await _searchParkingOptions();
     if (mounted) setState(() => _customerStep = 1);
+  }
+
+  /// Tapping a lot in the list picks that lot. It is priced for the dates on
+  /// the form first - a browsing row only knows one day at the lot's rate,
+  /// and the reservation must be quoted on the real window. If the lot has
+  /// no room for those dates, the customer lands on that town's results
+  /// rather than in a booking that cannot happen.
+  Future<void> _chooseBrowsedPlace(ParkingBusinessOption place) async {
+    setState(() {
+      _browseState = place.state.trim();
+      _browseCity = place.city.trim();
+      _parkingCityController.text = place.city.trim();
+      _selectedParkingOption = null;
+    });
+    await _searchParkingOptions();
+    if (!mounted) return;
+    ParkingBusinessOption? match;
+    for (final option in _parkingOptions) {
+      if (option.businessId == place.businessId) {
+        match = option;
+        break;
+      }
+    }
+    setState(() {
+      _selectedParkingOption = match;
+      _customerStep = 1;
+    });
   }
 
   void _goToParkingStep(int step) {
@@ -2051,25 +2124,65 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       subtitle: l10n.customerParkingSubtitle,
       child: Column(
         children: [
-          Builder(
-            builder: (context) {
-              final selectedCity = _parkingCityController.text.trim().isEmpty
-                  ? null
-                  : _parkingCityController.text.trim();
-              return _RoundedDropdownField(
-                label: l10n.parkingCity,
-                value: selectedCity,
-                items: businessCityOptions('United States', selectedCity),
-                onChanged: (value) {
-                  setState(() {
-                    _parkingCityController.text = value ?? '';
-                    _parkingOptions = const [];
-                    _selectedParkingOption = null;
-                  });
-                },
-              );
+          // The old picker offered every city in the country, so almost every
+          // choice led nowhere. These two are built from the lots that
+          // actually exist, and the list underneath means a customer who
+          // knows no town at all can still just look.
+          if (_browseStates.isNotEmpty) ...[
+            _RoundedDropdownField(
+              label: l10n.parkingState,
+              value: _browseState.isEmpty ? null : _browseState,
+              items: _browseStates,
+              onChanged: (value) {
+                setState(() {
+                  _browseState = value ?? '';
+                  _browseCity = '';
+                  _parkingCityController.text = '';
+                  _parkingOptions = const [];
+                  _selectedParkingOption = null;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+          _RoundedDropdownField(
+            label: l10n.parkingCity,
+            value: _browseCity.isEmpty ? null : _browseCity,
+            items: _browseCities,
+            onChanged: (value) {
+              setState(() {
+                _browseCity = value ?? '';
+                _parkingCityController.text = _browseCity;
+                _parkingOptions = const [];
+                _selectedParkingOption = null;
+              });
             },
           ),
+          if (_browsedPlaces.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                l10n.parkingPlacesNearby(_browsedPlaces.length),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            ..._browsedPlaces.take(8).map(
+                  (place) => _ParkingPlaceTile(
+                    place: place,
+                    selected: _selectedParkingOption?.businessId ==
+                        place.businessId,
+                    onTap: _isSearchingParking
+                        ? () {}
+                        : () => _chooseBrowsedPlace(place),
+                  ),
+                ),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
@@ -2469,6 +2582,108 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
           ],
           Expanded(child: primary),
         ],
+      ),
+    );
+  }
+}
+
+/// One place to park, as a customer browsing sees it: who it is, where it is,
+/// how far away, and what a day costs. Distance only appears when the
+/// customer has shared their location - an invented number is worse than none.
+class _ParkingPlaceTile extends StatelessWidget {
+  const _ParkingPlaceTile({
+    required this.place,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ParkingBusinessOption place;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final where = [place.city, place.state]
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .join(', ');
+    final miles = place.distanceMiles;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFF1F5F9) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF1D4ED8).withValues(alpha: 0.45)
+                  : Colors.grey.shade300,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      place.businessName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (where.isNotEmpty)
+                      Text(
+                        where,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '\$${place.pricing.dailyRate.toStringAsFixed(0)}/day',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (miles != null)
+                    Text(
+                      '${miles.toStringAsFixed(miles < 10 ? 1 : 0)} mi away',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    )
+                  else if (place.availableSpaces > 0)
+                    Text(
+                      '${place.availableSpaces} free',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

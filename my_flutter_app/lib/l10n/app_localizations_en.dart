@@ -8012,4 +8012,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get parkingPriceLabel => 'Price';
+
+  @override
+  String get parkingState => 'State';
+
+  @override
+  String parkingPlacesNearby(int count) {
+    return '$count places to park';
+  }
 }

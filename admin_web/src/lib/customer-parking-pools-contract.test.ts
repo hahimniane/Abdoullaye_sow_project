@@ -103,3 +103,62 @@ test("narrow parking layouts keep headings and fields in one readable column", (
     /\.customer-parking-search-grid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);/s,
   );
 });
+
+// A customer typed "Bronx" and got "No parking is available" while KEREN sat
+// a mile away — its parking city is stored as "New York". A free-text box that
+// must match exactly can never find a lot the customer does not already know
+// the name of, and the search button stayed disabled until they guessed.
+test("a customer can browse parking without naming a town", () => {
+  // The search no longer waits for a city.
+  const valid = source.slice(source.indexOf("const validSearch ="));
+  assert.ok(
+    !/city\.trim\(\)\.length > 1/.test(valid.slice(0, valid.indexOf(";"))),
+    "search must not require a typed city",
+  );
+  // No free-text city box: the pickers are built from the lots that exist.
+  assert.doesNotMatch(source, /placeholder="Enter a city"/);
+  assert.match(source, /browseStates\.map/);
+  assert.match(source, /browseCities\.map/);
+  // Every lot loads before the customer chooses anything.
+  assert.match(source, /setAllPlaces\(/);
+  assert.match(source, /aria-label="Places to park"/);
+});
+
+test("the search narrows only by what the customer chose", () => {
+  // Tapping a lot narrows to its town, so the search reads the town it was
+  // handed rather than only the pickers.
+  assert.match(source, /\.\.\.\(searchCity\.trim\(\) \? \{city: searchCity\.trim\(\)\} : \{\}\)/);
+  assert.match(source, /\.\.\.\(searchState\.trim\(\) \? \{state: searchState\.trim\(\)\} : \{\}\)/);
+});
+
+test("distance is shown only when the customer shared where they are", () => {
+  const browse = source.slice(source.indexOf('aria-label="Places to park"'));
+  const block = browse.slice(0, browse.indexOf("</section>"));
+  assert.match(block, /place\.distanceMiles !== null/);
+  // Without it, the row says how much room there is instead of inventing miles.
+  assert.match(block, /free today/);
+  assert.match(block, /Full today/);
+});
+
+test("the browse list has styles to render", () => {
+  for (const selector of [".customer-browse-list", ".customer-browse-row", ".customer-browse-meta"]) {
+    assert.ok(styles.includes(selector), `${selector} is unstyled`);
+  }
+});
+
+
+// Tapping a lot in the list must pick that lot, not merely filter to its town.
+// It is priced for the form's dates first: a browsing row only knows one day
+// at the lot's rate, and a reservation must be quoted on the real window.
+test("tapping a lot in the list selects it for booking", () => {
+  const fn = source.slice(source.indexOf("async function chooseBrowsedPlace"));
+  const body = fn.slice(0, fn.indexOf("\n  }\n"));
+  assert.match(body, /await searchParking\(\{ city: placeCity, state: placeState \}\)/);
+  assert.match(body, /option\.businessId === place\.businessId/);
+  assert.match(body, /if \(match\) setSelected\(match\)/);
+  // The row calls it, and cannot be double-fired while a search is running.
+  const list = source.slice(source.indexOf('aria-label="Places to park"'));
+  const rows = list.slice(0, list.indexOf("</section>"));
+  assert.match(rows, /onClick=\{\(\) => void chooseBrowsedPlace\(place\)\}/);
+  assert.match(rows, /disabled=\{loading\}/);
+});
