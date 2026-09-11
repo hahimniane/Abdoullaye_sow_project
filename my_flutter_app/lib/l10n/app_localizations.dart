@@ -14196,6 +14196,66 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 car past the end date, still owing} other{{count} cars past the end date, still owing}}'**
   String lotParkingOverdueCars(int count);
 
+  /// No description provided for @lotActivityGenerated.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated so far'**
+  String get lotActivityGenerated;
+
+  /// No description provided for @lotActivityCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get lotActivityCollected;
+
+  /// No description provided for @lotActivityAwaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting'**
+  String get lotActivityAwaiting;
+
+  /// No description provided for @lotActivityJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'Jobs'**
+  String get lotActivityJobs;
+
+  /// No description provided for @lotRevenueSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Where the revenue comes from'**
+  String get lotRevenueSources;
+
+  /// No description provided for @lotRevenueSourcesNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Activities this year, plus car parking generated to date.'**
+  String get lotRevenueSourcesNote;
+
+  /// No description provided for @lotRevenueCarParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Car parking'**
+  String get lotRevenueCarParking;
+
+  /// No description provided for @lotRevenueOneOff.
+  ///
+  /// In en, this message translates to:
+  /// **'One-off jobs'**
+  String get lotRevenueOneOff;
+
+  /// No description provided for @lotRevenueTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total revenue'**
+  String get lotRevenueTotal;
+
+  /// No description provided for @lotNoRevenueYear.
+  ///
+  /// In en, this message translates to:
+  /// **'No revenue recorded in {year} yet.'**
+  String lotNoRevenueYear(String year);
+
   /// No description provided for @lotMonthByMonth.
   ///
   /// In en, this message translates to:

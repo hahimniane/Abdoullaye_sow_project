@@ -3465,6 +3465,23 @@
       }
     }
   },
+  "lotActivityGenerated": "Généré à ce jour",
+  "lotActivityCollected": "Encaissé",
+  "lotActivityAwaiting": "En attente",
+  "lotActivityJobs": "Tâches",
+  "lotRevenueSources": "D'où viennent les revenus",
+  "lotRevenueSourcesNote": "Activités de cette année, plus le stationnement généré à ce jour.",
+  "lotRevenueCarParking": "Stationnement",
+  "lotRevenueOneOff": "Tâches ponctuelles",
+  "lotRevenueTotal": "Revenu total",
+  "lotNoRevenueYear": "Aucun revenu enregistré en {year} pour l'instant.",
+  "@lotNoRevenueYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
   "lotMonthByMonth": "Mois par mois",
   "lotErrActivityType": "Choisissez ce qui a été fait.",
   "lotErrCustomLabel": "Précisez ce qui a été fait.",

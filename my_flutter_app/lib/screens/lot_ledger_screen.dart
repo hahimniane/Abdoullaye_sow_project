@@ -308,6 +308,61 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
     final parkingTotals =
         businessParkingTotals(_parkedCarRows, spacesTotal: _parkingSpaces);
     final parkingOverdue = businessParkingOverdue(_parkedCarRows);
+
+    // Activity money to date, for the scoreboard above the Activity list —
+    // total billed, collected, still awaiting, and how many jobs. Cancelled
+    // and voided jobs never billed, so `countsAsRevenue` leaves them out.
+    var genCents = 0, colCents = 0, awaCents = 0, jobs = 0;
+    for (final a in _activities) {
+      if (!a.countsAsRevenue) continue;
+      genCents += a.feeCents;
+      jobs += 1;
+      if (a.paid) {
+        colCents += a.feeCents;
+      } else if (a.awaitingLink || a.awaitingDirect) {
+        awaCents += a.feeCents;
+      }
+    }
+    final activityMoney = (
+      generated: genCents,
+      collected: colCents,
+      awaiting: awaCents,
+      jobs: jobs,
+    );
+
+    // Revenue by source for the report year: one figure per activity type
+    // (one-offs pooled), plus a car-parking line (generated to date), so the
+    // owner sees where the year's money came from rather than one lump.
+    final year = lotMonthStart(_month).year;
+    final byType = <String, ({String label, int cents})>{};
+    for (final a in _activities) {
+      if (!a.countsAsRevenue) continue;
+      final aYear = a.activityDate?.year ??
+          int.tryParse(a.activityDateMonth.split('-').first);
+      if (aYear != year) continue;
+      final key = a.isCustom ? '__oneoff' : a.activityTypeId;
+      final label = a.isCustom ? '' : a.activityTypeLabel; // filled at render
+      final prev = byType[key];
+      byType[key] = (
+        label: prev?.label.isNotEmpty == true ? prev!.label : label,
+        cents: (prev?.cents ?? 0) + a.feeCents,
+      );
+    }
+    final revenueRows = <({String key, String label, int cents})>[
+      for (final e in byType.entries)
+        if (e.value.cents > 0)
+          (key: e.key, label: e.value.label, cents: e.value.cents),
+    ];
+    final parkingGeneratedCents =
+        ((parkingTotals.collected + parkingTotals.owed) * 100).round();
+    if (parkingGeneratedCents > 0) {
+      revenueRows.add(
+        (key: '__parking', label: '', cents: parkingGeneratedCents),
+      );
+    }
+    revenueRows.sort((a, b) => b.cents.compareTo(a.cents));
+    final revenueTotal = revenueRows.fold(0, (s, r) => s + r.cents);
+
     switch (_segment) {
       case 1:
         return _ExpensesPanel(
@@ -330,13 +385,17 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
           monthLabel: _monthLabel,
           parkingTotals: parkingTotals,
           parkingOverdue: parkingOverdue,
+          revenueRows: revenueRows,
+          revenueTotalCents: revenueTotal,
         );
       default:
         return _ActivityPanel(
           businessId: widget.businessId,
           knownCars: _knownCars,
-          parkingTotals: parkingTotals,
-          parkingOverdue: parkingOverdue,
+          activityGeneratedCents: activityMoney.generated,
+          activityCollectedCents: activityMoney.collected,
+          activityAwaitingCents: activityMoney.awaiting,
+          activityJobs: activityMoney.jobs,
           loading: _loading,
           month: _month,
           monthLabel: _monthLabel(_month),
@@ -671,59 +730,29 @@ class _MoneyTile extends StatelessWidget {
   }
 }
 
-/// The parked-car scoreboard, the same figures the Parking screen shows,
-/// surfaced in the ledger: how many cars are in the lot, what parking has
-/// generated so far, what has been collected, what is still owed, and — when
-/// there is any — what is past due. "Generated so far" is collected plus owed.
-class _ParkingMoneyBoard extends StatelessWidget {
-  const _ParkingMoneyBoard({
-    required this.totals,
-    required this.overdue,
-    this.showInLot = true,
-  });
+/// A row of small stat chips — a scoreboard. Used above the Activity list to
+/// show what the lot's activities have generated so far, the same shape the
+/// Parking screen's own scoreboard uses.
+class _LotStatBoard extends StatelessWidget {
+  const _LotStatBoard({required this.stats});
 
-  final BusinessParkingTotals totals;
-  final BusinessParkingOverdue overdue;
-  final bool showInLot;
+  final List<({String label, String value, bool alert})> stats;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final generatedCents =
-        ((totals.collected + totals.owed) * 100).round();
-    final chips = <Widget>[
-      if (showInLot)
-        _ParkingStatChip(label: l10n.lotParkingInLot, value: '${totals.inLot}'),
-      _ParkingStatChip(
-        label: l10n.lotParkingGenerated,
-        value: formatLotCents(generatedCents),
-      ),
-      _ParkingStatChip(
-        label: l10n.lotParkingCollected,
-        value: formatLotCents((totals.collected * 100).round()),
-      ),
-      _ParkingStatChip(
-        label: l10n.lotParkingOwed,
-        value: formatLotCents((totals.owed * 100).round()),
-        alert: totals.owed > 0,
-      ),
-      if (overdue.count > 0)
-        _ParkingStatChip(
-          label: l10n.lotParkingOverdue,
-          value: formatLotCents((overdue.amount * 100).round()),
-          alert: true,
-        ),
-    ];
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
-      children: chips,
+      children: [
+        for (final s in stats)
+          _LotStatChip(label: s.label, value: s.value, alert: s.alert),
+      ],
     );
   }
 }
 
-class _ParkingStatChip extends StatelessWidget {
-  const _ParkingStatChip({
+class _LotStatChip extends StatelessWidget {
+  const _LotStatChip({
     required this.label,
     required this.value,
     this.alert = false,
@@ -1532,8 +1561,10 @@ class _ActivityPanel extends StatelessWidget {
   const _ActivityPanel({
     required this.businessId,
     required this.knownCars,
-    required this.parkingTotals,
-    required this.parkingOverdue,
+    required this.activityGeneratedCents,
+    required this.activityCollectedCents,
+    required this.activityAwaitingCents,
+    required this.activityJobs,
     required this.loading,
     required this.month,
     required this.monthLabel,
@@ -1550,8 +1581,10 @@ class _ActivityPanel extends StatelessWidget {
 
   final String businessId;
   final List<LotKnownCar> knownCars;
-  final BusinessParkingTotals parkingTotals;
-  final BusinessParkingOverdue parkingOverdue;
+  final int activityGeneratedCents;
+  final int activityCollectedCents;
+  final int activityAwaitingCents;
+  final int activityJobs;
   final bool loading;
   final String month;
   final String monthLabel;
@@ -1581,12 +1614,31 @@ class _ActivityPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 120),
           children: [
-            // Parked cars are the other half of what the lot makes, so the
-            // ledger opens on the whole money picture, not just billed jobs.
-            _ParkingMoneyBoard(
-              totals: parkingTotals,
-              overdue: parkingOverdue,
-              showInLot: true,
+            // How much the activities on this tab have generated so far —
+            // total billed, collected, still awaiting, and how many jobs.
+            _LotStatBoard(
+              stats: [
+                (
+                  label: l10n.lotActivityGenerated,
+                  value: formatLotCents(activityGeneratedCents),
+                  alert: false,
+                ),
+                (
+                  label: l10n.lotActivityCollected,
+                  value: formatLotCents(activityCollectedCents),
+                  alert: false,
+                ),
+                (
+                  label: l10n.lotActivityAwaiting,
+                  value: formatLotCents(activityAwaitingCents),
+                  alert: activityAwaitingCents > 0,
+                ),
+                (
+                  label: l10n.lotActivityJobs,
+                  value: '$activityJobs',
+                  alert: false,
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.md),
             _SearchField(value: search, onChanged: onSearch),
@@ -3819,6 +3871,8 @@ class _ReportsPanel extends StatelessWidget {
     required this.monthLabel,
     required this.parkingTotals,
     required this.parkingOverdue,
+    required this.revenueRows,
+    required this.revenueTotalCents,
   });
 
   final LotLedgerMath math;
@@ -3827,6 +3881,8 @@ class _ReportsPanel extends StatelessWidget {
   final String Function(String) monthLabel;
   final BusinessParkingTotals parkingTotals;
   final BusinessParkingOverdue parkingOverdue;
+  final List<({String key, String label, int cents})> revenueRows;
+  final int revenueTotalCents;
 
   @override
   Widget build(BuildContext context) {
@@ -4009,6 +4065,29 @@ class _ReportsPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
+        // Where the year's revenue came from — every activity type that billed,
+        // plus car parking — so the total is not one opaque bar.
+        Text(
+          l10n.lotRevenueSources,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+            color: AppColors.ink,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          l10n.lotRevenueSourcesNote,
+          style: const TextStyle(fontSize: 11, color: AppColors.muted),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _RevenueBreakdown(
+          rows: revenueRows,
+          totalCents: revenueTotalCents,
+          year: year,
+        ),
+        const SizedBox(height: AppSpacing.lg),
         Text(
           l10n.lotWhereTheMoneyGoes,
           style: const TextStyle(
@@ -4025,6 +4104,97 @@ class _ReportsPanel extends StatelessWidget {
           year: year,
         ),
       ],
+    );
+  }
+}
+
+/// Where the year's revenue came from, ranked: every activity type that
+/// billed, plus a car-parking line. Same bars as the expense breakdown, in the
+/// revenue colour, so the total is not one opaque figure.
+class _RevenueBreakdown extends StatelessWidget {
+  const _RevenueBreakdown({
+    required this.rows,
+    required this.totalCents,
+    required this.year,
+  });
+
+  final List<({String key, String label, int cents})> rows;
+  final int totalCents;
+  final int year;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    if (rows.isEmpty || totalCents <= 0) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.paper,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: AppColors.rule),
+        ),
+        child: Text(
+          l10n.lotNoRevenueYear('$year'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13, color: AppColors.muted),
+        ),
+      );
+    }
+    String labelFor(({String key, String label, int cents}) r) {
+      if (r.key == '__parking') return l10n.lotRevenueCarParking;
+      if (r.key == '__oneoff') return l10n.lotRevenueOneOff;
+      return r.label.isEmpty ? l10n.lotRevenueOneOff : r.label;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        children: [
+          for (final row in rows)
+            Padding(
+              padding: EdgeInsets.only(
+                bottom: row == rows.last ? 0 : AppSpacing.md,
+              ),
+              child: _ExpenseShareRow(
+                label: labelFor(row),
+                cents: row.cents,
+                fraction: row.cents / totalCents,
+                barColor: AppColors.sage,
+              ),
+            ),
+          const Divider(height: AppSpacing.lg, color: AppColors.rule),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.lotRevenueTotal,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+              Text(
+                formatLotCents(totalCents),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                  color: AppColors.ink,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -4094,11 +4264,13 @@ class _ExpenseShareRow extends StatelessWidget {
     required this.label,
     required this.cents,
     required this.fraction,
+    this.barColor = AppColors.saffron,
   });
 
   final String label;
   final int cents;
   final double fraction;
+  final Color barColor;
 
   @override
   Widget build(BuildContext context) {
@@ -4154,7 +4326,7 @@ class _ExpenseShareRow extends StatelessWidget {
                       duration: AppMotion.swapFor(context),
                       curve: AppMotion.standard,
                       decoration: BoxDecoration(
-                        color: AppColors.saffron,
+                        color: barColor,
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
