@@ -13655,6 +13655,21 @@ button[data-loading="true"]::before {
 
 .pk-stat b.owed { color: #b45309; }
 
+/* The payments block inside the edit modal - the same billing control the
+   card carries, set off from the vehicle/date fields above it. */
+.lst-edit-payments {
+  border-top: 1px solid var(--rule, #e5e7eb);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.lst-edit-payments h4 {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+  margin: 0 0 8px;
+}
+
 /* Composable filter chips: a status kind AND a payment class, each toggled on
    its own, so a lot can ask "in the lot and not paid" in one row. */
 .pk-facets {

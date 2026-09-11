@@ -5764,6 +5764,21 @@ export function ParkingPanel({
                   {editErrors.map((code) => (<li key={code}>{BUSINESS_PARKING_ENTRY_MESSAGES[code]}</li>))}
                 </ul>
               )}
+              {/* Payments live here too, not only on the card: someone who
+                  opened a record to edit it should be able to take the next
+                  part payment without hunting for another screen. It is the
+                  same control the card uses, on the same record, so a payment
+                  taken here settles exactly as it would there. */}
+              {(() => {
+                const editingParkingRow = parkedCars.rows.find((row) => row.id === draft.id);
+                if (!editingParkingRow || !isBusinessEnteredParking(editingParkingRow)) return null;
+                return (
+                  <div className="lst-edit-payments">
+                    <h4>Payments</h4>
+                    <ParkingBillingActions row={editingParkingRow} staff={parkingStaff.rows} />
+                  </div>
+                );
+              })()}
             </div>
             <footer className="lst-modal-foot">
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
