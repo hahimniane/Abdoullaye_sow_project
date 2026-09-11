@@ -14208,6 +14208,30 @@ abstract class AppLocalizations {
   /// **'Requests to quote, and jobs to move.'**
   String get businessTransportRowSubtitle;
 
+  /// No description provided for @parkingWalkInsOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Walk-ins only'**
+  String get parkingWalkInsOnly;
+
+  /// No description provided for @parkingWalkInsOnlyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This lot takes walk-ins only — contact them to arrange parking.'**
+  String get parkingWalkInsOnlyNote;
+
+  /// No description provided for @parkingAcceptReservations.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept online reservations from customers'**
+  String get parkingAcceptReservations;
+
+  /// No description provided for @parkingAcceptReservationsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Off makes this a walk-in-only lot: it still shows in customer search so people can find and contact you, but they can\'t book or pay online — you record every car yourself.'**
+  String get parkingAcceptReservationsHelp;
+
   /// No description provided for @parkingScoreInLot.
   ///
   /// In en, this message translates to:

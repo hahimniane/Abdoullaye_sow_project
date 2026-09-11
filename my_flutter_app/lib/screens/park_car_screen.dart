@@ -605,6 +605,16 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   /// no room for those dates, the customer lands on that town's results
   /// rather than in a booking that cannot happen.
   Future<void> _chooseBrowsedPlace(ParkingBusinessOption place) async {
+    // A walk-in-only lot lists so it can be found, but takes no online
+    // reservation. Say so and stop rather than walk the customer into a wizard
+    // that would be refused at the end.
+    if (!place.acceptsReservations) {
+      showErrorSnackBar(
+        context,
+        AppLocalizations.of(context)!.parkingWalkInsOnlyNote,
+      );
+      return;
+    }
     setState(() {
       _browseState = place.state.trim();
       _browseCity = place.city.trim();
@@ -2784,6 +2794,15 @@ class _ParkingPlaceTile extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11.5,
                           color: Colors.grey.shade600,
+                        ),
+                      ),
+                    if (!place.acceptsReservations)
+                      Text(
+                        AppLocalizations.of(context)!.parkingWalkInsOnly,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange.shade800,
                         ),
                       ),
                   ],

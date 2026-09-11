@@ -1536,6 +1536,29 @@ export function BusinessServicesPanel({
                       value={draft.parkingInstructions}
                     />
                   </label>
+                  <div className="wide">
+                    <label className="customer-choice-row">
+                      <input
+                        checked={draft.parkingAcceptsReservations}
+                        onChange={() =>
+                          update(
+                            "parkingAcceptsReservations",
+                            !draft.parkingAcceptsReservations,
+                          )
+                        }
+                        type="checkbox"
+                      />
+                      <span>
+                        <strong>Accept online reservations from customers</strong>
+                        <small>
+                          Off makes this a walk-in-only lot: it still shows in
+                          customer search so people can find and contact you,
+                          but they can&rsquo;t book or pay online — you record
+                          every car yourself.
+                        </small>
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </article>
             )}

@@ -7991,6 +7991,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Requests to quote, and jobs to move.';
 
   @override
+  String get parkingWalkInsOnly => 'Walk-ins only';
+
+  @override
+  String get parkingWalkInsOnlyNote =>
+      'This lot takes walk-ins only — contact them to arrange parking.';
+
+  @override
+  String get parkingAcceptReservations =>
+      'Accept online reservations from customers';
+
+  @override
+  String get parkingAcceptReservationsHelp =>
+      'Off makes this a walk-in-only lot: it still shows in customer search so people can find and contact you, but they can\'t book or pay online — you record every car yourself.';
+
+  @override
   String get parkingScoreInLot => 'In the lot';
 
   @override

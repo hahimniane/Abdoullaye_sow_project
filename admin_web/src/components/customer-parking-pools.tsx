@@ -80,6 +80,8 @@ type ParkingOption = {
   pickupFee: number;
   distanceMiles: number | null;
   instructions: string;
+  /** A walk-in-only lot: listed and contactable, but no online reservation. */
+  acceptsReservations: boolean;
 };
 
 type DestinationOption = {
@@ -501,13 +503,22 @@ function ParkingWorkspace({
               {option.instructions && (
                 <p className="customer-service-note">{option.instructions}</p>
               )}
-              <button
-                className="primary-button"
-                onClick={() => setSelected(option)}
-                type="button"
-              >
-                Reserve this space
-              </button>
+              {option.acceptsReservations ? (
+                <button
+                  className="primary-button"
+                  onClick={() => setSelected(option)}
+                  type="button"
+                >
+                  Reserve this space
+                </button>
+              ) : (
+                // A walk-in-only lot: no online booking. The listing still
+                // carries the lot's own instructions/phone so the customer can
+                // arrange it directly.
+                <p className="customer-service-note">
+                  This lot takes walk-ins only — contact them to arrange parking.
+                </p>
+              )}
             </article>
           ))}
         </section>
@@ -1676,6 +1687,7 @@ function parkingOptionFromData(value: unknown): ParkingOption {
         ? null
         : numberValue(data.distanceMiles),
     instructions: text(data.instructions, ""),
+    acceptsReservations: data.acceptsReservations !== false,
   };
 }
 

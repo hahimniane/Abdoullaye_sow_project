@@ -8124,6 +8124,21 @@ class AppLocalizationsFr extends AppLocalizations {
       'Demandes à chiffrer et missions à livrer.';
 
   @override
+  String get parkingWalkInsOnly => 'Sans réservation';
+
+  @override
+  String get parkingWalkInsOnlyNote =>
+      'Ce parc accepte seulement les arrivées sans réservation — contactez-le pour organiser le stationnement.';
+
+  @override
+  String get parkingAcceptReservations =>
+      'Accepter les réservations en ligne des clients';
+
+  @override
+  String get parkingAcceptReservationsHelp =>
+      'Désactivé, ce parc devient sans réservation : il reste visible dans la recherche pour être trouvé et contacté, mais les clients ne peuvent ni réserver ni payer en ligne — vous enregistrez chaque voiture vous-même.';
+
+  @override
   String get parkingScoreInLot => 'Au parc';
 
   @override
