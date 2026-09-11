@@ -137,6 +137,8 @@ import {
   businessParkingDocumentType,
   businessParkingEndLabel,
   businessParkingStayDays,
+  businessParkingAmountPaid,
+  businessParkingIsPartlyPaid,
   businessParkingWithinRange,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
@@ -4788,6 +4790,24 @@ export function ParkingPanel({
   // With only the standard rate there is nothing to choose, so the picker
   // stays out of the way entirely.
   const rateChoices = useMemo(() => parkingRateChoices(business), [business]);
+  // uid -> readable name, for the "Registered by" and "Received by" columns.
+  // Built from the staff already loaded; an id with no match (a former
+  // employee, an admin) shows a short id rather than a blank.
+  const staffNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of parkingStaff.rows) {
+      const r = row as Record<string, unknown>;
+      const id = String(r.id ?? "");
+      if (!id) continue;
+      map.set(id, text(r.fullName, "") || text(r.name, "") || text(r.email, "") || id);
+    }
+    return map;
+  }, [parkingStaff.rows]);
+  const nameForStaff = (id: unknown) => {
+    const key = text(id, "");
+    if (!key) return "";
+    return staffNameById.get(key) || `${key.slice(0, 6)}\u2026`;
+  };
   const [parkingView, setParkingView] = useState<"list" | "cards">("list");
   // Which card the list sent us to, so opening a row lands on that car
   // rather than at the top of thirty of them.
@@ -5356,6 +5376,8 @@ export function ParkingPanel({
               <span className="num">Rate</span>
               <span className="num">Total</span>
               <span>Status</span>
+              <span>Registered by</span>
+              <span>Received by</span>
               <span className="pk-acts-head">Actions</span>
             </div>
             {filteredRows.map((row) => {
@@ -5381,6 +5403,10 @@ export function ParkingPanel({
                   <span>{badge
                     ? <em className={`pk-pill ${tone === "paid" ? "ok" : "warn"}`}>{badge}</em>
                     : <em className="pk-pill">{parkingStatusLabel(row)}</em>}</span>
+                  <span>{nameForStaff(row.enteredByUid) ? <small>{nameForStaff(row.enteredByUid)}</small> : <small className="muted">\u2014</small>}</span>
+                  <span>{tone === "paid" || businessParkingIsPartlyPaid(row)
+                    ? <small>{nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) || <span className="muted">\u2014</span>}</small>
+                    : <small className="muted">\u2014</small>}</span>
                   <span className="pk-acts">
                     <button type="button" className="pk-act" disabled={rowBusy} title={isReceipt ? "Print receipt" : "Print invoice"} aria-label={isReceipt ? "Print receipt" : "Print invoice"} onClick={() => void openParkingDocument(row)}>
                       {rowBusy ? <RefreshCw className="spin" size={13} /> : <Printer size={13} />}
@@ -8100,6 +8126,11 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState("");
   const [receivedBy, setReceivedBy] = useState("");
+  // A part payment: a number of days OR a dollar amount, and who took it.
+  const [partOpen, setPartOpen] = useState(false);
+  const [partMode, setPartMode] = useState<"days" | "amount">("days");
+  const [partValue, setPartValue] = useState("");
+  const [partReceivedBy, setPartReceivedBy] = useState("");
   const r = row as Record<string, unknown>;
   const dayMs = 24 * 60 * 60 * 1000;
   const asMs = (v: unknown) => {
@@ -8114,6 +8145,17 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
   const days = openEnded && fromMs ? Math.max(0, Math.floor((Date.now() - fromMs) / dayMs)) : 0;
   const unbilledCents = days * dailyCents;
   const settled = ["succeeded", "paid"].includes(String(r.paymentStatus));
+  const paidCents = Math.max(0, Math.round(Number(r.amountPaidCents) || 0));
+  const dueCents = Math.max(0, Math.round(
+    Number(r.amountDueCents ?? r.totalCostCents) || 0));
+  // A fixed stay can take a part payment against its total; an open stay
+  // takes money in against a balance that keeps growing. Not offered once
+  // settled, cancelled, or on a payment-link record (Stripe owns that).
+  const canPartPay =
+    isBusinessEnteredParking(row) &&
+    String(r.paymentMethod) === "direct" &&
+    String(r.status) !== "cancelled" &&
+    !settled;
   const billedThrough = asDate(r.billedThroughDate);
   const staffOptions = staff.map((s) => ({
     id: String((s as Record<string, unknown>).id),
@@ -8144,6 +8186,19 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
       await httpsCallable(functions, "closeParkingStay")({ parkedCarId: row.id });
     });
   }
+  async function recordPart() {
+    if (!partReceivedBy) { setFlash("Say who took the money so it can be reconciled."); return; }
+    const n = Number(partValue);
+    if (!Number.isFinite(n) || n <= 0) { setFlash("Enter the days or the amount paid."); return; }
+    const payload = partMode === "days"
+      ? { entryId: row.id, days: Math.round(n), receivedByStaffId: partReceivedBy }
+      : { entryId: row.id, amountCents: Math.round(n * 100), receivedByStaffId: partReceivedBy };
+    await runPanelAction(setBusy, setFlash, "Part payment recorded.", async () => {
+      await httpsCallable(functions, "recordBusinessParkingPartialPayment")(payload);
+    });
+    setPartValue("");
+    setPartOpen(false);
+  }
 
   return (
     <div className="pur-info" style={{ display: "block" }}>
@@ -8166,6 +8221,12 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
         )}
       </dl>
       <p className="lst-hint">{note}</p>
+      {paidCents > 0 && (
+        <p className="lst-hint">
+          Paid so far: <b>{lotFormatCents(paidCents)}</b>
+          {!openEnded && dueCents > 0 && ` of ${lotFormatCents(dueCents)} — ${lotFormatCents(Math.max(0, dueCents - paidCents))} still owed`}
+        </p>
+      )}
       {flash && <div className="lst-hint" role="status">{flash}</div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         {openEnded && (
@@ -8182,6 +8243,36 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
             <button className="secondary-button" type="button" disabled={busy} onClick={received}>Payment received in person</button>
           </>
         )}
+        {canPartPay && !partOpen && (
+          <button className="ghost-button" type="button" disabled={busy} onClick={() => setPartOpen(true)}>Record a part payment</button>
+        )}
+      </div>
+      {canPartPay && partOpen && (
+        <div className="pk-partpay">
+          <div className="pk-partpay-row">
+            <select value={partMode} onChange={(e) => setPartMode(e.target.value === "amount" ? "amount" : "days")} aria-label="Pay by">
+              <option value="days">Days</option>
+              <option value="amount">Amount ($)</option>
+            </select>
+            <input
+              type="number" min="1" inputMode="decimal"
+              value={partValue}
+              placeholder={partMode === "days" ? "e.g. 5" : "e.g. 60"}
+              onChange={(e) => setPartValue(e.target.value)}
+              aria-label={partMode === "days" ? "Days paid" : "Amount paid"}
+            />
+            <select value={partReceivedBy} onChange={(e) => setPartReceivedBy(e.target.value)} aria-label="Received by">
+              <option value="">Received by…</option>
+              {staffOptions.map((sopt) => (<option key={sopt.id} value={sopt.id}>{sopt.name}</option>))}
+            </select>
+          </div>
+          <div className="pk-partpay-row">
+            <button className="primary-button" type="button" disabled={busy} onClick={recordPart}>Record payment</button>
+            <button className="ghost-button" type="button" disabled={busy} onClick={() => { setPartOpen(false); setPartValue(""); }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         {openEnded && (<button className="ghost-button" type="button" disabled={busy} onClick={close}>Car left today</button>)}
       </div>
     </div>

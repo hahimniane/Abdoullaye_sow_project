@@ -8020,4 +8020,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String parkingPlacesNearby(int count) {
     return '$count places to park';
   }
+
+  @override
+  String get parkingRecordPartPayment => 'Record a part payment';
+
+  @override
+  String parkingPaidSoFar(String amount) {
+    return 'Paid so far: $amount';
+  }
+
+  @override
+  String get parkingDays => 'Days';
+
+  @override
+  String get parkingAmount => 'Amount (\$)';
+
+  @override
+  String get parkingDaysPaid => 'Days paid';
+
+  @override
+  String get parkingAmountPaid => 'Amount paid (\$)';
+
+  @override
+  String get parkingRecordPayment => 'Record payment';
+
+  @override
+  String get parkingPartPaymentRecorded => 'Part payment recorded.';
+
+  @override
+  String get parkingEnterDaysOrAmount => 'Enter the days or the amount paid.';
+
+  @override
+  String get parkingReceivedBy => 'Received by';
+
+  @override
+  String get parkingRegisteredBy => 'Registered by';
 }

@@ -443,6 +443,83 @@ function businessParkingPaidUpdate({
   };
 }
 
+/**
+ * A partial payment against a parking record.
+ *
+ * A customer parking for twenty days may hand over five or ten days' worth at
+ * a time. Staff record it either as a number of days (priced from this car's
+ * own daily rate) or as a dollar amount. Each payment is appended to the
+ * record; the running total is amountPaidCents.
+ *
+ * A stay with a leave date has a fixed total (amountDueCents), so once the
+ * payments reach it the record is fully paid. An open-ended stay has no fixed
+ * total - it accrues day by day - so a partial payment there is money in
+ * against a balance that keeps growing, and it is never "fully covered" by
+ * this alone (closing or billing the stay settles it).
+ *
+ * @param {{entry: !Object, days: *, amountCents: *,
+ *   dailyRateCents: number}} params The record, and one of days/amountCents.
+ * @return {{ok: boolean, reason: (string|undefined), appliedCents: number,
+ *   newPaidCents: number, fullyCovered: boolean, openEnded: boolean}}
+ */
+function businessParkingPartialPaymentPlan({entry, days, amountCents,
+  dailyRateCents}) {
+  const data = entry && typeof entry === "object" ? entry : {};
+  if (text(data.source, 40) !== BUSINESS_PARKING_SOURCE &&
+      data.enteredByBusiness !== true) {
+    return partialRefusal("not_a_business_entry");
+  }
+  if (text(data.paymentMethod, 40) !== "direct") {
+    return partialRefusal("payment_link_is_stripe_owned");
+  }
+  if (text(data.status, 40) === BUSINESS_PARKING_STATUS.CANCELLED) {
+    return partialRefusal("entry_cancelled");
+  }
+  const paymentStatus = text(data.paymentStatus, 40);
+  if (paymentStatus === BUSINESS_PARKING_PAYMENT_STATUS.PAID ||
+      paymentStatus === BUSINESS_PARKING_PAYMENT_STATUS.SUCCEEDED) {
+    return partialRefusal("already_paid");
+  }
+
+  const rateCents = Math.max(0, Math.round(Number(dailyRateCents) || 0));
+  let applied = 0;
+  const dayCount = Number(days);
+  const centsGiven = Number(amountCents);
+  if (Number.isFinite(dayCount) && dayCount > 0) {
+    if (rateCents <= 0) return partialRefusal("no_daily_rate");
+    applied = Math.round(dayCount) * rateCents;
+  } else if (Number.isFinite(centsGiven) && centsGiven > 0) {
+    applied = Math.round(centsGiven);
+  } else {
+    return partialRefusal("no_amount");
+  }
+  if (applied <= 0) return partialRefusal("no_amount");
+
+  const alreadyPaid = Math.max(
+      0, Math.round(Number(data.amountPaidCents) || 0));
+  const openEnded = !data.parkingEndDate;
+  const dueCents = Math.max(0, Math.round(
+      Number(data.amountDueCents ?? data.totalCostCents ?? 0) || 0));
+
+  // On a fixed stay you cannot pay more than is owed: an overpayment is a
+  // typo, not a tip. Clamp it to the balance rather than banking it.
+  if (!openEnded && dueCents > 0) {
+    const remaining = Math.max(0, dueCents - alreadyPaid);
+    if (remaining <= 0) return partialRefusal("already_paid");
+    applied = Math.min(applied, remaining);
+  }
+
+  const newPaidCents = alreadyPaid + applied;
+  const fullyCovered = !openEnded && dueCents > 0 && newPaidCents >= dueCents;
+  return {ok: true, appliedCents: applied, newPaidCents, fullyCovered,
+    openEnded};
+}
+
+function partialRefusal(reason) {
+  return {ok: false, reason, appliedCents: 0, newPaidCents: 0,
+    fullyCovered: false, openEnded: false};
+}
+
 // A Stripe Checkout Session dies 24 hours after it is minted - that is the
 // API maximum, not a setting we chose. The owner's rule is the opposite: a
 // payment link stays good until the customer pays it or the lot cancels it.
@@ -679,4 +756,5 @@ module.exports = {
   normalizeDirectPaymentMethod,
   normalizeParkingRates,
   parkingRateSelection,
+  businessParkingPartialPaymentPlan,
 };

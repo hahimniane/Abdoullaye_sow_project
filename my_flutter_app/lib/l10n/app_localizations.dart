@@ -14261,6 +14261,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} places to park'**
   String parkingPlacesNearby(int count);
+
+  /// No description provided for @parkingRecordPartPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a part payment'**
+  String get parkingRecordPartPayment;
+
+  /// No description provided for @parkingPaidSoFar.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid so far: {amount}'**
+  String parkingPaidSoFar(String amount);
+
+  /// No description provided for @parkingDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Days'**
+  String get parkingDays;
+
+  /// No description provided for @parkingAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount (\$)'**
+  String get parkingAmount;
+
+  /// No description provided for @parkingDaysPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Days paid'**
+  String get parkingDaysPaid;
+
+  /// No description provided for @parkingAmountPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount paid (\$)'**
+  String get parkingAmountPaid;
+
+  /// No description provided for @parkingRecordPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Record payment'**
+  String get parkingRecordPayment;
+
+  /// No description provided for @parkingPartPaymentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Part payment recorded.'**
+  String get parkingPartPaymentRecorded;
+
+  /// No description provided for @parkingEnterDaysOrAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the days or the amount paid.'**
+  String get parkingEnterDaysOrAmount;
+
+  /// No description provided for @parkingReceivedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Received by'**
+  String get parkingReceivedBy;
+
+  /// No description provided for @parkingRegisteredBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Registered by'**
+  String get parkingRegisteredBy;
 }
 
 class _AppLocalizationsDelegate

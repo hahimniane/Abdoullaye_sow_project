@@ -83,6 +83,14 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   late final BusinessParkingService _businessParkingService;
   String _receivedVia = businessParkingReceivedViaValues.first;
   bool _isMarkingPaid = false;
+  // The lot's team, uid -> name, for "who received" and the part-payment
+  // picker. Best-effort: reading the team needs the people permission, so a
+  // parking-only staff member simply gets no names and can still mark paid.
+  Map<String, String> _staffNames = const {};
+  bool _partOpen = false;
+  bool _partByDays = true;
+  final _partValueController = TextEditingController();
+  String _partReceivedBy = '';
 
   @override
   void initState() {
@@ -94,6 +102,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _vinController = TextEditingController(text: widget.parkedCar.vinNumber);
     _trackingCode = widget.parkedCar.trackingCode;
     _paymentFields = Map<String, dynamic>.from(widget.parkedCar.paymentFields);
+    _loadStaffNames();
     _customerPhoneController = TextEditingController(
       text: (_paymentFields['customerPhone'] ?? '').toString(),
     );
@@ -151,6 +160,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _ownerNameController.dispose();
     _costPerDayController.dispose();
     _vinController.dispose();
+    _partValueController.dispose();
     _customerPhoneController.dispose();
     _customerEmailController.dispose();
     super.dispose();
@@ -1362,6 +1372,92 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     );
   }
 
+  Future<void> _loadStaffNames() async {
+    final businessId = (_paymentFields['businessId'] ?? '').toString().trim();
+    if (businessId.isEmpty) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('businessId', isEqualTo: businessId)
+          .limit(200)
+          .get();
+      if (!mounted) return;
+      final names = <String, String>{};
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        final name = (d['fullName'] ?? d['name'] ?? d['email'] ?? '')
+            .toString()
+            .trim();
+        if (name.isNotEmpty) names[doc.id] = name;
+      }
+      setState(() {
+        _staffNames = names;
+        _partReceivedBy = names.keys.isNotEmpty ? names.keys.first : '';
+      });
+    } catch (_) {
+      // No permission to read the team: names stay blank, the flow still works.
+    }
+  }
+
+  /// A uid as a person, or a short id when the team is not loaded.
+  String _staffLabel(Object? id) {
+    final key = (id ?? '').toString().trim();
+    if (key.isEmpty) return '';
+    return _staffNames[key] ??
+        (key.length > 6 ? '${key.substring(0, 6)}\u2026' : key);
+  }
+
+  Future<void> _recordPartPayment() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_partReceivedBy.isEmpty) {
+      showErrorSnackBar(context, l10n.chooseParkingBusiness);
+      return;
+    }
+    final n = num.tryParse(_partValueController.text.trim());
+    if (n == null || n <= 0) {
+      showErrorSnackBar(context, l10n.parkingEnterDaysOrAmount);
+      return;
+    }
+    setState(() => _isMarkingPaid = true);
+    try {
+      await _businessParkingService.recordPartialPayment(
+        entryId: widget.parkedCar.id,
+        receivedByStaffId: _partReceivedBy,
+        receivedVia: _receivedVia,
+        days: _partByDays ? n.round() : null,
+        amountCents: _partByDays ? null : (n * 100).round(),
+      );
+      if (!mounted) return;
+      // Refresh from the record so the paid-so-far line and any settled
+      // transition show without leaving the screen.
+      final fresh = await FirebaseFirestore.instance
+          .collection('parkedCars')
+          .doc(widget.parkedCar.id)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        if (fresh.data() != null) {
+          _paymentFields = Map<String, dynamic>.from(fresh.data()!);
+        }
+        _partOpen = false;
+        _partValueController.clear();
+      });
+      showSuccessSnackBar(context, l10n.parkingPartPaymentRecorded);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      final message = (error.message ?? '').trim();
+      showErrorSnackBar(
+        context,
+        message.isEmpty ? l10n.paymentCouldNotBeRecorded : message,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showErrorSnackBar(context, l10n.paymentCouldNotBeRecorded);
+    } finally {
+      if (mounted) setState(() => _isMarkingPaid = false);
+    }
+  }
+
   /// Records that the customer paid the lot off-platform.
   ///
   /// The platform never held this money - it recorded what was owed - so this
@@ -1795,9 +1891,113 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 label: l10n.markPaymentReceived,
               ),
             ),
+            const SizedBox(height: 8),
+            if (businessParkingAmountPaid(_paymentFields) > 0)
+              Text(
+                l10n.parkingPaidSoFar(
+                  '\$${businessParkingAmountPaid(_paymentFields).toStringAsFixed(2)}',
+                ),
+                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+              ),
+            if (_staffLabel(_paymentFields['receivedByStaffId'] ??
+                    _paymentFields['directPaymentMarkedByUid'])
+                .isNotEmpty)
+              Text(
+                '${l10n.parkingReceivedBy}: '
+                '${_staffLabel(_paymentFields['receivedByStaffId'] ?? _paymentFields['directPaymentMarkedByUid'])}',
+                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+              ),
+            if (!_partOpen)
+              TextButton.icon(
+                onPressed: _isMarkingPaid
+                    ? null
+                    : () => setState(() => _partOpen = true),
+                icon: const Icon(Icons.pie_chart_outline, size: 18),
+                label: Text(l10n.parkingRecordPartPayment),
+              )
+            else
+              _buildPartPaymentForm(l10n),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildPartPaymentForm(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: SegmentedButton<bool>(
+                segments: [
+                  ButtonSegment<bool>(value: true, label: Text(l10n.parkingDays)),
+                  ButtonSegment<bool>(
+                    value: false,
+                    label: Text(l10n.parkingAmount),
+                  ),
+                ],
+                selected: {_partByDays},
+                onSelectionChanged: _isMarkingPaid
+                    ? null
+                    : (set) => setState(() => _partByDays = set.first),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _partValueController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: _partByDays ? l10n.parkingDaysPaid : l10n.parkingAmountPaid,
+          ),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          key: ValueKey<String>('part-$_partReceivedBy'),
+          initialValue: _partReceivedBy.isEmpty ? null : _partReceivedBy,
+          decoration: InputDecoration(labelText: l10n.parkingReceivedBy),
+          isExpanded: true,
+          items: [
+            for (final entry in _staffNames.entries)
+              DropdownMenuItem<String>(
+                value: entry.key,
+                child: Text(entry.value),
+              ),
+          ],
+          onChanged: _isMarkingPaid
+              ? null
+              : (value) {
+                  if (value == null) return;
+                  setState(() => _partReceivedBy = value);
+                },
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: AsyncActionButton.filled(
+                onPressed: _isMarkingPaid ? null : _recordPartPayment,
+                icon: Icons.payments_outlined,
+                label: l10n.parkingRecordPayment,
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: _isMarkingPaid
+                  ? null
+                  : () => setState(() {
+                        _partOpen = false;
+                        _partValueController.clear();
+                      }),
+              child: Text(l10n.cancel),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
