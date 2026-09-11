@@ -44,6 +44,7 @@ class BusinessProfile {
     this.parkingMonthlyRate = 0,
     this.parkingMinimumDays = 1,
     this.parkingPickupAvailable = false,
+    this.parkingAcceptsReservations = true,
     this.parkingPickupFee = 0,
     this.parkingInstructions,
     this.parkingLatitude,
@@ -104,6 +105,10 @@ class BusinessProfile {
   final double parkingMonthlyRate;
   final int parkingMinimumDays;
   final bool parkingPickupAvailable;
+
+  /// When false the lot is walk-in only: still listed and contactable, but it
+  /// takes no online customer reservations. Absent means true.
+  final bool parkingAcceptsReservations;
   final double parkingPickupFee;
   final String? parkingInstructions;
   final double? parkingLatitude;
@@ -192,6 +197,8 @@ class BusinessProfile {
         1,
       ).clamp(1, 365),
       parkingPickupAvailable: data['parkingPickupAvailable'] == true,
+      parkingAcceptsReservations:
+          data['parkingAcceptsReservations'] != false,
       parkingPickupFee: _parseDouble(data['parkingPickupFee'], 0),
       parkingInstructions: data['parkingInstructions'] as String?,
       parkingLatitude: _parseNullableDouble(data['parkingLatitude']),

@@ -29,6 +29,9 @@ function publicParkingOption(option) {
     monthlyRate: Math.max(0, finiteNumber(data.monthlyRate)),
     pickupAvailable: data.pickupAvailable === true,
     pickupFee: Math.max(0, finiteNumber(data.pickupFee)),
+    // A walk-in-only lot still lists so it can be found and contacted, but the
+    // reserve/pay button is hidden. Absent means "yes".
+    acceptsReservations: data.acceptsReservations !== false,
     minimumDays: Math.max(1, Math.trunc(finiteNumber(data.minimumDays, 1))),
     instructions: cleanString(data.instructions, 1000),
     distanceMiles: Number.isFinite(Number(data.distanceMiles)) ?

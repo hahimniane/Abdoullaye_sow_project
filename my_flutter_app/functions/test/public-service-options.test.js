@@ -33,6 +33,19 @@ test(
     },
 );
 
+test("a walk-in-only lot is listed but flagged as taking no bookings", () => {
+  // Absent means "yes" - existing lots keep accepting reservations.
+  const dflt = publicParkingOption({businessId: "b"});
+  assert.equal(dflt.acceptsReservations, true);
+  // An explicit false rides through so the customer UI hides the reserve
+  // button while the lot stays in the listing.
+  const walkIn = publicParkingOption({
+    businessId: "b",
+    acceptsReservations: false,
+  });
+  assert.equal(walkIn.acceptsReservations, false);
+});
+
 test("public parking options surface a business's review aggregate", () => {
   const option = publicParkingOption({
     businessId: "business-1",

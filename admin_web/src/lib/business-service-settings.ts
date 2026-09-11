@@ -151,6 +151,9 @@ export type BusinessServiceSettingsDraft = {
   parkingRates: ParkingRate[];
   parkingPickupAvailable: boolean;
   parkingPickupFee: string;
+  /** When off, the lot is walk-in only: it stays listed but takes no online
+   *  customer reservations. */
+  parkingAcceptsReservations: boolean;
   parkingInstructions: string;
   pickupEnabled: boolean;
   pickupShared: PickupConfigDraft;
@@ -279,6 +282,8 @@ export function businessServiceSettingsFromRow(
     parkingMinimumDays: numberText(business?.parkingMinimumDays, "1"),
     parkingPickupAvailable: business?.parkingPickupAvailable === true,
     parkingPickupFee: numberText(business?.parkingPickupFee),
+    // Absent means "yes" - existing lots keep accepting reservations.
+    parkingAcceptsReservations: business?.parkingAcceptsReservations !== false,
     parkingInstructions: stringValue(business?.parkingInstructions),
     pickupEnabled: pickupShared.enabled === true,
     pickupShared: pickupConfigDraftFrom(pickupShared),
@@ -606,6 +611,7 @@ export function buildBusinessServiceSettingsPayload(
       draft.enabledServices.includes("carParking") &&
       draft.parkingPickupAvailable,
     parkingPickupFee: nonNegative(draft.parkingPickupFee),
+    parkingAcceptsReservations: draft.parkingAcceptsReservations,
     parkingInstructions: draft.parkingInstructions.trim(),
     parkingLatitude: parkingLocationChanged
       ? null

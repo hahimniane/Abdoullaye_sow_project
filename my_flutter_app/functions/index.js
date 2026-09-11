@@ -10678,6 +10678,7 @@ exports.updateBusinessProfile = onCall(
         parkingMinimumDays,
         parkingRates,
         parkingPickupAvailable,
+        parkingAcceptsReservations,
         parkingPickupFee,
         parkingInstructions,
         parkingLatitude,
@@ -10810,6 +10811,12 @@ exports.updateBusinessProfile = onCall(
             current.parkingMinimumDays || 1,
         ))),
         parkingPickupAvailable: parkingPickupAvailable === true,
+        // Absent in the payload leaves the current setting untouched; only an
+        // explicit false makes the lot walk-in only. Existing lots (no field)
+        // keep accepting reservations.
+        parkingAcceptsReservations: parkingAcceptsReservations === undefined ?
+            current.parkingAcceptsReservations !== false :
+            parkingAcceptsReservations !== false,
         parkingPickupFee: Math.max(0, numberOrFallback(
             parkingPickupFee,
             current.parkingPickupFee || 0,
@@ -11180,6 +11187,9 @@ function parkingOptionFromBusiness({
     monthlyRate: numberOrFallback(business.parkingMonthlyRate, 0),
     pickupAvailable: business.parkingPickupAvailable === true,
     pickupFee: numberOrFallback(business.parkingPickupFee, 0),
+    // A walk-in-only lot still lists, so the customer can find and contact it,
+    // but the reserve/pay button is hidden. Absent means "yes".
+    acceptsReservations: business.parkingAcceptsReservations !== false,
     minimumDays: Math.max(1, intOrFallback(business.parkingMinimumDays, 1)),
     instructions: business.parkingInstructions || "",
     phone: business.phone || "",
@@ -11401,6 +11411,17 @@ exports.createParkingReservation = onCall(
           throw new HttpsError(
               "failed-precondition",
               "This business is not accepting parking reservations",
+          );
+        }
+        // A walk-in-only lot stays visible in discovery but takes no online
+        // reservations - the customer app hides the button, and this is the
+        // hard stop if a stale client still sends one. Absent means "yes"
+        // so existing lots are unchanged.
+        if (business.parkingAcceptsReservations === false) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This lot takes walk-ins only and is not accepting online " +
+                "reservations. Contact the lot to arrange parking.",
           );
         }
         const reservations = await transaction.get(

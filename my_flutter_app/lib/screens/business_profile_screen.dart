@@ -93,6 +93,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   Uint8List? _featureLogoBytes;
   bool _featureConsent = false;
   bool _parkingPickupAvailable = false;
+  bool _parkingAcceptsReservations = true;
   bool _freightPickupAvailable = false;
   String _freightPickupModel = 'distance';
   bool _isSaving = false;
@@ -174,6 +175,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       business.parkingMonthlyRate,
       business.parkingMinimumDays,
       business.parkingPickupAvailable,
+      business.parkingAcceptsReservations,
       business.parkingPickupFee,
       business.parkingInstructions ?? '',
       business.parkingLatitude ?? '',
@@ -251,6 +253,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         _parkingMinimumDaysController.text = business.parkingMinimumDays
             .toString();
         _parkingPickupAvailable = business.parkingPickupAvailable;
+        _parkingAcceptsReservations = business.parkingAcceptsReservations;
         _parkingPickupFeeController.text = business.parkingPickupFee == 0
             ? ''
             : business.parkingPickupFee.toStringAsFixed(0);
@@ -578,6 +581,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         parkingMonthlyRate: parkingMonthlyRate,
         parkingMinimumDays: parkingMinimumDays,
         parkingPickupAvailable: _parkingPickupAvailable,
+        parkingAcceptsReservations: _parkingAcceptsReservations,
         parkingPickupFee: parkingPickupFee,
         parkingInstructions: _parkingInstructionsController.text,
         parkingLatitude: parkingLatitude,
@@ -726,6 +730,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   parkingMonthlyRateController: _parkingMonthlyRateController,
                   parkingMinimumDaysController: _parkingMinimumDaysController,
                   parkingInstructionsController: _parkingInstructionsController,
+                  parkingAcceptsReservations: _parkingAcceptsReservations,
+                  onParkingAcceptsReservationsChanged: (value) {
+                    setState(() => _parkingAcceptsReservations = value);
+                  },
                   onHoldPricingModeChanged: (value) {
                     setState(() => _holdPricingMode = value);
                   },
@@ -1423,6 +1431,8 @@ class _BusinessForm extends StatelessWidget {
     required this.parkingMonthlyRateController,
     required this.parkingMinimumDaysController,
     required this.parkingInstructionsController,
+    required this.parkingAcceptsReservations,
+    required this.onParkingAcceptsReservationsChanged,
     required this.onHoldPricingModeChanged,
     required this.onAddressCountryChanged,
     required this.onAddressStateChanged,
@@ -1468,6 +1478,8 @@ class _BusinessForm extends StatelessWidget {
   final TextEditingController parkingMonthlyRateController;
   final TextEditingController parkingMinimumDaysController;
   final TextEditingController parkingInstructionsController;
+  final bool parkingAcceptsReservations;
+  final ValueChanged<bool> onParkingAcceptsReservationsChanged;
   final ValueChanged<String> onHoldPricingModeChanged;
   final ValueChanged<String?> onAddressCountryChanged;
   final ValueChanged<String?> onAddressStateChanged;
@@ -1883,6 +1895,20 @@ class _BusinessForm extends StatelessWidget {
                   onChanged: () => onSectionEdited(
                     _BusinessProfileSectionKey.parkingCapacity,
                   ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: parkingAcceptsReservations,
+                  onChanged: canEdit
+                      ? (value) {
+                          onParkingAcceptsReservationsChanged(value);
+                          onSectionEdited(
+                            _BusinessProfileSectionKey.parkingCapacity,
+                          );
+                        }
+                      : null,
+                  title: Text(l10n.parkingAcceptReservations),
+                  subtitle: Text(l10n.parkingAcceptReservationsHelp),
                 ),
               ],
             ),

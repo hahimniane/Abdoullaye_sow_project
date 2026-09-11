@@ -179,6 +179,7 @@ class _BusinessRegistrationScreenState
           parkingMonthlyRate: 0,
           parkingMinimumDays: 1,
           parkingPickupAvailable: false,
+          parkingAcceptsReservations: true,
           parkingPickupFee: 0,
           parkingInstructions: '',
           parkingLatitude: null,

@@ -111,6 +111,7 @@ class ParkingBusinessOption {
     this.distanceMiles,
     this.state = '',
     this.quotedForDates = false,
+    this.acceptsReservations = true,
   });
 
   final String businessId;
@@ -135,6 +136,10 @@ class ParkingBusinessOption {
   /// False while browsing: the total shown is one day at the lot's rate,
   /// not a quote for dates the customer chose.
   final bool quotedForDates;
+
+  /// When false the lot is walk-in only: still listed so it can be found and
+  /// contacted, but the reserve/pay button is hidden. Absent means true.
+  final bool acceptsReservations;
 
   bool get hasAvailability => availableSpaces > 0;
 
@@ -168,6 +173,7 @@ class ParkingBusinessOption {
       distanceMiles: data['distanceMiles'] == null
           ? null
           : _double(data['distanceMiles']),
+      acceptsReservations: data['acceptsReservations'] != false,
     );
   }
 
@@ -191,6 +197,7 @@ class ParkingBusinessOption {
       'phone': phone,
       'email': email,
       'distanceMiles': distanceMiles,
+      'acceptsReservations': acceptsReservations,
     };
   }
 }
