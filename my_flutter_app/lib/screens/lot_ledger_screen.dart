@@ -1796,6 +1796,9 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
   String _method = lotPaymentMethodLink;
   String _receivedVia = 'cash';
   String? _receivedBy;
+  // Direct only: whether the money is already in hand. When false the activity
+  // is logged as owed and asks for no one who received it.
+  bool _paymentReceived = true;
   bool _busy = false;
   Set<String> _errors = {};
   List<LotCustomer> _suggestions = const [];
@@ -1841,6 +1844,9 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
         existing.receivedVia.isEmpty ? 'cash' : existing.receivedVia;
     _receivedBy =
         existing.receivedByStaffId.isEmpty ? null : existing.receivedByStaffId;
+    // A direct row still awaiting payment loads as not-yet-received, so the
+    // form does not demand a staff member it never had.
+    _paymentReceived = !existing.awaitingDirect;
   }
 
   @override
@@ -2000,6 +2006,7 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       customerPhone: _phone.text,
       customerEmail: _email.text,
       receivedByStaffId: _receivedBy ?? '',
+      paymentReceived: _paymentReceived,
     );
     final errors = validateLotActivityDraft(draft, lockedPayment: _locked);
     if (errors.isNotEmpty) {
@@ -2024,9 +2031,17 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       'vinNumber': _vin.text.trim(),
       'auctionHouse': (_type?.needsAuctionHouse ?? false) ? _auctionHouse : '',
       'paymentMethod': _method,
-      'receivedVia': _method == lotPaymentMethodDirect ? _receivedVia : '',
+      // Absent-means-received on the server, so send it; a direct activity not
+      // yet paid carries no received fields.
+      'paymentReceived':
+          _method == lotPaymentMethodDirect ? _paymentReceived : true,
+      'receivedVia': _method == lotPaymentMethodDirect && _paymentReceived
+          ? _receivedVia
+          : '',
       'receivedByStaffId':
-          _method == lotPaymentMethodDirect ? (_receivedBy ?? '') : '',
+          _method == lotPaymentMethodDirect && _paymentReceived
+          ? (_receivedBy ?? '')
+          : '',
     };
 
     try {
@@ -2324,51 +2339,66 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
             onTap: () => setState(() => _method = lotPaymentMethodDirect),
           ),
           if (_method == lotPaymentMethodDirect && !_locked) ...[
-            _PickerField(
-              label: l10n.lotHowItWasPaid,
-              value: _receivedViaLabelFor(l10n, _receivedVia),
-              placeholder: l10n.lotHowItWasPaid,
-              onTap: () async {
-                final picked = await _pickOption<String>(
-                  context,
-                  title: l10n.lotHowItWasPaid,
-                  selected: _receivedVia,
-                  options: [
-                    for (final v in lotReceivedViaOptions)
-                      LotOption(v, _receivedViaLabelFor(l10n, v)),
-                  ],
-                );
-                if (picked != null && mounted) {
-                  setState(() => _receivedVia = picked);
-                }
-              },
+            const SizedBox(height: AppSpacing.sm),
+            // The money is not always in hand when the job is logged. Only when
+            // it has been received do we ask who took it.
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _paymentReceived,
+              onChanged: (v) => setState(() => _paymentReceived = v),
+              title: Text(l10n.lotMoneyReceived),
+              subtitle: Text(
+                _paymentReceived ? l10n.lotMoneyReceivedNote : l10n.lotLoggedAsOwed,
+              ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            _PickerField(
-              label: l10n.lotReceivedBy,
-              value: widget.staff
-                  .where((s) => s.id == _receivedBy)
-                  .firstOrNull
-                  ?.name,
-              placeholder: l10n.lotReceivedBy,
-              error: errorFor('received_by_required'),
-              onTap: () async {
-                final picked = await _pickOption<String>(
-                  context,
-                  title: l10n.lotReceivedBy,
-                  selected: _receivedBy,
-                  options: [
-                    for (final s in widget.staff) LotOption(s.id, s.name),
-                  ],
-                );
-                if (picked != null && mounted) {
-                  setState(() {
-                    _receivedBy = picked;
-                    _errors = {..._errors}..remove('received_by_required');
-                  });
-                }
-              },
-            ),
+            if (_paymentReceived) ...[
+              const SizedBox(height: AppSpacing.md),
+              _PickerField(
+                label: l10n.lotHowItWasPaid,
+                value: _receivedViaLabelFor(l10n, _receivedVia),
+                placeholder: l10n.lotHowItWasPaid,
+                onTap: () async {
+                  final picked = await _pickOption<String>(
+                    context,
+                    title: l10n.lotHowItWasPaid,
+                    selected: _receivedVia,
+                    options: [
+                      for (final v in lotReceivedViaOptions)
+                        LotOption(v, _receivedViaLabelFor(l10n, v)),
+                    ],
+                  );
+                  if (picked != null && mounted) {
+                    setState(() => _receivedVia = picked);
+                  }
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _PickerField(
+                label: l10n.lotReceivedBy,
+                value: widget.staff
+                    .where((s) => s.id == _receivedBy)
+                    .firstOrNull
+                    ?.name,
+                placeholder: l10n.lotReceivedBy,
+                error: errorFor('received_by_required'),
+                onTap: () async {
+                  final picked = await _pickOption<String>(
+                    context,
+                    title: l10n.lotReceivedBy,
+                    selected: _receivedBy,
+                    options: [
+                      for (final s in widget.staff) LotOption(s.id, s.name),
+                    ],
+                  );
+                  if (picked != null && mounted) {
+                    setState(() {
+                      _receivedBy = picked;
+                      _errors = {..._errors}..remove('received_by_required');
+                    });
+                  }
+                },
+              ),
+            ],
           ],
         ],
       ),
@@ -2707,18 +2737,22 @@ class _ChaseSheetState extends State<_ChaseSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ActionRow(
-            icon: Icons.send_outlined,
-            label: l10n.lotSendLinkAgain,
-            onTap: _busy
-                ? () {}
-                : () => _run(
-                      'resendLotActivityLink',
-                      {'activityId': widget.activity.id},
-                      l10n.lotLinkResent,
-                    ),
-          ),
-          const SizedBox(height: AppSpacing.md),
+          // A direct activity logged as owed has no link to re-send; it is
+          // only marked received. A link row offers both.
+          if (widget.activity.awaitingLink) ...[
+            _ActionRow(
+              icon: Icons.send_outlined,
+              label: l10n.lotSendLinkAgain,
+              onTap: _busy
+                  ? () {}
+                  : () => _run(
+                        'resendLotActivityLink',
+                        {'activityId': widget.activity.id},
+                        l10n.lotLinkResent,
+                      ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           _PickerField(
             label: l10n.lotHowItWasPaid,
             value: _receivedViaLabel(l10n, _via),

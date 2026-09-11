@@ -7899,8 +7899,18 @@ class AppLocalizationsFr extends AppLocalizations {
   String get lotPaidOutsideWebsite => 'Payé en dehors du site';
 
   @override
-  String get lotPaidOutsideWebsiteNote =>
-      'Espèces, Zelle, chèque. Indiquez qui l’a reçu.';
+  String get lotPaidOutsideWebsiteNote => 'Espèces, Zelle, chèque.';
+
+  @override
+  String get lotMoneyReceived => 'L’argent a été reçu';
+
+  @override
+  String get lotMoneyReceivedNote =>
+      'Indiquez le moyen de paiement et qui l’a reçu.';
+
+  @override
+  String get lotLoggedAsOwed =>
+      'Pas encore payé — enregistré comme dû. Marquez-le reçu quand l’argent arrive.';
 
   @override
   String get lotLinkGoesByTextAndEmail => 'Le lien part par SMS et par e-mail.';

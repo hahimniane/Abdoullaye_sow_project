@@ -394,6 +394,7 @@ void main() {
       String phone = '2015550100',
       String email = '',
       String receivedBy = '',
+      bool paymentReceived = true,
     }) {
       return LotActivityDraft(
         activityTypeId: typeId,
@@ -405,6 +406,7 @@ void main() {
         customerPhone: phone,
         customerEmail: email,
         receivedByStaffId: receivedBy,
+        paymentReceived: paymentReceived,
       );
     }
 
@@ -426,6 +428,19 @@ void main() {
             draft(method: lotPaymentMethodDirect, receivedBy: ''),
             lockedPayment: false),
         contains('received_by_required'),
+      );
+    });
+
+    test('an activity logged before the money arrives names no one', () {
+      expect(
+        validateLotActivityDraft(
+            draft(
+              method: lotPaymentMethodDirect,
+              receivedBy: '',
+              paymentReceived: false,
+            ),
+            lockedPayment: false),
+        isEmpty,
       );
     });
 
