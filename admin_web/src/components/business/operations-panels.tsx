@@ -7507,6 +7507,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
 
   const [activityDraft, setActivityDraft] = useState<LotActivityDraft>(emptyLotActivityDraft);
   const [vinHint, setVinHint] = useState("");
+  const lastActivityVinRef = useRef("");
   const [customerPick, setCustomerPick] = useState<LotCustomer | null>(null);
   const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
   const [newType, setNewType] = useState<LotActivityTypeDraft>(emptyLotActivityTypeDraft);
@@ -7830,38 +7831,97 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   }
 
   function applyVin(rawVin: string) {
-    const clean = rawVin.toUpperCase().slice(0, 17);
+    const clean = rawVin.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 17);
     setActivityDraft((d) => ({ ...d, vinNumber: clean }));
     if (clean.length < 6) {
       setVinHint("");
+      lastActivityVinRef.current = "";
       return;
     }
+    // First the lot's own records — a parked car or a past activity — because
+    // those also carry who owns it.
     const match = [...parkedCars.rows, ...activities.rows].find(
       (row) =>
         String((row as Record<string, unknown>).vinNumber || "")
           .toUpperCase() === clean,
     ) as Record<string, unknown> | undefined;
-    if (!match) {
-      setVinHint("");
+    if (match) {
+      lastActivityVinRef.current = clean;
+      setActivityDraft((d) => ({
+        ...d,
+        carMake: text(match.carMake, d.carMake),
+        carModel: text(match.carModel, d.carModel),
+        carYear: text(match.carYear, d.carYear),
+        customerName: d.customerName || text(match.customerName ?? match.ownerName, ""),
+        customerPhone: d.customerPhone || text(match.customerPhone, ""),
+        customerEmail: d.customerEmail || text(match.customerEmail, ""),
+      }));
+      const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")]
+        .filter(Boolean)
+        .join(" ");
+      const who = text(match.customerName ?? match.ownerName, "");
+      setVinHint(
+        `Filled from an existing record${car ? `: ${car}` : ""}` +
+          `${who ? ` for ${who}` : ""}. You can change anything below.`,
+      );
       return;
     }
-    setActivityDraft((d) => ({
-      ...d,
-      carMake: text(match.carMake, d.carMake),
-      carModel: text(match.carModel, d.carModel),
-      carYear: text(match.carYear, d.carYear),
-      customerName: d.customerName || text(match.customerName ?? match.ownerName, ""),
-      customerPhone: d.customerPhone || text(match.customerPhone, ""),
-      customerEmail: d.customerEmail || text(match.customerEmail, ""),
-    }));
-    const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")]
-      .filter(Boolean)
-      .join(" ");
-    const who = text(match.customerName ?? match.ownerName, "");
-    setVinHint(
-      `Filled from an existing record${car ? `: ${car}` : ""}` +
-        `${who ? ` for ${who}` : ""}. You can change anything below.`,
-    );
+    // The yard has never seen this VIN: decode it. Only on a full VIN, and once
+    // per distinct one so it does not re-fire on every keystroke.
+    setVinHint("");
+    if (clean.length === 17 && clean !== lastActivityVinRef.current) {
+      lastActivityVinRef.current = clean;
+      void decodeActivityVin(clean);
+    }
+  }
+
+  // Fill make/model/year from a full VIN via the public NHTSA database, matched
+  // to the lot's catalog so the selects hold a real option. The activity form's
+  // make/model/year are catalog dropdowns, so an unmatched make is reported
+  // rather than forced.
+  async function decodeActivityVin(vin: string) {
+    setVinHint("Looking up the VIN…");
+    try {
+      const res = await fetch(
+        `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`,
+      );
+      const data = await res.json();
+      const r = (data?.Results?.[0] ?? {}) as Record<string, unknown>;
+      const dMake = text(r.Make, "");
+      const dModel = text(r.Model, "");
+      const dYear = text(r.ModelYear, "");
+      const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
+      let model = "";
+      let year = "";
+      if (make) {
+        const canon = canonicalModel(make, dModel);
+        model = getModels(make).find((m) => m.toLowerCase() === (canon || dModel).toLowerCase()) ?? "";
+        if (model) year = getYears(make, model).find((y) => String(y) === dYear) ?? "";
+      }
+      // Ignore a stale response if the field has since changed.
+      if (lastActivityVinRef.current !== vin) return;
+      if (!make) {
+        const seen = [dYear, dMake, dModel].filter(Boolean).join(" ");
+        setVinHint(seen
+          ? `VIN reads ${seen} — we don't carry that make; pick the closest.`
+          : "Couldn't read that VIN. Enter the vehicle by hand.");
+        return;
+      }
+      setActivityDraft((d) => ({
+        ...d,
+        carMake: make,
+        carModel: model || d.carModel,
+        carYear: year || d.carYear,
+      }));
+      const filled = [year, make, model].filter(Boolean).join(" ");
+      setVinHint(model && year
+        ? `Filled from VIN: ${filled}. You can change anything below.`
+        : `Filled the make from VIN: ${filled} — set the model/year.`);
+    } catch {
+      if (lastActivityVinRef.current === vin) {
+        setVinHint("Couldn't reach the VIN service. Enter the vehicle by hand.");
+      }
+    }
   }
 
   async function saveActivity() {
