@@ -1797,11 +1797,15 @@ export function ListingsPanel({
   const [images, setImages] = useState<EditImage[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState("active");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [vinBusy, setVinBusy] = useState(false);
+  const [vinNote, setVinNote] = useState("");
+  const lastVinRef = useRef("");
   const cityOptions = useMemo(
     () => withSelected(citiesForState(draft.locationState), draft.locationCity),
     [draft.locationCity, draft.locationState],
@@ -1822,6 +1826,58 @@ export function ListingsPanel({
         ? value.features.filter((item) => item !== feature)
         : [...value.features, feature],
     }));
+  }
+
+  // A full VIN fills make, model and year from the public NHTSA database,
+  // matched to the same catalog the pickers use, so listing a car never means
+  // choosing what the VIN already says. On anything it can't place it says so
+  // and leaves the pickers to the seller.
+  async function decodeListingVin(rawVin: string) {
+    const vin = rawVin.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (vin.length < 17) { lastVinRef.current = ""; return; }
+    if (vin.length !== 17 || vin === lastVinRef.current) return;
+    lastVinRef.current = vin;
+    setVinBusy(true);
+    setVinNote("");
+    try {
+      const res = await fetch(
+        `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`,
+      );
+      const data = await res.json();
+      const r = (data?.Results?.[0] ?? {}) as Record<string, unknown>;
+      const dMake = text(r.Make, "");
+      const dModel = text(r.Model, "");
+      const dYear = text(r.ModelYear, "");
+      const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
+      let model = "";
+      let year = "";
+      if (make) {
+        const canon = canonicalModel(make, dModel);
+        model = getModels(make).find((m) => m.toLowerCase() === (canon || dModel).toLowerCase()) ?? "";
+        if (model) year = getYears(make, model).find((y) => String(y) === dYear) ?? "";
+      }
+      if (!make) {
+        const seen = [dYear, dMake, dModel].filter(Boolean).join(" ");
+        setVinNote(seen
+          ? `VIN reads ${seen} — we don't carry that make; pick the closest.`
+          : "Couldn't read that VIN. Enter the vehicle by hand.");
+        return;
+      }
+      setDraft((value) => ({
+        ...value,
+        make,
+        model: model || value.model,
+        year: year || value.year,
+      }));
+      const filled = [year, make, model].filter(Boolean).join(" ");
+      setVinNote(model && year
+        ? `Filled from VIN: ${filled}.`
+        : `Filled the make from VIN: ${filled} — set the model/year.`);
+    } catch {
+      setVinNote("Couldn't reach the VIN service. Enter the vehicle by hand.");
+    } finally {
+      setVinBusy(false);
+    }
   }
 
   function newKey() {
@@ -1879,6 +1935,8 @@ export function ListingsPanel({
     setDraft(emptyListingDraft);
     setMessage("");
     setFormOpen(false);
+    setVinNote("");
+    lastVinRef.current = "";
   }
 
   function editListing(row: FirestoreRow) {
@@ -1929,8 +1987,12 @@ export function ListingsPanel({
   }
 
   const filteredRows = useMemo(
-    () => filterRows(listings.rows, search, ["title", "make", "model", "year", "price", "status", "locationCity", "locationState", "stockNumber", "vin"]),
-    [listings.rows, search],
+    () => {
+      const searched = filterRows(listings.rows, search, ["title", "make", "model", "year", "price", "status", "locationCity", "locationState", "stockNumber", "vin"]);
+      if (statusFilter === "all") return searched;
+      return searched.filter((row) => (text(row.status, "") || "active") === statusFilter);
+    },
+    [listings.rows, search, statusFilter],
   );
 
   async function saveListing() {
@@ -2067,6 +2129,12 @@ export function ListingsPanel({
         <div className="lst-search">
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search make, model, status…" />
         </div>
+        <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by status">
+          <option value="all">All statuses</option>
+          {listingStatuses.map((status) => (
+            <option key={status} value={status}>{statusLabel(status)}</option>
+          ))}
+        </select>
         {selectedIds.length > 0 && (
           <div className="lst-bulk">
             <span>{selectedIds.length} selected</span>
@@ -2164,6 +2232,13 @@ export function ListingsPanel({
                   <span>Title</span>
                   <input value={draft.title} onChange={(event) => setDraft((value) => ({ ...value, title: event.target.value }))} placeholder="e.g. 2019 Toyota Camry XLE" />
                 </label>
+                {/* VIN leads the vehicle fields: a full VIN fills make, model
+                    and year below, so the seller confirms rather than re-picks. */}
+                <label className="lst-field wide"><span>VIN</span>
+                  <input value={draft.vin} onChange={(event) => { const v = event.target.value; setDraft((value) => ({ ...value, vin: v })); void decodeListingVin(v); }} placeholder="17 characters — fills the make, model and year" />
+                  {vinBusy && <small className="lst-hint">Looking up the VIN…</small>}
+                  {!vinBusy && vinNote && <small className="lst-hint">{vinNote}</small>}
+                </label>
                 <label className="lst-field"><span>Make</span>
                   <select
                     value={draft.make}
@@ -2254,9 +2329,6 @@ export function ListingsPanel({
                     <option value="">Select color</option>
                     {colorOptions.map((option) => (<option key={option} value={option}>{optionLabel(option)}</option>))}
                   </select>
-                </label>
-                <label className="lst-field"><span>VIN</span>
-                  <input value={draft.vin} onChange={(event) => setDraft((value) => ({ ...value, vin: event.target.value }))} placeholder="17-character VIN" />
                 </label>
                 <label className="lst-field"><span>Stock number</span>
                   <input value={draft.stockNumber} onChange={(event) => setDraft((value) => ({ ...value, stockNumber: event.target.value }))} placeholder="Optional" />
@@ -4108,6 +4180,7 @@ export function TransportPanel({
   const transports = useBusinessRows("transportRequests", businessId, enabled, 500);
   const [view, setView] = useState<"opportunities" | "jobs">("opportunities");
   const [search, setSearch] = useState("");
+  const [jobStatus, setJobStatus] = useState("all");
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
   const [draft, setDraft] = useState<TransportQuoteDraft>(emptyTransportQuoteDraft);
@@ -4165,9 +4238,15 @@ export function TransportPanel({
     [openOpportunities, search],
   );
 
+  // The statuses actually present on this business's jobs — a filter offering
+  // states no job is in reads as broken, so the options come from the data.
+  const jobStatuses = useMemo(
+    () => Array.from(new Set(transports.rows.map((row) => text(row.status, "")).filter(Boolean))).sort(),
+    [transports.rows],
+  );
   const filteredJobs = useMemo(
-    () =>
-      filterRows(transports.rows, search, [
+    () => {
+      const searched = filterRows(transports.rows, search, [
         "trackingCode",
         "ownerName",
         "customerName",
@@ -4177,8 +4256,11 @@ export function TransportPanel({
         "vinNumber",
         "destinationCountryName",
         "status",
-      ]),
-    [transports.rows, search],
+      ]);
+      if (jobStatus === "all") return searched;
+      return searched.filter((row) => text(row.status, "") === jobStatus);
+    },
+    [transports.rows, search, jobStatus],
   );
 
   // The rows stream in from Firestore, so the target card usually does not
@@ -4404,6 +4486,14 @@ export function TransportPanel({
             value={search}
           />
         </div>
+        {view === "jobs" && jobStatuses.length > 0 && (
+          <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={jobStatus} onChange={(event) => setJobStatus(event.target.value)} aria-label="Filter by status">
+            <option value="all">All statuses</option>
+            {jobStatuses.map((status) => (
+              <option key={status} value={status}>{statusLabel(status)}</option>
+            ))}
+          </select>
+        )}
         {view === "jobs" && (
           <button className="lst-btn ghost" type="button" disabled={filteredJobs.length === 0} onClick={() => downloadCsv("accepted-transport-jobs.csv", filteredJobs, ["trackingCode", "ownerName", "carMake", "carModel", "carYear", "vinNumber", "destinationCountryName", "selectedAmountCents", "transportDate", "status", "updatedAt"])}>
             <Download size={15} /> Export CSV
