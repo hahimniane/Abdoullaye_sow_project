@@ -1888,51 +1888,67 @@ button[data-loading="true"]::before {
   min-height: 52px;
 }
 
-/* The lot-ledger activity log has five columns (Vehicle, Customer, Activity,
-   Date, Fee); the shared grid above sizes four. Give it its own template and
-   a little more breathing room per cell. */
+/* The lot-ledger activity log: Vehicle, Customer, Activity, Date, Fee, and a
+   trailing actions column. Each data cell stacks a value over a muted
+   sub-line; the actions reveal on row hover so a resting table reads as clean,
+   dense lines of data rather than a wall of buttons. */
 .lot-activity-table .mini-table-head,
 .lot-activity-table .mini-table-row {
   grid-template-columns:
-    minmax(160px, 2fr)
-    minmax(130px, 1.3fr)
-    minmax(130px, 1.3fr)
+    minmax(150px, 1.9fr)
+    minmax(120px, 1.2fr)
+    minmax(120px, 1.2fr)
+    minmax(96px, 0.8fr)
     minmax(120px, 1fr)
-    minmax(120px, 1.1fr);
-  align-items: center;
+    minmax(112px, auto);
+  align-items: start;
 }
 
-/* Each activity cell stacks a value over a muted sub-line; keep them tight
-   and let the row's inline action buttons wrap under their value cleanly. */
+.lot-activity-table .mini-table-row { min-height: 46px; }
+.lot-activity-table .mini-table-row.voided { opacity: 0.55; }
+
 .lot-activity-table .mini-table-row > span {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  padding: 8px 0;
 }
 
 .lot-activity-table .mini-table-row > span > small {
   color: var(--muted);
 }
 
-.lot-activity-table .mini-table-row .ghost-button {
-  align-self: flex-start;
+/* Fee column right-aligns on tabular figures so the money forms a clean edge. */
+.lot-activity-table .lot-col-fee {
+  align-items: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.lot-activity-table .mini-table-head .lot-col-fee { justify-content: flex-end; }
+
+.lot-activity-table .lot-col-fee .ghost-button {
   margin-top: 2px;
   padding: 2px 6px;
 }
 
-/* Row actions (edit / history / void) sit in a compact horizontal group
-   rather than stacking down the cell. */
+/* Actions live in their own column, a compact icon row that stays quiet until
+   the row is hovered or focused within. */
 .lot-activity-table .lot-row-actions {
-  display: flex;
-  flex-direction: row;
-  gap: 4px;
-  margin-top: 2px;
+  align-items: center;
+  flex-direction: row !important;
+  gap: 2px;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
-
+.lot-activity-table .mini-table-row:hover .lot-row-actions,
+.lot-activity-table .mini-table-row:focus-within .lot-row-actions {
+  opacity: 1;
+}
 .lot-activity-table .lot-row-actions .ghost-button {
   margin-top: 0;
-  padding: 3px 6px;
+  padding: 3px 5px;
 }
 
 .mini-table-row:last-child {
@@ -13745,59 +13761,6 @@ button[data-loading="true"]::before {
 .lot-expense-purchase-actions { display: flex; flex-shrink: 0; gap: 2px; }
 .lot-expense-empty { color: var(--muted); font-size: 12px; margin: 12px 0 4px; }
 .lot-expense-add { margin-top: 10px; }
-
-/* Activity log: one card per job, replacing the dense 5-column table. The
-   label + vehicle + customer stack on the left, money on the right, actions
-   on a quiet footer — the same shape as the expense cards. */
-.lot-activity-cards {
-  display: grid;
-  gap: 10px;
-  margin-top: 8px;
-}
-.lot-activity-card {
-  background: var(--paper, #fff);
-  border: 1px solid var(--rule, #e5e7eb);
-  border-radius: 14px;
-  padding: 13px 15px;
-}
-.lot-activity-card.voided { opacity: 0.6; }
-.lot-activity-card-head {
-  align-items: flex-start;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-}
-.lot-activity-card-title { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; }
-.lot-activity-card-title > strong { font-size: 14px; font-weight: 750; }
-.lot-activity-vehicle {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lot-activity-card-title small { color: var(--muted); font-size: 12px; }
-.lot-activity-card-money { text-align: right; white-space: nowrap; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.lot-activity-card-money b {
-  font-size: 18px;
-  font-weight: 750;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.2px;
-}
-.lot-activity-card-money small { color: var(--muted); font-size: 11px; }
-.lot-activity-card-foot {
-  align-items: center;
-  border-top: 1px solid var(--rule, #e5e7eb);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 11px;
-  padding-top: 10px;
-}
-/* The icon actions sit to the right; the text buttons (Chase, Mark not
-   received) stay to the left of them. */
-.lot-activity-card-actions { display: flex; gap: 2px; margin-left: auto; }
 
 /* The payments block inside the edit modal - the same billing control the
    card carries, set off from the vehicle/date fields above it. */
