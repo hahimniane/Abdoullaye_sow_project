@@ -674,6 +674,42 @@ List<LotActivity> lotFilterActivities(
   ];
 }
 
+/// Whether an activity is still owed (awaiting), or collected — voided rows are
+/// neither. Mirrors the console's payment filter.
+bool lotActivityIsOwed(LotActivity a) => !a.voided && (a.awaitingLink || a.awaitingDirect);
+bool lotActivityIsCollected(LotActivity a) => !a.voided && a.paid;
+
+/// Activities within an inclusive "yyyy-MM" range, narrowed by type, payment
+/// state ('all' | 'owed' | 'paid') and a search query. Month keys sort
+/// chronologically as strings, so the range test is a lexicographic compare.
+/// Mirrors the console's range + owed/paid filter.
+List<LotActivity> lotFilterActivitiesRange(
+  List<LotActivity> all, {
+  required String startMonth,
+  required String endMonth,
+  required String typeFilter,
+  required String payFilter,
+  required String query,
+}) {
+  final q = query.trim().toLowerCase();
+  return [
+    for (final a in all)
+      if (a.activityDateMonth.compareTo(startMonth) >= 0 &&
+          a.activityDateMonth.compareTo(endMonth) <= 0 &&
+          (typeFilter == 'all' ||
+              (typeFilter == lotCustomActivityId
+                  ? a.isCustom
+                  : a.activityTypeId == typeFilter)) &&
+          (payFilter == 'all' ||
+              (payFilter == 'owed' ? lotActivityIsOwed(a) : lotActivityIsCollected(a))) &&
+          (q.isEmpty ||
+              '${a.vinNumber} ${a.customerName} ${a.customerPhone}'
+                  .toLowerCase()
+                  .contains(q)))
+        a,
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // Client-side validation, mirroring the server's codes so the screen can
 // refuse before a round trip. The screen maps codes to translated messages.

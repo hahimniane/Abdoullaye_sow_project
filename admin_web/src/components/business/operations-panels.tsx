@@ -7475,6 +7475,29 @@ function lotMonthLabel(month: string): string {
   return lotMonthOptions(Number(y)).find((o) => o.value === month)?.label ?? month;
 }
 
+/** Shift a "yyyy-mm" key by whole months (negative to go back). */
+function lotShiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number);
+  if (!y || !m) return month;
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return lotMonthKey(d);
+}
+
+/** A short label for a month span: one month, or "Mar – Sep 2026". */
+function lotRangeLabel(start: string, end: string): string {
+  if (start === end) return lotMonthLabel(start);
+  const short = (mk: string) => {
+    const [y, m] = mk.split("-").map(Number);
+    const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return { name: names[(m || 1) - 1] ?? mk, year: y };
+  };
+  const a = short(start);
+  const b = short(end);
+  return a.year === b.year
+    ? `${a.name} – ${b.name} ${b.year}`
+    : `${a.name} ${a.year} – ${b.name} ${b.year}`;
+}
+
 const LOT_TAG_TINTS = ["#0d9488", "#f59e0b", "#6366f1", "#db2777", "#0891b2"];
 
 export function LotLedgerPanel({ businessId, business, previewMode = false }: PanelProps) {
@@ -7497,6 +7520,15 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const [month, setMonth] = useState<string>(() => lotMonthKey(new Date()));
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  // Activity tab date range: this month, the last three months, or a custom
+  // month span. Drives both the list and the summary cards above it. Kept
+  // apart from `month` (which still scopes the Expenses and Reports tabs).
+  const [actRange, setActRange] = useState<"month" | "3m" | "custom">("month");
+  const [actFrom, setActFrom] = useState<string>(() => lotMonthKey(new Date()));
+  const [actTo, setActTo] = useState<string>(() => lotMonthKey(new Date()));
+  // Payment filter for the activity list: everything, only what is still owed,
+  // or only what has been collected.
+  const [payFilter, setPayFilter] = useState<"all" | "owed" | "paid">("all");
 
   const [modal, setModal] = useState<LotModal>("");
   const [editId, setEditId] = useState("");
@@ -7530,7 +7562,6 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const year = Number(month.split("-")[0]) || new Date().getUTCFullYear();
-  const searching = search.trim().length > 0;
   const thresholdCents = Number(business?.expenseProofThresholdCents);
   const proofThreshold = Number.isFinite(thresholdCents) && thresholdCents >= 0
     ? thresholdCents
@@ -7577,20 +7608,47 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
 
   const knownTypeIds = orderedTypes.map((t) => String((t as Record<string, unknown>).id));
 
+  // The activity date range as inclusive "yyyy-mm" bounds. Month keys sort
+  // chronologically as strings, so a lexicographic compare is the range test.
+  const nowMonthKey = lotMonthKey(new Date());
+  const [actStart, actEnd] = useMemo<[string, string]>(() => {
+    if (actRange === "3m") return [lotShiftMonth(nowMonthKey, -2), nowMonthKey];
+    if (actRange === "custom") {
+      return actFrom <= actTo ? [actFrom, actTo] : [actTo, actFrom];
+    }
+    return [nowMonthKey, nowMonthKey];
+  }, [actRange, actFrom, actTo, nowMonthKey]);
+
+  // Activities within the range, before the type/payment/search narrowing —
+  // the set the summary cards total.
+  const rangeActivities = useMemo(
+    () => activities.rows.filter((row) => {
+      const mk = lotRowMonth(row, "activityDate");
+      return mk >= actStart && mk <= actEnd;
+    }),
+    [activities.rows, actStart, actEnd],
+  );
+
   const scopedActivities = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return activities.rows.filter((row) => {
+    return rangeActivities.filter((row) => {
       const r = row as Record<string, unknown>;
-      if (!searching && lotRowMonth(row, "activityDate") !== month) return false;
       if (typeFilter === "custom" && String(r.activityTypeId) !== LOT_CUSTOM_ACTIVITY_ID) return false;
       if (typeFilter !== "all" && typeFilter !== "custom" && String(r.activityTypeId) !== typeFilter) return false;
+      if (payFilter !== "all") {
+        const voided = r.voided === true;
+        const paid = !voided && (String(r.paymentStatus) === "succeeded" || String(r.paymentStatus) === "paid");
+        const owed = !voided && (String(r.paymentStatus) === "awaiting_payment_link" || String(r.paymentStatus) === "awaiting_direct_payment");
+        if (payFilter === "paid" && !paid) return false;
+        if (payFilter === "owed" && !owed) return false;
+      }
       if (q) {
         const hay = `${text(r.vinNumber, "")} ${text(r.customerName, "")} ${text(r.customerPhone, "")}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [activities.rows, month, searching, search, typeFilter]);
+  }, [rangeActivities, search, typeFilter, payFilter]);
 
   const monthActivities = useMemo(
     () => activities.rows.filter((row) => lotRowMonth(row, "activityDate") === month),
@@ -7614,18 +7672,6 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     for (const v of revenueByType.values()) s += v.cents;
     return s;
   }, [revenueByType]);
-
-  const awaitingCents = useMemo(() => {
-    let s = 0;
-    for (const row of monthActivities) {
-      const r = row as Record<string, unknown>;
-      if (r.voided === true) continue;
-      if (String(r.paymentStatus) === "awaiting_payment_link") {
-        s += Number(r.feeCents) || 0;
-      }
-    }
-    return s;
-  }, [monthActivities]);
 
   // Every purchase counts in exactly one month (lotExpenseEntryMonth); a fixed
   // line's standing amount is replaced - not added to - when a live purchase
@@ -7658,15 +7704,16 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   // collected plus everything still owed on cars that have run it up.
   const parkingGenerated = Math.round((parkingTotals.collected + parkingTotals.owed) * 100) / 100;
 
-  // Activity money to date, for the scoreboard above the Activity list — the
-  // ledger's own version of "how much has this generated so far". Cancelled and
-  // voided jobs never billed, so they are left out.
+  // The summary cards above the Activity list, totalled over the selected
+  // range: generated (billed), collected (paid), owed (still awaiting), and
+  // the job count. Cancelled and voided jobs never billed, so they are left
+  // out.
   const activityMoney = useMemo(() => {
     let generatedCents = 0;
     let collectedCents = 0;
-    let awaitingCentsAll = 0;
+    let owedCents = 0;
     let jobs = 0;
-    for (const row of activities.rows) {
+    for (const row of rangeActivities) {
       const r = row as Record<string, unknown>;
       if (r.voided === true) continue;
       const status = String(r.paymentStatus);
@@ -7675,10 +7722,10 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       generatedCents += fee;
       jobs += 1;
       if (status === "succeeded" || status === "paid") collectedCents += fee;
-      else if (status === "awaiting_payment_link" || status === "awaiting_direct_payment") awaitingCentsAll += fee;
+      else if (status === "awaiting_payment_link" || status === "awaiting_direct_payment") owedCents += fee;
     }
-    return { generatedCents, collectedCents, awaitingCentsAll, jobs };
-  }, [activities.rows]);
+    return { generatedCents, collectedCents, owedCents, jobs };
+  }, [rangeActivities]);
 
   // Revenue by source for the report year: one figure per activity type, plus
   // car parking, so the owner sees where the year's money came from — titles,
@@ -7713,20 +7760,6 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     return rows;
   }, [yearRevenueByType, typeById, parkingGenerated]);
   const revenueBreakdownTotal = revenueBreakdown.reduce((s, r) => s + r.cents, 0);
-
-  const topCards = useMemo(
-    () =>
-      [...revenueByType.entries()]
-        .filter(([k]) => k !== "custom")
-        .sort((a, b) => b[1].cents - a[1].cents)
-        .slice(0, 3)
-        .map(([k, v]) => ({
-          label: text(typeById.get(k)?.label, "Activity"),
-          cents: v.cents,
-          note: `${v.count} ${v.count === 1 ? "job" : "jobs"}`,
-        })),
-    [revenueByType, typeById],
-  );
 
   // Year series for the reports charts.
   const yearMonths = lotMonthOptions(year).map((o) => o.value);
@@ -8261,22 +8294,14 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
 
       {segment === "activity" && (
         <>
-          {/* How much the lot's activities have generated so far — the same kind
-              of scoreboard the Parking screen shows, but about the jobs on this
-              tab: total billed to date, what has been collected, what is still
-              owed, and how many jobs. */}
-          <div className="pk-scoreboard" role="group" aria-label="Activity money">
-            <div className="pk-stat"><span>Generated so far</span><b>{lotFormatCents(activityMoney.generatedCents)}</b></div>
+          {/* Summary cards for the selected range: total billed, collected, what
+              is still owed, and the job count. The range control in the toolbar
+              below drives both these figures and the list. */}
+          <div className="pk-scoreboard" role="group" aria-label="Activity summary">
+            <div className="pk-stat"><span>Generated</span><b>{lotFormatCents(activityMoney.generatedCents)}</b><small>{lotRangeLabel(actStart, actEnd)}</small></div>
             <div className="pk-stat"><span>Collected</span><b>{lotFormatCents(activityMoney.collectedCents)}</b></div>
-            <div className="pk-stat"><span>Awaiting</span><b className={activityMoney.awaitingCentsAll > 0 ? "owed" : undefined}>{lotFormatCents(activityMoney.awaitingCentsAll)}</b></div>
+            <div className="pk-stat"><span>Owed</span><b className={activityMoney.owedCents > 0 ? "owed" : undefined}>{lotFormatCents(activityMoney.owedCents)}</b></div>
             <div className="pk-stat"><span>Jobs</span><b>{activityMoney.jobs}</b></div>
-          </div>
-
-          <div className="metric-grid">
-            {topCards.map((c) => (
-              <div className="metric money" key={c.label}><span>{c.label}</span><b>{lotFormatCents(c.cents)}</b><small>{c.note}</small></div>
-            ))}
-            <div className="metric attention"><span>Awaiting payment</span><b>{lotFormatCents(awaitingCents)}</b><small>Website links sent and not settled</small></div>
           </div>
 
           <div className="panel">
@@ -8289,14 +8314,27 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 ))}
                 <option value="custom">One-off jobs</option>
               </select>
-              <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
-                {lotMonthOptions(year).map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+              <select value={payFilter} onChange={(e) => setPayFilter(e.target.value as "all" | "owed" | "paid")} aria-label="Filter by payment">
+                <option value="all">All money</option>
+                <option value="owed">Owed</option>
+                <option value="paid">Collected</option>
               </select>
+              <select value={actRange} onChange={(e) => setActRange(e.target.value as "month" | "3m" | "custom")} aria-label="Date range">
+                <option value="month">This month</option>
+                <option value="3m">Last 3 months</option>
+                <option value="custom">Custom range</option>
+              </select>
+              {actRange === "custom" && (
+                <>
+                  <input type="month" value={actFrom} onChange={(e) => setActFrom(e.target.value)} aria-label="From month" />
+                  <input type="month" value={actTo} onChange={(e) => setActTo(e.target.value)} aria-label="To month" />
+                </>
+              )}
               <input type="search" placeholder="VIN, customer, phone" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search activity" />
               <button className="secondary-button" type="button" onClick={() => { setDraftError(""); setModal("types"); }}>Activities &amp; rates</button>
               <button className="primary-button" type="button" onClick={openRecord}>Record activity</button>
             </div>
-            <p className="panel-lede">{searching ? "Searching every month for this term." : `Showing ${lotMonthLabel(month)}. The figures above cover the same month.`}</p>
+            <p className="panel-lede">Showing {lotRangeLabel(actStart, actEnd)}{payFilter === "owed" ? " · owed only" : payFilter === "paid" ? " · collected only" : ""}. The cards above cover the same range.</p>
             {scopedActivities.length === 0 ? (
               <EmptyState text="No activity recorded for this scope yet." />
             ) : (

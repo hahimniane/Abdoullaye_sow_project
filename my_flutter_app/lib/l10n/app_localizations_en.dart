@@ -8021,6 +8021,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lotActivityJobs => 'Jobs';
 
   @override
+  String get lotActivityOwed => 'Owed';
+
+  @override
+  String get lotRangeThisMonth => 'This month';
+
+  @override
+  String get lotRangeLast3Months => 'Last 3 months';
+
+  @override
+  String get lotRangeCustom => 'Custom';
+
+  @override
+  String get lotRangeFrom => 'From month';
+
+  @override
+  String get lotRangeTo => 'To month';
+
+  @override
+  String get lotPayAll => 'All money';
+
+  @override
+  String get lotPayOwed => 'Owed';
+
+  @override
+  String get lotPayCollected => 'Collected';
+
+  @override
   String get lotRevenueSources => 'Where the revenue comes from';
 
   @override

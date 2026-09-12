@@ -14262,6 +14262,60 @@ abstract class AppLocalizations {
   /// **'Jobs'**
   String get lotActivityJobs;
 
+  /// No description provided for @lotActivityOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed'**
+  String get lotActivityOwed;
+
+  /// No description provided for @lotRangeThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get lotRangeThisMonth;
+
+  /// No description provided for @lotRangeLast3Months.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 3 months'**
+  String get lotRangeLast3Months;
+
+  /// No description provided for @lotRangeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get lotRangeCustom;
+
+  /// No description provided for @lotRangeFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From month'**
+  String get lotRangeFrom;
+
+  /// No description provided for @lotRangeTo.
+  ///
+  /// In en, this message translates to:
+  /// **'To month'**
+  String get lotRangeTo;
+
+  /// No description provided for @lotPayAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All money'**
+  String get lotPayAll;
+
+  /// No description provided for @lotPayOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed'**
+  String get lotPayOwed;
+
+  /// No description provided for @lotPayCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get lotPayCollected;
+
   /// No description provided for @lotRevenueSources.
   ///
   /// In en, this message translates to:

@@ -8154,6 +8154,33 @@ class AppLocalizationsFr extends AppLocalizations {
   String get lotActivityJobs => 'Tâches';
 
   @override
+  String get lotActivityOwed => 'Dû';
+
+  @override
+  String get lotRangeThisMonth => 'Ce mois-ci';
+
+  @override
+  String get lotRangeLast3Months => '3 derniers mois';
+
+  @override
+  String get lotRangeCustom => 'Personnalisé';
+
+  @override
+  String get lotRangeFrom => 'Mois de début';
+
+  @override
+  String get lotRangeTo => 'Mois de fin';
+
+  @override
+  String get lotPayAll => 'Tout';
+
+  @override
+  String get lotPayOwed => 'Dû';
+
+  @override
+  String get lotPayCollected => 'Encaissé';
+
+  @override
   String get lotRevenueSources => 'D\'où viennent les revenus';
 
   @override
