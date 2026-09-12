@@ -14691,7 +14691,26 @@ exports.upsertLotExpenseLine = onCall(
         if (!existing.exists || existing.data()?.businessId !== businessId) {
           throw new HttpsError("not-found", "Expense line not found");
         }
-        await ref.set(record, {merge: true});
+        const before = existing.data() || {};
+        await ref.set({...record, editedByStaffId: uid}, {merge: true});
+        // Editing a line is an audited change, the same as editing a purchase:
+        // who changed what, kept for the record and shown behind History.
+        const diff = lotFieldDiff(before, record);
+        if (diff.length > 0) {
+          const first = diff[0];
+          await writeLotLedgerAudit({
+            businessId,
+            entityType: "expense_line",
+            entityId: lineId,
+            action: "edited",
+            byStaffId: uid,
+            summary: diff.length === 1 ?
+              `${first.field} ${first.from} → ${first.to}` :
+              `${first.field} ${first.from} → ${first.to} ` +
+                `(+${diff.length - 1} more)`,
+            changes: diff,
+          });
+        }
         return {lineId, ...record};
       }
       const ref = db.collection("lotExpenseLines").doc();

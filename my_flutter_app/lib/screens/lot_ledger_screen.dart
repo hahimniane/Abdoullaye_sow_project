@@ -3317,6 +3317,18 @@ class _ExpensesPanel extends StatelessWidget {
                       proofThresholdCents: proofThresholdCents,
                     ),
                   ),
+                  onEditLine: () => showLotSheet(
+                    context,
+                    _ExpenseLineSheet(businessId: businessId, line: line),
+                  ),
+                  onHistory: () => showLotSheet(
+                    context,
+                    _HistorySheet(
+                      businessId: businessId,
+                      entityId: line.id,
+                      staff: staff,
+                    ),
+                  ),
                 ),
           ],
         ),
@@ -3345,6 +3357,8 @@ class _ExpenseLineCard extends StatelessWidget {
     required this.monthLabel,
     required this.math,
     required this.onTap,
+    required this.onEditLine,
+    required this.onHistory,
   });
 
   final LotExpenseLine line;
@@ -3352,6 +3366,8 @@ class _ExpenseLineCard extends StatelessWidget {
   final String monthLabel;
   final LotLedgerMath math;
   final VoidCallback onTap;
+  final VoidCallback onEditLine;
+  final VoidCallback onHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -3439,8 +3455,33 @@ class _ExpenseLineCard extends StatelessWidget {
                 fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
+            const SizedBox(width: 2),
+            Semantics(
+              button: true,
+              label: l10n.lotEditLine,
+              child: PressableScale(
+                scale: 0.9,
+                onTap: onEditLine,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.edit_outlined,
+                      size: 16, color: AppColors.muted),
+                ),
+              ),
+            ),
+            Semantics(
+              button: true,
+              label: l10n.lotHistory,
+              child: PressableScale(
+                scale: 0.9,
+                onTap: onHistory,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.history,
+                      size: 16, color: AppColors.muted),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -3727,6 +3768,26 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
                     ),
                     Semantics(
                       button: true,
+                      label: l10n.lotHistory,
+                      child: PressableScale(
+                        scale: 0.9,
+                        onTap: () => showLotSheet(
+                          context,
+                          _HistorySheet(
+                            businessId: widget.businessId,
+                            entityId: entry.id,
+                            staff: widget.staff,
+                          ),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.history,
+                              size: 16, color: AppColors.muted),
+                        ),
+                      ),
+                    ),
+                    Semantics(
+                      button: true,
                       label: l10n.lotVoid,
                       child: PressableScale(
                         scale: 0.9,
@@ -3850,9 +3911,11 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
 }
 
 class _ExpenseLineSheet extends StatefulWidget {
-  const _ExpenseLineSheet({required this.businessId});
+  const _ExpenseLineSheet({required this.businessId, this.line});
 
   final String businessId;
+  // When set, the sheet edits this line instead of adding a new one.
+  final LotExpenseLine? line;
 
   @override
   State<_ExpenseLineSheet> createState() => _ExpenseLineSheetState();
@@ -3862,8 +3925,22 @@ class _ExpenseLineSheetState extends State<_ExpenseLineSheet> {
   final _label = TextEditingController();
   final _detail = TextEditingController();
   final _recurring = TextEditingController();
-  String _kind = lotExpenseKindMetered;
+  late String _kind =
+      widget.line?.kind ?? lotExpenseKindMetered;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final line = widget.line;
+    if (line != null) {
+      _label.text = line.label;
+      _detail.text = line.detail;
+      if (line.kind == lotExpenseKindFixed) {
+        _recurring.text = (line.recurringCents / 100).toStringAsFixed(2);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -3882,9 +3959,11 @@ class _ExpenseLineSheetState extends State<_ExpenseLineSheet> {
     }
     setState(() => _busy = true);
     try {
+      final lineId = widget.line?.id ?? '';
       await FirebaseFunctions.instance
           .httpsCallable('upsertLotExpenseLine')
           .call<Object?>({
+        if (lineId.isNotEmpty) 'lineId': lineId,
         'businessId': widget.businessId,
         'label': _label.text.trim(),
         'detail': _detail.text.trim(),
@@ -3910,7 +3989,7 @@ class _ExpenseLineSheetState extends State<_ExpenseLineSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return _SheetShell(
-      title: l10n.lotAddExpenseLine,
+      title: widget.line != null ? l10n.lotEditExpenseLine : l10n.lotAddExpenseLine,
       footer: _SheetButton(
         label: l10n.lotSave,
         busy: _busy,
