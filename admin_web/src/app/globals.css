@@ -1932,14 +1932,14 @@ button[data-loading="true"]::before {
   padding: 2px 6px;
 }
 
-/* Actions live in their own column, a compact icon row that stays quiet until
-   the row is hovered or focused within. */
+/* Actions live in their own compact icon column, quietly muted so a resting
+   row still reads as data — and a touch bolder when the row is hovered. */
 .lot-activity-table .lot-row-actions {
   align-items: center;
   flex-direction: row !important;
   gap: 2px;
   justify-content: flex-end;
-  opacity: 0;
+  opacity: 0.55;
   transition: opacity 0.12s ease;
 }
 .lot-activity-table .mini-table-row:hover .lot-row-actions,
