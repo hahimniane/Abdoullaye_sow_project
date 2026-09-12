@@ -7855,6 +7855,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lotPurchaseAdded => 'Purchase added.';
 
   @override
+  String get lotPurchaseUpdated => 'Purchase updated.';
+
+  @override
+  String get lotEditPurchase => 'Edit purchase';
+
+  @override
+  String get lotSaveChanges => 'Save changes';
+
+  @override
+  String get lotEditingPurchase => 'Editing a purchase';
+
+  @override
+  String get lotCancelEdit => 'Cancel';
+
+  @override
   String get lotExpenseLineSaved => 'Expense line saved.';
 
   @override

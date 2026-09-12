@@ -14742,6 +14742,84 @@ exports.createLotExpenseEntry = onCall(
     },
 );
 
+// Edit a logged purchase — amount, date, who paid, note, receipt. The line it
+// belongs to never changes through an edit (record a new purchase on another
+// line instead), and a voided purchase is history, not editable. Mirrors
+// updateLotActivity: validate, re-snapshot the proof rule, write an audit diff.
+exports.updateLotExpenseEntry = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const entryId = String(data.entryId || "").trim();
+      const changes = data.changes || {};
+      const db = admin.firestore();
+      const ref = db.collection("lotExpenseEntries").doc(entryId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Purchase not found");
+      const current = doc.data() || {};
+      const businessId = String(current.businessId || "");
+      await requireBusinessPermission(uid, businessId, "ledger");
+      if (current.voided === true) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This purchase is voided. Record a new one instead.");
+      }
+      const thresholdCents = await loadBusinessExpenseThreshold(db, businessId);
+      const hasProof = Boolean(
+          String(changes.proofUrl ?? current.proofUrl ?? "").trim());
+      const errors = validateLotExpenseEntry(
+          changes, {thresholdCents, hasProof});
+      if (errors.length > 0) {
+        const message = errors.includes("expense_proof_required") ?
+          `Attach a receipt: this business asks for proof at ` +
+            `$${(thresholdCents / 100).toFixed(2)} and above.` :
+          lotLedgerMessage(errors);
+        throw new HttpsError("invalid-argument", message);
+      }
+      const spentAt = lotActivityMidday(changes.spentAt);
+      // The date is the truth: the month bucket follows the (possibly changed)
+      // spend date so an edit that moves a purchase to another month is honest.
+      const month = spentAt ?
+        lotMonthKeyOf(spentAt) : String(current.month || "");
+      const proofUrl =
+        String(changes.proofUrl ?? current.proofUrl ?? "").trim();
+      const record = lotExpenseEntryRecord(
+          {...changes, lineId: current.lineId, month},
+          {recordedByStaffId: String(current.recordedByStaffId || uid),
+            thresholdCents});
+      await ref.set({
+        ...record,
+        editedByStaffId: uid,
+        spentAt: spentAt ?
+          FirestoreTimestamp.fromDate(spentAt) : current.spentAt,
+        proofUrl,
+        proofFileName: String(changes.proofFileName ?? current.proofFileName ??
+          "").trim().slice(0, 200),
+        proofContentType: String(changes.proofContentType ??
+          current.proofContentType ?? "").trim().slice(0, 100),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      const diff = lotFieldDiff(current, {...record, proofUrl});
+      if (diff.length > 0) {
+        const first = diff[0];
+        await writeLotLedgerAudit({
+          businessId,
+          entityType: "expense_entry",
+          entityId: entryId,
+          action: "edited",
+          byStaffId: uid,
+          summary: diff.length === 1 ?
+            `${first.field} ${first.from} → ${first.to}` :
+            `${first.field} ${first.from} → ${first.to} ` +
+              `(+${diff.length - 1} more)`,
+          changes: diff,
+        });
+      }
+      return {success: true, entryId};
+    },
+);
+
 // Money entries are voided, never hard-deleted: the row stays for the record,
 // marked with who/when/why, excluded from totals, and it lands in the Needs-
 // attention feed so others see the change.

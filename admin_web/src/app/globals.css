@@ -13684,6 +13684,67 @@ button[data-loading="true"]::before {
   margin-top: 1px;
 }
 
+/* Expense page: one card per expense line, its purchases listed inside with
+   inline edit/void — replacing the dense table that read as unfinished. */
+.lot-expense-cards {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.lot-expense-card {
+  background: var(--paper, #fff);
+  border: 1px solid var(--rule, #e5e7eb);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.lot-expense-card-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.lot-expense-card-title { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lot-expense-card-title strong { font-size: 15px; font-weight: 700; color: var(--ink); }
+.lot-expense-card-title small { color: var(--muted); font-size: 12px; }
+.lot-expense-card-title .lst-badge { align-self: flex-start; }
+.lot-expense-card-amount { text-align: right; white-space: nowrap; }
+.lot-expense-card-amount b {
+  display: block;
+  font-size: 20px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+.lot-expense-card-amount small { color: var(--muted); font-size: 11px; }
+.lot-expense-purchases {
+  border-top: 1px solid var(--rule, #e5e7eb);
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.lot-expense-purchase {
+  align-items: center;
+  border-radius: 9px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 6px 8px;
+}
+.lot-expense-purchase:hover { background: rgba(13, 148, 136, 0.05); }
+.lot-expense-purchase-main {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.lot-expense-purchase-main strong { font-variant-numeric: tabular-nums; font-weight: 700; }
+.lot-expense-purchase-main small { color: var(--muted); font-size: 12px; }
+.lot-expense-purchase-actions { display: flex; flex-shrink: 0; gap: 2px; }
+.lot-expense-empty { color: var(--muted); font-size: 12px; margin: 12px 0 4px; }
+.lot-expense-add { margin-top: 10px; }
+
 /* The payments block inside the edit modal - the same billing control the
    card carries, set off from the vehicle/date fields above it. */
 .lst-edit-payments {

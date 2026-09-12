@@ -7444,6 +7444,7 @@ type LotModal =
   | "chase"
   | "expense-line"
   | "purchases"
+  | "edit-purchase"
   | "void"
   | "history";
 
@@ -7514,6 +7515,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const [lineDraft, setLineDraft] = useState({ label: "", detail: "", kind: "metered", recurring: "" });
   const [purchase, setPurchase] = useState<LotExpenseEntryDraft>(emptyLotExpenseEntryDraft);
   const [purchaseFile, setPurchaseFile] = useState<File | null>(null);
+  // Set when the purchase form is editing an existing entry rather than adding.
+  const [editEntryId, setEditEntryId] = useState("");
   const [chaseVia, setChaseVia] = useState("cash");
   const [chaseStaff, setChaseStaff] = useState("");
   const [directStaff, setDirectStaff] = useState("");
@@ -7745,6 +7748,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     setEditId("");
     setChaseId("");
     setPurchaseLineId("");
+    setEditEntryId("");
     setDraftError("");
     setPurchaseFile(null);
     setVinHint("");
@@ -8111,6 +8115,91 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     });
   }
 
+  function openAddPurchase(lineId: string) {
+    setPurchaseLineId(lineId);
+    setEditEntryId("");
+    setPurchase({ ...emptyLotExpenseEntryDraft, spentAt: `${month}-01` });
+    setPurchaseFile(null);
+    setDraftError("");
+    setModal("purchases");
+  }
+
+  function openEditPurchase(entry: Record<string, unknown>) {
+    setPurchaseLineId(String(entry.lineId ?? ""));
+    setEditEntryId(String(entry.id ?? ""));
+    setPurchase({
+      amount: String((Number(entry.amountCents) || 0) / 100),
+      spentAt: lotDateInputValue(entry.spentAt) || `${month}-01`,
+      paidByStaffId: text(entry.paidByStaffId, ""),
+      note: text(entry.note, ""),
+      hasProof: Boolean(text(entry.proofUrl, "")),
+    });
+    setPurchaseFile(null);
+    setDraftError("");
+    setModal("edit-purchase");
+  }
+
+  async function saveEditPurchase() {
+    const entry = expenseEntries.rows.find(
+      (e) => String((e as Record<string, unknown>).id) === editEntryId,
+    ) as Record<string, unknown> | undefined;
+    // A new file replaces the receipt; otherwise the stored one stands, so the
+    // proof rule is satisfied by either a fresh file or an existing URL.
+    const hasProof = Boolean(purchaseFile) || Boolean(text(entry?.proofUrl, ""));
+    const errors = validateLotExpenseEntryDraft(
+      { ...purchase, hasProof },
+      proofThreshold,
+    );
+    if (errors.length) {
+      setDraftError(
+        errors
+          .map((c) =>
+            c === "expense_proof_required"
+              ? expenseProofMessage(proofThreshold)
+              : c === "expense_amount_required"
+                ? "Enter what was spent."
+                : c === "expense_date_required"
+                  ? "Choose the date of the purchase."
+                  : "Say who paid for it.",
+          )
+          .join(" "),
+      );
+      return;
+    }
+    await runPanelAction(setBusy, setFlash, "Purchase updated.", async () => {
+      const changes: Record<string, unknown> = {
+        ...lotExpenseEntryPayload(purchase, { businessId, lineId: purchaseLineId, month }),
+      };
+      // Only send a new receipt when one was picked; leaving it out keeps the
+      // stored receipt exactly as it was.
+      if (purchaseFile) {
+        const path = `lotExpenseProofs/${businessId}/${crypto.randomUUID()}-${purchaseFile.name}`;
+        const uploaded = await uploadBytes(storageRef(storage, path), purchaseFile);
+        changes.proofUrl = await getDownloadURL(uploaded.ref);
+        changes.proofFileName = purchaseFile.name;
+        changes.proofContentType = purchaseFile.type;
+      }
+      await httpsCallable(functions, "updateLotExpenseEntry")({
+        entryId: editEntryId,
+        changes,
+      });
+      setPurchase(emptyLotExpenseEntryDraft);
+      setPurchaseFile(null);
+      closeModal();
+    });
+  }
+
+  function voidPurchase(entry: Record<string, unknown>) {
+    setVoidTarget({
+      type: "expense",
+      id: String(entry.id ?? ""),
+      label: `${lotFormatCents(Number(entry.amountCents) || 0)} · ${formatDate(entry.spentAt)}`,
+    });
+    setVoidReason("");
+    setDraftError("");
+    setModal("void");
+  }
+
   const staffOptions = staff.rows.map((s) => ({
     id: String((s as Record<string, unknown>).id),
     name: text((s as Record<string, unknown>).fullName, "") || text((s as Record<string, unknown>).name, "") || text((s as Record<string, unknown>).email, ""),
@@ -8258,29 +8347,63 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
           {expenseLines.rows.length === 0 ? (
             <EmptyState text="No expense lines yet." />
           ) : (
-            <div className="mini-table">
-              <div style={{ minWidth: 680 }}>
-                <div className="mini-table-head"><span>Expense</span><span>Supplier / detail</span><span>How it behaves</span><span>{lotMonthLabel(month)}</span></div>
-                {expenseLines.rows.map((line) => {
-                  const l = line as Record<string, unknown>;
-                  const metered = l.kind === "metered";
-                  const monthEntries = expenseEntries.rows.filter((e) => (e as Record<string, unknown>).voided !== true && String((e as Record<string, unknown>).lineId) === String(l.id) && lotExpenseEntryMonth(e as Record<string, unknown>) === month);
-                  const entriesTotal = monthEntries.reduce((s, e) => s + (Number((e as Record<string, unknown>).amountCents) || 0), 0);
-                  // A fixed line shows what the month actually cost: the purchase logged against it, else its standing amount - the same number the totals use.
-                  const amount = metered || monthEntries.length > 0 ? entriesTotal : Number(l.recurringCents) || 0;
-                  return (
-                    <div className="mini-table-row" key={String(l.id)}>
-                      <span>
-                        {metered ? (<button className="ghost-button" type="button" onClick={() => { setPurchaseLineId(String(l.id)); setPurchase({ ...emptyLotExpenseEntryDraft, spentAt: `${month}-01` }); setPurchaseFile(null); setDraftError(""); setModal("purchases"); }}><strong>{text(l.label, "")}</strong></button>) : (<strong>{text(l.label, "")}</strong>)}
-                        <small>{metered ? (monthEntries.length > 0 ? `${monthEntries.length} purchase${monthEntries.length === 1 ? "" : "s"}` : `Waiting on ${lotMonthLabel(month)}'s bill`) : `${lotFormatCents(Number(l.recurringCents) || 0)} every month`}</small>
-                      </span>
-                      <span>{text(l.detail, "")}</span>
-                      <span>{metered ? "Changes every month" : "Same every month"}</span>
-                      <span style={metered && monthEntries.length === 0 ? { borderLeft: "3px solid var(--warning)", paddingLeft: 8 } : undefined}><strong>{lotFormatCents(amount)}</strong>{metered && (<button className="ghost-button" type="button" onClick={() => { setPurchaseLineId(String(l.id)); setPurchase({ ...emptyLotExpenseEntryDraft, spentAt: `${month}-01` }); setPurchaseFile(null); setDraftError(""); setModal("purchases"); }}><Plus size={13} /> Add purchase</button>)}</span>
+            <div className="lot-expense-cards">
+              {expenseLines.rows.map((line) => {
+                const l = line as Record<string, unknown>;
+                const metered = l.kind === "metered";
+                const monthEntries = expenseEntries.rows.filter((e) => (e as Record<string, unknown>).voided !== true && String((e as Record<string, unknown>).lineId) === String(l.id) && lotExpenseEntryMonth(e as Record<string, unknown>) === month);
+                const entriesTotal = monthEntries.reduce((s, e) => s + (Number((e as Record<string, unknown>).amountCents) || 0), 0);
+                // A fixed line shows what the month actually cost: the purchase
+                // logged against it, else its standing amount — the same number
+                // the totals use.
+                const amount = metered || monthEntries.length > 0 ? entriesTotal : Number(l.recurringCents) || 0;
+                const missing = metered && monthEntries.length === 0;
+                return (
+                  <article className="lot-expense-card" key={String(l.id)}>
+                    <div className="lot-expense-card-head">
+                      <div className="lot-expense-card-title">
+                        <strong>{text(l.label, "")}</strong>
+                        <span className={`lst-badge ${metered ? "warn" : "muted"} compact`}>{metered ? "Metered" : "Fixed"}</span>
+                        {text(l.detail, "") && <small>{text(l.detail, "")}</small>}
+                      </div>
+                      <div className="lot-expense-card-amount">
+                        <b>{lotFormatCents(amount)}</b>
+                        <small>{metered ? "this month" : `${lotFormatCents(Number(l.recurringCents) || 0)}/mo`}</small>
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                    {monthEntries.length > 0 && (
+                      <div className="lot-expense-purchases">
+                        {monthEntries.map((e) => {
+                          const er = e as Record<string, unknown>;
+                          return (
+                            <div className="lot-expense-purchase" key={String(er.id)}>
+                              <div className="lot-expense-purchase-main">
+                                <strong>{lotFormatCents(Number(er.amountCents) || 0)}</strong>
+                                <small>{formatDate(er.spentAt)}</small>
+                                {text(er.proofUrl, "") ? (
+                                  <a className="status-pill good compact" href={text(er.proofUrl, "")} target="_blank" rel="noopener" title={text(er.proofFileName, "View receipt")}><Paperclip size={12} /> Receipt</a>
+                                ) : er.proofRequired ? (
+                                  <span className="status-pill danger compact">Proof missing</span>
+                                ) : null}
+                                {text(er.paidByStaffId, "") && <small>· {staffName(text(er.paidByStaffId, ""))}</small>}
+                                {text(er.note, "") && <small>· {text(er.note, "")}</small>}
+                              </div>
+                              <div className="lot-expense-purchase-actions">
+                                <button className="ghost-button" type="button" onClick={() => openEditPurchase(er)} title="Edit"><Pencil size={14} /></button>
+                                <button className="ghost-button" type="button" onClick={() => voidPurchase(er)} title="Void"><Ban size={14} /></button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {missing && <p className="lot-expense-empty">Waiting on {lotMonthLabel(month)}&apos;s bill.</p>}
+                    {metered && (
+                      <button className="ghost-button lot-expense-add" type="button" onClick={() => openAddPurchase(String(l.id))}><Plus size={13} /> Add purchase</button>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
@@ -8485,28 +8608,21 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
         </div>
       )}
 
-      {modal === "purchases" && (
+      {(modal === "purchases" || modal === "edit-purchase") && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
-          <div className="lst-modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
-            <header className="lst-modal-head"><div><h3>{text(purchaseLine?.label, "Purchases")} — {lotMonthLabel(month)}</h3><p>Every purchase for this line this month.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+          <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head"><div><h3>{modal === "edit-purchase" ? "Edit purchase" : "Add a purchase"} — {text(purchaseLine?.label, "expense")}</h3><p>{modal === "edit-purchase" ? "Changes are logged in this line's history." : `A purchase for ${lotMonthLabel(month)}.`}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
-              {expenseEntries.rows.filter((e) => String((e as Record<string, unknown>).lineId) === purchaseLineId && lotExpenseEntryMonth(e as Record<string, unknown>) === month).map((e) => {
-                const er = e as Record<string, unknown>;
-                const evoided = er.voided === true;
-                return (<div key={String(er.id)} className="mini-table-row" style={evoided ? { opacity: 0.6 } : undefined}><span><strong>{evoided ? <s>{lotFormatCents(Number(er.amountCents) || 0)}</s> : lotFormatCents(Number(er.amountCents) || 0)}</strong><small>{formatDate(er.spentAt)}</small>{evoided && <span className="status-pill danger compact">Voided</span>}</span><span>{text(er.proofUrl, "") ? <a className="status-pill good compact" href={text(er.proofUrl, "")} target="_blank" rel="noopener" title="Open the receipt"><Paperclip size={12} /> {text(er.proofFileName, "View receipt")}</a> : er.proofRequired ? <span className="status-pill danger compact">Proof missing</span> : <span className="status-pill compact">No proof needed</span>}</span><span><small>Paid by {staffName(text(er.paidByStaffId, "")) || "—"}</small><small>Recorded by {staffName(text(er.recordedByStaffId, "")) || "—"}</small>{text(er.note, "") && <small>{text(er.note, "")}</small>}{evoided ? <small>Voided by {staffName(text(er.voidedByStaffId, ""))}{text(er.voidReason, "") ? ` — ${text(er.voidReason, "")}` : ""}</small> : <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "expense", id: String(er.id), label: `${lotFormatCents(Number(er.amountCents) || 0)} · ${text(purchaseLine?.label, "purchase")}` }); setVoidReason(""); setDraftError(""); setModal("void"); }}>Void</button>}</span></div>);
-              })}
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
-              <div style={{ borderTop: "2px solid var(--rule)", marginTop: 12, paddingTop: 12 }}>
-                <div className="lst-form-grid">
-                  <label className="lst-field"><span>Amount</span><input inputMode="decimal" value={purchase.amount} onChange={(e) => setPurchase((d) => ({ ...d, amount: e.target.value }))} /></label>
-                  <label className="lst-field"><span>Date</span><input type="date" value={purchase.spentAt} onChange={(e) => setPurchase((d) => ({ ...d, spentAt: e.target.value }))} /></label>
-                  <label className="lst-field"><span>Paid by</span><select value={purchase.paidByStaffId} onChange={(e) => setPurchase((d) => ({ ...d, paidByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
-                  <label className="lst-field wide"><span>Note</span><input value={purchase.note} onChange={(e) => setPurchase((d) => ({ ...d, note: e.target.value }))} /></label>
-                  <label className="lst-field wide"><span>Receipt</span><input type="file" accept="image/*,application/pdf" onChange={(e) => setPurchaseFile(e.target.files?.[0] ?? null)} /><small className="lst-hint">{expenseProofRequired(purchaseCents, proofThreshold) ? `This is at or above ${lotFormatCents(proofThreshold)}, so a receipt is required.` : `Below ${lotFormatCents(proofThreshold)} — a receipt is optional, attach one anyway if you have it.`}</small></label>
-                </div>
+              <div className="lst-form-grid">
+                <label className="lst-field"><span>Amount</span><input inputMode="decimal" value={purchase.amount} onChange={(e) => setPurchase((d) => ({ ...d, amount: e.target.value }))} /></label>
+                <label className="lst-field"><span>Date</span><input type="date" value={purchase.spentAt} onChange={(e) => setPurchase((d) => ({ ...d, spentAt: e.target.value }))} /></label>
+                <label className="lst-field"><span>Paid by</span><select value={purchase.paidByStaffId} onChange={(e) => setPurchase((d) => ({ ...d, paidByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
+                <label className="lst-field wide"><span>Note</span><input value={purchase.note} onChange={(e) => setPurchase((d) => ({ ...d, note: e.target.value }))} /></label>
+                <label className="lst-field wide"><span>Receipt</span><input type="file" accept="image/*,application/pdf" onChange={(e) => setPurchaseFile(e.target.files?.[0] ?? null)} /><small className="lst-hint">{modal === "edit-purchase" && purchase.hasProof && !purchaseFile ? "A receipt is on file — choose a new one only to replace it. " : ""}{expenseProofRequired(purchaseCents, proofThreshold) ? `This is at or above ${lotFormatCents(proofThreshold)}, so a receipt is required.` : `Below ${lotFormatCents(proofThreshold)} — a receipt is optional, attach one anyway if you have it.`}</small></label>
               </div>
             </div>
-            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Done</button><button className="lst-add" type="button" disabled={busy} onClick={addPurchase}>Add a purchase</button></footer>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={modal === "edit-purchase" ? saveEditPurchase : addPurchase}>{modal === "edit-purchase" ? "Save changes" : "Add purchase"}</button></footer>
           </div>
         </div>
       )}
