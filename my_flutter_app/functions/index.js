@@ -13839,6 +13839,13 @@ const LOT_AUDIT_FIELDS = Object.freeze({
   paymentMethod: {label: "Payment method", money: false},
   auctionHouse: {label: "Auction house", money: false},
   note: {label: "Note", money: false},
+  // Expense-line fields, so editing a line (incl. a fixed one's monthly
+  // amount) is tracked the same way. A key absent from the record being
+  // diffed is skipped, so these never affect an activity or entry diff.
+  recurringCents: {label: "Monthly amount", money: true},
+  label: {label: "Name", money: false},
+  detail: {label: "Supplier / detail", money: false},
+  kind: {label: "Type", money: false},
 });
 
 /**
