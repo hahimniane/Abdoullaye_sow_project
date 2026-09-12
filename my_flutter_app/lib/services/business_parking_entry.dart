@@ -1198,6 +1198,17 @@ class BusinessParkingService {
     return BusinessParkingPaidResult.fromCallable(response.data);
   }
 
+  /// Undo a hand-marked direct payment: set a "paid" walk-up back to awaiting
+  /// the payment. Logged in the car's change history.
+  Future<void> revertPaid({required String entryId, String reason = ''}) async {
+    await _functions
+        .httpsCallable('revertBusinessParkingPaid')
+        .call<Object?>(<String, dynamic>{
+          'entryId': entryId,
+          if (reason.trim().isNotEmpty) 'reason': reason.trim(),
+        });
+  }
+
   /// Records part of a stay's cost: either a number of days (priced from the
   /// car's own daily rate on the server) or a dollar amount, and who took it.
   Future<void> recordPartialPayment({

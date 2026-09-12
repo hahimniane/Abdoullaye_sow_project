@@ -444,6 +444,41 @@ function businessParkingPaidUpdate({
 }
 
 /**
+ * Undo a direct "marked paid": set a business-entered, direct-payment record
+ * that was marked paid back to awaiting the payment. Only a hand-marked direct
+ * entry can be undone — a Stripe payment-link settlement is Stripe's record,
+ * not ours. Mirrors businessParkingPaidUpdate in reverse.
+ *
+ * @param {object} params { entry }.
+ * @return {object} { ok, reason?, update? }.
+ */
+function businessParkingRevertPaidUpdate({entry}) {
+  const data = entry && typeof entry === "object" ? entry : {};
+  if (text(data.source, 40) !== BUSINESS_PARKING_SOURCE) {
+    return {ok: false, update: null, reason: "not_a_business_entry"};
+  }
+  if (text(data.paymentMethod, 40) !== "direct") {
+    return {ok: false, update: null, reason: "payment_link_is_stripe_owned"};
+  }
+  if (text(data.paymentStatus, 40) !== BUSINESS_PARKING_PAYMENT_STATUS.PAID) {
+    return {ok: false, update: null, reason: "not_paid"};
+  }
+  return {
+    ok: true,
+    update: {
+      paymentStatus: BUSINESS_PARKING_PAYMENT_STATUS.AWAITING_DIRECT,
+      directPaymentReceived: false,
+      directPaymentMethod: "",
+      directPaymentNote: "",
+      directPaymentMarkedByUid: "",
+      amountPaidCents: 0,
+      amountPaid: 0,
+      ...directPaymentPayoutFields(0),
+    },
+  };
+}
+
+/**
  * A partial payment against a parking record.
  *
  * A customer parking for twenty days may hand over five or ten days' worth at
@@ -750,6 +785,7 @@ module.exports = {
   BUSINESS_PARKING_STATUS,
   buildBusinessParkingEntryRecord,
   businessParkingPaidUpdate,
+  businessParkingRevertPaidUpdate,
   businessParkingPaymentPlan,
   directPaymentPayoutFields,
   normalizeBusinessParkingEntry,

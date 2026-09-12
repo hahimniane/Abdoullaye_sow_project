@@ -4918,6 +4918,29 @@ export function ParkingPanel({
   // Which card the list sent us to, so opening a row lands on that car
   // rather than at the top of thirty of them.
   const [openRowId, setOpenRowId] = useState("");
+  // Change history for one parked car, opened from a row's History button.
+  const [historyId, setHistoryId] = useState("");
+  const [historyRows, setHistoryRows] = useState<FirestoreRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  async function openParkingHistory(entryId: string) {
+    setHistoryId(entryId);
+    setHistoryRows([]);
+    setHistoryLoading(true);
+    try {
+      const snap = await getDocs(query(
+        collection(db, "lotLedgerAudit"),
+        where("businessId", "==", businessId),
+        where("entityId", "==", entryId),
+        orderBy("at", "desc"),
+        limit(50),
+      ));
+      setHistoryRows(snap.docs.map((d) => ({ id: d.id, ...d.data() } as FirestoreRow)));
+    } catch {
+      setHistoryRows([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
   // How much of this walk-up has been paid at the desk: nothing, part of it,
   // or the whole thing. A part payment carries days-or-amount alongside.
   const [entryPaid, setEntryPaid] = useState<"later" | "part" | "full">("later");
@@ -5705,6 +5728,9 @@ export function ParkingPanel({
                     <button type="button" className="pk-act" title="Edit this record" aria-label="Edit this record" onClick={() => editParking(row)}>
                       <Pencil size={13} />
                     </button>
+                    <button type="button" className="pk-act" title="Change history" aria-label="Change history" onClick={() => void openParkingHistory(String(row.id))}>
+                      <History size={13} />
+                    </button>
                     {/* Settling money asks how it arrived, and that choice
                         lives on the card. This opens the card at this car so
                         the answer is deliberate rather than a default. */}
@@ -5877,11 +5903,40 @@ export function ParkingPanel({
                 ) : (
                   <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editParking(row)}><Pencil size={14} /> Edit</button>
                 )}
+                <button className="lst-btn ghost" type="button" onClick={() => void openParkingHistory(String(row.id))}><History size={14} /> History</button>
               </div>
             </article>
           );
         })}
       </div>
+      )}
+
+      {historyId && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => setHistoryId("")}>
+          <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head"><div><h3>Change history</h3><p>Every payment change and edit on this car, most recent first.</p></div><button className="lst-icon-btn" type="button" onClick={() => setHistoryId("")} aria-label="Close"><X size={18} /></button></header>
+            <div className="lst-modal-body">
+              {historyLoading ? (
+                <p className="panel-lede">Loading…</p>
+              ) : historyRows.length === 0 ? (
+                <EmptyState text="No changes recorded yet — nothing has been paid, reverted or edited." />
+              ) : historyRows.map((h) => {
+                const hr = h as Record<string, unknown>;
+                const who = staffNameById.get(text(hr.byStaffId, "")) || text(hr.byStaffId, "") || "an unknown user";
+                return (
+                  <div key={String(hr.id)} style={{ padding: "10px 0", borderBottom: "1px solid var(--rule)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span><strong>{text(hr.summary, "") || text(hr.action, "Change")}</strong></span>
+                      <small style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{formatDate(hr.at)}</small>
+                    </div>
+                    <small style={{ color: "var(--muted)" }}>{who}</small>
+                  </div>
+                );
+              })}
+            </div>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" onClick={() => setHistoryId("")}>Done</button></footer>
+          </div>
+        </div>
       )}
 
       {formOpen && (
@@ -8966,6 +9021,17 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
     setPartValue("");
     setPartOpen(false);
   }
+  // A car can be saved marked as paid; if that was wrong, set it back to
+  // awaiting the payment. Only a hand-marked direct payment can be undone —
+  // a Stripe payment-link settlement is Stripe's record. Logged in History.
+  const canRevertPaid = isBusinessEnteredParking(row) &&
+    String(r.paymentMethod) === "direct" &&
+    String(r.paymentStatus) === "paid";
+  async function revertPaid() {
+    await runPanelAction(setBusy, setFlash, "Set back to not paid.", async () => {
+      await httpsCallable(functions, "revertBusinessParkingPaid")({ entryId: row.id });
+    });
+  }
 
   return (
     <div className="pur-info" style={{ display: "block" }}>
@@ -9056,6 +9122,7 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
       )}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         {openEnded && (<button className="ghost-button" type="button" disabled={busy} onClick={close}>Car left today</button>)}
+        {canRevertPaid && (<button className="ghost-button" type="button" disabled={busy} onClick={() => void revertPaid()} title="Set this back to not paid"><RotateCcw size={13} /> Mark as not paid</button>)}
       </div>
     </div>
   );
