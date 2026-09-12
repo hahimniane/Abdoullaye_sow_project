@@ -3482,6 +3482,11 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
 
   String _proofUrl = '';
   String _proofName = '';
+  // Set when the form is editing an existing purchase rather than adding one.
+  String _editingEntryId = '';
+  // True once a new receipt has been attached during an edit, so an unchanged
+  // edit keeps the stored receipt instead of resending it.
+  bool _proofReplaced = false;
 
   @override
   void dispose() {
@@ -3521,6 +3526,7 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
       setState(() {
         _proofUrl = url;
         _proofName = picked.name;
+        _proofReplaced = true;
         _errors = {..._errors}..remove('expense_proof_required');
       });
       AppHaptics.commit();
@@ -3532,6 +3538,35 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
+  }
+
+  void _editEntry(LotExpenseEntry entry) {
+    setState(() {
+      _editingEntryId = entry.id;
+      _amount.text = (entry.amountCents / 100).toStringAsFixed(2);
+      _note.text = entry.note;
+      _date = entry.spentAt ?? DateTime.now();
+      _paidBy = entry.paidByStaffId.isNotEmpty ? entry.paidByStaffId : null;
+      _proofUrl = entry.proofUrl;
+      _proofName = entry.proofFileName;
+      _proofReplaced = false;
+      _errors = {};
+    });
+    AppHaptics.selection();
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _editingEntryId = '';
+      _amount.clear();
+      _note.clear();
+      _date = DateTime.now();
+      _paidBy = null;
+      _proofUrl = '';
+      _proofName = '';
+      _proofReplaced = false;
+      _errors = {};
+    });
   }
 
   Future<void> _voidEntry(LotExpenseEntry entry) async {
@@ -3565,24 +3600,44 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
     }
     setState(() => _busy = true);
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('createLotExpenseEntry')
-          .call<Object?>({
-        'businessId': widget.businessId,
-        'lineId': widget.line.id,
-        'month': widget.month,
-        'amountCents': cents,
-        'spentAt': lotMiddayIso(_date),
-        'paidByStaffId': _paidBy,
-        'note': _note.text.trim(),
-        'proofUrl': _proofUrl,
-        'proofFileName': _proofName,
-        'proofContentType': _proofUrl.isEmpty ? '' : 'image/jpeg',
-      });
+      if (_editingEntryId.isNotEmpty) {
+        final changes = <String, Object?>{
+          'amountCents': cents,
+          'spentAt': lotMiddayIso(_date),
+          'paidByStaffId': _paidBy,
+          'note': _note.text.trim(),
+          // Only resend the receipt when a new one was attached; otherwise the
+          // stored receipt stays exactly as it was.
+          if (_proofReplaced) 'proofUrl': _proofUrl,
+          if (_proofReplaced) 'proofFileName': _proofName,
+          if (_proofReplaced) 'proofContentType': 'image/jpeg',
+        };
+        await FirebaseFunctions.instance
+            .httpsCallable('updateLotExpenseEntry')
+            .call<Object?>({'entryId': _editingEntryId, 'changes': changes});
+      } else {
+        await FirebaseFunctions.instance
+            .httpsCallable('createLotExpenseEntry')
+            .call<Object?>({
+          'businessId': widget.businessId,
+          'lineId': widget.line.id,
+          'month': widget.month,
+          'amountCents': cents,
+          'spentAt': lotMiddayIso(_date),
+          'paidByStaffId': _paidBy,
+          'note': _note.text.trim(),
+          'proofUrl': _proofUrl,
+          'proofFileName': _proofName,
+          'proofContentType': _proofUrl.isEmpty ? '' : 'image/jpeg',
+        });
+      }
       if (!mounted) return;
       AppHaptics.commit();
       Navigator.of(context).pop();
-      showSuccessSnackBar(context, l10n.lotPurchaseAdded);
+      showSuccessSnackBar(
+          context, _editingEntryId.isNotEmpty
+              ? l10n.lotPurchaseUpdated
+              : l10n.lotPurchaseAdded);
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       AppHaptics.refuse();
@@ -3603,11 +3658,12 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
         DateFormat.yMMMEd(Localizations.localeOf(context).toLanguageTag())
             .format(_date);
 
+    final editing = _editingEntryId.isNotEmpty;
     return _SheetShell(
       title: widget.line.label,
       subtitle: widget.monthLabel,
       footer: _SheetButton(
-        label: l10n.lotAddPurchase,
+        label: editing ? l10n.lotSaveChanges : l10n.lotAddPurchase,
         busy: _busy,
         busyLabel: l10n.lotSaving,
         onTap: _submit,
@@ -3658,6 +3714,19 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
                       ),
                     Semantics(
                       button: true,
+                      label: l10n.lotEditPurchase,
+                      child: PressableScale(
+                        scale: 0.9,
+                        onTap: () => _editEntry(entry),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.edit_outlined,
+                              size: 16, color: AppColors.muted),
+                        ),
+                      ),
+                    ),
+                    Semantics(
+                      button: true,
                       label: l10n.lotVoid,
                       child: PressableScale(
                         scale: 0.9,
@@ -3674,6 +3743,37 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
               ),
             const Divider(height: AppSpacing.xl),
           ],
+          if (editing)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: Row(
+                children: [
+                  const Icon(Icons.edit_outlined,
+                      size: 15, color: AppColors.muted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      l10n.lotEditingPurchase,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.muted),
+                    ),
+                  ),
+                  PressableScale(
+                    scale: 0.95,
+                    onTap: _cancelEdit,
+                    child: Text(
+                      l10n.lotCancelEdit,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.sage),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           TextField(
             controller: _amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),

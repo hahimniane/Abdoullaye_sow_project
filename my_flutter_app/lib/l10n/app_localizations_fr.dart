@@ -7989,6 +7989,21 @@ class AppLocalizationsFr extends AppLocalizations {
   String get lotPurchaseAdded => 'Achat ajouté.';
 
   @override
+  String get lotPurchaseUpdated => 'Achat mis à jour.';
+
+  @override
+  String get lotEditPurchase => 'Modifier l\'achat';
+
+  @override
+  String get lotSaveChanges => 'Enregistrer';
+
+  @override
+  String get lotEditingPurchase => 'Modification d\'un achat';
+
+  @override
+  String get lotCancelEdit => 'Annuler';
+
+  @override
   String get lotExpenseLineSaved => 'Poste enregistré.';
 
   @override

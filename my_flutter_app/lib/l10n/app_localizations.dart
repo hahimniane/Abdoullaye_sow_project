@@ -13986,6 +13986,36 @@ abstract class AppLocalizations {
   /// **'Purchase added.'**
   String get lotPurchaseAdded;
 
+  /// No description provided for @lotPurchaseUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase updated.'**
+  String get lotPurchaseUpdated;
+
+  /// No description provided for @lotEditPurchase.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit purchase'**
+  String get lotEditPurchase;
+
+  /// No description provided for @lotSaveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get lotSaveChanges;
+
+  /// No description provided for @lotEditingPurchase.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing a purchase'**
+  String get lotEditingPurchase;
+
+  /// No description provided for @lotCancelEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get lotCancelEdit;
+
   /// No description provided for @lotExpenseLineSaved.
   ///
   /// In en, this message translates to:
