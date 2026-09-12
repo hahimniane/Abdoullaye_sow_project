@@ -7513,6 +7513,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
   const [newType, setNewType] = useState<LotActivityTypeDraft>(emptyLotActivityTypeDraft);
   const [lineDraft, setLineDraft] = useState({ label: "", detail: "", kind: "metered", recurring: "" });
+  // Set when the expense-line form is editing an existing line, not adding one.
+  const [editLineId, setEditLineId] = useState("");
   const [purchase, setPurchase] = useState<LotExpenseEntryDraft>(emptyLotExpenseEntryDraft);
   const [purchaseFile, setPurchaseFile] = useState<File | null>(null);
   // Set when the purchase form is editing an existing entry rather than adding.
@@ -7749,6 +7751,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     setChaseId("");
     setPurchaseLineId("");
     setEditEntryId("");
+    setEditLineId("");
     setDraftError("");
     setPurchaseFile(null);
     setVinHint("");
@@ -8053,13 +8056,34 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     }
   }
 
-  async function addExpenseLine() {
+  function openAddLine() {
+    setLineDraft({ label: "", detail: "", kind: "metered", recurring: "" });
+    setEditLineId("");
+    setDraftError("");
+    setModal("expense-line");
+  }
+
+  function openEditLine(line: Record<string, unknown>) {
+    setEditLineId(String(line.id ?? ""));
+    setLineDraft({
+      label: text(line.label, ""),
+      detail: text(line.detail, ""),
+      kind: String(line.kind) === "fixed" ? "fixed" : "metered",
+      recurring: String(line.kind) === "fixed" ? String((Number(line.recurringCents) || 0) / 100) : "",
+    });
+    setDraftError("");
+    setModal("expense-line");
+  }
+
+  async function saveExpenseLine() {
     if (!lineDraft.label.trim()) {
       setDraftError("Name the expense line.");
       return;
     }
-    await runPanelAction(setBusy, setFlash, "Expense line added.", async () => {
+    const editing = Boolean(editLineId);
+    await runPanelAction(setBusy, setFlash, editing ? "Expense line updated." : "Expense line added.", async () => {
       await httpsCallable(functions, "upsertLotExpenseLine")({
+        ...(editing ? { lineId: editLineId } : {}),
         businessId,
         label: lineDraft.label,
         detail: lineDraft.detail,
@@ -8067,6 +8091,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
         recurringCents: lineDraft.kind === "fixed" ? Math.round((Number(lineDraft.recurring) || 0) * 100) : 0,
       });
       setLineDraft({ label: "", detail: "", kind: "metered", recurring: "" });
+      setEditLineId("");
       closeModal();
     });
   }
@@ -8325,7 +8350,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
               {lotMonthOptions(year).map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
             </select>
-            <button className="primary-button" type="button" onClick={() => { setLineDraft({ label: "", detail: "", kind: "metered", recurring: "" }); setDraftError(""); setModal("expense-line"); }}>Add expense line</button>
+            <button className="primary-button" type="button" onClick={openAddLine}>Add expense line</button>
           </div>
           <p className="panel-lede" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {editingThreshold ? (
@@ -8370,6 +8395,10 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                         <b>{lotFormatCents(amount)}</b>
                         <small>{metered ? "this month" : `${lotFormatCents(Number(l.recurringCents) || 0)}/mo`}</small>
                       </div>
+                      <div className="lot-expense-line-actions">
+                        <button className="ghost-button" type="button" onClick={() => openEditLine(l)} title="Edit this expense line"><Pencil size={14} /></button>
+                        <button className="ghost-button" type="button" onClick={() => openHistory(String(l.id))} title="Change history"><History size={14} /></button>
+                      </div>
                     </div>
                     {monthEntries.length > 0 && (
                       <div className="lot-expense-purchases">
@@ -8390,6 +8419,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                               </div>
                               <div className="lot-expense-purchase-actions">
                                 <button className="ghost-button" type="button" onClick={() => openEditPurchase(er)} title="Edit"><Pencil size={14} /></button>
+                                <button className="ghost-button" type="button" onClick={() => openHistory(String(er.id))} title="Change history"><History size={14} /></button>
                                 <button className="ghost-button" type="button" onClick={() => voidPurchase(er)} title="Void"><Ban size={14} /></button>
                               </div>
                             </div>
@@ -8593,7 +8623,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       {modal === "expense-line" && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-            <header className="lst-modal-head"><div><h3>Add expense line</h3><p>A cost the lot carries.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
+            <header className="lst-modal-head"><div><h3>{editLineId ? "Edit expense line" : "Add expense line"}</h3><p>{editLineId ? "Changes are kept in this line's history." : "A cost the lot carries."}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
               <div className="lst-form-grid">
@@ -8603,7 +8633,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 {lineDraft.kind === "fixed" && (<label className="lst-field"><span>Monthly amount</span><input inputMode="decimal" value={lineDraft.recurring} onChange={(e) => setLineDraft((d) => ({ ...d, recurring: e.target.value }))} /></label>)}
               </div>
             </div>
-            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={addExpenseLine}>Add line</button></footer>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={saveExpenseLine}>{editLineId ? "Save changes" : "Add line"}</button></footer>
           </div>
         </div>
       )}

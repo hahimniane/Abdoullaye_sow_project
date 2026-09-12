@@ -7870,6 +7870,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lotCancelEdit => 'Cancel';
 
   @override
+  String get lotEditExpenseLine => 'Edit expense line';
+
+  @override
+  String get lotEditLine => 'Edit line';
+
+  @override
   String get lotExpenseLineSaved => 'Expense line saved.';
 
   @override

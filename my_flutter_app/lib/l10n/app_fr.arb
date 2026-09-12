@@ -3386,6 +3386,8 @@
   "lotSaveChanges": "Enregistrer",
   "lotEditingPurchase": "Modification d'un achat",
   "lotCancelEdit": "Annuler",
+  "lotEditExpenseLine": "Modifier la ligne de dépense",
+  "lotEditLine": "Modifier la ligne",
   "lotExpenseLineSaved": "Poste enregistré.",
   "lotSameEveryMonth": "Identique chaque mois",
   "lotChangesEveryMonth": "Variable chaque mois",

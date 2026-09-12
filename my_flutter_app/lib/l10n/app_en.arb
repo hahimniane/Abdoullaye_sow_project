@@ -3386,6 +3386,8 @@
   "lotSaveChanges": "Save changes",
   "lotEditingPurchase": "Editing a purchase",
   "lotCancelEdit": "Cancel",
+  "lotEditExpenseLine": "Edit expense line",
+  "lotEditLine": "Edit line",
   "lotExpenseLineSaved": "Expense line saved.",
   "lotSameEveryMonth": "Same every month",
   "lotChangesEveryMonth": "Changes every month",

@@ -14016,6 +14016,18 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get lotCancelEdit;
 
+  /// No description provided for @lotEditExpenseLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit expense line'**
+  String get lotEditExpenseLine;
+
+  /// No description provided for @lotEditLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit line'**
+  String get lotEditLine;
+
   /// No description provided for @lotExpenseLineSaved.
   ///
   /// In en, this message translates to:

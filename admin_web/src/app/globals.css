@@ -13703,7 +13703,8 @@ button[data-loading="true"]::before {
   gap: 12px;
   justify-content: space-between;
 }
-.lot-expense-card-title { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lot-expense-card-title { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+.lot-expense-line-actions { display: flex; flex-shrink: 0; gap: 2px; }
 .lot-expense-card-title strong { font-size: 15px; font-weight: 700; color: var(--ink); }
 .lot-expense-card-title small { color: var(--muted); font-size: 12px; }
 .lot-expense-card-title .lst-badge { align-self: flex-start; }

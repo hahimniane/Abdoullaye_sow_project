@@ -8004,6 +8004,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get lotCancelEdit => 'Annuler';
 
   @override
+  String get lotEditExpenseLine => 'Modifier la ligne de dépense';
+
+  @override
+  String get lotEditLine => 'Modifier la ligne';
+
+  @override
   String get lotExpenseLineSaved => 'Poste enregistré.';
 
   @override
