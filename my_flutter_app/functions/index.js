@@ -283,6 +283,7 @@ const {
   parkingCheckoutSessionReusable,
   buildBusinessParkingEntryRecord,
   businessParkingPaidUpdate,
+  businessParkingRevertPaidUpdate,
   businessParkingPaymentPlan,
   directPaymentPayoutFields,
   normalizeDirectPaymentMethod,
@@ -11786,6 +11787,8 @@ const BUSINESS_PARKING_PAID_REFUSALS = Object.freeze({
   entry_cancelled: "This parking entry was cancelled",
   not_awaiting_direct_payment:
     "This parking entry is not waiting on a direct payment",
+  not_paid:
+    "This parking entry is not marked paid, so there is nothing to undo",
 });
 
 function businessParkingEntryMessage(errors) {
@@ -13219,6 +13222,19 @@ exports.markBusinessParkingPaid = onCall(
         };
       });
 
+      if (!result.alreadyPaid) {
+        await writeLotLedgerAudit({
+          businessId: String(existing.data()?.businessId || ""),
+          entityType: "parking",
+          entityId: entryId,
+          action: "paid",
+          byStaffId: uid,
+          summary: `Marked paid — ${dollarsFromCents(result.amountPaidCents)}` +
+            `${receivedVia ? ` (${receivedVia})` : ""}`,
+          changes: [],
+        });
+      }
+
       return {
         success: true,
         entryId,
@@ -13228,6 +13244,67 @@ exports.markBusinessParkingPaid = onCall(
         amountPaidCents: result.amountPaidCents,
         paymentStatus: "paid",
       };
+    },
+);
+
+// Undo a hand-marked direct parking payment: set a "paid" walk-up back to
+// awaiting the payment, with an audit line so the change is on the record.
+// Stripe payment-link settlements cannot be undone this way.
+exports.revertBusinessParkingPaid = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const entryId = cleanText(
+          request.data?.entryId || request.data?.reservationId, 180);
+      const reason = cleanText(request.data?.reason, 500);
+      if (!entryId) {
+        throw new HttpsError("invalid-argument", "Parking entry is required");
+      }
+      const db = admin.firestore();
+      const entryRef = db.collection("parkedCars").doc(entryId);
+      const existing = await entryRef.get();
+      if (!existing.exists) {
+        throw new HttpsError("not-found", "Parking entry not found");
+      }
+      const businessId = String(existing.data()?.businessId || "");
+      await requireBusinessPermission(uid, businessId, "parking");
+
+      await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(entryRef);
+        if (!snapshot.exists) {
+          throw new HttpsError("not-found", "Parking entry not found");
+        }
+        const decision = businessParkingRevertPaidUpdate({
+          entry: snapshot.data() || {},
+        });
+        if (!decision.ok) {
+          throw new HttpsError(
+              "failed-precondition",
+              BUSINESS_PARKING_PAID_REFUSALS[decision.reason] ||
+                "This parking payment cannot be undone",
+          );
+        }
+        transaction.update(entryRef, {
+          ...decision.update,
+          directPaymentReceivedAt: null,
+          paymentRevertedByStaffId: uid,
+          paymentRevertedAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      });
+
+      await writeLotLedgerAudit({
+        businessId,
+        entityType: "parking",
+        entityId: entryId,
+        action: "payment_reverted",
+        byStaffId: uid,
+        summary: reason ?
+          `Set back to not paid — ${reason}` : "Set back to not paid",
+        changes: [],
+      });
+
+      return {success: true, entryId, paymentStatus: "awaiting_direct_payment"};
     },
 );
 

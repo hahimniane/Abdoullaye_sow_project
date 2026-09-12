@@ -13698,6 +13698,30 @@ abstract class AppLocalizations {
   /// **'No changes yet.'**
   String get lotNoHistory;
 
+  /// No description provided for @lotParkingMarkNotPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as not paid'**
+  String get lotParkingMarkNotPaid;
+
+  /// No description provided for @lotParkingMarkedNotPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Set back to not paid.'**
+  String get lotParkingMarkedNotPaid;
+
+  /// No description provided for @lotParkingMarkNotPaidConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Set this car back to awaiting payment? The change is logged in its history.'**
+  String get lotParkingMarkNotPaidConfirm;
+
+  /// No description provided for @lotParkingHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change history'**
+  String get lotParkingHistoryTitle;
+
   /// No description provided for @lotWhatWasDone.
   ///
   /// In en, this message translates to:

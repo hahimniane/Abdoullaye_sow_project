@@ -1513,6 +1513,145 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     }
   }
 
+  /// Undo a hand-marked direct payment: set the car back to awaiting payment.
+  Future<void> _revertPaid() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await confirmMajorAction(
+      context,
+      title: l10n.lotParkingMarkNotPaid,
+      message: l10n.lotParkingMarkNotPaidConfirm,
+      confirmLabel: l10n.lotParkingMarkNotPaid,
+      icon: Icons.undo_outlined,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _isMarkingPaid = true);
+    try {
+      await _businessParkingService.revertPaid(entryId: widget.parkedCar.id);
+      if (!mounted) return;
+      setState(() {
+        _paymentFields = <String, dynamic>{
+          ..._paymentFields,
+          'paymentStatus': 'awaiting_direct_payment',
+          'directPaymentReceived': false,
+          'directPaymentMethod': '',
+          'amountPaidCents': 0,
+          'amountPaid': 0,
+        };
+      });
+      showSuccessSnackBar(context, l10n.lotParkingMarkedNotPaid);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      final message = (error.message ?? '').trim();
+      showErrorSnackBar(
+        context,
+        message.isEmpty ? l10n.paymentCouldNotBeRecorded : message,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showErrorSnackBar(context, l10n.paymentCouldNotBeRecorded);
+    } finally {
+      if (mounted) setState(() => _isMarkingPaid = false);
+    }
+  }
+
+  /// The change history for this car — payments marked, undone, and edits —
+  /// read from the shared ledger audit, shown in a sheet on demand.
+  Future<void> _showParkingHistory() async {
+    final l10n = AppLocalizations.of(context)!;
+    final businessId = (_paymentFields['businessId'] ?? '').toString();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        final query = FirebaseFirestore.instance
+            .collection('lotLedgerAudit')
+            .where('businessId', isEqualTo: businessId)
+            .where('entityId', isEqualTo: widget.parkedCar.id)
+            .orderBy('at', descending: true)
+            .limit(50)
+            .get();
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.5,
+          maxChildSize: 0.9,
+          builder: (context, controller) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Text(
+                  l10n.lotParkingHistoryTitle,
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w700),
+                ),
+              ),
+              Expanded(
+                child: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  future: query,
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final docs = snap.data?.docs ?? const [];
+                    if (docs.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            l10n.lotNoHistory,
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      controller: controller,
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                      itemCount: docs.length,
+                      separatorBuilder: (_, _) => Divider(
+                          height: 18, color: Colors.grey.shade200),
+                      itemBuilder: (context, i) {
+                        final d = docs[i].data();
+                        final summary = (d['summary'] ?? d['action'] ?? '')
+                            .toString();
+                        final who = _staffLabel(d['byStaffId']);
+                        final rawAt = d['at'];
+                        final at = rawAt is Timestamp ? rawAt.toDate() : null;
+                        final when = at == null
+                            ? ''
+                            : DateFormat.yMMMd().add_jm().format(at);
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              summary,
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              [who, when].where((s) => s.isNotEmpty).join(' · '),
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   /// Asks Stripe, right now, whether this payment link was paid.
   ///
   /// The manual fallback for a webhook that never arrived. Without it a lot
@@ -1791,6 +1930,33 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
               ),
             ),
           ],
+          // Undo a hand-marked direct payment. A Stripe payment-link
+          // settlement is Stripe's record and cannot be undone here, so this
+          // shows only on a paid, direct, business-entered car.
+          if (isPaid &&
+              canRecordPayment &&
+              isBusinessEnteredParking(_paymentFields) &&
+              (_paymentFields['paymentMethod'] ?? '').toString() == 'direct') ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: AsyncActionButton.outlined(
+                onPressed: _isMarkingPaid ? null : _revertPaid,
+                icon: Icons.undo_outlined,
+                label: l10n.lotParkingMarkNotPaid,
+              ),
+            ),
+          ],
+          // The row's change history — payments marked, undone, and edits.
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: AsyncActionButton.outlined(
+              onPressed: _showParkingHistory,
+              icon: Icons.history,
+              label: l10n.lotHistory,
+            ),
+          ),
           if (checkoutUrl.isNotEmpty && isPaid) ...[
             const SizedBox(height: 12),
             Text(

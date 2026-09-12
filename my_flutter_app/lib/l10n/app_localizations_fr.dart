@@ -7841,6 +7841,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String get lotNoHistory => 'Aucune modification.';
 
   @override
+  String get lotParkingMarkNotPaid => 'Marquer comme non payé';
+
+  @override
+  String get lotParkingMarkedNotPaid => 'Remis en attente de paiement.';
+
+  @override
+  String get lotParkingMarkNotPaidConfirm =>
+      'Remettre cette voiture en attente de paiement ? Le changement est enregistré dans son historique.';
+
+  @override
+  String get lotParkingHistoryTitle => 'Historique des modifications';
+
+  @override
   String get lotWhatWasDone => 'Ce qui a été fait';
 
   @override
