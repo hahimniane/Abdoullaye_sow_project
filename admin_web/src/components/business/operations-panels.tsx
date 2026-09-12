@@ -8302,28 +8302,22 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             ) : (
               <div className="mini-table">
                 <div className="lot-activity-table" style={{ minWidth: 820 }}>
-                  <div className="mini-table-head"><span>Vehicle</span><span>Customer</span><span>Activity</span><span>Date</span><span>Fee</span></div>
+                  <div className="mini-table-head"><span>Vehicle</span><span>Customer</span><span>Activity</span><span>Date</span><span className="lot-col-fee">Fee</span><span aria-hidden="true"></span></div>
                   {scopedActivities.map((row) => {
                     const r = row as Record<string, unknown>;
                     const voided = r.voided === true;
                     const label = text(r.activityTypeLabel, "") || (String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? text(r.customLabel, "One-off") : text(typeById.get(String(r.activityTypeId))?.label, "Activity"));
                     const vehicle = [text(r.carYear, ""), text(r.carMake, ""), text(r.carModel, "")].filter(Boolean).join(" ") || "Vehicle";
                     return (
-                      <div className="mini-table-row" key={String(r.id)} style={voided ? { opacity: 0.6 } : undefined}>
+                      <div className={`mini-table-row${voided ? " voided" : ""}`} key={String(r.id)}>
                         <span><strong>{voided ? <s>{vehicle}</s> : vehicle}</strong><small>{text(r.vinNumber, "")}</small>{voided && <span className="status-pill danger compact">Voided</span>}</span>
                         <span><strong>{text(r.customerName, "")}</strong><small>{text(r.customerPhone, "")}</small></span>
                         <span><strong style={{ color: tintForType(String(r.activityTypeId)) }}>{label}</strong><small>{text(r.auctionHouse, "") ? `Auction: ${text(r.auctionHouse, "")}` : r.feeOverridden ? "Priced for this job" : "Standard rate"}</small></span>
                         <span>
                           <strong>{formatDate(r.activityDate)}</strong>
                           {text(r.editedByStaffId, "") && <small>Edited</small>}
-                          <span className="lot-row-actions">
-                            {!voided && <button className="ghost-button" type="button" onClick={() => openEdit(r)} title="Edit"><Pencil size={14} /></button>}
-                            <button className="ghost-button" type="button" onClick={() => openHistory(String(r.id))} title="Change history"><History size={14} /></button>
-                            {!voided && (lotActivityPaid(r) || lotActivityAwaitingLink(r)) && <button className="ghost-button" type="button" onClick={() => openLotDocument(r)} title={lotActivityPaid(r) ? "Receipt" : "Invoice"}><FileText size={14} /></button>}
-                            {!voided && <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "activity", id: String(r.id), label: `${vehicle} · ${lotFormatCents(Number(r.feeCents) || 0)}` }); setVoidReason(""); setDraftError(""); setModal("void"); }} title="Void"><Ban size={14} /></button>}
-                          </span>
                         </span>
-                        <span>
+                        <span className="lot-col-fee">
                           <strong>{voided ? <s>{lotFormatCents(Number(r.feeCents) || 0)}</s> : lotFormatCents(Number(r.feeCents) || 0)}</strong>
                           <span className={`status-pill compact ${lotActivityPaid(r) ? "good" : lotActivityAwaitingLink(r) ? "warning" : ""}`}>{lotActivityPaymentLabel(r)}</span>
                           {!voided && String(r.paymentMethod) === "direct" && staffName(text(r.receivedByStaffId, "")) && <small>by {staffName(text(r.receivedByStaffId, ""))}</small>}
@@ -8332,6 +8326,12 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                               to not-received if it never actually came in; the
                               change is logged under whoever does it. */}
                           {!voided && lotActivityPaid(r) && String(r.paymentMethod) === "direct" && (<button className="ghost-button" type="button" onClick={() => void revertActivityPayment(String(r.id), vehicle)} title="Set back to not received"><RotateCcw size={13} /> Mark not received</button>)}
+                        </span>
+                        <span className="lot-row-actions">
+                          {!voided && <button className="ghost-button" type="button" onClick={() => openEdit(r)} title="Edit"><Pencil size={14} /></button>}
+                          <button className="ghost-button" type="button" onClick={() => openHistory(String(r.id))} title="Change history"><History size={14} /></button>
+                          {!voided && (lotActivityPaid(r) || lotActivityAwaitingLink(r)) && <button className="ghost-button" type="button" onClick={() => openLotDocument(r)} title={lotActivityPaid(r) ? "Receipt" : "Invoice"}><FileText size={14} /></button>}
+                          {!voided && <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "activity", id: String(r.id), label: `${vehicle} · ${lotFormatCents(Number(r.feeCents) || 0)}` }); setVoidReason(""); setDraftError(""); setModal("void"); }} title="Void"><Ban size={14} /></button>}
                         </span>
                       </div>
                     );
