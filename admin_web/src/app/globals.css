@@ -425,6 +425,47 @@ button[data-loading="true"]::before {
   width: 100%;
 }
 
+/* Desktop: the shell fills the viewport and the sidebar and the main content
+   scroll independently, instead of the whole page scrolling as one. Below
+   1050px the sidebar collapses to a horizontal strip (see the max-width query),
+   so this only applies on the wide, two-column layout. */
+@media (min-width: 1051px) {
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .topbar {
+    flex: 0 0 auto;
+    position: static;
+  }
+
+  .workspace {
+    flex: 1 1 auto;
+    grid-template-rows: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+  }
+
+  .sidebar {
+    align-self: stretch;
+    height: auto;
+    min-height: 0;
+    overflow-y: auto;
+    position: static;
+    top: auto;
+  }
+
+  .content {
+    height: auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
 .dashboard-grid {
   display: grid;
   gap: 20px;
