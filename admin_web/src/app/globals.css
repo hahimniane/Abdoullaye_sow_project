@@ -13746,6 +13746,59 @@ button[data-loading="true"]::before {
 .lot-expense-empty { color: var(--muted); font-size: 12px; margin: 12px 0 4px; }
 .lot-expense-add { margin-top: 10px; }
 
+/* Activity log: one card per job, replacing the dense 5-column table. The
+   label + vehicle + customer stack on the left, money on the right, actions
+   on a quiet footer — the same shape as the expense cards. */
+.lot-activity-cards {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+.lot-activity-card {
+  background: var(--paper, #fff);
+  border: 1px solid var(--rule, #e5e7eb);
+  border-radius: 14px;
+  padding: 13px 15px;
+}
+.lot-activity-card.voided { opacity: 0.6; }
+.lot-activity-card-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.lot-activity-card-title { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; }
+.lot-activity-card-title > strong { font-size: 14px; font-weight: 750; }
+.lot-activity-vehicle {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lot-activity-card-title small { color: var(--muted); font-size: 12px; }
+.lot-activity-card-money { text-align: right; white-space: nowrap; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.lot-activity-card-money b {
+  font-size: 18px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+.lot-activity-card-money small { color: var(--muted); font-size: 11px; }
+.lot-activity-card-foot {
+  align-items: center;
+  border-top: 1px solid var(--rule, #e5e7eb);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+  padding-top: 10px;
+}
+/* The icon actions sit to the right; the text buttons (Chase, Mark not
+   received) stay to the left of them. */
+.lot-activity-card-actions { display: flex; gap: 2px; margin-left: auto; }
+
 /* The payments block inside the edit modal - the same billing control the
    card carries, set off from the vehicle/date fields above it. */
 .lst-edit-payments {
