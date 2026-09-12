@@ -70,6 +70,12 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   late String _month = lotMonthKey(DateTime.now());
   String _typeFilter = 'all';
   String _search = '';
+  // Activity tab date range and payment filter. 'month' = this month,
+  // '3m' = last three months, 'custom' = the _actFrom.._actTo month span.
+  String _actRange = 'month';
+  late String _actFrom = lotMonthKey(DateTime.now());
+  late String _actTo = lotMonthKey(DateTime.now());
+  String _payFilter = 'all'; // 'all' | 'owed' | 'paid'
   bool _loading = true;
 
   LotLedgerMath get _math => LotLedgerMath(
@@ -239,6 +245,41 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       DateFormat.yMMMM(Localizations.localeOf(context).toLanguageTag())
           .format(lotMonthStart(key));
 
+  /// A short label for a month span: one month in full, else "Mar – Sep 2026".
+  String _rangeLabel(String start, String end) {
+    final tag = Localizations.localeOf(context).toLanguageTag();
+    if (start == end) return DateFormat.yMMMM(tag).format(lotMonthStart(start));
+    final a = DateFormat.MMM(tag).format(lotMonthStart(start));
+    final b = DateFormat.yMMM(tag).format(lotMonthStart(end));
+    return '$a – $b';
+  }
+
+  /// Pick a custom month span with two month pickers, then switch to it.
+  Future<void> _pickCustomRange() async {
+    final now = DateTime.now();
+    final from = await showDatePicker(
+      context: context,
+      initialDate: lotMonthStart(_actFrom),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1, 12),
+      helpText: AppLocalizations.of(context)!.lotRangeFrom,
+    );
+    if (from == null || !mounted) return;
+    final to = await showDatePicker(
+      context: context,
+      initialDate: from,
+      firstDate: from,
+      lastDate: DateTime(now.year + 1, 12),
+      helpText: AppLocalizations.of(context)!.lotRangeTo,
+    );
+    if (to == null || !mounted) return;
+    setState(() {
+      _actFrom = lotMonthKey(from);
+      _actTo = lotMonthKey(to);
+      _actRange = 'custom';
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -309,24 +350,44 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
         businessParkingTotals(_parkedCarRows, spacesTotal: _parkingSpaces);
     final parkingOverdue = businessParkingOverdue(_parkedCarRows);
 
-    // Activity money to date, for the scoreboard above the Activity list —
-    // total billed, collected, still awaiting, and how many jobs. Cancelled
-    // and voided jobs never billed, so `countsAsRevenue` leaves them out.
-    var genCents = 0, colCents = 0, awaCents = 0, jobs = 0;
+    // The activity range as inclusive "yyyy-MM" bounds — month keys sort
+    // chronologically as strings.
+    final nowMk = lotMonthKey(DateTime.now());
+    final String actStart;
+    final String actEnd;
+    if (_actRange == '3m') {
+      actStart = lotShiftMonth(nowMk, -2);
+      actEnd = nowMk;
+    } else if (_actRange == 'custom') {
+      actStart = _actFrom.compareTo(_actTo) <= 0 ? _actFrom : _actTo;
+      actEnd = _actFrom.compareTo(_actTo) <= 0 ? _actTo : _actFrom;
+    } else {
+      actStart = nowMk;
+      actEnd = nowMk;
+    }
+
+    // Summary cards for the selected range: total billed, collected, still
+    // owed, and how many jobs. Cancelled and voided jobs never billed, so
+    // `countsAsRevenue` leaves them out.
+    var genCents = 0, colCents = 0, owedCents = 0, jobs = 0;
     for (final a in _activities) {
+      if (a.activityDateMonth.compareTo(actStart) < 0 ||
+          a.activityDateMonth.compareTo(actEnd) > 0) {
+        continue;
+      }
       if (!a.countsAsRevenue) continue;
       genCents += a.feeCents;
       jobs += 1;
       if (a.paid) {
         colCents += a.feeCents;
       } else if (a.awaitingLink || a.awaitingDirect) {
-        awaCents += a.feeCents;
+        owedCents += a.feeCents;
       }
     }
     final activityMoney = (
       generated: genCents,
       collected: colCents,
-      awaiting: awaCents,
+      owed: owedCents,
       jobs: jobs,
     );
 
@@ -394,11 +455,17 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
           knownCars: _knownCars,
           activityGeneratedCents: activityMoney.generated,
           activityCollectedCents: activityMoney.collected,
-          activityAwaitingCents: activityMoney.awaiting,
+          activityOwedCents: activityMoney.owed,
           activityJobs: activityMoney.jobs,
+          startMonth: actStart,
+          endMonth: actEnd,
+          rangeLabel: _rangeLabel(actStart, actEnd),
+          range: _actRange,
+          payFilter: _payFilter,
+          onRange: (v) => setState(() => _actRange = v),
+          onPayFilter: (v) => setState(() => _payFilter = v),
+          onPickCustomRange: _pickCustomRange,
           loading: _loading,
-          month: _month,
-          monthLabel: _monthLabel(_month),
           activities: _activities,
           types: _types,
           staff: _staff,
@@ -1563,11 +1630,17 @@ class _ActivityPanel extends StatelessWidget {
     required this.knownCars,
     required this.activityGeneratedCents,
     required this.activityCollectedCents,
-    required this.activityAwaitingCents,
+    required this.activityOwedCents,
     required this.activityJobs,
+    required this.startMonth,
+    required this.endMonth,
+    required this.rangeLabel,
+    required this.range,
+    required this.payFilter,
+    required this.onRange,
+    required this.onPayFilter,
+    required this.onPickCustomRange,
     required this.loading,
-    required this.month,
-    required this.monthLabel,
     required this.activities,
     required this.types,
     required this.staff,
@@ -1583,11 +1656,17 @@ class _ActivityPanel extends StatelessWidget {
   final List<LotKnownCar> knownCars;
   final int activityGeneratedCents;
   final int activityCollectedCents;
-  final int activityAwaitingCents;
+  final int activityOwedCents;
   final int activityJobs;
+  final String startMonth;
+  final String endMonth;
+  final String rangeLabel;
+  final String range;
+  final String payFilter;
+  final ValueChanged<String> onRange;
+  final ValueChanged<String> onPayFilter;
+  final VoidCallback onPickCustomRange;
   final bool loading;
-  final String month;
-  final String monthLabel;
   final List<LotActivity> activities;
   final List<LotActivityType> types;
   final List<LotStaff> staff;
@@ -1601,10 +1680,12 @@ class _ActivityPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final rows = lotFilterActivities(
+    final rows = lotFilterActivitiesRange(
       activities,
-      month: month,
+      startMonth: startMonth,
+      endMonth: endMonth,
       typeFilter: typeFilter,
+      payFilter: payFilter,
       query: search,
     );
 
@@ -1614,8 +1695,8 @@ class _ActivityPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 120),
           children: [
-            // How much the activities on this tab have generated so far —
-            // total billed, collected, still awaiting, and how many jobs.
+            // Summary cards for the selected range: total billed, collected,
+            // still owed, and how many jobs.
             _LotStatBoard(
               stats: [
                 (
@@ -1629,9 +1710,9 @@ class _ActivityPanel extends StatelessWidget {
                   alert: false,
                 ),
                 (
-                  label: l10n.lotActivityAwaiting,
-                  value: formatLotCents(activityAwaitingCents),
-                  alert: activityAwaitingCents > 0,
+                  label: l10n.lotActivityOwed,
+                  value: formatLotCents(activityOwedCents),
+                  alert: activityOwedCents > 0,
                 ),
                 (
                   label: l10n.lotActivityJobs,
@@ -1640,6 +1721,16 @@ class _ActivityPanel extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: AppSpacing.md),
+            // Date range, then the owed/collected money filter.
+            _ActivityRangeBar(
+              range: range,
+              rangeLabel: rangeLabel,
+              onRange: onRange,
+              onPickCustomRange: onPickCustomRange,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _ActivityPayFilter(selected: payFilter, onChanged: onPayFilter),
             const SizedBox(height: AppSpacing.md),
             _SearchField(value: search, onChanged: onSearch),
             const SizedBox(height: AppSpacing.md),
@@ -1660,7 +1751,7 @@ class _ActivityPanel extends StatelessWidget {
                     ? Icons.receipt_long_outlined
                     : Icons.search_off,
                 title: search.trim().isEmpty
-                    ? l10n.lotNoActivityForMonth(monthLabel)
+                    ? l10n.lotNoActivityForMonth(rangeLabel)
                     : l10n.lotNoSearchMatch,
                 hint: search.trim().isEmpty ? l10n.lotNoActivityHint : null,
               )
@@ -1716,6 +1807,95 @@ class _ActivityPanel extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The date-range chooser above the activity list: This month, Last 3 months,
+/// or a custom span (which opens two month pickers). The chosen span is echoed
+/// under the chips so the current window is always legible.
+class _ActivityRangeBar extends StatelessWidget {
+  const _ActivityRangeBar({
+    required this.range,
+    required this.rangeLabel,
+    required this.onRange,
+    required this.onPickCustomRange,
+  });
+
+  final String range;
+  final String rangeLabel;
+  final ValueChanged<String> onRange;
+  final VoidCallback onPickCustomRange;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.sm,
+          children: [
+            ChoiceChip(
+              label: Text(l10n.lotRangeThisMonth),
+              selected: range == 'month',
+              onSelected: (_) => onRange('month'),
+            ),
+            ChoiceChip(
+              label: Text(l10n.lotRangeLast3Months),
+              selected: range == '3m',
+              onSelected: (_) => onRange('3m'),
+            ),
+            ChoiceChip(
+              label: Text(l10n.lotRangeCustom),
+              selected: range == 'custom',
+              onSelected: (_) => onPickCustomRange(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          rangeLabel,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.muted,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The owed / collected money filter for the activity list.
+class _ActivityPayFilter extends StatelessWidget {
+  const _ActivityPayFilter({required this.selected, required this.onChanged});
+
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Wrap(
+      spacing: AppSpacing.sm,
+      children: [
+        ChoiceChip(
+          label: Text(l10n.lotPayAll),
+          selected: selected == 'all',
+          onSelected: (_) => onChanged('all'),
+        ),
+        ChoiceChip(
+          label: Text(l10n.lotPayOwed),
+          selected: selected == 'owed',
+          onSelected: (_) => onChanged('owed'),
+        ),
+        ChoiceChip(
+          label: Text(l10n.lotPayCollected),
+          selected: selected == 'paid',
+          onSelected: (_) => onChanged('paid'),
         ),
       ],
     );
