@@ -2335,8 +2335,8 @@
   "hubBuyVerifiedCar": "Acheter une voiture vérifiée",
   "hubFollowShipments": "Suivre vos expéditions",
   "navShip": "Envoyer",
-  "shipSheetTitle": "Qu\u2019envoyez-vous\u202f?",
-  "shipSheetSubtitle": "Choisissez ce qui part, on s\u2019occupe du reste.",
+  "shipSheetTitle": "Qu’envoyez-vous ?",
+  "shipSheetSubtitle": "Choisissez ce qui part, on s’occupe du reste.",
   "hubShipping": "Expédition",
   "hubShippingSubtitle": "Envoyez des barils, du fret et des voitures au pays.",
   "hubSharedBarrels": "Barils partagés",
@@ -2346,6 +2346,12 @@
   "hubShipCarHome": "Expédier une voiture au pays",
   "hubCarsSubtitle": "Achetez une voiture vérifiée ou stockez-la auprès d’une entreprise.",
   "hubParkCarSubtitle": "Stocker auprès d’une entreprise",
+  "homeHeroTitle": "Envoyer quelque chose au pays",
+  "homeHeroSubtitle": "Un fût, du fret ou une voiture. Choisissez ce qui part, on s'occupe du reste.",
+  "homeHeroCta": "Commencer un envoi",
+  "homeHelpTitle": "Besoin d'aide ?",
+  "homeHelpSubtitle": "Écrivez à l'équipe Laawol",
+  "homeSignInSubtitle": "Suivez vos commandes et vos envois",
   "hubActivitySubtitle": "Vos commandes, expéditions et votre portefeuille.",
   "hubOrdersSubtitle": "Voitures, barils, fret et plus",
   "hubWalletSubtitle": "Solde et remboursements",
@@ -3595,5 +3601,99 @@
     }
   },
   "parkingReceivedBy": "Reçu par",
-  "parkingRegisteredBy": "Enregistré par"
+  "parkingRegisteredBy": "Enregistré par",
+  "parkingLeaves": "Départ",
+  "parkingBilledThrough": "Facturé jusqu'au",
+  "parkingNothingBilledYet": "Rien pour l'instant",
+  "parkingUnbilled": "Non facturé",
+  "parkingUnbilledDays": "{count, plural, =1{1 jour} other{{count} jours}}",
+  "parkingAccrualPricedNote": "Le prix a été fixé pour la date de départ à l'enregistrement : rien ne s'accumule jour après jour.",
+  "parkingAccrualSinceNote": "S'accumule depuis le {date}. Facturez quand vous voulez — la voiture reste en place.",
+  "parkingAccrualFirstBillNote": "Rien n'a encore été facturé. Facturez jusqu'à aujourd'hui pour envoyer le premier lien.",
+  "parkingAccrualCaughtUpNote": "Tout est facturé jusqu'à aujourd'hui.",
+  "parkingBillThroughToday": "Facturer {amount} jusqu'à aujourd'hui",
+  "parkingNothingToBill": "Rien à facturer",
+  "parkingBillLinkSent": "Lien de paiement envoyé.",
+  "parkingBillCouldNotBeSent": "Le lien de paiement n'a pas pu être envoyé.",
+  "parkingPaymentReceivedInPerson": "Paiement reçu en personne",
+  "parkingRecordedAsReceived": "Enregistré comme reçu.",
+  "parkingCarLeftToday": "La voiture est partie aujourd'hui",
+  "parkingCarLeftTodayExplain": "La date du jour devient la date de départ et l'accumulation s'arrête. Ce qui est dû reste dû.",
+  "parkingStayClosed": "Séjour clôturé.",
+  "parkingStayCouldNotBeClosed": "Le séjour n'a pas pu être clôturé.",
+  "parkingMarkFullyPaid": "Marquer comme entièrement payé ({amount})",
+  "parkingMarkedFullyPaid": "Marqué comme payé.",
+  "parkingNothingOutstanding": "Rien n'est dû sur cette voiture.",
+  "parkingPaidSoFarOfTotal": "Payé à ce jour : {paid} sur {total} — {owed} restant dû",
+  "lotActivityTypesTitle": "Prestations et tarifs",
+  "lotActivityTypesSubtitle": "Ce que le parc facture, et le prix que le personnel voit à l'enregistrement.",
+  "lotActivityTypeName": "Nom",
+  "lotActivityTypeFee": "Tarif par défaut ($)",
+  "lotActivityTypeNeedsAuctionHouse": "Demande la maison de vente",
+  "lotActivityTypeShown": "Proposé à l'enregistrement",
+  "lotActivityTypeAdd": "Ajouter une prestation",
+  "lotActivityTypeSaved": "Prestation enregistrée.",
+  "lotActivityTypeRemoved": "Supprimée.",
+  "lotActivityTypeRemove": "Supprimer",
+  "lotActivityTypeRemoveTitle": "Supprimer cette prestation",
+  "lotActivityTypeRemoveExplain": "Elle disparaît de la liste proposée. Les entrées déjà enregistrées gardent le nom sous lequel elles ont été saisies.",
+  "lotActivityTypeNameRequired": "Donnez un nom à la prestation.",
+  "lotActivityTypesEmpty": "Aucune prestation pour l'instant. Ajoutez la première pour que le personnel ait quelque chose à enregistrer.",
+  "lotActivityTypeCouldNotBeSaved": "La prestation n'a pas pu être enregistrée.",
+  "lotProofThresholdTitle": "Exiger un reçu à partir de",
+  "lotProofThresholdHint": "Le personnel doit joindre un reçu à partir de ce montant. Zéro n'en demande jamais.",
+  "lotProofNeverRequired": "Aucun reçu n'est exigé.",
+  "lotProofThresholdSaved": "Règle de reçu enregistrée.",
+  "lotProofThresholdCouldNotBeSaved": "La règle de reçu n'a pas pu être enregistrée.",
+  "parkingRateCardsTitle": "Autres tarifs (facultatif)",
+  "parkingRateCardsHint": "Une place plus grande, un tarif longue durée, un prix pour le concessionnaire qui amène plusieurs voitures. Donnez un nom et un prix par jour à chacun ; le personnel le choisit à l'enregistrement. Une ligne sans nom ni prix n'est pas enregistrée.",
+  "parkingRateCardName": "Nom du tarif",
+  "parkingRateCardNameHint": "ex. SUV / grand gabarit",
+  "parkingRateCardDaily": "Prix / jour ($)",
+  "parkingRateCardMinDays": "Jours min.",
+  "parkingRateCardAdd": "Ajouter un tarif",
+  "parkingRateCardRemove": "Supprimer ce tarif",
+  "lotLedgerSettings": "Réglages du registre",
+  "lotActivityTypeHidden": "Masquée",
+  "@parkingUnbilledDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@parkingAccrualSinceNote": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "@parkingBillThroughToday": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@parkingMarkFullyPaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@parkingPaidSoFarOfTotal": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      }
+    }
+  }
 }

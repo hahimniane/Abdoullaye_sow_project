@@ -18,6 +18,7 @@ import {
   businessParkingAmountPaid,
   businessParkingAccrued,
   businessParkingBalance,
+  isBusinessParkingPaymentLinkCancelled,
   businessParkingOverdue,
   businessParkingTotals,
   businessParkingMatchesFacets,
@@ -1117,4 +1118,33 @@ test("the record form asks who received an already-paid walk-up", () => {
   assert.match(block, /setEntryReceivedBy/);
   // and it is threaded into the settle call
   assert.match(panelSource, /receivedByStaffId: entryReceivedBy/);
+});
+
+test("a cancelled payment link is recognised, so the console stops offering it", () => {
+  const live = {
+    source: "business",
+    paymentMethod: "payment_link",
+    checkoutUrl: "https://pay.example/abc",
+  };
+  assert.equal(isBusinessParkingPaymentLinkCancelled(live), false);
+  // The field's presence is the whole signal - the console used to hand staff
+  // a dead link because it only ever checked for "paid".
+  assert.equal(
+    isBusinessParkingPaymentLinkCancelled({
+      ...live,
+      paymentLinkCancelledAt: "2026-09-13T00:00:00.000Z",
+    }),
+    true,
+  );
+  assert.equal(
+    isBusinessParkingPaymentLinkCancelled({
+      ...live,
+      paymentLinkCancelledAt: {seconds: 1789000000, nanoseconds: 0},
+    }),
+    true,
+  );
+  assert.equal(
+    isBusinessParkingPaymentLinkCancelled({...live, paymentLinkCancelledAt: null}),
+    false,
+  );
 });

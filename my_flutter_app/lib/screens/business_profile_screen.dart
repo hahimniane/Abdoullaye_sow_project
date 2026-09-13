@@ -25,6 +25,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/pickup_plan_editor.dart';
+import '../services/parking_rates.dart';
 
 class BusinessProfileScreen extends StatefulWidget {
   const BusinessProfileScreen({super.key});
@@ -83,6 +84,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   };
   final _featureBlurbController = TextEditingController();
   final _pickupPlanKey = GlobalKey<PickupPlanEditorState>();
+  final _parkingRatesKey = GlobalKey<_ParkingRateCardsEditorState>();
   final _selectedServices = <String>{};
   final _sectionErrors = <_BusinessProfileSectionKey, String>{};
   String _holdPricingMode = 'flat';
@@ -580,6 +582,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         parkingWeeklyRate: parkingWeeklyRate,
         parkingMonthlyRate: parkingMonthlyRate,
         parkingMinimumDays: parkingMinimumDays,
+        // Null while the parking section is not on screen, which the
+        // provider turns into "leave the cards alone" rather than an
+        // empty list that would delete them.
+        parkingRates: _parkingRatesKey.currentState?.buildRates(),
         parkingPickupAvailable: _parkingPickupAvailable,
         parkingAcceptsReservations: _parkingAcceptsReservations,
         parkingPickupFee: parkingPickupFee,
@@ -730,6 +736,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   parkingMonthlyRateController: _parkingMonthlyRateController,
                   parkingMinimumDaysController: _parkingMinimumDaysController,
                   parkingInstructionsController: _parkingInstructionsController,
+                  parkingRatesKey: _parkingRatesKey,
+                  parkingRates: business.parkingRates,
                   parkingAcceptsReservations: _parkingAcceptsReservations,
                   onParkingAcceptsReservationsChanged: (value) {
                     setState(() => _parkingAcceptsReservations = value);
@@ -1431,6 +1439,8 @@ class _BusinessForm extends StatelessWidget {
     required this.parkingMonthlyRateController,
     required this.parkingMinimumDaysController,
     required this.parkingInstructionsController,
+    required this.parkingRatesKey,
+    required this.parkingRates,
     required this.parkingAcceptsReservations,
     required this.onParkingAcceptsReservationsChanged,
     required this.onHoldPricingModeChanged,
@@ -1478,6 +1488,8 @@ class _BusinessForm extends StatelessWidget {
   final TextEditingController parkingMonthlyRateController;
   final TextEditingController parkingMinimumDaysController;
   final TextEditingController parkingInstructionsController;
+  final GlobalKey<_ParkingRateCardsEditorState> parkingRatesKey;
+  final List<ParkingRate> parkingRates;
   final bool parkingAcceptsReservations;
   final ValueChanged<bool> onParkingAcceptsReservationsChanged;
   final ValueChanged<String> onHoldPricingModeChanged;
@@ -1885,6 +1897,18 @@ class _BusinessForm extends StatelessWidget {
                     ),
                   ),
                 ),
+                // The lot's alternative prices. The standard daily rate above
+                // is still the default; these are what staff can pick instead
+                // when they record a car.
+                _ParkingRateCardsEditor(
+                  key: parkingRatesKey,
+                  initial: parkingRates,
+                  enabled: canEdit,
+                  onChanged: () => onSectionEdited(
+                    _BusinessProfileSectionKey.parkingCapacity,
+                  ),
+                ),
+                const SizedBox(height: 14),
                 _BusinessProfileField(
                   controller: parkingInstructionsController,
                   enabled: canEdit,
@@ -1943,6 +1967,222 @@ class _BusinessForm extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The lot's alternative price cards.
+///
+/// Owns its own drafts and hands the finished list back through its
+/// [GlobalKey] at save time, the same way the pickup-plan editor does — a row
+/// being typed is not profile state, and lifting every field into the screen
+/// would mean rebuilding the whole form on every keystroke.
+class _ParkingRateCardsEditor extends StatefulWidget {
+  const _ParkingRateCardsEditor({
+    super.key,
+    required this.initial,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final List<ParkingRate> initial;
+  final bool enabled;
+  final VoidCallback onChanged;
+
+  @override
+  State<_ParkingRateCardsEditor> createState() =>
+      _ParkingRateCardsEditorState();
+}
+
+class _ParkingRateCardDraft {
+  _ParkingRateCardDraft({required this.id, String label = '',
+      String daily = '', String minimum = ''})
+      : label = TextEditingController(text: label),
+        daily = TextEditingController(text: daily),
+        minimum = TextEditingController(text: minimum);
+
+  /// Kept from the saved card so editing a price does not orphan the records
+  /// that already reference it.
+  final String id;
+  final TextEditingController label;
+  final TextEditingController daily;
+  final TextEditingController minimum;
+  double weeklyRate = 0;
+  double monthlyRate = 0;
+
+  void dispose() {
+    label.dispose();
+    daily.dispose();
+    minimum.dispose();
+  }
+}
+
+class _ParkingRateCardsEditorState extends State<_ParkingRateCardsEditor> {
+  late List<_ParkingRateCardDraft> _drafts = [
+    for (final rate in widget.initial)
+      _ParkingRateCardDraft(
+        id: rate.id,
+        label: rate.label,
+        daily: rate.dailyRate > 0 ? _trimZeros(rate.dailyRate) : '',
+        minimum: rate.minimumDays > 1 ? '${rate.minimumDays}' : '',
+      )..weeklyRate = rate.weeklyRate
+       ..monthlyRate = rate.monthlyRate,
+  ];
+
+  static String _trimZeros(double value) {
+    final text = value.toStringAsFixed(2);
+    return text.endsWith('.00') ? text.substring(0, text.length - 3) : text;
+  }
+
+  @override
+  void dispose() {
+    for (final draft in _drafts) {
+      draft.dispose();
+    }
+    super.dispose();
+  }
+
+  /// A fresh id that cannot collide with a saved one.
+  String _nextId() {
+    var n = _drafts.length + 1;
+    final taken = _drafts.map((d) => d.id).toSet();
+    while (taken.contains('rate$n')) {
+      n += 1;
+    }
+    return 'rate$n';
+  }
+
+  /// The cards as the callable wants them. A row with no name or no price is
+  /// dropped rather than saved half-written — the same rule the console's
+  /// hint states out loud.
+  List<Map<String, dynamic>> buildRates() {
+    final out = <Map<String, dynamic>>[];
+    for (final draft in _drafts) {
+      final label = draft.label.text.trim();
+      final daily = double.tryParse(draft.daily.text.trim()) ?? 0;
+      if (label.isEmpty || daily <= 0) continue;
+      final minimum = int.tryParse(draft.minimum.text.trim()) ?? 0;
+      out.add(<String, dynamic>{
+        'id': draft.id,
+        'label': label,
+        'dailyRate': daily,
+        'weeklyRate': draft.weeklyRate,
+        'monthlyRate': draft.monthlyRate,
+        'minimumDays': minimum > 0 ? minimum : 1,
+      });
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 6),
+        Text(
+          l10n.parkingRateCardsTitle,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: AppColors.ink,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l10n.parkingRateCardsHint,
+          style: const TextStyle(
+            fontSize: 12.5,
+            height: 1.4,
+            color: AppColors.muted,
+          ),
+        ),
+        const SizedBox(height: 10),
+        for (var i = 0; i < _drafts.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: TextField(
+                    controller: _drafts[i].label,
+                    enabled: widget.enabled,
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (_) => widget.onChanged(),
+                    decoration: InputDecoration(
+                      labelText: l10n.parkingRateCardName,
+                      hintText: l10n.parkingRateCardNameHint,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: _drafts[i].daily,
+                    enabled: widget.enabled,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => widget.onChanged(),
+                    decoration: InputDecoration(
+                      labelText: l10n.parkingRateCardDaily,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: _drafts[i].minimum,
+                    enabled: widget.enabled,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => widget.onChanged(),
+                    decoration: InputDecoration(
+                      labelText: l10n.parkingRateCardMinDays,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: widget.enabled
+                      ? () {
+                          final removed = _drafts[i];
+                          setState(() => _drafts.removeAt(i));
+                          removed.dispose();
+                          widget.onChanged();
+                        }
+                      : null,
+                  icon: const Icon(Icons.delete_outline, size: 19),
+                  color: AppColors.muted,
+                  tooltip: l10n.parkingRateCardRemove,
+                ),
+              ],
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: widget.enabled
+                ? () {
+                    setState(() {
+                      _drafts = [
+                        ..._drafts,
+                        _ParkingRateCardDraft(id: _nextId()),
+                      ];
+                    });
+                    widget.onChanged();
+                  }
+                : null,
+            icon: const Icon(Icons.add, size: 18),
+            label: Text(l10n.parkingRateCardAdd),
+          ),
+        ),
+      ],
     );
   }
 }

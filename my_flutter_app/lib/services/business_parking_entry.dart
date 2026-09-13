@@ -972,6 +972,132 @@ double businessParkingBalance(Map<String, dynamic> row, {DateTime? now}) {
   return owed > 0 ? (owed * 100).round() / 100 : 0;
 }
 
+/// What has piled up since the lot last billed this stay.
+///
+/// Deliberately NOT [businessParkingBalance]. The balance is everything still
+/// owed; this is only the slice that has never been put on a payment link, so
+/// billing twice cannot happen. It counts from `billedThroughDate` when there
+/// is one and from the arrival otherwise, in whole elapsed days — exclusive,
+/// because a day that has not finished has not been earned. Mirrors the
+/// server's `billParkingThroughToday` arithmetic exactly; if the two ever
+/// disagree the button would offer a figure the callable then refuses.
+class BusinessParkingUnbilled {
+  const BusinessParkingUnbilled({
+    required this.openEnded,
+    required this.billedThrough,
+    required this.days,
+    required this.amount,
+  });
+
+  /// Only an open-ended stay accrues. A stay with a leave date was priced for
+  /// its whole range when it was recorded.
+  final bool openEnded;
+
+  /// When the lot last billed, or null if it never has.
+  final DateTime? billedThrough;
+
+  final int days;
+
+  /// [days] at the car's own daily rate, in dollars.
+  final double amount;
+
+  bool get hasSomethingToBill => openEnded && amount > 0;
+}
+
+BusinessParkingUnbilled businessParkingUnbilled(
+  Map<String, dynamic> row, {
+  DateTime? now,
+}) {
+  final openEnded = _toDateOrNull(row['parkingEndDate']) == null;
+  final billedThrough = _toDateOrNull(row['billedThroughDate']);
+  if (!openEnded) {
+    return BusinessParkingUnbilled(
+      openEnded: false,
+      billedThrough: billedThrough,
+      days: 0,
+      amount: 0,
+    );
+  }
+  final from = billedThrough ??
+      _toDateOrNull(row['parkingDate']) ??
+      _toDateOrNull(row['createdAt']);
+  if (from == null) {
+    return BusinessParkingUnbilled(
+      openEnded: true,
+      billedThrough: billedThrough,
+      days: 0,
+      amount: 0,
+    );
+  }
+  final elapsed = (now ?? DateTime.now()).difference(from).inDays;
+  final days = elapsed > 0 ? elapsed : 0;
+  final daily = num.tryParse(_trimmed(row['dailyRate'], 20)) ?? 0;
+  final amount = daily > 0 ? days * daily.toDouble() : 0.0;
+  return BusinessParkingUnbilled(
+    openEnded: true,
+    billedThrough: billedThrough,
+    days: days,
+    amount: (amount * 100).round() / 100,
+  );
+}
+
+/// Has this stay been settled — by Stripe or by hand?
+bool _businessParkingSettled(Map<String, dynamic> row) {
+  final status = _trimmed(row['paymentStatus'], 40);
+  return status == 'succeeded' || status == 'paid';
+}
+
+/// "Bill through today" is offered only on an open-ended stay that has
+/// actually run up days nobody has been asked to pay for.
+bool canBillBusinessParkingThroughToday(
+  Map<String, dynamic> row, {
+  DateTime? now,
+}) {
+  if (_trimmed(row['status'], 40) == 'cancelled') return false;
+  if (_businessParkingSettled(row)) return false;
+  return businessParkingUnbilled(row, now: now).hasSomethingToBill;
+}
+
+/// "They paid it in person" settles a link the lot has already sent. Nothing
+/// has been billed yet means there is no invoice to settle — bill it first.
+bool canRecordBusinessParkingPaymentReceived(Map<String, dynamic> row) {
+  if (_trimmed(row['status'], 40) == 'cancelled') return false;
+  if (_businessParkingSettled(row)) return false;
+  return _toDateOrNull(row['billedThroughDate']) != null;
+}
+
+/// "The car left today" closes an open-ended stay. A stay that already has a
+/// leave date has nothing to close, and a cancelled record released its space
+/// long ago. Closing never touches the money: an unpaid balance survives it.
+bool canCloseBusinessParkingStay(Map<String, dynamic> row) {
+  if (_trimmed(row['status'], 40) == 'cancelled') return false;
+  return _toDateOrNull(row['parkingEndDate']) == null;
+}
+
+/// Whether a stay can take money against its balance at all: a walk-up the
+/// business entered, paying the lot directly, neither settled nor cancelled.
+bool canPartPayBusinessParking(Map<String, dynamic> row) {
+  if (!isBusinessEnteredParking(row)) return false;
+  if (_trimmed(row['paymentMethod'], 40) != 'direct') return false;
+  if (_trimmed(row['status'], 40) == 'cancelled') return false;
+  return !_businessParkingSettled(row);
+}
+
+/// "They have now paid it all" — settle the whole outstanding balance in one
+/// move, through the same part-payment callable so Collected and Owed both
+/// stay correct. An imported record marked "no payment required" has nothing
+/// to settle, which is why the status is checked and not just the balance.
+bool canSettleBusinessParkingBalance(
+  Map<String, dynamic> row, {
+  DateTime? now,
+}) {
+  if (!canPartPayBusinessParking(row)) return false;
+  if (_trimmed(row['paymentStatus'], 40) != 'awaiting_direct_payment') {
+    return false;
+  }
+  return businessParkingBalance(row, now: now) > 0;
+}
+
 /// The scoreboard over a set of parking rows - the live version of the totals
 /// the lot's own spreadsheet kept in the margin, computed from the records
 /// rather than from a formula that can rot. Mirrors the console's
@@ -1226,6 +1352,48 @@ class BusinessParkingService {
           'receivedVia': receivedVia,
           'days': ?days,
           'amountCents': ?amountCents,
+        });
+  }
+
+  /// Puts everything that has accrued since the last billing on a payment
+  /// link and sends it. Only an open-ended stay accrues; the server refuses a
+  /// stay with a leave date with `failed-precondition`, because its price
+  /// already covers its whole range.
+  Future<void> billThroughToday({required String parkedCarId}) async {
+    await _functions
+        .httpsCallable('billParkingThroughToday')
+        .call<Object?>(<String, dynamic>{'parkedCarId': parkedCarId});
+  }
+
+  /// The customer handed the money over at the gate instead of using the link
+  /// the lot sent. Settles the record and expires the Stripe session, so the
+  /// link cannot also be paid. Needs to know who took it, for reconciliation.
+  Future<void> recordPaymentReceived({
+    required String parkedCarId,
+    required String receivedByStaffId,
+  }) async {
+    await _functions
+        .httpsCallable('recordParkingPaymentReceived')
+        .call<Object?>(<String, dynamic>{
+          'parkedCarId': parkedCarId,
+          'receivedByStaffId': receivedByStaffId.trim(),
+        });
+  }
+
+  /// The car left. Stamps the leave date and stops the accrual; it does not
+  /// touch the money, so a balance the lot is still owed survives it.
+  Future<void> closeStay({
+    required String parkedCarId,
+    DateTime? endDate,
+  }) async {
+    await _functions
+        .httpsCallable('closeParkingStay')
+        .call<Object?>(<String, dynamic>{
+          'parkedCarId': parkedCarId,
+          if (endDate != null)
+            'endDate': '${endDate.year.toString().padLeft(4, '0')}-'
+                '${endDate.month.toString().padLeft(2, '0')}-'
+                '${endDate.day.toString().padLeft(2, '0')}',
         });
   }
 

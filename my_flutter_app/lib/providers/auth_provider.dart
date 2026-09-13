@@ -762,6 +762,11 @@ class AuthProvider extends ChangeNotifier {
     required double parkingWeeklyRate,
     required double parkingMonthlyRate,
     required int parkingMinimumDays,
+    /// The lot's alternative price cards, already shaped for the
+    /// callable. Omitted means "leave them as they are" — the server
+    /// keeps the current cards when the field is absent, so a screen
+    /// that does not edit them cannot wipe them.
+    List<Map<String, dynamic>>? parkingRates,
     required bool parkingPickupAvailable,
     required bool parkingAcceptsReservations,
     required double parkingPickupFee,
@@ -816,6 +821,7 @@ class AuthProvider extends ChangeNotifier {
       'parkingWeeklyRate': parkingWeeklyRate,
       'parkingMonthlyRate': parkingMonthlyRate,
       'parkingMinimumDays': parkingMinimumDays,
+      'parkingRates': ?parkingRates,
       'parkingPickupAvailable': parkingPickupAvailable,
       'parkingAcceptsReservations': parkingAcceptsReservations,
       'parkingPickupFee': parkingPickupFee,

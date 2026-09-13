@@ -16,10 +16,13 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../data/car_catalog.dart';
 import '../services/business_parking_entry.dart';
+import '../services/vin_catalog_matcher.dart';
+import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
+import '../utils/vin_utils.dart';
 import '../utils/parking_status_options.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
@@ -74,6 +77,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   List<String> _makeOptions = [];
   List<String> _modelOptions = [];
   List<String> _yearOptions = [];
+  final VinDecoderService _vinDecoderService = NhtsaVinDecoderService();
+  bool _isVinDecoding = false;
+  /// The last VIN already looked up, so typing one character past a
+  /// complete VIN does not fire a second identical request.
+  String _lastAutoDecodedVin = '';
   bool _isCatalogLoading = true;
 
   /// Server-owned payment state for a walk-up the lot entered itself. Held in
@@ -91,6 +99,12 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   bool _partByDays = true;
   final _partValueController = TextEditingController();
   String _partReceivedBy = '';
+  /// Who took the money, asked separately for each of the two ways it
+  /// can arrive: settling the whole balance, and settling a link the lot
+  /// already sent. Sharing one field would let a pick made for one action
+  /// be submitted by the other.
+  String _settleReceivedBy = '';
+  String _receivedInPersonBy = '';
 
   @override
   void initState() {
@@ -1335,11 +1349,24 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           TextFormField(
             controller: _vinController,
             readOnly: !canEdit,
+            textCapitalization: TextCapitalization.characters,
+            onChanged: canEdit ? _onVinChanged : null,
             decoration: InputDecoration(
               // Optional on a walk-up, the way the console has it - and the
               // message was an English literal, so a French lot was told
               // "Please enter VIN number" in the middle of a French form.
               labelText: isBusinessEntry ? l10n.vinNumberOptional : l10n.vinNumber,
+              helperText: canEdit ? l10n.lotVinHint : null,
+              suffixIcon: _isVinDecoding
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
             ),
             validator: (value) {
               if (!canEdit || isBusinessEntry) return null;
@@ -1392,7 +1419,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       }
       setState(() {
         _staffNames = names;
-        _partReceivedBy = names.keys.isNotEmpty ? names.keys.first : '';
+        final first = names.keys.isNotEmpty ? names.keys.first : '';
+        _partReceivedBy = first;
+        _settleReceivedBy = first;
+        _receivedInPersonBy = first;
       });
     } catch (_) {
       // No permission to read the team: names stay blank, the flow still works.
@@ -1405,6 +1435,182 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     if (key.isEmpty) return '';
     return _staffNames[key] ??
         (key.length > 6 ? '${key.substring(0, 6)}\u2026' : key);
+  }
+
+  /// Fill the vehicle from the VIN the moment a full, valid one is entered —
+  /// no button press. The record form and the ledger's activity form have done
+  /// this since VIN-first; this edit form was the last one still asking
+  /// someone to type a make and model next to a VIN that already names them.
+  void _onVinChanged(String value) {
+    final vin = normalizeVin(value);
+    if (vin.length == 17 && isValidVin(vin) && vin != _lastAutoDecodedVin) {
+      _lastAutoDecodedVin = vin;
+      _decodeCurrentVin();
+    } else if (vin.length < 17) {
+      // Let a corrected VIN decode again after being cleared or shortened.
+      _lastAutoDecodedVin = '';
+    }
+  }
+
+  Future<void> _decodeCurrentVin() async {
+    final l10n = AppLocalizations.of(context)!;
+    final vin = normalizeVin(_vinController.text);
+    if (!isValidVin(vin)) {
+      showErrorSnackBar(context, l10n.invalidVinNumber);
+      return;
+    }
+    setState(() => _isVinDecoding = true);
+    try {
+      final decoded = await _vinDecoderService.decode(vin);
+      if (!mounted) return;
+      final match = matchDecodedVehicleToCatalog(
+        decoded: decoded,
+        makeOptions: _makeOptions,
+        modelsForMake: CarCatalog.instance.getModels,
+        yearsForModel: CarCatalog.instance.getYears,
+      );
+      setState(() {
+        if (match.make != null) {
+          _selectedMake = match.make;
+          _modelOptions = match.modelOptions;
+          _selectedModel = match.model;
+          _yearOptions = match.yearOptions;
+          _selectedYear = match.year;
+        }
+      });
+      if (!match.isComplete) {
+        showErrorSnackBar(context, l10n.vinMatchReview);
+        return;
+      }
+      showSuccessSnackBar(
+        context,
+        decoded.summary.isEmpty
+            ? l10n.vinDecoded
+            : l10n.vinDecodedVehicle(decoded.summary),
+      );
+    } catch (_) {
+      if (mounted) showErrorSnackBar(context, l10n.vinDecodeFailed);
+    } finally {
+      if (mounted) setState(() => _isVinDecoding = false);
+    }
+  }
+
+  /// Re-reads the car so every figure on this screen — the accrual, what has
+  /// been paid, the status — comes from the record rather than from an
+  /// optimistic guess about what the callable did.
+  Future<void> _refreshFromRecord() async {
+    final fresh = await FirebaseFirestore.instance
+        .collection('parkedCars')
+        .doc(widget.parkedCar.id)
+        .get();
+    if (!mounted || fresh.data() == null) return;
+    setState(() => _paymentFields = Map<String, dynamic>.from(fresh.data()!));
+  }
+
+  /// Runs one billing callable with the same shape every one of them needs:
+  /// a busy flag, the server's own refusal shown as written, and a refresh so
+  /// the card reflects what actually happened.
+  Future<void> _runBillingAction(
+    Future<void> Function() action, {
+    required String success,
+    required String failure,
+  }) async {
+    setState(() => _isMarkingPaid = true);
+    try {
+      await action();
+      await _refreshFromRecord();
+      if (!mounted) return;
+      showSuccessSnackBar(context, success);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      // The server's refusal names the reason — the stay has a leave date, the
+      // permission is not this staff member's — which this screen's copy
+      // cannot. Shown as written, the way the console shows it.
+      final message = (error.message ?? '').trim();
+      showErrorSnackBar(context, message.isEmpty ? failure : message);
+    } catch (_) {
+      if (!mounted) return;
+      showErrorSnackBar(context, failure);
+    } finally {
+      if (mounted) setState(() => _isMarkingPaid = false);
+    }
+  }
+
+  /// Puts everything that has accrued since the last billing on a payment link.
+  Future<void> _billThroughToday() async {
+    final l10n = AppLocalizations.of(context)!;
+    await _runBillingAction(
+      () => _businessParkingService.billThroughToday(
+        parkedCarId: widget.parkedCar.id,
+      ),
+      success: l10n.parkingBillLinkSent,
+      failure: l10n.parkingBillCouldNotBeSent,
+    );
+  }
+
+  /// The customer paid at the gate instead of using the link the lot sent.
+  Future<void> _recordPaymentReceivedInPerson() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_receivedInPersonBy.isEmpty) {
+      showErrorSnackBar(context, l10n.parkingSayWhoReceived);
+      return;
+    }
+    await _runBillingAction(
+      () => _businessParkingService.recordPaymentReceived(
+        parkedCarId: widget.parkedCar.id,
+        receivedByStaffId: _receivedInPersonBy,
+      ),
+      success: l10n.parkingRecordedAsReceived,
+      failure: l10n.paymentCouldNotBeRecorded,
+    );
+  }
+
+  /// The whole outstanding balance in one move, through the same part-payment
+  /// callable the console uses — so Collected and Owed both stay correct, and
+  /// an open-ended stay is brought level rather than declared finished.
+  Future<void> _markFullyPaid() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_settleReceivedBy.isEmpty) {
+      showErrorSnackBar(context, l10n.parkingSayWhoReceived);
+      return;
+    }
+    final outstandingCents =
+        (businessParkingBalance(_paymentFields) * 100).round();
+    if (outstandingCents <= 0) {
+      showErrorSnackBar(context, l10n.parkingNothingOutstanding);
+      return;
+    }
+    await _runBillingAction(
+      () => _businessParkingService.recordPartialPayment(
+        entryId: widget.parkedCar.id,
+        receivedByStaffId: _settleReceivedBy,
+        receivedVia: _receivedVia,
+        amountCents: outstandingCents,
+      ),
+      success: l10n.parkingMarkedFullyPaid,
+      failure: l10n.paymentCouldNotBeRecorded,
+    );
+  }
+
+  /// The car left. Stamps today as the leave date and stops the accrual; it
+  /// does not touch the money, which is why the confirmation says so.
+  Future<void> _closeStay() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await confirmMajorAction(
+      context,
+      title: l10n.parkingCarLeftToday,
+      message: l10n.parkingCarLeftTodayExplain,
+      confirmLabel: l10n.parkingCarLeftToday,
+      icon: Icons.logout,
+    );
+    if (!confirmed || !mounted) return;
+    await _runBillingAction(
+      () => _businessParkingService.closeStay(
+        parkedCarId: widget.parkedCar.id,
+      ),
+      success: l10n.parkingStayClosed,
+      failure: l10n.parkingStayCouldNotBeClosed,
+    );
   }
 
   Future<void> _recordPartPayment() async {
@@ -1913,6 +2119,67 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             currency.format(businessParkingAmountDue(_paymentFields)),
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
+          // What the stay has run up and what has already been asked for. The
+          // app used to show only the amount recorded, which on an open-ended
+          // stay is a figure from the day the car arrived and says nothing
+          // about what is owed now.
+          const SizedBox(height: 14),
+          _buildAccrualPanel(l10n, currency),
+          if (canRecordPayment) ...[
+            // Everything since the last billing, on a link, in one press. Only
+            // an open-ended stay accrues; the server refuses the rest.
+            if (canBillBusinessParkingThroughToday(_paymentFields)) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: AsyncActionButton.filled(
+                  key: const ValueKey<String>('parking-bill-through-today'),
+                  onPressed: _isMarkingPaid ? null : _billThroughToday,
+                  icon: Icons.receipt_long_outlined,
+                  label: l10n.parkingBillThroughToday(
+                    currency.format(
+                      businessParkingUnbilled(_paymentFields).amount,
+                    ),
+                  ),
+                ),
+              ),
+            ] else if (businessParkingUnbilled(_paymentFields).openEnded &&
+                !isPaid) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: AsyncActionButton.filled(
+                  onPressed: null,
+                  icon: Icons.receipt_long_outlined,
+                  label: l10n.parkingNothingToBill,
+                ),
+              ),
+            ],
+            // The customer paid at the gate instead of using the link the lot
+            // already sent. Settles the record and expires the Stripe session,
+            // so the same money cannot also arrive through the link.
+            if (canRecordBusinessParkingPaymentReceived(_paymentFields)) ...[
+              const SizedBox(height: 12),
+              _receivedByPicker(
+                l10n: l10n,
+                value: _receivedInPersonBy,
+                fieldKey: 'received-in-person',
+                onChanged: (next) =>
+                    setState(() => _receivedInPersonBy = next),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: AsyncActionButton.outlined(
+                  key: const ValueKey<String>('parking-payment-received'),
+                  onPressed:
+                      _isMarkingPaid ? null : _recordPaymentReceivedInPerson,
+                  icon: Icons.payments_outlined,
+                  label: l10n.parkingPaymentReceivedInPerson,
+                ),
+              ),
+            ],
+          ],
           // Gated on the same permission as the rest of the card: the lot's
           // own staff hand a customer their paperwork, and the callable
           // enforces the permission anyway.
@@ -2073,6 +2340,30 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 '${_staffLabel(_paymentFields['receivedByStaffId'] ?? _paymentFields['directPaymentMarkedByUid'])}',
                 style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
               ),
+            // "They have now paid it all" — the plain settlement the card was
+            // missing, which staff were having to fake by typing the balance
+            // into the part-payment form.
+            if (canSettleBusinessParkingBalance(_paymentFields)) ...[
+              const SizedBox(height: 12),
+              _receivedByPicker(
+                l10n: l10n,
+                value: _settleReceivedBy,
+                fieldKey: 'settle-received-by',
+                onChanged: (next) => setState(() => _settleReceivedBy = next),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: AsyncActionButton.filled(
+                  key: const ValueKey<String>('parking-mark-fully-paid'),
+                  onPressed: _isMarkingPaid ? null : _markFullyPaid,
+                  icon: Icons.done_all,
+                  label: l10n.parkingMarkFullyPaid(
+                    currency.format(businessParkingBalance(_paymentFields)),
+                  ),
+                ),
+              ),
+            ],
             if (!_partOpen)
               TextButton.icon(
                 onPressed: _isMarkingPaid
@@ -2084,8 +2375,149 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             else
               _buildPartPaymentForm(l10n),
           ],
+          // The car left. Last on the card because it is the end of the stay,
+          // and it deliberately does not touch the money: a balance the lot is
+          // still owed survives the car driving away.
+          if (canRecordPayment &&
+              canCloseBusinessParkingStay(_paymentFields)) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: AsyncActionButton.outlined(
+                key: const ValueKey<String>('parking-close-stay'),
+                onPressed: _isMarkingPaid ? null : _closeStay,
+                icon: Icons.logout,
+                label: l10n.parkingCarLeftToday,
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  /// What this stay has run up and what has already been asked for.
+  ///
+  /// Only an open-ended stay accrues, so "Billed through" and "Unbilled" show
+  /// only there. On a stay priced for its leave date they could say one thing
+  /// and one thing only — "Nothing yet", "0 days" — and sitting under an
+  /// amount that is genuinely owed they would read as "nothing is owed".
+  Widget _buildAccrualPanel(AppLocalizations l10n, NumberFormat currency) {
+    final unbilled = businessParkingUnbilled(_paymentFields);
+    final dates = DateFormat.yMMMd(Localizations.localeOf(context).toString());
+    final endDate = _paymentFields['parkingEndDate'];
+    final paid = businessParkingAmountPaid(_paymentFields);
+    final due = businessParkingAmountDue(_paymentFields);
+
+    final String note;
+    if (!unbilled.openEnded) {
+      note = l10n.parkingAccrualPricedNote;
+    } else if (unbilled.amount > 0) {
+      note = unbilled.billedThrough != null
+          ? l10n.parkingAccrualSinceNote(dates.format(unbilled.billedThrough!))
+          : l10n.parkingAccrualFirstBillNote;
+    } else {
+      note = l10n.parkingAccrualCaughtUpNote;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 22,
+          runSpacing: 12,
+          children: [
+            _accrualTile(
+              l10n.parkingLeaves,
+              unbilled.openEnded
+                  ? l10n.parkingOpenEnded
+                  : dates.format(_asDate(endDate) ?? DateTime.now()),
+            ),
+            if (unbilled.openEnded) ...[
+              _accrualTile(
+                l10n.parkingBilledThrough,
+                unbilled.billedThrough != null
+                    ? dates.format(unbilled.billedThrough!)
+                    : l10n.parkingNothingBilledYet,
+              ),
+              _accrualTile(
+                l10n.parkingUnbilled,
+                '${l10n.parkingUnbilledDays(unbilled.days)} · '
+                '${currency.format(unbilled.amount)}',
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          note,
+          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, height: 1.3),
+        ),
+        if (paid > 0) ...[
+          const SizedBox(height: 6),
+          Text(
+            // A fixed stay has a total to measure the payment against; an
+            // open-ended one does not, because the total is still growing.
+            !unbilled.openEnded && due > 0
+                ? l10n.parkingPaidSoFarOfTotal(
+                    currency.format(paid),
+                    currency.format(due),
+                    currency.format(due - paid > 0 ? due - paid : 0),
+                  )
+                : l10n.parkingPaidSoFar(currency.format(paid)),
+            style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _accrualTile(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+
+  DateTime? _asDate(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String && value.trim().isNotEmpty) {
+      return DateTime.tryParse(value.trim());
+    }
+    return null;
+  }
+
+  /// The "who took it" picker, asked wherever money is recorded as received.
+  Widget _receivedByPicker({
+    required AppLocalizations l10n,
+    required String value,
+    required ValueChanged<String> onChanged,
+    required String fieldKey,
+  }) {
+    return DropdownButtonFormField<String>(
+      key: ValueKey<String>('$fieldKey-$value'),
+      initialValue: value.isEmpty ? null : value,
+      decoration: InputDecoration(labelText: l10n.parkingReceivedBy),
+      isExpanded: true,
+      items: [
+        for (final entry in _staffNames.entries)
+          DropdownMenuItem<String>(value: entry.key, child: Text(entry.value)),
+      ],
+      onChanged: _isMarkingPaid
+          ? null
+          : (next) {
+              if (next == null) return;
+              onChanged(next);
+            },
     );
   }
 
