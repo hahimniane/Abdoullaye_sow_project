@@ -886,6 +886,34 @@ describe("public Website CMS rules", () => {
 });
 
 describe("business dashboard Firestore rules", () => {
+  // The app does not read parked cars one document at a time: it subscribes to
+  // `parkedCars where businessId == mine`. A query is evaluated against the
+  // rule as a whole - the security rules must be satisfiable from the query's
+  // constraints alone, without reading any document - so a get() passing says
+  // nothing about whether the list loads. Every test above this one was a
+  // get(), which is how "the business cannot see its parked cars" could be
+  // true while the rules tests were green.
+  it("lets the lot run the parked-car QUERY the app actually subscribes to",
+      async () => {
+        const {query, collection, where, getDocs} =
+            require("firebase/firestore");
+
+        for (const uid of ["owner-a", "staff-parking-a"]) {
+          const db = firestoreFor(uid);
+          await assertSucceeds(getDocs(query(
+              collection(db, "parkedCars"),
+              where("businessId", "==", "biz_a"))));
+        }
+
+        // Unfiltered, and filtered to someone else's lot, must both be refused
+        // - the filter is the only thing that makes the query safe.
+        await assertFails(getDocs(query(collection(
+            firestoreFor("owner-a"), "parkedCars"))));
+        await assertFails(getDocs(query(
+            collection(firestoreFor("owner-a"), "parkedCars"),
+            where("businessId", "==", "biz_b"))));
+      });
+
   it("lets a business owner read their own private records only", async () => {
     const ownerDb = firestoreFor("owner-a");
 
