@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../providers/app_gate_provider.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_motion.dart';
 import '../widgets/app_bottom_nav.dart';
+import '../widgets/ship_sheet.dart';
 import 'services_hub_screen.dart';
 import 'settings_screen.dart';
 
@@ -178,6 +183,12 @@ class CustomerHomeScreen extends StatefulWidget {
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   static const _tabCount = 5;
 
+  /// The shipping tab is no longer one of the bar's equals — it is what the
+  /// raised Ship button opens into — so the bar shows these four and the
+  /// button stands for the fifth.
+  static const _shippingTab = 1;
+  static const _visibleTabs = <int>[0, 2, 3, 4];
+
   int _index = 0;
   final List<GlobalKey<NavigatorState>> _navKeys = List.generate(
     _tabCount,
@@ -213,6 +224,60 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
   }
 
+  /// Ship asks what, then takes them straight there.
+  ///
+  /// The flow opens inside the shipping tab's own navigator, so the bar stays
+  /// put and backing out lands on the shipping hub — every service in one
+  /// place — rather than dumping them on Home.
+  Future<void> _openShip() async {
+    final l10n = AppLocalizations.of(context)!;
+    final sharedBarrels = context.read<AppGateProvider>().sharedBarrelsEnabled;
+    final route = await showShipSheet(
+      context,
+      title: l10n.shipSheetTitle,
+      subtitle: l10n.shipSheetSubtitle,
+      options: [
+        ShipOption(
+          route: '/barrel',
+          icon: Icons.local_shipping_outlined,
+          title: l10n.hubSendBarrel,
+          subtitle: l10n.hubShipFullBarrel,
+          tint: AppColors.cobalt,
+        ),
+        if (sharedBarrels)
+          ShipOption(
+            route: '/open-barrels',
+            icon: Icons.group_add_outlined,
+            title: l10n.hubSharedBarrels,
+            subtitle: l10n.hubSharedBarrelsSubtitle,
+            tint: AppColors.cobaltMid,
+          ),
+        // The tints have to be told apart at a glance, and the palette's
+        // teals read as one colour at 13% alpha — so the four options step
+        // teal, bright teal, amber, slate rather than four shades of green.
+        ShipOption(
+          route: '/send-freight',
+          icon: Icons.inventory_2_outlined,
+          title: l10n.orderTypeFreight,
+          subtitle: l10n.hubFreightSubtitle,
+          tint: AppColors.saffron,
+        ),
+        ShipOption(
+          route: '/request-transport',
+          icon: Icons.car_rental_outlined,
+          title: l10n.hubTransportCar,
+          subtitle: l10n.hubShipCarHome,
+          tint: AppColors.ink,
+        ),
+      ],
+    );
+    if (route == null || !mounted) return;
+    setState(() => _index = _shippingTab);
+    final nav = _navKeys[_shippingTab].currentState;
+    nav?.popUntil((r) => r.isFirst);
+    nav?.pushNamed(route);
+  }
+
   Widget _tab(int index) {
     return Navigator(
       key: _navKeys[index],
@@ -245,23 +310,32 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         }
       },
       child: Scaffold(
-        body: IndexedStack(
+        body: _TabSwap(
           index: _index,
-          children: [for (var i = 0; i < _tabCount; i++) _tab(i)],
+          // IndexedStack keeps every tab's navigator alive, so the swap is
+          // instant by construction; this plays the arriving tab in over it so
+          // the change reads as a move rather than a cut.
+          child: IndexedStack(
+            index: _index,
+            children: [for (var i = 0; i < _tabCount; i++) _tab(i)],
+          ),
         ),
         bottomNavigationBar: AppBottomNav(
-          currentIndex: _index,
-          onTap: _onTap,
+          // -1 while a shipping flow is open: no tab owns that place, the
+          // raised button does, and it lights up instead.
+          currentIndex: _visibleTabs.indexOf(_index),
+          onTap: (visible) => _onTap(_visibleTabs[visible]),
+          action: AppBottomNavAction(
+            icon: Icons.local_shipping_rounded,
+            label: l10n.navShip,
+            active: _index == _shippingTab,
+            onTap: _openShip,
+          ),
           items: [
             AppBottomNavItem(
               icon: Icons.home_outlined,
               selectedIcon: Icons.home,
               label: l10n.home,
-            ),
-            AppBottomNavItem(
-              icon: Icons.local_shipping_outlined,
-              selectedIcon: Icons.local_shipping,
-              label: l10n.hubShipping,
             ),
             AppBottomNavItem(
               icon: Icons.directions_car_outlined,
@@ -281,6 +355,72 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Plays the incoming tab in whenever [index] changes.
+///
+/// The travel is small and downward-to-rest: enough to say "this is new
+/// content", not enough to make switching tabs feel slow. Under reduced motion
+/// it is a cross-fade with no travel.
+class _TabSwap extends StatefulWidget {
+  const _TabSwap({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_TabSwap> createState() => _TabSwapState();
+}
+
+class _TabSwapState extends State<_TabSwap>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+    value: 1,
+  );
+
+  @override
+  void didUpdateWidget(_TabSwap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index) {
+      _controller.duration = AppMotion.reduced(context)
+          ? const Duration(milliseconds: 140)
+          : const Duration(milliseconds: 300);
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final flat = AppMotion.reduced(context);
+    final curved = CurvedAnimation(
+      parent: _controller,
+      curve: AppMotion.standard,
+    );
+    return AnimatedBuilder(
+      animation: curved,
+      builder: (context, child) {
+        final t = curved.value;
+        return Opacity(
+          opacity: 0.35 + 0.65 * t,
+          child: flat
+              ? child
+              : Transform.translate(
+                  offset: Offset(0, (1 - t) * 10),
+                  child: child,
+                ),
+        );
+      },
+      child: widget.child,
     );
   }
 }

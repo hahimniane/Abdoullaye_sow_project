@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/app_gate_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_motion.dart';
 import '../widgets/customer_notification_bell.dart';
 
 /// The content of each persistent-navbar tab. Services of the same nature live
@@ -34,23 +35,29 @@ class HomeTab extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 28),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 8, 4),
-              child: Row(
-                children: [
-                  Expanded(child: _GreetingHeader(auth: auth)),
-                  const CustomerNotificationBell(),
-                ],
+            RiseIn(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 8, 4),
+                child: Row(
+                  children: [
+                    Expanded(child: _GreetingHeader(auth: auth)),
+                    const CustomerNotificationBell(),
+                  ],
+                ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-              child: _BalanceCard(auth: auth),
+            RiseIn(
+              index: 1,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                child: _BalanceCard(auth: auth),
+              ),
             ),
-            _SectionHeader(l10n.hubQuickActions),
+            RiseIn(index: 2, child: _SectionHeader(l10n.hubQuickActions)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _ServicesSection(
+                startIndex: 3,
                 items: [
                   _HubItem(
                     l10n.hubSendBarrel,
@@ -175,22 +182,28 @@ class ActivityTab extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 28),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 20, 8, 4),
-              child: _CategoryHeader(
-                title: l10n.activity,
-                subtitle: l10n.hubActivitySubtitle,
-                trailing: const CustomerNotificationBell(),
+            RiseIn(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 20, 8, 4),
+                child: _CategoryHeader(
+                  title: l10n.activity,
+                  subtitle: l10n.hubActivitySubtitle,
+                  trailing: const CustomerNotificationBell(),
+                ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-              child: _BalanceCard(auth: auth),
+            RiseIn(
+              index: 1,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                child: _BalanceCard(auth: auth),
+              ),
             ),
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _ServicesSection(
+                startIndex: 2,
                 items: [
                   _HubItem(
                     l10n.trackShipment,
@@ -249,12 +262,14 @@ class _CategoryTab extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 28),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 20, 8, 4),
-              child: _CategoryHeader(
-                title: title,
-                subtitle: subtitle,
-                trailing: showBell ? const CustomerNotificationBell() : null,
+            RiseIn(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 20, 8, 4),
+                child: _CategoryHeader(
+                  title: title,
+                  subtitle: subtitle,
+                  trailing: showBell ? const CustomerNotificationBell() : null,
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -431,13 +446,15 @@ class _SignInPromptCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
-        child: Ink(
+    return PressableScale(
+      scale: 0.98,
+      onTap: () {
+        AppHaptics.selection();
+        onTap();
+      },
+      child: Semantics(
+        button: true,
+        child: DecoratedBox(
           decoration: BoxDecoration(
             gradient: AppColors.headerGradient,
             borderRadius: BorderRadius.circular(24),
@@ -498,9 +515,13 @@ class _HubItem {
 /// A rounded white card holding the rows of one section, separated by light
 /// dividers.
 class _ServicesSection extends StatelessWidget {
-  const _ServicesSection({required this.items});
+  const _ServicesSection({required this.items, this.startIndex = 1});
 
   final List<_HubItem> items;
+
+  /// Where this card sits in the screen's entrance order, so a card under a
+  /// header keeps arriving after it rather than racing it.
+  final int startIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -529,7 +550,9 @@ class _ServicesSection extends StatelessWidget {
                 endIndent: 16,
                 color: AppColors.rule,
               ),
-            _ServiceRow(item: items[i]),
+            // The rows arrive in reading order, one just behind the next, so
+            // the card assembles itself instead of being stamped down whole.
+            RiseIn(index: startIndex + i, child: _ServiceRow(item: items[i])),
           ],
         ],
       ),
@@ -544,8 +567,14 @@ class _ServiceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => Navigator.pushNamed(context, item.route),
+    // PressableScale over InkWell: the row answers on finger-down instead of
+    // waiting for the release, which is what makes a tap feel direct.
+    return PressableScale(
+      scale: 0.975,
+      onTap: () {
+        AppHaptics.selection();
+        Navigator.pushNamed(context, item.route);
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         child: Row(
