@@ -5439,6 +5439,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hubFollowShipments => 'Follow your shipments';
 
   @override
+  String get navShip => 'Ship';
+
+  @override
+  String get shipSheetTitle => 'What are you sending?';
+
+  @override
+  String get shipSheetSubtitle =>
+      'Pick what’s going home and we’ll take it from there.';
+
+  @override
   String get hubShipping => 'Shipping';
 
   @override

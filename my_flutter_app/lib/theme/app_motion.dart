@@ -140,6 +140,101 @@ class _PressableScaleState extends State<PressableScale> {
   }
 }
 
+/// Content that arrives rather than appearing.
+///
+/// A short rise with the fade, staggered down a list, reads as the screen
+/// settling into place — the eye follows the order it should read in. Kept
+/// small (a few points) and quick: this is meant to be felt, not watched. Past
+/// the first handful of rows the delay is capped, because a stagger that keeps
+/// growing turns into a queue the user waits on.
+///
+/// Under reduced motion it is a plain cross-fade with no travel.
+class RiseIn extends StatefulWidget {
+  const RiseIn({
+    super.key,
+    required this.child,
+    this.index = 0,
+    this.offset = 14,
+    this.stagger = const Duration(milliseconds: 55),
+  });
+
+  final Widget child;
+
+  /// Position in a staggered group; 0 is first and starts immediately.
+  final int index;
+
+  /// How far the content rises, in logical pixels.
+  final double offset;
+
+  final Duration stagger;
+
+  @override
+  State<RiseIn> createState() => _RiseInState();
+}
+
+class _RiseInState extends State<RiseIn> with SingleTickerProviderStateMixin {
+  static const Duration _travel = Duration(milliseconds: 420);
+
+  late final Duration _delay =
+      widget.stagger * math.min(widget.index, _maxStaggered);
+  static const int _maxStaggered = 6;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _travel + _delay,
+  );
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (AppMotion.reduced(context)) {
+      _controller.duration = const Duration(milliseconds: 140);
+    }
+    // The stagger is an interval inside one animation rather than a delayed
+    // start: a pending Timer would outlive a widget test and, worse, keep
+    // ticking after the row is gone.
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final flat = AppMotion.reduced(context);
+    final total = _controller.duration ?? _travel;
+    final begin = flat || total == Duration.zero
+        ? 0.0
+        : (_delay.inMicroseconds / total.inMicroseconds).clamp(0.0, 0.9);
+    final curved = CurvedAnimation(
+      parent: _controller,
+      curve: Interval(begin, 1, curve: AppMotion.standard),
+    );
+    return AnimatedBuilder(
+      animation: curved,
+      builder: (context, child) {
+        final t = curved.value;
+        return Opacity(
+          opacity: t,
+          child: flat
+              ? child
+              : Transform.translate(
+                  offset: Offset(0, (1 - t) * widget.offset),
+                  child: child,
+                ),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
 /// Haptics are reserved for moments that mean something — a commit, a snap, a
 /// refusal. Spent everywhere, they teach people to stop noticing them.
 abstract final class AppHaptics {

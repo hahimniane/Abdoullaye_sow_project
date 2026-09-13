@@ -9780,6 +9780,24 @@ abstract class AppLocalizations {
   /// **'Follow your shipments'**
   String get hubFollowShipments;
 
+  /// No description provided for @navShip.
+  ///
+  /// In en, this message translates to:
+  /// **'Ship'**
+  String get navShip;
+
+  /// No description provided for @shipSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What are you sending?'**
+  String get shipSheetTitle;
+
+  /// No description provided for @shipSheetSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick what’s going home and we’ll take it from there.'**
+  String get shipSheetSubtitle;
+
   /// No description provided for @hubShipping.
   ///
   /// In en, this message translates to:
