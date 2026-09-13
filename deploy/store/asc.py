@@ -131,12 +131,7 @@ def submit(build_number, version_string, notes_path=None):
         st = v["attributes"]["appStoreState"]
         if st in WITHDRAWABLE:
             print(f"withdrawing {v['attributes']['versionString']} ({st})")
-            subs = call("GET", f"/appStoreVersions/{v['id']}"
-                               "/appStoreVersionSubmission")
-            sub_id = (subs.get("data") or {}).get("id")
-            if sub_id:
-                call("DELETE", f"/appStoreVersionSubmissions/{sub_id}")
-                time.sleep(3)
+            withdraw(v["id"])
             target = v
             break
         if st in EDITABLE:
@@ -168,6 +163,56 @@ def submit(build_number, version_string, notes_path=None):
     print("submitting for review")
     submit_for_review(target["id"])
     print(f"submitted {version_string} (build {build_number})")
+
+
+def withdraw(version_id):
+    """Take a waiting version back out of review.
+
+    The old `appStoreVersionSubmission` relationship is dead along with
+    `appStoreVersionSubmissions/CREATE` (retired 2026-09-10): a version
+    submitted through `reviewSubmissions` has no such relationship, so the GET
+    answered with nothing, nothing was deleted, and the version stayed locked.
+    The failure then surfaced two calls later as a 409 on attaching the build
+    ("The specified pre-release build could not be added"), which names the
+    build and not the real cause.
+
+    Cancelling is a PATCH on the review submission itself, and it is not
+    instant: the submission sits in CANCELING for a minute or so and the
+    version is not editable until it clears.
+    """
+    open_states = {"READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW",
+                   "UNRESOLVED_ISSUES"}
+    subs = call("GET", f"/apps/{APP_ID}/reviewSubmissions"
+                       "?filter[platform]=IOS&limit=20").get("data", [])
+    for sub in subs:
+        if sub["attributes"]["state"] not in open_states:
+            continue
+        items = call("GET", f"/reviewSubmissions/{sub['id']}"
+                            "/items").get("data", [])
+        holds = any(
+            ((i.get("relationships", {}).get("appStoreVersion", {}).get("data")
+              or {}).get("id") == version_id)
+            for i in items)
+        # An empty submission is one this script opened and never filled;
+        # cancel it too rather than leaving it to block the next one.
+        if not holds and items:
+            continue
+        print(f"  cancelling review submission {sub['id']}")
+        call("PATCH", f"/reviewSubmissions/{sub['id']}", data=json.dumps({
+            "data": {"type": "reviewSubmissions", "id": sub["id"],
+                     "attributes": {"canceled": True}}}))
+
+    for _ in range(40):
+        time.sleep(15)
+        state_now = next(
+            (v["attributes"]["appStoreState"] for v in versions()
+             if v["id"] == version_id), None)
+        if state_now in EDITABLE:
+            print(f"  version is {state_now}")
+            return
+    raise SystemExit(
+        "the version did not become editable after cancelling; check App "
+        "Store Connect before retrying")
 
 
 def submit_for_review(version_id):
