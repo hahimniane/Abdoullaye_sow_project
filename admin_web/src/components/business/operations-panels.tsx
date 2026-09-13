@@ -145,6 +145,7 @@ import {
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
+  isBusinessParkingPaymentLinkCancelled,
   businessParkingResendMessage,
   businessParkingMatchesFacets,
   businessParkingUpdateChanges,
@@ -5792,9 +5793,16 @@ export function ParkingPanel({
                     <span>Payment link</span>
                     {/* Once the customer has paid, the link leads to Stripe's
                         "already completed" page. Offering to copy it there
-                        reads as a broken link rather than a finished sale. */}
+                        reads as a broken link rather than a finished sale.
+                        A cancelled link is just as dead, and for the same
+                        reason: the lot killed it, so it can no longer take
+                        anyone's money. The app has said so since the link
+                        could be cancelled at all; this console went on
+                        handing staff the dead link. */}
                     {businessParkingPaymentTone(row) === "paid" ? (
                       <em className="lst-hint">This link was already used to pay. Nothing further is owed.</em>
+                    ) : isBusinessParkingPaymentLinkCancelled(row) ? (
+                      <em className="lst-hint">This link was cancelled and can no longer take a payment.</em>
                     ) : (
                       // paymentLinkUrl is the durable Laawol link; a Stripe
                       // session URL dies within 24 hours, so it is only the

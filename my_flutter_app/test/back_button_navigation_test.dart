@@ -78,10 +78,17 @@ void main() {
       'lib/screens/customer_home_screen.dart',
     ).readAsStringSync();
 
-    expect(shellSource, contains('return const HomeTab();'));
+    // Each tab's root is built by the shell, and none of them is handed a
+    // back button: the root of a tab is already the top of its stack, so an
+    // arrow there would point at nothing. Home takes the Ship callback, so it
+    // is not const — the rule is about the back button, not the constructor.
+    expect(shellSource, contains('return HomeTab(onShip: _openShip);'));
     expect(shellSource, contains('return const ShippingTab();'));
     expect(shellSource, contains('return const CarsTab();'));
     expect(shellSource, contains('return const ActivityTab();'));
+    for (final tab in ['HomeTab', 'ShippingTab', 'CarsTab', 'ActivityTab']) {
+      expect(shellSource, isNot(contains('$tab(showBackButton')));
+    }
   });
 
   test('settings detail screens open inside the nested settings navigator', () {

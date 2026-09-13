@@ -5477,6 +5477,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hubParkCarSubtitle => 'Store with a business';
 
   @override
+  String get homeHeroTitle => 'Send something home';
+
+  @override
+  String get homeHeroSubtitle =>
+      'A barrel, freight, or a car. Pick what\'s going and we\'ll take it from there.';
+
+  @override
+  String get homeHeroCta => 'Start a shipment';
+
+  @override
+  String get homeHelpTitle => 'Need a hand?';
+
+  @override
+  String get homeHelpSubtitle => 'Message the Laawol team';
+
+  @override
+  String get homeSignInSubtitle => 'Track your orders and shipments';
+
+  @override
   String get hubActivitySubtitle => 'Your orders, shipments, and wallet.';
 
   @override
@@ -8299,4 +8318,190 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get parkingRegisteredBy => 'Registered by';
+
+  @override
+  String get parkingLeaves => 'Leaves';
+
+  @override
+  String get parkingBilledThrough => 'Billed through';
+
+  @override
+  String get parkingNothingBilledYet => 'Nothing yet';
+
+  @override
+  String get parkingUnbilled => 'Unbilled';
+
+  @override
+  String parkingUnbilledDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get parkingAccrualPricedNote =>
+      'Priced for its leave date when it was recorded, so nothing accrues day by day.';
+
+  @override
+  String parkingAccrualSinceNote(String date) {
+    return 'Accruing since $date. Bill it whenever you like — the car stays in place.';
+  }
+
+  @override
+  String get parkingAccrualFirstBillNote =>
+      'Nothing billed yet. Bill it through today to send the first link.';
+
+  @override
+  String get parkingAccrualCaughtUpNote =>
+      'Everything up to today has been billed.';
+
+  @override
+  String parkingBillThroughToday(String amount) {
+    return 'Bill $amount through today';
+  }
+
+  @override
+  String get parkingNothingToBill => 'Nothing to bill';
+
+  @override
+  String get parkingBillLinkSent => 'Payment link sent.';
+
+  @override
+  String get parkingBillCouldNotBeSent => 'The payment link could not be sent.';
+
+  @override
+  String get parkingPaymentReceivedInPerson => 'Payment received in person';
+
+  @override
+  String get parkingRecordedAsReceived => 'Recorded as received.';
+
+  @override
+  String get parkingCarLeftToday => 'Car left today';
+
+  @override
+  String get parkingCarLeftTodayExplain =>
+      'This stamps today as the leave date and stops the daily charge. Anything still owed stays owed.';
+
+  @override
+  String get parkingStayClosed => 'Stay closed.';
+
+  @override
+  String get parkingStayCouldNotBeClosed => 'The stay could not be closed.';
+
+  @override
+  String parkingMarkFullyPaid(String amount) {
+    return 'Mark as fully paid ($amount)';
+  }
+
+  @override
+  String get parkingMarkedFullyPaid => 'Marked as paid.';
+
+  @override
+  String get parkingNothingOutstanding => 'Nothing is outstanding on this car.';
+
+  @override
+  String parkingPaidSoFarOfTotal(String paid, String total, String owed) {
+    return 'Paid so far: $paid of $total — $owed still owed';
+  }
+
+  @override
+  String get lotActivityTypesTitle => 'Activities & rates';
+
+  @override
+  String get lotActivityTypesSubtitle =>
+      'What this lot charges for, and the price staff see when they record it.';
+
+  @override
+  String get lotActivityTypeName => 'Name';
+
+  @override
+  String get lotActivityTypeFee => 'Default fee (\$)';
+
+  @override
+  String get lotActivityTypeNeedsAuctionHouse => 'Asks for an auction house';
+
+  @override
+  String get lotActivityTypeShown => 'Shown when recording';
+
+  @override
+  String get lotActivityTypeAdd => 'Add an activity';
+
+  @override
+  String get lotActivityTypeSaved => 'Activity saved.';
+
+  @override
+  String get lotActivityTypeRemoved => 'Removed.';
+
+  @override
+  String get lotActivityTypeRemove => 'Remove';
+
+  @override
+  String get lotActivityTypeRemoveTitle => 'Remove this activity';
+
+  @override
+  String get lotActivityTypeRemoveExplain =>
+      'It leaves the list staff pick from. Entries already recorded keep the name they were saved with.';
+
+  @override
+  String get lotActivityTypeNameRequired => 'Give the activity a name.';
+
+  @override
+  String get lotActivityTypesEmpty =>
+      'No activities yet. Add the first one so staff have something to record.';
+
+  @override
+  String get lotActivityTypeCouldNotBeSaved =>
+      'The activity could not be saved.';
+
+  @override
+  String get lotProofThresholdTitle => 'Require a receipt from';
+
+  @override
+  String get lotProofThresholdHint =>
+      'Staff must attach a receipt at this amount and above. Zero never asks for one.';
+
+  @override
+  String get lotProofNeverRequired => 'A receipt is never required.';
+
+  @override
+  String get lotProofThresholdSaved => 'Receipt rule saved.';
+
+  @override
+  String get lotProofThresholdCouldNotBeSaved =>
+      'The receipt rule could not be saved.';
+
+  @override
+  String get parkingRateCardsTitle => 'Other prices (optional)';
+
+  @override
+  String get parkingRateCardsHint =>
+      'A bigger space, a long-stay deal, a rate for a dealer who brings several cars. Give each one a name and a price per day; staff pick it when they record a car. A row without a name and a price is not saved.';
+
+  @override
+  String get parkingRateCardName => 'Price name';
+
+  @override
+  String get parkingRateCardNameHint => 'e.g. SUV / oversize';
+
+  @override
+  String get parkingRateCardDaily => 'Price / day (\$)';
+
+  @override
+  String get parkingRateCardMinDays => 'Min days';
+
+  @override
+  String get parkingRateCardAdd => 'Add a price';
+
+  @override
+  String get parkingRateCardRemove => 'Remove this price';
+
+  @override
+  String get lotLedgerSettings => 'Ledger settings';
+
+  @override
+  String get lotActivityTypeHidden => 'Hidden';
 }

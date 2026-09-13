@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'business_service.dart';
+import '../services/parking_rates.dart';
 
 class BusinessProfile {
   const BusinessProfile({
@@ -43,6 +44,7 @@ class BusinessProfile {
     this.parkingWeeklyRate = 0,
     this.parkingMonthlyRate = 0,
     this.parkingMinimumDays = 1,
+    this.parkingRates = const [],
     this.parkingPickupAvailable = false,
     this.parkingAcceptsReservations = true,
     this.parkingPickupFee = 0,
@@ -104,6 +106,11 @@ class BusinessProfile {
   final double parkingWeeklyRate;
   final double parkingMonthlyRate;
   final int parkingMinimumDays;
+
+  /// The lot's alternative price cards — a bigger space, a long-stay
+  /// deal. The standard daily rate above stays the default; a card is an
+  /// alternative to it, never a replacement.
+  final List<ParkingRate> parkingRates;
   final bool parkingPickupAvailable;
 
   /// When false the lot is walk-in only: still listed and contactable, but it
@@ -192,6 +199,7 @@ class BusinessProfile {
       parkingDailyRate: _parseDouble(data['parkingDailyRate'], 0),
       parkingWeeklyRate: _parseDouble(data['parkingWeeklyRate'], 0),
       parkingMonthlyRate: _parseDouble(data['parkingMonthlyRate'], 0),
+      parkingRates: normalizeParkingRates(data['parkingRates']),
       parkingMinimumDays: _parseInt(
         data['parkingMinimumDays'],
         1,

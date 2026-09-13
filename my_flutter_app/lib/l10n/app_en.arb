@@ -2336,7 +2336,7 @@
   "hubFollowShipments": "Follow your shipments",
   "navShip": "Ship",
   "shipSheetTitle": "What are you sending?",
-  "shipSheetSubtitle": "Pick what\u2019s going home and we\u2019ll take it from there.",
+  "shipSheetSubtitle": "Pick what’s going home and we’ll take it from there.",
   "hubShipping": "Shipping",
   "hubShippingSubtitle": "Send barrels, freight, and cars home.",
   "hubSharedBarrels": "Shared barrels",
@@ -2346,6 +2346,12 @@
   "hubShipCarHome": "Ship a car home",
   "hubCarsSubtitle": "Buy a verified car or store one with a business.",
   "hubParkCarSubtitle": "Store with a business",
+  "homeHeroTitle": "Send something home",
+  "homeHeroSubtitle": "A barrel, freight, or a car. Pick what's going and we'll take it from there.",
+  "homeHeroCta": "Start a shipment",
+  "homeHelpTitle": "Need a hand?",
+  "homeHelpSubtitle": "Message the Laawol team",
+  "homeSignInSubtitle": "Track your orders and shipments",
   "hubActivitySubtitle": "Your orders, shipments, and wallet.",
   "hubOrdersSubtitle": "Cars, barrels, freight & more",
   "hubWalletSubtitle": "Balance & refunds",
@@ -3595,5 +3601,99 @@
     }
   },
   "parkingReceivedBy": "Received by",
-  "parkingRegisteredBy": "Registered by"
+  "parkingRegisteredBy": "Registered by",
+  "parkingLeaves": "Leaves",
+  "parkingBilledThrough": "Billed through",
+  "parkingNothingBilledYet": "Nothing yet",
+  "parkingUnbilled": "Unbilled",
+  "parkingUnbilledDays": "{count, plural, =1{1 day} other{{count} days}}",
+  "@parkingUnbilledDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "parkingAccrualPricedNote": "Priced for its leave date when it was recorded, so nothing accrues day by day.",
+  "parkingAccrualSinceNote": "Accruing since {date}. Bill it whenever you like — the car stays in place.",
+  "@parkingAccrualSinceNote": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingAccrualFirstBillNote": "Nothing billed yet. Bill it through today to send the first link.",
+  "parkingAccrualCaughtUpNote": "Everything up to today has been billed.",
+  "parkingBillThroughToday": "Bill {amount} through today",
+  "@parkingBillThroughToday": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingNothingToBill": "Nothing to bill",
+  "parkingBillLinkSent": "Payment link sent.",
+  "parkingBillCouldNotBeSent": "The payment link could not be sent.",
+  "parkingPaymentReceivedInPerson": "Payment received in person",
+  "parkingRecordedAsReceived": "Recorded as received.",
+  "parkingCarLeftToday": "Car left today",
+  "parkingCarLeftTodayExplain": "This stamps today as the leave date and stops the daily charge. Anything still owed stays owed.",
+  "parkingStayClosed": "Stay closed.",
+  "parkingStayCouldNotBeClosed": "The stay could not be closed.",
+  "parkingMarkFullyPaid": "Mark as fully paid ({amount})",
+  "@parkingMarkFullyPaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingMarkedFullyPaid": "Marked as paid.",
+  "parkingNothingOutstanding": "Nothing is outstanding on this car.",
+  "parkingPaidSoFarOfTotal": "Paid so far: {paid} of {total} — {owed} still owed",
+  "@parkingPaidSoFarOfTotal": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      }
+    }
+  },
+  "lotActivityTypesTitle": "Activities & rates",
+  "lotActivityTypesSubtitle": "What this lot charges for, and the price staff see when they record it.",
+  "lotActivityTypeName": "Name",
+  "lotActivityTypeFee": "Default fee ($)",
+  "lotActivityTypeNeedsAuctionHouse": "Asks for an auction house",
+  "lotActivityTypeShown": "Shown when recording",
+  "lotActivityTypeAdd": "Add an activity",
+  "lotActivityTypeSaved": "Activity saved.",
+  "lotActivityTypeRemoved": "Removed.",
+  "lotActivityTypeRemove": "Remove",
+  "lotActivityTypeRemoveTitle": "Remove this activity",
+  "lotActivityTypeRemoveExplain": "It leaves the list staff pick from. Entries already recorded keep the name they were saved with.",
+  "lotActivityTypeNameRequired": "Give the activity a name.",
+  "lotActivityTypesEmpty": "No activities yet. Add the first one so staff have something to record.",
+  "lotActivityTypeCouldNotBeSaved": "The activity could not be saved.",
+  "lotProofThresholdTitle": "Require a receipt from",
+  "lotProofThresholdHint": "Staff must attach a receipt at this amount and above. Zero never asks for one.",
+  "lotProofNeverRequired": "A receipt is never required.",
+  "lotProofThresholdSaved": "Receipt rule saved.",
+  "lotProofThresholdCouldNotBeSaved": "The receipt rule could not be saved.",
+  "parkingRateCardsTitle": "Other prices (optional)",
+  "parkingRateCardsHint": "A bigger space, a long-stay deal, a rate for a dealer who brings several cars. Give each one a name and a price per day; staff pick it when they record a car. A row without a name and a price is not saved.",
+  "parkingRateCardName": "Price name",
+  "parkingRateCardNameHint": "e.g. SUV / oversize",
+  "parkingRateCardDaily": "Price / day ($)",
+  "parkingRateCardMinDays": "Min days",
+  "parkingRateCardAdd": "Add a price",
+  "parkingRateCardRemove": "Remove this price",
+  "lotLedgerSettings": "Ledger settings",
+  "lotActivityTypeHidden": "Hidden"
 }

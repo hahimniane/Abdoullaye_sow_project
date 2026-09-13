@@ -15,6 +15,7 @@ import '../services/business_parking_entry.dart';
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/vin_decoder_service.dart';
+import '../utils/action_confirmation.dart';
 import '../utils/vin_utils.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -51,6 +52,10 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   final List<StreamSubscription<Object?>> _subs = [];
 
   List<LotActivityType> _types = const [];
+  /// Every type including the hidden ones. The forms only ever offer [_types]
+  /// (the active ones); the settings sheet has to show what is switched off,
+  /// or there is no way to switch it back on.
+  List<LotActivityType> _allTypes = const [];
   List<LotActivity> _activities = const [];
   List<LotExpenseLine> _lines = const [];
   List<LotExpenseEntry> _entries = const [];
@@ -116,7 +121,10 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       final list = [
         for (final d in snap.docs) LotActivityType.fromMap(d.id, d.data()),
       ]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      setState(() => _types = list.where((t) => t.active).toList());
+      setState(() {
+        _allTypes = list;
+        _types = list.where((t) => t.active).toList();
+      });
     }));
 
     _subs.add(scoped('lotActivities')
@@ -254,6 +262,21 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
     return '$a – $b';
   }
 
+  /// Everything the ledger itself is configured by, in one place: the
+  /// activities this lot charges for, and the amount above which staff must
+  /// attach a receipt. Both are settings, not records, so neither belongs on
+  /// the Activity or Expenses list.
+  void _openLedgerSettings() {
+    showLotSheet(
+      context,
+      _LedgerSettingsSheet(
+        businessId: widget.businessId,
+        types: _allTypes,
+        proofThresholdCents: _proofThresholdCents,
+      ),
+    );
+  }
+
   /// Pick a custom month span with two month pickers, then switch to it.
   Future<void> _pickCustomRange() async {
     final now = DateTime.now();
@@ -300,6 +323,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
             awaitingCents: math.monthAwaitingCents(_month),
             segment: _segment,
             onSegment: _goToSegment,
+            onOpenSettings: _openLedgerSettings,
             labels: [l10n.lotTabActivity, l10n.lotTabExpenses, l10n.lotTabReports],
           ),
           Expanded(
@@ -504,6 +528,7 @@ class _LedgerHeader extends StatelessWidget {
     required this.awaitingCents,
     required this.segment,
     required this.onSegment,
+    required this.onOpenSettings,
     required this.labels,
   });
 
@@ -517,6 +542,7 @@ class _LedgerHeader extends StatelessWidget {
   final int awaitingCents;
   final int segment;
   final ValueChanged<int> onSegment;
+  final VoidCallback onOpenSettings;
   final List<String> labels;
 
   @override
@@ -562,6 +588,18 @@ class _LedgerHeader extends StatelessWidget {
                           ),
                       ],
                     ),
+                  ),
+                  // What this lot charges for, and when it asks for a receipt.
+                  // Both were console-only: an owner on the phone could record
+                  // an activity but never define one.
+                  IconButton(
+                    onPressed: () {
+                      AppHaptics.selection();
+                      onOpenSettings();
+                    },
+                    icon: const Icon(Icons.tune, size: 20),
+                    color: AppColors.muted,
+                    tooltip: l10n.lotLedgerSettings,
                   ),
                 ],
               ),
@@ -4084,6 +4122,390 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
               errorFor('expense_proof_required')!,
               style: const TextStyle(fontSize: 12, color: AppColors.errorRed),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The ledger's own settings: what this lot charges for, and when a receipt
+/// is required. Both were console-only.
+class _LedgerSettingsSheet extends StatefulWidget {
+  const _LedgerSettingsSheet({
+    required this.businessId,
+    required this.types,
+    required this.proofThresholdCents,
+  });
+
+  final String businessId;
+  final List<LotActivityType> types;
+  final int proofThresholdCents;
+
+  @override
+  State<_LedgerSettingsSheet> createState() => _LedgerSettingsSheetState();
+}
+
+class _LedgerSettingsSheetState extends State<_LedgerSettingsSheet> {
+  late final TextEditingController _threshold = TextEditingController(
+    text: widget.proofThresholdCents > 0
+        ? (widget.proofThresholdCents / 100).toStringAsFixed(2)
+        : '0',
+  );
+  bool _savingThreshold = false;
+
+  @override
+  void dispose() {
+    _threshold.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveThreshold() async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _savingThreshold = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('setExpenseProofThreshold')
+          .call<Object?>({
+        'businessId': widget.businessId,
+        'thresholdCents': lotDollarsToCents(_threshold.text) ?? 0,
+      });
+      if (!mounted) return;
+      AppHaptics.commit();
+      showSuccessSnackBar(context, l10n.lotProofThresholdSaved);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      showErrorSnackBar(
+        context,
+        error.message ?? l10n.lotProofThresholdCouldNotBeSaved,
+      );
+    } finally {
+      if (mounted) setState(() => _savingThreshold = false);
+    }
+  }
+
+  Future<void> _removeType(LotActivityType type) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await confirmMajorAction(
+      context,
+      title: l10n.lotActivityTypeRemoveTitle,
+      message: l10n.lotActivityTypeRemoveExplain,
+      confirmLabel: l10n.lotActivityTypeRemove,
+      icon: Icons.delete_outline,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('deleteLotActivityType')
+          .call<Object?>({
+        'businessId': widget.businessId,
+        'typeId': type.id,
+      });
+      if (!mounted) return;
+      AppHaptics.commit();
+      showSuccessSnackBar(context, l10n.lotActivityTypeRemoved);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      // The server refuses a type that recorded entries still point at, and
+      // says how many and to rename it instead. That sentence is the whole
+      // answer, so it is shown as written.
+      showErrorSnackBar(context, error.message ?? l10n.lotCouldNotSave);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _SheetShell(
+      title: l10n.lotLedgerSettings,
+      subtitle: l10n.lotActivityTypesSubtitle,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.lotActivityTypesTitle,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (widget.types.isEmpty)
+            Text(
+              l10n.lotActivityTypesEmpty,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: AppColors.muted,
+              ),
+            )
+          else
+            for (final type in widget.types)
+              _ActivityTypeRow(
+                type: type,
+                onEdit: () => showLotSheet(
+                  context,
+                  _ActivityTypeSheet(
+                    businessId: widget.businessId,
+                    type: type,
+                  ),
+                ),
+                onRemove: () => _removeType(type),
+              ),
+          const SizedBox(height: AppSpacing.sm),
+          _ActionRow(
+            icon: Icons.add,
+            label: l10n.lotActivityTypeAdd,
+            onTap: () => showLotSheet(
+              context,
+              _ActivityTypeSheet(businessId: widget.businessId),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            l10n.lotProofThresholdTitle,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.lotProofThresholdHint,
+            style: const TextStyle(
+              fontSize: 12.5,
+              height: 1.4,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _threshold,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: l10n.lotAmount,
+              prefixText: '\$',
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _SheetButton(
+            label: l10n.lotSave,
+            busy: _savingThreshold,
+            busyLabel: l10n.lotSaving,
+            onTap: _saveThreshold,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityTypeRow extends StatelessWidget {
+  const _ActivityTypeRow({
+    required this.type,
+    required this.onEdit,
+    required this.onRemove,
+  });
+
+  final LotActivityType type;
+  final VoidCallback onEdit;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: PressableScale(
+              onTap: onEdit,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.cream,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  border: Border.all(color: AppColors.rule),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            type.label,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: type.active
+                                  ? AppColors.ink
+                                  : AppColors.muted,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            // A hidden type says so; otherwise the useful
+                            // second line is the price staff will see.
+                            type.active
+                                ? formatLotCents(type.defaultFeeCents)
+                                : '${formatLotCents(type.defaultFeeCents)} · '
+                                    '${l10n.lotActivityTypeHidden}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: AppColors.muted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(Icons.delete_outline, size: 19),
+            color: AppColors.muted,
+            tooltip: l10n.lotActivityTypeRemove,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityTypeSheet extends StatefulWidget {
+  const _ActivityTypeSheet({required this.businessId, this.type});
+
+  final String businessId;
+
+  /// When set, the sheet edits this activity instead of adding one.
+  final LotActivityType? type;
+
+  @override
+  State<_ActivityTypeSheet> createState() => _ActivityTypeSheetState();
+}
+
+class _ActivityTypeSheetState extends State<_ActivityTypeSheet> {
+  late final TextEditingController _label =
+      TextEditingController(text: widget.type?.label ?? '');
+  late final TextEditingController _fee = TextEditingController(
+    text: widget.type != null && widget.type!.defaultFeeCents > 0
+        ? (widget.type!.defaultFeeCents / 100).toStringAsFixed(2)
+        : '',
+  );
+  late bool _needsAuctionHouse = widget.type?.needsAuctionHouse ?? false;
+  late bool _active = widget.type?.active ?? true;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _label.dispose();
+    _fee.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_label.text.trim().isEmpty) {
+      AppHaptics.refuse();
+      showErrorSnackBar(context, l10n.lotActivityTypeNameRequired);
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final typeId = widget.type?.id ?? '';
+      await FirebaseFunctions.instance
+          .httpsCallable('upsertLotActivityType')
+          .call<Object?>({
+        if (typeId.isNotEmpty) 'typeId': typeId,
+        'businessId': widget.businessId,
+        'label': _label.text.trim(),
+        'defaultFeeCents': lotDollarsToCents(_fee.text) ?? 0,
+        'needsAuctionHouse': _needsAuctionHouse,
+        'active': _active,
+        'sortOrder': widget.type?.sortOrder ?? 0,
+      });
+      if (!mounted) return;
+      AppHaptics.commit();
+      Navigator.of(context).pop();
+      showSuccessSnackBar(context, l10n.lotActivityTypeSaved);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      showErrorSnackBar(
+        context,
+        error.message ?? l10n.lotActivityTypeCouldNotBeSaved,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _SheetShell(
+      title: widget.type != null
+          ? widget.type!.label
+          : l10n.lotActivityTypeAdd,
+      footer: _SheetButton(
+        label: l10n.lotSave,
+        busy: _busy,
+        busyLabel: l10n.lotSaving,
+        onTap: _submit,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _label,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(labelText: l10n.lotActivityTypeName),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _fee,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: l10n.lotActivityTypeFee,
+              prefixText: '\$',
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _needsAuctionHouse,
+            onChanged: (v) => setState(() => _needsAuctionHouse = v),
+            title: Text(
+              l10n.lotActivityTypeNeedsAuctionHouse,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _active,
+            onChanged: (v) => setState(() => _active = v),
+            title: Text(
+              l10n.lotActivityTypeShown,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
         ],
       ),
     );

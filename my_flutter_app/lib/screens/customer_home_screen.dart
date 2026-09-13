@@ -198,7 +198,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Widget _root(int index) {
     switch (index) {
       case 0:
-        return const HomeTab();
+        // Home's hero opens the same chooser the raised button does.
+        return HomeTab(onShip: _openShip);
       case 1:
         return const ShippingTab();
       case 2:

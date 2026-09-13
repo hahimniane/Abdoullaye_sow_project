@@ -5576,6 +5576,25 @@ class AppLocalizationsFr extends AppLocalizations {
   String get hubParkCarSubtitle => 'Stocker auprès d’une entreprise';
 
   @override
+  String get homeHeroTitle => 'Envoyer quelque chose au pays';
+
+  @override
+  String get homeHeroSubtitle =>
+      'Un fût, du fret ou une voiture. Choisissez ce qui part, on s\'occupe du reste.';
+
+  @override
+  String get homeHeroCta => 'Commencer un envoi';
+
+  @override
+  String get homeHelpTitle => 'Besoin d\'aide ?';
+
+  @override
+  String get homeHelpSubtitle => 'Écrivez à l\'équipe Laawol';
+
+  @override
+  String get homeSignInSubtitle => 'Suivez vos commandes et vos envois';
+
+  @override
   String get hubActivitySubtitle =>
       'Vos commandes, expéditions et votre portefeuille.';
 
@@ -8433,4 +8452,192 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get parkingRegisteredBy => 'Enregistré par';
+
+  @override
+  String get parkingLeaves => 'Départ';
+
+  @override
+  String get parkingBilledThrough => 'Facturé jusqu\'au';
+
+  @override
+  String get parkingNothingBilledYet => 'Rien pour l\'instant';
+
+  @override
+  String get parkingUnbilled => 'Non facturé';
+
+  @override
+  String parkingUnbilledDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count jours',
+      one: '1 jour',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get parkingAccrualPricedNote =>
+      'Le prix a été fixé pour la date de départ à l\'enregistrement : rien ne s\'accumule jour après jour.';
+
+  @override
+  String parkingAccrualSinceNote(String date) {
+    return 'S\'accumule depuis le $date. Facturez quand vous voulez — la voiture reste en place.';
+  }
+
+  @override
+  String get parkingAccrualFirstBillNote =>
+      'Rien n\'a encore été facturé. Facturez jusqu\'à aujourd\'hui pour envoyer le premier lien.';
+
+  @override
+  String get parkingAccrualCaughtUpNote =>
+      'Tout est facturé jusqu\'à aujourd\'hui.';
+
+  @override
+  String parkingBillThroughToday(String amount) {
+    return 'Facturer $amount jusqu\'à aujourd\'hui';
+  }
+
+  @override
+  String get parkingNothingToBill => 'Rien à facturer';
+
+  @override
+  String get parkingBillLinkSent => 'Lien de paiement envoyé.';
+
+  @override
+  String get parkingBillCouldNotBeSent =>
+      'Le lien de paiement n\'a pas pu être envoyé.';
+
+  @override
+  String get parkingPaymentReceivedInPerson => 'Paiement reçu en personne';
+
+  @override
+  String get parkingRecordedAsReceived => 'Enregistré comme reçu.';
+
+  @override
+  String get parkingCarLeftToday => 'La voiture est partie aujourd\'hui';
+
+  @override
+  String get parkingCarLeftTodayExplain =>
+      'La date du jour devient la date de départ et l\'accumulation s\'arrête. Ce qui est dû reste dû.';
+
+  @override
+  String get parkingStayClosed => 'Séjour clôturé.';
+
+  @override
+  String get parkingStayCouldNotBeClosed =>
+      'Le séjour n\'a pas pu être clôturé.';
+
+  @override
+  String parkingMarkFullyPaid(String amount) {
+    return 'Marquer comme entièrement payé ($amount)';
+  }
+
+  @override
+  String get parkingMarkedFullyPaid => 'Marqué comme payé.';
+
+  @override
+  String get parkingNothingOutstanding => 'Rien n\'est dû sur cette voiture.';
+
+  @override
+  String parkingPaidSoFarOfTotal(String paid, String total, String owed) {
+    return 'Payé à ce jour : $paid sur $total — $owed restant dû';
+  }
+
+  @override
+  String get lotActivityTypesTitle => 'Prestations et tarifs';
+
+  @override
+  String get lotActivityTypesSubtitle =>
+      'Ce que le parc facture, et le prix que le personnel voit à l\'enregistrement.';
+
+  @override
+  String get lotActivityTypeName => 'Nom';
+
+  @override
+  String get lotActivityTypeFee => 'Tarif par défaut (\$)';
+
+  @override
+  String get lotActivityTypeNeedsAuctionHouse => 'Demande la maison de vente';
+
+  @override
+  String get lotActivityTypeShown => 'Proposé à l\'enregistrement';
+
+  @override
+  String get lotActivityTypeAdd => 'Ajouter une prestation';
+
+  @override
+  String get lotActivityTypeSaved => 'Prestation enregistrée.';
+
+  @override
+  String get lotActivityTypeRemoved => 'Supprimée.';
+
+  @override
+  String get lotActivityTypeRemove => 'Supprimer';
+
+  @override
+  String get lotActivityTypeRemoveTitle => 'Supprimer cette prestation';
+
+  @override
+  String get lotActivityTypeRemoveExplain =>
+      'Elle disparaît de la liste proposée. Les entrées déjà enregistrées gardent le nom sous lequel elles ont été saisies.';
+
+  @override
+  String get lotActivityTypeNameRequired => 'Donnez un nom à la prestation.';
+
+  @override
+  String get lotActivityTypesEmpty =>
+      'Aucune prestation pour l\'instant. Ajoutez la première pour que le personnel ait quelque chose à enregistrer.';
+
+  @override
+  String get lotActivityTypeCouldNotBeSaved =>
+      'La prestation n\'a pas pu être enregistrée.';
+
+  @override
+  String get lotProofThresholdTitle => 'Exiger un reçu à partir de';
+
+  @override
+  String get lotProofThresholdHint =>
+      'Le personnel doit joindre un reçu à partir de ce montant. Zéro n\'en demande jamais.';
+
+  @override
+  String get lotProofNeverRequired => 'Aucun reçu n\'est exigé.';
+
+  @override
+  String get lotProofThresholdSaved => 'Règle de reçu enregistrée.';
+
+  @override
+  String get lotProofThresholdCouldNotBeSaved =>
+      'La règle de reçu n\'a pas pu être enregistrée.';
+
+  @override
+  String get parkingRateCardsTitle => 'Autres tarifs (facultatif)';
+
+  @override
+  String get parkingRateCardsHint =>
+      'Une place plus grande, un tarif longue durée, un prix pour le concessionnaire qui amène plusieurs voitures. Donnez un nom et un prix par jour à chacun ; le personnel le choisit à l\'enregistrement. Une ligne sans nom ni prix n\'est pas enregistrée.';
+
+  @override
+  String get parkingRateCardName => 'Nom du tarif';
+
+  @override
+  String get parkingRateCardNameHint => 'ex. SUV / grand gabarit';
+
+  @override
+  String get parkingRateCardDaily => 'Prix / jour (\$)';
+
+  @override
+  String get parkingRateCardMinDays => 'Jours min.';
+
+  @override
+  String get parkingRateCardAdd => 'Ajouter un tarif';
+
+  @override
+  String get parkingRateCardRemove => 'Supprimer ce tarif';
+
+  @override
+  String get lotLedgerSettings => 'Réglages du registre';
+
+  @override
+  String get lotActivityTypeHidden => 'Masquée';
 }

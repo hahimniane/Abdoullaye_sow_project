@@ -379,6 +379,21 @@ export function businessParkingAmountDue(row: ParkingRowLike) {
  * @param row A parkedCars document.
  * @return "paid", "awaiting", or "none".
  */
+/**
+ * Has the lot already nullified this payment link?
+ *
+ * The server stamps `paymentLinkCancelledAt`; the field's presence is the
+ * whole signal, so a timestamp, a string or a sentinel written by an
+ * optimistic client all read the same. Mirrors the app's
+ * `isBusinessParkingPaymentLinkCancelled`.
+ */
+export function isBusinessParkingPaymentLinkCancelled(
+  row: ParkingRowLike,
+): boolean {
+  return (row as { paymentLinkCancelledAt?: unknown })
+    ?.paymentLinkCancelledAt != null;
+}
+
 export function businessParkingPaymentTone(
   row: ParkingRowLike,
 ): "paid" | "awaiting" | "none" {

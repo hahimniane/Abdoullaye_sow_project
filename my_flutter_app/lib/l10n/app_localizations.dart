@@ -9852,6 +9852,42 @@ abstract class AppLocalizations {
   /// **'Store with a business'**
   String get hubParkCarSubtitle;
 
+  /// No description provided for @homeHeroTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send something home'**
+  String get homeHeroTitle;
+
+  /// No description provided for @homeHeroSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A barrel, freight, or a car. Pick what\'s going and we\'ll take it from there.'**
+  String get homeHeroSubtitle;
+
+  /// No description provided for @homeHeroCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a shipment'**
+  String get homeHeroCta;
+
+  /// No description provided for @homeHelpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Need a hand?'**
+  String get homeHelpTitle;
+
+  /// No description provided for @homeHelpSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Message the Laawol team'**
+  String get homeHelpSubtitle;
+
+  /// No description provided for @homeSignInSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Track your orders and shipments'**
+  String get homeSignInSubtitle;
+
   /// No description provided for @hubActivitySubtitle.
   ///
   /// In en, this message translates to:
@@ -14771,6 +14807,324 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Registered by'**
   String get parkingRegisteredBy;
+
+  /// No description provided for @parkingLeaves.
+  ///
+  /// In en, this message translates to:
+  /// **'Leaves'**
+  String get parkingLeaves;
+
+  /// No description provided for @parkingBilledThrough.
+  ///
+  /// In en, this message translates to:
+  /// **'Billed through'**
+  String get parkingBilledThrough;
+
+  /// No description provided for @parkingNothingBilledYet.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing yet'**
+  String get parkingNothingBilledYet;
+
+  /// No description provided for @parkingUnbilled.
+  ///
+  /// In en, this message translates to:
+  /// **'Unbilled'**
+  String get parkingUnbilled;
+
+  /// No description provided for @parkingUnbilledDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day} other{{count} days}}'**
+  String parkingUnbilledDays(int count);
+
+  /// No description provided for @parkingAccrualPricedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Priced for its leave date when it was recorded, so nothing accrues day by day.'**
+  String get parkingAccrualPricedNote;
+
+  /// No description provided for @parkingAccrualSinceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Accruing since {date}. Bill it whenever you like — the car stays in place.'**
+  String parkingAccrualSinceNote(String date);
+
+  /// No description provided for @parkingAccrualFirstBillNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing billed yet. Bill it through today to send the first link.'**
+  String get parkingAccrualFirstBillNote;
+
+  /// No description provided for @parkingAccrualCaughtUpNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything up to today has been billed.'**
+  String get parkingAccrualCaughtUpNote;
+
+  /// No description provided for @parkingBillThroughToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Bill {amount} through today'**
+  String parkingBillThroughToday(String amount);
+
+  /// No description provided for @parkingNothingToBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to bill'**
+  String get parkingNothingToBill;
+
+  /// No description provided for @parkingBillLinkSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link sent.'**
+  String get parkingBillLinkSent;
+
+  /// No description provided for @parkingBillCouldNotBeSent.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment link could not be sent.'**
+  String get parkingBillCouldNotBeSent;
+
+  /// No description provided for @parkingPaymentReceivedInPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment received in person'**
+  String get parkingPaymentReceivedInPerson;
+
+  /// No description provided for @parkingRecordedAsReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded as received.'**
+  String get parkingRecordedAsReceived;
+
+  /// No description provided for @parkingCarLeftToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Car left today'**
+  String get parkingCarLeftToday;
+
+  /// No description provided for @parkingCarLeftTodayExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'This stamps today as the leave date and stops the daily charge. Anything still owed stays owed.'**
+  String get parkingCarLeftTodayExplain;
+
+  /// No description provided for @parkingStayClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Stay closed.'**
+  String get parkingStayClosed;
+
+  /// No description provided for @parkingStayCouldNotBeClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'The stay could not be closed.'**
+  String get parkingStayCouldNotBeClosed;
+
+  /// No description provided for @parkingMarkFullyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as fully paid ({amount})'**
+  String parkingMarkFullyPaid(String amount);
+
+  /// No description provided for @parkingMarkedFullyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked as paid.'**
+  String get parkingMarkedFullyPaid;
+
+  /// No description provided for @parkingNothingOutstanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is outstanding on this car.'**
+  String get parkingNothingOutstanding;
+
+  /// No description provided for @parkingPaidSoFarOfTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid so far: {paid} of {total} — {owed} still owed'**
+  String parkingPaidSoFarOfTotal(String paid, String total, String owed);
+
+  /// No description provided for @lotActivityTypesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Activities & rates'**
+  String get lotActivityTypesTitle;
+
+  /// No description provided for @lotActivityTypesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What this lot charges for, and the price staff see when they record it.'**
+  String get lotActivityTypesSubtitle;
+
+  /// No description provided for @lotActivityTypeName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get lotActivityTypeName;
+
+  /// No description provided for @lotActivityTypeFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Default fee (\$)'**
+  String get lotActivityTypeFee;
+
+  /// No description provided for @lotActivityTypeNeedsAuctionHouse.
+  ///
+  /// In en, this message translates to:
+  /// **'Asks for an auction house'**
+  String get lotActivityTypeNeedsAuctionHouse;
+
+  /// No description provided for @lotActivityTypeShown.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown when recording'**
+  String get lotActivityTypeShown;
+
+  /// No description provided for @lotActivityTypeAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add an activity'**
+  String get lotActivityTypeAdd;
+
+  /// No description provided for @lotActivityTypeSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity saved.'**
+  String get lotActivityTypeSaved;
+
+  /// No description provided for @lotActivityTypeRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed.'**
+  String get lotActivityTypeRemoved;
+
+  /// No description provided for @lotActivityTypeRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get lotActivityTypeRemove;
+
+  /// No description provided for @lotActivityTypeRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this activity'**
+  String get lotActivityTypeRemoveTitle;
+
+  /// No description provided for @lotActivityTypeRemoveExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'It leaves the list staff pick from. Entries already recorded keep the name they were saved with.'**
+  String get lotActivityTypeRemoveExplain;
+
+  /// No description provided for @lotActivityTypeNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Give the activity a name.'**
+  String get lotActivityTypeNameRequired;
+
+  /// No description provided for @lotActivityTypesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No activities yet. Add the first one so staff have something to record.'**
+  String get lotActivityTypesEmpty;
+
+  /// No description provided for @lotActivityTypeCouldNotBeSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'The activity could not be saved.'**
+  String get lotActivityTypeCouldNotBeSaved;
+
+  /// No description provided for @lotProofThresholdTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Require a receipt from'**
+  String get lotProofThresholdTitle;
+
+  /// No description provided for @lotProofThresholdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff must attach a receipt at this amount and above. Zero never asks for one.'**
+  String get lotProofThresholdHint;
+
+  /// No description provided for @lotProofNeverRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'A receipt is never required.'**
+  String get lotProofNeverRequired;
+
+  /// No description provided for @lotProofThresholdSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt rule saved.'**
+  String get lotProofThresholdSaved;
+
+  /// No description provided for @lotProofThresholdCouldNotBeSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'The receipt rule could not be saved.'**
+  String get lotProofThresholdCouldNotBeSaved;
+
+  /// No description provided for @parkingRateCardsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Other prices (optional)'**
+  String get parkingRateCardsTitle;
+
+  /// No description provided for @parkingRateCardsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A bigger space, a long-stay deal, a rate for a dealer who brings several cars. Give each one a name and a price per day; staff pick it when they record a car. A row without a name and a price is not saved.'**
+  String get parkingRateCardsHint;
+
+  /// No description provided for @parkingRateCardName.
+  ///
+  /// In en, this message translates to:
+  /// **'Price name'**
+  String get parkingRateCardName;
+
+  /// No description provided for @parkingRateCardNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. SUV / oversize'**
+  String get parkingRateCardNameHint;
+
+  /// No description provided for @parkingRateCardDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Price / day (\$)'**
+  String get parkingRateCardDaily;
+
+  /// No description provided for @parkingRateCardMinDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Min days'**
+  String get parkingRateCardMinDays;
+
+  /// No description provided for @parkingRateCardAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a price'**
+  String get parkingRateCardAdd;
+
+  /// No description provided for @parkingRateCardRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this price'**
+  String get parkingRateCardRemove;
+
+  /// No description provided for @lotLedgerSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Ledger settings'**
+  String get lotLedgerSettings;
+
+  /// No description provided for @lotActivityTypeHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Hidden'**
+  String get lotActivityTypeHidden;
 }
 
 class _AppLocalizationsDelegate
