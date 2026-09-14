@@ -102,6 +102,24 @@ void main() {
     expect(provider, contains("'parkingRates': ?parkingRates,"));
   });
 
+  test('the parked-car list carries the columns the console table has', () {
+    // The console opens on a dense table; the app only had cards, so the lot
+    // could see a car but not what it had run up, what it costs a day, or who
+    // took the money. A phone has one column, not eleven — the assertion is
+    // that every figure is present, not that it is laid out the same way.
+    final home = read('lib/screens/home_menu.dart');
+    expect(home, contains('_ParkingListRow'));
+    expect(home, contains('_ParkingViewToggle'));
+    // Days, rate and total.
+    expect(home, contains('businessParkingStayDays(fields)'));
+    expect(home, contains("fields['dailyRate']"));
+    expect(home, contains('businessParkingAmountDue(fields)'));
+    // Registered by / Received by, which need the team loaded.
+    expect(home, contains("fields['enteredByUid']"));
+    expect(home, contains("fields['receivedByStaffId']"));
+    expect(home, contains('_loadStaffNames'));
+  });
+
   test('the console stops handing staff a cancelled payment link', () {
     final lib = read('../admin_web/src/lib/business-parking-entry.ts');
     final panel =

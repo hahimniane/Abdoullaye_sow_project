@@ -8640,4 +8640,21 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get lotActivityTypeHidden => 'Masquée';
+
+  @override
+  String get parkingViewList => 'Liste';
+
+  @override
+  String get parkingViewCards => 'Cartes';
+
+  @override
+  String parkingDaysAtRate(int count, String rate) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count jours',
+      one: '1 jour',
+    );
+    return '$_temp0 · $rate/jour';
+  }
 }

@@ -143,6 +143,14 @@ class _HomeMenuState extends State<HomeMenu> {
   /// off screen.
   ParkingFacets _parkingFacets = const ParkingFacets();
 
+  /// The console offers the same two layouts and opens on the dense one: a lot
+  /// with thirty cars in it is answering "who owes me", and that is a question
+  /// about a column, not about one card at a time.
+  bool _parkingDenseList = true;
+
+  /// uid -> person, for the "Registered by" and "Received by" columns.
+  Map<String, String> _staffNames = const {};
+
   /// Free text over tracking code, owner, car and VIN. A lot with a windscreen
   /// slip in its hand looks the car up by its code; without this the only way
   /// to find one was to scroll.
@@ -196,6 +204,7 @@ class _HomeMenuState extends State<HomeMenu> {
 
     if (auth.hasBusinessPermission(BusinessPermission.parking)) {
       _loadParkingSpaces(auth.businessId);
+      _loadStaffNames(auth.businessId);
       _parkedCarsSubscription =
           scope(
             FirebaseFirestore.instance.collection('parkedCars'),
@@ -348,6 +357,34 @@ class _HomeMenuState extends State<HomeMenu> {
   /// A one-shot read of the lot's capacity. Silent on failure: the scoreboard
   /// simply drops its "Spaces" tile, which is also what it does when the field
   /// was never set.
+  /// Who entered a record and who took the money, as names. The console shows
+  /// both columns; without them the app's list could say a car was paid but
+  /// never who to ask about it.
+  Future<void> _loadStaffNames(String? businessId) async {
+    final id = (businessId ?? '').trim();
+    if (id.isEmpty) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('businessId', isEqualTo: id)
+          .limit(200)
+          .get();
+      if (!mounted) return;
+      final names = <String, String>{};
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        final name = (d['fullName'] ?? d['name'] ?? d['email'] ?? '')
+            .toString()
+            .trim();
+        if (name.isNotEmpty) names[doc.id] = name;
+      }
+      setState(() => _staffNames = names);
+    } catch (_) {
+      // No permission to read the team: the columns stay blank and every
+      // other part of the list still works.
+    }
+  }
+
   Future<void> _loadParkingSpaces(String? businessId) async {
     if (businessId == null || businessId.isEmpty) return;
     try {
@@ -590,6 +627,10 @@ class _HomeMenuState extends State<HomeMenu> {
                   l10n: l10n,
                   records: _filteredRecords,
                   isLoading: _isLoading,
+                  denseList: _parkingDenseList,
+                  onDenseListChanged: (dense) =>
+                      setState(() => _parkingDenseList = dense),
+                  staffNames: _staffNames,
                   selectedCategory: _selectedCategory,
                   onCategoryChanged: _selectCategory,
                   facets: _parkingFacets,
@@ -1196,6 +1237,9 @@ class _ActivitySection extends StatelessWidget {
     required this.l10n,
     required this.records,
     required this.isLoading,
+    required this.denseList,
+    required this.onDenseListChanged,
+    required this.staffNames,
     required this.selectedCategory,
     required this.onCategoryChanged,
     required this.facets,
@@ -1214,6 +1258,9 @@ class _ActivitySection extends StatelessWidget {
   final AppLocalizations l10n;
   final List<ActivityRecord> records;
   final bool isLoading;
+  final bool denseList;
+  final ValueChanged<bool> onDenseListChanged;
+  final Map<String, String> staffNames;
   final ServiceCategory selectedCategory;
   final ValueChanged<ServiceCategory> onCategoryChanged;
   final ParkingFacets facets;
@@ -1368,6 +1415,18 @@ class _ActivitySection extends StatelessWidget {
             const SizedBox(height: 12),
             _ParkingScoreboard(l10n: l10n, totals: parkingTotals!),
           ],
+          // Same two layouts as the console, same default. The dense one
+          // carries the columns a card cannot: days, rate, total, who
+          // registered the car and who took the money.
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _ParkingViewToggle(
+              l10n: l10n,
+              dense: denseList,
+              onChanged: onDenseListChanged,
+            ),
+          ),
           // Tracking code, owner, car, VIN - the same fields the console
           // searches, in the same order, so the same query finds the same car
           // on both.
@@ -1540,6 +1599,21 @@ class _ActivitySection extends StatelessWidget {
                     (record.payload as ParkedCar).paymentFields,
                   )
                 : '';
+            if (record.category == ServiceCategory.parking &&
+                record.payload is ParkedCar &&
+                denseList) {
+              final car = record.payload as ParkedCar;
+              return _ParkingListRow(
+                l10n: l10n,
+                car: car,
+                staffNames: staffNames,
+                onTap: () => Navigator.pushNamed(
+                  context,
+                  '/parked-car-details',
+                  arguments: car,
+                ),
+              );
+            }
             final card = _RecordCard(
               title: record.title,
               subtitle: paymentNote.isEmpty
@@ -1707,6 +1781,243 @@ class _ParkingStat extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// List or Cards, the console's own pair.
+class _ParkingViewToggle extends StatelessWidget {
+  const _ParkingViewToggle({
+    required this.l10n,
+    required this.dense,
+    required this.onChanged,
+  });
+
+  final AppLocalizations l10n;
+  final bool dense;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segment(l10n.parkingViewList, dense, () => onChanged(true)),
+          _segment(l10n.parkingViewCards, !dense, () => onChanged(false)),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment(String label, bool selected, VoidCallback onTap) {
+    return PressableScale(
+      onTap: () {
+        AppHaptics.selection();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        color: selected ? AppColors.ink : Colors.transparent,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: selected ? AppColors.paper : AppColors.muted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One parked car, the way the console's table row shows it.
+///
+/// The console has eleven columns; a phone has one. Nothing is dropped — the
+/// columns are stacked into three lines that read left to right the way the
+/// table does: what the car is and what it costs, who left it and what it has
+/// run up, then the dates, the standing, and the two names. Money sits hard
+/// right on its own line so a column of totals still scans down the page.
+class _ParkingListRow extends StatelessWidget {
+  const _ParkingListRow({
+    required this.l10n,
+    required this.car,
+    required this.staffNames,
+    required this.onTap,
+  });
+
+  final AppLocalizations l10n;
+  final ParkedCar car;
+  final Map<String, String> staffNames;
+  final VoidCallback onTap;
+
+  String _staff(Object? uid) {
+    final key = (uid ?? '').toString().trim();
+    if (key.isEmpty) return '';
+    return staffNames[key] ?? '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fields = car.paymentFields;
+    final currency = NumberFormat.simpleCurrency(
+      locale: Localizations.localeOf(context).toString(),
+      name: 'USD',
+    );
+    final dates = DateFormat.MMMd(Localizations.localeOf(context).toString());
+
+    final vehicle = [car.carYear, car.carMake, car.carModel]
+        .where((part) => part.trim().isNotEmpty)
+        .join(' ');
+    final identifier = car.vinNumber.trim().isNotEmpty
+        ? car.vinNumber.trim()
+        : car.trackingCode;
+    final depositor = (fields['customerName'] ?? car.ownerName ?? '')
+        .toString()
+        .trim();
+    final phone = (fields['customerPhone'] ?? '').toString().trim();
+
+    final days = businessParkingStayDays(fields);
+    final rate = num.tryParse('${fields['dailyRate'] ?? 0}')?.toDouble() ?? 0;
+    final total = businessParkingAmountDue(fields);
+    final openEnded = car.parkingEndDate == null;
+
+    final registeredBy = _staff(fields['enteredByUid']);
+    final receivedBy = _staff(
+      fields['receivedByStaffId'] ?? fields['directPaymentMarkedByUid'],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: PressableScale(
+        onTap: () {
+          AppHaptics.selection();
+          onTap();
+        },
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          decoration: BoxDecoration(
+            color: AppColors.paper,
+            border: Border.all(color: AppColors.rule),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            vehicle.isEmpty ? car.trackingCode : vehicle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          total > 0 ? currency.format(total) : '—',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink,
+                            // Digits line up down the column.
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            [
+                              if (depositor.isNotEmpty) depositor,
+                              if (phone.isNotEmpty) phone,
+                              identifier,
+                            ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          rate > 0
+                              ? l10n.parkingDaysAtRate(
+                                  days, currency.format(rate))
+                              : l10n.parkingUnbilledDays(days),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.muted,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (car.isBusinessEntered)
+                          BusinessParkingPaymentBadge(paymentFields: fields)
+                        else
+                          _rowMeta(businessParkingPaymentStatusLabel(
+                              l10n, fields)),
+                        _rowMeta(
+                          '${dates.format(car.parkingDate)} → '
+                          '${openEnded ? l10n.parkingOpenEnded : dates.format(car.parkingEndDate!)}',
+                        ),
+                        if (registeredBy.isNotEmpty)
+                          _rowMeta('${l10n.parkingRegisteredBy}: $registeredBy'),
+                        if (receivedBy.isNotEmpty)
+                          _rowMeta('${l10n.parkingReceivedBy}: $receivedBy'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(left: 6, top: 2),
+                child: Icon(
+                  Icons.arrow_forward_ios,
+                  color: AppColors.muted,
+                  size: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _rowMeta(String text) {
+    return Text(
+      text,
+      style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
     );
   }
 }

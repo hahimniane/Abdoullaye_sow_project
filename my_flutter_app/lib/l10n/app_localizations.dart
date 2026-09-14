@@ -15125,6 +15125,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hidden'**
   String get lotActivityTypeHidden;
+
+  /// No description provided for @parkingViewList.
+  ///
+  /// In en, this message translates to:
+  /// **'List'**
+  String get parkingViewList;
+
+  /// No description provided for @parkingViewCards.
+  ///
+  /// In en, this message translates to:
+  /// **'Cards'**
+  String get parkingViewCards;
+
+  /// No description provided for @parkingDaysAtRate.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day} other{{count} days}} · {rate}/day'**
+  String parkingDaysAtRate(int count, String rate);
 }
 
 class _AppLocalizationsDelegate
