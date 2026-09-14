@@ -3695,5 +3695,18 @@
   "parkingRateCardAdd": "Add a price",
   "parkingRateCardRemove": "Remove this price",
   "lotLedgerSettings": "Ledger settings",
-  "lotActivityTypeHidden": "Hidden"
+  "lotActivityTypeHidden": "Hidden",
+  "parkingViewList": "List",
+  "parkingViewCards": "Cards",
+  "parkingDaysAtRate": "{count, plural, =1{1 day} other{{count} days}} · {rate}/day",
+  "@parkingDaysAtRate": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
+  }
 }

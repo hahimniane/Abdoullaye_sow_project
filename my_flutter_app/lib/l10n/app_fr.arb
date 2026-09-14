@@ -3695,5 +3695,18 @@
         "type": "String"
       }
     }
+  },
+  "parkingViewList": "Liste",
+  "parkingViewCards": "Cartes",
+  "parkingDaysAtRate": "{count, plural, =1{1 jour} other{{count} jours}} · {rate}/jour",
+  "@parkingDaysAtRate": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
   }
 }
