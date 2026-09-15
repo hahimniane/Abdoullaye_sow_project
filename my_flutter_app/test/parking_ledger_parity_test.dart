@@ -120,6 +120,33 @@ void main() {
     expect(home, contains('_loadStaffNames'));
   });
 
+  test('an activity says who recorded it, the way a parked car does', () {
+    // The field has been written on every activity since createLotActivity
+    // existed (`recordedByStaffId: uid`); neither surface read it. A parked
+    // car has carried "Registered by" since its list grew the column, and an
+    // activity is the other half of the same ledger.
+    final model = read('lib/services/lot_ledger.dart');
+    final screen = read('lib/screens/lot_ledger_screen.dart');
+    final panel =
+        read('../admin_web/src/components/business/operations-panels.tsx');
+    expect(model, contains("recordedByStaffId: _s(d['recordedByStaffId'], 120)"));
+    // On the row and in the detail, not one without the other.
+    expect(screen, contains('activity.recordedByStaffId'));
+    expect(screen, contains('l10n.lotRecordedBy'));
+    expect(panel, contains('staffName(text(r.recordedByStaffId, ""))'));
+  });
+
+  test('neither console hands back a uid when it cannot name someone', () {
+    // A business may only read its own team, so an outsider is unnameable.
+    // Both helpers used to answer with the raw key.
+    final panel =
+        read('../admin_web/src/components/business/operations-panels.tsx');
+    expect(panel, isNot(contains(r'`${key.slice(0, 6)}\u2026`')));
+    expect(panel, contains('if (!row) return "";'));
+    final car = read('lib/screens/parked_car_details_screen.dart');
+    expect(car, contains("return _staffNames[key] ?? '';"));
+  });
+
   test('the console stops handing staff a cancelled payment link', () {
     final lib = read('../admin_web/src/lib/business-parking-entry.ts');
     final panel =

@@ -7645,14 +7645,16 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     ? thresholdCents
     : DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS;
 
+  // Returns "" rather than the uid when the person cannot be named: a
+  // business may only read its own team, so someone who has since moved, or a
+  // Laawol admin acting on the lot, is unnameable here. Callers decide what to
+  // say instead; the change history holds who it actually was.
   const staffName = (id: string) => {
     if (!id) return "";
     const row = staff.rows.find((s) => String((s as Record<string, unknown>).id) === id);
-    return row
-      ? text((row as Record<string, unknown>).fullName, "") ||
-        text((row as Record<string, unknown>).name, "") ||
-        text((row as Record<string, unknown>).email, id)
-      : id;
+    if (!row) return "";
+    const r = row as Record<string, unknown>;
+    return text(r.fullName, "") || text(r.name, "") || text(r.email, "");
   };
 
 
@@ -8431,6 +8433,12 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                         <span><strong style={{ color: tintForType(String(r.activityTypeId)) }}>{label}</strong><small>{text(r.auctionHouse, "") ? `Auction: ${text(r.auctionHouse, "")}` : r.feeOverridden ? "Priced for this job" : "Standard rate"}</small></span>
                         <span>
                           <strong>{formatDate(r.activityDate)}</strong>
+                          {/* Who entered it. A parked car has carried this
+                              since its list grew a "Registered by" column, and
+                              an activity is the other half of the same ledger:
+                              when a figure looks wrong, the first question is
+                              who put it there. */}
+                          {staffName(text(r.recordedByStaffId, "")) && <small>By {staffName(text(r.recordedByStaffId, ""))}</small>}
                           {text(r.editedByStaffId, "") && <small>Edited</small>}
                         </span>
                         <span className="lot-col-fee">
@@ -8530,7 +8538,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                                 ) : er.proofRequired ? (
                                   <span className="status-pill danger compact">Proof missing</span>
                                 ) : null}
-                                {text(er.paidByStaffId, "") && <small>· {staffName(text(er.paidByStaffId, ""))}</small>}
+                                {staffName(text(er.paidByStaffId, "")) && <small>· {staffName(text(er.paidByStaffId, ""))}</small>}
                                 {text(er.note, "") && <small>· {text(er.note, "")}</small>}
                               </div>
                               <div className="lot-expense-purchase-actions">

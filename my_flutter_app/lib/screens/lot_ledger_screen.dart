@@ -2059,12 +2059,21 @@ class _ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final voided = activity.voided;
     final strike = voided ? TextDecoration.lineThrough : null;
     final dateText = activity.activityDate == null
         ? ''
         : DateFormat.MMMd(Localizations.localeOf(context).toLanguageTag())
             .format(activity.activityDate!);
+    // Who entered it, on the row rather than one tap in — the same place a
+    // parked car carries it. A uid is never shown: a person who has left the
+    // business cannot be named, and the change history holds the record.
+    final recordedBy = staff
+            .where((member) => member.id == activity.recordedByStaffId)
+            .firstOrNull
+            ?.name ??
+        '';
 
     return PressableScale(
       onTap: onTap,
@@ -2130,7 +2139,23 @@ class _ActivityCard extends StatelessWidget {
               Row(
                 children: [
                   _StatusPill(activity: activity),
-                  const Spacer(),
+                  const SizedBox(width: AppSpacing.sm),
+                  // Empty when the recorder cannot be named, and then this
+                  // simply holds the space a Spacer used to.
+                  Expanded(
+                    child: Text(
+                      recordedBy.isEmpty
+                          ? ''
+                          : '${l10n.lotRecordedBy}: $recordedBy',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
                   Text(
                     dateText,
                     style: const TextStyle(
@@ -2908,6 +2933,15 @@ class _ActivityDetailSheet extends StatelessWidget {
               value: DateFormat.yMMMEd(
                       Localizations.localeOf(context).toLanguageTag())
                   .format(date),
+            ),
+          // Who entered it, always - a parked car has carried this since the
+          // list grew a "Registered by" column, and an activity is the other
+          // half of the same ledger. It sits above "Received by" because one
+          // person can record a job and another take the money for it.
+          if (_staffName(activity.recordedByStaffId).isNotEmpty)
+            _DetailRow(
+              label: l10n.lotRecordedBy,
+              value: _staffName(activity.recordedByStaffId),
             ),
           if (activity.paymentMethod == lotPaymentMethodDirect) ...[
             _DetailRow(

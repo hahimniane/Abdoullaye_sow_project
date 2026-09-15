@@ -15143,6 +15143,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 day} other{{count} days}} · {rate}/day'**
   String parkingDaysAtRate(int count, String rate);
+
+  /// No description provided for @lotRecordedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded by'**
+  String get lotRecordedBy;
 }
 
 class _AppLocalizationsDelegate

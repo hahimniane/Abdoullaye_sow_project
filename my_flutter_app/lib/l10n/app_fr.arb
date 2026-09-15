@@ -3708,5 +3708,6 @@
         "type": "String"
       }
     }
-  }
+  },
+  "lotRecordedBy": "Enregistré par"
 }
