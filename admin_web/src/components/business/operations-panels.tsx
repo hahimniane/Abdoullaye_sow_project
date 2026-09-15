@@ -4910,11 +4910,18 @@ export function ParkingPanel({
     }
     return map;
   }, [parkingStaff.rows]);
+  // A uid is not a person. This used to answer "Hs8wae\u2026" for anyone the
+  // lot cannot look up - a Laawol admin acting on the lot, or a staff member
+  // who has since moved - which is six characters of noise in a column headed
+  // "Registered by". The rules only let a business read its own team, so an
+  // outsider genuinely cannot be named here; say that instead of showing the
+  // key. Who it actually was is in the car's change history.
   const nameForStaff = (id: unknown) => {
     const key = text(id, "");
     if (!key) return "";
-    return staffNameById.get(key) || `${key.slice(0, 6)}\u2026`;
+    return staffNameById.get(key) || "";
   };
+  const STAFF_UNKNOWN = "Not on your team";
   const [parkingView, setParkingView] = useState<"list" | "cards">("list");
   // Which card the list sent us to, so opening a row lands on that car
   // rather than at the top of thirty of them.
@@ -5719,9 +5726,11 @@ export function ParkingPanel({
                   <span>{badge
                     ? <em className={`pk-pill ${tone === "paid" ? "ok" : "warn"}`}>{badge}</em>
                     : <em className="pk-pill">{parkingStatusLabel(row)}</em>}</span>
-                  <span>{nameForStaff(row.enteredByUid) ? <small>{nameForStaff(row.enteredByUid)}</small> : <small className="muted">\u2014</small>}</span>
+                  <span>{text(row.enteredByUid, "")
+                    ? <small className={nameForStaff(row.enteredByUid) ? undefined : "muted"} title={nameForStaff(row.enteredByUid) ? undefined : STAFF_UNKNOWN}>{nameForStaff(row.enteredByUid) || STAFF_UNKNOWN}</small>
+                    : <small className="muted">\u2014</small>}</span>
                   <span>{tone === "paid" || businessParkingIsPartlyPaid(row)
-                    ? <small>{nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) || <span className="muted">\u2014</span>}</small>
+                    ? <small className={nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) ? undefined : "muted"} title={nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) ? undefined : STAFF_UNKNOWN}>{nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) || STAFF_UNKNOWN}</small>
                     : <small className="muted">\u2014</small>}</span>
                   <span className="pk-acts">
                     <button type="button" className="pk-act" disabled={rowBusy} title={isReceipt ? "Print receipt" : "Print invoice"} aria-label={isReceipt ? "Print receipt" : "Print invoice"} onClick={() => void openParkingDocument(row)}>
@@ -5936,7 +5945,7 @@ export function ParkingPanel({
                 <EmptyState text="No changes recorded yet — nothing has been paid, reverted or edited." />
               ) : historyRows.map((h) => {
                 const hr = h as Record<string, unknown>;
-                const who = staffNameById.get(text(hr.byStaffId, "")) || text(hr.byStaffId, "") || "an unknown user";
+                const who = staffNameById.get(text(hr.byStaffId, "")) || (text(hr.byStaffId, "") ? "someone not on your team" : "an unknown user");
                 return (
                   <div key={String(hr.id)} style={{ padding: "10px 0", borderBottom: "1px solid var(--rule)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>

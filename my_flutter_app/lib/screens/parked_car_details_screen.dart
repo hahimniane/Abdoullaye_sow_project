@@ -1429,12 +1429,17 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     }
   }
 
-  /// A uid as a person, or a short id when the team is not loaded.
+  /// A uid as a person, or nothing.
+  ///
+  /// It used to fall back to six characters of the uid, which is noise where a
+  /// name belongs. A business may only read its own team, so someone acting on
+  /// the lot from outside it - a Laawol admin, a staff member who has since
+  /// moved - genuinely cannot be named here. The change history carries the
+  /// record of who it was.
   String _staffLabel(Object? id) {
     final key = (id ?? '').toString().trim();
     if (key.isEmpty) return '';
-    return _staffNames[key] ??
-        (key.length > 6 ? '${key.substring(0, 6)}\u2026' : key);
+    return _staffNames[key] ?? '';
   }
 
   /// Fill the vehicle from the VIN the moment a full, valid one is entered —
