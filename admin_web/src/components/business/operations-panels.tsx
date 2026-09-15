@@ -5697,7 +5697,13 @@ export function ParkingPanel({
               const badge = isBusinessEnteredParking(row) ? businessParkingPaymentBadge(row) : "";
               const tone = businessParkingPaymentTone(row);
               const rate = Number(row.dailyRate) || 0;
-              const total = Number(row.totalCost ?? row.amountDue) || 0;
+              // `??` only falls through on null/undefined, and totalCost is
+              // written as the string "0" on a record whose price was settled
+              // later - so a car with amountDue 108 rendered "—" in the one
+              // column that matters. Every other cell already uses the helper,
+              // which also prefers amountDue (current) over totalCost (the
+              // estimate taken when the car arrived).
+              const total = businessParkingAmountDue(row);
               const linkUrl = text(row.paymentLinkUrl ?? row.checkoutUrl, "");
               const rowBusy = paidBusyId === row.id;
               const isReceipt = businessParkingDocumentType(row) === "receipt";

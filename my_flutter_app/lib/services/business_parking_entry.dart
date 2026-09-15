@@ -377,11 +377,25 @@ BusinessParkingPaymentTone businessParkingPaymentTone(
   return BusinessParkingPaymentTone.awaiting;
 }
 
-/// What has actually been handed over so far, in dollars. A stay paid in
-/// instalments carries a running amountPaidCents.
-double businessParkingAmountPaid(Map<String, dynamic> row) {
+/// What has actually been handed over so far, in dollars.
+///
+/// A stay paid in instalments carries a running `amountPaidCents`. A stay
+/// settled in one go does not: `markBusinessParkingPaid` and
+/// `recordParkingPaymentReceived` move `paymentStatus` to succeeded and never
+/// write the amount. Reading only the field meant a car the lot had been paid
+/// for reported nothing collected and its whole amount still owed - KEREN's
+/// board read "Collected \$528 / Owed \$108" with the \$108 sitting on a row
+/// badged PAID.
+///
+/// A settled record has been paid for everything it has run up: that is what
+/// settled means. Reading it as accrued keeps Collected + Owed = Generated.
+double businessParkingAmountPaid(Map<String, dynamic> row, {DateTime? now}) {
   final cents = num.tryParse('${row['amountPaidCents'] ?? ''}') ?? 0;
-  return cents.isFinite && cents > 0 ? cents.round() / 100 : 0;
+  if (cents.isFinite && cents > 0) return cents.round() / 100;
+  if (_businessParkingSettled(row)) {
+    return businessParkingAccrued(row, now: now);
+  }
+  return 0;
 }
 
 /// Money is in but the record is not settled - a part payment against a
@@ -968,7 +982,7 @@ double businessParkingAccrued(Map<String, dynamic> row, {DateTime? now}) {
 double businessParkingBalance(Map<String, dynamic> row, {DateTime? now}) {
   if (_trimmed(row['status'], 40) == 'cancelled') return 0;
   final owed = businessParkingAccrued(row, now: now) -
-      businessParkingAmountPaid(row);
+      businessParkingAmountPaid(row, now: now);
   return owed > 0 ? (owed * 100).round() / 100 : 0;
 }
 
@@ -1163,7 +1177,7 @@ BusinessParkingTotals businessParkingTotals(
       }
     }
     if (ended) left += 1;
-    collected += businessParkingAmountPaid(row);
+    collected += businessParkingAmountPaid(row, now: now);
     owed += businessParkingBalance(row, now: now);
   }
   return BusinessParkingTotals(

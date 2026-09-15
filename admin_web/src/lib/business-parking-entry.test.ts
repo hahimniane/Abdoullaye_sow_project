@@ -1148,3 +1148,49 @@ test("a cancelled payment link is recognised, so the console stops offering it",
     false,
   );
 });
+
+test("a car settled by hand counts as collected, not as still owed", () => {
+  // KEREN's 2009 RAV4: paid in person, so paymentStatus moved to succeeded
+  // and amountPaidCents was never written. The board read "Collected $528 /
+  // Owed $108" with the $108 sitting on a row badged PAID.
+  const settled = {
+    source: "business",
+    paymentMethod: "direct",
+    paymentStatus: "succeeded",
+    status: "reserved",
+    parkingDate: "2026-09-03T12:00:00.000Z",
+    parkingEndDate: "2026-09-12T15:42:17.060Z",
+    dailyRate: "12",
+    totalCost: "0",
+    totalCostCents: "0",
+    amountDue: "108",
+    amountDueCents: "10800",
+  };
+  assert.equal(businessParkingAmountPaid(settled), 108);
+  assert.equal(businessParkingBalance(settled), 0);
+
+  // An instalment still wins: it is the figure someone actually typed.
+  assert.equal(
+    businessParkingAmountPaid({...settled, amountPaidCents: 4000}), 40);
+
+  // Nothing changes for a car that has not been settled.
+  const awaiting = {...settled, paymentStatus: "awaiting_direct_payment"};
+  assert.equal(businessParkingAmountPaid(awaiting), 0);
+  assert.equal(businessParkingBalance(awaiting), 108);
+});
+
+test("the recorded amount survives a totalCost of zero", () => {
+  // `??` only falls through on null/undefined. totalCost is written as the
+  // string "0" on a record priced later, so `row.totalCost ?? row.amountDue`
+  // kept the zero and the console's Total column rendered "—" on a car that
+  // owed $108.
+  const row = {
+    source: "business",
+    totalCost: "0",
+    totalCostCents: "0",
+    amountDue: "108",
+    amountDueCents: "10800",
+  };
+  assert.equal(businessParkingAmountDue(row), 108);
+  assert.notEqual(Number(row.totalCost ?? row.amountDue) || 0, 108);
+});

@@ -409,10 +409,28 @@ export function businessParkingPaymentTone(
  * What has actually been handed over so far, in dollars. A stay paid in
  * instalments carries a running amountPaidCents; a stay paid in one go carries
  * the whole amount once it settles.
+ *
+ * That second sentence was the intent and not the behaviour. Settling by hand
+ * - `markBusinessParkingPaid`, `recordParkingPaymentReceived` - moves
+ * `paymentStatus` to succeeded and never writes `amountPaidCents`, so a car
+ * the lot had been paid for reported nothing collected and its whole amount
+ * still owed. KEREN's board read "Collected $528 / Owed $108" with the $108
+ * sitting on a row badged PAID.
+ *
+ * A settled record has been paid for everything it has run up: that is what
+ * settled means. Reading it as accrued keeps Collected + Owed = Generated.
  */
-export function businessParkingAmountPaid(row: ParkingRowLike) {
+export function businessParkingAmountPaid(
+  row: ParkingRowLike,
+  now: Date = new Date(),
+) {
   const cents = Number((row as { amountPaidCents?: unknown })?.amountPaidCents);
-  return Number.isFinite(cents) && cents > 0 ? Math.round(cents) / 100 : 0;
+  if (Number.isFinite(cents) && cents > 0) return Math.round(cents) / 100;
+  const status = trimmed(row?.paymentStatus, 40);
+  if (status === "succeeded" || status === "paid") {
+    return businessParkingAccrued(row, now);
+  }
+  return 0;
 }
 
 /**
@@ -600,7 +618,8 @@ export function businessParkingBalance(
   now: Date = new Date(),
 ): number {
   if (trimmed((row as { status?: unknown })?.status, 40) === "cancelled") return 0;
-  const owed = businessParkingAccrued(row, now) - businessParkingAmountPaid(row);
+  const owed =
+    businessParkingAccrued(row, now) - businessParkingAmountPaid(row, now);
   return owed > 0 ? Math.round(owed * 100) / 100 : 0;
 }
 
@@ -644,7 +663,7 @@ export function businessParkingTotals(
       }
     }
     if (ended) left += 1;
-    collected += businessParkingAmountPaid(row);
+    collected += businessParkingAmountPaid(row, now);
     owed += businessParkingBalance(row, now);
   }
   return {
