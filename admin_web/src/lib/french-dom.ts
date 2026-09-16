@@ -1142,6 +1142,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Choisissez une heure pour visiter l’entreprise approuvée.",
   "Review your contact details before secure payment.":
     "Vérifiez vos coordonnées avant le paiement sécurisé.",
+  "Appointment requests": "Demandes de rendez-vous",
   "Appointment time": "Heure du rendez-vous",
   "Review & pay": "Vérifier et payer",
   "Request progress": "Progression de la demande",
@@ -4412,6 +4413,23 @@ Object.assign(TEXT_TRANSLATIONS, {
   // Undoing money marked received off-platform: the button and its tooltip.
   "Mark not received": "Marquer comme non reçu",
   "Set back to not received": "Rétablir en non reçu",
+  // Lot ledger scoreboard. The headings are sentence case in the source
+  // and uppercased by CSS, so these are the strings the DOM carries.
+  "Generated": "Facturé",
+  "Collected": "Encaissé",
+  "Owed": "Dû",
+  "Jobs": "Prestations",
+  // Activity log filters.
+  "All money": "Tous les montants",
+  "This month": "Ce mois-ci",
+  "Last 3 months": "3 derniers mois",
+  "Custom range": "Période personnalisée",
+  // The lede under those filters. The month it names is interpolated, so
+  // the sentence reaches the DOM as its own node either side of it.
+  "The cards above cover the same range.":
+    "Les cartes ci-dessus couvrent la même période.",
+  "· owed only": "· dû uniquement",
+  "· collected only": "· encaissé uniquement",
   "Month by month": "Mois par mois",
   "Year in summary": "Bilan annuel",
   "Net profit": "Bénéfice net",
