@@ -35,7 +35,7 @@ import {
   fuelOptions,
   optionLabel,
   transmissionOptions,
-} from "@/components/business/operations-panels";
+} from "@/lib/vehicle-options";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { PaymentHoldNotice } from "@/components/payment-hold-notice";
 import { CustomerPhoneField } from "@/components/customer-phone-field";

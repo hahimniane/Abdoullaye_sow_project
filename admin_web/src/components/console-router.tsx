@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   User,
   onAuthStateChanged,
@@ -13,13 +14,10 @@ import { httpsCallable } from "firebase/functions";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { MailCheck, RefreshCw, Send, ShieldCheck } from "lucide-react";
 
-import { AdminConsole } from "@/components/admin-console";
 import {
   type ConsoleHost,
   consoleHostKind,
 } from "@/lib/console-host";
-import { BusinessConsole } from "@/components/business-console";
-import { CustomerConsole } from "@/components/customer-console";
 import { CustomerServiceEntry } from "@/components/customer-service-entry";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
@@ -30,6 +28,41 @@ import { auth, db, functions } from "@/lib/firebase";
 import { useFrenchDomTranslation } from "@/lib/french-dom";
 import { isValidPhone } from "@/lib/phone";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
+
+// The three consoles are split out of the entry bundle. Each one is reachable
+// only after the router has decided who is signed in, and the admin console
+// alone is larger than everything else the page loads - a signed-out visitor
+// opening a booking form was downloading all three and parsing them before the
+// form could appear. `ssr: false` is the honest setting here: this is a static
+// export and the router is a client component either way.
+//
+// Firebase, the sign-in card and the guest service entry stay eager. They are
+// what the first paint actually needs, and deferring them would only move the
+// wait rather than remove it.
+// The same panel the router already shows while it works out who you are, so
+// handing over to a lazily loaded console looks like the boot continuing
+// rather than the page blanking.
+const consoleLoading = () => (
+  <div className="app-shell">
+    <div className="center-panel">
+      <RefreshCw className="spin" size={28} />
+      <p>Ouverture de la console...</p>
+    </div>
+  </div>
+);
+
+const AdminConsole = dynamic(
+  () => import("@/components/admin-console").then((m) => m.AdminConsole),
+  { ssr: false, loading: consoleLoading },
+);
+const BusinessConsole = dynamic(
+  () => import("@/components/business-console").then((m) => m.BusinessConsole),
+  { ssr: false, loading: consoleLoading },
+);
+const CustomerConsole = dynamic(
+  () => import("@/components/customer-console").then((m) => m.CustomerConsole),
+  { ssr: false, loading: consoleLoading },
+);
 
 const previewCustomerUser = {
   uid: "customer-preview",

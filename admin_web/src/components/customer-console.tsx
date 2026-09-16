@@ -47,6 +47,7 @@ import {
   viewingStatusLabel,
 } from "@/lib/car-viewing";
 import { customerCarListingIsEligible } from "@/lib/customer-service-eligibility";
+import { type CustomerCollection, usePublicCars } from "@/lib/public-cars";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 import { CustomerCarViewing } from "@/components/customer-car-viewing";
@@ -117,11 +118,7 @@ async function withPhoneVerificationTimeout<T>(request: Promise<T>) {
   }
 }
 
-export type CustomerCollection = {
-  rows: FirestoreRow[];
-  loading: boolean;
-  error: string;
-};
+export type { CustomerCollection } from "@/lib/public-cars";
 
 const tabs: Array<{
   id: CustomerTab;
@@ -1622,21 +1619,6 @@ function useCustomerCarPurchases(uid: string) {
   return useCustomerCollection("carPurchases", "buyerUid", uid);
 }
 
-export function usePublicCars(enabled: boolean): CustomerCollection {
-  const [state, setState] = useState<CustomerCollection>({ rows: [], loading: false, error: "" });
-  useEffect(() => {
-    if (!enabled) return undefined;
-    setState({ rows: [], loading: true, error: "" });
-    const request = query(collection(db, "cars"), where("status", "==", "active"), limit(100));
-    return onSnapshot(request, (snapshot) => {
-      const rows = snapshot.docs
-        .map((item) => ({ id: item.id, ...item.data() }))
-        .filter(customerCarListingIsEligible);
-      setState({ rows, loading: false, error: "" });
-    }, (error) => setState({ rows: [], loading: false, error: error.message }));
-  }, [enabled]);
-  return state;
-}
 
 type TaggedRow = {
   row: FirestoreRow;
