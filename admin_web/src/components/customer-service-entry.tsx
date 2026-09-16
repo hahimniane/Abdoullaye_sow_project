@@ -1,17 +1,32 @@
 "use client";
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { ArrowLeft, LogIn, X } from "lucide-react";
 import type { User } from "firebase/auth";
 
-import { CustomerCars } from "@/components/customer-cars";
-import { usePublicCars } from "@/components/customer-console";
-import { CustomerParkingPools } from "@/components/customer-parking-pools";
+import { usePublicCars } from "@/lib/public-cars";
 import { CustomerShippingServices } from "@/components/customer-shipping-services";
 import { GuestContactPanel } from "@/components/guest-contact-panel";
 import { auth } from "@/lib/firebase";
+
+// Each service panel is already gated on which service the visitor asked for,
+// so only the chosen one is ever rendered - but a static import still shipped
+// all four to everybody. Shipping stays eager: it is the service most links
+// point at, and deferring it would put a round trip in front of the form.
+const CustomerCars = dynamic(
+  () => import("@/components/customer-cars").then((m) => m.CustomerCars),
+  { ssr: false },
+);
+const CustomerParkingPools = dynamic(
+  () => import("@/components/customer-parking-pools").then((m) => m.CustomerParkingPools),
+  { ssr: false },
+);
+const GuestTracking = dynamic(
+  () => import("@/components/guest-tracking").then((m) => m.GuestTracking),
+  { ssr: false },
+);
 import { recallGuestContact } from "@/lib/guest-contact";
-import { GuestTracking } from "@/components/guest-tracking";
 import type { CustomerService } from "@/lib/customer-service-intent";
 import type { UserProfile } from "@/types/admin";
 

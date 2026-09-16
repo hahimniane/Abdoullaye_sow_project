@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync("src/components/customer-console.tsx", "utf8");
+// The public car listings live in their own module so the signed-out
+// service entry can subscribe without importing the whole console.
+const publicCars = readFileSync("src/lib/public-cars.ts", "utf8");
 
 test("customer activity listeners are ownership scoped", () => {
   assert.match(source, /"barrelShipments", "customerUid", uid/);
@@ -21,8 +24,8 @@ test("the customer console no longer touches wallets at all", () => {
 });
 
 test("customer marketplace only requests active public listings", () => {
-  assert.match(source, /where\("status", "==", "active"\)/);
-  assert.match(source, /\.filter\(customerCarListingIsEligible\)/);
+  assert.match(publicCars, /where\("status", "==", "active"\)/);
+  assert.match(publicCars, /\.filter\(customerCarListingIsEligible\)/);
 });
 
 test("a shipment appears once on the orders page, not twice", () => {

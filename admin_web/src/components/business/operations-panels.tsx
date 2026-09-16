@@ -219,6 +219,15 @@ import {
 } from "@/lib/car-purchase";
 import { asDate, currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import {
+  ACRONYMS,
+  bodyTypeOptions,
+  conditionOptions,
+  drivetrainOptions,
+  fuelOptions,
+  optionLabel,
+  transmissionOptions,
+} from "@/lib/vehicle-options";
+import {
   normalizeTransportContainerNumber,
   transportFulfillmentErrorMessage,
   transportFulfillmentNextStatuses,
@@ -368,15 +377,10 @@ const listingStatuses = ["draft", "active", "reserved", "sold", "inactive"];
 // Car attribute option lists — kept in sync with the mobile listing form
 // (my_flutter_app/lib/screens/staff_car_management_screen.dart). These power the
 // same customer-facing filters as the app.
-export const conditionOptions = ["new", "used", "certified", "salvage"];
-export const bodyTypeOptions = ["sedan", "suv", "truck", "van", "coupe", "hatchback", "wagon", "convertible"];
-export const transmissionOptions = ["automatic", "manual", "cvt"];
-export const fuelOptions = ["gas", "diesel", "hybrid", "electric", "plug_in_hybrid"];
-export const drivetrainOptions = ["fwd", "rwd", "awd", "4wd"];
+// Vehicle option vocabularies now live in @/lib/vehicle-options.
 const colorOptions = ["black", "white", "silver", "gray", "red", "blue", "green", "yellow", "brown", "beige", "gold", "orange", "purple", "burgundy", "other"];
 const featureOptions = ["backup_camera", "bluetooth", "leather_seats", "sunroof", "navigation", "heated_seats", "apple_carplay", "android_auto", "blind_spot", "third_row", "remote_start", "keyless_entry"];
 
-const ACRONYMS = new Set(["suv", "cvt", "vin", "fwd", "rwd", "awd", "4wd"]);
 /**
  * What cancelling a paid booking does to the customer's money, in the words
  * the business needs before they press it.
@@ -422,105 +426,6 @@ export function businessCancelAction(row: FirestoreRow, collection:
   };
 }
 
-export function optionLabel(value: string) {
-  const labels: Record<"en" | "fr", Record<string, string>> = {
-    en: {
-      automatic: "Automatic",
-      backup_camera: "Backup camera",
-      beige: "Beige",
-      black: "Black",
-      blind_spot: "Blind spot",
-      bluetooth: "Bluetooth",
-      brown: "Brown",
-      certified: "Certified",
-      convertible: "Convertible",
-      coupe: "Coupe",
-      diesel: "Diesel",
-      electric: "Electric",
-      gas: "Gas",
-      gold: "Gold",
-      gray: "Gray",
-      green: "Green",
-      hatchback: "Hatchback",
-      heated_seats: "Heated seats",
-      hybrid: "Hybrid",
-      keyless_entry: "Keyless entry",
-      leather_seats: "Leather seats",
-      manual: "Manual",
-      navigation: "Navigation",
-      new: "New",
-      orange: "Orange",
-      other: "Other",
-      plug_in_hybrid: "Plug-in hybrid",
-      purple: "Purple",
-      red: "Red",
-      remote_start: "Remote start",
-      salvage: "Salvage",
-      sedan: "Sedan",
-      silver: "Silver",
-      sunroof: "Sunroof",
-      third_row: "Third row",
-      truck: "Truck",
-      used: "Used",
-      van: "Van",
-      wagon: "Wagon",
-      white: "White",
-      yellow: "Yellow",
-    },
-    fr: {
-      automatic: "Automatique",
-      backup_camera: "Caméra de recul",
-      beige: "Beige",
-      black: "Noir",
-      blind_spot: "Détection angle mort",
-      bluetooth: "Bluetooth",
-      brown: "Marron",
-      certified: "Certifié",
-      convertible: "Cabriolet",
-      coupe: "Coupé",
-      diesel: "Diesel",
-      electric: "Électrique",
-      gas: "Essence",
-      gold: "Or",
-      gray: "Gris",
-      green: "Vert",
-      hatchback: "Hatchback",
-      heated_seats: "Sièges chauffants",
-      hybrid: "Hybride",
-      keyless_entry: "Accès sans clé",
-      leather_seats: "Sièges en cuir",
-      manual: "Manuelle",
-      navigation: "Navigation",
-      new: "Neuf",
-      orange: "Orange",
-      other: "Autre",
-      plug_in_hybrid: "Hybride rechargeable",
-      purple: "Violet",
-      red: "Rouge",
-      remote_start: "Démarrage à distance",
-      salvage: "Accidenté",
-      sedan: "Berline",
-      silver: "Argent",
-      sunroof: "Toit ouvrant",
-      third_row: "Troisième rangée",
-      truck: "Pick-up",
-      used: "Occasion",
-      van: "Van",
-      wagon: "Break",
-      white: "Blanc",
-      yellow: "Jaune",
-    },
-  };
-  const language = currentLanguage();
-  if (labels[language][value]) return labels[language][value];
-  if (!value) return "";
-  if (ACRONYMS.has(value.toLowerCase())) return value.toUpperCase();
-  return value
-    .split(/[_\s]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
 
 // What a person may set by hand. "Pending payment" is the server's word for
 // "a link is out and unpaid" - letting staff pick it would have a record
