@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { translateValue } from "./french-dom.ts";
+
 import {
   DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS,
   LOT_CUSTOM_ACTIVITY_ID,
@@ -344,4 +346,23 @@ test("a paid activity can be set back to not received, from the panel", () => {
   assert.match(panel, /"revertLotActivityDirectPayment"/);
   assert.match(panel, /async function revertActivityPayment\(/);
   assert.match(panel, /confirmImportantAction\(/);
+});
+
+// Every word the activity row puts on screen has to exist in French. The row
+// names who recorded the job and, on a cash job, who took the money — each a
+// bare preposition in its own text node, which is exactly the shape that slips
+// past a review looking for sentences. It shipped English-only once.
+test("the activity row's own copy is translated, prepositions included", () => {
+  const panel = readFileSync(
+    "src/components/business/operations-panels.tsx", "utf8");
+  // The row renders both, beside the date and under the fee.
+  assert.match(panel, /"By ",?\s*|\{"By "\}|By \{/);
+  assert.match(panel, /staffName\(text\(r\.recordedByStaffId, ""\)\)/);
+  for (const label of ["By", "by", "Edited", "Mark not received",
+    "Set back to not received"]) {
+    assert.notEqual(
+      translateValue(label, "fr"), label,
+      `"${label}" renders on the activity row with no French entry in ` +
+      `french-dom.ts — add one.`);
+  }
 });

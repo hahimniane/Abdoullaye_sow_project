@@ -4404,6 +4404,14 @@ Object.assign(TEXT_TRANSLATIONS, {
   "No changes recorded — nothing has been edited or voided.":
     "Aucune modification enregistrée — rien n’a été modifié ni invalidé.",
   "Edited": "Modifié",
+  // An activity row names who entered it, and on a cash job who took the
+  // money. Both read as a bare preposition in front of a person's name, so
+  // each arrives as its own text node — there is no longer phrase to key on.
+  "By": "Par",
+  "by": "par",
+  // Undoing money marked received off-platform: the button and its tooltip.
+  "Mark not received": "Marquer comme non reçu",
+  "Set back to not received": "Rétablir en non reçu",
   "Month by month": "Mois par mois",
   "Year in summary": "Bilan annuel",
   "Net profit": "Bénéfice net",
