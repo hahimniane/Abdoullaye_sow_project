@@ -366,3 +366,35 @@ test("the activity row's own copy is translated, prepositions included", () => {
       `french-dom.ts — add one.`);
   }
 });
+
+// The scoreboard, the filters and the lede above the table. These headings are
+// sentence case in the source and uppercased by CSS, so the dictionary has to
+// key on what the DOM actually carries, not on what the screenshot shows.
+test("the lot ledger's scoreboard, filters and lede are translated", () => {
+  for (const label of ["Generated", "Collected", "Owed", "Jobs",
+    "All money", "This month", "Last 3 months", "Custom range",
+    "The cards above cover the same range.", "Appointment requests"]) {
+    assert.notEqual(
+      translateValue(label, "fr"), label,
+      `"${label}" renders on the lot ledger with no French entry in ` +
+      `french-dom.ts — add one.`);
+  }
+  // The short keys above must not eat the longer strings they sit inside;
+  // longest-first alternation is what protects these, in both directions.
+  for (const [en, fr] of [
+    ["Collected from orders the customer has paid",
+      "Encaissée sur les commandes déjà payées par le client"],
+    ["One-off jobs", "Prestations ponctuelles"],
+    ["Due on arrival", "Dû à l’arrivée"],
+    ["Appointment time", "Heure du rendez-vous"],
+    ["Month by month", "Mois par mois"],
+  ]) {
+    assert.equal(translateValue(en, "fr"), fr);
+    assert.equal(translateValue(fr, "en"), en);
+  }
+  // The lede interpolates the month, so the sentence reaches the DOM with the
+  // period still attached to it.
+  assert.equal(
+    translateValue(". The cards above cover the same range.", "fr"),
+    ". Les cartes ci-dessus couvrent la même période.");
+});
