@@ -176,6 +176,7 @@ class LotActivity {
     required this.paymentStatus,
     required this.receivedVia,
     required this.receivedByStaffId,
+    required this.recordedByStaffId,
     required this.activityDate,
     required this.activityDateMonth,
     required this.voided,
@@ -200,6 +201,11 @@ class LotActivity {
   final String paymentStatus;
   final String receivedVia;
   final String receivedByStaffId;
+
+  /// Who entered the activity. Distinct from [receivedByStaffId]: one person
+  /// can record a job and another take the money for it, which is exactly the
+  /// pair a lot wants to see when a figure looks wrong.
+  final String recordedByStaffId;
   final DateTime? activityDate;
   final String activityDateMonth;
   final bool voided;
@@ -227,6 +233,7 @@ class LotActivity {
       paymentStatus: _s(d['paymentStatus'], 40),
       receivedVia: _s(d['receivedVia'], 40),
       receivedByStaffId: _s(d['receivedByStaffId'], 120),
+      recordedByStaffId: _s(d['recordedByStaffId'], 120),
       activityDate: date,
       activityDateMonth: RegExp(r'^\d{4}-\d{2}$').hasMatch(explicitMonth)
           ? explicitMonth

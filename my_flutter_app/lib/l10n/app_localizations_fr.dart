@@ -8657,4 +8657,7 @@ class AppLocalizationsFr extends AppLocalizations {
     );
     return '$_temp0 · $rate/jour';
   }
+
+  @override
+  String get lotRecordedBy => 'Enregistré par';
 }
