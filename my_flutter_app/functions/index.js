@@ -304,6 +304,11 @@ const {
   lotActivityDirectReceived,
   lotActivityEditRefusal,
   lotActivityLockedPaymentFields,
+  lotActivityPaidCents,
+  lotActivityRemainingCents,
+  lotActivityPaymentPlan,
+  lotActivityPaymentRecord,
+  LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS,
   validateLotExpenseEntry,
   lotExpenseEntryRecord,
   validateLotExpenseLine,
@@ -11840,6 +11845,97 @@ function parkingPaymentLinkPage({title, message}) {
     `</main></body></html>`;
 }
 
+/**
+ * The statement a customer sees on their own payment link: what the job cost,
+ * what has arrived, what is still owed, and every payment behind those
+ * figures - cash taken at the lot included.
+ *
+ * Cash payments reach the customer through no other channel at all: no email,
+ * no SMS, no account. Without this page, someone who handed over $200 three
+ * weeks ago has nothing that says so, and a balance they cannot check is a
+ * balance they have to argue about.
+ *
+ * Staff names are deliberately absent. Who took the money is the business's
+ * own record; putting a named employee in front of the customer invites a
+ * kind of pressure the business does not need.
+ *
+ * @param {object} view Totals, the payment list, and any error to show.
+ * @return {string} The page HTML.
+ */
+function lotActivityBalancePage(view) {
+  const escape = (value) => String(value || "").replace(/[&<>"]/g, (char) => (
+    {"&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"}[char]
+  ));
+  const money = (cents) => lotMoney(cents);
+  const rows = (view.payments || []).map((payment) => {
+    const when = payment.at ?
+      new Date(payment.at).toLocaleDateString("en-US", {
+        month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+      }) : "";
+    const how = payment.source === "card" ? "card" : "cash";
+    return `<li><span>${escape(when)}</span>` +
+      `<span>${escape(money(payment.amountCents))}</span>` +
+      `<span>${escape(how)}</span></li>`;
+  }).join("");
+
+  const minimum = LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS;
+  const suggested = Math.max(0, Number(view.remainingCents) || 0);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<title>${escape(view.businessName || "Payment")}</title><style>` +
+    `body{margin:0;min-height:100vh;display:flex;align-items:center;` +
+    `justify-content:center;background:#f6f7f6;` +
+    `font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;` +
+    `color:#12211f;padding:24px}` +
+    `main{background:#fff;border-radius:14px;padding:28px;max-width:440px;` +
+    `width:100%;box-shadow:0 10px 30px rgba(0,0,0,.08)}` +
+    `h1{font-size:19px;margin:0 0 4px}` +
+    `.lede{margin:0 0 20px;color:#5b6b68;font-size:14px}` +
+    `.totals{display:flex;gap:10px;margin:0 0 18px}` +
+    `.totals div{flex:1;background:#f2f6f5;border-radius:10px;padding:12px}` +
+    `.totals span{display:block;font-size:11px;letter-spacing:.06em;` +
+    `text-transform:uppercase;color:#5b6b68}` +
+    `.totals b{font-size:17px}` +
+    `.due b{color:#b45309}` +
+    `ul{list-style:none;margin:0 0 18px;padding:0;font-size:13px}` +
+    `ul li{display:flex;justify-content:space-between;gap:10px;` +
+    `padding:7px 0;border-bottom:1px solid #eef2f1;color:#3d4d4a}` +
+    `h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;` +
+    `color:#5b6b68;margin:0 0 6px}` +
+    `label{display:block;font-size:13px;margin:0 0 6px;color:#3d4d4a}` +
+    `input{width:100%;box-sizing:border-box;padding:11px 12px;font-size:16px;` +
+    `border:1px solid #d7e0de;border-radius:10px;margin:0 0 12px}` +
+    `button{width:100%;padding:13px;font-size:15px;font-weight:600;` +
+    `color:#fff;background:#0f766e;border:0;border-radius:10px;` +
+    `cursor:pointer}` +
+    `.err{background:#fef2f2;color:#b91c1c;border-radius:10px;padding:10px;` +
+    `font-size:13px;margin:0 0 14px}` +
+    `.note{margin:12px 0 0;font-size:12px;color:#5b6b68;text-align:center}` +
+    `</style></head><body><main>` +
+    `<h1>${escape(view.businessName || "Payment")}</h1>` +
+    `<p class="lede">${escape(view.reference || "")}</p>` +
+    (view.error ? `<p class="err">${escape(view.error)}</p>` : "") +
+    `<div class="totals">` +
+    `<div><span>Total</span><b>${escape(money(view.feeCents))}</b></div>` +
+    `<div><span>Paid</span><b>${escape(money(view.paidCents))}</b></div>` +
+    `<div class="due"><span>Due</span>` +
+    `<b>${escape(money(view.remainingCents))}</b></div>` +
+    `</div>` +
+    (rows ? `<h2>Payments</h2><ul>${rows}</ul>` : "") +
+    `<form method="GET" action="/p">` +
+    `<input type="hidden" name="t" value="${escape(view.token)}">` +
+    `<label for="amount">How much are you paying today?</label>` +
+    `<input id="amount" name="amount" type="number" inputmode="decimal" ` +
+    `step="0.01" min="${(minimum / 100).toFixed(2)}" ` +
+    `max="${(suggested / 100).toFixed(2)}" ` +
+    `value="${(suggested / 100).toFixed(2)}" required>` +
+    `<button type="submit">Pay by card</button>` +
+    `</form>` +
+    `<p class="note">Card payments start at ${escape(money(minimum))}. ` +
+    `You can also pay the business in cash.</p>` +
+    `</main></body></html>`;
+}
+
 function businessParkingReturnUrls(trackingCode) {
   const base = normalizedConsoleUrl(process.env.CUSTOMER_CONSOLE_URL);
   const query = new URLSearchParams({parking: String(trackingCode || "")});
@@ -12142,7 +12238,7 @@ exports.parkingPaymentLink = onRequest(
       if (matches.empty) {
         // The same durable /p link also carries lot-activity tokens, whose
         // records live in lotActivities rather than parkedCars.
-        if (await resolveLotActivityPaymentLink(db, token, res)) return;
+        if (await resolveLotActivityPaymentLink(db, token, res, req)) return;
         return res.status(404).send(parkingPaymentLinkPage({
           title: "Link not found",
           message: "This payment link is not valid. Ask the " +
@@ -13893,6 +13989,15 @@ const LOT_LEDGER_MESSAGES = Object.freeze({
   expense_line_label_required: "Name the expense line.",
   expense_line_kind_invalid: "Choose how this expense behaves.",
   activity_voided: "This entry was voided. Record a new one instead.",
+  activity_cancelled: "This entry was cancelled, so it can't take a payment.",
+  already_paid: "This entry is fully paid.",
+  nothing_to_pay: "This entry has no fee to pay.",
+  no_amount: "Enter how much was paid.",
+  below_card_minimum:
+    "Card payments start at $20. Smaller amounts cost too much to process; " +
+    "cash has no minimum.",
+  below_amount_paid:
+    "The total can't go below what has already been paid on this entry.",
   paid_amount_locked:
     "This entry is paid, so the amount can't change. Void it and record a " +
     "new one if the price was wrong.",
@@ -13986,6 +14091,16 @@ function lotActivityMidday(value) {
  * @param {Date} date A parsed activity/spend date.
  * @return {string} The yyyy-mm month key.
  */
+/**
+ * Cents as money, for audit summaries a person reads.
+ *
+ * @param {number} cents The amount.
+ * @return {string} e.g. "$350.00".
+ */
+function lotMoney(cents) {
+  return `$${(Math.max(0, Number(cents) || 0) / 100).toFixed(2)}`;
+}
+
 function lotMonthKeyOf(date) {
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");
   return `${date.getUTCFullYear()}-${m}`;
@@ -14227,17 +14342,20 @@ async function issueLotActivityLink({
 
 /**
  * Resolve a durable /p link whose token belongs to a lot activity rather than
- * a parked car. Mirrors the parkedCars branch of parkingPaymentLink: reuse a
- * live session or mint a fresh one, redirect to Stripe, and show a plain page
- * when the entry is already paid or cancelled.
+ * a parked car. Unlike the parkedCars branch this does not redirect straight
+ * to Stripe: an activity can be paid in instalments, so the customer first
+ * sees what the job cost, what has arrived - cash taken at the lot included -
+ * and what is still owed, then says how much of it they are paying today.
+ * A session is minted for that amount only.
  *
  * @param {object} db Firestore.
  * @param {string} token The paymentLinkToken from the /p query.
  * @param {object} res The Express response.
+ * @param {object} req The Express request, for the chosen amount.
  * @return {Promise<boolean>} true when this token was a lot activity and the
  *   response was sent; false when it is not a lot activity (caller 404s).
  */
-async function resolveLotActivityPaymentLink(db, token, res) {
+async function resolveLotActivityPaymentLink(db, token, res, req) {
   const matches = await db.collection("lotActivities")
       .where("paymentLinkToken", "==", token)
       .limit(1)
@@ -14273,9 +14391,65 @@ async function resolveLotActivityPaymentLink(db, token, res) {
 
   const connectedAccountId =
     String(entry.stripeConnectedAccountId || "").trim() || undefined;
-  const amountCents = Number(entry.feeCents || 0);
+
+  // The statement behind the balance. Ordered oldest first so it reads as a
+  // history rather than a stack.
+  const paymentDocs = await db.collection("lotActivityPayments")
+      .where("activityId", "==", ref.id)
+      .limit(100)
+      .get()
+      .catch(() => null);
+  const payments = (paymentDocs ? paymentDocs.docs : [])
+      .map((doc) => {
+        const row = doc.data() || {};
+        const at = row.createdAt && typeof row.createdAt.toDate === "function" ?
+          row.createdAt.toDate().getTime() : 0;
+        return {
+          amountCents: Number(row.amountCents || 0),
+          source: String(row.source || "cash"),
+          at,
+        };
+      })
+      .sort((a, b) => a.at - b.at);
+
+  const businessDoc = await db.collection("businesses")
+      .doc(String(entry.businessId || "")).get().catch(() => null);
+  const view = {
+    token,
+    businessName: String(businessDoc?.data()?.name || "Payment due"),
+    reference: String(entry.activityTypeLabel || "") +
+      (entry.trackingCode ? ` · ${entry.trackingCode}` : ""),
+    feeCents: Number(entry.feeCents || 0),
+    paidCents: lotActivityPaidCents(entry),
+    remainingCents: lotActivityRemainingCents(entry),
+    payments,
+    error: "",
+  };
+
+  // No amount chosen yet: show what is owed and what has already been paid,
+  // and let the customer say how much of it they are paying today.
+  const requested = String(req?.query?.amount || "").trim();
+  if (!requested) {
+    res.status(200).send(lotActivityBalancePage(view));
+    return true;
+  }
+
+  const amountCents = Math.round(Number(requested) * 100);
+  const plan = lotActivityPaymentPlan({
+    activity: entry, amountCents, source: "card",
+  });
+  if (!plan.ok) {
+    view.error = LOT_LEDGER_MESSAGES[plan.reason] ||
+      "That amount can't be paid right now.";
+    res.status(200).send(lotActivityBalancePage(view));
+    return true;
+  }
+
+  // Reuse a live session only when it is for the amount being paid now;
+  // otherwise it would charge yesterday's figure.
   const existingSessionId = String(entry.checkoutSessionId || "").trim();
-  if (existingSessionId) {
+  const pending = Number(entry.pendingPaymentCents);
+  if (existingSessionId && pending === plan.appliedCents) {
     const existing = await retrieveStripeCheckoutSession(
         existingSessionId, connectedAccountId,
     ).catch(() => null);
@@ -14288,17 +14462,21 @@ async function resolveLotActivityPaymentLink(db, token, res) {
   }
   const mintCount = Number(entry.paymentLinkMintCount || 0) + 1;
   const session = await createStripeCustomerCheckoutSession({
-    amount: amountCents,
+    amount: plan.appliedCents,
     currency: SHIPMENT_CURRENCY,
     customerEmail: String(entry.customerEmail || "") || undefined,
     productName: "Laawol lot service",
     recordId: ref.id,
     idempotencySeed: `lot-activity:${ref.id}:${mintCount}`,
     connectedAccountId,
+    // The platform fee is a share of what is being charged now, not of the
+    // job's total: an instalment pays its own proportion.
     applicationFeeAmount:
       String(entry.stripeChargeType || "") === "direct" ?
         clampedApplicationFeeAmount(
-            Number(entry.platformFeeCents || 0), amountCents,
+            Math.round(Number(entry.platformFeeCents || 0) *
+              (plan.appliedCents / Math.max(1, Number(entry.feeCents) || 1))),
+            plan.appliedCents,
         ) : undefined,
     metadata: {
       paymentType: LOT_ACTIVITY_PAYMENT_TYPE,
@@ -14314,6 +14492,10 @@ async function resolveLotActivityPaymentLink(db, token, res) {
     checkoutStatus: "open",
     paymentLinkMintCount: mintCount,
     paymentLinkRefreshedAt: FirestoreFieldValue.serverTimestamp(),
+    // What this session is for. Reconciliation checks Stripe's amount against
+    // it, and settlement applies it as the instalment - without it a $200
+    // payment would be checked against, and settle, the job's whole total.
+    pendingPaymentCents: plan.appliedCents,
     updatedAt: FirestoreFieldValue.serverTimestamp(),
   });
   res.redirect(303, String(session.url || ""));
@@ -14333,26 +14515,104 @@ async function resolveLotActivityPaymentLink(db, token, res) {
  */
 async function completeLotActivityPayment(target) {
   const ref = admin.firestore().doc(target.path);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) {
-    throw new Error(`Payment target not found: ${target.path}`);
-  }
-  const entry = snapshot.data() || {};
-  const paid = LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED;
-  const firstSettlement = entry.paymentStatus !== paid;
-  await ref.update({
-    paymentStatus: paid,
-    checkoutStatus: "completed",
-    ...(firstSettlement && {paidAt: FirestoreFieldValue.serverTimestamp()}),
-    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  const db = admin.firestore();
+  const paymentRef = db.collection("lotActivityPayments").doc();
+  const now = new Date();
+  // What Stripe just took. A session is minted for the amount being paid now,
+  // which on an instalment is a part of the job; `feeCents` is the fallback
+  // for links minted before instalments existed.
+  let settled = null;
+
+  // The transaction is what makes two rails safe: the customer completing
+  // checkout and a staff member recording cash can land in the same second,
+  // and each reading `amountPaidCents` outside a transaction would apply its
+  // payment to the same stale figure.
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) {
+      throw new Error(`Payment target not found: ${target.path}`);
+    }
+    const entry = snapshot.data() || {};
+    const charged = Number.isSafeInteger(Number(entry.pendingPaymentCents)) ?
+      Number(entry.pendingPaymentCents) :
+      Math.max(0, Number(entry.feeCents) || 0);
+
+    const plan = lotActivityPaymentPlan({
+      activity: entry, amountCents: charged, source: "card",
+    });
+    if (!plan.ok) {
+      // Already settled, voided or cancelled. Stripe retries its webhook, so
+      // arriving twice is expected rather than exceptional - record nothing a
+      // second time and let the caller finish quietly.
+      settled = {duplicate: true, entry, plan};
+      return;
+    }
+    settled = {duplicate: false, entry, plan, chargedCents: charged};
+
+    tx.set(paymentRef, {
+      ...lotActivityPaymentRecord({
+        businessId: String(entry.businessId || ""),
+        activityId: ref.id,
+        amountCents: plan.appliedCents,
+        // Money Stripe took beyond the balance - the customer completing
+        // checkout while the desk was recording cash for the same money. It
+        // is kept visible rather than silently banked or auto-refunded.
+        overpaidCents: plan.overpaidCents,
+        source: "card",
+        recordedByStaffId: "",
+        paidAtMonth: lotMonthKeyOf(now),
+        note: "",
+      }),
+      createdAt: FirestoreFieldValue.serverTimestamp(),
+    });
+
+    tx.set(ref, {
+      amountPaidCents: plan.newPaidCents,
+      lastPaymentAt: FirestoreFieldValue.serverTimestamp(),
+      ...(plan.overpaidCents > 0 && {
+        overpaidCents: FirestoreFieldValue.increment(plan.overpaidCents),
+      }),
+      // A part payment leaves the job awaiting the rest: only the instalment
+      // that clears the balance settles it.
+      ...(plan.fullyCovered ? {
+        paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED,
+        checkoutStatus: "completed",
+        paidAt: FirestoreFieldValue.serverTimestamp(),
+      } : {
+        checkoutStatus: "open",
+      }),
+      pendingPaymentCents: FirestoreFieldValue.delete(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
   });
+
+  if (!settled || settled.duplicate) return;
+  const entry = settled.entry;
+  const firstSettlement = settled.plan.fullyCovered;
   await issueBusinessPayoutTransfer({
     ref,
-    data: {...entry, paymentStatus: paid},
+    data: {
+      ...entry,
+      paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED,
+    },
     serviceType: LOT_ACTIVITY_PAYMENT_TYPE,
   });
-  if (!firstSettlement) return;
-  const amountCents = Number(entry.feeCents || 0);
+  if (!firstSettlement) {
+    // A part payment: log it and stop. The receipt email says "paid", which
+    // would be a lie while money is still owed.
+    await writeLotLedgerAudit({
+      businessId: String(entry.businessId || ""),
+      entityType: "activity",
+      entityId: ref.id,
+      action: "payment_received",
+      byStaffId: "",
+      summary: `Part payment of ${lotMoney(settled.plan.appliedCents)} on ` +
+        `the website, ${lotMoney(settled.plan.remainingCents)} still owed`,
+      changes: [],
+    });
+    return;
+  }
+  const amountCents = Number(settled.chargedCents || entry.feeCents || 0);
   const dollars = `$${(amountCents / 100).toFixed(2)}`;
   const code = String(entry.trackingCode || "");
   const businessId = String(entry.businessId || "");
@@ -14402,7 +14662,8 @@ exports.createLotActivity = onCall(
       const db = admin.firestore();
       const fee = await resolveLotActivityFee(db, businessId, data);
       const errors = validateLotActivity(
-          data, {knownTypeIds: fee.knownTypeIds});
+          data, {knownTypeIds: fee.knownTypeIds,
+            needsVehicle: fee.needsVehicle});
       if (errors.length > 0) {
         throw new HttpsError("invalid-argument", lotLedgerMessage(errors));
       }
@@ -14481,7 +14742,8 @@ exports.updateLotActivity = onCall(
       await requireBusinessPermission(uid, businessId, "ledger");
       const fee = await resolveLotActivityFee(db, businessId, changes);
       const errors = validateLotActivity(
-          changes, {knownTypeIds: fee.knownTypeIds});
+          changes, {knownTypeIds: fee.knownTypeIds,
+            needsVehicle: fee.needsVehicle});
       if (errors.length > 0) {
         throw new HttpsError("invalid-argument", lotLedgerMessage(errors));
       }
@@ -14640,9 +14902,32 @@ exports.recordLotActivityDirectPayment = onCall(
             String(current.stripeConnectedAccountId || "").trim() || undefined,
         ).catch(() => null);
       }
+      // Settling a part-paid job has to move the running total too, or the
+      // balance keeps reading as owed under a "Paid" badge - the same figure
+      // the scoreboard sums. The remainder is written as its own instalment
+      // so the history accounts for every dollar rather than jumping.
+      const outstanding = lotActivityRemainingCents(current);
+      if (outstanding > 0) {
+        await admin.firestore().collection("lotActivityPayments").doc().set({
+          ...lotActivityPaymentRecord({
+            businessId: String(current.businessId || ""),
+            activityId,
+            amountCents: outstanding,
+            overpaidCents: 0,
+            source: "cash",
+            receivedVia: data.receivedVia,
+            receivedByStaffId,
+            recordedByStaffId: uid,
+            paidAtMonth: lotMonthKeyOf(new Date()),
+            note: "",
+          }),
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      }
       await ref.set({
         paymentMethod: "direct",
         paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED,
+        amountPaidCents: Math.max(0, Number(current.feeCents) || 0),
         receivedVia: lotNormalizeReceivedVia(data.receivedVia),
         receivedByStaffId,
         recordedByStaffId: String(current.recordedByStaffId || uid),
@@ -14665,6 +14950,142 @@ exports.recordLotActivityDirectPayment = onCall(
         changes: [],
       });
       return {success: true, activityId};
+    },
+);
+
+// Record one instalment against an activity, in cash.
+//
+// The money arrives in pieces and from either direction: cash taken at the lot
+// and card taken on the customer's own link, against one balance, in any
+// order. The whole thing runs in a transaction because both staff at the desk
+// and the customer on their phone can be settling the same balance in the same
+// second, and two reads of `amountPaidCents` outside one would each apply
+// their payment to the same starting figure.
+//
+// Taking cash also expires the live Stripe session. The customer reopens the
+// link, sees the new balance, and pays that - rather than completing a
+// checkout for an amount that stopped being owed while they were typing.
+exports.recordLotActivityInstalment = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const activityId = String(data.activityId || "").trim();
+      const receivedByStaffId = String(data.receivedByStaffId || "").trim();
+      const db = admin.firestore();
+      const ref = db.collection("lotActivities").doc(activityId);
+
+      const preflight = await ref.get();
+      if (!preflight.exists) {
+        throw new HttpsError("not-found", "Activity not found");
+      }
+      const businessId = String((preflight.data() || {}).businessId || "");
+      await requireBusinessPermission(uid, businessId, "ledger");
+      // Cash has no one to name unless a person is named: the same rule the
+      // one-shot direct payment already enforces, for the same reason.
+      if (!receivedByStaffId) {
+        throw new HttpsError(
+            "invalid-argument", LOT_LEDGER_MESSAGES.received_by_required);
+      }
+
+      const paymentRef = db.collection("lotActivityPayments").doc();
+      const now = new Date();
+      let applied = null;
+      let sessionToExpire = "";
+      let connectedAccount = "";
+
+      await db.runTransaction(async (tx) => {
+        const doc = await tx.get(ref);
+        if (!doc.exists) {
+          throw new HttpsError("not-found", "Activity not found");
+        }
+        const current = doc.data() || {};
+        const plan = lotActivityPaymentPlan({
+          activity: current,
+          amountCents: data.amountCents,
+          source: "cash",
+        });
+        if (!plan.ok) {
+          throw new HttpsError(
+              "failed-precondition",
+              LOT_LEDGER_MESSAGES[plan.reason] ||
+                "This payment can't be recorded.");
+        }
+        applied = plan;
+        sessionToExpire = String(current.checkoutSessionId || "").trim();
+        connectedAccount =
+          String(current.stripeConnectedAccountId || "").trim();
+
+        tx.set(paymentRef, {
+          ...lotActivityPaymentRecord({
+            businessId,
+            activityId,
+            amountCents: plan.appliedCents,
+            overpaidCents: 0,
+            source: "cash",
+            receivedVia: data.receivedVia,
+            receivedByStaffId,
+            recordedByStaffId: uid,
+            paidAtMonth: lotMonthKeyOf(now),
+            note: data.note,
+          }),
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+        });
+
+        const update = {
+          amountPaidCents: plan.newPaidCents,
+          lastPaymentAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        };
+        if (plan.fullyCovered) {
+          // The last instalment settles the job. `receivedVia` and
+          // `receivedByStaffId` name whoever closed it out; the per-payment
+          // records hold who took each of the earlier ones.
+          update.paymentStatus = LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED;
+          update.paymentMethod = "direct";
+          update.receivedVia = lotNormalizeReceivedVia(data.receivedVia);
+          update.receivedByStaffId = receivedByStaffId;
+          update.paidAt = FirestoreFieldValue.serverTimestamp();
+          update.paymentLinkToken = FirestoreFieldValue.delete();
+          update.checkoutStatus = "cancelled";
+          update.paymentRevertedByStaffId = FirestoreFieldValue.delete();
+          update.paymentRevertedAt = FirestoreFieldValue.delete();
+        }
+        tx.set(ref, update, {merge: true});
+      });
+
+      // Outside the transaction: Stripe is not transactional, and a network
+      // call inside one would hold the document lock for its duration.
+      if (sessionToExpire && !SIMULATE_PAYMENTS) {
+        await expireStripeCheckoutSession(
+            sessionToExpire, connectedAccount || undefined).catch(() => null);
+      }
+
+      await writeLotLedgerAudit({
+        businessId,
+        entityType: "activity",
+        entityId: activityId,
+        action: "payment_received",
+        byStaffId: uid,
+        summary: applied.fullyCovered ?
+          `Final payment of ${lotMoney(applied.appliedCents)} - settled` :
+          `Part payment of ${lotMoney(applied.appliedCents)}, ` +
+            `${lotMoney(applied.remainingCents)} still owed`,
+        changes: [],
+      });
+
+      return {
+        success: true,
+        activityId,
+        paymentId: paymentRef.id,
+        appliedCents: applied.appliedCents,
+        amountPaidCents: applied.newPaidCents,
+        remainingCents: applied.remainingCents,
+        fullyCovered: applied.fullyCovered,
+      };
     },
 );
 
@@ -14700,8 +15121,29 @@ exports.revertLotActivityDirectPayment = onCall(
         );
       }
       const previousReceiver = String(current.receivedByStaffId || "");
+      // "The money never came in" has to undo the running total as well, or
+      // the job reads as awaiting payment while still counting as collected.
+      // The instalments behind it are flagged rather than deleted - the same
+      // call voiding makes - so the record of what was claimed survives.
+      const paidDocs = await admin.firestore()
+          .collection("lotActivityPayments")
+          .where("activityId", "==", activityId)
+          .get();
+      if (!paidDocs.empty) {
+        const batch = admin.firestore().batch();
+        for (const paid of paidDocs.docs) {
+          if (paid.data()?.reverted === true) continue;
+          batch.set(paid.ref, {
+            reverted: true,
+            revertedByStaffId: uid,
+            revertedAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true});
+        }
+        await batch.commit();
+      }
       await ref.set({
         paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_DIRECT,
+        amountPaidCents: 0,
         receivedVia: "",
         receivedByStaffId: "",
         paymentRevertedByStaffId: uid,

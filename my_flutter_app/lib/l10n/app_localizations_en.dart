@@ -8524,4 +8524,116 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lotRecordedBy => 'Recorded by';
+
+  @override
+  String get lotPartPaid => 'Part paid';
+
+  @override
+  String lotPaidOfTotal(String paid, String total) {
+    return '$paid of $total';
+  }
+
+  @override
+  String lotStillOwed(String amount) {
+    return '$amount still owed';
+  }
+
+  @override
+  String get lotBalance => 'Balance';
+
+  @override
+  String get lotPaidSoFar => 'Paid so far';
+
+  @override
+  String get lotNoVehicle => 'No car';
+
+  @override
+  String get lotNoVehicleNote => 'This activity is recorded without a vehicle.';
+
+  @override
+  String get lotActivityTypeNeedsVehicle => 'Done to a car';
+
+  @override
+  String get lotActivityTypeNeedsVehicleNote =>
+      'Turn this off for work with no vehicle, such as lending an auction account. Staff are then not asked for a VIN.';
+
+  @override
+  String get lotRecordPayment => 'Record a payment';
+
+  @override
+  String get lotRecordPaymentNote =>
+      'Money taken in person. It comes off the balance now, and the customer\'s link asks for what is left.';
+
+  @override
+  String get lotPaymentAmount => 'Amount taken (\$)';
+
+  @override
+  String lotPaymentMaxNote(String amount) {
+    return 'At most $amount — what is still owed on this entry.';
+  }
+
+  @override
+  String get lotPaymentNote => 'Note (optional)';
+
+  @override
+  String lotPaymentRecorded(String amount) {
+    return '$amount recorded.';
+  }
+
+  @override
+  String lotPaymentSettled(String amount) {
+    return '$amount recorded — settled in full.';
+  }
+
+  @override
+  String get lotPayments => 'Payments';
+
+  @override
+  String get lotPaymentsNote =>
+      'Every payment taken against this entry, whichever route it came in on.';
+
+  @override
+  String get lotNoPaymentsYet =>
+      'No individual payments recorded on this entry.';
+
+  @override
+  String get lotPaymentsCouldNotBeLoaded => 'The payments could not be loaded.';
+
+  @override
+  String get lotPaymentInPerson => 'In person';
+
+  @override
+  String get lotPaymentOnline => 'Online';
+
+  @override
+  String lotPaymentOverpaid(String amount) {
+    return '$amount over the balance';
+  }
+
+  @override
+  String get lotErrActivityVoided =>
+      'This entry was voided — record a new one instead.';
+
+  @override
+  String get lotErrActivityCancelled =>
+      'This entry was cancelled, so no money can be taken against it.';
+
+  @override
+  String get lotErrNothingToPay => 'This entry has no fee to pay.';
+
+  @override
+  String get lotErrAlreadyPaid => 'This entry is already paid in full.';
+
+  @override
+  String get lotErrNoAmount => 'Enter the amount taken.';
+
+  @override
+  String lotErrBelowCardMinimum(String amount) {
+    return 'A card payment starts at $amount.';
+  }
+
+  @override
+  String lotErrBelowAmountPaid(String amount) {
+    return '$amount has already been taken on this entry. The fee cannot go below it.';
+  }
 }

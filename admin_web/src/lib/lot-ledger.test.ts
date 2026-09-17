@@ -24,7 +24,26 @@ import {
   fixedLineAppliesTo,
   lotMonthExpenseCents,
   lotExpenseByLine,
+  lotActivityTypePayload,
+  // Instalments: what has arrived against what was agreed.
+  LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS,
+  LOT_ACTIVITY_PAYMENT_SOURCES,
+  lotActivityPaidCents,
+  lotActivityRemainingCents,
+  lotActivityPartlyPaid,
+  lotActivityPaymentBadge,
+  lotActivityBalanceText,
+  lotActivityPaymentPlan,
+  lotActivityScoreboard,
+  lotPaymentMonth,
+  emptyLotInstalmentDraft,
+  validateLotInstalmentDraft,
+  lotInstalmentMessage,
+  lotInstalmentPayload,
 } from "./lot-ledger.ts";
+// The activity ledger and the parking ledger share a payment vocabulary; the
+// badge test below compares them directly rather than trusting two lists.
+import { businessParkingPaymentBadge } from "./business-parking-entry.ts";
 
 test("money renders a true minus with the sign outside the symbol", () => {
   assert.equal(formatCents(929100), "$9,291.00");
@@ -397,4 +416,539 @@ test("the lot ledger's scoreboard, filters and lede are translated", () => {
   assert.equal(
     translateValue(". The cards above cover the same range.", "fr"),
     ". Les cartes ci-dessus couvrent la même période.");
+});
+
+// ===========================================================================
+// Instalments — a job paid in pieces.
+//
+// `feeCents` is the agreed total, `amountPaidCents` what has arrived, and
+// part-paid is DERIVED from the two rather than being a fifth payment status.
+// Every rule below is a mirror of the instalment block in
+// `my_flutter_app/functions/lot_ledger.js`; the contract test at the end of
+// this section fails if the two drift apart.
+// ===========================================================================
+
+test("what has been collected: absent means nothing, a settled old row means all", () => {
+  // Nothing written, nothing collected.
+  assert.equal(lotActivityPaidCents({ feeCents: 100000 }), 0);
+  // The running total wins when it is there.
+  assert.equal(
+    lotActivityPaidCents({ feeCents: 100000, amountPaidCents: 35000 }),
+    35000,
+  );
+  // Rule (a): settled before instalments existed. No running total was ever
+  // written, so the status is the only evidence — and it says paid in full.
+  assert.equal(
+    lotActivityPaidCents({ feeCents: 100000, paymentStatus: "succeeded" }),
+    100000,
+  );
+  // An awaiting row with no total is simply unpaid.
+  assert.equal(
+    lotActivityPaidCents({ feeCents: 100000, paymentStatus: "awaiting_payment_link" }),
+    0,
+  );
+  // Junk reads as zero rather than NaN, which would poison every total.
+  assert.equal(lotActivityPaidCents({ feeCents: 100000, amountPaidCents: "x" }), 0);
+  assert.equal(lotActivityPaidCents(null as unknown as Record<string, unknown>), 0);
+});
+
+test("the remaining balance never goes below zero", () => {
+  assert.equal(lotActivityRemainingCents({ feeCents: 100000, amountPaidCents: 35000 }), 65000);
+  assert.equal(lotActivityRemainingCents({ feeCents: 100000, paymentStatus: "succeeded" }), 0);
+  // Overpaid on the card rail: the job owes nothing, it does not owe minus.
+  assert.equal(lotActivityRemainingCents({ feeCents: 100000, amountPaidCents: 120000 }), 0);
+  assert.equal(lotActivityRemainingCents({ feeCents: 0 }), 0);
+});
+
+test("part paid means some but not all — and a voided row is never part paid", () => {
+  assert.ok(lotActivityPartlyPaid({ feeCents: 100000, amountPaidCents: 35000 }));
+  // Nothing in yet.
+  assert.ok(!lotActivityPartlyPaid({ feeCents: 100000, amountPaidCents: 0 }));
+  // All of it in.
+  assert.ok(!lotActivityPartlyPaid({ feeCents: 100000, amountPaidCents: 100000 }));
+  // Rule (b): a voided job is dead. Its balance is not chased, so it is not
+  // shown as part paid however much of it came in before it was voided.
+  assert.ok(
+    !lotActivityPartlyPaid({ feeCents: 100000, amountPaidCents: 35000, voided: true }),
+  );
+  // A row settled before instalments existed reads as fully paid, not part.
+  assert.ok(!lotActivityPartlyPaid({ feeCents: 100000, paymentStatus: "succeeded" }));
+});
+
+test("the activity badge speaks the parking ledger's exact vocabulary", () => {
+  // Both halves of this panel describe the same state, so they must use the
+  // same words. If either list changes, this fails.
+  const parkingWords = new Set<string>(
+    [
+      { paymentMethod: "direct", enteredByBusiness: true, paymentStatus: "succeeded" },
+      { paymentMethod: "direct", enteredByBusiness: true, paymentStatus: "awaiting_direct_payment", amountPaidCents: 3500 },
+      { paymentMethod: "direct", enteredByBusiness: true, paymentStatus: "awaiting_direct_payment" },
+    ].map((row) => businessParkingPaymentBadge(row)),
+  );
+  assert.deepEqual([...parkingWords].sort(), ["Not paid", "Paid", "Part paid"]);
+
+  assert.equal(lotActivityPaymentBadge({ feeCents: 100000, paymentStatus: "succeeded" }), "Paid");
+  assert.equal(
+    lotActivityPaymentBadge({ feeCents: 100000, amountPaidCents: 35000, paymentStatus: "awaiting_direct_payment" }),
+    "Part paid",
+  );
+  assert.equal(
+    lotActivityPaymentBadge({ feeCents: 100000, paymentStatus: "awaiting_payment_link" }),
+    "Not paid",
+  );
+  // Fully covered before the status has caught up still reads as paid.
+  assert.equal(
+    lotActivityPaymentBadge({ feeCents: 100000, amountPaidCents: 100000, paymentStatus: "awaiting_payment_link" }),
+    "Paid",
+  );
+  // A dead row carries no balance badge at all.
+  assert.equal(lotActivityPaymentBadge({ feeCents: 100000, voided: true }), "");
+  assert.equal(lotActivityPaymentBadge({ feeCents: 100000, paymentStatus: "cancelled" }), "");
+
+  // Every word the badge can produce is one of the parking ledger's three.
+  for (const row of [
+    { feeCents: 100000, paymentStatus: "succeeded" },
+    { feeCents: 100000, amountPaidCents: 35000 },
+    { feeCents: 100000 },
+  ]) {
+    assert.ok(parkingWords.has(lotActivityPaymentBadge(row)));
+  }
+});
+
+test("the row's balance line reads as $350.00 of $1,000.00", () => {
+  assert.equal(
+    lotActivityBalanceText({ feeCents: 100000, amountPaidCents: 35000 }),
+    "$350.00 of $1,000.00",
+  );
+  // No fee, nothing to read a balance against.
+  assert.equal(lotActivityBalanceText({ feeCents: 0, amountPaidCents: 0 }), "");
+});
+
+test("a payment is clamped to the balance, and a card payment has a floor", () => {
+  const job = { feeCents: 100000, amountPaidCents: 35000 };
+  // Cash: staff typing more than is owed is a typo, not a tip.
+  const over = lotActivityPaymentPlan({ activity: job, amountCents: 90000, source: "cash" });
+  assert.equal(over.ok, true);
+  assert.equal(over.appliedCents, 65000);
+  assert.equal(over.overpaidCents, 0);
+  assert.equal(over.remainingCents, 0);
+  assert.equal(over.fullyCovered, true);
+
+  const part = lotActivityPaymentPlan({ activity: job, amountCents: 20000, source: "cash" });
+  assert.equal(part.appliedCents, 20000);
+  assert.equal(part.newPaidCents, 55000);
+  assert.equal(part.remainingCents, 45000);
+  assert.equal(part.fullyCovered, false);
+
+  // Card: Stripe already took it, so the overspill is reported, not clamped
+  // away silently.
+  const card = lotActivityPaymentPlan({ activity: job, amountCents: 90000, source: "card" });
+  assert.equal(card.appliedCents, 65000);
+  assert.equal(card.overpaidCents, 25000);
+
+  // $20 floor on the card rail only; cash has no minimum.
+  assert.equal(
+    lotActivityPaymentPlan({ activity: job, amountCents: 1500, source: "card" }).reason,
+    "below_card_minimum",
+  );
+  assert.equal(lotActivityPaymentPlan({ activity: job, amountCents: 1500, source: "cash" }).ok, true);
+  assert.equal(LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS, 2000);
+
+  // Nothing to take.
+  assert.equal(
+    lotActivityPaymentPlan({ activity: { ...job, voided: true }, amountCents: 1000, source: "cash" }).reason,
+    "activity_voided",
+  );
+  assert.equal(
+    lotActivityPaymentPlan({ activity: { feeCents: 100000, paymentStatus: "cancelled" }, amountCents: 1000, source: "cash" }).reason,
+    "activity_cancelled",
+  );
+  assert.equal(
+    lotActivityPaymentPlan({ activity: { feeCents: 0 }, amountCents: 1000, source: "cash" }).reason,
+    "nothing_to_pay",
+  );
+  assert.equal(
+    lotActivityPaymentPlan({ activity: { feeCents: 100000, paymentStatus: "succeeded" }, amountCents: 1000, source: "cash" }).reason,
+    "already_paid",
+  );
+  assert.equal(
+    lotActivityPaymentPlan({ activity: job, amountCents: 0, source: "cash" }).reason,
+    "no_amount",
+  );
+});
+
+test("an instalment reports every problem at once and clamps what it sends", () => {
+  const job = { feeCents: 100000, amountPaidCents: 35000 };
+  // Nothing typed, nobody named.
+  const empty = validateLotInstalmentDraft(emptyLotInstalmentDraft, job);
+  assert.ok(empty.includes("instalment_amount_required"));
+  assert.ok(empty.includes("instalment_received_by_required"));
+  // Each refusal becomes a sentence, and the same sentence is not said twice.
+  assert.equal(
+    lotInstalmentMessage(empty),
+    "Enter how much came in. Say which staff member took the payment.",
+  );
+
+  const good = { amount: "200", receivedVia: "cash", receivedByStaffId: "s1", note: "first half" };
+  assert.deepEqual(validateLotInstalmentDraft(good, job), []);
+
+  // A job that cannot take money is refused before the round trip.
+  assert.deepEqual(
+    validateLotInstalmentDraft(good, { feeCents: 100000, paymentStatus: "succeeded" }),
+    ["already_paid"],
+  );
+
+  const payload = lotInstalmentPayload(
+    { ...good, amount: "900" },
+    { businessId: "biz1", activityId: "a1", activity: job },
+  );
+  assert.equal(payload.businessId, "biz1");
+  assert.equal(payload.activityId, "a1");
+  // $900 typed against a $650 balance is sent as $650.
+  assert.equal(payload.amountCents, 65000);
+  assert.equal(payload.receivedVia, "cash");
+  assert.equal(payload.receivedByStaffId, "s1");
+  assert.equal(payload.note, "first half");
+});
+
+test("a payment counts in the month it arrived, whatever month the job is in", () => {
+  assert.equal(lotPaymentMonth({ paidAtMonth: "2026-11" }), "2026-11");
+  // No month key written: fall back to when the record was created.
+  assert.equal(
+    lotPaymentMonth({ createdAt: new Date("2026-11-04T12:00:00") }),
+    "2026-11",
+  );
+  assert.equal(lotPaymentMonth({ paidAtMonth: "nonsense" }), "");
+});
+
+// ---------------------------------------------------------------------------
+// The scoreboard. Generated and Owed belong to the job's month; Collected
+// belongs to the month the money arrived in. They therefore need not add up
+// inside a single month — that is the owner's decision, not a rounding bug.
+// ---------------------------------------------------------------------------
+
+const septemberJob = {
+  id: "a1",
+  feeCents: 100000,
+  amountPaidCents: 35000,
+  paymentStatus: "awaiting_direct_payment",
+  activityDateMonth: "2026-09",
+};
+const scoreboardFor = (
+  activities: Record<string, unknown>[],
+  payments: Record<string, unknown>[],
+  months: string[],
+) =>
+  lotActivityScoreboard({
+    activities,
+    payments,
+    activityMonth: (row) => String(row.activityDateMonth ?? ""),
+    inRange: (month) => months.includes(month),
+  });
+
+test("Collected follows the payment's month; Owed is the job's remaining balance", () => {
+  const payments = [
+    { activityId: "a1", amountCents: 20000, paidAtMonth: "2026-09" },
+    // The second instalment landed two months after the job was billed.
+    { activityId: "a1", amountCents: 15000, paidAtMonth: "2026-11" },
+  ];
+
+  const september = scoreboardFor([septemberJob], payments, ["2026-09"]);
+  assert.equal(september.generatedCents, 100000);
+  assert.equal(september.collectedCents, 20000);
+  // Owed is what the job still has outstanding, not its whole fee: reading
+  // the fee here is what made a part-paid job look untouched.
+  assert.equal(september.owedCents, 65000);
+  assert.equal(september.jobs, 1);
+
+  // November billed nothing, but money arrived in it.
+  const november = scoreboardFor([septemberJob], payments, ["2026-11"]);
+  assert.equal(november.generatedCents, 0);
+  assert.equal(november.collectedCents, 15000);
+  assert.equal(november.owedCents, 0);
+  assert.equal(november.jobs, 0);
+
+  // Over both months the parts add back up to what the row itself records.
+  const both = scoreboardFor([septemberJob], payments, ["2026-09", "2026-11"]);
+  assert.equal(both.collectedCents, 35000);
+});
+
+test("money collected before instalments existed is still counted, exactly once", () => {
+  // A row settled the old way: a status, no running total, no payment
+  // documents at all. Its month is the only date the money has.
+  const legacy = {
+    id: "old", feeCents: 50000, paymentStatus: "succeeded",
+    activityDateMonth: "2026-09",
+  };
+  const legacyOnly = scoreboardFor([legacy], [], ["2026-09"]);
+  assert.equal(legacyOnly.collectedCents, 50000);
+  assert.equal(legacyOnly.owedCents, 0);
+
+  // A row whose collection IS documented contributes its payments and nothing
+  // extra — no double count.
+  const documented = scoreboardFor(
+    [septemberJob],
+    [{ activityId: "a1", amountCents: 35000, paidAtMonth: "2026-09" }],
+    ["2026-09"],
+  );
+  assert.equal(documented.collectedCents, 35000);
+
+  // Half documented, half not: only the undocumented half is added back.
+  const partlyDocumented = scoreboardFor(
+    [septemberJob],
+    [{ activityId: "a1", amountCents: 20000, paidAtMonth: "2026-09" }],
+    ["2026-09"],
+  );
+  assert.equal(partlyDocumented.collectedCents, 35000);
+});
+
+test("voided and cancelled jobs are off the board, with their payments", () => {
+  const voided = { id: "v", feeCents: 80000, amountPaidCents: 80000, voided: true, activityDateMonth: "2026-09" };
+  const cancelled = { id: "c", feeCents: 80000, paymentStatus: "cancelled", activityDateMonth: "2026-09" };
+  const board = scoreboardFor(
+    [voided, cancelled],
+    [{ activityId: "v", amountCents: 80000, paidAtMonth: "2026-09" }],
+    ["2026-09"],
+  );
+  assert.deepEqual(board, { generatedCents: 0, collectedCents: 0, owedCents: 0, jobs: 0 });
+
+  // A payment whose job is not on screen is left out rather than appearing as
+  // money no visible row explains.
+  const orphan = scoreboardFor([], [{ activityId: "gone", amountCents: 5000, paidAtMonth: "2026-09" }], ["2026-09"]);
+  assert.equal(orphan.collectedCents, 0);
+});
+
+// ---------------------------------------------------------------------------
+// An activity type that records no vehicle.
+// ---------------------------------------------------------------------------
+
+test("an activity type records a vehicle unless it says otherwise", () => {
+  // The default is on: a lot's work is almost always done to a car.
+  assert.equal(emptyLotActivityTypeDraft.needsVehicle, true);
+  assert.equal(
+    lotActivityTypePayload({ label: "Dispatch", defaultFee: "50", needsAuctionHouse: false }).needsVehicle,
+    true,
+  );
+  assert.equal(
+    lotActivityTypePayload({
+      label: "Auction account", defaultFee: "50",
+      needsAuctionHouse: false, needsVehicle: false,
+    }).needsVehicle,
+    false,
+  );
+});
+
+test("a job with no vehicle is not asked for a VIN, and sends no car", () => {
+  const draft = {
+    ...emptyLotActivityDraft,
+    activityTypeId: "t1",
+    fee: "250",
+    activityDate: "2026-09-16",
+    customerName: "Alimou",
+    customerPhone: "2015551234",
+    carMake: "Toyota",
+    carModel: "Camry",
+    carYear: "2018",
+    vinNumber: "",
+  };
+  // The car fields still guard by default — absent means yes, as on the server.
+  assert.ok(validateLotActivityDraft(draft, ["t1"]).includes("vin_required"));
+  assert.deepEqual(validateLotActivityDraft(draft, ["t1"], { needsVehicle: false }), []);
+
+  // And a job with no vehicle carries no vehicle, even when the form had one
+  // filled in before the activity was changed.
+  const payload = lotActivityPayload(draft, "biz1", { needsVehicle: false });
+  assert.equal(payload.vinNumber, "");
+  assert.equal(payload.carMake, "");
+  assert.equal(payload.carModel, "");
+  assert.equal(payload.carYear, "");
+  // The default still sends the car.
+  assert.equal(lotActivityPayload(draft, "biz1").carMake, "Toyota");
+});
+
+// ---------------------------------------------------------------------------
+// The mirror. These rules exist twice on purpose — once in the callable, once
+// here — so this reads the server file and fails if the two stop agreeing.
+// ---------------------------------------------------------------------------
+
+test("the instalment rules mirror the server module", () => {
+  const server = readFileSync(
+    "../my_flutter_app/functions/lot_ledger.js", "utf8");
+
+  // Same names, exported from both sides.
+  for (const name of [
+    "lotActivityPaidCents", "lotActivityRemainingCents",
+    "lotActivityPartlyPaid", "lotActivityPaymentPlan",
+    "lotActivityPaymentRecord", "LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS",
+    "LOT_ACTIVITY_PAYMENT_SOURCES",
+  ]) {
+    assert.ok(
+      server.includes(name),
+      `${name} is gone from functions/lot_ledger.js — the console mirrors a ` +
+      `module that no longer defines it.`);
+  }
+
+  // The card floor is one number in two files.
+  const floor = server.match(/LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS = (\d+)/);
+  assert.ok(floor, "the server no longer states a card minimum");
+  assert.equal(Number(floor?.[1]), LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS);
+
+  // The two rails, in the same order.
+  assert.match(server, /LOT_ACTIVITY_PAYMENT_SOURCES = Object\.freeze\(\["cash", "card"\]\)/);
+  assert.deepEqual([...LOT_ACTIVITY_PAYMENT_SOURCES], ["cash", "card"]);
+
+  // paymentStatus keeps its four values: part-paid is derived, never stored.
+  // A fifth member would silently change what every reader of "succeeded"
+  // believes, on both sides of the wire.
+  const statuses = server.match(/LOT_ACTIVITY_PAYMENT_STATUS = Object\.freeze\(\{[\s\S]*?\}\)/);
+  assert.ok(statuses);
+  assert.equal((statuses?.[0].match(/:\s*"/g) ?? []).length, 4);
+  assert.ok(!/part_paid|"part paid"/i.test(statuses?.[0] ?? ""));
+
+  // A type that records no vehicle is the server's own flag, read the same
+  // absent-means-yes way here.
+  assert.match(server, /needsVehicle: input\.needsVehicle !== false/);
+  assert.match(server, /opts\.needsVehicle !== false/);
+
+  // The instalment document's shape, field for field, is what the console
+  // expects to read back on the scoreboard.
+  for (const field of [
+    "businessId", "activityId", "amountCents", "overpaidCents", "source",
+    "receivedVia", "receivedByStaffId", "recordedByStaffId", "paidAtMonth",
+    "note",
+  ]) {
+    assert.ok(
+      new RegExp(`${field}:`).test(server),
+      `lotActivityPaymentRecord no longer writes ${field}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// What the console actually renders. A pure function that is never wired up
+// is not a feature.
+// ---------------------------------------------------------------------------
+
+test("the console records instalments, and the scoreboard reads them", () => {
+  const panel = readFileSync(
+    "src/components/business/operations-panels.tsx", "utf8");
+
+  // The instalment collection is read, and the scoreboard is built from it
+  // rather than from the activity rows alone.
+  assert.match(panel, /useBusinessRows\("lotActivityPayments"/);
+  assert.match(panel, /lotActivityScoreboard\(\{[\s\S]*?payments: activityPayments\.rows/);
+
+  // The chase modal offers a part payment and calls the new callable.
+  assert.match(panel, /"recordLotActivityInstalment"/);
+  assert.match(panel, /async function chaseRecordInstalment\(/);
+  assert.match(panel, /lotInstalmentPayload\(/);
+  // And it validates before spending a round trip.
+  assert.match(panel, /validateLotInstalmentDraft\(/);
+
+  // The row shows the balance state and how much of it has arrived.
+  assert.match(panel, /lotActivityPaymentBadge\(r\)/);
+  assert.match(panel, /lotActivityBalanceText\(r\)/);
+});
+
+test("an activity type can record no vehicle, and the form obeys it", () => {
+  const panel = readFileSync(
+    "src/components/business/operations-panels.tsx", "utf8");
+
+  // The checkbox exists on both the existing-type row and the add form.
+  assert.equal((panel.match(/Records a vehicle/g) ?? []).length >= 2, true);
+  assert.match(panel, /needsVehicle: e\.target\.checked/);
+
+  // The car fields are hidden, not disabled: the owner's rule is that a form
+  // does not show a field its controlling answer switched off.
+  assert.match(panel, /\{typeNeedsVehicle && \(/);
+  assert.match(panel, /needsVehicle: typeNeedsVehicle/);
+
+  // The vehicle cell must never print the literal word "Vehicle" over an
+  // empty VIN line again.
+  assert.ok(
+    !/join\(" "\) \|\| "Vehicle"/.test(panel),
+    'the activity row still falls back to the literal word "Vehicle"');
+  assert.match(panel, /const vehicle = vehicleText \|\| "—";/);
+});
+
+test("every string the instalment work puts on screen exists in French", () => {
+  for (const label of [
+    "Records a vehicle",
+    "A job done without a car — lending an auction account, say — needs an activity that records no vehicle. The form then stops asking for a VIN.",
+    "Part paid", "Paid", "Not paid", "Still owed",
+    "The whole balance", "Part of it — they paid some of it now",
+    "Amount received", "More than the balance is recorded as the balance.",
+    "The rest stays owed and can be collected again later, here or on the customer’s payment link.",
+    "Record part payment", "Part payment recorded.",
+    "This entry is no longer on screen. Close this and open it again.",
+    "Enter how much came in.", "Say which staff member took the payment.",
+    "This entry was cancelled, so there is nothing to collect.",
+    "This entry has no fee to collect.",
+    "This entry is already paid in full.",
+    "A card payment has to be at least $20.00.",
+    "Record payment", "Mark this activity's money as received.",
+    // The note field's placeholder — an attribute is as visible as a label.
+    "e.g. first instalment",
+  ]) {
+    assert.notEqual(
+      translateValue(label, "fr"), label,
+      `"${label}" renders in the lot ledger with no French entry in ` +
+      `french-dom.ts — add one.`);
+  }
+
+  // Round-trip the new entries: a French value that sits inside an existing
+  // one comes back as something else, which is the failure this guards.
+  for (const [en, fr] of [
+    ["Part paid", "Partiellement payé"],
+    ["Still owed", "Reste dû"],
+    ["Amount received", "Montant reçu"],
+    ["Records a vehicle", "Enregistre un véhicule"],
+    ["Record part payment", "Enregistrer un paiement partiel"],
+  ]) {
+    assert.equal(translateValue(en, "fr"), fr);
+    assert.equal(translateValue(fr, "en"), en);
+  }
+
+  // The balance line reaches the DOM as one node with the amounts in it.
+  assert.equal(
+    translateValue("$350.00 of $1,000.00", "fr"),
+    "$350.00 sur $1,000.00");
+});
+
+test("a job settled after a part payment owes nothing on the board", () => {
+  // The shape a whole-balance settlement leaves behind: the status moved to
+  // succeeded, the running total did not. Read literally that is $650 still
+  // owed on a row badged Paid — the parking ledger's own bug. The board reads
+  // settled as paid in full, so the three figures still reconcile.
+  const settledAfterPart = {
+    id: "a1", feeCents: 100000, amountPaidCents: 35000,
+    paymentStatus: "succeeded", activityDateMonth: "2026-09",
+  };
+  const board = scoreboardFor(
+    [settledAfterPart],
+    [{ activityId: "a1", amountCents: 35000, paidAtMonth: "2026-09" }],
+    ["2026-09"],
+  );
+  assert.equal(board.generatedCents, 100000);
+  assert.equal(board.owedCents, 0);
+  assert.equal(board.collectedCents, 100000);
+  assert.equal(board.collectedCents + board.owedCents, board.generatedCents);
+
+  // The row's own numbers still mirror the server exactly — only the board
+  // applies the settled rule.
+  assert.equal(lotActivityPaidCents(settledAfterPart), 35000);
+  assert.equal(lotActivityRemainingCents(settledAfterPart), 65000);
+});
+
+test("settling a part-paid job goes through the instalment callable", () => {
+  const panel = readFileSync(
+    "src/components/business/operations-panels.tsx", "utf8");
+  // recordLotActivityDirectPayment never writes amountPaidCents, so using it
+  // on a part-paid job leaves a balance behind under a Paid badge. The panel
+  // must route those rows to the instalment path instead.
+  assert.match(
+    panel,
+    /if \(row && lotActivityPaidCents\(row\) > 0 && lotActivityRemainingCents\(row\) > 0\) \{\s*await chaseRecordInstalment\(activityId, lotActivityRemainingCents\(row\)\);/,
+  );
+  // And the balance line follows the badge rather than the raw numbers.
+  assert.match(panel, /const partlyPaid = badge === "Part paid";/);
 });

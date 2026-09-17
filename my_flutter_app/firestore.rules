@@ -604,6 +604,15 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // One row per instalment against an activity - cash taken at the lot and
+    // card taken on the customer's link, each with the month it arrived in.
+    // Read-only to the business's managers: every write goes through
+    // recordLotActivityInstalment or the Stripe settlement handler as admin,
+    // because a client that could write here could write itself paid.
+    match /lotActivityPayments/{paymentId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
     // The change log (edits and voids) — read-only to a business's managers;
     // every write is made by the ledger callables as admin.
     match /lotLedgerAudit/{eventId} {

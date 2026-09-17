@@ -86,6 +86,54 @@ void main() {
     expect(screen, contains('types: _allTypes'));
   });
 
+  test('an activity can be part paid, and paid from the phone', () {
+    // The money changes hands in person and the person taking it has a phone.
+    // A phone that can show a balance but not move it sends staff back to a
+    // desktop for the one act they are standing there to perform.
+    final model = read('lib/services/lot_ledger.dart');
+    final screen = read('lib/screens/lot_ledger_screen.dart');
+    final backend = read('../my_flutter_app/functions/lot_ledger.js');
+
+    // The server derives part-paid from two numbers and deliberately grows no
+    // fifth payment status; a client that invented one would disagree with
+    // every existing reader of `succeeded`.
+    expect(backend, contains('function lotActivityPartlyPaid'));
+    expect(model, contains("amountPaidCents: _cents(d['amountPaidCents'])"));
+    expect(model, contains('int get paidCents'));
+    expect(model, contains('int get remainingCents'));
+    expect(model, contains('bool get partlyPaid'));
+    expect(model, contains('LotInstalmentPlan lotActivityPaymentPlan('));
+    expect(model, contains('class LotActivityPayment'));
+    expect(screen, isNot(contains("'part_paid'")));
+
+    // Recording, not only reading: the callable, the collection the history
+    // comes from, and the balance on the row.
+    expect(
+      screen,
+      contains("httpsCallable('recordLotActivityInstalment')"),
+      reason: 'the app must be able to take a payment, not only show one',
+    );
+    expect(screen, contains("collection('lotActivityPayments')"));
+    expect(screen, contains('l10n.lotPartPaid'));
+    expect(screen, contains('l10n.lotPaidOfTotal('));
+    expect(screen, contains('l10n.lotRecordPayment'));
+  });
+
+  test('a car-less activity reads as deliberate, not as a broken row', () {
+    // `needsVehicle` absent means yes, so every type written before the flag
+    // existed still demands a VIN. A type that opts out must not leave the
+    // vehicle line blank, and the editor must carry the flag or renaming a
+    // type would quietly demand a VIN again.
+    final model = read('lib/services/lot_ledger.dart');
+    final screen = read('lib/screens/lot_ledger_screen.dart');
+    expect(model, contains("needsVehicle: d['needsVehicle'] != false"));
+    expect(model, contains('bool get hasVehicle'));
+    expect(screen, contains('activity.hasVehicle'));
+    expect(screen, contains('l10n.lotNoVehicle'));
+    expect(screen, contains('if (_needsVehicle) ...['));
+    expect(screen, contains("'needsVehicle': _needsVehicle,"));
+  });
+
   test('the business profile can author the lot\'s price cards', () {
     final profile = read('lib/screens/business_profile_screen.dart');
     final provider = read('lib/providers/auth_provider.dart');

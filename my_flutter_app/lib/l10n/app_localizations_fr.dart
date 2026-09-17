@@ -8660,4 +8660,118 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get lotRecordedBy => 'Enregistré par';
+
+  @override
+  String get lotPartPaid => 'Partiellement payé';
+
+  @override
+  String lotPaidOfTotal(String paid, String total) {
+    return '$paid sur $total';
+  }
+
+  @override
+  String lotStillOwed(String amount) {
+    return '$amount restant dû';
+  }
+
+  @override
+  String get lotBalance => 'Solde';
+
+  @override
+  String get lotPaidSoFar => 'Payé à ce jour';
+
+  @override
+  String get lotNoVehicle => 'Sans véhicule';
+
+  @override
+  String get lotNoVehicleNote =>
+      'Cette activité est enregistrée sans véhicule.';
+
+  @override
+  String get lotActivityTypeNeedsVehicle => 'Concerne un véhicule';
+
+  @override
+  String get lotActivityTypeNeedsVehicleNote =>
+      'Désactivez pour un travail sans véhicule, comme le prêt d\'un compte de vente aux enchères. Le NIV n\'est alors pas demandé.';
+
+  @override
+  String get lotRecordPayment => 'Enregistrer un paiement';
+
+  @override
+  String get lotRecordPaymentNote =>
+      'Argent reçu en personne. Il est déduit du solde immédiatement, et le lien du client demande le reste.';
+
+  @override
+  String get lotPaymentAmount => 'Montant reçu (\$)';
+
+  @override
+  String lotPaymentMaxNote(String amount) {
+    return '$amount au maximum — le montant restant dû sur cette entrée.';
+  }
+
+  @override
+  String get lotPaymentNote => 'Note (facultatif)';
+
+  @override
+  String lotPaymentRecorded(String amount) {
+    return '$amount enregistré.';
+  }
+
+  @override
+  String lotPaymentSettled(String amount) {
+    return '$amount enregistré — soldé intégralement.';
+  }
+
+  @override
+  String get lotPayments => 'Paiements';
+
+  @override
+  String get lotPaymentsNote =>
+      'Chaque paiement reçu sur cette entrée, quel qu\'en soit le moyen.';
+
+  @override
+  String get lotNoPaymentsYet =>
+      'Aucun paiement individuel enregistré sur cette entrée.';
+
+  @override
+  String get lotPaymentsCouldNotBeLoaded =>
+      'Les paiements n\'ont pas pu être chargés.';
+
+  @override
+  String get lotPaymentInPerson => 'En personne';
+
+  @override
+  String get lotPaymentOnline => 'En ligne';
+
+  @override
+  String lotPaymentOverpaid(String amount) {
+    return '$amount au-delà du solde';
+  }
+
+  @override
+  String get lotErrActivityVoided =>
+      'Cette entrée a été annulée — enregistrez-en une nouvelle.';
+
+  @override
+  String get lotErrActivityCancelled =>
+      'Cette entrée a été annulée ; aucun montant ne peut y être encaissé.';
+
+  @override
+  String get lotErrNothingToPay => 'Cette entrée n\'a aucun montant à payer.';
+
+  @override
+  String get lotErrAlreadyPaid => 'Cette entrée est déjà intégralement payée.';
+
+  @override
+  String get lotErrNoAmount => 'Saisissez le montant reçu.';
+
+  @override
+  String lotErrBelowCardMinimum(String amount) {
+    return 'Un paiement par carte commence à $amount.';
+  }
+
+  @override
+  String lotErrBelowAmountPaid(String amount) {
+    return '$amount a déjà été encaissé sur cette entrée. Le montant facturé ne peut pas descendre en dessous.';
+  }
 }

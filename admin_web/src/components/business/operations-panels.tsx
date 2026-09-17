@@ -93,9 +93,21 @@ import {
   expenseProofMessage,
   lotMonthExpenseCents,
   lotExpenseByLine,
+  lotActivityPaidCents,
+  lotActivityRemainingCents,
+  lotActivityPaymentBadge,
+  lotActivityBalanceText,
+  lotActivityScoreboard,
+  lotActivityPaymentPlan,
+  dollarsToCents as lotDollarsToCents,
+  emptyLotInstalmentDraft,
+  validateLotInstalmentDraft,
+  lotInstalmentPayload,
+  lotInstalmentMessage,
   type LotActivityDraft,
   type LotActivityTypeDraft,
   type LotExpenseEntryDraft,
+  type LotInstalmentDraft,
 } from "@/lib/lot-ledger";
 import {
   lotCustomerFromStaffRow,
@@ -7487,6 +7499,12 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const enabled = Boolean(businessId && !previewMode);
   const activityTypes = useBusinessRows("lotActivityTypes", businessId, enabled, 200);
   const activities = useBusinessRows("lotActivities", businessId, enabled, 1000);
+  // Every instalment taken against an activity, on either rail. The scoreboard
+  // reads these rather than deriving what was collected from the activity rows,
+  // because a payment counts in the month it ARRIVED, not the month of the job
+  // it settles. If this collection is unreadable the hook yields an empty list
+  // and the scoreboard falls back to the money recorded on the rows themselves.
+  const activityPayments = useBusinessRows("lotActivityPayments", businessId, enabled, 2000);
   const expenseLines = useBusinessRows("lotExpenseLines", businessId, enabled, 200);
   const expenseEntries = useBusinessRows("lotExpenseEntries", businessId, enabled, 2000);
   const staff = useBusinessStaff(businessId, enabled, 200);
@@ -7536,6 +7554,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const [editEntryId, setEditEntryId] = useState("");
   const [chaseVia, setChaseVia] = useState("cash");
   const [chaseStaff, setChaseStaff] = useState("");
+  // Chase modal: is the money that came in the whole balance, or part of it?
+  // "part" reveals the amount field; "full" hides it entirely rather than
+  // greying it out, so the form only shows fields its answer keeps alive.
+  const [chaseAmountMode, setChaseAmountMode] = useState<"full" | "part">("full");
+  const [instalment, setInstalment] = useState<LotInstalmentDraft>(emptyLotInstalmentDraft);
   const [directStaff, setDirectStaff] = useState("");
   const [editingThreshold, setEditingThreshold] = useState(false);
   const [thresholdInput, setThresholdInput] = useState("");
@@ -7690,27 +7713,28 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const parkingGenerated = Math.round((parkingTotals.collected + parkingTotals.owed) * 100) / 100;
 
   // The summary cards above the Activity list, totalled over the selected
-  // range: generated (billed), collected (paid), owed (still awaiting), and
-  // the job count. Cancelled and voided jobs never billed, so they are left
-  // out.
-  const activityMoney = useMemo(() => {
-    let generatedCents = 0;
-    let collectedCents = 0;
-    let owedCents = 0;
-    let jobs = 0;
-    for (const row of rangeActivities) {
-      const r = row as Record<string, unknown>;
-      if (r.voided === true) continue;
-      const status = String(r.paymentStatus);
-      if (status === "cancelled") continue;
-      const fee = Number(r.feeCents) || 0;
-      generatedCents += fee;
-      jobs += 1;
-      if (status === "succeeded" || status === "paid") collectedCents += fee;
-      else if (status === "awaiting_payment_link" || status === "awaiting_direct_payment") owedCents += fee;
-    }
-    return { generatedCents, collectedCents, owedCents, jobs };
-  }, [rangeActivities]);
+  // range: generated (billed), collected (money that arrived), owed (the
+  // balance still outstanding on those jobs), and the job count. Cancelled and
+  // voided jobs never billed, so they are left out.
+  //
+  // The arithmetic lives in lot-ledger.ts, where it is unit-tested. Two things
+  // it does that the old inline loop could not:
+  //   - a part-paid job contributes its REMAINING balance to Owed, not its
+  //     whole fee (which read as though nothing had been collected);
+  //   - Collected is read from the instalment documents, each carrying the
+  //     month it arrived in, so a September job paid in November counts as
+  //     November's income. Every activity is passed in, not only the ones in
+  //     the range, because a payment inside the range can belong to a job
+  //     billed outside it.
+  const activityMoney = useMemo(
+    () => lotActivityScoreboard({
+      activities: activities.rows as Record<string, unknown>[],
+      payments: activityPayments.rows as Record<string, unknown>[],
+      activityMonth: (row) => lotRowMonth(row, "activityDate"),
+      inRange: (mk) => Boolean(mk) && mk >= actStart && mk <= actEnd,
+    }),
+    [activities.rows, activityPayments.rows, actStart, actEnd],
+  );
 
   // Revenue by source for the report year: one figure per activity type, plus
   // car parking, so the owner sees where the year's money came from — titles,
@@ -7775,6 +7799,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     setVinHint("");
     setVoidTarget(null);
     setVoidReason("");
+    setChaseAmountMode("full");
+    setInstalment(emptyLotInstalmentDraft);
   }
 
   function openRecord() {
@@ -7815,6 +7841,16 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
 
   const selectedType = typeById.get(activityDraft.activityTypeId);
   const editRow = editId ? (activities.rows.find((r) => String(r.id) === editId) as Record<string, unknown> | undefined) : undefined;
+  // Absent means yes — the server's reading — so a type saved before the flag
+  // existed, and a one-off with no type at all, still records a car.
+  //
+  // An entry that already HAS a car keeps its car fields even if its activity
+  // has since been changed to one that records no vehicle: hiding them would
+  // send empty vehicle fields on the next save and quietly erase the car this
+  // job was actually done to.
+  const typeNeedsVehicle =
+    (selectedType ? selectedType.needsVehicle !== false : true) ||
+    Boolean(editRow && (text(editRow.vinNumber, "") || text(editRow.carMake, "")));
   const editingPaid = Boolean(editRow && lotActivityPaid(editRow));
 
   // Typing a VIN pulls the car and customer from an existing record for this
@@ -7950,12 +7986,15 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   }
 
   async function saveActivity() {
-    const errors = validateLotActivityDraft(activityDraft, [...knownTypeIds]);
+    // The chosen type decides whether a VIN is demanded and whether the car
+    // fields are sent at all, exactly as the callable decides it server-side.
+    const vehicleOptions = { needsVehicle: typeNeedsVehicle };
+    const errors = validateLotActivityDraft(activityDraft, [...knownTypeIds], vehicleOptions);
     if (errors.length) {
       setDraftError(lotActivityMessage(errors));
       return;
     }
-    const payload = lotActivityPayload(activityDraft, businessId);
+    const payload = lotActivityPayload(activityDraft, businessId, vehicleOptions);
     await runPanelAction(setBusy, setFlash, editId ? "Activity updated." : "Activity recorded.", async () => {
       if (editId) {
         await httpsCallable(functions, "updateLotActivity")({ activityId: editId, changes: payload });
@@ -8000,12 +8039,64 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       setDraftError("Say which staff member took the payment.");
       return;
     }
+    // A row that has already taken money settles through the instalment
+    // callable rather than this one. `recordLotActivityDirectPayment` moves
+    // the status to succeeded without touching `amountPaidCents`, so on a
+    // part-paid job the remaining $650 would go on reading as owed under a
+    // "Paid" badge — the exact failure the parking ledger hit. The instalment
+    // path applies the rest of the balance and settles the row in one write.
+    const row = activities.rows.find((r) => String(r.id) === activityId) as Record<string, unknown> | undefined;
+    if (row && lotActivityPaidCents(row) > 0 && lotActivityRemainingCents(row) > 0) {
+      await chaseRecordInstalment(activityId, lotActivityRemainingCents(row));
+      return;
+    }
     await runPanelAction(setBusy, setFlash, "Recorded as paid.", async () => {
       await httpsCallable(functions, "recordLotActivityDirectPayment")({
         activityId,
         receivedByStaffId: chaseStaff,
         receivedVia: chaseVia,
       });
+      closeModal();
+    });
+  }
+
+  /**
+   * Part of the balance, taken at the lot. The whole-balance path is left
+   * exactly where it was (`recordLotActivityDirectPayment`, which settles the
+   * row); this one writes an instalment instead, and an instalment is what
+   * carries the month the money actually arrived in. The amount is clamped to
+   * what is still owed before it is sent — the same call the server makes.
+   */
+  async function chaseRecordInstalment(activityId: string, amountCentsOverride?: number) {
+    const row = activities.rows.find((r) => String(r.id) === activityId) as Record<string, unknown> | undefined;
+    if (!row) {
+      setDraftError("This entry is no longer on screen. Close this and open it again.");
+      return;
+    }
+    // How it was paid and who took it are the modal's own selects, shared with
+    // the whole-balance path rather than asked for twice.
+    const draft = {
+      ...instalment,
+      ...(typeof amountCentsOverride === "number" ? { amount: String(amountCentsOverride / 100) } : {}),
+      receivedVia: chaseVia,
+      receivedByStaffId: chaseStaff,
+    };
+    const errors = validateLotInstalmentDraft(draft, row);
+    if (errors.length) {
+      setDraftError(lotInstalmentMessage(errors));
+      return;
+    }
+    // The last instalment settles the job, so it is not reported as a part
+    // payment: the same event reads differently depending on what it closes.
+    const settles = lotActivityPaymentPlan({
+      activity: row,
+      amountCents: lotDollarsToCents(draft.amount) ?? 0,
+      source: "cash",
+    }).fullyCovered;
+    await runPanelAction(setBusy, setFlash, settles ? "Recorded as paid." : "Part payment recorded.", async () => {
+      await httpsCallable(functions, "recordLotActivityInstalment")(
+        lotInstalmentPayload(draft, { businessId, activityId, activity: row }),
+      );
       closeModal();
     });
   }
@@ -8330,10 +8421,26 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                     const r = row as Record<string, unknown>;
                     const voided = r.voided === true;
                     const label = text(r.activityTypeLabel, "") || (String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? text(r.customLabel, "One-off") : text(typeById.get(String(r.activityTypeId))?.label, "Activity"));
-                    const vehicle = [text(r.carYear, ""), text(r.carMake, ""), text(r.carModel, "")].filter(Boolean).join(" ") || "Vehicle";
+                    const vin = text(r.vinNumber, "");
+                    // A job recorded against no car — lending an auction
+                    // account, say — shows a dash. It used to print the literal
+                    // word "Vehicle" above an empty VIN line, which reads as a
+                    // car whose details went missing. The column always stays:
+                    // a table that drops a cell per row stops lining up.
+                    const vehicleText = [text(r.carYear, ""), text(r.carMake, ""), text(r.carModel, "")].filter(Boolean).join(" ") || vin;
+                    const vehicle = vehicleText || "—";
+                    // What a confirmation calls this row: its car when it has
+                    // one, otherwise the job itself — never a bare dash.
+                    const rowLabel = vehicleText || label;
+                    const badge = lotActivityPaymentBadge(r);
+                    // The balance line follows the badge, not the raw numbers:
+                    // a job settled by a whole-balance action keeps an old
+                    // amountPaidCents, and "$350 of $1,000" under a Paid pill
+                    // would contradict itself.
+                    const partlyPaid = badge === "Part paid";
                     return (
                       <div className={`mini-table-row${voided ? " voided" : ""}`} key={String(r.id)}>
-                        <span><strong>{voided ? <s>{vehicle}</s> : vehicle}</strong><small>{text(r.vinNumber, "")}</small>{voided && <span className="status-pill danger compact">Voided</span>}</span>
+                        <span><strong>{voided ? <s>{vehicle}</s> : vehicle}</strong><small>{vehicleText && vehicleText !== vin ? vin : ""}</small>{voided && <span className="status-pill danger compact">Voided</span>}</span>
                         <span><strong>{text(r.customerName, "")}</strong><small>{text(r.customerPhone, "")}</small></span>
                         <span><strong style={{ color: tintForType(String(r.activityTypeId)) }}>{label}</strong><small>{text(r.auctionHouse, "") ? `Auction: ${text(r.auctionHouse, "")}` : r.feeOverridden ? "Priced for this job" : "Standard rate"}</small></span>
                         <span>
@@ -8348,19 +8455,28 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                         </span>
                         <span className="lot-col-fee">
                           <strong>{voided ? <s>{lotFormatCents(Number(r.feeCents) || 0)}</s> : lotFormatCents(Number(r.feeCents) || 0)}</strong>
-                          <span className={`status-pill compact ${lotActivityPaid(r) ? "good" : lotActivityAwaitingLink(r) ? "warning" : ""}`}>{lotActivityPaymentLabel(r)}</span>
+                          {/* The money in two lines: what state the balance is
+                              in, then how it is being paid. The badge uses the
+                              parking ledger's own three words (Paid / Part paid
+                              / Not paid) so the two halves of this panel never
+                              describe the same state differently. */}
+                          {badge
+                            ? <span className={`status-pill compact ${badge === "Paid" ? "good" : "warning"}`}>{badge}</span>
+                            : <span className="status-pill compact">{lotActivityPaymentLabel(r)}</span>}
+                          {badge && <small>{lotActivityPaymentLabel(r)}</small>}
+                          {partlyPaid && <small>{lotActivityBalanceText(r)}</small>}
                           {!voided && String(r.paymentMethod) === "direct" && staffName(text(r.receivedByStaffId, "")) && <small>by {staffName(text(r.receivedByStaffId, ""))}</small>}
-                          {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase</button>)}
+                          {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setChaseAmountMode("full"); setInstalment(emptyLotInstalmentDraft); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase</button>)}
                           {/* Money marked received off-platform can be set back
                               to not-received if it never actually came in; the
                               change is logged under whoever does it. */}
-                          {!voided && lotActivityPaid(r) && String(r.paymentMethod) === "direct" && (<button className="ghost-button" type="button" onClick={() => void revertActivityPayment(String(r.id), vehicle)} title="Set back to not received"><RotateCcw size={13} /> Mark not received</button>)}
+                          {!voided && lotActivityPaid(r) && String(r.paymentMethod) === "direct" && (<button className="ghost-button" type="button" onClick={() => void revertActivityPayment(String(r.id), rowLabel)} title="Set back to not received"><RotateCcw size={13} /> Mark not received</button>)}
                         </span>
                         <span className="lot-row-actions">
                           {!voided && <button className="ghost-button" type="button" onClick={() => openEdit(r)} title="Edit"><Pencil size={14} /></button>}
                           <button className="ghost-button" type="button" onClick={() => openHistory(String(r.id))} title="Change history"><History size={14} /></button>
                           {!voided && (lotActivityPaid(r) || lotActivityAwaitingLink(r)) && <button className="ghost-button" type="button" onClick={() => openLotDocument(r)} title={lotActivityPaid(r) ? "Receipt" : "Invoice"}><FileText size={14} /></button>}
-                          {!voided && <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "activity", id: String(r.id), label: `${vehicle} · ${lotFormatCents(Number(r.feeCents) || 0)}` }); setVoidReason(""); setDraftError(""); setModal("void"); }} title="Void"><Ban size={14} /></button>}
+                          {!voided && <button className="ghost-button" type="button" onClick={() => { setVoidTarget({ type: "activity", id: String(r.id), label: `${rowLabel} · ${lotFormatCents(Number(r.feeCents) || 0)}` }); setVoidReason(""); setDraftError(""); setModal("void"); }} title="Void"><Ban size={14} /></button>}
                         </span>
                       </div>
                     );
@@ -8519,7 +8635,22 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
               <div className="lst-form-grid">
                 <label className="lst-field wide"><span>What was done</span>
-                  <select value={activityDraft.activityTypeId} onChange={(e) => { const id = e.target.value; const t = typeById.get(id); setActivityDraft((d) => ({ ...d, activityTypeId: id, fee: t ? String((Number(t.defaultFeeCents) || 0) / 100) : d.fee })); }}>
+                  <select value={activityDraft.activityTypeId} onChange={(e) => {
+                    const id = e.target.value;
+                    const t = typeById.get(id);
+                    // Switching to an activity that records no vehicle clears
+                    // the car fields as it hides them: a VIN typed for the
+                    // previous choice must not ride along into a job that
+                    // never had a car.
+                    const keepsVehicle = t ? t.needsVehicle !== false : true;
+                    setVinHint("");
+                    setActivityDraft((d) => ({
+                      ...d,
+                      activityTypeId: id,
+                      fee: t ? String((Number(t.defaultFeeCents) || 0) / 100) : d.fee,
+                      ...(keepsVehicle ? {} : { vinNumber: "", carMake: "", carModel: "", carYear: "" }),
+                    }));
+                  }}>
                     <option value="">Choose an activity</option>
                     {orderedTypes.map((t) => (<option key={String((t as Record<string, unknown>).id)} value={String((t as Record<string, unknown>).id)}>{text((t as Record<string, unknown>).label, "")} — {lotFormatCents(Number((t as Record<string, unknown>).defaultFeeCents) || 0)}</option>))}
                     <option value={LOT_CUSTOM_ACTIVITY_ID}>Something else — one-off</option>
@@ -8530,7 +8661,12 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 )}
                 <label className="lst-field"><span>Fee</span><input inputMode="decimal" value={activityDraft.fee} disabled={editingPaid} onChange={(e) => setActivityDraft((d) => ({ ...d, fee: e.target.value }))} /><small className="lst-hint">{editingPaid ? "Paid, so the amount is locked. Void this entry and record a new one if the price was wrong." : "From your activity list; edit to price this job."}</small></label>
                 <label className="lst-field"><span>Date</span><input type="date" value={activityDraft.activityDate} onChange={(e) => setActivityDraft((d) => ({ ...d, activityDate: e.target.value }))} /></label>
+                {/* An activity type that records no vehicle hides the car
+                    fields outright rather than greying them out: a disabled
+                    field still reads as something the form wants. */}
+                {typeNeedsVehicle && (
                 <label className="lst-field wide"><span>VIN</span><input value={activityDraft.vinNumber} onChange={(e) => applyVin(e.target.value)} placeholder="17 characters" />{vinHint && <small className="lst-hint" style={{ color: "var(--money)" }}>{vinHint}</small>}</label>
+                )}
                 <label className="lst-field" style={{ position: "relative" }}><span>Customer</span>
                   <input value={activityDraft.customerName} autoComplete="off" onFocus={() => setCustomerMenuOpen(true)} onBlur={() => window.setTimeout(() => setCustomerMenuOpen(false), 150)} onChange={(e) => { setCustomerPick(null); setCustomerMenuOpen(true); setActivityDraft((d) => ({ ...d, customerName: e.target.value })); }} />
                   {customerMatches.length > 0 && (
@@ -8542,6 +8678,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                   )}
                 </label>
                 <label className="lst-field"><span>Phone</span><input value={activityDraft.customerPhone} onChange={(e) => setActivityDraft((d) => ({ ...d, customerPhone: e.target.value }))} /></label>
+                {typeNeedsVehicle && (<>
                 <label className="lst-field"><span>Car make</span>
                   <select value={canonicalMake(activityDraft.carMake) || activityDraft.carMake} onChange={(e) => setActivityDraft((d) => ({ ...d, carMake: e.target.value, carModel: "", carYear: "" }))}>
                     <option value="">Select a make</option>
@@ -8560,6 +8697,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                     {getYears(activityDraft.carMake, activityDraft.carModel).map((y) => (<option key={y} value={y}>{y}</option>))}
                   </select>
                 </label>
+                </>)}
                 {Boolean(selectedType?.needsAuctionHouse) && (
                   <label className="lst-field"><span>Auction house</span><select value={activityDraft.auctionHouse} onChange={(e) => setActivityDraft((d) => ({ ...d, auctionHouse: e.target.value }))}><option value="">Choose</option>{LOT_AUCTION_HOUSES.map((h) => (<option key={h} value={h}>{h}</option>))}</select></label>
                 )}
@@ -8617,10 +8755,12 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                   <label className="lst-field"><span>Add an activity</span><input placeholder="e.g. Key cutting" value={newType.label} onChange={(e) => setNewType((d) => ({ ...d, label: e.target.value }))} /></label>
                   <label className="lst-field"><span>Fee</span><input inputMode="decimal" placeholder="0" value={newType.defaultFee} onChange={(e) => setNewType((d) => ({ ...d, defaultFee: e.target.value }))} /></label>
                   <label className="lst-field"><span>Auction field</span><input type="checkbox" checked={newType.needsAuctionHouse} onChange={(e) => setNewType((d) => ({ ...d, needsAuctionHouse: e.target.checked }))} /></label>
+                  <label className="lst-field"><span>Records a vehicle</span><input type="checkbox" checked={newType.needsVehicle !== false} onChange={(e) => setNewType((d) => ({ ...d, needsVehicle: e.target.checked }))} /></label>
                 </div>
                 <button className="lst-add" type="button" disabled={busy} onClick={() => saveType(newType)}>Add</button>
               </div>
               <p className="lst-hint">A fee of 0 means staff type the price on every job. An activity already used by a recorded entry can be renamed but not removed, so past months keep adding up the way they did.</p>
+              <p className="lst-hint">A job done without a car — lending an auction account, say — needs an activity that records no vehicle. The form then stops asking for a VIN.</p>
             </div>
             <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" onClick={closeModal}>Done</button></footer>
           </div>
@@ -8632,18 +8772,51 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
         // only be marked received. A link row offers both.
         const chaseRow = activities.rows.find((r) => String(r.id) === chaseId) as Record<string, unknown> | undefined;
         const chaseDirectOnly = chaseRow ? lotActivityAwaitsDirect(chaseRow) : false;
+        // The balance drives what this modal offers: money already collected
+        // against the job, and what is left to take.
+        const chaseFeeCents = Number(chaseRow?.feeCents) || 0;
+        const chasePaidCents = chaseRow ? lotActivityPaidCents(chaseRow) : 0;
+        const chaseRemainingCents = chaseRow ? lotActivityRemainingCents(chaseRow) : 0;
+        const recordingPart = chaseAmountMode === "part";
         return (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>{chaseDirectOnly ? "Record payment" : "Chase payment"}</h3><p>{chaseDirectOnly ? "Mark this activity's money as received." : "Send the link again, or record the money if it came in another way."}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              {chaseFeeCents > 0 && (
+                <p className="panel-lede">
+                  {/* What has arrived against what was agreed, in the same
+                      words the row uses. */}
+                  <span>Collected</span> <strong>{lotActivityBalanceText(chaseRow ?? {})}</strong>
+                  {chasePaidCents > 0 && <> · <span>Still owed</span> <strong>{lotFormatCents(chaseRemainingCents)}</strong></>}
+                </p>
+              )}
               <div className="lst-form-grid">
                 <label className="lst-field"><span>How it was paid</span><select value={chaseVia} onChange={(e) => setChaseVia(e.target.value)}>{LOT_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}</select></label>
                 <label className="lst-field"><span>Received by</span><select value={chaseStaff} onChange={(e) => setChaseStaff(e.target.value)}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
               </div>
+              {/* How much came in. The question is asked first and the amount
+                  field appears only once the answer needs it. */}
+              {chaseFeeCents > 0 && (
+                <fieldset className="lst-fieldset">
+                  <label className="lst-radio"><input type="radio" name="lotchaseamount" checked={!recordingPart} onChange={() => { setChaseAmountMode("full"); setDraftError(""); }} /><span>The whole balance — {lotFormatCents(chaseRemainingCents)}</span></label>
+                  <label className="lst-radio"><input type="radio" name="lotchaseamount" checked={recordingPart} onChange={() => { setChaseAmountMode("part"); setDraftError(""); }} /><span>Part of it — they paid some of it now</span></label>
+                  {recordingPart && (
+                    <div className="lst-subchoice">
+                      <div className="lst-form-grid">
+                        <label className="lst-field"><span>Amount received</span><input inputMode="decimal" value={instalment.amount} onChange={(e) => setInstalment((d) => ({ ...d, amount: e.target.value }))} placeholder="0.00" /><small className="lst-hint">More than the balance is recorded as the balance.</small></label>
+                        <label className="lst-field"><span>Note</span><input value={instalment.note} onChange={(e) => setInstalment((d) => ({ ...d, note: e.target.value }))} placeholder="e.g. first instalment" /></label>
+                      </div>
+                      <p className="lst-hint">The rest stays owed and can be collected again later, here or on the customer&rsquo;s payment link.</p>
+                    </div>
+                  )}
+                </fieldset>
+              )}
             </div>
-            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={() => chaseRecordDirect(chaseId)}>Record as received</button>{!chaseDirectOnly && (<button className="lst-add" type="button" disabled={busy} onClick={() => chaseResend(chaseId)}>Re-send the link</button>)}</footer>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>{recordingPart
+              ? <button className="lst-add" type="button" disabled={busy} onClick={() => chaseRecordInstalment(chaseId)}>Record part payment</button>
+              : <button className="lst-add" type="button" disabled={busy} onClick={() => chaseRecordDirect(chaseId)}>Record as received</button>}{!chaseDirectOnly && (<button className="lst-add" type="button" disabled={busy} onClick={() => chaseResend(chaseId)}>Re-send the link</button>)}</footer>
           </div>
         </div>
         );
@@ -8732,14 +8905,18 @@ function LotTypeRow({ row, uses, busy, onSave, onRemove }: { row: Record<string,
   const [label, setLabel] = useState(text(row.label, ""));
   const [fee, setFee] = useState(String((Number(row.defaultFeeCents) || 0) / 100));
   const [needsAuction, setNeedsAuction] = useState(Boolean(row.needsAuctionHouse));
+  // Absent means yes, the same reading the server gives it: a type saved
+  // before this flag existed still records a car.
+  const [needsVehicle, setNeedsVehicle] = useState(row.needsVehicle !== false);
   return (
     <div className="lst-form-grid" style={{ alignItems: "end", marginBottom: 8 }}>
       <label className="lst-field"><span>Name</span><input value={label} onChange={(e) => setLabel(e.target.value)} /></label>
       <label className="lst-field"><span>Fee</span><input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} /></label>
       <label className="lst-field"><span>Auction field</span><input type="checkbox" checked={needsAuction} onChange={(e) => setNeedsAuction(e.target.checked)} /></label>
+      <label className="lst-field"><span>Records a vehicle</span><input type="checkbox" checked={needsVehicle} onChange={(e) => setNeedsVehicle(e.target.checked)} /></label>
       <div><small className="lst-hint">{uses > 0 ? `${uses} ${uses === 1 ? "entry uses" : "entries use"} this` : "Not used yet"}</small></div>
       <div style={{ display: "flex", gap: 6 }}>
-        <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => onSave({ label, defaultFee: fee, needsAuctionHouse: needsAuction })}>Save</button>
+        <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => onSave({ label, defaultFee: fee, needsAuctionHouse: needsAuction, needsVehicle })}>Save</button>
         <button className="ghost-button" type="button" disabled={busy} onClick={onRemove}>Remove</button>
       </div>
     </div>

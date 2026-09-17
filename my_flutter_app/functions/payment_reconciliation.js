@@ -62,7 +62,11 @@ const PAYMENT_ROUTES = Object.freeze({
     customerMetadataKey: "businessId",
     customerField: "businessId",
     businessField: "businessId",
-    amountCentsField: "feeCents",
+    // An activity can be paid in instalments, so a session is minted for the
+    // amount being paid now, not the job's total. `feeCents` remains the
+    // fallback for every row minted before instalments existed.
+    amountCentsField: "pendingPaymentCents",
+    amountCentsFallbackField: "feeCents",
     currencyField: "currency",
     defaultCurrency: "usd",
     intentField: "stripePaymentIntentId",
@@ -411,7 +415,15 @@ function routePaymentIntentMetadata(metadata) {
 
 function expectedAmountCents(config, data) {
   if (config.amountCentsField) {
-    return Number(data[config.amountCentsField]);
+    const primary = Number(data[config.amountCentsField]);
+    if (Number.isSafeInteger(primary)) return primary;
+    // A record written before its type gained a per-charge amount field has
+    // only the total. Falling back keeps those reconciling; without it every
+    // historical row would fail the amount check and refuse to settle.
+    if (config.amountCentsFallbackField) {
+      return Number(data[config.amountCentsFallbackField]);
+    }
+    return primary;
   }
   return Math.round(Number(data[config.amountDollarsField]) * 100);
 }

@@ -4404,6 +4404,16 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Chaque modification et invalidation de cette entrée, la plus récente en premier.",
   "No changes recorded — nothing has been edited or voided.":
     "Aucune modification enregistrée — rien n’a été modifié ni invalidé.",
+  // Every one of these begins with a standalone "No", and the dictionary maps
+  // a bare "No" to "Non" - so without the whole sentence as a key the regex
+  // renders "Non activity recorded for this scope yet." Longest-first
+  // alternation is what makes the full sentence win.
+  "No activity recorded for this scope yet.":
+    "Aucune activité enregistrée pour cette période.",
+  "No changes recorded yet — nothing has been paid, reverted or edited.":
+    "Aucune modification enregistrée — rien n’a encore été payé, annulé " +
+    "ni modifié.",
+  "No expense lines yet.": "Aucune ligne de dépense pour l’instant.",
   "Edited": "Modifié",
   // An activity row names who entered it, and on a cash job who took the
   // money. Both read as a bare preposition in front of a person's name, so
@@ -4499,8 +4509,56 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Utilisez Relancer le paiement pour changer le mode de règlement ; cela ferme l’autre voie pour que le client ne paie pas deux fois.",
 });
 
+// Instalments on a lot activity: an activity type that records no vehicle,
+// the balance a part-paid row carries, and the part-payment path in the chase
+// modal. Every value here was checked against the dictionary in both
+// directions — the engine replaces substrings longest-first, so a new French
+// value must not sit inside an existing one, and must not contain an English
+// key that would re-translate it.
+Object.assign(TEXT_TRANSLATIONS, {
+  // Activities & rates: does this kind of job involve a car at all?
+  "Records a vehicle": "Enregistre un véhicule",
+  "A job done without a car — lending an auction account, say — needs an activity that records no vehicle. The form then stops asking for a VIN.":
+    "Une prestation réalisée sans voiture — le prêt d’un compte d’enchères, par exemple — demande une activité qui n’enregistre aucun véhicule. Le formulaire cesse alors de demander un VIN.",
+  // The balance badge. "Paid" and "Not paid" are already here, from the
+  // parking ledger whose vocabulary this shares.
+  "Part paid": "Partiellement payé",
+  "Still owed": "Reste dû",
+  // Chase payment: how much of the balance actually came in.
+  "The whole balance": "La totalité du solde",
+  "Part of it — they paid some of it now":
+    "Une partie seulement — ils viennent d’en payer une partie",
+  "Amount received": "Montant reçu",
+  "More than the balance is recorded as the balance.":
+    "Un montant supérieur au solde est enregistré comme le solde.",
+  "The rest stays owed and can be collected again later, here or on the customer’s payment link.":
+    "Le reste demeure dû et pourra être encaissé plus tard, ici ou sur le lien de paiement du client.",
+  "Record part payment": "Enregistrer un paiement partiel",
+  "Part payment recorded.": "Paiement partiel enregistré.",
+  "This entry is no longer on screen. Close this and open it again.":
+    "Cette entrée n’est plus affichée. Fermez cette fenêtre et rouvrez-la.",
+  // What the instalment form refuses, in sentences rather than codes.
+  "Enter how much came in.": "Indiquez le montant reçu.",
+  "Say which staff member took the payment.":
+    "Indiquez quel membre du personnel a reçu le paiement.",
+  "This entry was cancelled, so there is nothing to collect.":
+    "Cette entrée a été annulée : il n’y a rien à encaisser.",
+  "This entry has no fee to collect.":
+    "Cette entrée n’a aucun montant à encaisser.",
+  "This entry is already paid in full.":
+    "Cette entrée est déjà intégralement payée.",
+  "A card payment has to be at least $20.00.":
+    "Un paiement par carte doit être d’au moins 20,00 $.",
+  // The chase modal's own header, which had no French of its own.
+  "Record payment": "Enregistrer le paiement",
+  "Mark this activity's money as received.":
+    "Marquer l’argent de cette activité comme reçu.",
+});
+
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "17 characters": "17 caractères",
+  // Placeholder on the part-payment note.
+  "e.g. first instalment": "p. ex. premier versement",
   "Add a photo by URL": "Ajouter une photo par URL",
   "Apt 4B": "App. 4B",
   "Choose quote request": "Choisir une demande de devis",

@@ -15149,6 +15149,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recorded by'**
   String get lotRecordedBy;
+
+  /// No description provided for @lotPartPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Part paid'**
+  String get lotPartPaid;
+
+  /// No description provided for @lotPaidOfTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{paid} of {total}'**
+  String lotPaidOfTotal(String paid, String total);
+
+  /// No description provided for @lotStillOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} still owed'**
+  String lotStillOwed(String amount);
+
+  /// No description provided for @lotBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance'**
+  String get lotBalance;
+
+  /// No description provided for @lotPaidSoFar.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid so far'**
+  String get lotPaidSoFar;
+
+  /// No description provided for @lotNoVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'No car'**
+  String get lotNoVehicle;
+
+  /// No description provided for @lotNoVehicleNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This activity is recorded without a vehicle.'**
+  String get lotNoVehicleNote;
+
+  /// No description provided for @lotActivityTypeNeedsVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Done to a car'**
+  String get lotActivityTypeNeedsVehicle;
+
+  /// No description provided for @lotActivityTypeNeedsVehicleNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn this off for work with no vehicle, such as lending an auction account. Staff are then not asked for a VIN.'**
+  String get lotActivityTypeNeedsVehicleNote;
+
+  /// No description provided for @lotRecordPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a payment'**
+  String get lotRecordPayment;
+
+  /// No description provided for @lotRecordPaymentNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Money taken in person. It comes off the balance now, and the customer\'s link asks for what is left.'**
+  String get lotRecordPaymentNote;
+
+  /// No description provided for @lotPaymentAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount taken (\$)'**
+  String get lotPaymentAmount;
+
+  /// No description provided for @lotPaymentMaxNote.
+  ///
+  /// In en, this message translates to:
+  /// **'At most {amount} — what is still owed on this entry.'**
+  String lotPaymentMaxNote(String amount);
+
+  /// No description provided for @lotPaymentNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get lotPaymentNote;
+
+  /// No description provided for @lotPaymentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} recorded.'**
+  String lotPaymentRecorded(String amount);
+
+  /// No description provided for @lotPaymentSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} recorded — settled in full.'**
+  String lotPaymentSettled(String amount);
+
+  /// No description provided for @lotPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get lotPayments;
+
+  /// No description provided for @lotPaymentsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Every payment taken against this entry, whichever route it came in on.'**
+  String get lotPaymentsNote;
+
+  /// No description provided for @lotNoPaymentsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No individual payments recorded on this entry.'**
+  String get lotNoPaymentsYet;
+
+  /// No description provided for @lotPaymentsCouldNotBeLoaded.
+  ///
+  /// In en, this message translates to:
+  /// **'The payments could not be loaded.'**
+  String get lotPaymentsCouldNotBeLoaded;
+
+  /// No description provided for @lotPaymentInPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'In person'**
+  String get lotPaymentInPerson;
+
+  /// No description provided for @lotPaymentOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get lotPaymentOnline;
+
+  /// No description provided for @lotPaymentOverpaid.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} over the balance'**
+  String lotPaymentOverpaid(String amount);
+
+  /// No description provided for @lotErrActivityVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'This entry was voided — record a new one instead.'**
+  String get lotErrActivityVoided;
+
+  /// No description provided for @lotErrActivityCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'This entry was cancelled, so no money can be taken against it.'**
+  String get lotErrActivityCancelled;
+
+  /// No description provided for @lotErrNothingToPay.
+  ///
+  /// In en, this message translates to:
+  /// **'This entry has no fee to pay.'**
+  String get lotErrNothingToPay;
+
+  /// No description provided for @lotErrAlreadyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'This entry is already paid in full.'**
+  String get lotErrAlreadyPaid;
+
+  /// No description provided for @lotErrNoAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount taken.'**
+  String get lotErrNoAmount;
+
+  /// No description provided for @lotErrBelowCardMinimum.
+  ///
+  /// In en, this message translates to:
+  /// **'A card payment starts at {amount}.'**
+  String lotErrBelowCardMinimum(String amount);
+
+  /// No description provided for @lotErrBelowAmountPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} has already been taken on this entry. The fee cannot go below it.'**
+  String lotErrBelowAmountPaid(String amount);
 }
 
 class _AppLocalizationsDelegate

@@ -1213,6 +1213,12 @@ class _StatusPill extends StatelessWidget {
     } else if (activity.cancelled) {
       label = l10n.lotCancelledStatus;
       color = AppColors.muted;
+    } else if (activity.partlyPaid) {
+      // Money is in but the job is not settled. There is no such payment
+      // status on the record — it is read off the fee and what has arrived —
+      // so it is said here rather than left looking untouched.
+      label = l10n.lotPartPaid;
+      color = AppColors.saffron;
     } else if (activity.awaitingLink) {
       label = l10n.lotAwaitingShort;
       color = AppColors.warn;
@@ -1246,9 +1252,26 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-String _lotErrorText(AppLocalizations l10n, String code, int thresholdCents) {
+/// One vocabulary of refusals, whether the screen refused locally or the
+/// server did: both speak the codes in `functions/lot_ledger.js`.
+/// [amountCents] carries the figure a money refusal has to name.
+String _lotErrorText(
+  AppLocalizations l10n,
+  String code,
+  int thresholdCents, {
+  int amountCents = 0,
+}) {
   return switch (code) {
     'activity_type_invalid' => l10n.lotErrActivityType,
+    'below_amount_paid' =>
+      l10n.lotErrBelowAmountPaid(formatLotCents(amountCents)),
+    'activity_voided' => l10n.lotErrActivityVoided,
+    'activity_cancelled' => l10n.lotErrActivityCancelled,
+    'nothing_to_pay' => l10n.lotErrNothingToPay,
+    'already_paid' => l10n.lotErrAlreadyPaid,
+    'no_amount' => l10n.lotErrNoAmount,
+    'below_card_minimum' =>
+      l10n.lotErrBelowCardMinimum(formatLotCents(lotMinCardPaymentCents)),
     'custom_label_required' => l10n.lotErrCustomLabel,
     'fee_required' => l10n.lotErrFee,
     'customer_name_required' => l10n.lotErrCustomerName,
@@ -2096,7 +2119,13 @@ class _ActivityCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      activity.vehicleLabel,
+                      // Work done with no car has no vehicle to lead with, so
+                      // the job itself does. An empty line here reads as a
+                      // record that failed to load rather than as one that
+                      // never had a car.
+                      activity.hasVehicle
+                          ? activity.vehicleLabel
+                          : activity.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2109,24 +2138,49 @@ class _ActivityCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    formatLotCents(activity.feeCents),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
-                      color: AppColors.ink,
-                      decoration: strike,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatLotCents(activity.feeCents),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          color: AppColors.ink,
+                          decoration: strike,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      // The agreed total on its own says nothing about what
+                      // has arrived. A row holding part of its money says so
+                      // here, where the figure it qualifies is.
+                      if (activity.partlyPaid) ...[
+                        const SizedBox(height: 1),
+                        Text(
+                          l10n.lotPaidOfTotal(
+                            formatLotCents(activity.paidCents),
+                            formatLotCents(activity.feeCents),
+                          ),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.saffron,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
               const SizedBox(height: 3),
               Text(
-                [activity.customerName, activity.label]
-                    .where((p) => p.isNotEmpty)
-                    .join(' · '),
+                [
+                  activity.customerName,
+                  activity.hasVehicle ? activity.label : l10n.lotNoVehicle,
+                ].where((p) => p.isNotEmpty).join(' · '),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -2241,6 +2295,11 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       widget.types.where((t) => t.id == _typeId).firstOrNull;
 
   bool get _isCustom => _typeId == lotCustomActivityId;
+
+  /// Whether the chosen activity is done to a car. Absent means yes, so a
+  /// one-off and every type written before the flag existed keep the VIN
+  /// guard; only a type that opts out records work with no vehicle.
+  bool get _needsVehicle => _type?.needsVehicle ?? true;
 
   @override
   void initState() {
@@ -2426,7 +2485,15 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       receivedByStaffId: _receivedBy ?? '',
       paymentReceived: _paymentReceived,
     );
-    final errors = validateLotActivityDraft(draft, lockedPayment: _locked);
+    final errors = validateLotActivityDraft(
+      draft,
+      lockedPayment: _locked,
+      needsVehicle: _needsVehicle,
+      // A part-paid job's total may still move — they extend, or a fee is
+      // added — but never below what has already been collected: that would
+      // owe the customer money, and there is no way to give it back.
+      alreadyPaidCents: widget.existing?.paidCents ?? 0,
+    );
     if (errors.isNotEmpty) {
       AppHaptics.refuse();
       setState(() => _errors = errors.toSet());
@@ -2443,10 +2510,12 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       'customerName': _customer.text.trim(),
       'customerPhone': _phone.text.trim(),
       'customerEmail': _email.text.trim(),
-      'carMake': _make.text.trim(),
-      'carModel': _model.text.trim(),
-      'carYear': _year.text.trim(),
-      'vinNumber': _vin.text.trim(),
+      // A car-less activity carries no vehicle at all rather than whatever a
+      // previous type left in the fields.
+      'carMake': _needsVehicle ? _make.text.trim() : '',
+      'carModel': _needsVehicle ? _model.text.trim() : '',
+      'carYear': _needsVehicle ? _year.text.trim() : '',
+      'vinNumber': _needsVehicle ? _vin.text.trim() : '',
       'auctionHouse': (_type?.needsAuctionHouse ?? false) ? _auctionHouse : '',
       'paymentMethod': _method,
       // Absent-means-received on the server, so send it; a direct activity not
@@ -2509,7 +2578,12 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     String? errorFor(String code) => _errors.contains(code)
-        ? _lotErrorText(l10n, code, lotDefaultProofThresholdCents)
+        ? _lotErrorText(
+            l10n,
+            code,
+            lotDefaultProofThresholdCents,
+            amountCents: widget.existing?.paidCents ?? 0,
+          )
         : null;
     final dateLabel = DateFormat.yMMMEd(
             Localizations.localeOf(context).toLanguageTag())
@@ -2552,11 +2626,15 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
             controller: _fee,
             enabled: !_locked,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (_) => _clearError('fee_required'),
+            onChanged: (_) {
+              _clearError('fee_required');
+              _clearError('below_amount_paid');
+            },
             decoration: InputDecoration(
               labelText: l10n.lotFee,
               prefixText: r'$ ',
-              errorText: errorFor('fee_required'),
+              errorText: errorFor('fee_required') ??
+                  errorFor('below_amount_paid'),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -2566,40 +2644,74 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
             placeholder: dateLabel,
             onTap: _pickDate,
           ),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: _vin,
-            textCapitalization: TextCapitalization.characters,
-            onChanged: _applyVin,
-            decoration: InputDecoration(
-              labelText: l10n.lotVin,
-              helperText: _vinBusy
-                  ? l10n.lotDecodingVin
-                  : (_vinHint.isEmpty ? l10n.lotVinHint : _vinHint),
-              helperStyle: _vinHint.isEmpty && !_vinBusy
-                  ? null
-                  : const TextStyle(
-                      color: AppColors.sage,
-                      fontWeight: FontWeight.w600,
-                    ),
-              helperMaxLines: 2,
-              errorText: errorFor('vin_required'),
-              suffixIcon: _vinBusy
-                  ? const Padding(
-                      padding: EdgeInsets.all(13),
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+          if (!_needsVehicle) ...[
+            const SizedBox(height: AppSpacing.md),
+            // Typing a 17-character placeholder to clear a VIN check is how a
+            // ledger fills up with fictional vehicles. This activity says
+            // plainly that it has no car instead.
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.parchment,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                border: Border.all(color: AppColors.rule),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.no_crash_outlined,
+                      size: 18, color: AppColors.muted),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      l10n.lotNoVehicleNote,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        height: 1.35,
+                        color: AppColors.muted,
                       ),
-                    )
-                  : IconButton(
-                      icon: const Icon(Icons.document_scanner_outlined),
-                      tooltip: l10n.scanVin,
-                      onPressed: _scanVin,
                     ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
+          if (_needsVehicle) ...[
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _vin,
+              textCapitalization: TextCapitalization.characters,
+              onChanged: _applyVin,
+              decoration: InputDecoration(
+                labelText: l10n.lotVin,
+                helperText: _vinBusy
+                    ? l10n.lotDecodingVin
+                    : (_vinHint.isEmpty ? l10n.lotVinHint : _vinHint),
+                helperStyle: _vinHint.isEmpty && !_vinBusy
+                    ? null
+                    : const TextStyle(
+                        color: AppColors.sage,
+                        fontWeight: FontWeight.w600,
+                      ),
+                helperMaxLines: 2,
+                errorText: errorFor('vin_required'),
+                suffixIcon: _vinBusy
+                    ? const Padding(
+                        padding: EdgeInsets.all(13),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.document_scanner_outlined),
+                        tooltip: l10n.scanVin,
+                        onPressed: _scanVin,
+                      ),
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           TextField(
             controller: _customer,
@@ -2668,36 +2780,38 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
               errorText: errorFor('payment_link_contact_required'),
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _make,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(labelText: l10n.lotMake),
+          if (_needsVehicle) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _make,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: InputDecoration(labelText: l10n.lotMake),
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: TextField(
-                  controller: _model,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(labelText: l10n.lotModel),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: TextField(
+                    controller: _model,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: InputDecoration(labelText: l10n.lotModel),
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              SizedBox(
-                width: 78,
-                child: TextField(
-                  controller: _year,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: l10n.lotYearField),
+                const SizedBox(width: AppSpacing.sm),
+                SizedBox(
+                  width: 78,
+                  child: TextField(
+                    controller: _year,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: l10n.lotYearField),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
           if (_type?.needsAuctionHouse ?? false) ...[
             const SizedBox(height: AppSpacing.md),
             _PickerField(
@@ -2886,12 +3000,17 @@ class _ActivityDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final date = activity.activityDate;
+    // A car-less job says so rather than showing a blank line where the
+    // vehicle belongs.
+    final subtitle = activity.hasVehicle
+        ? [
+            activity.vehicleLabel,
+            if (activity.vinNumber.isNotEmpty) activity.vinNumber,
+          ].where((p) => p.isNotEmpty).join(' · ')
+        : l10n.lotNoVehicle;
     return _SheetShell(
       title: activity.label.isEmpty ? l10n.lotLedgerTitle : activity.label,
-      subtitle: [
-        activity.vehicleLabel,
-        if (activity.vinNumber.isNotEmpty) activity.vinNumber,
-      ].where((p) => p.isNotEmpty).join(' · '),
+      subtitle: subtitle,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2920,6 +3039,13 @@ class _ActivityDetailSheet extends StatelessWidget {
               activity.voidReason,
               style: const TextStyle(fontSize: 13, color: AppColors.muted),
             ),
+          ],
+          // The agreed total is the headline; what has actually arrived is the
+          // number staff are asked about at the desk, so it sits directly
+          // under it rather than one tap away.
+          if (activity.partlyPaid) ...[
+            const SizedBox(height: AppSpacing.md),
+            _BalanceBar(activity: activity),
           ],
           const SizedBox(height: AppSpacing.lg),
           _DetailRow(label: l10n.lotCustomer, value: activity.customerName),
@@ -2958,11 +3084,36 @@ class _ActivityDetailSheet extends StatelessWidget {
             _DetailRow(
                 label: l10n.lotAuctionHouse, value: activity.auctionHouse),
           const SizedBox(height: AppSpacing.lg),
+          // Every payment taken against this job, cash or card, in the order
+          // it arrived. A single running total cannot answer "who took the
+          // $350 and when", which is the question a disputed figure raises.
+          _PaymentHistory(
+            businessId: businessId,
+            activityId: activity.id,
+            staff: staff,
+          ),
+          const SizedBox(height: AppSpacing.lg),
           if (activity.hasDocument)
             _ActionRow(
               icon: Icons.receipt_long_outlined,
               label: activity.paid ? l10n.lotOpenReceipt : l10n.lotOpenInvoice,
               onTap: () => _openLotDocument(context, activity.id),
+            ),
+          // The money changes hands in person and the person taking it has a
+          // phone, so recording it is here and not only in the console.
+          if (activity.canTakePayment)
+            _ActionRow(
+              icon: Icons.payments_outlined,
+              label: l10n.lotRecordPayment,
+              onTap: () => showLotSheet(
+                context,
+                _InstalmentSheet(
+                  businessId: businessId,
+                  activity: activity,
+                  staff: staff,
+                  onDone: onChanged,
+                ),
+              ),
             ),
           if (activity.canChase)
             _ActionRow(
@@ -3123,6 +3274,448 @@ class _ActionRow extends StatelessWidget {
             const Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// How much of an agreed fee has arrived, as one line: the bar, what is in,
+/// and what is still out. Read from the record's own two numbers, so it can
+/// never disagree with the figure above it.
+class _BalanceBar extends StatelessWidget {
+  const _BalanceBar({required this.activity});
+
+  final LotActivity activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final fee = activity.feeCents;
+    final share = fee <= 0 ? 0.0 : (activity.paidCents / fee).clamp(0.0, 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          child: SizedBox(
+            height: 6,
+            child: Stack(
+              children: [
+                Container(color: AppColors.rule),
+                FractionallySizedBox(
+                  widthFactor: share,
+                  child: Container(color: AppColors.saffron),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${l10n.lotPaidSoFar}: '
+                '${formatLotCents(activity.paidCents)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            Text(
+              l10n.lotStillOwed(formatLotCents(activity.remainingCents)),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.warn,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+String _paymentSourceLabel(AppLocalizations l10n, LotActivityPayment payment) =>
+    payment.isCash ? l10n.lotPaymentInPerson : l10n.lotPaymentOnline;
+
+/// The instalments recorded against one activity, newest first.
+class _PaymentHistory extends StatelessWidget {
+  const _PaymentHistory({
+    required this.businessId,
+    required this.activityId,
+    required this.staff,
+  });
+
+  final String businessId;
+  final String activityId;
+  final List<LotStaff> staff;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    // Scoped by business as well as activity: the rule authorizes by business,
+    // and Firestore refuses a query it cannot prove stays inside that scope.
+    // Ordering is done here rather than in the query so two equality filters
+    // are all the index has to serve.
+    final query = FirebaseFirestore.instance
+        .collection('lotActivityPayments')
+        .where('businessId', isEqualTo: businessId)
+        .where('activityId', isEqualTo: activityId)
+        .limit(50)
+        .get();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.lotPayments,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+            color: AppColors.ink,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          l10n.lotPaymentsNote,
+          style: const TextStyle(
+            fontSize: 12,
+            height: 1.35,
+            color: AppColors.muted,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          future: query,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                child: Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              );
+            }
+            if (snapshot.hasError) {
+              return Text(
+                l10n.lotPaymentsCouldNotBeLoaded,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              );
+            }
+            final payments = [
+              for (final d in snapshot.data?.docs ?? [])
+                LotActivityPayment.fromMap(d.id, d.data()),
+            ]..sort((a, b) {
+                final at = a.createdAt;
+                final bt = b.createdAt;
+                if (at == null || bt == null) return 0;
+                return bt.compareTo(at);
+              });
+            if (payments.isEmpty) {
+              return Text(
+                l10n.lotNoPaymentsYet,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final payment in payments)
+                  _PaymentRow(payment: payment, staff: staff),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _PaymentRow extends StatelessWidget {
+  const _PaymentRow({required this.payment, required this.staff});
+
+  final LotActivityPayment payment;
+  final List<LotStaff> staff;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final tag = Localizations.localeOf(context).toLanguageTag();
+    // A person who has left the business cannot be named; the raw uid is never
+    // shown, the same call every other list on this screen makes.
+    final takenBy = payment.receivedByStaffId.isEmpty
+        ? ''
+        : staff
+                .where((member) => member.id == payment.receivedByStaffId)
+                .firstOrNull
+                ?.name ??
+            '';
+    final detail = [
+      _paymentSourceLabel(l10n, payment),
+      if (payment.isCash && payment.receivedVia.isNotEmpty)
+        _receivedViaLabel(l10n, payment.receivedVia),
+      if (takenBy.isNotEmpty) takenBy,
+      if (payment.createdAt != null)
+        DateFormat.yMMMd(tag).format(payment.createdAt!),
+    ].where((part) => part.isNotEmpty).join(' · ');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.parchment,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  detail,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+                if (payment.note.isNotEmpty)
+                  Text(
+                    payment.note,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.muted),
+                  ),
+                // Card can arrive over the balance; it is shown rather than
+                // silently kept, so it can be settled deliberately.
+                if (payment.overpaidCents > 0)
+                  Text(
+                    l10n.lotPaymentOverpaid(
+                        formatLotCents(payment.overpaidCents)),
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.warn),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            formatLotCents(payment.amountCents),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+              color: AppColors.ink,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Taking one instalment in cash, at the desk.
+///
+/// The amount is clamped to what is still owed before it is sent: staff typing
+/// more than the balance is a typo, not a tip, and the platform has no way to
+/// hand money back. The plan that decides this is the same one the server
+/// runs, so a refusal reads the same either side.
+class _InstalmentSheet extends StatefulWidget {
+  const _InstalmentSheet({
+    required this.businessId,
+    required this.activity,
+    required this.staff,
+    required this.onDone,
+  });
+
+  final String businessId;
+  final LotActivity activity;
+  final List<LotStaff> staff;
+  final VoidCallback onDone;
+
+  @override
+  State<_InstalmentSheet> createState() => _InstalmentSheetState();
+}
+
+class _InstalmentSheetState extends State<_InstalmentSheet> {
+  late final TextEditingController _amount = TextEditingController(
+    // Opens on the whole balance: settling in full is the common case, and a
+    // part payment is a correction down from it.
+    text: (widget.activity.remainingCents / 100).toStringAsFixed(2),
+  );
+  final TextEditingController _note = TextEditingController();
+  String _via = lotPaymentSourceCash;
+  String? _receivedBy;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
+    final plan = lotActivityPaymentPlan(
+      activity: widget.activity,
+      amountCents: lotDollarsToCents(_amount.text),
+      source: lotPaymentSourceCash,
+    );
+    if (!plan.ok) {
+      AppHaptics.refuse();
+      setState(() => _error = _lotErrorText(
+            l10n,
+            plan.reason,
+            lotDefaultProofThresholdCents,
+          ));
+      return;
+    }
+    if (_receivedBy == null || _receivedBy!.trim().isEmpty) {
+      AppHaptics.refuse();
+      showErrorSnackBar(context, l10n.lotErrReceivedBy);
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('recordLotActivityInstalment')
+          .call<Object?>({
+        'businessId': widget.businessId,
+        'activityId': widget.activity.id,
+        // The clamped figure, not what was typed: the server clamps too, and
+        // sending the typed number would make the confirmation a guess.
+        'amountCents': plan.appliedCents,
+        'receivedVia': _via,
+        'receivedByStaffId': _receivedBy,
+        'note': _note.text.trim(),
+      });
+      if (!mounted) return;
+      final data = result.data;
+      final appliedCents = data is Map && data['appliedCents'] is num
+          ? (data['appliedCents'] as num).round()
+          : plan.appliedCents;
+      final settled = data is Map && data['fullyCovered'] == true
+          ? true
+          : plan.fullyCovered;
+      AppHaptics.commit();
+      widget.onDone();
+      Navigator.of(context).pop();
+      showSuccessSnackBar(
+        context,
+        settled
+            ? l10n.lotPaymentSettled(formatLotCents(appliedCents))
+            : l10n.lotPaymentRecorded(formatLotCents(appliedCents)),
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      showErrorSnackBar(context, error.message ?? l10n.lotCouldNotSave);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _SheetShell(
+      title: l10n.lotRecordPayment,
+      subtitle: l10n.lotRecordPaymentNote,
+      footer: _SheetButton(
+        label: l10n.lotRecordPayment,
+        busy: _busy,
+        busyLabel: l10n.lotSaving,
+        onTap: _submit,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _BalanceBar(activity: widget.activity),
+          const SizedBox(height: AppSpacing.lg),
+          TextField(
+            controller: _amount,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
+            decoration: InputDecoration(
+              labelText: l10n.lotPaymentAmount,
+              prefixText: r'$ ',
+              helperText: l10n.lotPaymentMaxNote(
+                  formatLotCents(widget.activity.remainingCents)),
+              helperMaxLines: 2,
+              errorText: _error,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _PickerField(
+            label: l10n.lotHowItWasPaid,
+            value: _receivedViaLabel(l10n, _via),
+            placeholder: l10n.lotHowItWasPaid,
+            onTap: () async {
+              final picked = await _pickOption<String>(
+                context,
+                title: l10n.lotHowItWasPaid,
+                selected: _via,
+                options: [
+                  for (final v in lotReceivedViaOptions)
+                    LotOption(v, _receivedViaLabel(l10n, v)),
+                ],
+              );
+              if (picked != null && mounted) setState(() => _via = picked);
+            },
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _PickerField(
+            label: l10n.lotReceivedBy,
+            value: widget.staff
+                .where((member) => member.id == _receivedBy)
+                .firstOrNull
+                ?.name,
+            placeholder: l10n.lotReceivedBy,
+            onTap: () async {
+              final picked = await _pickOption<String>(
+                context,
+                title: l10n.lotReceivedBy,
+                selected: _receivedBy,
+                options: [
+                  for (final member in widget.staff)
+                    LotOption(member.id, member.name),
+                ],
+              );
+              if (picked != null && mounted) {
+                setState(() => _receivedBy = picked);
+              }
+            },
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _note,
+            maxLines: 2,
+            decoration: InputDecoration(labelText: l10n.lotPaymentNote),
+          ),
+        ],
       ),
     );
   }
@@ -4444,6 +5037,10 @@ class _ActivityTypeSheetState extends State<_ActivityTypeSheet> {
         : '',
   );
   late bool _needsAuctionHouse = widget.type?.needsAuctionHouse ?? false;
+  // Absent means yes on the server, so an editor that did not carry this would
+  // quietly turn a car-less activity back into one that demands a VIN every
+  // time someone renamed it.
+  late bool _needsVehicle = widget.type?.needsVehicle ?? true;
   late bool _active = widget.type?.active ?? true;
   bool _busy = false;
 
@@ -4472,6 +5069,7 @@ class _ActivityTypeSheetState extends State<_ActivityTypeSheet> {
         'label': _label.text.trim(),
         'defaultFeeCents': lotDollarsToCents(_fee.text) ?? 0,
         'needsAuctionHouse': _needsAuctionHouse,
+        'needsVehicle': _needsVehicle,
         'active': _active,
         'sortOrder': widget.type?.sortOrder ?? 0,
       });
@@ -4529,6 +5127,19 @@ class _ActivityTypeSheetState extends State<_ActivityTypeSheet> {
             title: Text(
               l10n.lotActivityTypeNeedsAuctionHouse,
               style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _needsVehicle,
+            onChanged: (v) => setState(() => _needsVehicle = v),
+            title: Text(
+              l10n.lotActivityTypeNeedsVehicle,
+              style: const TextStyle(fontSize: 14),
+            ),
+            subtitle: Text(
+              l10n.lotActivityTypeNeedsVehicleNote,
+              style: const TextStyle(fontSize: 12, height: 1.35),
             ),
           ),
           SwitchListTile.adaptive(
