@@ -495,3 +495,44 @@ describe("settling and unsettling keep the balance honest", () => {
     assert.match(body, /expireStripeCheckoutSession/);
   });
 });
+
+// validateLotActivity reads `opts.needsVehicle !== false`, so a resolver path
+// that forgets the field sends `undefined` and the server demands a VIN for a
+// job whose form does not even show the field. That shipped: the call sites
+// passed `fee.needsVehicle` while the resolver never set it, and every unit
+// test above passed because they call the validator directly with explicit
+// options. The wiring between the two is what needs pinning, not either end.
+describe("the type's vehicle rule reaches the validator", () => {
+  const {readFileSync} = require("node:fs");
+  const source = readFileSync(
+      require("node:path").join(__dirname, "..", "index.js"), "utf8");
+
+  const resolver = (() => {
+    const start = source.indexOf("async function resolveLotActivityFee(");
+    assert.ok(start > -1, "resolveLotActivityFee not found");
+    return source.slice(start, source.indexOf("\nasync function", start + 1));
+  })();
+
+  it("every path out of resolveLotActivityFee reports needsVehicle", () => {
+    const returns = resolver.match(/return \{[\s\S]*?\};/g) || [];
+    assert.ok(returns.length >= 3,
+        `expected every exit to be checked, found ${returns.length}`);
+    for (const block of returns) {
+      assert.match(
+          block, /needsVehicle/,
+          "a resolveLotActivityFee return omits needsVehicle, so the server " +
+          "will demand a VIN for a type that records no car:\n" + block);
+    }
+  });
+
+  it("both callables hand the resolved rule to validation", () => {
+    const pattern = new RegExp(
+        "validateLotActivity\\(\\s*\\w+, \\{knownTypeIds: " +
+        "fee\\.knownTypeIds,?[\\s\\S]{0,80}?\\}\\)", "g");
+    const calls = source.match(pattern) || [];
+    assert.equal(calls.length, 2, "expected create and update to validate");
+    for (const call of calls) {
+      assert.match(call, /needsVehicle: fee\.needsVehicle/);
+    }
+  });
+});

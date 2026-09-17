@@ -14238,15 +14238,18 @@ async function resolveLotActivityFee(db, businessId, data) {
   const typeId = String(data.activityTypeId || "").trim();
   const requested = Math.max(0, Math.round(Number(data.feeCents) || 0));
   if (typeId === LOT_CUSTOM_ACTIVITY_ID) {
+    // A one-off job has no type to ask, so it keeps the old requirement: a
+    // VIN. Relaxing it here would drop the guard for every custom entry.
     return {
       feeCents: requested, feeOverridden: true, label: "", knownTypeIds: [],
+      needsVehicle: true,
     };
   }
   const typeDoc = await db.collection("lotActivityTypes").doc(typeId).get();
   if (!typeDoc.exists || typeDoc.data()?.businessId !== businessId) {
     return {
       feeCents: requested, feeOverridden: false, label: "",
-      knownTypeIds: [],
+      knownTypeIds: [], needsVehicle: true,
     };
   }
   const t = typeDoc.data() || {};
@@ -14256,6 +14259,12 @@ async function resolveLotActivityFee(db, businessId, data) {
     feeOverridden: requested !== rate,
     label: String(t.label || ""),
     knownTypeIds: [typeId],
+    // Absent means yes: every type written before this flag existed still
+    // demands a VIN, so no historical type quietly stops asking for one.
+    // Every return here must set this - a path that omits it sends
+    // `undefined` to validateLotActivity, which reads it as "needs a VIN"
+    // and refuses a car-less job with the field hidden on screen.
+    needsVehicle: t.needsVehicle !== false,
   };
 }
 
