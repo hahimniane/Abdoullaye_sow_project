@@ -469,7 +469,9 @@ describe("settling and unsettling keep the balance honest", () => {
 
   it("marking a part-paid job received also clears its balance", () => {
     const body = callable("recordLotActivityDirectPayment");
-    assert.match(body, /amountPaidCents: Math\.max\(0, Number\(current\.feeCents\)/);
+    assert.match(
+        body,
+        /amountPaidCents: Math\.max\(0, Number\(current\.feeCents\)/);
     // The money that settles it is recorded, so the history accounts for
     // every dollar instead of jumping from $350 to paid.
     assert.match(body, /lotActivityRemainingCents\(current\)/);
