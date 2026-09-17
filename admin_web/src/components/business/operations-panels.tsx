@@ -7093,6 +7093,11 @@ async function runPanelAction(
   setMessage: (value: string) => void,
   successMessage: string,
   action: () => Promise<unknown>,
+  // Where the failure should be said, when the panel's own banner is the
+  // wrong place for it. A save launched from a modal leaves the modal open
+  // on failure, and the banner renders behind it - so the person is looking
+  // at a form that did not close, with the reason hidden underneath.
+  onError?: (message: string) => void,
 ) {
   setBusy(true);
   setMessage("");
@@ -7100,7 +7105,10 @@ async function runPanelAction(
     await action();
     setMessage(successMessage);
   } catch (error) {
-    setMessage(error instanceof Error ? error.message : "L’action a échoué.");
+    const message =
+      error instanceof Error ? error.message : "L’action a échoué.";
+    setMessage(message);
+    onError?.(message);
   } finally {
     setBusy(false);
   }
@@ -8003,7 +8011,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       }
       setMonth(payload.activityDate.slice(0, 7) || month);
       closeModal();
-    });
+    }, setDraftError);
   }
 
   async function saveType(draft: LotActivityTypeDraft, typeId?: string) {
@@ -8017,8 +8025,14 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
         businessId,
         ...lotActivityTypePayload(draft, { typeId }),
       });
-      if (!typeId) setNewType(emptyLotActivityTypeDraft);
-    });
+      // A new type is a one-off act: clear the form and get out of the way,
+      // the way recording an activity does. Editing an existing row leaves
+      // the list open, because the reason to be here is usually several rows.
+      if (!typeId) {
+        setNewType(emptyLotActivityTypeDraft);
+        closeModal();
+      }
+    }, setDraftError);
   }
 
   async function removeType(typeId: string) {
