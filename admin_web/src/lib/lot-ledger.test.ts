@@ -952,3 +952,26 @@ test("settling a part-paid job goes through the instalment callable", () => {
   // And the balance line follows the badge rather than the raw numbers.
   assert.match(panel, /const partlyPaid = badge === "Part paid";/);
 });
+
+// A save launched from a modal leaves the modal open when it fails, and the
+// panel's banner renders behind it — so the person sees a form that did not
+// close and no reason why. That is exactly how "Enter the VIN." went
+// unexplained on production: the server refused, the modal stayed, and the
+// message was underneath it.
+test("a failed save says so inside the modal, not behind it", () => {
+  const panel = readFileSync(
+    "src/components/business/operations-panels.tsx", "utf8");
+
+  // runPanelAction can report a failure somewhere other than the panel banner.
+  assert.match(panel, /onError\?: \(message: string\) => void/);
+  assert.match(panel, /onError\?\.\(message\)/);
+
+  // The two lot-ledger saves that run from a modal use it.
+  const saves = panel.match(/await runPanelAction\([\s\S]*?\}, setDraftError\);/g) ?? [];
+  assert.ok(
+    saves.length >= 2,
+    "the activity save and the type save should both route their failure " +
+    "into the modal's own error line");
+  assert.ok(saves.some((s) => /createLotActivity/.test(s)));
+  assert.ok(saves.some((s) => /upsertLotActivityType/.test(s)));
+});
