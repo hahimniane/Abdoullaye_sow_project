@@ -914,6 +914,45 @@ describe("business dashboard Firestore rules", () => {
             where("businessId", "==", "biz_b"))));
       });
 
+  // The instalment history is read as a QUERY - `where businessId == mine and
+  // activityId == this one` - so the rule has to be satisfiable from those
+  // constraints alone. A get() passing here would prove nothing, which is the
+  // lesson the parked-car query above was written for.
+  it("lets the lot run the instalment-history QUERY the clients subscribe to",
+      async () => {
+        const {query, collection, where, getDocs, doc, setDoc} =
+            require("firebase/firestore");
+
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+          await setDoc(
+              doc(context.firestore(), "lotActivityPayments/pay_a"),
+              {businessId: "biz_a", activityId: "act_a", amountCents: 5000,
+                source: "cash", paidAtMonth: "2026-11"});
+        });
+
+        await assertSucceeds(getDocs(query(
+            collection(firestoreFor("owner-a"), "lotActivityPayments"),
+            where("businessId", "==", "biz_a"),
+            where("activityId", "==", "act_a"))));
+
+        // Unfiltered, and filtered to another lot, must both be refused: the
+        // business filter is the only thing that makes the query safe.
+        await assertFails(getDocs(query(collection(
+            firestoreFor("owner-a"), "lotActivityPayments"))));
+        await assertFails(getDocs(query(
+            collection(firestoreFor("owner-a"), "lotActivityPayments"),
+            where("businessId", "==", "biz_b"))));
+      });
+
+  // Money rows are written by the callables as admin. A client that could
+  // write here could write itself paid.
+  it("never lets a client write an instalment", async () => {
+    const {doc, setDoc} = require("firebase/firestore");
+    await assertFails(setDoc(
+        doc(firestoreFor("owner-a"), "lotActivityPayments/forged"),
+        {businessId: "biz_a", activityId: "act_a", amountCents: 100000}));
+  });
+
   it("lets a business owner read their own private records only", async () => {
     const ownerDb = firestoreFor("owner-a");
 

@@ -300,3 +300,196 @@ describe("editing a recorded activity protects the money", () => {
     });
   });
 });
+
+describe("instalments", () => {
+  const {
+    LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS,
+    lotActivityPaidCents,
+    lotActivityRemainingCents,
+    lotActivityPartlyPaid,
+    lotActivityPaymentPlan,
+    lotActivityPaymentRecord,
+    lotActivityEditRefusal,
+  } = require("../lot_ledger");
+
+  const job = (feeCents, paidCents, extra = {}) => ({
+    feeCents, amountPaidCents: paidCents,
+    paymentStatus: "awaiting_payment_link", ...extra,
+  });
+  const plan = (activity, amountCents, source) =>
+    lotActivityPaymentPlan({activity, amountCents, source});
+
+  it("applies a first instalment and leaves the rest owing", () => {
+    const result = plan(job(100000, 0), 5000, "cash");
+    assert.equal(result.ok, true);
+    assert.equal(result.appliedCents, 5000);
+    assert.equal(result.newPaidCents, 5000);
+    assert.equal(result.remainingCents, 95000);
+    assert.equal(result.fullyCovered, false);
+  });
+
+  it("settles the activity when the last instalment lands", () => {
+    const result = plan(job(100000, 95000), 5000, "cash");
+    assert.equal(result.fullyCovered, true);
+    assert.equal(result.remainingCents, 0);
+  });
+
+  // Staff typing more than is owed is a typo, not a tip - the same call
+  // parking already makes.
+  it("clamps cash to the balance and never reports an overpayment", () => {
+    const result = plan(job(100000, 95000), 99999, "cash");
+    assert.equal(result.appliedCents, 5000);
+    assert.equal(result.overpaidCents, 0);
+    assert.equal(result.newPaidCents, 100000);
+  });
+
+  // By the time a card payment reaches us Stripe has already taken it, so
+  // clamping would quietly keep money the books never show.
+  it("reports a card overpayment instead of swallowing it", () => {
+    const result = plan(job(100000, 95000), 99999, "card");
+    assert.equal(result.appliedCents, 5000);
+    assert.equal(result.overpaidCents, 94999);
+    assert.equal(result.fullyCovered, true);
+  });
+
+  it("refuses a card payment under the minimum, but never cash", () => {
+    assert.equal(
+        plan(job(100000, 0), LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS - 1, "card")
+            .reason,
+        "below_card_minimum");
+    assert.equal(
+        plan(job(100000, 0), LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS, "card").ok,
+        true);
+    assert.equal(plan(job(100000, 0), 100, "cash").ok, true);
+  });
+
+  it("refuses payment against a voided or settled job", () => {
+    assert.equal(plan(job(100000, 5000, {voided: true}), 1000, "cash").reason,
+        "activity_voided");
+    assert.equal(plan(job(100000, 100000), 1000, "cash").reason,
+        "already_paid");
+    assert.equal(
+        plan(job(100000, 0, {paymentStatus: "cancelled"}), 1000, "cash").reason,
+        "activity_cancelled");
+    assert.equal(plan(job(100000, 0), 0, "cash").reason, "no_amount");
+    assert.equal(plan(job(100000, 0), -500, "cash").reason, "no_amount");
+  });
+
+  // Every activity settled before instalments existed carries no running
+  // total. Reading one as unpaid would resurrect finished jobs as debts.
+  it("reads a pre-instalment settled activity as fully paid", () => {
+    const legacy = {feeCents: 2500, paymentStatus: "succeeded"};
+    assert.equal(lotActivityPaidCents(legacy), 2500);
+    assert.equal(lotActivityRemainingCents(legacy), 0);
+    assert.equal(lotActivityPartlyPaid(legacy), false);
+    assert.equal(plan(legacy, 500, "cash").reason, "already_paid");
+  });
+
+  // A dead job is not a debt: its balance must stop being chased.
+  it("never calls a voided job part paid", () => {
+    assert.equal(lotActivityPartlyPaid(job(100000, 35000)), true);
+    assert.equal(
+        lotActivityPartlyPaid(job(100000, 35000, {voided: true})), false);
+  });
+
+  it("lets a part-paid total move, but never below what was collected", () => {
+    assert.equal(lotActivityEditRefusal(job(100000, 35000), {}, 130000), null);
+    assert.equal(lotActivityEditRefusal(job(100000, 35000), {}, 35000), null);
+    assert.equal(lotActivityEditRefusal(job(100000, 35000), {}, 4000),
+        "below_amount_paid");
+  });
+
+  // The month key is the point: a September job paid in November is November
+  // income, and a scoreboard reading the activity's month never sees it.
+  it("stamps a payment with its own month and rail", () => {
+    const record = lotActivityPaymentRecord({
+      businessId: "biz_1", activityId: "act_1", amountCents: 20000,
+      source: "cash", receivedVia: "zelle", receivedByStaffId: "staff_2",
+      recordedByStaffId: "staff_2", paidAtMonth: "2026-11", note: "part",
+    });
+    assert.equal(record.paidAtMonth, "2026-11");
+    assert.equal(record.source, "cash");
+    assert.equal(record.receivedVia, "zelle");
+    assert.equal(record.receivedByStaffId, "staff_2");
+  });
+
+  // Card money has no one holding it, so naming a staff member would be a lie.
+  it("keeps cash-only fields off a card payment", () => {
+    const record = lotActivityPaymentRecord({
+      businessId: "biz_1", activityId: "act_1", amountCents: 20000,
+      source: "card", receivedVia: "zelle", receivedByStaffId: "staff_2",
+      paidAtMonth: "2026-11",
+    });
+    assert.equal(record.receivedVia, "");
+    assert.equal(record.receivedByStaffId, "");
+  });
+});
+
+describe("activity types that record no vehicle", () => {
+  const {lotActivityTypeRecord: typeRecord, validateLotActivity: validate} =
+    require("../lot_ledger");
+
+  it("demands a vehicle unless the type opts out", () => {
+    assert.equal(typeRecord({label: "Dispatch", defaultFeeCents: 0})
+        .needsVehicle, true);
+    assert.equal(typeRecord({label: "Access", defaultFeeCents: 0,
+      needsVehicle: false}).needsVehicle, false);
+  });
+
+  it("drops the VIN requirement only for a type with no vehicle", () => {
+    const input = {
+      activityTypeId: "t1", feeCents: 100000, activityDate: "2026-10-03",
+      customerName: "Mamadou", paymentMethod: "direct",
+      receivedByStaffId: "staff_1",
+    };
+    const opts = {knownTypeIds: ["t1"]};
+    assert.ok(validate(input, opts).includes("vin_required"));
+    assert.ok(!validate(input, {...opts, needsVehicle: false})
+        .includes("vin_required"));
+  });
+});
+
+// The running total and the payment status are two facts about the same
+// money. Every path that moves one has to move the other, or a job reads as
+// owing $650 under a "Paid" badge - which is exactly how the parking ledger's
+// own historical bug behaved. These read the source because the callables
+// need Firestore and Stripe to run, and the assertion is about what they
+// write, not how they compute it.
+describe("settling and unsettling keep the balance honest", () => {
+  const {readFileSync} = require("node:fs");
+  const source = readFileSync(
+      require("node:path").join(__dirname, "..", "index.js"), "utf8");
+
+  const callable = (name) => {
+    const start = source.indexOf(`exports.${name} = onCall(`);
+    assert.ok(start > -1, `${name} not found`);
+    const next = source.indexOf("\nexports.", start + 1);
+    return source.slice(start, next === -1 ? undefined : next);
+  };
+
+  it("marking a part-paid job received also clears its balance", () => {
+    const body = callable("recordLotActivityDirectPayment");
+    assert.match(body, /amountPaidCents: Math\.max\(0, Number\(current\.feeCents\)/);
+    // The money that settles it is recorded, so the history accounts for
+    // every dollar instead of jumping from $350 to paid.
+    assert.match(body, /lotActivityRemainingCents\(current\)/);
+    assert.match(body, /collection\("lotActivityPayments"\)/);
+  });
+
+  it("reverting a payment puts the balance back to nothing paid", () => {
+    const body = callable("revertLotActivityDirectPayment");
+    assert.match(body, /amountPaidCents: 0/);
+    // Flagged, never deleted - the same call voiding makes.
+    assert.match(body, /reverted: true/);
+    assert.doesNotMatch(body, /\.delete\(\)\s*;?\s*$/m);
+  });
+
+  it("an instalment settles the job only when it clears the balance", () => {
+    const body = callable("recordLotActivityInstalment");
+    assert.match(body, /if \(plan\.fullyCovered\)/);
+    assert.match(body, /runTransaction/);
+    // Taking cash closes the window in which the customer could still pay a
+    // balance that has just stopped being owed.
+    assert.match(body, /expireStripeCheckoutSession/);
+  });
+});

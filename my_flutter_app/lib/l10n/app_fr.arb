@@ -3709,5 +3709,94 @@
       }
     }
   },
-  "lotRecordedBy": "Enregistré par"
+  "lotRecordedBy": "Enregistré par",
+  "lotPartPaid": "Partiellement payé",
+  "lotPaidOfTotal": "{paid} sur {total}",
+  "lotStillOwed": "{amount} restant dû",
+  "lotBalance": "Solde",
+  "lotPaidSoFar": "Payé à ce jour",
+  "lotNoVehicle": "Sans véhicule",
+  "lotNoVehicleNote": "Cette activité est enregistrée sans véhicule.",
+  "lotActivityTypeNeedsVehicle": "Concerne un véhicule",
+  "lotActivityTypeNeedsVehicleNote": "Désactivez pour un travail sans véhicule, comme le prêt d'un compte de vente aux enchères. Le NIV n'est alors pas demandé.",
+  "lotRecordPayment": "Enregistrer un paiement",
+  "lotRecordPaymentNote": "Argent reçu en personne. Il est déduit du solde immédiatement, et le lien du client demande le reste.",
+  "lotPaymentAmount": "Montant reçu ($)",
+  "lotPaymentMaxNote": "{amount} au maximum — le montant restant dû sur cette entrée.",
+  "lotPaymentNote": "Note (facultatif)",
+  "lotPaymentRecorded": "{amount} enregistré.",
+  "lotPaymentSettled": "{amount} enregistré — soldé intégralement.",
+  "lotPayments": "Paiements",
+  "lotPaymentsNote": "Chaque paiement reçu sur cette entrée, quel qu'en soit le moyen.",
+  "lotNoPaymentsYet": "Aucun paiement individuel enregistré sur cette entrée.",
+  "lotPaymentsCouldNotBeLoaded": "Les paiements n'ont pas pu être chargés.",
+  "lotPaymentInPerson": "En personne",
+  "lotPaymentOnline": "En ligne",
+  "lotPaymentOverpaid": "{amount} au-delà du solde",
+  "lotErrActivityVoided": "Cette entrée a été annulée — enregistrez-en une nouvelle.",
+  "lotErrActivityCancelled": "Cette entrée a été annulée ; aucun montant ne peut y être encaissé.",
+  "lotErrNothingToPay": "Cette entrée n'a aucun montant à payer.",
+  "lotErrAlreadyPaid": "Cette entrée est déjà intégralement payée.",
+  "lotErrNoAmount": "Saisissez le montant reçu.",
+  "lotErrBelowCardMinimum": "Un paiement par carte commence à {amount}.",
+  "lotErrBelowAmountPaid": "{amount} a déjà été encaissé sur cette entrée. Le montant facturé ne peut pas descendre en dessous.",
+  "@lotPaidOfTotal": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "@lotStillOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@lotPaymentMaxNote": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@lotPaymentRecorded": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@lotPaymentSettled": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@lotPaymentOverpaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@lotErrBelowCardMinimum": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@lotErrBelowAmountPaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  }
 }

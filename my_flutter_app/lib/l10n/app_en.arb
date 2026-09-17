@@ -3709,5 +3709,94 @@
       }
     }
   },
-  "lotRecordedBy": "Recorded by"
+  "lotRecordedBy": "Recorded by",
+  "lotPartPaid": "Part paid",
+  "lotPaidOfTotal": "{paid} of {total}",
+  "@lotPaidOfTotal": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "lotStillOwed": "{amount} still owed",
+  "@lotStillOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotBalance": "Balance",
+  "lotPaidSoFar": "Paid so far",
+  "lotNoVehicle": "No car",
+  "lotNoVehicleNote": "This activity is recorded without a vehicle.",
+  "lotActivityTypeNeedsVehicle": "Done to a car",
+  "lotActivityTypeNeedsVehicleNote": "Turn this off for work with no vehicle, such as lending an auction account. Staff are then not asked for a VIN.",
+  "lotRecordPayment": "Record a payment",
+  "lotRecordPaymentNote": "Money taken in person. It comes off the balance now, and the customer's link asks for what is left.",
+  "lotPaymentAmount": "Amount taken ($)",
+  "lotPaymentMaxNote": "At most {amount} — what is still owed on this entry.",
+  "@lotPaymentMaxNote": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotPaymentNote": "Note (optional)",
+  "lotPaymentRecorded": "{amount} recorded.",
+  "@lotPaymentRecorded": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotPaymentSettled": "{amount} recorded — settled in full.",
+  "@lotPaymentSettled": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotPayments": "Payments",
+  "lotPaymentsNote": "Every payment taken against this entry, whichever route it came in on.",
+  "lotNoPaymentsYet": "No individual payments recorded on this entry.",
+  "lotPaymentsCouldNotBeLoaded": "The payments could not be loaded.",
+  "lotPaymentInPerson": "In person",
+  "lotPaymentOnline": "Online",
+  "lotPaymentOverpaid": "{amount} over the balance",
+  "@lotPaymentOverpaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotErrActivityVoided": "This entry was voided — record a new one instead.",
+  "lotErrActivityCancelled": "This entry was cancelled, so no money can be taken against it.",
+  "lotErrNothingToPay": "This entry has no fee to pay.",
+  "lotErrAlreadyPaid": "This entry is already paid in full.",
+  "lotErrNoAmount": "Enter the amount taken.",
+  "lotErrBelowCardMinimum": "A card payment starts at {amount}.",
+  "@lotErrBelowCardMinimum": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lotErrBelowAmountPaid": "{amount} has already been taken on this entry. The fee cannot go below it.",
+  "@lotErrBelowAmountPaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  }
 }

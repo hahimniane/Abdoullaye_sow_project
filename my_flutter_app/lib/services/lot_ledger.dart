@@ -39,6 +39,19 @@ const lotAuctionHouses = <String>[
   'Other',
 ];
 
+/// Which rail one instalment came in on. A job's balance is settled across
+/// both, in any order, so the rail belongs to the payment rather than to the
+/// job. Mirrors `LOT_ACTIVITY_PAYMENT_SOURCES` in `functions/lot_ledger.js`.
+const lotPaymentSourceCash = 'cash';
+const lotPaymentSourceCard = 'card';
+
+const lotPaymentSources = <String>[lotPaymentSourceCash, lotPaymentSourceCard];
+
+/// Card fees are a percentage plus a fixed 30 cents, so a tiny card payment
+/// loses a large share of itself. Cash has no floor: staff record whatever
+/// they were handed. Mirrors `LOT_ACTIVITY_MIN_CARD_PAYMENT_CENTS`.
+const lotMinCardPaymentCents = 2000;
+
 const lotExpenseKindFixed = 'fixed';
 const lotExpenseKindMetered = 'metered';
 const lotExpenseKindOneOff = 'one_off';
@@ -134,6 +147,7 @@ class LotActivityType {
     required this.label,
     required this.defaultFeeCents,
     required this.needsAuctionHouse,
+    required this.needsVehicle,
     required this.active,
     required this.sortOrder,
   });
@@ -142,6 +156,11 @@ class LotActivityType {
   final String label;
   final int defaultFeeCents;
   final bool needsAuctionHouse;
+
+  /// Whether the work is done to a car. Absent means yes, so every type
+  /// written before the flag existed still asks for a VIN; only a type that
+  /// opts out records work with no vehicle — lending an auction account, say.
+  final bool needsVehicle;
   final bool active;
   final int sortOrder;
 
@@ -151,6 +170,7 @@ class LotActivityType {
       label: _s(d['label'], 120),
       defaultFeeCents: _cents(d['defaultFeeCents']),
       needsAuctionHouse: d['needsAuctionHouse'] == true,
+      needsVehicle: d['needsVehicle'] != false,
       active: d['active'] != false,
       sortOrder: _cents(d['sortOrder']),
     );
@@ -164,6 +184,7 @@ class LotActivity {
     required this.activityTypeLabel,
     required this.customLabel,
     required this.feeCents,
+    required this.amountPaidCents,
     required this.customerName,
     required this.customerPhone,
     required this.customerEmail,
@@ -188,7 +209,15 @@ class LotActivity {
   final String activityTypeId;
   final String activityTypeLabel;
   final String customLabel;
+
+  /// What was agreed for the job.
   final int feeCents;
+
+  /// What has actually arrived against [feeCents], across any number of
+  /// payments on either rail. Absent (0) on every row written before
+  /// instalments existed — read [paidCents], never this, to answer "how much
+  /// has been collected".
+  final int amountPaidCents;
   final String customerName;
   final String customerPhone;
   final String customerEmail;
@@ -221,6 +250,7 @@ class LotActivity {
       activityTypeLabel: _s(d['activityTypeLabel'], 120),
       customLabel: _s(d['customLabel'], 120),
       feeCents: _cents(d['feeCents']),
+      amountPaidCents: _cents(d['amountPaidCents']),
       customerName: _s(d['customerName']),
       customerPhone: _s(d['customerPhone'], 40),
       customerEmail: _s(d['customerEmail'], 180),
@@ -260,6 +290,11 @@ class LotActivity {
     return name.isNotEmpty ? name : vinNumber;
   }
 
+  /// Whether this row names a car at all. Work done with no vehicle — lending
+  /// an auction account, say — has none, and a row that renders an empty
+  /// vehicle reads as broken rather than as deliberate.
+  bool get hasVehicle => vehicleLabel.isNotEmpty;
+
   bool get paid => paymentStatus == lotStatusSucceeded;
   bool get awaitingLink => paymentStatus == lotStatusAwaitingLink;
   bool get cancelled => paymentStatus == lotStatusCancelled;
@@ -281,6 +316,101 @@ class LotActivity {
   /// A document exists once the money has a state the customer can be shown:
   /// a receipt when paid, an invoice while the link is open.
   bool get hasDocument => !voided && (paid || awaitingLink);
+
+  /// What has actually been collected. Absent means nothing, so a record
+  /// written before instalments existed reads as unpaid unless its status says
+  /// otherwise: a row settled in one go never had a running total written.
+  /// Mirrors `lotActivityPaidCents` in `functions/lot_ledger.js`.
+  int get paidCents {
+    final stored = amountPaidCents > 0 ? amountPaidCents : 0;
+    if (stored > 0) return stored;
+    if (paid) return feeCents > 0 ? feeCents : 0;
+    return 0;
+  }
+
+  /// Cents still owed, never below zero. Mirrors `lotActivityRemainingCents`.
+  int get remainingCents {
+    final fee = feeCents > 0 ? feeCents : 0;
+    final left = fee - paidCents;
+    return left > 0 ? left : 0;
+  }
+
+  /// Money has arrived but the job is not settled. A voided job is never part
+  /// paid for display: it is dead, and its balance is not chased. Mirrors
+  /// `lotActivityPartlyPaid`.
+  bool get partlyPaid {
+    if (voided) return false;
+    final fee = feeCents > 0 ? feeCents : 0;
+    final collected = paidCents;
+    return collected > 0 && collected < fee;
+  }
+
+  /// Whether staff standing next to the customer can take money against this
+  /// row right now. Settled, cancelled and voided rows have no balance to
+  /// take; neither does a job recorded at no charge.
+  bool get canTakePayment =>
+      !voided && !cancelled && !paid && feeCents > 0 && remainingCents > 0;
+}
+
+/// One instalment, as stored in `lotActivityPayments`. Each payment carries
+/// its own month key: a job recorded in September and paid in November is
+/// November's income, and a reader that used the activity's month would never
+/// see it.
+class LotActivityPayment {
+  const LotActivityPayment({
+    required this.id,
+    required this.activityId,
+    required this.amountCents,
+    required this.overpaidCents,
+    required this.source,
+    required this.receivedVia,
+    required this.receivedByStaffId,
+    required this.recordedByStaffId,
+    required this.paidAtMonth,
+    required this.note,
+    required this.createdAt,
+    this.reverted = false,
+  });
+
+  final String id;
+  final String activityId;
+  final int amountCents;
+
+  /// Card only: what arrived beyond the balance. Cash is clamped to the
+  /// balance before it is ever recorded, so this is always zero for cash.
+  final int overpaidCents;
+  final String source;
+  final String receivedVia;
+  final String receivedByStaffId;
+  final String recordedByStaffId;
+  final String paidAtMonth;
+  final String note;
+  final DateTime? createdAt;
+
+  /// Money the business later said never arrived. Flagged rather than
+  /// deleted, the same call voiding makes, so the claim survives - but it
+  /// stops counting towards what has been collected.
+  final bool reverted;
+
+  factory LotActivityPayment.fromMap(String id, Map<String, dynamic> d) {
+    final rail = _s(d['source'], 10);
+    return LotActivityPayment(
+      id: id,
+      activityId: _s(d['activityId'], 120),
+      amountCents: _cents(d['amountCents']),
+      overpaidCents: _cents(d['overpaidCents']),
+      source: lotPaymentSources.contains(rail) ? rail : lotPaymentSourceCash,
+      receivedVia: _s(d['receivedVia'], 40),
+      receivedByStaffId: _s(d['receivedByStaffId'], 120),
+      recordedByStaffId: _s(d['recordedByStaffId'], 120),
+      paidAtMonth: _s(d['paidAtMonth'], 7),
+      note: _s(d['note'], 300),
+      createdAt: lotDateOf(d['createdAt']),
+      reverted: d['reverted'] == true,
+    );
+  }
+
+  bool get isCash => source == lotPaymentSourceCash;
 }
 
 class LotExpenseLine {
@@ -718,6 +848,100 @@ List<LotActivity> lotFilterActivitiesRange(
 }
 
 // ---------------------------------------------------------------------------
+// Instalments.
+//
+// `feeCents` is what was agreed; what has arrived is the sum of the payments
+// against it, on either rail, in any order. `paymentStatus` deliberately gains
+// no "part paid" member — it still means settled or not, and part-paid is
+// derived from the two numbers, so every existing reader of `succeeded` keeps
+// believing exactly what it believed before.
+// ---------------------------------------------------------------------------
+
+/// What one instalment would do to a balance, or why it cannot be applied.
+class LotInstalmentPlan {
+  const LotInstalmentPlan({
+    required this.ok,
+    this.reason = '',
+    this.appliedCents = 0,
+    this.overpaidCents = 0,
+    this.newPaidCents = 0,
+    this.remainingCents = 0,
+    this.fullyCovered = false,
+  });
+
+  const LotInstalmentPlan.refused(String reason) : this(ok: false, reason: reason);
+
+  final bool ok;
+
+  /// A server error code when [ok] is false, so the screen maps one vocabulary
+  /// to its translated messages whether the refusal came from here or a round
+  /// trip.
+  final String reason;
+
+  /// What would actually be taken — never more than the balance for cash.
+  final int appliedCents;
+
+  /// Card only: what arrived beyond the balance, reported rather than kept
+  /// silently or refunded silently.
+  final int overpaidCents;
+  final int newPaidCents;
+  final int remainingCents;
+  final bool fullyCovered;
+}
+
+/// Plan one instalment against an activity.
+///
+/// Cash is clamped to the balance: staff typing more than is owed is a typo,
+/// not a tip — the same call parking already makes. Card is never clamped,
+/// because by the time this runs Stripe has already taken the money.
+///
+/// A deliberate mirror of `lotActivityPaymentPlan` in
+/// `functions/lot_ledger.js`; the screen refuses locally with the same code
+/// the server would have returned.
+LotInstalmentPlan lotActivityPaymentPlan({
+  required LotActivity activity,
+  required int? amountCents,
+  String source = lotPaymentSourceCash,
+}) {
+  final rail =
+      lotPaymentSources.contains(source) ? source : lotPaymentSourceCash;
+
+  if (activity.voided) return const LotInstalmentPlan.refused('activity_voided');
+  if (activity.cancelled) {
+    return const LotInstalmentPlan.refused('activity_cancelled');
+  }
+
+  final fee = activity.feeCents > 0 ? activity.feeCents : 0;
+  if (fee <= 0) return const LotInstalmentPlan.refused('nothing_to_pay');
+
+  final alreadyPaid = activity.paidCents;
+  final remaining = activity.remainingCents;
+  if (remaining <= 0) return const LotInstalmentPlan.refused('already_paid');
+
+  var applied = amountCents ?? 0;
+  if (applied <= 0) return const LotInstalmentPlan.refused('no_amount');
+  if (rail == lotPaymentSourceCard && applied < lotMinCardPaymentCents) {
+    return const LotInstalmentPlan.refused('below_card_minimum');
+  }
+
+  var overpaid = 0;
+  if (rail == lotPaymentSourceCard && applied > remaining) {
+    overpaid = applied - remaining;
+  }
+  if (applied > remaining) applied = remaining;
+
+  final newPaid = alreadyPaid + applied;
+  return LotInstalmentPlan(
+    ok: true,
+    appliedCents: applied,
+    overpaidCents: overpaid,
+    newPaidCents: newPaid,
+    remainingCents: fee - newPaid > 0 ? fee - newPaid : 0,
+    fullyCovered: newPaid >= fee,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Client-side validation, mirroring the server's codes so the screen can
 // refuse before a round trip. The screen maps codes to translated messages.
 // ---------------------------------------------------------------------------
@@ -751,18 +975,30 @@ class LotActivityDraft {
   final bool paymentReceived;
 }
 
+/// [needsVehicle] follows the chosen type: absent means yes, so car work keeps
+/// the VIN guard and only a type that opts out records work with no vehicle.
+/// [alreadyPaidCents] is what the entry being edited has already collected —
+/// a $1,000 job holding $350 cannot become a $40 job, because that would owe
+/// the customer money and this platform has no way to give it back. Mirrors
+/// the server's `below_amount_paid` refusal.
 List<String> validateLotActivityDraft(
   LotActivityDraft d, {
   required bool lockedPayment,
+  bool needsVehicle = true,
+  int alreadyPaidCents = 0,
 }) {
   final errors = <String>[];
   if (d.activityTypeId.isEmpty) errors.add('activity_type_invalid');
   if (d.activityTypeId == lotCustomActivityId && d.customLabel.trim().isEmpty) {
     errors.add('custom_label_required');
   }
-  if (d.feeCents == null || d.feeCents! < 0) errors.add('fee_required');
+  if (d.feeCents == null || d.feeCents! < 0) {
+    errors.add('fee_required');
+  } else if (alreadyPaidCents > 0 && d.feeCents! < alreadyPaidCents) {
+    errors.add('below_amount_paid');
+  }
   if (d.customerName.trim().isEmpty) errors.add('customer_name_required');
-  if (d.vinNumber.trim().isEmpty) errors.add('vin_required');
+  if (needsVehicle && d.vinNumber.trim().isEmpty) errors.add('vin_required');
   if (!lockedPayment) {
     if (d.paymentMethod == lotPaymentMethodLink &&
         d.customerPhone.trim().isEmpty &&
