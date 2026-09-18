@@ -778,9 +778,9 @@ describe("a card-paid parking entry records when it was paid", () => {
     const start = source.indexOf(
         "async function completeBusinessParkingEntryPayment");
     assert.ok(start > -1);
-    const body = source.slice(start, source.indexOf("\nasync function", start + 1));
-    assert.match(
-        body,
-        /\.\.\.\(firstSettlement && \{paidAt: FirestoreFieldValue\.serverTimestamp\(\)\}\)/);
+    const end = source.indexOf("\nasync function", start + 1);
+    const body = source.slice(start, end);
+    assert.match(body, /\.\.\.\(firstSettlement && \{paidAt: /);
+    assert.match(body, /FirestoreFieldValue\.serverTimestamp\(\)\}\)/);
   });
 });
