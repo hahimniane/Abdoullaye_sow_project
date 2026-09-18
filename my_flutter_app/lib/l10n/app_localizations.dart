@@ -15347,6 +15347,600 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{amount} has already been taken on this entry. The fee cannot go below it.'**
   String lotErrBelowAmountPaid(String amount);
+
+  /// No description provided for @ctrTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get ctrTitle;
+
+  /// No description provided for @ctrSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What went into each box, recorded from the yard.'**
+  String get ctrSubtitle;
+
+  /// No description provided for @ctrStatusLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading'**
+  String get ctrStatusLoading;
+
+  /// No description provided for @ctrStatusShipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipped'**
+  String get ctrStatusShipped;
+
+  /// No description provided for @ctrStatusArrived.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived'**
+  String get ctrStatusArrived;
+
+  /// No description provided for @ctrNewContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'New container'**
+  String get ctrNewContainer;
+
+  /// No description provided for @ctrEditContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit container'**
+  String get ctrEditContainer;
+
+  /// No description provided for @ctrCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get ctrCreate;
+
+  /// No description provided for @ctrCreating.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating…'**
+  String get ctrCreating;
+
+  /// No description provided for @ctrLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Working name'**
+  String get ctrLabel;
+
+  /// No description provided for @ctrLabelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Sailing 3 Oct, box 2'**
+  String get ctrLabelHint;
+
+  /// No description provided for @ctrNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Container number'**
+  String get ctrNumber;
+
+  /// No description provided for @ctrNumberHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Four letters and seven digits, once the line sends it'**
+  String get ctrNumberHint;
+
+  /// No description provided for @ctrBookingReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking / BL reference'**
+  String get ctrBookingReference;
+
+  /// No description provided for @ctrDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination'**
+  String get ctrDestination;
+
+  /// No description provided for @ctrChooseDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a country'**
+  String get ctrChooseDestination;
+
+  /// No description provided for @ctrNoDestinations.
+  ///
+  /// In en, this message translates to:
+  /// **'No destinations set up yet. Add countries under Services & coverage first.'**
+  String get ctrNoDestinations;
+
+  /// No description provided for @ctrDestinationUnset.
+  ///
+  /// In en, this message translates to:
+  /// **'No destination yet'**
+  String get ctrDestinationUnset;
+
+  /// No description provided for @ctrNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get ctrNotes;
+
+  /// No description provided for @ctrLockedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipped. The list is the record of what went; only the notes stay open.'**
+  String get ctrLockedNote;
+
+  /// No description provided for @ctrNoContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'No containers yet.'**
+  String get ctrNoContainers;
+
+  /// No description provided for @ctrNoContainersHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Create one when you start loading a box.'**
+  String get ctrNoContainersHint;
+
+  /// No description provided for @ctrNoLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'No container is loading.'**
+  String get ctrNoLoading;
+
+  /// No description provided for @ctrNoShipped.
+  ///
+  /// In en, this message translates to:
+  /// **'No container has shipped.'**
+  String get ctrNoShipped;
+
+  /// No description provided for @ctrNoArrived.
+  ///
+  /// In en, this message translates to:
+  /// **'No container has arrived yet.'**
+  String get ctrNoArrived;
+
+  /// No description provided for @ctrEmptyContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing loaded yet'**
+  String get ctrEmptyContainer;
+
+  /// No description provided for @ctrEmptyContainerHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the first car, barrels or anything else that went in.'**
+  String get ctrEmptyContainerHint;
+
+  /// No description provided for @ctrCarsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 car} other{{count} cars}}'**
+  String ctrCarsCount(int count);
+
+  /// No description provided for @ctrBarrelsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 barrel} other{{count} barrels}}'**
+  String ctrBarrelsCount(int count);
+
+  /// No description provided for @ctrOtherCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 other item} other{{count} other items}}'**
+  String ctrOtherCount(int count);
+
+  /// No description provided for @ctrSailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sailed {date}'**
+  String ctrSailed(String date);
+
+  /// No description provided for @ctrArrivedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived {date}'**
+  String ctrArrivedOn(String date);
+
+  /// No description provided for @ctrLoaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Loaded'**
+  String get ctrLoaded;
+
+  /// No description provided for @ctrAddLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to the container'**
+  String get ctrAddLine;
+
+  /// No description provided for @ctrAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get ctrAdd;
+
+  /// No description provided for @ctrAdding.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding…'**
+  String get ctrAdding;
+
+  /// No description provided for @ctrKind.
+  ///
+  /// In en, this message translates to:
+  /// **'What is it?'**
+  String get ctrKind;
+
+  /// No description provided for @ctrKindCar.
+  ///
+  /// In en, this message translates to:
+  /// **'A car'**
+  String get ctrKindCar;
+
+  /// No description provided for @ctrKindBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrels'**
+  String get ctrKindBarrels;
+
+  /// No description provided for @ctrKindOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else'**
+  String get ctrKindOther;
+
+  /// No description provided for @ctrQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'How many'**
+  String get ctrQuantity;
+
+  /// No description provided for @ctrDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'What it is'**
+  String get ctrDescription;
+
+  /// No description provided for @ctrOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Whose is it?'**
+  String get ctrOwner;
+
+  /// No description provided for @ctrOwnerCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'A customer\'s'**
+  String get ctrOwnerCustomer;
+
+  /// No description provided for @ctrOwnerCustomerNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Name the customer, so the list says whose it is.'**
+  String get ctrOwnerCustomerNote;
+
+  /// No description provided for @ctrOwnerStock.
+  ///
+  /// In en, this message translates to:
+  /// **'Business stock'**
+  String get ctrOwnerStock;
+
+  /// No description provided for @ctrOwnerStockNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Bought to sell abroad. No customer to name.'**
+  String get ctrOwnerStockNote;
+
+  /// No description provided for @ctrStock.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock'**
+  String get ctrStock;
+
+  /// No description provided for @ctrBarrelsQty.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} barrels'**
+  String ctrBarrelsQty(int count);
+
+  /// No description provided for @ctrTimes.
+  ///
+  /// In en, this message translates to:
+  /// **'× {count}'**
+  String ctrTimes(int count);
+
+  /// No description provided for @ctrRemoveLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from the container'**
+  String get ctrRemoveLine;
+
+  /// No description provided for @ctrRemoveLineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this line?'**
+  String get ctrRemoveLineTitle;
+
+  /// No description provided for @ctrRemoveLineMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'It comes off the loading list. You can add it again.'**
+  String get ctrRemoveLineMessage;
+
+  /// No description provided for @ctrRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get ctrRemove;
+
+  /// No description provided for @ctrMoveLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to another container'**
+  String get ctrMoveLine;
+
+  /// No description provided for @ctrMoveTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to'**
+  String get ctrMoveTo;
+
+  /// No description provided for @ctrNoOtherLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'No other container is loading right now.'**
+  String get ctrNoOtherLoading;
+
+  /// No description provided for @ctrMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved.'**
+  String get ctrMoved;
+
+  /// No description provided for @ctrShip.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark shipped'**
+  String get ctrShip;
+
+  /// No description provided for @ctrShipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark this container shipped?'**
+  String get ctrShipTitle;
+
+  /// No description provided for @ctrShipMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The list becomes the record of what went. Only the notes stay open after this.'**
+  String get ctrShipMessage;
+
+  /// No description provided for @ctrShippedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked shipped.'**
+  String get ctrShippedDone;
+
+  /// No description provided for @ctrArrive.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark arrived'**
+  String get ctrArrive;
+
+  /// No description provided for @ctrArriveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark this container arrived?'**
+  String get ctrArriveTitle;
+
+  /// No description provided for @ctrArriveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Its cars are free to go on a new container.'**
+  String get ctrArriveMessage;
+
+  /// No description provided for @ctrArrivedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked arrived.'**
+  String get ctrArrivedDone;
+
+  /// No description provided for @ctrDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete container'**
+  String get ctrDelete;
+
+  /// No description provided for @ctrDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this container?'**
+  String get ctrDeleteTitle;
+
+  /// No description provided for @ctrDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Only an empty container that is still loading can be deleted.'**
+  String get ctrDeleteMessage;
+
+  /// No description provided for @ctrDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted.'**
+  String get ctrDeleted;
+
+  /// No description provided for @ctrOpenDocument.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading list'**
+  String get ctrOpenDocument;
+
+  /// No description provided for @ctrSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN, customer or phone'**
+  String get ctrSearchHint;
+
+  /// No description provided for @ctrNoSearchMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing matches.'**
+  String get ctrNoSearchMatch;
+
+  /// No description provided for @ctrHitsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 match} other{{count} matches}}'**
+  String ctrHitsCount(int count);
+
+  /// No description provided for @ctrLinkShipped.
+  ///
+  /// In en, this message translates to:
+  /// **'In {container} · sailed {date}'**
+  String ctrLinkShipped(String container, String date);
+
+  /// No description provided for @ctrLinkShippedNoDate.
+  ///
+  /// In en, this message translates to:
+  /// **'In {container}'**
+  String ctrLinkShippedNoDate(String container);
+
+  /// No description provided for @ctrLinkLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading in {name}'**
+  String ctrLinkLoading(String name);
+
+  /// No description provided for @ctrCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Container created.'**
+  String get ctrCreated;
+
+  /// No description provided for @ctrUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved.'**
+  String get ctrUpdated;
+
+  /// No description provided for @ctrLineAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Added.'**
+  String get ctrLineAdded;
+
+  /// No description provided for @ctrLineRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed.'**
+  String get ctrLineRemoved;
+
+  /// No description provided for @ctrCouldNotLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'The containers could not be loaded.'**
+  String get ctrCouldNotLoad;
+
+  /// No description provided for @ctrErrLabelRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Give the container a name to find it by.'**
+  String get ctrErrLabelRequired;
+
+  /// No description provided for @ctrErrNumberInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'A container number is four letters and seven digits, like MSKU1234567. Booking numbers and bills of lading go in the reference field.'**
+  String get ctrErrNumberInvalid;
+
+  /// No description provided for @ctrErrStatusInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not a state a container can be in.'**
+  String get ctrErrStatusInvalid;
+
+  /// No description provided for @ctrErrTransitionInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'A container only moves forward: loading, then shipped, then arrived.'**
+  String get ctrErrTransitionInvalid;
+
+  /// No description provided for @ctrErrDestinationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose where this container is going before it ships.'**
+  String get ctrErrDestinationRequired;
+
+  /// No description provided for @ctrErrEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is on this container yet, so it can\'t ship.'**
+  String get ctrErrEmpty;
+
+  /// No description provided for @ctrErrLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'This container has shipped. Its list is the record of what went; add a note instead of changing it.'**
+  String get ctrErrLocked;
+
+  /// No description provided for @ctrErrHasLines.
+  ///
+  /// In en, this message translates to:
+  /// **'This container has lines on it. Remove them first, or leave it.'**
+  String get ctrErrHasLines;
+
+  /// No description provided for @ctrErrNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Container not found.'**
+  String get ctrErrNotFound;
+
+  /// No description provided for @ctrErrLineNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That line is no longer on the container.'**
+  String get ctrErrLineNotFound;
+
+  /// No description provided for @ctrErrLineKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what this line is: a car, barrels, or something else.'**
+  String get ctrErrLineKind;
+
+  /// No description provided for @ctrErrQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter how many.'**
+  String get ctrErrQuantity;
+
+  /// No description provided for @ctrErrDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what it is.'**
+  String get ctrErrDescription;
+
+  /// No description provided for @ctrErrOwnerKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Say whose this is: a customer, or your own stock.'**
+  String get ctrErrOwnerKind;
+
+  /// No description provided for @ctrErrVinAlreadyLoaded.
+  ///
+  /// In en, this message translates to:
+  /// **'This car is already on another container that hasn\'t arrived.'**
+  String get ctrErrVinAlreadyLoaded;
+
+  /// No description provided for @ctrErrVinAlreadyLoadedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'This car is already on {container}, which hasn\'t arrived.'**
+  String ctrErrVinAlreadyLoadedIn(String container);
+
+  /// No description provided for @ctrErrMoveTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'You can only move a line to a container that is still loading.'**
+  String get ctrErrMoveTarget;
 }
 
 class _AppLocalizationsDelegate

@@ -182,11 +182,13 @@ const businessStaffPermissionOptions = [
   "reviews",
   "support",
   "growth",
+  "containers",
 ] as const;
 
 function businessPermissionLabel(permission: string) {
   if (permission === "carSales") return "Car sales";
   if (permission === "ledger") return "Lot ledger";
+  if (permission === "containers") return "Containers";
   return permission.charAt(0).toUpperCase() + permission.slice(1);
 }
 

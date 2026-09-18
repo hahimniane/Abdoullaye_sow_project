@@ -3815,5 +3815,191 @@
         "type": "String"
       }
     }
-  }
+  },
+  "ctrTitle": "Containers",
+  "ctrSubtitle": "What went into each box, recorded from the yard.",
+  "ctrStatusLoading": "Loading",
+  "ctrStatusShipped": "Shipped",
+  "ctrStatusArrived": "Arrived",
+  "ctrNewContainer": "New container",
+  "ctrEditContainer": "Edit container",
+  "ctrCreate": "Create",
+  "ctrCreating": "Creating…",
+  "ctrLabel": "Working name",
+  "ctrLabelHint": "e.g. Sailing 3 Oct, box 2",
+  "ctrNumber": "Container number",
+  "ctrNumberHint": "Four letters and seven digits, once the line sends it",
+  "ctrBookingReference": "Booking / BL reference",
+  "ctrDestination": "Destination",
+  "ctrChooseDestination": "Choose a country",
+  "ctrNoDestinations": "No destinations set up yet. Add countries under Services & coverage first.",
+  "ctrDestinationUnset": "No destination yet",
+  "ctrNotes": "Notes",
+  "ctrLockedNote": "Shipped. The list is the record of what went; only the notes stay open.",
+  "ctrNoContainers": "No containers yet.",
+  "ctrNoContainersHint": "Create one when you start loading a box.",
+  "ctrNoLoading": "No container is loading.",
+  "ctrNoShipped": "No container has shipped.",
+  "ctrNoArrived": "No container has arrived yet.",
+  "ctrEmptyContainer": "Nothing loaded yet",
+  "ctrEmptyContainerHint": "Add the first car, barrels or anything else that went in.",
+  "ctrCarsCount": "{count, plural, =1{1 car} other{{count} cars}}",
+  "@ctrCarsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrBarrelsCount": "{count, plural, =1{1 barrel} other{{count} barrels}}",
+  "@ctrBarrelsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrOtherCount": "{count, plural, =1{1 other item} other{{count} other items}}",
+  "@ctrOtherCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrSailed": "Sailed {date}",
+  "@ctrSailed": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrArrivedOn": "Arrived {date}",
+  "@ctrArrivedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLoaded": "Loaded",
+  "ctrAddLine": "Add to the container",
+  "ctrAdd": "Add",
+  "ctrAdding": "Adding…",
+  "ctrKind": "What is it?",
+  "ctrKindCar": "A car",
+  "ctrKindBarrels": "Barrels",
+  "ctrKindOther": "Something else",
+  "ctrQuantity": "How many",
+  "ctrDescription": "What it is",
+  "ctrOwner": "Whose is it?",
+  "ctrOwnerCustomer": "A customer's",
+  "ctrOwnerCustomerNote": "Name the customer, so the list says whose it is.",
+  "ctrOwnerStock": "Business stock",
+  "ctrOwnerStockNote": "Bought to sell abroad. No customer to name.",
+  "ctrStock": "Stock",
+  "ctrBarrelsQty": "{count} barrels",
+  "@ctrBarrelsQty": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrTimes": "× {count}",
+  "@ctrTimes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrRemoveLine": "Remove from the container",
+  "ctrRemoveLineTitle": "Remove this line?",
+  "ctrRemoveLineMessage": "It comes off the loading list. You can add it again.",
+  "ctrRemove": "Remove",
+  "ctrMoveLine": "Move to another container",
+  "ctrMoveTo": "Move to",
+  "ctrNoOtherLoading": "No other container is loading right now.",
+  "ctrMoved": "Moved.",
+  "ctrShip": "Mark shipped",
+  "ctrShipTitle": "Mark this container shipped?",
+  "ctrShipMessage": "The list becomes the record of what went. Only the notes stay open after this.",
+  "ctrShippedDone": "Marked shipped.",
+  "ctrArrive": "Mark arrived",
+  "ctrArriveTitle": "Mark this container arrived?",
+  "ctrArriveMessage": "Its cars are free to go on a new container.",
+  "ctrArrivedDone": "Marked arrived.",
+  "ctrDelete": "Delete container",
+  "ctrDeleteTitle": "Delete this container?",
+  "ctrDeleteMessage": "Only an empty container that is still loading can be deleted.",
+  "ctrDeleted": "Deleted.",
+  "ctrOpenDocument": "Loading list",
+  "ctrSearchHint": "VIN, customer or phone",
+  "ctrNoSearchMatch": "Nothing matches.",
+  "ctrHitsCount": "{count, plural, =1{1 match} other{{count} matches}}",
+  "@ctrHitsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrLinkShipped": "In {container} · sailed {date}",
+  "@ctrLinkShipped": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLinkShippedNoDate": "In {container}",
+  "@ctrLinkShippedNoDate": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLinkLoading": "Loading in {name}",
+  "@ctrLinkLoading": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrCreated": "Container created.",
+  "ctrUpdated": "Saved.",
+  "ctrLineAdded": "Added.",
+  "ctrLineRemoved": "Removed.",
+  "ctrCouldNotLoad": "The containers could not be loaded.",
+  "ctrErrLabelRequired": "Give the container a name to find it by.",
+  "ctrErrNumberInvalid": "A container number is four letters and seven digits, like MSKU1234567. Booking numbers and bills of lading go in the reference field.",
+  "ctrErrStatusInvalid": "That is not a state a container can be in.",
+  "ctrErrTransitionInvalid": "A container only moves forward: loading, then shipped, then arrived.",
+  "ctrErrDestinationRequired": "Choose where this container is going before it ships.",
+  "ctrErrEmpty": "Nothing is on this container yet, so it can't ship.",
+  "ctrErrLocked": "This container has shipped. Its list is the record of what went; add a note instead of changing it.",
+  "ctrErrHasLines": "This container has lines on it. Remove them first, or leave it.",
+  "ctrErrNotFound": "Container not found.",
+  "ctrErrLineNotFound": "That line is no longer on the container.",
+  "ctrErrLineKind": "Say what this line is: a car, barrels, or something else.",
+  "ctrErrQuantity": "Enter how many.",
+  "ctrErrDescription": "Say what it is.",
+  "ctrErrOwnerKind": "Say whose this is: a customer, or your own stock.",
+  "ctrErrVinAlreadyLoaded": "This car is already on another container that hasn't arrived.",
+  "ctrErrVinAlreadyLoadedIn": "This car is already on {container}, which hasn't arrived.",
+  "@ctrErrVinAlreadyLoadedIn": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrErrMoveTarget": "You can only move a line to a container that is still loading."
 }

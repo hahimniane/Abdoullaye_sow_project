@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show FontFeature, ImageFilter;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -12,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/business_parking_entry.dart';
+import '../services/container_manifest.dart';
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/vin_decoder_service.dart';
@@ -22,6 +22,8 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/container_link_chip.dart';
+import '../widgets/lot_sheets.dart';
 import 'vin_scanner_screen.dart';
 
 /// The lot ledger, yard-side.
@@ -66,6 +68,14 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   // the ledger can total parked-car money the same way the Parking screen does.
   List<Map<String, dynamic>> _parkedCarRows = const [];
   int _parkingSpaces = 0;
+
+  /// VIN → where the car is as far as the containers know, so an activity
+  /// row can say "In MSKU1234567 · sailed 3 Oct" beside the car it names.
+  /// One map from the rows already streamed; no query per row. Empty when
+  /// this person cannot read containers.
+  List<ShippingContainer> _containers = const [];
+  List<ContainerLine> _containerLines = const [];
+  Map<String, ContainerVinLink> _containerLinks = const {};
 
   String _businessName = '';
   int _proofThresholdCents = lotDefaultProofThresholdCents;
@@ -186,6 +196,24 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
         ];
         _parkedCarRows = [for (final d in snap.docs) d.data()];
       });
+    }, onError: (_) {}));
+
+    _subs.add(scoped('containers').snapshots().listen((snap) {
+      if (!mounted) return;
+      _containers = [
+        for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
+      ];
+      setState(() =>
+          _containerLinks = containerVinLinks(_containerLines, _containers));
+    }, onError: (_) {}));
+
+    _subs.add(scoped('containerLines').snapshots().listen((snap) {
+      if (!mounted) return;
+      _containerLines = [
+        for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
+      ];
+      setState(() =>
+          _containerLinks = containerVinLinks(_containerLines, _containers));
     }, onError: (_) {}));
 
     _subs.add(_db.collection('businesses').doc(id).snapshots().listen((doc) {
@@ -478,6 +506,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
         return _ActivityPanel(
           businessId: widget.businessId,
           knownCars: _knownCars,
+          containerLinks: _containerLinks,
           activityGeneratedCents: activityMoney.generated,
           activityCollectedCents: activityMoney.collected,
           activityOwedCents: activityMoney.owed,
@@ -505,13 +534,6 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   }
 }
 
-/// A staff member, as the pickers need them.
-class LotStaff {
-  const LotStaff({required this.id, required this.name});
-
-  final String id;
-  final String name;
-}
 
 // ---------------------------------------------------------------------------
 // Header: identity, the month, the money, and the three ways in.
@@ -635,7 +657,7 @@ class _LedgerHeader extends StatelessWidget {
                     child: _MoneyTile(
                       label: l10n.lotNet,
                       cents: netCents,
-                      tone: netCents < 0 ? _Tone.warn : _Tone.good,
+                      tone: netCents < 0 ? LotTone.warn : LotTone.good,
                     ),
                   ),
                 ],
@@ -768,25 +790,23 @@ class _StepArrow extends StatelessWidget {
   }
 }
 
-enum _Tone { neutral, good, warn }
-
 class _MoneyTile extends StatelessWidget {
   const _MoneyTile({
     required this.label,
     required this.cents,
-    this.tone = _Tone.neutral,
+    this.tone = LotTone.neutral,
   });
 
   final String label;
   final int cents;
-  final _Tone tone;
+  final LotTone tone;
 
   @override
   Widget build(BuildContext context) {
     final color = switch (tone) {
-      _Tone.good => AppColors.sage,
-      _Tone.warn => AppColors.errorRed,
-      _Tone.neutral => AppColors.ink,
+      LotTone.good => AppColors.sage,
+      LotTone.warn => AppColors.errorRed,
+      LotTone.neutral => AppColors.ink,
     };
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -1089,113 +1109,6 @@ class _SegmentedState extends State<_Segmented>
   }
 }
 
-// ---------------------------------------------------------------------------
-// Shared pieces.
-// ---------------------------------------------------------------------------
-
-/// The one action a panel exists for, parked where the thumb is, on a
-/// translucent layer the list scrolls under rather than an opaque strip that
-/// eats the bottom of the screen.
-class _PrimaryBar extends StatelessWidget {
-  const _PrimaryBar({required this.label, required this.icon, required this.onTap});
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.paper.withValues(alpha: 0.78),
-            border: Border(
-              top: BorderSide(color: AppColors.rule.withValues(alpha: 0.8)),
-            ),
-          ),
-          padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
-          child: SafeArea(
-            top: false,
-            child: PressableScale(
-              onTap: onTap,
-              child: Container(
-                height: 50,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.cobalt,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, size: 18, color: Colors.white),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.icon, required this.title, this.hint});
-
-  final IconData icon;
-  final String title;
-  final String? hint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xl, vertical: 48),
-      child: Column(
-        children: [
-          Icon(icon, size: 30, color: AppColors.muted.withValues(alpha: 0.55)),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppColors.ink,
-            ),
-          ),
-          if (hint != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              hint!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: AppColors.muted,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 /// How the money reads, read off the money itself rather than off a colour
 /// someone set by hand.
 class _StatusPill extends StatelessWidget {
@@ -1299,388 +1212,6 @@ String _receivedViaLabel(AppLocalizations l10n, String value) {
   };
 }
 
-/// Sheets arrive from the bottom and leave the same way, over a scrim that
-/// dims what they interrupt.
-Future<T?> showLotSheet<T>(BuildContext context, Widget child) {
-  return showModalBottomSheet<T>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
-    backgroundColor: AppColors.paper,
-    barrierColor: AppColors.ink.withValues(alpha: 0.32),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (sheetContext) => Padding(
-      padding:
-          EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
-      child: child,
-    ),
-  );
-}
-
-class _SheetShell extends StatelessWidget {
-  const _SheetShell({
-    required this.title,
-    this.subtitle,
-    required this.body,
-    this.footer,
-  });
-
-  final String title;
-  final String? subtitle;
-  final Widget body;
-  final Widget? footer;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.9,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                    height: 1.15,
-                    letterSpacing: -0.4,
-                    color: AppColors.ink,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle!,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.4,
-                      color: AppColors.muted,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
-              child: body,
-            ),
-          ),
-          if (footer != null)
-            Container(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: AppColors.paper,
-                border: Border(
-                  top: BorderSide(color: AppColors.rule.withValues(alpha: 0.7)),
-                ),
-              ),
-              child: SafeArea(top: false, child: footer!),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SheetButton extends StatelessWidget {
-  const _SheetButton({
-    required this.label,
-    required this.onTap,
-    this.busy = false,
-    this.busyLabel,
-    this.tone = _Tone.neutral,
-  });
-
-  final String label;
-  final VoidCallback? onTap;
-  final bool busy;
-  final String? busyLabel;
-  final _Tone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final background = switch (tone) {
-      _Tone.warn => AppColors.errorRed,
-      _Tone.good => AppColors.cobalt,
-      _Tone.neutral => AppColors.cobalt,
-    };
-    return PressableScale(
-      onTap: busy ? null : onTap,
-      child: Container(
-        height: 50,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: busy ? background.withValues(alpha: 0.5) : background,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              busy ? (busyLabel ?? label) : label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A field that opens a list instead of dropping a menu over the content.
-/// The list is a sheet like every other choice in the app, so one pattern
-/// covers picking an activity, a payment method, and a staff member.
-class _PickerField extends StatelessWidget {
-  const _PickerField({
-    required this.label,
-    required this.value,
-    required this.placeholder,
-    required this.onTap,
-    this.error,
-  });
-
-  final String label;
-  final String? value;
-  final String placeholder;
-  final VoidCallback onTap;
-  final String? error;
-
-  @override
-  Widget build(BuildContext context) {
-    final filled = value != null && value!.isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        PressableScale(
-          onTap: onTap,
-          scale: 0.99,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.parchment,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-              border: Border.all(
-                color: error != null ? AppColors.errorRed : AppColors.rule,
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.2,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        filled ? value! : placeholder,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: filled ? FontWeight.w600 : FontWeight.w400,
-                          color: filled ? AppColors.ink : AppColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.unfold_more,
-                    size: 18, color: AppColors.muted),
-              ],
-            ),
-          ),
-        ),
-        if (error != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 4, top: 5),
-            child: Text(
-              error!,
-              style: const TextStyle(fontSize: 12, color: AppColors.errorRed),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class LotOption<T> {
-  const LotOption(this.value, this.label, {this.detail});
-
-  final T value;
-  final String label;
-  final String? detail;
-}
-
-Future<T?> _pickOption<T>(
-  BuildContext context, {
-  required String title,
-  required List<LotOption<T>> options,
-  T? selected,
-}) {
-  return showLotSheet<T>(
-    context,
-    _SheetShell(
-      title: title,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final option in options)
-            PressableScale(
-              onTap: () => Navigator.of(context).pop(option.value),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: option.value == selected
-                      ? AppColors.mist
-                      : AppColors.parchment,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                  border: Border.all(
-                    color: option.value == selected
-                        ? AppColors.cobalt
-                        : AppColors.rule,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            option.label,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.ink,
-                            ),
-                          ),
-                          if (option.detail != null)
-                            Text(
-                              option.detail!,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.muted,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (option.value == selected)
-                      const Icon(Icons.check, size: 18, color: AppColors.cobalt),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    ),
-  );
-}
-
-/// A choice with two long explanations reads better as two cards than as two
-/// radio dots: the whole card is the target, and the reasoning sits with it.
-class _ChoiceCard extends StatelessWidget {
-  const _ChoiceCard({
-    required this.title,
-    required this.note,
-    required this.selected,
-    required this.onTap,
-    this.enabled = true,
-  });
-
-  final String title;
-  final String note;
-  final bool selected;
-  final VoidCallback onTap;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: enabled ? onTap : null,
-      scale: 0.99,
-      child: AnimatedContainer(
-        duration: AppMotion.press,
-        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.mist : AppColors.parchment,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          border: Border.all(
-            color: selected ? AppColors.cobalt : AppColors.rule,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              selected ? Icons.radio_button_checked : Icons.radio_button_off,
-              size: 18,
-              color: selected ? AppColors.cobalt : AppColors.muted,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    note,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      height: 1.35,
-                      color: AppColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Activity.
@@ -1690,6 +1221,7 @@ class _ActivityPanel extends StatelessWidget {
   const _ActivityPanel({
     required this.businessId,
     required this.knownCars,
+    required this.containerLinks,
     required this.activityGeneratedCents,
     required this.activityCollectedCents,
     required this.activityOwedCents,
@@ -1716,6 +1248,7 @@ class _ActivityPanel extends StatelessWidget {
 
   final String businessId;
   final List<LotKnownCar> knownCars;
+  final Map<String, ContainerVinLink> containerLinks;
   final int activityGeneratedCents;
   final int activityCollectedCents;
   final int activityOwedCents;
@@ -1808,7 +1341,7 @@ class _ActivityPanel extends StatelessWidget {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (rows.isEmpty)
-              _EmptyState(
+              LotEmptyState(
                 icon: search.trim().isEmpty
                     ? Icons.receipt_long_outlined
                     : Icons.search_off,
@@ -1834,6 +1367,7 @@ class _ActivityPanel extends StatelessWidget {
                 _ActivityCard(
                   activity: row,
                   staff: staff,
+                  containerLink: containerLinks[row.vinNumber],
                   onTap: () => showLotSheet(
                     context,
                     _ActivityDetailSheet(
@@ -1854,7 +1388,7 @@ class _ActivityPanel extends StatelessWidget {
           left: 0,
           right: 0,
           bottom: 0,
-          child: _PrimaryBar(
+          child: LotPrimaryBar(
             label: l10n.lotRecordActivity,
             icon: Icons.add,
             onTap: () => showLotSheet(
@@ -2075,11 +1609,15 @@ class _ActivityCard extends StatelessWidget {
     required this.activity,
     required this.staff,
     required this.onTap,
+    this.containerLink,
   });
 
   final LotActivity activity;
   final List<LotStaff> staff;
   final VoidCallback onTap;
+
+  /// Where the car is, when it is on a container that has not arrived.
+  final ContainerVinLink? containerLink;
 
   @override
   Widget build(BuildContext context) {
@@ -2190,6 +1728,10 @@ class _ActivityCard extends StatelessWidget {
                   color: AppColors.muted,
                 ),
               ),
+              if (containerLink != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                ContainerLinkChip(link: containerLink!),
+              ],
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
@@ -2438,7 +1980,7 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
 
   Future<void> _pickType() async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await _pickOption<String>(
+    final picked = await pickLotOption<String>(
       context,
       title: l10n.lotWhatWasDone,
       selected: _typeId,
@@ -2590,10 +2132,10 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
             Localizations.localeOf(context).toLanguageTag())
         .format(_date);
 
-    return _SheetShell(
+    return LotSheetShell(
       title: _editing ? l10n.lotEditActivity : l10n.lotRecordActivity,
       subtitle: _locked ? l10n.lotPaidOnPlatform : null,
-      footer: _SheetButton(
+      footer: LotSheetButton(
         label: l10n.lotSave,
         busy: _busy,
         busyLabel: l10n.lotSaving,
@@ -2602,7 +2144,7 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PickerField(
+          LotPickerField(
             label: l10n.lotWhatWasDone,
             value: _isCustom
                 ? l10n.lotOneOffOption
@@ -2639,7 +2181,7 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          _PickerField(
+          LotPickerField(
             label: l10n.lotDate,
             value: dateLabel,
             placeholder: dateLabel,
@@ -2815,12 +2357,12 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
           ],
           if (_type?.needsAuctionHouse ?? false) ...[
             const SizedBox(height: AppSpacing.md),
-            _PickerField(
+            LotPickerField(
               label: l10n.lotAuctionHouse,
               value: _auctionHouse.isEmpty ? null : _auctionHouse,
               placeholder: l10n.lotChooseActivity,
               onTap: () async {
-                final picked = await _pickOption<String>(
+                final picked = await pickLotOption<String>(
                   context,
                   title: l10n.lotAuctionHouse,
                   selected: _auctionHouse,
@@ -2845,7 +2387,7 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          _ChoiceCard(
+          LotChoiceCard(
             title: l10n.lotChargeThroughWebsite,
             note: l10n.lotChargeThroughWebsiteNote,
             selected: _method == lotPaymentMethodLink,
@@ -2864,7 +2406,7 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-          _ChoiceCard(
+          LotChoiceCard(
             title: l10n.lotPaidOutsideWebsite,
             note: l10n.lotPaidOutsideWebsiteNote,
             selected: _method == lotPaymentMethodDirect,
@@ -2886,12 +2428,12 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
             ),
             if (_paymentReceived) ...[
               const SizedBox(height: AppSpacing.md),
-              _PickerField(
+              LotPickerField(
                 label: l10n.lotHowItWasPaid,
                 value: _receivedViaLabelFor(l10n, _receivedVia),
                 placeholder: l10n.lotHowItWasPaid,
                 onTap: () async {
-                  final picked = await _pickOption<String>(
+                  final picked = await pickLotOption<String>(
                     context,
                     title: l10n.lotHowItWasPaid,
                     selected: _receivedVia,
@@ -2906,7 +2448,7 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
                 },
               ),
               const SizedBox(height: AppSpacing.md),
-              _PickerField(
+              LotPickerField(
                 label: l10n.lotReceivedBy,
                 value: widget.staff
                     .where((s) => s.id == _receivedBy)
@@ -2915,7 +2457,7 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
                 placeholder: l10n.lotReceivedBy,
                 error: errorFor('received_by_required'),
                 onTap: () async {
-                  final picked = await _pickOption<String>(
+                  final picked = await pickLotOption<String>(
                     context,
                     title: l10n.lotReceivedBy,
                     selected: _receivedBy,
@@ -3009,7 +2551,7 @@ class _ActivityDetailSheet extends StatelessWidget {
             if (activity.vinNumber.isNotEmpty) activity.vinNumber,
           ].where((p) => p.isNotEmpty).join(' · ')
         : l10n.lotNoVehicle;
-    return _SheetShell(
+    return LotSheetShell(
       title: activity.label.isEmpty ? l10n.lotLedgerTitle : activity.label,
       subtitle: subtitle,
       body: Column(
@@ -3165,7 +2707,7 @@ class _ActivityDetailSheet extends StatelessWidget {
             label: l10n.lotHistory,
             onTap: () => showLotSheet(
               context,
-              _HistorySheet(
+              LotHistorySheet(
                 businessId: businessId,
                 entityId: activity.id,
                 staff: staff,
@@ -3640,10 +3182,10 @@ class _InstalmentSheetState extends State<_InstalmentSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return _SheetShell(
+    return LotSheetShell(
       title: l10n.lotRecordPayment,
       subtitle: l10n.lotRecordPaymentNote,
-      footer: _SheetButton(
+      footer: LotSheetButton(
         label: l10n.lotRecordPayment,
         busy: _busy,
         busyLabel: l10n.lotSaving,
@@ -3670,12 +3212,12 @@ class _InstalmentSheetState extends State<_InstalmentSheet> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          _PickerField(
+          LotPickerField(
             label: l10n.lotHowItWasPaid,
             value: _receivedViaLabel(l10n, _via),
             placeholder: l10n.lotHowItWasPaid,
             onTap: () async {
-              final picked = await _pickOption<String>(
+              final picked = await pickLotOption<String>(
                 context,
                 title: l10n.lotHowItWasPaid,
                 selected: _via,
@@ -3688,7 +3230,7 @@ class _InstalmentSheetState extends State<_InstalmentSheet> {
             },
           ),
           const SizedBox(height: AppSpacing.md),
-          _PickerField(
+          LotPickerField(
             label: l10n.lotReceivedBy,
             value: widget.staff
                 .where((member) => member.id == _receivedBy)
@@ -3696,7 +3238,7 @@ class _InstalmentSheetState extends State<_InstalmentSheet> {
                 ?.name,
             placeholder: l10n.lotReceivedBy,
             onTap: () async {
-              final picked = await _pickOption<String>(
+              final picked = await pickLotOption<String>(
                 context,
                 title: l10n.lotReceivedBy,
                 selected: _receivedBy,
@@ -3767,7 +3309,7 @@ class _ChaseSheetState extends State<_ChaseSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return _SheetShell(
+    return LotSheetShell(
       title: l10n.lotChasePayment,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3788,12 +3330,12 @@ class _ChaseSheetState extends State<_ChaseSheet> {
             ),
             const SizedBox(height: AppSpacing.md),
           ],
-          _PickerField(
+          LotPickerField(
             label: l10n.lotHowItWasPaid,
             value: _receivedViaLabel(l10n, _via),
             placeholder: l10n.lotHowItWasPaid,
             onTap: () async {
-              final picked = await _pickOption<String>(
+              final picked = await pickLotOption<String>(
                 context,
                 title: l10n.lotHowItWasPaid,
                 selected: _via,
@@ -3806,7 +3348,7 @@ class _ChaseSheetState extends State<_ChaseSheet> {
             },
           ),
           const SizedBox(height: AppSpacing.md),
-          _PickerField(
+          LotPickerField(
             label: l10n.lotReceivedBy,
             value: widget.staff
                 .where((s) => s.id == _receivedBy)
@@ -3814,7 +3356,7 @@ class _ChaseSheetState extends State<_ChaseSheet> {
                 ?.name,
             placeholder: l10n.lotReceivedBy,
             onTap: () async {
-              final picked = await _pickOption<String>(
+              final picked = await pickLotOption<String>(
                 context,
                 title: l10n.lotReceivedBy,
                 selected: _receivedBy,
@@ -3829,7 +3371,7 @@ class _ChaseSheetState extends State<_ChaseSheet> {
           ),
         ],
       ),
-      footer: _SheetButton(
+      footer: LotSheetButton(
         label: l10n.lotRecordAsPaid,
         busy: _busy,
         busyLabel: l10n.lotSaving,
@@ -3908,16 +3450,16 @@ class _VoidSheetState extends State<_VoidSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return _SheetShell(
+    return LotSheetShell(
       title: l10n.lotVoidTitle,
       subtitle: l10n.lotVoidExplain,
       body: TextField(
         controller: _reason,
         decoration: InputDecoration(labelText: l10n.lotVoidReason),
       ),
-      footer: _SheetButton(
+      footer: LotSheetButton(
         label: l10n.lotVoid,
-        tone: _Tone.warn,
+        tone: LotTone.warn,
         busy: _busy,
         busyLabel: l10n.lotSaving,
         onTap: _submit,
@@ -3975,111 +3517,19 @@ class _RevertSheetState extends State<_RevertSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return _SheetShell(
+    return LotSheetShell(
       title: l10n.lotMarkNotReceivedTitle,
       subtitle: l10n.lotMarkNotReceivedExplain,
       body: TextField(
         controller: _note,
         decoration: InputDecoration(labelText: l10n.lotMarkNotReceivedNote),
       ),
-      footer: _SheetButton(
+      footer: LotSheetButton(
         label: l10n.lotMarkNotReceived,
-        tone: _Tone.warn,
+        tone: LotTone.warn,
         busy: _busy,
         busyLabel: l10n.lotSaving,
         onTap: _submit,
-      ),
-    );
-  }
-}
-
-class _HistorySheet extends StatelessWidget {
-  const _HistorySheet({
-    required this.businessId,
-    required this.entityId,
-    required this.staff,
-  });
-
-  final String businessId;
-  final String entityId;
-  final List<LotStaff> staff;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    // Scoped by business as well as entity: the rule authorizes by business,
-    // and Firestore refuses a query it cannot prove stays inside that scope.
-    final query = FirebaseFirestore.instance
-        .collection('lotLedgerAudit')
-        .where('businessId', isEqualTo: businessId)
-        .where('entityId', isEqualTo: entityId)
-        .orderBy('at', descending: true)
-        .limit(50)
-        .get();
-
-    return _SheetShell(
-      title: l10n.lotHistory,
-      body: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        future: query,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          final events = [
-            for (final d in snapshot.data?.docs ?? [])
-              LotAuditEvent.fromMap(d.id, d.data()),
-          ];
-          if (events.isEmpty) {
-            return _EmptyState(
-              icon: Icons.history,
-              title: l10n.lotNoHistory,
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final event in events)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        event.summary,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        [
-                          staff
-                                  .where((s) => s.id == event.byStaffId)
-                                  .firstOrNull
-                                  ?.name ??
-                              '',
-                          if (event.at != null)
-                            DateFormat.yMMMd(Localizations.localeOf(context)
-                                    .toLanguageTag())
-                                .add_jm()
-                                .format(event.at!),
-                        ].where((p) => p.isNotEmpty).join(' · '),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          );
-        },
       ),
     );
   }
@@ -4139,7 +3589,7 @@ class _ExpensesPanel extends StatelessWidget {
                 ),
               ),
             if (lines.isEmpty)
-              _EmptyState(
+              LotEmptyState(
                 icon: Icons.account_balance_wallet_outlined,
                 title: l10n.lotNoExpenseLines,
                 hint: l10n.lotNoExpenseLinesHint,
@@ -4169,7 +3619,7 @@ class _ExpensesPanel extends StatelessWidget {
                   ),
                   onHistory: () => showLotSheet(
                     context,
-                    _HistorySheet(
+                    LotHistorySheet(
                       businessId: businessId,
                       entityId: line.id,
                       staff: staff,
@@ -4182,7 +3632,7 @@ class _ExpensesPanel extends StatelessWidget {
           left: 0,
           right: 0,
           bottom: 0,
-          child: _PrimaryBar(
+          child: LotPrimaryBar(
             label: l10n.lotAddExpenseLine,
             icon: Icons.add,
             onTap: () => showLotSheet(
@@ -4384,7 +3834,7 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
 
   Future<void> _attachReceipt() async {
     final l10n = AppLocalizations.of(context)!;
-    final source = await _pickOption<ImageSource>(
+    final source = await pickLotOption<ImageSource>(
       context,
       title: l10n.lotAttachReceipt,
       options: [
@@ -4546,10 +3996,10 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
             .format(_date);
 
     final editing = _editingEntryId.isNotEmpty;
-    return _SheetShell(
+    return LotSheetShell(
       title: widget.line.label,
       subtitle: widget.monthLabel,
-      footer: _SheetButton(
+      footer: LotSheetButton(
         label: editing ? l10n.lotSaveChanges : l10n.lotAddPurchase,
         busy: _busy,
         busyLabel: l10n.lotSaving,
@@ -4619,7 +4069,7 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
                         scale: 0.9,
                         onTap: () => showLotSheet(
                           context,
-                          _HistorySheet(
+                          LotHistorySheet(
                             businessId: widget.businessId,
                             entityId: entry.id,
                             staff: widget.staff,
@@ -4693,7 +4143,7 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          _PickerField(
+          LotPickerField(
             label: l10n.lotDate,
             value: dateLabel,
             placeholder: dateLabel,
@@ -4708,13 +4158,13 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
             },
           ),
           const SizedBox(height: AppSpacing.md),
-          _PickerField(
+          LotPickerField(
             label: l10n.lotPaidBy,
             value: widget.staff.where((s) => s.id == _paidBy).firstOrNull?.name,
             placeholder: l10n.lotPaidBy,
             error: errorFor('expense_paid_by_required'),
             onTap: () async {
-              final picked = await _pickOption<String>(
+              final picked = await pickLotOption<String>(
                 context,
                 title: l10n.lotPaidBy,
                 selected: _paidBy,
@@ -4845,7 +4295,7 @@ class _LedgerSettingsSheetState extends State<_LedgerSettingsSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return _SheetShell(
+    return LotSheetShell(
       title: l10n.lotLedgerSettings,
       subtitle: l10n.lotActivityTypesSubtitle,
       body: Column(
@@ -4919,7 +4369,7 @@ class _LedgerSettingsSheetState extends State<_LedgerSettingsSheet> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          _SheetButton(
+          LotSheetButton(
             label: l10n.lotSave,
             busy: _savingThreshold,
             busyLabel: l10n.lotSaving,
@@ -5093,11 +4543,11 @@ class _ActivityTypeSheetState extends State<_ActivityTypeSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return _SheetShell(
+    return LotSheetShell(
       title: widget.type != null
           ? widget.type!.label
           : l10n.lotActivityTypeAdd,
-      footer: _SheetButton(
+      footer: LotSheetButton(
         label: l10n.lotSave,
         busy: _busy,
         busyLabel: l10n.lotSaving,
@@ -5236,9 +4686,9 @@ class _ExpenseLineSheetState extends State<_ExpenseLineSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return _SheetShell(
+    return LotSheetShell(
       title: widget.line != null ? l10n.lotEditExpenseLine : l10n.lotAddExpenseLine,
-      footer: _SheetButton(
+      footer: LotSheetButton(
         label: l10n.lotSave,
         busy: _busy,
         busyLabel: l10n.lotSaving,
@@ -5258,13 +4708,13 @@ class _ExpenseLineSheetState extends State<_ExpenseLineSheet> {
             decoration: InputDecoration(labelText: l10n.lotExpenseSupplier),
           ),
           const SizedBox(height: AppSpacing.md),
-          _ChoiceCard(
+          LotChoiceCard(
             title: l10n.lotChangesEveryMonth,
             note: l10n.lotWaitingOnBill,
             selected: _kind == lotExpenseKindMetered,
             onTap: () => setState(() => _kind = lotExpenseKindMetered),
           ),
-          _ChoiceCard(
+          LotChoiceCard(
             title: l10n.lotSameEveryMonth,
             note: l10n.lotMonthlyAmount,
             selected: _kind == lotExpenseKindFixed,
@@ -5364,7 +4814,7 @@ class _ReportsPanel extends StatelessWidget {
               child: _MoneyTile(
                 label: l10n.lotNetProfit,
                 cents: net,
-                tone: net < 0 ? _Tone.warn : _Tone.good,
+                tone: net < 0 ? LotTone.warn : LotTone.good,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -5432,7 +4882,7 @@ class _ReportsPanel extends StatelessWidget {
               child: _MoneyTile(
                 label: l10n.lotParkingCollected,
                 cents: (parkingTotals.collected * 100).round(),
-                tone: _Tone.good,
+                tone: LotTone.good,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -5440,7 +4890,7 @@ class _ReportsPanel extends StatelessWidget {
               child: _MoneyTile(
                 label: l10n.lotParkingOwed,
                 cents: (parkingTotals.owed * 100).round(),
-                tone: parkingTotals.owed > 0 ? _Tone.warn : _Tone.neutral,
+                tone: parkingTotals.owed > 0 ? LotTone.warn : LotTone.neutral,
               ),
             ),
           ],
@@ -5451,7 +4901,7 @@ class _ReportsPanel extends StatelessWidget {
             label:
                 '${l10n.lotParkingOverdue} · ${l10n.lotParkingOverdueCars(parkingOverdue.count)}',
             cents: (parkingOverdue.amount * 100).round(),
-            tone: _Tone.warn,
+            tone: LotTone.warn,
           ),
         ],
         const SizedBox(height: AppSpacing.lg),

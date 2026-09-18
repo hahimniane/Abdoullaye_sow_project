@@ -314,6 +314,23 @@ const {
   validateLotExpenseLine,
   normalizeReceivedVia: lotNormalizeReceivedVia,
 } = require("./lot_ledger");
+const {
+  CONTAINER_STATUS,
+  CONTAINER_MESSAGES,
+  validateContainer,
+  containerRecord,
+  containerTransitionRefusal,
+  containerIsOpen,
+  containerDeleteRefusal,
+  validateContainerLine,
+  containerLineRecord,
+  openContainerHoldingVin,
+  containerCounts,
+} = require("./container_manifest");
+const {
+  containerDocumentModel,
+  renderContainerDocument,
+} = require("./container_document");
 const {parkingAvailability} = require("./parking_occupancy");
 const {lotCustomerKey, mergeLotCustomer} = require("./lot_customers");
 const {
@@ -469,6 +486,7 @@ const VALID_BUSINESS_PERMISSIONS = [
   "reviews",
   "support",
   "growth",
+  "containers",
 ];
 const VALID_PLATFORM_ADMIN_ROLES = [
   "superAdmin",
@@ -12448,7 +12466,34 @@ exports.parkingDocument = onRequest(
             .where("paymentLinkToken", "==", token)
             .limit(1)
             .get();
-        if (lot.empty) return notFound();
+        if (lot.empty) {
+          // A container's loading list lives in its own token field: the
+          // page is a record of what was loaded, not a receipt, and never
+          // shares the /p payment token space.
+          const boxes = await db.collection("containers")
+              .where("documentToken", "==", token)
+              .limit(1)
+              .get();
+          if (boxes.empty) return notFound();
+          const box = boxes.docs[0];
+          const lineDocs = await db.collection("containerLines")
+              .where("containerId", "==", box.id)
+              .get();
+          const boxBusiness = await db.collection("businesses")
+              .doc(String(box.data()?.businessId || "")).get()
+              .catch(() => null);
+          res.set("Content-Type", "text/html; charset=utf-8");
+          return res.status(200).send(renderContainerDocument(
+              containerDocumentModel({
+                container: box.data() || {},
+                lines: lineDocs.docs.map((d) => d.data() || {})
+                    .sort((a, b) => (a.createdAt?.toMillis?.() || 0) -
+                      (b.createdAt?.toMillis?.() || 0)),
+                business: boxBusiness && boxBusiness.exists ?
+                  boxBusiness.data() : {},
+              }),
+          ));
+        }
         const activity = lot.docs[0].data() || {};
         const kind = lotActivityDocumentType(activity);
         if (!kind) {
@@ -15381,6 +15426,368 @@ exports.updateLotExpenseEntry = onCall(
 // Money entries are voided, never hard-deleted: the row stays for the record,
 // marked with who/when/why, excluded from totals, and it lands in the Needs-
 // attention feed so others see the change.
+// -------------------------------------------------------------------------
+// Containers - what the business loaded into a shipping box, recorded by the
+// business itself. Every write goes through here as admin; the clients only
+// read. The rules of the list live in container_manifest.js.
+// -------------------------------------------------------------------------
+
+const CONTAINER_SECTION = "containers";
+
+function containerMessage(codes) {
+  return (Array.isArray(codes) ? codes : [codes])
+      .map((code) => CONTAINER_MESSAGES[code] || code).join(" ");
+}
+
+/**
+ * Load a container the caller may act on.
+ *
+ * @param {object} db Firestore.
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @param {string} containerId The container.
+ * @return {Promise<{ref: object, data: object}>} The document.
+ */
+async function loadContainerFor(db, uid, businessId, containerId) {
+  await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+  const ref = db.collection("containers").doc(String(containerId || ""));
+  const doc = containerId ? await ref.get() : null;
+  if (!doc || !doc.exists || String(doc.data()?.businessId) !== businessId) {
+    throw new HttpsError("not-found", CONTAINER_MESSAGES.container_not_found);
+  }
+  return {ref, data: doc.data() || {}};
+}
+
+/**
+ * The summary a container carries, recomputed from its lines so a list of
+ * containers can be scanned without loading every line.
+ *
+ * @param {object} db Firestore.
+ * @param {object} ref The container document.
+ * @return {Promise<number>} The line count after the refresh.
+ */
+async function refreshContainerCounts(db, ref) {
+  const lines = await db.collection("containerLines")
+      .where("containerId", "==", ref.id).get();
+  const counts = containerCounts(lines.docs.map((d) => d.data() || {}));
+  await ref.set({...counts, updatedAt: FirestoreFieldValue.serverTimestamp()},
+      {merge: true});
+  return counts.lineCount;
+}
+
+function containerAudit(businessId, containerId, action, uid, summary) {
+  return writeLotLedgerAudit({
+    businessId, entityType: "container", entityId: containerId,
+    action, byStaffId: uid, summary, changes: [],
+  });
+}
+
+exports.createContainer = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+      const errors = validateContainer(data);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", containerMessage(errors));
+      }
+      const db = admin.firestore();
+      const ref = db.collection("containers").doc();
+      const record = containerRecord(data);
+      await ref.set({
+        businessId,
+        ...record,
+        status: CONTAINER_STATUS.LOADING,
+        lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0,
+        createdByStaffId: uid,
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      await containerAudit(businessId, ref.id, "created", uid,
+          `Started ${record.label}`);
+      return {success: true, containerId: ref.id};
+    },
+);
+
+exports.updateContainer = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadContainerFor(db, uid, businessId, data.containerId);
+      const changes = data.changes && typeof data.changes === "object" ?
+        data.changes : {};
+      const merged = containerRecord({...current, ...changes});
+      const errors = validateContainer(merged);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", containerMessage(errors));
+      }
+      // Once shipped, the list and its identity are the record of what was
+      // declared. Only the notes stay open.
+      const structural = ["label", "containerNumber", "bookingReference",
+        "destinationCountryId", "destinationCountryName"];
+      const changed = structural.filter((key) =>
+        String(current[key] || "") !== String(merged[key] || ""));
+      if (changed.length > 0 && !containerIsOpen(current)) {
+        throw new HttpsError(
+            "failed-precondition", CONTAINER_MESSAGES.container_locked);
+      }
+      await ref.set({
+        ...merged,
+        editedByStaffId: uid,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      const touched = [...changed,
+        ...(String(current.notes || "") !== merged.notes ? ["notes"] : [])];
+      if (touched.length > 0) {
+        await containerAudit(businessId, ref.id, "edited", uid,
+            `Changed ${touched.join(", ")}`);
+      }
+      return {success: true, containerId: ref.id};
+    },
+);
+
+exports.deleteContainer = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadContainerFor(db, uid, businessId, data.containerId);
+      const lineCount = await refreshContainerCounts(db, ref);
+      const refusal = containerDeleteRefusal(current, lineCount);
+      if (refusal) {
+        throw new HttpsError(
+            "failed-precondition", CONTAINER_MESSAGES[refusal]);
+      }
+      await ref.delete();
+      await containerAudit(businessId, ref.id, "deleted", uid,
+          `Deleted ${String(current.label || "")}`);
+      return {success: true, containerId: ref.id};
+    },
+);
+
+exports.addContainerLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadContainerFor(db, uid, businessId, data.containerId);
+      if (!containerIsOpen(current)) {
+        throw new HttpsError(
+            "failed-precondition", CONTAINER_MESSAGES.container_locked);
+      }
+      const line = data.line && typeof data.line === "object" ? data.line : {};
+      const errors = validateContainerLine(line);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", containerMessage(errors));
+      }
+      const record = containerLineRecord(line, {
+        containerId: ref.id,
+        containerStatus: String(current.status || CONTAINER_STATUS.LOADING),
+        addedByStaffId: uid,
+      });
+      // A car on two open containers is a mistake every time. Refuse, and
+      // say which container has it.
+      if (record.kind === "car") {
+        const sameVin = await db.collection("containerLines")
+            .where("businessId", "==", businessId)
+            .where("vinNumber", "==", record.vinNumber)
+            .get();
+        const conflict = openContainerHoldingVin(
+            sameVin.docs.map((d) => d.data() || {}), ref.id);
+        if (conflict) {
+          throw new HttpsError(
+              "failed-precondition",
+              CONTAINER_MESSAGES.vin_already_loaded,
+              {reason: "vin_already_loaded", conflictContainerId: conflict});
+        }
+      }
+      const lineRef = db.collection("containerLines").doc();
+      await lineRef.set({
+        businessId,
+        ...record,
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      await refreshContainerCounts(db, ref);
+      // The lot's customer memory learns from every line that names one, the
+      // way it learns from a parked car or a ledger job.
+      if (record.ownerKind === "customer") {
+        await rememberLotCustomer(db, {
+          businessId,
+          seen: {customerName: record.customerName,
+            customerPhone: record.customerPhone, customerEmail: ""},
+          source: "container",
+          staffId: uid,
+        });
+      }
+      const what = record.kind === "car" ?
+        `car ${record.vinNumber}` :
+        (record.kind === "barrels" ? `${record.quantity} barrels` :
+          `${record.quantity} × ${record.description}`);
+      await containerAudit(businessId, ref.id, "line_added", uid,
+          `Added ${what}` + (record.customerName ?
+            ` for ${record.customerName}` : " (business stock)"));
+      return {success: true, lineId: lineRef.id, containerId: ref.id};
+    },
+);
+
+exports.removeContainerLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadContainerFor(db, uid, businessId, data.containerId);
+      if (!containerIsOpen(current)) {
+        throw new HttpsError(
+            "failed-precondition", CONTAINER_MESSAGES.container_locked);
+      }
+      const lineRef = db.collection("containerLines")
+          .doc(String(data.lineId || ""));
+      const lineDoc = data.lineId ? await lineRef.get() : null;
+      const line = lineDoc && lineDoc.exists ? lineDoc.data() || {} : null;
+      if (!line || String(line.containerId) !== ref.id) {
+        throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+      }
+      await lineRef.delete();
+      await refreshContainerCounts(db, ref);
+      await containerAudit(businessId, ref.id, "line_removed", uid,
+          `Removed ${line.kind === "car" ? `car ${line.vinNumber}` :
+            (line.kind === "barrels" ? `${line.quantity} barrels` :
+              String(line.description || "a line"))}`);
+      return {success: true, containerId: ref.id};
+    },
+);
+
+exports.moveContainerLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const lineRef = db.collection("containerLines")
+          .doc(String(data.lineId || ""));
+      const lineDoc = data.lineId ? await lineRef.get() : null;
+      const line = lineDoc && lineDoc.exists ? lineDoc.data() || {} : null;
+      if (!line || String(line.businessId) !== businessId) {
+        await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+        throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+      }
+      const from =
+        await loadContainerFor(db, uid, businessId, line.containerId);
+      const to =
+        await loadContainerFor(db, uid, businessId, data.toContainerId);
+      if (!containerIsOpen(from.data)) {
+        throw new HttpsError(
+            "failed-precondition", CONTAINER_MESSAGES.container_locked);
+      }
+      if (!containerIsOpen(to.data)) {
+        throw new HttpsError(
+            "failed-precondition", CONTAINER_MESSAGES.move_target_not_loading);
+      }
+      if (from.ref.id === to.ref.id) return {success: true};
+      await lineRef.set({
+        containerId: to.ref.id,
+        containerStatus: String(to.data.status || CONTAINER_STATUS.LOADING),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      await refreshContainerCounts(db, from.ref);
+      await refreshContainerCounts(db, to.ref);
+      const what = line.kind === "car" ? `car ${line.vinNumber}` :
+        (line.kind === "barrels" ? `${line.quantity} barrels` :
+          String(line.description || "a line"));
+      await containerAudit(businessId, from.ref.id, "line_moved", uid,
+          `Moved ${what} to ${String(to.data.label || to.ref.id)}`);
+      await containerAudit(businessId, to.ref.id, "line_moved", uid,
+          `Received ${what} from ${String(from.data.label || from.ref.id)}`);
+      return {success: true, lineId: lineRef.id, containerId: to.ref.id};
+    },
+);
+
+exports.setContainerStatus = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadContainerFor(db, uid, businessId, data.containerId);
+      const lineCount = await refreshContainerCounts(db, ref);
+      const next = String(data.status || "").trim();
+      const refusal = containerTransitionRefusal(current, next, lineCount);
+      if (refusal) {
+        throw new HttpsError(
+            "failed-precondition", CONTAINER_MESSAGES[refusal]);
+      }
+      const update = {
+        status: next,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      };
+      if (next === CONTAINER_STATUS.SHIPPED) {
+        update.sailedAt = FirestoreFieldValue.serverTimestamp();
+        update.shippedByStaffId = uid;
+      } else {
+        update.arrivedAt = FirestoreFieldValue.serverTimestamp();
+        update.arrivedByStaffId = uid;
+      }
+      await ref.set(update, {merge: true});
+      // Lines carry the container's state so "is this car already on an open
+      // container" is one query on lines.
+      const lines = await db.collection("containerLines")
+          .where("containerId", "==", ref.id).get();
+      const batch = db.batch();
+      lines.docs.forEach((d) => batch.set(d.ref, {
+        containerStatus: next,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true}));
+      await batch.commit();
+      await containerAudit(businessId, ref.id, next, uid,
+          next === CONTAINER_STATUS.SHIPPED ?
+            `Shipped with ${lineCount} line${lineCount === 1 ? "" : "s"}` :
+            "Marked arrived");
+      return {success: true, containerId: ref.id, status: next};
+    },
+);
+
+exports.getContainerDocumentUrl = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadContainerFor(db, uid, businessId, data.containerId);
+      let token = String(current.documentToken || "").trim();
+      if (!token) {
+        token = crypto.randomBytes(24).toString("base64url");
+        await ref.set({
+          documentToken: token,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
+        "https://laawoldigital.com/d";
+      return {success: true, url: `${base}?t=${encodeURIComponent(token)}`};
+    },
+);
+
 exports.voidLotActivity = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK, cors: true,

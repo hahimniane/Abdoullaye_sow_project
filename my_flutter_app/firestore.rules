@@ -613,6 +613,18 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // Containers the business loads itself, and what went in them. Read by
+    // the business's managers; every write goes through the container
+    // callables as admin, so a client cannot ship a box or rewrite what was
+    // declared on it.
+    match /containers/{containerId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /containerLines/{lineId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
     // The change log (edits and voids) — read-only to a business's managers;
     // every write is made by the ledger callables as admin.
     match /lotLedgerAudit/{eventId} {

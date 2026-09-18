@@ -8787,4 +8787,374 @@ class AppLocalizationsFr extends AppLocalizations {
   String lotErrBelowAmountPaid(String amount) {
     return '$amount a déjà été encaissé sur cette entrée. Le montant facturé ne peut pas descendre en dessous.';
   }
+
+  @override
+  String get ctrTitle => 'Conteneurs';
+
+  @override
+  String get ctrSubtitle =>
+      'Ce qui est entré dans chaque conteneur, enregistré depuis le parc.';
+
+  @override
+  String get ctrStatusLoading => 'En chargement';
+
+  @override
+  String get ctrStatusShipped => 'Expédié';
+
+  @override
+  String get ctrStatusArrived => 'Arrivé';
+
+  @override
+  String get ctrNewContainer => 'Nouveau conteneur';
+
+  @override
+  String get ctrEditContainer => 'Modifier le conteneur';
+
+  @override
+  String get ctrCreate => 'Créer';
+
+  @override
+  String get ctrCreating => 'Création…';
+
+  @override
+  String get ctrLabel => 'Nom de travail';
+
+  @override
+  String get ctrLabelHint => 'ex. Départ 3 oct., boîte 2';
+
+  @override
+  String get ctrNumber => 'Numéro de conteneur';
+
+  @override
+  String get ctrNumberHint =>
+      'Quatre lettres et sept chiffres, dès que la compagnie l\'envoie';
+
+  @override
+  String get ctrBookingReference => 'Référence booking / connaissement';
+
+  @override
+  String get ctrDestination => 'Destination';
+
+  @override
+  String get ctrChooseDestination => 'Choisir un pays';
+
+  @override
+  String get ctrNoDestinations =>
+      'Aucune destination configurée. Ajoutez d\'abord des pays dans Services et couverture.';
+
+  @override
+  String get ctrDestinationUnset => 'Pas encore de destination';
+
+  @override
+  String get ctrNotes => 'Notes';
+
+  @override
+  String get ctrLockedNote =>
+      'Expédié. La liste est le relevé de ce qui est parti ; seules les notes restent modifiables.';
+
+  @override
+  String get ctrNoContainers => 'Aucun conteneur pour le moment.';
+
+  @override
+  String get ctrNoContainersHint =>
+      'Créez-en un quand vous commencez à charger une boîte.';
+
+  @override
+  String get ctrNoLoading => 'Aucun conteneur en chargement.';
+
+  @override
+  String get ctrNoShipped => 'Aucun conteneur expédié.';
+
+  @override
+  String get ctrNoArrived => 'Aucun conteneur arrivé pour le moment.';
+
+  @override
+  String get ctrEmptyContainer => 'Rien de chargé pour l\'instant';
+
+  @override
+  String get ctrEmptyContainerHint =>
+      'Ajoutez la première voiture, les barils ou tout autre chose entré dedans.';
+
+  @override
+  String ctrCarsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count voitures',
+      one: '1 voiture',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrBarrelsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count barils',
+      one: '1 baril',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrOtherCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count autres articles',
+      one: '1 autre article',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrSailed(String date) {
+    return 'Parti le $date';
+  }
+
+  @override
+  String ctrArrivedOn(String date) {
+    return 'Arrivé le $date';
+  }
+
+  @override
+  String get ctrLoaded => 'Chargé';
+
+  @override
+  String get ctrAddLine => 'Ajouter au conteneur';
+
+  @override
+  String get ctrAdd => 'Ajouter';
+
+  @override
+  String get ctrAdding => 'Ajout…';
+
+  @override
+  String get ctrKind => 'Qu\'est-ce que c\'est ?';
+
+  @override
+  String get ctrKindCar => 'Une voiture';
+
+  @override
+  String get ctrKindBarrels => 'Des barils';
+
+  @override
+  String get ctrKindOther => 'Autre chose';
+
+  @override
+  String get ctrQuantity => 'Combien';
+
+  @override
+  String get ctrDescription => 'De quoi il s\'agit';
+
+  @override
+  String get ctrOwner => 'À qui est-ce ?';
+
+  @override
+  String get ctrOwnerCustomer => 'À un client';
+
+  @override
+  String get ctrOwnerCustomerNote =>
+      'Nommez le client, pour que la liste dise à qui c\'est.';
+
+  @override
+  String get ctrOwnerStock => 'Stock de l\'entreprise';
+
+  @override
+  String get ctrOwnerStockNote =>
+      'Acheté pour être vendu à l\'étranger. Aucun client à nommer.';
+
+  @override
+  String get ctrStock => 'Stock';
+
+  @override
+  String ctrBarrelsQty(int count) {
+    return '$count barils';
+  }
+
+  @override
+  String ctrTimes(int count) {
+    return '× $count';
+  }
+
+  @override
+  String get ctrRemoveLine => 'Retirer du conteneur';
+
+  @override
+  String get ctrRemoveLineTitle => 'Retirer cette ligne ?';
+
+  @override
+  String get ctrRemoveLineMessage =>
+      'Elle sort de la liste de chargement. Vous pourrez l\'ajouter à nouveau.';
+
+  @override
+  String get ctrRemove => 'Retirer';
+
+  @override
+  String get ctrMoveLine => 'Déplacer vers un autre conteneur';
+
+  @override
+  String get ctrMoveTo => 'Déplacer vers';
+
+  @override
+  String get ctrNoOtherLoading =>
+      'Aucun autre conteneur n\'est en chargement en ce moment.';
+
+  @override
+  String get ctrMoved => 'Déplacé.';
+
+  @override
+  String get ctrShip => 'Marquer expédié';
+
+  @override
+  String get ctrShipTitle => 'Marquer ce conteneur comme expédié ?';
+
+  @override
+  String get ctrShipMessage =>
+      'La liste devient le relevé de ce qui est parti. Seules les notes resteront modifiables.';
+
+  @override
+  String get ctrShippedDone => 'Marqué expédié.';
+
+  @override
+  String get ctrArrive => 'Marquer arrivé';
+
+  @override
+  String get ctrArriveTitle => 'Marquer ce conteneur comme arrivé ?';
+
+  @override
+  String get ctrArriveMessage =>
+      'Ses voitures pourront aller dans un nouveau conteneur.';
+
+  @override
+  String get ctrArrivedDone => 'Marqué arrivé.';
+
+  @override
+  String get ctrDelete => 'Supprimer le conteneur';
+
+  @override
+  String get ctrDeleteTitle => 'Supprimer ce conteneur ?';
+
+  @override
+  String get ctrDeleteMessage =>
+      'Seul un conteneur vide encore en chargement peut être supprimé.';
+
+  @override
+  String get ctrDeleted => 'Supprimé.';
+
+  @override
+  String get ctrOpenDocument => 'Liste de chargement';
+
+  @override
+  String get ctrSearchHint => 'NIV, client ou téléphone';
+
+  @override
+  String get ctrNoSearchMatch => 'Aucun résultat.';
+
+  @override
+  String ctrHitsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count résultats',
+      one: '1 résultat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrLinkShipped(String container, String date) {
+    return 'Dans $container · parti le $date';
+  }
+
+  @override
+  String ctrLinkShippedNoDate(String container) {
+    return 'Dans $container';
+  }
+
+  @override
+  String ctrLinkLoading(String name) {
+    return 'En chargement dans $name';
+  }
+
+  @override
+  String get ctrCreated => 'Conteneur créé.';
+
+  @override
+  String get ctrUpdated => 'Enregistré.';
+
+  @override
+  String get ctrLineAdded => 'Ajouté.';
+
+  @override
+  String get ctrLineRemoved => 'Retiré.';
+
+  @override
+  String get ctrCouldNotLoad => 'Les conteneurs n\'ont pas pu être chargés.';
+
+  @override
+  String get ctrErrLabelRequired =>
+      'Donnez un nom au conteneur pour le retrouver.';
+
+  @override
+  String get ctrErrNumberInvalid =>
+      'Un numéro de conteneur, c\'est quatre lettres et sept chiffres, comme MSKU1234567. Les numéros de booking et les connaissements vont dans le champ référence.';
+
+  @override
+  String get ctrErrStatusInvalid =>
+      'Ce n\'est pas un état possible pour un conteneur.';
+
+  @override
+  String get ctrErrTransitionInvalid =>
+      'Un conteneur ne fait qu\'avancer : chargement, puis expédié, puis arrivé.';
+
+  @override
+  String get ctrErrDestinationRequired =>
+      'Choisissez où va ce conteneur avant de l\'expédier.';
+
+  @override
+  String get ctrErrEmpty =>
+      'Rien n\'est encore dans ce conteneur, il ne peut pas partir.';
+
+  @override
+  String get ctrErrLocked =>
+      'Ce conteneur est expédié. Sa liste est le relevé de ce qui est parti ; ajoutez une note plutôt que de la modifier.';
+
+  @override
+  String get ctrErrHasLines =>
+      'Ce conteneur contient des lignes. Retirez-les d\'abord, ou laissez-le.';
+
+  @override
+  String get ctrErrNotFound => 'Conteneur introuvable.';
+
+  @override
+  String get ctrErrLineNotFound => 'Cette ligne n\'est plus sur le conteneur.';
+
+  @override
+  String get ctrErrLineKind =>
+      'Dites ce qu\'est cette ligne : une voiture, des barils ou autre chose.';
+
+  @override
+  String get ctrErrQuantity => 'Indiquez combien.';
+
+  @override
+  String get ctrErrDescription => 'Dites de quoi il s\'agit.';
+
+  @override
+  String get ctrErrOwnerKind =>
+      'Dites à qui c\'est : un client, ou votre propre stock.';
+
+  @override
+  String get ctrErrVinAlreadyLoaded =>
+      'Cette voiture est déjà dans un autre conteneur qui n\'est pas arrivé.';
+
+  @override
+  String ctrErrVinAlreadyLoadedIn(String container) {
+    return 'Cette voiture est déjà dans $container, qui n\'est pas arrivé.';
+  }
+
+  @override
+  String get ctrErrMoveTarget =>
+      'Une ligne ne peut être déplacée que vers un conteneur encore en chargement.';
 }
