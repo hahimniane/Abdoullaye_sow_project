@@ -3467,6 +3467,23 @@
     }
   },
   "lotNetProfit": "Net profit",
+  "lotParkingIncomeForYear": "Parked-car income {year}",
+  "@lotParkingIncomeForYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotParkingCollectedInYear": "Collected in {year}",
+  "@lotParkingCollectedInYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotLegendParkedCars": "Parked cars",
   "lotMargin": "Margin",
   "lotParkingIncome": "Parked-car income",
   "lotParkingIncomeNote": "Paid, still to come, and past due. Current standing.",

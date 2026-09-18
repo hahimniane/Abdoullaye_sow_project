@@ -35,6 +35,7 @@ import {
   isBusinessEnteredParking,
   validateBusinessParkingEntryDraft,
   type BusinessParkingEntryDraft,
+  businessParkingCollectedByMonth,
 } from "./business-parking-entry.ts";
 import { TEXT_TRANSLATIONS } from "./french-dom.ts";
 
@@ -1193,4 +1194,76 @@ test("the recorded amount survives a totalCost of zero", () => {
   };
   assert.equal(businessParkingAmountDue(row), 108);
   assert.notEqual(Number(row.totalCost ?? row.amountDue) || 0, 108);
+});
+
+
+// Parked-car money by the month it arrived. A stay has no natural month, so
+// this is built from payment dates: each instalment on its own day, and
+// whatever the record says arrived beyond those on the day it settled.
+const stamp = (iso: string) => ({ toDate: () => new Date(iso) });
+const MONTHS = ["2026-07", "2026-08", "2026-09", "2026-10"];
+
+test("each instalment lands in the month it was taken", () => {
+  const rows = [{
+    source: "business", status: "reserved", paymentStatus: "awaiting_direct_payment",
+    amountDueCents: 30000, amountPaidCents: 20000,
+    parkingPayments: [
+      { amountCents: 5000, at: stamp("2026-08-03T10:00:00") },
+      { amountCents: 15000, at: stamp("2026-10-20T10:00:00") },
+    ],
+  }];
+  assert.deepEqual(businessParkingCollectedByMonth(rows, MONTHS), [0, 5000, 0, 15000]);
+});
+
+// A stay settled in one go carries no per-payment array, only when it was
+// paid. It must count once, in that month - never zero, never twice.
+test("a one-shot cash settlement counts once, in the month it was received", () => {
+  const rows = [{
+    source: "business", status: "reserved", paymentStatus: "paid",
+    amountDueCents: 12000, amountPaidCents: 12000,
+    directPaymentReceivedAt: stamp("2026-09-14T09:00:00"),
+  }];
+  assert.deepEqual(businessParkingCollectedByMonth(rows, MONTHS), [0, 0, 12000, 0]);
+});
+
+test("a card settlement uses paidAt, and an older record falls back to updatedAt", () => {
+  const rows = [
+    { source: "business", status: "reserved", paymentStatus: "succeeded",
+      amountDueCents: 8000, amountPaidCents: 8000, paidAt: stamp("2026-07-02T09:00:00"),
+      updatedAt: stamp("2026-10-01T09:00:00") },
+    { source: "business", status: "reserved", paymentStatus: "succeeded",
+      amountDueCents: 6000, amountPaidCents: 6000, updatedAt: stamp("2026-10-05T09:00:00") },
+  ];
+  assert.deepEqual(businessParkingCollectedByMonth(rows, MONTHS), [8000, 0, 0, 6000]);
+});
+
+// Money the instalments explain and money the running total adds on top are
+// both real; the remainder goes to the settlement month and nothing repeats.
+test("instalments plus a settling remainder are never double counted", () => {
+  const rows = [{
+    source: "business", status: "reserved", paymentStatus: "paid",
+    amountDueCents: 30000, amountPaidCents: 30000,
+    parkingPayments: [{ amountCents: 10000, at: stamp("2026-08-03T10:00:00") }],
+    directPaymentReceivedAt: stamp("2026-09-30T10:00:00"),
+  }];
+  const byMonth = businessParkingCollectedByMonth(rows, MONTHS);
+  assert.deepEqual(byMonth, [0, 10000, 20000, 0]);
+  assert.equal(byMonth.reduce((a, b) => a + b, 0), 30000);
+});
+
+test("money outside the months asked for is left out, not misfiled", () => {
+  const rows = [{
+    source: "business", status: "reserved", paymentStatus: "paid",
+    amountDueCents: 5000, amountPaidCents: 5000,
+    directPaymentReceivedAt: stamp("2025-12-31T10:00:00"),
+  }];
+  assert.deepEqual(businessParkingCollectedByMonth(rows, MONTHS), [0, 0, 0, 0]);
+});
+
+test("an unpaid stay contributes nothing however much it has run up", () => {
+  const rows = [{
+    source: "business", status: "reserved", paymentStatus: "awaiting_direct_payment",
+    amountDueCents: 40000, parkingDate: stamp("2026-08-01T10:00:00"),
+  }];
+  assert.deepEqual(businessParkingCollectedByMonth(rows, MONTHS), [0, 0, 0, 0]);
 });

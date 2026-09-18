@@ -87,6 +87,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
         activities: _activities,
         lines: _lines,
         entries: _entries,
+        parkedCarRows: _parkedCarRows,
       );
 
   /// Every vehicle this business has on file: parked cars first, then whatever
@@ -5315,11 +5316,19 @@ class _ReportsPanel extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final year = lotMonthStart(month).year;
     final revenue = math.yearRevenueByMonth(year);
+    // Parked-car money in the month it arrived. A stay has no natural month,
+    // so this used to show only as a standing total and stayed off the chart.
+    final parking = math.yearParkingByMonth(year);
     final expenses = math.yearExpenseByMonth(year);
     final totalRevenue = revenue.fold(0, (a, b) => a + b);
+    final totalParking = parking.fold(0, (a, b) => a + b);
     final totalExpense = expenses.fold(0, (a, b) => a + b);
-    final net = totalRevenue - totalExpense;
-    final margin = lotMarginPercent(totalRevenue, net);
+    // Net is against everything that came in: activities billed plus
+    // parked-car money collected. Leaving parking out made the chart's
+    // running net and the Net tile disagree.
+    final totalIncome = totalRevenue + totalParking;
+    final net = totalIncome - totalExpense;
+    final margin = lotMarginPercent(totalIncome, net);
     final months = lotYearMonths(year);
 
     return ListView(
@@ -5342,6 +5351,11 @@ class _ReportsPanel extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _MoneyTile(
+          label: l10n.lotParkingIncomeForYear('$year'),
+          cents: totalParking,
         ),
         const SizedBox(height: AppSpacing.sm),
         Row(
@@ -5463,6 +5477,7 @@ class _ReportsPanel extends StatelessWidget {
             children: [
               _YearChart(
                 revenue: revenue,
+                parking: parking,
                 expenses: expenses,
                 selected: months.indexOf(month),
                 onSelect: (i) => onPickMonth(months[i]),
@@ -5472,6 +5487,11 @@ class _ReportsPanel extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _LegendDot(color: AppColors.cobalt, label: l10n.lotRevenue),
+                  const SizedBox(width: AppSpacing.lg),
+                  _LegendDot(
+                    color: AppColors.cobalt.withValues(alpha: 0.45),
+                    label: l10n.lotLegendParkedCars,
+                  ),
                   const SizedBox(width: AppSpacing.lg),
                   _LegendDot(
                       color: AppColors.saffron, label: l10n.lotExpensesLabel),
@@ -5816,12 +5836,16 @@ class _LegendDot extends StatelessWidget {
 class _YearChart extends StatelessWidget {
   const _YearChart({
     required this.revenue,
+    required this.parking,
     required this.expenses,
     required this.selected,
     required this.onSelect,
   });
 
   final List<int> revenue;
+
+  /// Parked-car money collected that month, stacked on the revenue bar.
+  final List<int> parking;
   final List<int> expenses;
   final int selected;
   final ValueChanged<int> onSelect;
@@ -5851,6 +5875,7 @@ class _YearChart extends StatelessWidget {
             child: CustomPaint(
               painter: _YearChartPainter(
                 revenue: revenue,
+                parking: parking,
                 expenses: expenses,
                 selected: selected,
                 initials: initials,
@@ -5867,6 +5892,7 @@ class _YearChart extends StatelessWidget {
 class _YearChartPainter extends CustomPainter {
   _YearChartPainter({
     required this.revenue,
+    required this.parking,
     required this.expenses,
     required this.selected,
     required this.initials,
@@ -5874,6 +5900,7 @@ class _YearChartPainter extends CustomPainter {
   });
 
   final List<int> revenue;
+  final List<int> parking;
   final List<int> expenses;
   final int selected;
   final List<String> initials;
@@ -5885,8 +5912,14 @@ class _YearChartPainter extends CustomPainter {
     final chartHeight = size.height - labelHeight;
     final slot = size.width / 12;
     final barWidth = (slot - 8) / 2;
+    // Income is the stacked bar: activities billed plus parked-car money
+    // collected, so the scale is set by the taller of income and expenses.
+    final income = [
+      for (var i = 0; i < 12; i++)
+        revenue[i] + (i < parking.length ? parking[i] : 0),
+    ];
     var max = 0;
-    for (final v in [...revenue, ...expenses]) {
+    for (final v in [...income, ...expenses]) {
       if (v > max) max = v;
     }
     if (max <= 0) max = 1;
@@ -5901,6 +5934,8 @@ class _YearChartPainter extends CustomPainter {
     );
 
     final revenuePaint = Paint()..color = AppColors.cobalt;
+    final parkingPaint = Paint()
+      ..color = AppColors.cobalt.withValues(alpha: 0.45);
     final expensePaint = Paint()..color = AppColors.saffron;
 
     for (var i = 0; i < 12; i++) {
@@ -5915,26 +5950,34 @@ class _YearChartPainter extends CustomPainter {
         );
       }
 
-      void bar(int value, double offset, Paint paint) {
+      // A segment from [base] up by [value]. The revenue bar sits on the
+      // baseline; parked-car income stacks on top of it in a lighter shade,
+      // so the whole bar is what came in and the join shows the split.
+      void bar(int value, double offset, Paint paint, {int base = 0}) {
         if (value <= 0) return;
-        final height = (value / max) * (chartHeight - 6);
+        final scale = (chartHeight - 6) / max;
+        final bottom = chartHeight - base * scale;
+        final height = value * scale;
         final rect = Rect.fromLTWH(
           left + offset,
-          chartHeight - height,
+          bottom - height,
           barWidth,
           height,
         );
+        final rounded = base == 0 && value == income[i] || base > 0;
         canvas.drawRRect(
           RRect.fromRectAndCorners(
             rect,
-            topLeft: const Radius.circular(2),
-            topRight: const Radius.circular(2),
+            topLeft: rounded ? const Radius.circular(2) : Radius.zero,
+            topRight: rounded ? const Radius.circular(2) : Radius.zero,
           ),
           paint,
         );
       }
 
       bar(revenue[i], 4, revenuePaint);
+      bar(i < parking.length ? parking[i] : 0, 4, parkingPaint,
+          base: revenue[i]);
       bar(expenses[i], 4 + barWidth, expensePaint);
 
       final label = TextPainter(
@@ -5959,5 +6002,6 @@ class _YearChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _YearChartPainter old) =>
       old.selected != selected ||
       !identical(old.revenue, revenue) ||
+      !identical(old.parking, parking) ||
       !identical(old.expenses, expenses);
 }

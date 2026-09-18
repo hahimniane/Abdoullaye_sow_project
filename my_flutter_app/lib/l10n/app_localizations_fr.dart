@@ -8143,6 +8143,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String get lotNetProfit => 'Bénéfice net';
 
   @override
+  String lotParkingIncomeForYear(String year) {
+    return 'Revenus du stationnement $year';
+  }
+
+  @override
+  String lotParkingCollectedInYear(String year) {
+    return 'Encaissé en $year';
+  }
+
+  @override
+  String get lotLegendParkedCars => 'Voitures stationnées';
+
+  @override
   String get lotMargin => 'Marge';
 
   @override

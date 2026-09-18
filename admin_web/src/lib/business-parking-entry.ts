@@ -502,6 +502,71 @@ export function businessParkingEndLabel(row: ParkingRowLike, now: Date = new Dat
   return endDay < today ? "Ended" : "Ends";
 }
 
+/**
+ * Parked-car money by the month it actually arrived, in cents, one figure per
+ * month asked for.
+ *
+ * A stay accrues and is paid across months, so it has no natural month - which
+ * is why the reports only ever showed parked-car money as a standing total
+ * and left it off the month-by-month chart. What a stay does have is payment
+ * dates. Each instalment in `parkingPayments` carries the day it was taken,
+ * and a stay settled in one go carries when: `directPaymentReceivedAt` for
+ * cash, `paidAt` for a card, and for records written before either was
+ * stamped, `updatedAt`. Money counts in the month it came in - the same rule
+ * the activity scoreboard follows - so the chart shows what the lot actually
+ * had that month rather than a running balance smeared across the year.
+ *
+ * Money the record says arrived that no instalment explains (a one-shot
+ * settlement, or a running total written before the per-payment array
+ * existed) is added once, to the settlement month; a stay with both is never
+ * counted twice.
+ */
+export function businessParkingCollectedByMonth(
+  rows: ParkingRowLike[],
+  months: readonly string[],
+  now: Date = new Date(),
+): number[] {
+  const index = new Map(months.map((m, i) => [m, i] as const));
+  const out = months.map(() => 0);
+  for (const row of rows) {
+    const payments = Array.isArray(row?.parkingPayments) ?
+      (row.parkingPayments as unknown[]) : [];
+    let documented = 0;
+    for (const item of payments) {
+      const entry = (item ?? {}) as Record<string, unknown>;
+      const cents = parkingPaymentCents(entry);
+      if (cents <= 0) continue;
+      documented += cents;
+      const slot = index.get(businessParkingMonthKey(toDateOrNull(entry.at)));
+      if (slot !== undefined) out[slot] += cents;
+    }
+    const collected = Math.round(businessParkingAmountPaid(row, now) * 100);
+    const remainder = collected - documented;
+    if (remainder <= 0) continue;
+    const settledOn =
+      toDateOrNull(row?.directPaymentReceivedAt) ??
+      toDateOrNull(row?.paidAt) ??
+      toDateOrNull(row?.updatedAt) ??
+      toDateOrNull(row?.createdAt);
+    const slot = index.get(businessParkingMonthKey(settledOn));
+    if (slot !== undefined) out[slot] += remainder;
+  }
+  return out;
+}
+
+function parkingPaymentCents(entry: Record<string, unknown>): number {
+  const cents = Number(entry.amountCents);
+  if (Number.isFinite(cents) && cents > 0) return Math.round(cents);
+  const dollars = Number(entry.amount);
+  return Number.isFinite(dollars) && dollars > 0 ? Math.round(dollars * 100) : 0;
+}
+
+/** Local "yyyy-mm", the same key the ledger's month filter uses. */
+function businessParkingMonthKey(date: Date | null): string {
+  if (!date) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function toDateOrNull(value: unknown): Date | null {
   if (!value) return null;
   const candidate = value as { toDate?: () => Date; seconds?: number };

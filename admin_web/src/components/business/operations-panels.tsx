@@ -174,6 +174,7 @@ import {
   type BusinessParkingEntryError,
   type BusinessParkingEntryResult,
   type BusinessParkingPaymentMethod,
+  businessParkingCollectedByMonth,
 } from "@/lib/business-parking-entry";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import {
@@ -7719,6 +7720,21 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   // What the lot's parking has generated so far, in dollars: everything
   // collected plus everything still owed on cars that have run it up.
   const parkingGenerated = Math.round((parkingTotals.collected + parkingTotals.owed) * 100) / 100;
+  // The same money, month by month, for the reports. A stay has no natural
+  // month, so parked-car income only ever showed as a standing total and was
+  // left off the chart; what it does have is payment dates, and money counts
+  // in the month it arrived - the rule the activity scoreboard already uses.
+  const yearMonthKeys = lotMonthOptions(year).map((o) => o.value);
+  const yearParkingByMonth = useMemo(
+    () => businessParkingCollectedByMonth(
+      parkedCars.rows as Parameters<typeof businessParkingCollectedByMonth>[0],
+      yearMonthKeys,
+    ),
+    // yearMonthKeys is derived from year alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [parkedCars.rows, year],
+  );
+  const yearParking = yearParkingByMonth.reduce((a, b) => a + b, 0);
 
   // The summary cards above the Activity list, totalled over the selected
   // range: generated (billed), collected (money that arrived), owed (the
@@ -7771,11 +7787,12 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
         cents,
       });
     }
-    const parkingCents = Math.round(parkingGenerated * 100);
-    if (parkingCents > 0) rows.push({ key: "__parking", label: "Car parking", cents: parkingCents });
+    // Parked-car money the year actually collected - not the standing total,
+    // which is to-date and includes what is still owed.
+    if (yearParking > 0) rows.push({ key: "__parking", label: "Car parking", cents: yearParking });
     rows.sort((a, b) => b.cents - a.cents);
     return rows;
-  }, [yearRevenueByType, typeById, parkingGenerated]);
+  }, [yearRevenueByType, typeById, yearParking]);
   const revenueBreakdownTotal = revenueBreakdown.reduce((s, r) => s + r.cents, 0);
 
   // Year series for the reports charts.
@@ -7792,7 +7809,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const yearExpenseByMonth = yearMonths.map((m) => monthExpenseFor(m));
   const yearRevenue = yearRevenueByMonth.reduce((a, b) => a + b, 0);
   const yearExpense = yearExpenseByMonth.reduce((a, b) => a + b, 0);
-  const yearNet = yearRevenue - yearExpense;
+  // Net is against everything that came in: the activities the year billed
+  // and the parked-car money it collected. Leaving parking out made the
+  // chart's running-net line and the Net tile disagree with each other.
+  const yearIncome = yearRevenue + yearParking;
+  const yearNet = yearIncome - yearExpense;
 
   function closeModal() {
     if (busy) return;
@@ -8608,15 +8629,16 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
           </div>
           <div className="metric-grid">
             <div className="metric money"><span>Activity revenue {year}</span><b>{lotFormatCents(yearRevenue)}</b></div>
+            <div className="metric money"><span>Parked-car income {year}</span><b>{lotFormatCents(yearParking)}</b><small>Collected in {year}</small></div>
             <div className="metric"><span>Expenses {year}</span><b>{lotFormatCents(yearExpense)}</b></div>
             <div className={`metric ${yearNet < 0 ? "attention" : "good"}`}><span>Net profit</span><b>{lotFormatCents(yearNet)}</b></div>
-            <div className="metric"><span>Margin</span><b>{yearRevenue > 0 ? `${Math.round((yearNet / yearRevenue) * 100)}%` : "—"}</b></div>
+            <div className="metric"><span>Margin</span><b>{yearIncome > 0 ? `${Math.round((yearNet / yearIncome) * 100)}%` : "—"}</b></div>
           </div>
 
-          {/* Parked-car income sits apart from the activity revenue above: a
-              stay accrues and is paid across months, so these are the live
-              standing totals (to date), not a figure for the report year.
-              Folding a running balance into the year's Net would misstate both. */}
+          {/* The standing position of parked-car money - paid, still to come,
+              past due - is a different question from what the year collected,
+              and answers "who still owes us". It stays as a to-date figure;
+              the year's collected parking is in the tiles and chart above. */}
           <div style={{ marginTop: 20, marginBottom: 8 }}>
             <h3 style={{ margin: 0 }}>Parked-car income</h3>
             <small style={{ color: "var(--muted)" }}>What the lot is holding cars for — paid, still to come, and past due. Current standing.</small>
@@ -8628,9 +8650,9 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             <div className={`metric ${parkingOverdue.count > 0 ? "attention" : ""}`}><span>Overdue</span><b>{formatMoney(parkingOverdue.amount)}</b><small>{parkingOverdue.count} car{parkingOverdue.count === 1 ? "" : "s"} past the end date, still owing</small></div>
           </div>
           {reportView === "month" ? (
-            <LotMonthlyChart revenue={yearRevenueByMonth} expenses={yearExpenseByMonth} year={year} />
+            <LotMonthlyChart revenue={yearRevenueByMonth} parking={yearParkingByMonth} expenses={yearExpenseByMonth} year={year} />
           ) : (
-            <LotYearSummary revenue={yearRevenue} expense={yearExpense} net={yearNet} />
+            <LotYearSummary revenue={yearRevenue} parking={yearParking} expense={yearExpense} net={yearNet} />
           )}
           <LotRevenueBreakdown rows={revenueBreakdown} totalCents={revenueBreakdownTotal} year={year} />
           <LotExpenseBreakdown
@@ -8937,25 +8959,40 @@ function LotTypeRow({ row, uses, busy, onSave, onRemove }: { row: Record<string,
   );
 }
 
-function LotMonthlyChart({ revenue, expenses, year }: { revenue: number[]; expenses: number[]; year: number }) {
+function LotMonthlyChart({ revenue, parking, expenses, year }: { revenue: number[]; parking: number[]; expenses: number[]; year: number }) {
   const w = 720; const h = 240; const pad = 34;
-  const max = Math.max(1, ...revenue, ...expenses);
+  // Everything that came in that month: activities billed plus parked-car
+  // money collected. Both stack into one bar so the eye compares income to
+  // expenses, while the two shades keep them tellable apart.
+  const income = revenue.map((r, i) => r + (parking[i] ?? 0));
+  const max = Math.max(1, ...income, ...expenses);
   const bw = (w - pad * 2) / 12;
   const y = (v: number) => h - pad - (v / max) * (h - pad * 2);
   let running = 0;
-  const netPts = revenue.map((r, i) => { running += r - expenses[i]; return running; });
+  const netPts = income.map((r, i) => { running += r - expenses[i]; return running; });
   const netMax = Math.max(1, ...netPts.map((n) => Math.abs(n)));
   const ny = (v: number) => h / 2 - (v / netMax) * (h / 2 - pad);
   const months = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
   return (
     <div className="mini-table"><div style={{ minWidth: w }}>
-      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label={`Monthly revenue and expenses for ${year}`}>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label={`Monthly income and expenses for ${year}`}>
         {[0, 0.25, 0.5, 0.75, 1].map((g) => (<g key={g}><line x1={pad} x2={w - pad} y1={y(max * g)} y2={y(max * g)} stroke="#d7e7e5" /><text x={4} y={y(max * g) + 4} fontSize="9" fill="#64748b">{`$${Math.round((max * g) / 100)}`}</text></g>))}
-        {revenue.map((r, i) => (<g key={i}><title>{`${months[i]}: rev $${(r / 100).toFixed(0)}, exp $${(expenses[i] / 100).toFixed(0)}`}</title><rect x={pad + i * bw + 4} y={y(r)} width={bw / 2 - 4} height={h - pad - y(r)} fill="#0d9488" /><rect x={pad + i * bw + bw / 2} y={y(expenses[i])} width={bw / 2 - 4} height={h - pad - y(expenses[i])} fill="#f59e0b" /><text x={pad + i * bw + bw / 2} y={h - pad + 12} fontSize="9" fill="#64748b" textAnchor="middle">{months[i]}</text></g>))}
+        {revenue.map((r, i) => {
+          const p = parking[i] ?? 0;
+          return (
+            <g key={i}>
+              <title>{`${months[i]}: activities $${(r / 100).toFixed(0)}, parked cars $${(p / 100).toFixed(0)}, exp $${(expenses[i] / 100).toFixed(0)}`}</title>
+              <rect x={pad + i * bw + 4} y={y(r)} width={bw / 2 - 4} height={h - pad - y(r)} fill="#0d9488" />
+              {p > 0 && <rect x={pad + i * bw + 4} y={y(income[i])} width={bw / 2 - 4} height={y(r) - y(income[i])} fill="#5eead4" />}
+              <rect x={pad + i * bw + bw / 2} y={y(expenses[i])} width={bw / 2 - 4} height={h - pad - y(expenses[i])} fill="#f59e0b" />
+              <text x={pad + i * bw + bw / 2} y={h - pad + 12} fontSize="9" fill="#64748b" textAnchor="middle">{months[i]}</text>
+            </g>
+          );
+        })}
         <line x1={pad} x2={w - pad} y1={ny(0)} y2={ny(0)} stroke="#94a3b8" strokeDasharray="3 3" />
         <polyline fill="none" stroke="#b42318" strokeWidth="2" points={netPts.map((n, i) => `${pad + i * bw + bw / 2},${ny(n)}`).join(" ")} />
       </svg>
-      <p className="lst-hint">Revenue (teal), expenses (amber), running net (red).</p>
+      <p className="lst-hint">Activity revenue (teal), parked-car income collected that month (light teal), expenses (amber), running net (red).</p>
     </div></div>
   );
 }
@@ -9034,8 +9071,8 @@ function LotExpenseBreakdown({ spend, totalCents, year }: { spend: { lineId: str
   );
 }
 
-function LotYearSummary({ revenue, expense, net }: { revenue: number; expense: number; net: number }) {
-  const max = Math.max(1, revenue, expense, Math.abs(net));
+function LotYearSummary({ revenue, parking, expense, net }: { revenue: number; parking: number; expense: number; net: number }) {
+  const max = Math.max(1, revenue, parking, expense, Math.abs(net));
   const bar = (label: string, v: number, color: string) => (
     <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 90px", alignItems: "center", gap: 8, marginBottom: 6 }}>
       <span>{label}</span>
@@ -9043,7 +9080,7 @@ function LotYearSummary({ revenue, expense, net }: { revenue: number; expense: n
       <strong style={{ textAlign: "right" }}>{lotFormatCents(v)}</strong>
     </div>
   );
-  return (<div>{bar("Revenue", revenue, "#0d9488")}{bar("Expenses", expense, "#f59e0b")}{bar("Net", net, net < 0 ? "#dc2626" : "#059669")}</div>);
+  return (<div>{bar("Activity revenue", revenue, "#0d9488")}{bar("Parked-car income", parking, "#5eead4")}{bar("Expenses", expense, "#f59e0b")}{bar("Net", net, net < 0 ? "#dc2626" : "#059669")}</div>);
 }
 
 // The open-ended parking actions: bill through today, record an off-platform

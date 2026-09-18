@@ -8009,6 +8009,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lotNetProfit => 'Net profit';
 
   @override
+  String lotParkingIncomeForYear(String year) {
+    return 'Parked-car income $year';
+  }
+
+  @override
+  String lotParkingCollectedInYear(String year) {
+    return 'Collected in $year';
+  }
+
+  @override
+  String get lotLegendParkedCars => 'Parked cars';
+
+  @override
   String get lotMargin => 'Margin';
 
   @override
