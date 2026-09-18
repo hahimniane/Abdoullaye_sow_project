@@ -5,6 +5,7 @@
 library;
 
 import 'package:intl/intl.dart';
+import 'business_parking_entry.dart' show businessParkingCollectedByMonth;
 
 // ---------------------------------------------------------------------------
 // Vocabulary shared with the server.
@@ -628,12 +629,18 @@ class LotLedgerMath {
     required this.activities,
     required this.lines,
     required this.entries,
+    this.parkedCarRows = const [],
     String? nowMonth,
   }) : nowMonth = nowMonth ?? lotMonthKey(DateTime.now());
 
   final List<LotActivity> activities;
   final List<LotExpenseLine> lines;
   final List<LotExpenseEntry> entries;
+
+  /// The raw parkedCars documents, so the reports can place parked-car money
+  /// in the month it arrived. A stay has no natural month, which is why it
+  /// used to show only as a standing total and stayed off the chart.
+  final List<Map<String, dynamic>> parkedCarRows;
 
   /// The month the report is being read in. A standing charge is not owed for
   /// a month that has not arrived yet.
@@ -766,6 +773,14 @@ class LotLedgerMath {
 
   List<int> yearExpenseByMonth(int year) =>
       [for (final m in lotYearMonths(year)) monthExpenseCents(m)];
+
+  /// Parked-car money collected in each month of [year], by payment date -
+  /// the same rule the activity scoreboard follows. Mirrors the console.
+  List<int> yearParkingByMonth(int year) =>
+      businessParkingCollectedByMonth(parkedCarRows, lotYearMonths(year));
+
+  int yearParkingCents(int year) =>
+      yearParkingByMonth(year).fold(0, (a, b) => a + b);
 
   int yearRevenueCents(int year) =>
       yearRevenueByMonth(year).fold(0, (a, b) => a + b);

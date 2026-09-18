@@ -712,6 +712,70 @@ bool businessParkingMatchesPaymentFilter(
 /// duck typing rather than by importing `cloud_firestore`, so everything above
 /// [BusinessParkingService] stays free of Firebase and the tests can drive it
 /// with a plain fake.
+/// Parked-car money by the month it actually arrived, in cents, one figure
+/// per month in [months].
+///
+/// A deliberate mirror of `businessParkingCollectedByMonth` in the console's
+/// `business-parking-entry.ts`. A stay accrues and is paid across months, so
+/// it has no natural month - which is why parked-car money only ever showed
+/// as a standing total and stayed off the month-by-month chart. What a stay
+/// does have is payment dates: each instalment in `parkingPayments` carries
+/// the day it was taken, and a stay settled in one go carries when
+/// (`directPaymentReceivedAt` for cash, `paidAt` for a card, `updatedAt` for
+/// records written before either was stamped). Money counts in the month it
+/// came in, the rule the activity scoreboard already follows.
+///
+/// Money the record says arrived that no instalment explains is added once,
+/// to the settlement month; a stay with both is never counted twice.
+List<int> businessParkingCollectedByMonth(
+  List<Map<String, dynamic>> rows,
+  List<String> months, {
+  DateTime? now,
+}) {
+  final index = <String, int>{
+    for (var i = 0; i < months.length; i++) months[i]: i,
+  };
+  final out = List<int>.filled(months.length, 0);
+  for (final row in rows) {
+    final raw = row['parkingPayments'];
+    final payments = raw is List ? raw : const [];
+    var documented = 0;
+    for (final item in payments) {
+      if (item is! Map) continue;
+      final entry = Map<String, dynamic>.from(item);
+      final cents = _parkingPaymentCents(entry);
+      if (cents <= 0) continue;
+      documented += cents;
+      final slot = index[_parkingMonthKey(_toDateOrNull(entry['at']))];
+      if (slot != null) out[slot] += cents;
+    }
+    final collected = (businessParkingAmountPaid(row, now: now) * 100).round();
+    final remainder = collected - documented;
+    if (remainder <= 0) continue;
+    final settledOn = _toDateOrNull(row['directPaymentReceivedAt']) ??
+        _toDateOrNull(row['paidAt']) ??
+        _toDateOrNull(row['updatedAt']) ??
+        _toDateOrNull(row['createdAt']);
+    final slot = index[_parkingMonthKey(settledOn)];
+    if (slot != null) out[slot] += remainder;
+  }
+  return out;
+}
+
+int _parkingPaymentCents(Map<String, dynamic> entry) {
+  final cents = num.tryParse('${entry['amountCents'] ?? ''}') ?? 0;
+  if (cents.isFinite && cents > 0) return cents.round();
+  final dollars = num.tryParse('${entry['amount'] ?? ''}') ?? 0;
+  return dollars.isFinite && dollars > 0 ? (dollars * 100).round() : 0;
+}
+
+/// Local "yyyy-MM", the same key the ledger's month filter uses.
+String _parkingMonthKey(DateTime? date) {
+  if (date == null) return '';
+  final local = date.toLocal();
+  return '${local.year}-${local.month.toString().padLeft(2, '0')}';
+}
+
 DateTime? _toDateOrNull(Object? value) {
   if (value == null) return null;
   try {

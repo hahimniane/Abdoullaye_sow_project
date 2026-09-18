@@ -975,3 +975,23 @@ test("a failed save says so inside the modal, not behind it", () => {
   assert.ok(saves.some((s) => /createLotActivity/.test(s)));
   assert.ok(saves.some((s) => /upsertLotActivityType/.test(s)));
 });
+
+
+// Parked-car money was missing from the month-by-month chart because a stay
+// has no natural month. It now arrives by payment date, stacks on the income
+// bar, counts in the running net and the year's Net, and the year breakdown
+// stops mixing in a to-date standing total.
+test("the reports chart carries parked-car income, by the month it arrived", () => {
+  const panel = readFileSync(
+    "src/components/business/operations-panels.tsx", "utf8");
+  assert.match(panel, /businessParkingCollectedByMonth\(/);
+  assert.match(panel, /<LotMonthlyChart revenue=\{yearRevenueByMonth\} parking=\{yearParkingByMonth\}/);
+  assert.match(panel, /const yearIncome = yearRevenue \+ yearParking;/);
+  assert.match(panel, /const yearNet = yearIncome - yearExpense;/);
+  assert.match(panel, /<LotYearSummary revenue=\{yearRevenue\} parking=\{yearParking\}/);
+  // The breakdown row for parking is the year's collected figure.
+  assert.match(panel, /key: "__parking", label: "Car parking", cents: yearParking/);
+  assert.doesNotMatch(panel, /Math\.round\(parkingGenerated \* 100\)/);
+  // The chart counts parking in its running net.
+  assert.match(panel, /const income = revenue\.map\(\(r, i\) => r \+ \(parking\[i\] \?\? 0\)\);/);
+});

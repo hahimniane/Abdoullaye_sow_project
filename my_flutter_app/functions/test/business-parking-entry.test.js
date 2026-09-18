@@ -766,3 +766,21 @@ describe("editing a walk-up record", () => {
     }).reason, "nothing_to_change");
   });
 });
+
+// A card-paid stay stamped nothing about when the money arrived, so the
+// reports could only file it under whatever month the record was last
+// touched. The settlement handler now stamps paidAt, once.
+describe("a card-paid parking entry records when it was paid", () => {
+  const {readFileSync} = require("node:fs");
+  const source = readFileSync(
+      require("node:path").join(__dirname, "..", "index.js"), "utf8");
+  it("stamps paidAt on first settlement", () => {
+    const start = source.indexOf(
+        "async function completeBusinessParkingEntryPayment");
+    assert.ok(start > -1);
+    const body = source.slice(start, source.indexOf("\nasync function", start + 1));
+    assert.match(
+        body,
+        /\.\.\.\(firstSettlement && \{paidAt: FirestoreFieldValue\.serverTimestamp\(\)\}\)/);
+  });
+});

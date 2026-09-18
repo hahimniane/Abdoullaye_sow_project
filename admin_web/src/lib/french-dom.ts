@@ -4441,6 +4441,18 @@ Object.assign(TEXT_TRANSLATIONS, {
   "· owed only": "· dû uniquement",
   "· collected only": "· encaissé uniquement",
   "Month by month": "Mois par mois",
+  // The lot ledger's Reports tab. The chart hint and the year tiles were
+  // English-only; the parked-car income line is new.
+  "Activity revenue": "Recettes des prestations",
+  "Parked-car income": "Revenus du stationnement",
+  "Collected in": "Encaissé en",
+  "Where the revenue comes from": "D’où viennent les recettes",
+  "Generated so far": "Généré à ce jour",
+  "Already paid": "Déjà payé",
+  "Money yet to come": "Argent encore à venir",
+  "Overdue": "En retard",
+  "Activity revenue (teal), parked-car income collected that month (light teal), expenses (amber), running net (red).":
+    "Recettes des prestations (bleu-vert), revenus du stationnement encaissés ce mois-là (bleu-vert clair), dépenses (ambre), résultat cumulé (rouge).",
   "Year in summary": "Bilan annuel",
   "Net profit": "Bénéfice net",
   "Margin": "Marge",

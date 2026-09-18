@@ -3467,6 +3467,23 @@
     }
   },
   "lotNetProfit": "Bénéfice net",
+  "lotParkingIncomeForYear": "Revenus du stationnement {year}",
+  "@lotParkingIncomeForYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotParkingCollectedInYear": "Encaissé en {year}",
+  "@lotParkingCollectedInYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "lotLegendParkedCars": "Voitures stationnées",
   "lotMargin": "Marge",
   "lotParkingIncome": "Revenus du stationnement",
   "lotParkingIncomeNote": "Payé, à venir et en retard. État actuel.",

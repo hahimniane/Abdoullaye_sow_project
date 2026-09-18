@@ -12994,6 +12994,10 @@ async function completeBusinessParkingEntryPayment(target) {
     status: "reserved",
     paymentStatus: "succeeded",
     checkoutStatus: "completed",
+    // When the money arrived. A cash settlement stamps
+    // directPaymentReceivedAt; a card one stamped nothing, so the reports
+    // could only place it in whatever month the record was last touched.
+    ...(firstSettlement && {paidAt: FirestoreFieldValue.serverTimestamp()}),
     updatedAt: FirestoreFieldValue.serverTimestamp(),
   });
   await issueBusinessPayoutTransfer({

@@ -14250,6 +14250,24 @@ abstract class AppLocalizations {
   /// **'Net profit'**
   String get lotNetProfit;
 
+  /// No description provided for @lotParkingIncomeForYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked-car income {year}'**
+  String lotParkingIncomeForYear(String year);
+
+  /// No description provided for @lotParkingCollectedInYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected in {year}'**
+  String lotParkingCollectedInYear(String year);
+
+  /// No description provided for @lotLegendParkedCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked cars'**
+  String get lotLegendParkedCars;
+
   /// No description provided for @lotMargin.
   ///
   /// In en, this message translates to:
