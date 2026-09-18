@@ -737,19 +737,35 @@ List<int> businessParkingCollectedByMonth(
   };
   final out = List<int>.filled(months.length, 0);
   for (final row in rows) {
+    // What the record says was collected is the ceiling. Reverting a payment
+    // zeroes the running total but leaves the instalment list in place, so
+    // counting every listed instalment would put money on the chart that the
+    // standing total - correctly - no longer shows. Instalments are counted
+    // oldest first up to that ceiling; anything beyond it is history.
+    final collected = (businessParkingAmountPaid(row, now: now) * 100).round();
+    if (collected <= 0) continue;
     final raw = row['parkingPayments'];
-    final payments = raw is List ? raw : const [];
+    final payments = <({int cents, DateTime? at})>[
+      for (final item in (raw is List ? raw : const []))
+        if (item is Map)
+          (
+            cents: _parkingPaymentCents(Map<String, dynamic>.from(item)),
+            at: _toDateOrNull(item['at']),
+          ),
+    ]
+      ..removeWhere((p) => p.cents <= 0)
+      ..sort((a, b) => (a.at?.millisecondsSinceEpoch ?? 0)
+          .compareTo(b.at?.millisecondsSinceEpoch ?? 0));
     var documented = 0;
-    for (final item in payments) {
-      if (item is! Map) continue;
-      final entry = Map<String, dynamic>.from(item);
-      final cents = _parkingPaymentCents(entry);
-      if (cents <= 0) continue;
+    for (final entry in payments) {
+      final cents = entry.cents < collected - documented
+          ? entry.cents
+          : collected - documented;
+      if (cents <= 0) break;
       documented += cents;
-      final slot = index[_parkingMonthKey(_toDateOrNull(entry['at']))];
+      final slot = index[_parkingMonthKey(entry.at)];
       if (slot != null) out[slot] += cents;
     }
-    final collected = (businessParkingAmountPaid(row, now: now) * 100).round();
     final remainder = collected - documented;
     if (remainder <= 0) continue;
     final settledOn = _toDateOrNull(row['directPaymentReceivedAt']) ??

@@ -529,18 +529,28 @@ export function businessParkingCollectedByMonth(
   const index = new Map(months.map((m, i) => [m, i] as const));
   const out = months.map(() => 0);
   for (const row of rows) {
-    const payments = Array.isArray(row?.parkingPayments) ?
-      (row.parkingPayments as unknown[]) : [];
+    // What the record says was collected is the ceiling. Reverting a payment
+    // zeroes the running total but leaves the instalment list in place, so
+    // counting every listed instalment would put money on the chart that the
+    // standing total - correctly - no longer shows. Instalments are counted
+    // oldest first up to that ceiling; anything beyond it is history, not
+    // income.
+    const collected = Math.round(businessParkingAmountPaid(row, now) * 100);
+    if (collected <= 0) continue;
+    const payments = (Array.isArray(row?.parkingPayments) ?
+      (row.parkingPayments as unknown[]) : [])
+        .map((item) => (item ?? {}) as Record<string, unknown>)
+        .map((entry) => ({ cents: parkingPaymentCents(entry), at: toDateOrNull(entry.at) }))
+        .filter((entry) => entry.cents > 0)
+        .sort((a, b) => (a.at?.getTime() ?? 0) - (b.at?.getTime() ?? 0));
     let documented = 0;
-    for (const item of payments) {
-      const entry = (item ?? {}) as Record<string, unknown>;
-      const cents = parkingPaymentCents(entry);
-      if (cents <= 0) continue;
+    for (const entry of payments) {
+      const cents = Math.min(entry.cents, collected - documented);
+      if (cents <= 0) break;
       documented += cents;
-      const slot = index.get(businessParkingMonthKey(toDateOrNull(entry.at)));
+      const slot = index.get(businessParkingMonthKey(entry.at));
       if (slot !== undefined) out[slot] += cents;
     }
-    const collected = Math.round(businessParkingAmountPaid(row, now) * 100);
     const remainder = collected - documented;
     if (remainder <= 0) continue;
     const settledOn =

@@ -97,6 +97,38 @@ void main() {
     expect(businessParkingCollectedByMonth(rows, months), [0, 0, 0, 0]);
   });
 
+  test("a reverted stay's surviving instalment list puts nothing on the chart",
+      () {
+    final rows = [
+      stay({
+        'paymentStatus': 'awaiting_direct_payment',
+        'amountDueCents': 30000,
+        'amountPaidCents': 0,
+        'parkingPayments': [
+          {'amountCents': 5000, 'at': at('2026-08-03T10:00:00')},
+        ],
+      }),
+    ];
+    expect(businessParkingCollectedByMonth(rows, months), [0, 0, 0, 0]);
+  });
+
+  test('a row never puts more on the chart than it says was collected', () {
+    final rows = [
+      stay({
+        'paymentStatus': 'awaiting_direct_payment',
+        'amountDueCents': 30000,
+        'amountPaidCents': 3000,
+        'parkingPayments': [
+          {'amountCents': 5000, 'at': at('2026-08-03T10:00:00')},
+          {'amountCents': 5000, 'at': at('2026-09-03T10:00:00')},
+        ],
+      }),
+    ];
+    final byMonth = businessParkingCollectedByMonth(rows, months);
+    expect(byMonth.fold(0, (a, b) => a + b), 3000);
+    expect(byMonth, [0, 3000, 0, 0]);
+  });
+
   test('the ledger maths hands the reports the same series', () {
     final math = LotLedgerMath(
       activities: const [],
