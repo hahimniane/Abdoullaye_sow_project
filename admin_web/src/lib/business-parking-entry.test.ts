@@ -1267,3 +1267,30 @@ test("an unpaid stay contributes nothing however much it has run up", () => {
   }];
   assert.deepEqual(businessParkingCollectedByMonth(rows, MONTHS), [0, 0, 0, 0]);
 });
+
+// Reverting a payment zeroes the running total but leaves the instalment list
+// behind. The standing total correctly shows nothing collected; the chart
+// must agree with it, or the year reads more than all-time.
+test("a reverted stay's surviving instalment list puts nothing on the chart", () => {
+  const rows = [{
+    source: "business", status: "reserved", paymentStatus: "awaiting_direct_payment",
+    amountDueCents: 30000, amountPaidCents: 0,
+    parkingPayments: [{ amountCents: 5000, at: stamp("2026-08-03T10:00:00") }],
+  }];
+  assert.deepEqual(businessParkingCollectedByMonth(rows, MONTHS), [0, 0, 0, 0]);
+});
+
+test("a row never puts more on the chart than it says was collected", () => {
+  const rows = [{
+    source: "business", status: "reserved", paymentStatus: "awaiting_direct_payment",
+    amountDueCents: 30000, amountPaidCents: 3000,
+    parkingPayments: [
+      { amountCents: 5000, at: stamp("2026-08-03T10:00:00") },
+      { amountCents: 5000, at: stamp("2026-09-03T10:00:00") },
+    ],
+  }];
+  const byMonth = businessParkingCollectedByMonth(rows, MONTHS);
+  assert.equal(byMonth.reduce((a, b) => a + b, 0), 3000);
+  // Oldest first: the ceiling is spent on August, nothing reaches September.
+  assert.deepEqual(byMonth, [0, 3000, 0, 0]);
+});
