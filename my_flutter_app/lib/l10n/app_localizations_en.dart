@@ -8649,4 +8649,368 @@ class AppLocalizationsEn extends AppLocalizations {
   String lotErrBelowAmountPaid(String amount) {
     return '$amount has already been taken on this entry. The fee cannot go below it.';
   }
+
+  @override
+  String get ctrTitle => 'Containers';
+
+  @override
+  String get ctrSubtitle => 'What went into each box, recorded from the yard.';
+
+  @override
+  String get ctrStatusLoading => 'Loading';
+
+  @override
+  String get ctrStatusShipped => 'Shipped';
+
+  @override
+  String get ctrStatusArrived => 'Arrived';
+
+  @override
+  String get ctrNewContainer => 'New container';
+
+  @override
+  String get ctrEditContainer => 'Edit container';
+
+  @override
+  String get ctrCreate => 'Create';
+
+  @override
+  String get ctrCreating => 'Creating…';
+
+  @override
+  String get ctrLabel => 'Working name';
+
+  @override
+  String get ctrLabelHint => 'e.g. Sailing 3 Oct, box 2';
+
+  @override
+  String get ctrNumber => 'Container number';
+
+  @override
+  String get ctrNumberHint =>
+      'Four letters and seven digits, once the line sends it';
+
+  @override
+  String get ctrBookingReference => 'Booking / BL reference';
+
+  @override
+  String get ctrDestination => 'Destination';
+
+  @override
+  String get ctrChooseDestination => 'Choose a country';
+
+  @override
+  String get ctrNoDestinations =>
+      'No destinations set up yet. Add countries under Services & coverage first.';
+
+  @override
+  String get ctrDestinationUnset => 'No destination yet';
+
+  @override
+  String get ctrNotes => 'Notes';
+
+  @override
+  String get ctrLockedNote =>
+      'Shipped. The list is the record of what went; only the notes stay open.';
+
+  @override
+  String get ctrNoContainers => 'No containers yet.';
+
+  @override
+  String get ctrNoContainersHint => 'Create one when you start loading a box.';
+
+  @override
+  String get ctrNoLoading => 'No container is loading.';
+
+  @override
+  String get ctrNoShipped => 'No container has shipped.';
+
+  @override
+  String get ctrNoArrived => 'No container has arrived yet.';
+
+  @override
+  String get ctrEmptyContainer => 'Nothing loaded yet';
+
+  @override
+  String get ctrEmptyContainerHint =>
+      'Add the first car, barrels or anything else that went in.';
+
+  @override
+  String ctrCarsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cars',
+      one: '1 car',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrBarrelsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count barrels',
+      one: '1 barrel',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrOtherCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count other items',
+      one: '1 other item',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrSailed(String date) {
+    return 'Sailed $date';
+  }
+
+  @override
+  String ctrArrivedOn(String date) {
+    return 'Arrived $date';
+  }
+
+  @override
+  String get ctrLoaded => 'Loaded';
+
+  @override
+  String get ctrAddLine => 'Add to the container';
+
+  @override
+  String get ctrAdd => 'Add';
+
+  @override
+  String get ctrAdding => 'Adding…';
+
+  @override
+  String get ctrKind => 'What is it?';
+
+  @override
+  String get ctrKindCar => 'A car';
+
+  @override
+  String get ctrKindBarrels => 'Barrels';
+
+  @override
+  String get ctrKindOther => 'Something else';
+
+  @override
+  String get ctrQuantity => 'How many';
+
+  @override
+  String get ctrDescription => 'What it is';
+
+  @override
+  String get ctrOwner => 'Whose is it?';
+
+  @override
+  String get ctrOwnerCustomer => 'A customer\'s';
+
+  @override
+  String get ctrOwnerCustomerNote =>
+      'Name the customer, so the list says whose it is.';
+
+  @override
+  String get ctrOwnerStock => 'Business stock';
+
+  @override
+  String get ctrOwnerStockNote => 'Bought to sell abroad. No customer to name.';
+
+  @override
+  String get ctrStock => 'Stock';
+
+  @override
+  String ctrBarrelsQty(int count) {
+    return '$count barrels';
+  }
+
+  @override
+  String ctrTimes(int count) {
+    return '× $count';
+  }
+
+  @override
+  String get ctrRemoveLine => 'Remove from the container';
+
+  @override
+  String get ctrRemoveLineTitle => 'Remove this line?';
+
+  @override
+  String get ctrRemoveLineMessage =>
+      'It comes off the loading list. You can add it again.';
+
+  @override
+  String get ctrRemove => 'Remove';
+
+  @override
+  String get ctrMoveLine => 'Move to another container';
+
+  @override
+  String get ctrMoveTo => 'Move to';
+
+  @override
+  String get ctrNoOtherLoading => 'No other container is loading right now.';
+
+  @override
+  String get ctrMoved => 'Moved.';
+
+  @override
+  String get ctrShip => 'Mark shipped';
+
+  @override
+  String get ctrShipTitle => 'Mark this container shipped?';
+
+  @override
+  String get ctrShipMessage =>
+      'The list becomes the record of what went. Only the notes stay open after this.';
+
+  @override
+  String get ctrShippedDone => 'Marked shipped.';
+
+  @override
+  String get ctrArrive => 'Mark arrived';
+
+  @override
+  String get ctrArriveTitle => 'Mark this container arrived?';
+
+  @override
+  String get ctrArriveMessage => 'Its cars are free to go on a new container.';
+
+  @override
+  String get ctrArrivedDone => 'Marked arrived.';
+
+  @override
+  String get ctrDelete => 'Delete container';
+
+  @override
+  String get ctrDeleteTitle => 'Delete this container?';
+
+  @override
+  String get ctrDeleteMessage =>
+      'Only an empty container that is still loading can be deleted.';
+
+  @override
+  String get ctrDeleted => 'Deleted.';
+
+  @override
+  String get ctrOpenDocument => 'Loading list';
+
+  @override
+  String get ctrSearchHint => 'VIN, customer or phone';
+
+  @override
+  String get ctrNoSearchMatch => 'Nothing matches.';
+
+  @override
+  String ctrHitsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count matches',
+      one: '1 match',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrLinkShipped(String container, String date) {
+    return 'In $container · sailed $date';
+  }
+
+  @override
+  String ctrLinkShippedNoDate(String container) {
+    return 'In $container';
+  }
+
+  @override
+  String ctrLinkLoading(String name) {
+    return 'Loading in $name';
+  }
+
+  @override
+  String get ctrCreated => 'Container created.';
+
+  @override
+  String get ctrUpdated => 'Saved.';
+
+  @override
+  String get ctrLineAdded => 'Added.';
+
+  @override
+  String get ctrLineRemoved => 'Removed.';
+
+  @override
+  String get ctrCouldNotLoad => 'The containers could not be loaded.';
+
+  @override
+  String get ctrErrLabelRequired => 'Give the container a name to find it by.';
+
+  @override
+  String get ctrErrNumberInvalid =>
+      'A container number is four letters and seven digits, like MSKU1234567. Booking numbers and bills of lading go in the reference field.';
+
+  @override
+  String get ctrErrStatusInvalid =>
+      'That is not a state a container can be in.';
+
+  @override
+  String get ctrErrTransitionInvalid =>
+      'A container only moves forward: loading, then shipped, then arrived.';
+
+  @override
+  String get ctrErrDestinationRequired =>
+      'Choose where this container is going before it ships.';
+
+  @override
+  String get ctrErrEmpty =>
+      'Nothing is on this container yet, so it can\'t ship.';
+
+  @override
+  String get ctrErrLocked =>
+      'This container has shipped. Its list is the record of what went; add a note instead of changing it.';
+
+  @override
+  String get ctrErrHasLines =>
+      'This container has lines on it. Remove them first, or leave it.';
+
+  @override
+  String get ctrErrNotFound => 'Container not found.';
+
+  @override
+  String get ctrErrLineNotFound => 'That line is no longer on the container.';
+
+  @override
+  String get ctrErrLineKind =>
+      'Say what this line is: a car, barrels, or something else.';
+
+  @override
+  String get ctrErrQuantity => 'Enter how many.';
+
+  @override
+  String get ctrErrDescription => 'Say what it is.';
+
+  @override
+  String get ctrErrOwnerKind =>
+      'Say whose this is: a customer, or your own stock.';
+
+  @override
+  String get ctrErrVinAlreadyLoaded =>
+      'This car is already on another container that hasn\'t arrived.';
+
+  @override
+  String ctrErrVinAlreadyLoadedIn(String container) {
+    return 'This car is already on $container, which hasn\'t arrived.';
+  }
+
+  @override
+  String get ctrErrMoveTarget =>
+      'You can only move a line to a container that is still loading.';
 }

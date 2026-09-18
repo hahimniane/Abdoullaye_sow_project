@@ -7,6 +7,7 @@ abstract final class BusinessPermission {
   static const transport = 'transport';
   static const parking = 'parking';
   static const ledger = 'ledger';
+  static const containers = 'containers';
   static const destinations = 'destinations';
   static const people = 'people';
   static const reviews = 'reviews';

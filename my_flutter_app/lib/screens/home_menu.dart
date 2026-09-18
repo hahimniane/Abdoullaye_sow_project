@@ -19,12 +19,15 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
+import '../services/container_manifest.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
+import '../widgets/container_link_chip.dart';
 import '../widgets/customer_notification_bell.dart';
 import 'business_assistant_screen.dart';
 import 'business_reviews_screen.dart';
 import 'business_transport_screen.dart';
+import 'containers_screen.dart';
 import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
@@ -168,7 +171,17 @@ class _HomeMenuState extends State<HomeMenu> {
   StreamSubscription<QuerySnapshot>? _freightShipmentsSubscription;
   StreamSubscription<QuerySnapshot>? _transportRequestsSubscription;
   StreamSubscription<QuerySnapshot>? _transportOpportunitiesSubscription;
+  StreamSubscription<QuerySnapshot>? _containersSubscription;
+  StreamSubscription<QuerySnapshot>? _containerLinesSubscription;
   bool _parkedLoaded = false;
+
+  /// VIN → where the car is as far as the containers know (loading in a box,
+  /// or sailed on one). Built once per snapshot from the two container
+  /// collections this screen already streams, so a parked-car row costs one
+  /// map lookup and never a query of its own.
+  List<ShippingContainer> _containers = const [];
+  List<ContainerLine> _containerLines = const [];
+  Map<String, ContainerVinLink> _containerLinks = const {};
 
   /// The lot's capacity, from the business record. Read once when parking is
   /// in scope; drives the "Spaces" tile, which stays hidden while it is zero
@@ -232,6 +245,33 @@ class _HomeMenuState extends State<HomeMenu> {
           );
     } else {
       _parkedLoaded = true;
+    }
+
+    // The containers permission is what lets a business read its own boxes;
+    // without it the rules refuse the query and the rows simply carry no link.
+    final containersBusinessId = auth.businessId ?? '';
+    if (auth.hasBusinessPermission(BusinessPermission.containers) &&
+        containersBusinessId.isNotEmpty) {
+      _containersSubscription = FirebaseFirestore.instance
+          .collection('containers')
+          .where('businessId', isEqualTo: containersBusinessId)
+          .snapshots()
+          .listen((snapshot) {
+        _containers = [
+          for (final d in snapshot.docs) ShippingContainer.fromMap(d.id, d.data()),
+        ];
+        _rebuildContainerLinks();
+      }, onError: (_) {});
+      _containerLinesSubscription = FirebaseFirestore.instance
+          .collection('containerLines')
+          .where('businessId', isEqualTo: containersBusinessId)
+          .snapshots()
+          .listen((snapshot) {
+        _containerLines = [
+          for (final d in snapshot.docs) ContainerLine.fromMap(d.id, d.data()),
+        ];
+        _rebuildContainerLinks();
+      }, onError: (_) {});
     }
 
     if (auth.hasBusinessPermission(BusinessPermission.barrels)) {
@@ -417,6 +457,13 @@ class _HomeMenuState extends State<HomeMenu> {
     return businessParkingTotals(rows, spacesTotal: _parkingTotalSpaces);
   }
 
+  void _rebuildContainerLinks() {
+    if (!mounted) return;
+    setState(() {
+      _containerLinks = containerVinLinks(_containerLines, _containers);
+    });
+  }
+
   void _rebuildActivityRecords() {
     if (!mounted) return;
     final combined = <ActivityRecord>[];
@@ -570,6 +617,8 @@ class _HomeMenuState extends State<HomeMenu> {
     _freightShipmentsSubscription?.cancel();
     _transportRequestsSubscription?.cancel();
     _transportOpportunitiesSubscription?.cancel();
+    _containersSubscription?.cancel();
+    _containerLinesSubscription?.cancel();
     super.dispose();
   }
 
@@ -631,6 +680,7 @@ class _HomeMenuState extends State<HomeMenu> {
                   onDenseListChanged: (dense) =>
                       setState(() => _parkingDenseList = dense),
                   staffNames: _staffNames,
+                  containerLinks: _containerLinks,
                   selectedCategory: _selectedCategory,
                   onCategoryChanged: _selectCategory,
                   facets: _parkingFacets,
@@ -786,6 +836,11 @@ class _ServicesSection extends StatelessWidget {
     final canUseLotLedger =
         auth.hasBusinessPermission(BusinessPermission.ledger) &&
         ledgerBusinessId.isNotEmpty;
+    // Containers - what the business loaded into each box - is its own
+    // permission, mirroring the console's `containers` tab.
+    final canUseContainers =
+        auth.hasBusinessPermission(BusinessPermission.containers) &&
+        ledgerBusinessId.isNotEmpty;
     // Same two gates as the Car Transport tile itself: the business offers
     // transport and this person holds the transport permission. Everything
     // behind the button - `submitTransportQuote`, `withdrawTransportQuote`,
@@ -929,7 +984,7 @@ class _ServicesSection extends StatelessWidget {
           // they read as a list you can walk into rather than as two more
           // buttons competing with the one action above them. Each says what
           // is inside, because a name alone makes people guess.
-          if (canUseLotLedger || canWorkTransport) ...[
+          if (canUseLotLedger || canUseContainers || canWorkTransport) ...[
             const SizedBox(height: 12),
             _DestinationGroup(
               rows: [
@@ -944,6 +999,22 @@ class _ServicesSection extends StatelessWidget {
                         MaterialPageRoute<void>(
                           builder: (_) =>
                               LotLedgerScreen(businessId: ledgerBusinessId),
+                        ),
+                      );
+                    },
+                  ),
+                // The loading list: which box each car and barrel went into.
+                if (canUseContainers)
+                  _Destination(
+                    rowKey: const Key('open-containers'),
+                    icon: Icons.view_in_ar_outlined,
+                    title: l10n.ctrTitle,
+                    subtitle: l10n.ctrSubtitle,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              ContainersScreen(businessId: ledgerBusinessId),
                         ),
                       );
                     },
@@ -1240,6 +1311,7 @@ class _ActivitySection extends StatelessWidget {
     required this.denseList,
     required this.onDenseListChanged,
     required this.staffNames,
+    required this.containerLinks,
     required this.selectedCategory,
     required this.onCategoryChanged,
     required this.facets,
@@ -1261,6 +1333,10 @@ class _ActivitySection extends StatelessWidget {
   final bool denseList;
   final ValueChanged<bool> onDenseListChanged;
   final Map<String, String> staffNames;
+
+  /// VIN → container link, for the parked-car rows. Empty when the business
+  /// holds no containers permission.
+  final Map<String, ContainerVinLink> containerLinks;
   final ServiceCategory selectedCategory;
   final ValueChanged<ServiceCategory> onCategoryChanged;
   final ParkingFacets facets;
@@ -1607,6 +1683,8 @@ class _ActivitySection extends StatelessWidget {
                 l10n: l10n,
                 car: car,
                 staffNames: staffNames,
+                containerLink:
+                    containerLinks[car.vinNumber.trim().toUpperCase()],
                 onTap: () => Navigator.pushNamed(
                   context,
                   '/parked-car-details',
@@ -1616,6 +1694,14 @@ class _ActivitySection extends StatelessWidget {
             }
             final card = _RecordCard(
               title: record.title,
+              containerLink:
+                  record.category == ServiceCategory.parking &&
+                      record.payload is ParkedCar
+                  ? containerLinks[(record.payload as ParkedCar)
+                      .vinNumber
+                      .trim()
+                      .toUpperCase()]
+                  : null,
               subtitle: paymentNote.isEmpty
                   ? record.subtitle
                   : '${record.subtitle} • $paymentNote',
@@ -1851,12 +1937,17 @@ class _ParkingListRow extends StatelessWidget {
     required this.car,
     required this.staffNames,
     required this.onTap,
+    this.containerLink,
   });
 
   final AppLocalizations l10n;
   final ParkedCar car;
   final Map<String, String> staffNames;
   final VoidCallback onTap;
+
+  /// Where this car is, if it is on a container that has not arrived:
+  /// "In MSKU1234567 · sailed 3 Oct", or "Loading in `name`".
+  final ContainerVinLink? containerLink;
 
   String _staff(Object? uid) {
     final key = (uid ?? '').toString().trim();
@@ -1986,6 +2077,8 @@ class _ParkingListRow extends StatelessWidget {
                         else
                           _rowMeta(businessParkingPaymentStatusLabel(
                               l10n, fields)),
+                        if (containerLink != null)
+                          ContainerLinkChip(link: containerLink!),
                         _rowMeta(
                           '${dates.format(car.parkingDate)} → '
                           '${openEnded ? l10n.parkingOpenEnded : dates.format(car.parkingEndDate!)}',
@@ -2030,6 +2123,7 @@ class _RecordCard extends StatelessWidget {
     required this.categoryLabel,
     required this.categoryIcon,
     this.paymentFields,
+    this.containerLink,
   });
 
   final String title;
@@ -2037,6 +2131,9 @@ class _RecordCard extends StatelessWidget {
   final DateTime date;
   final String categoryLabel;
   final IconData categoryIcon;
+
+  /// Where a parked car is, when it is on a container that has not arrived.
+  final ContainerVinLink? containerLink;
 
   /// Raw parked-car fields, or null for a record that has no payment state of
   /// its own to show.
@@ -2104,6 +2201,8 @@ class _RecordCard extends StatelessWidget {
                             BusinessParkingPaymentBadge(
                               paymentFields: paymentFields!,
                             ),
+                          if (containerLink != null)
+                            ContainerLinkChip(link: containerLink!),
                         ],
                       ),
                     ),

@@ -14,6 +14,7 @@ import {
   CalendarClock,
   Car,
   ClipboardList,
+  Container,
   ExternalLink,
   LogOut,
   MapPinned,
@@ -30,6 +31,7 @@ import {
 } from "lucide-react";
 
 import {AssistantWidget} from "@/components/business/assistant-widget";
+import {ContainersPanel} from "@/components/business/containers-panel";
 import {GrowthPanel} from "@/components/business/growth-panel";
 import {
   BarrelsPanel,
@@ -618,6 +620,9 @@ export function BusinessConsole({
               business={business}
               previewMode={previewMode}
             />
+          )}
+          {activeTab === "containers" && (
+            <ContainersPanel businessId={businessId} previewMode={previewMode} />
           )}
           {activeTab === "destinations" && (
             <div className="business-service-workspace">
@@ -1620,6 +1625,7 @@ function tabIcon(tab: BusinessTab) {
     transport: <Truck {...props} />,
     parking: <ParkingCircle {...props} />,
     ledger: <BookOpen {...props} />,
+    containers: <Container {...props} />,
     destinations: <MapPinned {...props} />,
     people: <UserCog {...props} />,
     reviews: <Star {...props} />,

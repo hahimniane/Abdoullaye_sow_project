@@ -305,6 +305,11 @@ final _permissionOptions = <_PermissionOption>[
     (l10n) => l10n.lotLedgerTitle,
   ),
   _PermissionOption(
+    BusinessPermission.containers,
+    Icons.view_in_ar_outlined,
+    (l10n) => l10n.ctrTitle,
+  ),
+  _PermissionOption(
     BusinessPermission.destinations,
     Icons.public_outlined,
     (l10n) => l10n.destinations,

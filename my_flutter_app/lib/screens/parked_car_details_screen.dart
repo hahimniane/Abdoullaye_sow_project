@@ -16,6 +16,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../data/car_catalog.dart';
 import '../services/business_parking_entry.dart';
+import '../services/container_manifest.dart';
 import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
@@ -28,6 +29,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/business_parking_payment_badge.dart';
+import '../widgets/container_link_chip.dart';
 
 class ParkedCarDetailsScreen extends StatefulWidget {
   final ParkedCar parkedCar;
@@ -95,6 +97,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   // picker. Best-effort: reading the team needs the people permission, so a
   // parking-only staff member simply gets no names and can still mark paid.
   Map<String, String> _staffNames = const {};
+
+  /// Where this car is as far as the containers know, when it is on a box
+  /// that has not arrived. One read for this VIN when the screen opens;
+  /// null until then, and null when the car is on no open container.
+  ContainerVinLink? _containerLink;
   bool _partOpen = false;
   bool _partByDays = true;
   final _partValueController = TextEditingController();
@@ -117,6 +124,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _trackingCode = widget.parkedCar.trackingCode;
     _paymentFields = Map<String, dynamic>.from(widget.parkedCar.paymentFields);
     _loadStaffNames();
+    _loadContainerLink();
     _customerPhoneController = TextEditingController(
       text: (_paymentFields['customerPhone'] ?? '').toString(),
     );
@@ -1014,6 +1022,13 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                                         paymentFields: _paymentFields,
                                       ),
                                     ],
+                                    // Where the car is, when a container has
+                                    // it: beside the code, where the lot looks
+                                    // first.
+                                    if (_containerLink != null) ...[
+                                      const SizedBox(height: 8),
+                                      ContainerLinkChip(link: _containerLink!),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -1426,6 +1441,43 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       });
     } catch (_) {
       // No permission to read the team: names stay blank, the flow still works.
+    }
+  }
+
+  /// The container this car sits on, if any. Two equality filters, so no
+  /// composite index; gated on the containers permission because the rules
+  /// refuse the read without it.
+  Future<void> _loadContainerLink() async {
+    final vin = widget.parkedCar.vinNumber.trim().toUpperCase();
+    final businessId = (_paymentFields['businessId'] ?? '').toString().trim();
+    if (vin.length < containerMinVin || businessId.isEmpty) return;
+    final auth = context.read<AuthProvider>();
+    if (!auth.hasBusinessPermission(BusinessPermission.containers)) return;
+    try {
+      final lines = await FirebaseFirestore.instance
+          .collection('containerLines')
+          .where('businessId', isEqualTo: businessId)
+          .where('vinNumber', isEqualTo: vin)
+          .limit(10)
+          .get();
+      final parsed = [
+        for (final d in lines.docs) ContainerLine.fromMap(d.id, d.data()),
+      ];
+      final containerId = openContainerHoldingVin(parsed);
+      if (containerId.isEmpty || !mounted) return;
+      final doc = await FirebaseFirestore.instance
+          .collection('containers')
+          .doc(containerId)
+          .get();
+      final data = doc.data();
+      if (data == null || !mounted) return;
+      final links = containerVinLinks(
+        parsed,
+        [ShippingContainer.fromMap(doc.id, data)],
+      );
+      setState(() => _containerLink = links[vin]);
+    } catch (_) {
+      // Not readable, or not there: the card simply carries no link.
     }
   }
 

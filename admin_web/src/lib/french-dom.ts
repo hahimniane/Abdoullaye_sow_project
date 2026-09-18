@@ -4565,6 +4565,146 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Record payment": "Enregistrer le paiement",
   "Mark this activity's money as received.":
     "Marquer l’argent de cette activité comme reçu.",
+  // Containers — the business's own loading lists (containers-panel.tsx,
+  // container-manifest.ts, vin-lookup.ts). Whole sentences, longest first
+  // where one contains another, so the substring pass never leaves a hybrid.
+  "Containers": "Conteneurs",
+  "Loading lists and sailings": "Listes de chargement et départs",
+  "Your own loading lists: what went into each box, when it sailed, and when it landed. Customers do not see this.":
+    "Vos propres listes de chargement : ce qui est entré dans chaque boîte, quand elle est partie et quand elle est arrivée. Les clients ne voient pas ceci.",
+  "Open the loading list": "Ouvrir la liste de chargement",
+  "The loading list is not ready yet. Try again in a moment.":
+    "La liste de chargement n’est pas encore prête. Réessayez dans un instant.",
+  "Loading list": "Liste de chargement",
+  "All containers": "Tous les conteneurs",
+  "New container": "Nouveau conteneur",
+  "Edit container": "Modifier le conteneur",
+  "Start container": "Créer le conteneur",
+  "Add a note": "Ajouter une note",
+  "Mark shipped": "Marquer expédié",
+  "Mark arrived": "Marquer arrivé",
+  "Marked as shipped.": "Marqué comme expédié.",
+  "Marked as arrived.": "Marqué comme arrivé.",
+  "Container updated.": "Conteneur mis à jour.",
+  "Container started.": "Conteneur créé.",
+  "Container deleted.": "Conteneur supprimé.",
+  "Container number": "Numéro de conteneur",
+  "Booking / BL reference": "Référence de réservation / BL",
+  "Working name": "Nom de travail",
+  "Not chosen yet": "Pas encore choisie",
+  "Your destinations come from Services & coverage.":
+    "Vos destinations viennent de Services et couverture.",
+  "Four letters and seven digits, when the shipping line sends it.":
+    "Quatre lettres et sept chiffres, quand la compagnie maritime l’envoie.",
+  "Give it a working name now; the container number can come later.":
+    "Donnez-lui un nom de travail maintenant ; le numéro de conteneur peut venir plus tard.",
+  "Name, number, reference and destination stay editable until it ships.":
+    "Le nom, le numéro, la référence et la destination restent modifiables jusqu’au départ.",
+  "The list is the record of what went. A correction after sailing is written beside it, as a note.":
+    "La liste est le registre de ce qui est parti. Une correction après le départ s’écrit à côté, sous forme de note.",
+  "On board": "À bord",
+  "cars · barrels · other": "voitures · barils · autres",
+  "Every state": "Tous les états",
+  "Every destination": "Toutes les destinations",
+  "Loading": "En chargement",
+  "Shipped": "Expédié",
+  "Arrived": "Arrivé",
+  "Started": "Démarré",
+  "Sailed": "Parti",
+  "Container": "Conteneur",
+  "No containers yet. Start one when you begin loading a box.":
+    "Aucun conteneur pour l’instant. Créez-en un quand vous commencez à charger une boîte.",
+  "No containers match this filter.": "Aucun conteneur ne correspond à ce filtre.",
+  "Nothing loaded matches that search.":
+    "Aucun chargement ne correspond à cette recherche.",
+  "Nothing loaded yet. Add the first line.":
+    "Rien de chargé pour l’instant. Ajoutez la première ligne.",
+  "This container has no lines.": "Ce conteneur n’a aucune ligne.",
+  "Lines": "Lignes",
+  "Cargo": "Cargaison",
+  "Whose": "À qui",
+  "Added": "Ajouté",
+  "Business stock — your own goods, nobody to name":
+    "Stock de l’entreprise — vos propres marchandises, personne à nommer",
+  "Business stock": "Stock de l’entreprise",
+  "A customer's — say who": "À un client — dites qui",
+  "Add a line": "Ajouter une ligne",
+  "Add line": "Ajouter la ligne",
+  "Line added.": "Ligne ajoutée.",
+  "Line removed.": "Ligne retirée.",
+  "Line moved.": "Ligne déplacée.",
+  "Line added": "Ligne ajoutée",
+  "Line removed": "Ligne retirée",
+  "Line moved": "Ligne déplacée",
+  "Deleted": "Supprimé",
+  "Changed": "Changé",
+  "— what went in, and whose it is.": "— ce qui est entré, et à qui c’est.",
+  "A car": "Une voiture",
+  "How many barrels": "Combien de barils",
+  "What it is": "Ce que c’est",
+  "How many": "Combien",
+  "Go to that container": "Aller à ce conteneur",
+  "Move line": "Déplacer la ligne",
+  "goes to another container that is still loading.":
+    "va vers un autre conteneur encore en chargement.",
+  "No other container is loading right now. Start one first.":
+    "Aucun autre conteneur n’est en chargement pour le moment. Créez-en un d’abord.",
+  "Move to": "Déplacer vers",
+  "Choose a container": "Choisir un conteneur",
+  "Moving...": "Déplacement...",
+  "Every change on this container, most recent first.":
+    "Chaque modification de ce conteneur, la plus récente en premier.",
+  "No changes recorded yet.": "Aucune modification enregistrée pour l’instant.",
+  "someone not on your team": "quelqu’un hors de votre équipe",
+  "an unknown user": "un utilisateur inconnu",
+  // The server's refusals, verbatim (container_manifest.js CONTAINER_MESSAGES).
+  "Give the container a name to find it by.":
+    "Donnez un nom au conteneur pour le retrouver.",
+  "A container number is four letters and seven digits, like MSKU1234567. Booking numbers and bills of lading go in the reference field.":
+    "Un numéro de conteneur, c’est quatre lettres et sept chiffres, comme MSKU1234567. Les numéros de réservation et les connaissements vont dans le champ référence.",
+  "That is not a state a container can be in.":
+    "Ce n’est pas un état possible pour un conteneur.",
+  "A container only moves forward: loading, then shipped, then arrived.":
+    "Un conteneur n’avance que dans un sens : en chargement, puis expédié, puis arrivé.",
+  "Choose where this container is going before it ships.":
+    "Choisissez où va ce conteneur avant son départ.",
+  "Nothing is on this container yet, so it can't ship.":
+    "Rien n’est encore dans ce conteneur, il ne peut donc pas partir.",
+  "This container has shipped. Its list is the record of what went; add a note instead of changing it.":
+    "Ce conteneur est parti. Sa liste est le registre de ce qui est parti ; ajoutez une note au lieu de la modifier.",
+  "This container has lines on it. Remove them first, or leave it.":
+    "Ce conteneur contient des lignes. Retirez-les d’abord, ou laissez-le.",
+  "Container not found.": "Conteneur introuvable.",
+  "That line is no longer on the container.":
+    "Cette ligne n’est plus sur le conteneur.",
+  "Say what this line is: a car, barrels, or something else.":
+    "Dites ce qu’est cette ligne : une voiture, des barils ou autre chose.",
+  "Enter the VIN.": "Saisissez le VIN.",
+  "Enter how many.": "Indiquez combien.",
+  "Say what it is.": "Dites ce que c’est.",
+  "Say whose this is: a customer, or your own stock.":
+    "Dites à qui c’est : un client, ou votre propre stock.",
+  "Enter the customer's name.": "Saisissez le nom du client.",
+  "This car is already on another container that hasn't arrived.":
+    "Cette voiture est déjà dans un autre conteneur qui n’est pas encore arrivé.",
+  "You can only move a line to a container that is still loading.":
+    "Vous ne pouvez déplacer une ligne que vers un conteneur encore en chargement.",
+  // Filling a vehicle from its VIN (vin-lookup.ts), shared by the ledger's
+  // record form and the container line form. The middle of each hint is the
+  // car itself, so the fixed halves are the keys.
+  "Looking up the VIN…": "Recherche du VIN…",
+  "Couldn't reach the VIN service. Enter the vehicle by hand.":
+    "Impossible de joindre le service VIN. Saisissez le véhicule à la main.",
+  "Couldn't read that VIN. Enter the vehicle by hand.":
+    "Impossible de lire ce VIN. Saisissez le véhicule à la main.",
+  "VIN reads": "Le VIN indique",
+  "— we don't carry that make; pick the closest.":
+    "— nous n’avons pas cette marque ; choisissez la plus proche.",
+  "Filled the make from VIN:": "Marque remplie depuis le VIN :",
+  "Filled from VIN:": "Rempli depuis le VIN :",
+  "Filled from an existing record": "Rempli depuis une fiche existante",
+  "— set the model/year.": "— indiquez le modèle et l’année.",
+  "You can change anything below.": "Vous pouvez tout modifier ci-dessous.",
 });
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
@@ -4626,6 +4766,14 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
     "Ce qui est inclus, le délai",
   "What your business is known for…":
     "Ce pour quoi votre entreprise est connue…",
+  // Containers panel: placeholders, titles and aria-labels.
+  "Filter by state": "Filtrer par état",
+  "Filter by destination": "Filtrer par destination",
+  "Search loaded cargo": "Rechercher dans le chargement",
+  "Sailing 3 Oct, box 2": "Départ 3 oct., boîte 2",
+  "e.g. tires, a generator": "p. ex. pneus, un groupe électrogène",
+  "Move to another container": "Déplacer vers un autre conteneur",
+  "Remove line": "Retirer la ligne",
 };
 
 const frToEn = Object.entries(TEXT_TRANSLATIONS).reduce<Record<string, string>>(

@@ -9,6 +9,7 @@ export type BusinessTab =
   | "transport"
   | "parking"
   | "ledger"
+  | "containers"
   | "destinations"
   | "people"
   | "reviews"
@@ -54,6 +55,10 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   {id: "transport", label: "Transport", description: "Vehicle moves", group: "transport", service: "carTransport", permission: "transport"},
   {id: "parking", label: "Parking", description: "Stored cars", group: "transport", service: "carParking", permission: "parking"},
   {id: "ledger", label: "Lot ledger", description: "Activity, expenses, reports", group: "transport", service: "carParking", permission: "ledger"},
+  // A container is the business's own loading list, independent of any
+  // customer request and of which services it sells: no service gate, only
+  // the permission.
+  {id: "containers", label: "Containers", description: "Loading lists and sailings", group: "transport", permission: "containers"},
   {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "manage", permission: "reviews"},
   {id: "cases", label: "Support", description: "Customers and help", group: "manage", permission: "support"},
   {id: "growth", label: "Growth", description: "Plan and advisor", group: "manage", permission: "growth"},

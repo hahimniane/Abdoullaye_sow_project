@@ -3815,5 +3815,191 @@
         "type": "String"
       }
     }
-  }
+  },
+  "ctrTitle": "Conteneurs",
+  "ctrSubtitle": "Ce qui est entré dans chaque conteneur, enregistré depuis le parc.",
+  "ctrStatusLoading": "En chargement",
+  "ctrStatusShipped": "Expédié",
+  "ctrStatusArrived": "Arrivé",
+  "ctrNewContainer": "Nouveau conteneur",
+  "ctrEditContainer": "Modifier le conteneur",
+  "ctrCreate": "Créer",
+  "ctrCreating": "Création…",
+  "ctrLabel": "Nom de travail",
+  "ctrLabelHint": "ex. Départ 3 oct., boîte 2",
+  "ctrNumber": "Numéro de conteneur",
+  "ctrNumberHint": "Quatre lettres et sept chiffres, dès que la compagnie l'envoie",
+  "ctrBookingReference": "Référence booking / connaissement",
+  "ctrDestination": "Destination",
+  "ctrChooseDestination": "Choisir un pays",
+  "ctrNoDestinations": "Aucune destination configurée. Ajoutez d'abord des pays dans Services et couverture.",
+  "ctrDestinationUnset": "Pas encore de destination",
+  "ctrNotes": "Notes",
+  "ctrLockedNote": "Expédié. La liste est le relevé de ce qui est parti ; seules les notes restent modifiables.",
+  "ctrNoContainers": "Aucun conteneur pour le moment.",
+  "ctrNoContainersHint": "Créez-en un quand vous commencez à charger une boîte.",
+  "ctrNoLoading": "Aucun conteneur en chargement.",
+  "ctrNoShipped": "Aucun conteneur expédié.",
+  "ctrNoArrived": "Aucun conteneur arrivé pour le moment.",
+  "ctrEmptyContainer": "Rien de chargé pour l'instant",
+  "ctrEmptyContainerHint": "Ajoutez la première voiture, les barils ou tout autre chose entré dedans.",
+  "ctrCarsCount": "{count, plural, =1{1 voiture} other{{count} voitures}}",
+  "@ctrCarsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrBarrelsCount": "{count, plural, =1{1 baril} other{{count} barils}}",
+  "@ctrBarrelsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrOtherCount": "{count, plural, =1{1 autre article} other{{count} autres articles}}",
+  "@ctrOtherCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrSailed": "Parti le {date}",
+  "@ctrSailed": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrArrivedOn": "Arrivé le {date}",
+  "@ctrArrivedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLoaded": "Chargé",
+  "ctrAddLine": "Ajouter au conteneur",
+  "ctrAdd": "Ajouter",
+  "ctrAdding": "Ajout…",
+  "ctrKind": "Qu'est-ce que c'est ?",
+  "ctrKindCar": "Une voiture",
+  "ctrKindBarrels": "Des barils",
+  "ctrKindOther": "Autre chose",
+  "ctrQuantity": "Combien",
+  "ctrDescription": "De quoi il s'agit",
+  "ctrOwner": "À qui est-ce ?",
+  "ctrOwnerCustomer": "À un client",
+  "ctrOwnerCustomerNote": "Nommez le client, pour que la liste dise à qui c'est.",
+  "ctrOwnerStock": "Stock de l'entreprise",
+  "ctrOwnerStockNote": "Acheté pour être vendu à l'étranger. Aucun client à nommer.",
+  "ctrStock": "Stock",
+  "ctrBarrelsQty": "{count} barils",
+  "@ctrBarrelsQty": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrTimes": "× {count}",
+  "@ctrTimes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrRemoveLine": "Retirer du conteneur",
+  "ctrRemoveLineTitle": "Retirer cette ligne ?",
+  "ctrRemoveLineMessage": "Elle sort de la liste de chargement. Vous pourrez l'ajouter à nouveau.",
+  "ctrRemove": "Retirer",
+  "ctrMoveLine": "Déplacer vers un autre conteneur",
+  "ctrMoveTo": "Déplacer vers",
+  "ctrNoOtherLoading": "Aucun autre conteneur n'est en chargement en ce moment.",
+  "ctrMoved": "Déplacé.",
+  "ctrShip": "Marquer expédié",
+  "ctrShipTitle": "Marquer ce conteneur comme expédié ?",
+  "ctrShipMessage": "La liste devient le relevé de ce qui est parti. Seules les notes resteront modifiables.",
+  "ctrShippedDone": "Marqué expédié.",
+  "ctrArrive": "Marquer arrivé",
+  "ctrArriveTitle": "Marquer ce conteneur comme arrivé ?",
+  "ctrArriveMessage": "Ses voitures pourront aller dans un nouveau conteneur.",
+  "ctrArrivedDone": "Marqué arrivé.",
+  "ctrDelete": "Supprimer le conteneur",
+  "ctrDeleteTitle": "Supprimer ce conteneur ?",
+  "ctrDeleteMessage": "Seul un conteneur vide encore en chargement peut être supprimé.",
+  "ctrDeleted": "Supprimé.",
+  "ctrOpenDocument": "Liste de chargement",
+  "ctrSearchHint": "NIV, client ou téléphone",
+  "ctrNoSearchMatch": "Aucun résultat.",
+  "ctrHitsCount": "{count, plural, =1{1 résultat} other{{count} résultats}}",
+  "@ctrHitsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrLinkShipped": "Dans {container} · parti le {date}",
+  "@ctrLinkShipped": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLinkShippedNoDate": "Dans {container}",
+  "@ctrLinkShippedNoDate": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLinkLoading": "En chargement dans {name}",
+  "@ctrLinkLoading": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrCreated": "Conteneur créé.",
+  "ctrUpdated": "Enregistré.",
+  "ctrLineAdded": "Ajouté.",
+  "ctrLineRemoved": "Retiré.",
+  "ctrCouldNotLoad": "Les conteneurs n'ont pas pu être chargés.",
+  "ctrErrLabelRequired": "Donnez un nom au conteneur pour le retrouver.",
+  "ctrErrNumberInvalid": "Un numéro de conteneur, c'est quatre lettres et sept chiffres, comme MSKU1234567. Les numéros de booking et les connaissements vont dans le champ référence.",
+  "ctrErrStatusInvalid": "Ce n'est pas un état possible pour un conteneur.",
+  "ctrErrTransitionInvalid": "Un conteneur ne fait qu'avancer : chargement, puis expédié, puis arrivé.",
+  "ctrErrDestinationRequired": "Choisissez où va ce conteneur avant de l'expédier.",
+  "ctrErrEmpty": "Rien n'est encore dans ce conteneur, il ne peut pas partir.",
+  "ctrErrLocked": "Ce conteneur est expédié. Sa liste est le relevé de ce qui est parti ; ajoutez une note plutôt que de la modifier.",
+  "ctrErrHasLines": "Ce conteneur contient des lignes. Retirez-les d'abord, ou laissez-le.",
+  "ctrErrNotFound": "Conteneur introuvable.",
+  "ctrErrLineNotFound": "Cette ligne n'est plus sur le conteneur.",
+  "ctrErrLineKind": "Dites ce qu'est cette ligne : une voiture, des barils ou autre chose.",
+  "ctrErrQuantity": "Indiquez combien.",
+  "ctrErrDescription": "Dites de quoi il s'agit.",
+  "ctrErrOwnerKind": "Dites à qui c'est : un client, ou votre propre stock.",
+  "ctrErrVinAlreadyLoaded": "Cette voiture est déjà dans un autre conteneur qui n'est pas arrivé.",
+  "ctrErrVinAlreadyLoadedIn": "Cette voiture est déjà dans {container}, qui n'est pas arrivé.",
+  "@ctrErrVinAlreadyLoadedIn": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrErrMoveTarget": "Une ligne ne peut être déplacée que vers un conteneur encore en chargement."
 }

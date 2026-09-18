@@ -188,6 +188,7 @@ const businessPermissionOptions = [
   {id: "transport", label: "Transport"},
   {id: "parking", label: "Parking"},
   {id: "ledger", label: "Lot ledger"},
+  {id: "containers", label: "Containers"},
   {id: "destinations", label: "Services & coverage"},
   {id: "people", label: "People"},
   {id: "reviews", label: "Reviews"},

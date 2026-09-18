@@ -116,6 +116,14 @@ import {
   matchLotCustomers,
   type LotCustomer,
 } from "@/lib/lot-customers";
+import { buildVinPlacementIndex, vinPlacementText } from "@/lib/container-manifest";
+import {
+  VIN_LOOKING_UP,
+  VIN_SERVICE_UNREACHABLE,
+  decodeVinWithCatalog,
+  findVehicleRecordByVin,
+  vinDecodeHint,
+} from "@/lib/vin-lookup";
 import {
   contentsFromRecord,
   quoteLensForBusiness,
@@ -4771,6 +4779,16 @@ export function ParkingPanel({
   // write to lotCustomers through createBusinessParkingEntry. A regular is
   // therefore someone to pick, not someone to re-type.
   const parkingCustomers = useBusinessRows("lotCustomers", businessId, Boolean(businessId && !previewMode), 500);
+  // Which box a parked car went into, if it was loaded: an in-memory join of
+  // the rows this panel already holds against the business's loading lists.
+  // One index per render, never a query per row.
+  const containerLines = useBusinessRows("containerLines", businessId, Boolean(businessId && !previewMode), 3000);
+  const containerRows = useBusinessRows("containers", businessId, Boolean(businessId && !previewMode), 500);
+  const vinPlacements = useMemo(
+    () => buildVinPlacementIndex(containerLines.rows, containerRows.rows),
+    [containerLines.rows, containerRows.rows],
+  );
+  const placementLang = currentLanguage() === "fr" ? "fr" : "en";
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
   const [search, setSearch] = useState("");
   // Two facets that compose: which status kinds and which payment classes to
@@ -5634,7 +5652,13 @@ export function ParkingPanel({
               const isReceipt = businessParkingDocumentType(row) === "receipt";
               return (
                 <div className="pk-row" key={String(row.id)} role="row">
-                  <span><b>{vehicle}</b><small>{text(row.vinNumber, "") || text(row.trackingCode, "")}</small></span>
+                  <span>
+                    <b>{vehicle}</b>
+                    <small>{text(row.vinNumber, "") || text(row.trackingCode, "")}</small>
+                    {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
+                      <small className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</small>
+                    )}
+                  </span>
                   <span><b>{text(row.customerName ?? row.ownerName, "—")}</b><small>{text(row.customerPhone, "")}</small></span>
                   <span>{formatDate(row.parkingDate) || "—"}</span>
                   <span className={openEnded ? "muted" : undefined}>{openEnded ? "Open" : formatDate(row.parkingEndDate)}</span>
@@ -5713,6 +5737,9 @@ export function ParkingPanel({
               <div className="pur-info">
                 <div><span>Owner</span><b>{text(row.customerName ?? row.ownerName, "—")}</b></div>
                 <div><span>VIN</span><b>{text(row.vinNumber, "—")}</b></div>
+                {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
+                  <div><span>Container</span><b className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</b></div>
+                )}
                 <div><span>Parked</span><b>{formatDate(row.parkingDate ?? row.createdAt)}</b></div>
                 {/* The platform records what a direct entry owes; it never
                     bills it, so the amount is labelled as recorded, not paid. */}
@@ -7089,7 +7116,7 @@ async function uploadCarImage(businessId: string, carId: string, file: File) {
   return getDownloadURL(target);
 }
 
-async function runPanelAction(
+export async function runPanelAction(
   setBusy: (value: boolean) => void,
   setMessage: (value: string) => void,
   successMessage: string,
@@ -7524,6 +7551,15 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   // The lot's customer memory: everyone recorded on an activity or a walk-up,
   // with the cars seen against them, offered back as staff type.
   const lotCustomers = useBusinessRows("lotCustomers", businessId, enabled, 500);
+  // Which box a car went into, if it was loaded: the same in-memory join the
+  // parking list does, against rows this panel already holds.
+  const containerLines = useBusinessRows("containerLines", businessId, enabled, 3000);
+  const containerRows = useBusinessRows("containers", businessId, enabled, 500);
+  const vinPlacements = useMemo(
+    () => buildVinPlacementIndex(containerLines.rows, containerRows.rows),
+    [containerLines.rows, containerRows.rows],
+  );
+  const placementLang = currentLanguage() === "fr" ? "fr" : "en";
 
   const [segment, setSegment] = useState<LotSegment>("activity");
   const [reportView, setReportView] = useState<LotReportView>("month");
@@ -7930,11 +7966,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     }
     // First the lot's own records — a parked car or a past activity — because
     // those also carry who owns it.
-    const match = [...parkedCars.rows, ...activities.rows].find(
-      (row) =>
-        String((row as Record<string, unknown>).vinNumber || "")
-          .toUpperCase() === clean,
-    ) as Record<string, unknown> | undefined;
+    const match = findVehicleRecordByVin([...parkedCars.rows, ...activities.rows], clean);
     if (match) {
       lastActivityVinRef.current = clean;
       setActivityDraft((d) => ({
@@ -7970,47 +8002,22 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   // make/model/year are catalog dropdowns, so an unmatched make is reported
   // rather than forced.
   async function decodeActivityVin(vin: string) {
-    setVinHint("Looking up the VIN…");
+    setVinHint(VIN_LOOKING_UP);
     try {
-      const res = await fetch(
-        `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`,
-      );
-      const data = await res.json();
-      const r = (data?.Results?.[0] ?? {}) as Record<string, unknown>;
-      const dMake = text(r.Make, "");
-      const dModel = text(r.Model, "");
-      const dYear = text(r.ModelYear, "");
-      const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
-      let model = "";
-      let year = "";
-      if (make) {
-        const canon = canonicalModel(make, dModel);
-        model = getModels(make).find((m) => m.toLowerCase() === (canon || dModel).toLowerCase()) ?? "";
-        if (model) year = getYears(make, model).find((y) => String(y) === dYear) ?? "";
-      }
+      const result = await decodeVinWithCatalog(vin);
       // Ignore a stale response if the field has since changed.
       if (lastActivityVinRef.current !== vin) return;
-      if (!make) {
-        const seen = [dYear, dMake, dModel].filter(Boolean).join(" ");
-        setVinHint(seen
-          ? `VIN reads ${seen} — we don't carry that make; pick the closest.`
-          : "Couldn't read that VIN. Enter the vehicle by hand.");
-        return;
+      if (result.make) {
+        setActivityDraft((d) => ({
+          ...d,
+          carMake: result.make,
+          carModel: result.model || d.carModel,
+          carYear: result.year || d.carYear,
+        }));
       }
-      setActivityDraft((d) => ({
-        ...d,
-        carMake: make,
-        carModel: model || d.carModel,
-        carYear: year || d.carYear,
-      }));
-      const filled = [year, make, model].filter(Boolean).join(" ");
-      setVinHint(model && year
-        ? `Filled from VIN: ${filled}. You can change anything below.`
-        : `Filled the make from VIN: ${filled} — set the model/year.`);
+      setVinHint(vinDecodeHint(result));
     } catch {
-      if (lastActivityVinRef.current === vin) {
-        setVinHint("Couldn't reach the VIN service. Enter the vehicle by hand.");
-      }
+      if (lastActivityVinRef.current === vin) setVinHint(VIN_SERVICE_UNREACHABLE);
     }
   }
 
@@ -8475,7 +8482,14 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                     const partlyPaid = badge === "Part paid";
                     return (
                       <div className={`mini-table-row${voided ? " voided" : ""}`} key={String(r.id)}>
-                        <span><strong>{voided ? <s>{vehicle}</s> : vehicle}</strong><small>{vehicleText && vehicleText !== vin ? vin : ""}</small>{voided && <span className="status-pill danger compact">Voided</span>}</span>
+                        <span>
+                          <strong>{voided ? <s>{vehicle}</s> : vehicle}</strong>
+                          <small>{vehicleText && vehicleText !== vin ? vin : ""}</small>
+                          {vin && vinPlacements.has(vin.toUpperCase()) && (
+                            <small className="ctn-placement">{vinPlacementText(vinPlacements.get(vin.toUpperCase()), placementLang)}</small>
+                          )}
+                          {voided && <span className="status-pill danger compact">Voided</span>}
+                        </span>
                         <span><strong>{text(r.customerName, "")}</strong><small>{text(r.customerPhone, "")}</small></span>
                         <span><strong style={{ color: tintForType(String(r.activityTypeId)) }}>{label}</strong><small>{text(r.auctionHouse, "") ? `Auction: ${text(r.auctionHouse, "")}` : r.feeOverridden ? "Priced for this job" : "Standard rate"}</small></span>
                         <span>

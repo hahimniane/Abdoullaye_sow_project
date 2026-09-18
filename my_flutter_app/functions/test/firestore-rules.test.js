@@ -953,6 +953,44 @@ describe("business dashboard Firestore rules", () => {
         {businessId: "biz_a", activityId: "act_a", amountCents: 100000}));
   });
 
+  // Containers and their lines are read as `where businessId == mine`
+  // queries and written only by the callables. Tested as the query, not a
+  // get(): a get() passing says nothing about whether the list loads.
+  it("lets the lot run the container and line QUERIES the clients subscribe to",
+      async () => {
+        const {query, collection, where, getDocs, doc, setDoc} =
+            require("firebase/firestore");
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+          const db = context.firestore();
+          await setDoc(doc(db, "containers/box_a"),
+              {businessId: "biz_a", label: "Sailing 3 Oct", status: "loading"});
+          await setDoc(doc(db, "containerLines/line_a"),
+              {businessId: "biz_a", containerId: "box_a", kind: "car",
+                vinNumber: "1HGCM82633A004352", containerStatus: "loading"});
+        });
+        for (const name of ["containers", "containerLines"]) {
+          await assertSucceeds(getDocs(query(
+              collection(firestoreFor("owner-a"), name),
+              where("businessId", "==", "biz_a"))));
+          await assertFails(getDocs(query(
+              collection(firestoreFor("owner-a"), name))));
+          await assertFails(getDocs(query(
+              collection(firestoreFor("owner-a"), name),
+              where("businessId", "==", "biz_b"))));
+        }
+      });
+
+  it("never lets a client write a container or a line", async () => {
+    const {doc, setDoc, updateDoc} = require("firebase/firestore");
+    const db = firestoreFor("owner-a");
+    await assertFails(setDoc(doc(db, "containers/forged"),
+        {businessId: "biz_a", label: "x", status: "shipped"}));
+    await assertFails(updateDoc(doc(db, "containers/box_a"),
+        {status: "shipped"}));
+    await assertFails(setDoc(doc(db, "containerLines/forged"),
+        {businessId: "biz_a", containerId: "box_a", kind: "car"}));
+  });
+
   it("lets a business owner read their own private records only", async () => {
     const ownerDb = firestoreFor("owner-a");
 

@@ -47,6 +47,23 @@ function flutterPermissions() {
       .map((m) => m[1]);
 }
 
+function adminInvitationPermissions() {
+  const source = read("admin_web", "src", "components", "admin-console.tsx");
+  const block = source.match(
+      /const businessStaffPermissionOptions = \[([^\]]*)\] as const;/,
+  );
+  assert.ok(block, "businessStaffPermissionOptions not found");
+  return [...block[1].matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
+}
+
+// The admin console's invitation payload is a hand-copied fifth list. It
+// drifted once - a section missing here is never granted to invited staff.
+test("the admin invitation payload offers exactly the backend vocabulary",
+    () => {
+      assert.deepEqual(
+          adminInvitationPermissions().sort(), backendPermissions().sort());
+    });
+
 test("every permission a console tab gates on is accepted by the backend",
     () => {
       const backend = new Set(backendPermissions());
