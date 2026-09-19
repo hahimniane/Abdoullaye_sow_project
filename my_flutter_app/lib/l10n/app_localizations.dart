@@ -632,6 +632,30 @@ abstract class AppLocalizations {
   /// **'Tracking number copied to clipboard'**
   String get trackingNumberCopied;
 
+  /// No description provided for @copyVin.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy VIN'**
+  String get copyVin;
+
+  /// No description provided for @copyName.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy name'**
+  String get copyName;
+
+  /// No description provided for @vinCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN copied to clipboard'**
+  String get vinCopied;
+
+  /// No description provided for @nameCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Name copied to clipboard'**
+  String get nameCopied;
+
   /// No description provided for @shipmentStatusNotStarted.
   ///
   /// In en, this message translates to:

@@ -75,6 +75,7 @@ import {
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
+import { CopyValue } from "@/components/copy-value";
 import {
   lotCustomerFromRow,
   lotCustomerFromStaffRow,
@@ -722,7 +723,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                   const by = staffName(text(row.addedByStaffId, ""));
                   return (
                     <div className="mini-table-row" key={String(row.id)}>
-                      <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}</span>
+                      <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}</span>
                       <span>
                         {stock ? <strong>Business stock</strong> : <strong>{text(row.customerName, "")}</strong>}
                         {!stock && <small>{text(row.customerPhone, "")}</small>}
@@ -787,7 +788,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                         onClick={() => { if (containerId) { setSelectedId(containerId); } }}
                         onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && containerId) { e.preventDefault(); setSelectedId(containerId); } }}
                       >
-                        <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}</span>
+                        <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}</span>
                         <span>
                           {stock ? <strong>Business stock</strong> : <strong>{text(hit.line.customerName, "")}</strong>}
                           {!stock && <small>{text(hit.line.customerPhone, "")}</small>}
