@@ -429,6 +429,7 @@ function renderParkingDocument(model) {
 module.exports = {
   PARKING_DOCUMENT_TYPES,
   documentLogo,
+  formatBusinessAddress,
   lotActivityDocumentType,
   lotActivityDocumentModel,
   parkingDocumentType,
