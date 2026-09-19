@@ -302,6 +302,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get trackingNumberCopied => 'Tracking number copied to clipboard';
 
   @override
+  String get copyVin => 'Copy VIN';
+
+  @override
+  String get copyName => 'Copy name';
+
+  @override
+  String get vinCopied => 'VIN copied to clipboard';
+
+  @override
+  String get nameCopied => 'Name copied to clipboard';
+
+  @override
   String get shipmentStatusNotStarted => 'Not started';
 
   @override

@@ -217,3 +217,16 @@ test("every string the panel shows has French", () => {
     assert.equal(translateValue(french, "en"), english, `"${english}" does not round-trip`);
   }
 });
+
+// A VIN is seventeen characters nobody should retype. The parking row and
+// card carry a one-tap copy beside the VIN and beside the customer's name;
+// a container line (detail and search) carries it beside the VIN.
+test("one tap copies a VIN or a customer name where they are shown", () => {
+  const ops = readFileSync("src/components/business/operations-panels.tsx", "utf8");
+  const ctn = readFileSync("src/components/business/containers-panel.tsx", "utf8");
+  assert.equal((ops.match(/<CopyValue value=\{text\(row\.vinNumber, ""\)\} label="Copy VIN" \/>/g) ?? []).length, 2);
+  assert.equal((ops.match(/label="Copy name"/g) ?? []).length, 2);
+  assert.equal((ctn.match(/<CopyValue value=\{vin\} label="Copy VIN" \/>/g) ?? []).length, 2);
+  const fr = readFileSync("src/lib/french-dom.ts", "utf8");
+  for (const key of ['"Copy VIN"', '"Copy name"']) assert.ok(fr.includes(key), `${key} needs French`);
+});

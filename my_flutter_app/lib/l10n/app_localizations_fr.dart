@@ -309,6 +309,18 @@ class AppLocalizationsFr extends AppLocalizations {
       'Numéro de suivi copié dans le presse-papiers';
 
   @override
+  String get copyVin => 'Copier le NIV';
+
+  @override
+  String get copyName => 'Copier le nom';
+
+  @override
+  String get vinCopied => 'NIV copié dans le presse-papiers';
+
+  @override
+  String get nameCopied => 'Nom copié dans le presse-papiers';
+
+  @override
   String get shipmentStatusNotStarted => 'Non démarré';
 
   @override

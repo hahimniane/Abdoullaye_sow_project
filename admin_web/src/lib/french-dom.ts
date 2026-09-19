@@ -4238,6 +4238,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   // one. Missed on the first pass because the label is inside a ternary
   // rather than sitting in the markup as plain text.
   "Copy number": "Copier le numéro",
+  "Copy VIN": "Copier le NIV",
+  "Copy name": "Copier le nom",
   // Guest checkout: booking and paying without an account.
   "Book without an account. We use these details to send your receipt and tracking number, and to reach you about this shipment.":
     "Réservez sans compte. Ces informations nous servent à vous envoyer votre reçu et votre numéro de suivi, et à vous joindre au sujet de cet envoi.",

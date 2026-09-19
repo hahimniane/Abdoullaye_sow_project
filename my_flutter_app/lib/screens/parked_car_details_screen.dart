@@ -914,6 +914,23 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     );
   }
 
+  /// A one-tap copy for a value nobody should retype - the VIN, the owner's
+  /// name. Nothing when the field is empty.
+  Widget? _copyIcon(TextEditingController controller, String tooltip,
+      String copiedMessage) {
+    if (controller.text.trim().isEmpty) return null;
+    return IconButton(
+      tooltip: tooltip,
+      icon: const Icon(Icons.copy_rounded, size: 18),
+      onPressed: () async {
+        await Clipboard.setData(ClipboardData(text: controller.text.trim()));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(copiedMessage)));
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -1258,7 +1275,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           TextFormField(
             controller: _ownerNameController,
             readOnly: !canEdit,
-            decoration: InputDecoration(labelText: l10n.ownerName),
+            decoration: InputDecoration(
+              labelText: l10n.ownerName,
+              suffixIcon: _copyIcon(
+                  _ownerNameController, l10n.copyName, l10n.nameCopied),
+            ),
             validator: (value) {
               if (!canEdit) return null;
               return value == null || value.isEmpty
@@ -1381,7 +1402,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     )
-                  : null,
+                  : _copyIcon(_vinController, l10n.copyVin, l10n.vinCopied),
             ),
             validator: (value) {
               if (!canEdit || isBusinessEntry) return null;

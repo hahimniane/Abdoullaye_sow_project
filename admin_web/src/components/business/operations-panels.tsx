@@ -5655,8 +5655,8 @@ export function ParkingPanel({
               return (
                 <div className="pk-row" key={String(row.id)} role="row">
                   <span>
-                    <b>{vehicle}</b>
-                    <small>{text(row.vinNumber, "") || text(row.trackingCode, "")}{text(row.vinNumber, "") && <CopyValue value={text(row.vinNumber, "")} label="Copy VIN" />}</small>
+                    <b>{vehicle}<CopyValue value={text(row.vinNumber, "")} label="Copy VIN" /></b>
+                    <small>{text(row.vinNumber, "") || text(row.trackingCode, "")}</small>
                     {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
                       <small className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</small>
                     )}
