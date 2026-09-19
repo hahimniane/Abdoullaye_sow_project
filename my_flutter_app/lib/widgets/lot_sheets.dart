@@ -371,6 +371,118 @@ class LotOption<T> {
   final String? detail;
 }
 
+/// A titled run of options in [pickLotSearchableOption].
+class LotOptionSection<T> {
+  const LotOptionSection(this.title, this.options);
+
+  final String title;
+  final List<LotOption<T>> options;
+}
+
+/// [pickLotOption] for lists too long to scroll - every country, say. A
+/// search box at the top narrows every section at once, matching the label
+/// or the detail; sections keep their order so the caller's "yours first"
+/// still reads as such.
+Future<T?> pickLotSearchableOption<T>(
+  BuildContext context, {
+  required String title,
+  required List<LotOptionSection<T>> sections,
+  required String searchHint,
+  T? selected,
+}) {
+  var query = '';
+  return showLotSheet<T>(
+    context,
+    StatefulBuilder(
+      builder: (context, setSheetState) {
+        final q = query.trim().toLowerCase();
+        bool matches(LotOption<T> o) =>
+            q.isEmpty ||
+            o.label.toLowerCase().contains(q) ||
+            (o.detail ?? '').toLowerCase().contains(q);
+        return LotSheetShell(
+          title: title,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                key: const Key('lot-option-search'),
+                autofocus: false,
+                onChanged: (v) => setSheetState(() => query = v),
+                decoration: InputDecoration(
+                  hintText: searchHint,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              for (final section in sections)
+                if (section.options.any(matches)) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(
+                        top: AppSpacing.sm, bottom: AppSpacing.sm),
+                    child: Text(
+                      section.title,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                  for (final option in section.options.where(matches))
+                    PressableScale(
+                      onTap: () => Navigator.of(context).pop(option.value),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: option.value == selected
+                              ? AppColors.mist
+                              : AppColors.parchment,
+                          borderRadius:
+                              BorderRadius.circular(AppSpacing.radiusSm),
+                          border: Border.all(
+                            color: option.value == selected
+                                ? AppColors.cobalt.withValues(alpha: 0.4)
+                                : AppColors.ink.withValues(alpha: 0.06),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                option.label,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.ink,
+                                ),
+                              ),
+                            ),
+                            if (option.detail != null)
+                              Text(
+                                option.detail!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.muted,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
 Future<T?> pickLotOption<T>(
   BuildContext context, {
   required String title,

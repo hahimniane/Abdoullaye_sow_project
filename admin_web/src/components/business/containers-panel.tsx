@@ -69,6 +69,7 @@ import {
   type ParkedCarPick,
 } from "@/lib/container-manifest";
 import {
+  DESTINATION_COUNTRIES,
   destinationCountryName,
   destinationCountryOptionForRow,
 } from "@/lib/destination-countries";
@@ -130,7 +131,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
   const enabled = Boolean(businessId && !previewMode);
   const containers = useBusinessCollection("containers", businessId, enabled, 500);
   const lines = useBusinessCollection("containerLines", businessId, enabled, 3000);
-  const destinations = useBusinessDestinations(businessId, enabled, 100);
+  const destinations = useBusinessDestinations(businessId, enabled, 500);
   const staff = useBusinessStaff(businessId, enabled, 200);
   // The same records the lot ledger's form scans when a VIN is typed: a
   // parked car or a past activity already says what the car is and whose.
@@ -197,11 +198,14 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
     return text(row.fullName, "") || text(row.name, "") || text(row.email, "");
   };
 
-  // The business's own destination list, labelled in the reader's language.
-  // A destination a container was given that has since left the list is
-  // folded back in so the picker never shows an empty choice for a real value.
+  // The business's own destination list, labelled in the reader's language,
+  // offered first; then every other country. A container goes wherever the
+  // business sends it - cars bought here and sold in Conakry need no barrel
+  // service to Guinea - so the picker is never limited to what Services &
+  // coverage lists, and a business that has listed nothing still has the
+  // whole world to choose from.
   const destinationOptions = useMemo(() => {
-    const options = destinations.rows.map((row) => {
+    const own = destinations.rows.map((row) => {
       const option = destinationCountryOptionForRow(row);
       return {
         id: String(row.id),
@@ -209,14 +213,26 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
         label: option.id ? destinationCountryName(option.id, lang) : option.name,
       };
     });
-    options.sort((a, b) => a.label.localeCompare(b.label));
-    return options;
+    own.sort((a, b) => a.label.localeCompare(b.label));
+    const ownIds = new Set(own.map((o) => o.id));
+    const rest = DESTINATION_COUNTRIES
+      .filter((c) => !ownIds.has(c.id))
+      .map((c) => ({ id: c.id, name: c.name, label: destinationCountryName(c.id, lang) }));
+    rest.sort((a, b) => a.label.localeCompare(b.label));
+    return { own, rest, all: [...own, ...rest] };
   }, [destinations.rows, lang]);
+
+  // The filter lists only destinations a container actually has, so it stays
+  // a handful of choices rather than every country.
+  const destinationFilterOptions = useMemo(() => {
+    const used = new Set(containers.rows.map((row) => text(row.destinationCountryId, "")).filter(Boolean));
+    return destinationOptions.all.filter((o) => used.has(o.id));
+  }, [containers.rows, destinationOptions]);
 
   function destinationLabel(row: Row) {
     const id = text(row.destinationCountryId, "");
     if (!id) return "";
-    const known = destinationOptions.find((option) => option.id === id);
+    const known = destinationOptions.all.find((option) => option.id === id);
     if (known) return known.label;
     const option = destinationCountryOptionForRow({ id, name: row.destinationCountryName });
     return option.id ? destinationCountryName(option.id, lang) : text(row.destinationCountryName, id);
@@ -319,7 +335,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
   }
 
   function pickDestination(id: string) {
-    const option = destinationOptions.find((o) => o.id === id);
+    const option = destinationOptions.all.find((o) => o.id === id);
     setContainerDraft((d) => ({
       ...d,
       destinationCountryId: id,
@@ -778,7 +794,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
             </select>
             <select value={destinationFilter} onChange={(e) => setDestinationFilter(e.target.value)} aria-label="Filter by destination">
               <option value="">Every destination</option>
-              {destinationOptions.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))}
+              {destinationFilterOptions.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))}
             </select>
             <input type="search" placeholder="VIN, customer, phone" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search loaded cargo" />
           </div>
@@ -884,12 +900,22 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                     <label className="lst-field wide"><span>Destination</span>
                       <select value={containerDraft.destinationCountryId} onChange={(e) => pickDestination(e.target.value)}>
                         <option value="">Not chosen yet</option>
-                        {containerDraft.destinationCountryId && !destinationOptions.some((o) => o.id === containerDraft.destinationCountryId) && (
+                        {containerDraft.destinationCountryId && !destinationOptions.all.some((o) => o.id === containerDraft.destinationCountryId) && (
                           <option value={containerDraft.destinationCountryId}>{containerDraft.destinationCountryName || containerDraft.destinationCountryId}</option>
                         )}
-                        {destinationOptions.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))}
+                        {destinationOptions.own.length > 0 ? (
+                          <>
+                            <optgroup label="Your destinations">
+                              {destinationOptions.own.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))}
+                            </optgroup>
+                            <optgroup label="Every other country">
+                              {destinationOptions.rest.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))}
+                            </optgroup>
+                          </>
+                        ) : (
+                          destinationOptions.rest.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))
+                        )}
                       </select>
-                      {destinationOptions.length === 0 && <small className="lst-hint">Your destinations come from Services &amp; coverage.</small>}
                     </label>
                   </>
                 )}

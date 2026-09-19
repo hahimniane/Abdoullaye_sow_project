@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/country_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/container_lot_cars.dart';
@@ -175,8 +176,9 @@ class _ContainersScreenState extends State<ContainersScreen> {
           _businessName = (data['name'] ?? data['businessName'] ?? '').toString());
     }, onError: (_) {}));
 
-    // The destination picker offers the business's own countries, the same
-    // list Services & coverage manages - never free text.
+    // The business's own countries, the same list Services & coverage
+    // manages, lead the destination picker; the rest of the catalogue
+    // follows, since a container goes wherever the business sends it.
     _subs.add(_db
         .collection('businesses')
         .doc(id)
@@ -1829,23 +1831,36 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
 
   Future<void> _pickDestination() async {
     final l10n = AppLocalizations.of(context)!;
-    if (widget.destinations.isEmpty) {
-      AppHaptics.refuse();
-      showErrorSnackBar(context, l10n.ctrNoDestinations);
-      return;
-    }
-    final picked = await pickLotOption<String>(
+    // The business's own destinations first, then every other country: a
+    // business that lists none under Services & coverage still has the
+    // whole world to choose from, never an empty sheet.
+    final ownIds = {for (final d in widget.destinations) d.id};
+    final own = [...widget.destinations]
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final rest = [
+      for (final c in CountryCatalog.all)
+        if (!ownIds.contains(c.id)) c,
+    ]..sort((a, b) => a.name.compareTo(b.name));
+    final picked = await pickLotSearchableOption<String>(
       context,
       title: l10n.ctrDestination,
+      searchHint: l10n.ctrSearchCountries,
       selected: _destinationId,
-      options: [
-        for (final d in widget.destinations)
-          LotOption(d.id, d.name, detail: d.code),
+      sections: [
+        if (own.isNotEmpty)
+          LotOptionSection(l10n.ctrYourDestinations, [
+            for (final d in own) LotOption(d.id, d.name, detail: d.code),
+          ]),
+        LotOptionSection(
+          own.isEmpty ? l10n.ctrEveryCountry : l10n.ctrEveryOtherCountry,
+          [for (final c in rest) LotOption(c.id, c.name, detail: c.code)],
+        ),
       ],
     );
     if (picked == null || !mounted) return;
-    final country =
-        widget.destinations.where((d) => d.id == picked).firstOrNull;
+    final country = [...widget.destinations, ...CountryCatalog.all]
+        .where((d) => d.id == picked)
+        .firstOrNull;
     setState(() {
       _destinationId = picked;
       _destinationName = country?.name ?? picked;
