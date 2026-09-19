@@ -283,6 +283,8 @@ class ContainerLineDraft {
     this.ownerKind = '',
     this.customerName = '',
     this.customerPhone = '',
+    this.receiverName = '',
+    this.receiverPhone = '',
   });
 
   final String kind;
@@ -295,6 +297,10 @@ class ContainerLineDraft {
   final String ownerKind;
   final String customerName;
   final String customerPhone;
+
+  /// Who collects it at the other end - the name written on the barrel.
+  final String receiverName;
+  final String receiverPhone;
 }
 
 /// Error codes. Mirrors `validateContainerLine`.
@@ -351,6 +357,10 @@ Map<String, dynamic> containerLineRecord(ContainerLineDraft input) {
     'ownerKind': owner,
     'customerName': customer ? _text(input.customerName, containerMaxLabel) : '',
     'customerPhone': customer ? _text(input.customerPhone, 40) : '',
+    // Either owner kind may name a receiver: stock goes to the business's
+    // own agent at the port.
+    'receiverName': _text(input.receiverName, containerMaxLabel),
+    'receiverPhone': _text(input.receiverPhone, 40),
   };
 }
 
@@ -371,6 +381,8 @@ class ContainerLine {
     required this.ownerKind,
     required this.customerName,
     required this.customerPhone,
+    this.receiverName = '',
+    this.receiverPhone = '',
     required this.addedByStaffId,
     required this.createdAt,
     required this.updatedAt,
@@ -393,6 +405,10 @@ class ContainerLine {
   final String ownerKind;
   final String customerName;
   final String customerPhone;
+
+  /// The name on the barrel: whoever collects it at the port.
+  final String receiverName;
+  final String receiverPhone;
   final String addedByStaffId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -413,6 +429,8 @@ class ContainerLine {
       ownerKind: _text(d['ownerKind'], 20),
       customerName: _text(d['customerName'], containerMaxLabel),
       customerPhone: _text(d['customerPhone'], 40),
+      receiverName: _text(d['receiverName'], containerMaxLabel),
+      receiverPhone: _text(d['receiverPhone'], 40),
       addedByStaffId: _text(d['addedByStaffId'], containerMaxLabel),
       createdAt: lotDateOf(d['createdAt']),
       updatedAt: lotDateOf(d['updatedAt']),
@@ -607,6 +625,15 @@ List<ContainerSearchHit> searchContainerLines(
       }
     }
     if (qDigits.length >= 3 && _digits(line.customerPhone).contains(qDigits)) {
+      score = score < 3 ? 3 : score;
+    }
+    // "Is there anything for Mariama Bah?" is the port's question; the
+    // receiver answers it even on a stock line that names no customer.
+    final receiver = line.receiverName.toLowerCase();
+    if (receiver.isNotEmpty && receiver.contains(q)) {
+      score = score < 3 ? 3 : score;
+    }
+    if (qDigits.length >= 3 && _digits(line.receiverPhone).contains(qDigits)) {
       score = score < 3 ? 3 : score;
     }
     if (score > 0) {

@@ -15640,7 +15640,8 @@ exports.addContainerLine = onCall(
           `${record.quantity} × ${record.description}`);
       await containerAudit(businessId, ref.id, "line_added", uid,
           `Added ${what}` + (record.customerName ?
-            ` for ${record.customerName}` : " (business stock)"));
+            ` for ${record.customerName}` : " (business stock)") +
+          (record.receiverName ? `, to ${record.receiverName}` : ""));
       return {success: true, lineId: lineRef.id, containerId: ref.id};
     },
 );

@@ -213,6 +213,7 @@ test("a customer's line names the customer; stock names no one", () => {
 
 test("the line payload keeps only the fields its kind and owner use", () => {
   const car = containerLinePayload({
+    ...emptyContainerLineDraft,
     kind: "car",
     // The form's own bookkeeping — the in-the-lot answer and which parked
     // car was picked — never reaches the server.
@@ -239,6 +240,8 @@ test("the line payload keeps only the fields its kind and owner use", () => {
     ownerKind: "stock",
     customerName: "",
     customerPhone: "",
+    receiverName: "",
+    receiverPhone: "",
   });
   const barrels = containerLinePayload({
     ...emptyContainerLineDraft,
@@ -252,6 +255,20 @@ test("the line payload keeps only the fields its kind and owner use", () => {
   assert.equal(barrels.carMake, "");
   assert.equal(barrels.customerName, "Aissatou Bah");
   assert.equal(barrels.customerPhone, "+1 646 555 0100");
+  assert.equal(barrels.receiverName, "", "no receiver until one is named");
+  // The name on the barrel is the receiver's; stock names one too (the
+  // business's agent), so it never depends on the owner kind.
+  const toAgent = containerLinePayload({
+    ...emptyContainerLineDraft,
+    kind: "barrels",
+    quantity: "3",
+    ownerKind: "stock",
+    receiverName: " Mariama Bah ",
+    receiverPhone: "+224 620 00 00 00",
+  });
+  assert.equal(toAgent.receiverName, "Mariama Bah");
+  assert.equal(toAgent.receiverPhone, "+224 620 00 00 00");
+  assert.equal(toAgent.customerName, "");
   const other = containerLinePayload({
     ...emptyContainerLineDraft,
     kind: "other",
@@ -386,9 +403,13 @@ test("search finds lines by VIN, customer name or phone digits, with their conta
   const lines = [
     { id: "a", kind: "car", vinNumber: "1HGCM82633A004352", customerName: "Aissatou Bah", customerPhone: "+1 (646) 555-0100", containerId: "S" },
     { id: "b", kind: "barrels", quantity: 4, customerName: "Mamadou Diallo", customerPhone: "6465550199", containerId: "L" },
-    { id: "c", kind: "other", quantity: 1, description: "generator", ownerKind: "stock", containerId: "L" },
+    { id: "c", kind: "other", quantity: 1, description: "generator", ownerKind: "stock", containerId: "L", receiverName: "Ousmane Camara", receiverPhone: "+224 620 11 22 33" },
   ];
   const ids = (hits: ReturnType<typeof searchContainerLines>) => hits.map((h) => h.line.id);
+  // "Is there anything for Ousmane?" is the port's question; the receiver
+  // answers it even on a stock line that names no customer.
+  assert.deepEqual(ids(searchContainerLines(lines, containers, "ousmane")), ["c"]);
+  assert.deepEqual(ids(searchContainerLines(lines, containers, "620 11")), ["c"]);
   assert.deepEqual(ids(searchContainerLines(lines, containers, "a")), [], "one character is too little");
   assert.deepEqual(ids(searchContainerLines(lines, containers, "4352")), ["a"]);
   assert.deepEqual(ids(searchContainerLines(lines, containers, "1hgcm8")), ["a"], "VIN search is case-insensitive");

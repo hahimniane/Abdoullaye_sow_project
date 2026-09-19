@@ -3902,6 +3902,20 @@
   "ctrOwnerCustomerNote": "Name the customer, so the list says whose it is.",
   "ctrOwnerStock": "Business stock",
   "ctrOwnerStockNote": "Bought to sell abroad. No customer to name.",
+  "ctrReceiver": "Receiver at destination",
+  "ctrReceiverHint": "The name written on it",
+  "ctrReceiverPhone": "Receiver's phone",
+  "ctrSplitHint": "Several customers' barrels in one go? Save each customer's share and add the next.",
+  "ctrSaveAndAnother": "Save & add another",
+  "ctrAddAndClose": "Add & close",
+  "ctrAddedSoFar": "Added so far: {list}",
+  "@ctrAddedSoFar": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
   "ctrStock": "Stock",
   "ctrBarrelsQty": "{count} barrels",
   "@ctrBarrelsQty": {

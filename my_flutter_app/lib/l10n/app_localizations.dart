@@ -15654,6 +15654,48 @@ abstract class AppLocalizations {
   /// **'Bought to sell abroad. No customer to name.'**
   String get ctrOwnerStockNote;
 
+  /// No description provided for @ctrReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver at destination'**
+  String get ctrReceiver;
+
+  /// No description provided for @ctrReceiverHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The name written on it'**
+  String get ctrReceiverHint;
+
+  /// No description provided for @ctrReceiverPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver\'s phone'**
+  String get ctrReceiverPhone;
+
+  /// No description provided for @ctrSplitHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Several customers\' barrels in one go? Save each customer\'s share and add the next.'**
+  String get ctrSplitHint;
+
+  /// No description provided for @ctrSaveAndAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Save & add another'**
+  String get ctrSaveAndAnother;
+
+  /// No description provided for @ctrAddAndClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Add & close'**
+  String get ctrAddAndClose;
+
+  /// No description provided for @ctrAddedSoFar.
+  ///
+  /// In en, this message translates to:
+  /// **'Added so far: {list}'**
+  String ctrAddedSoFar(String list);
+
   /// No description provided for @ctrStock.
   ///
   /// In en, this message translates to:

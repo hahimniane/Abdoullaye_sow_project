@@ -3902,6 +3902,20 @@
   "ctrOwnerCustomerNote": "Nommez le client, pour que la liste dise à qui c'est.",
   "ctrOwnerStock": "Stock de l'entreprise",
   "ctrOwnerStockNote": "Acheté pour être vendu à l'étranger. Aucun client à nommer.",
+  "ctrReceiver": "Destinataire à l'arrivée",
+  "ctrReceiverHint": "Le nom écrit dessus",
+  "ctrReceiverPhone": "Téléphone du destinataire",
+  "ctrSplitHint": "Des barils de plusieurs clients d'un coup ? Enregistrez la part de chaque client, puis ajoutez le suivant.",
+  "ctrSaveAndAnother": "Enregistrer et ajouter un autre",
+  "ctrAddAndClose": "Ajouter et fermer",
+  "ctrAddedSoFar": "Ajouté jusqu'ici : {list}",
+  "@ctrAddedSoFar": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
   "ctrStock": "Stock",
   "ctrBarrelsQty": "{count} barils",
   "@ctrBarrelsQty": {

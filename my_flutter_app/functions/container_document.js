@@ -105,6 +105,9 @@ function containerDocumentModel({container, lines, business}) {
         quantity: kind === "car" ? 1 : Math.max(1, Number(r.quantity) || 1),
         whose: stock ? "Business stock" : text(r.customerName, 120),
         phone: stock ? "" : text(r.customerPhone, 40),
+        // The name on the barrel: whoever collects it at the port.
+        receiver: text(r.receiverName, 120),
+        receiverPhone: text(r.receiverPhone, 40),
       };
     }),
     printedOn: dateLabel(new Date()),
@@ -131,6 +134,9 @@ function renderContainerDocument(model) {
     <td class="qty">${escape(line.quantity)}</td>
     <td><b>${escape(line.whose)}</b>${line.phone ?
       `<span class="sub">${escape(line.phone)}</span>` : ""}</td>
+    <td>${line.receiver ? `<b>${escape(line.receiver)}</b>` : ""}${
+  line.receiverPhone ?
+      `<span class="sub">${escape(line.receiverPhone)}</span>` : ""}</td>
   </tr>`).join("");
   const meta = [
     ["Destination", m.destination],
@@ -231,8 +237,8 @@ function renderContainerDocument(model) {
   <div class="meta">${meta}</div>
   <table>
     <thead><tr><th>#</th><th>What</th><th class="qty">Qty</th><th>Whose</th>
-    </tr></thead>
-    <tbody>${rows || `<tr><td colspan="4" class="n">Nothing loaded.</td></tr>`}
+    <th>Receiver</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="5" class="n">Nothing loaded.</td></tr>`}
     </tbody>
   </table>
   ${m.notes ? `<h2>Notes</h2><p class="notes">${escape(m.notes)}</p>` : ""}
