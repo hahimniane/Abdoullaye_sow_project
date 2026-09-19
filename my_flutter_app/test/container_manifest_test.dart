@@ -38,6 +38,8 @@ ContainerLine line({
   String customer = 'Aissatou',
   String phone = '',
   String owner = containerOwnerCustomer,
+  String receiver = '',
+  String receiverPhone = '',
   DateTime? createdAt,
 }) {
   return ContainerLine.fromMap(id, {
@@ -55,6 +57,8 @@ ContainerLine line({
     'ownerKind': owner,
     'customerName': customer,
     'customerPhone': phone,
+    'receiverName': receiver,
+    'receiverPhone': receiverPhone,
     'createdAt': createdAt,
   });
 }
@@ -237,6 +241,20 @@ void main() {
       expect(car['quantity'], 1, reason: 'a car is one car');
       expect(car['description'], '');
       expect(car['customerName'], '');
+      expect(car['receiverName'], '', reason: 'no receiver until one is named');
+
+      // The name on the barrel is the receiver's; stock names one too (the
+      // business's agent), so it never depends on the owner kind.
+      final toAgent = containerLineRecord(const ContainerLineDraft(
+        kind: containerLineKindBarrels,
+        quantity: 3,
+        ownerKind: containerOwnerStock,
+        receiverName: '  Mariama Bah ',
+        receiverPhone: '+224 620 00 00 00',
+      ));
+      expect(toAgent['receiverName'], 'Mariama Bah');
+      expect(toAgent['receiverPhone'], '+224 620 00 00 00');
+      expect(toAgent['customerName'], '');
 
       final barrels = containerLineRecord(const ContainerLineDraft(
         kind: containerLineKindBarrels,
@@ -346,10 +364,16 @@ void main() {
         line(id: 'barrels', containerId: 'c1', kind: containerLineKindBarrels,
             customer: 'Mamadou', phone: '(917) 555-1234'),
         line(id: 'stock', containerId: 'c1', vin: 'WVWZZZ3CZWE000001',
-            owner: containerOwnerStock, customer: ''),
+            owner: containerOwnerStock, customer: '',
+            receiver: 'Ousmane Camara', receiverPhone: '+224 620 11 22 33'),
       ];
       List<String> ids(String q) =>
           searchContainerLines(lines, containers, q).map((h) => h.line.id).toList();
+
+      // "Is there anything for Ousmane?" is the port's question; the
+      // receiver answers it even on a stock line that names no customer.
+      expect(ids('ousmane'), ['stock']);
+      expect(ids('620 11'), ['stock']);
 
       expect(ids('1hgcm82633a004352'), ['car']);
       expect(ids('WVWZZZ'), ['stock']);

@@ -937,6 +937,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         customers: widget.customers,
         knownCars: widget.knownCars,
         parkedCarRows: widget.parkedCarRows,
+        onLineAdded: widget.onCustomerRecorded,
       ),
     );
     if (added == true) widget.onCustomerRecorded();
@@ -1570,10 +1571,14 @@ class _LineCard extends StatelessWidget {
         : [line.customerName, line.customerPhone]
             .where((p) => p.isNotEmpty)
             .join(' · ');
+    final receiver = [line.receiverName, line.receiverPhone]
+        .where((p) => p.isNotEmpty)
+        .join(' · ');
     final detail = [
       if (line.isCar && line.vinNumber.isNotEmpty && line.vehicleLabel != line.vinNumber)
         line.vinNumber,
       owner,
+      if (receiver.isNotEmpty) '→ $receiver',
     ].where((p) => p.isNotEmpty).join(' · ');
 
     return PressableScale(
@@ -2040,11 +2045,17 @@ class _LineFormSheet extends StatefulWidget {
     required this.customers,
     required this.knownCars,
     this.parkedCarRows = const [],
+    this.onLineAdded,
   });
 
   final String businessId;
   final ShippingContainer container;
   final List<ShippingContainer> containers;
+
+  /// Told after every save, including the ones that keep the sheet open
+  /// for the next customer's share, so the lot's customer memory refreshes
+  /// even if the sheet is then dismissed.
+  final VoidCallback? onLineAdded;
 
   /// Every line of the business, so a VIN already on an open box is refused
   /// here before the server has to.
@@ -2069,7 +2080,13 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   final _description = TextEditingController();
   final _customer = TextEditingController();
   final _phone = TextEditingController();
+  final _receiver = TextEditingController();
+  final _receiverPhone = TextEditingController();
   final _lotFilter = TextEditingController();
+
+  /// Lines saved from this one opening of the sheet. Five barrels for three
+  /// customers are three lines, entered back to back without closing it.
+  final List<String> _addedThisSitting = [];
 
   String _kind = containerLineKindCar;
   String _owner = containerOwnerCustomer;
@@ -2097,7 +2114,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   void dispose() {
     for (final c in [
       _vin, _make, _model, _year, _quantity, _description, _customer, _phone,
-      _lotFilter,
+      _receiver, _receiverPhone, _lotFilter,
     ]) {
       c.dispose();
     }
@@ -2298,9 +2315,25 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         ownerKind: _owner,
         customerName: _customer.text,
         customerPhone: _phone.text,
+        receiverName: _receiver.text,
+        receiverPhone: _receiverPhone.text,
       );
 
-  Future<void> _submit() async {
+  /// What a saved line reads as in the "added so far" tally.
+  String _tallyLabel(AppLocalizations l10n, ContainerLineDraft d) {
+    final what = d.kind == containerLineKindBarrels
+        ? l10n.ctrBarrelsQty(d.quantity)
+        : '${d.description} ${l10n.ctrTimes(d.quantity)}';
+    final whose = d.ownerKind == containerOwnerStock
+        ? l10n.ctrStock
+        : d.customerName.trim();
+    final to = d.receiverName.trim();
+    return '$what — $whose${to.isEmpty ? '' : ' → $to'}';
+  }
+
+  /// `andAnother` keeps the sheet open after the save with the same kind of
+  /// cargo selected and the customer cleared, for the next customer's share.
+  Future<void> _submit({bool andAnother = false}) async {
     final l10n = AppLocalizations.of(context)!;
     final draft = _draft;
     final errors = validateContainerLine(draft).toSet();
@@ -2327,6 +2360,21 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       });
       if (!mounted) return;
       AppHaptics.commit();
+      widget.onLineAdded?.call();
+      if (andAnother) {
+        setState(() {
+          _addedThisSitting.add(_tallyLabel(l10n, draft));
+          _quantity.clear();
+          _customer.clear();
+          _phone.clear();
+          _receiver.clear();
+          _receiverPhone.clear();
+          _suggestions = const [];
+          _errors = {};
+          _serverNote = '';
+        });
+        return;
+      }
       Navigator.of(context).pop(true);
       showSuccessSnackBar(context, l10n.ctrLineAdded);
     } on FirebaseFunctionsException catch (error) {
@@ -2394,8 +2442,19 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             _RefusalNote(text: _serverNote),
             const SizedBox(height: AppSpacing.sm),
           ],
+          if (showOwner && !isCar) ...[
+            LotSheetButton(
+              key: const Key('line-save-and-another'),
+              label: l10n.ctrSaveAndAnother,
+              busy: _busy,
+              busyLabel: l10n.ctrAdding,
+              tone: LotTone.neutral,
+              onTap: () => _submit(andAnother: true),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           LotSheetButton(
-            label: l10n.ctrAdd,
+            label: _addedThisSitting.isEmpty ? l10n.ctrAdd : l10n.ctrAddAndClose,
             busy: _busy,
             busyLabel: l10n.ctrAdding,
             onTap: _submit,
@@ -2660,6 +2719,42 @@ class _LineFormSheetState extends State<_LineFormSheet> {
                 _errors = {..._errors}..remove('customer_name_required');
               }),
             ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              key: const Key('line-receiver'),
+              controller: _receiver,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                labelText: l10n.ctrReceiver,
+                hintText: l10n.ctrReceiverHint,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              key: const Key('line-receiver-phone'),
+              controller: _receiverPhone,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(labelText: l10n.ctrReceiverPhone),
+            ),
+            if (!isCar) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                l10n.ctrSplitHint,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            ],
+            if (_addedThisSitting.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                l10n.ctrAddedSoFar(_addedThisSitting.join('; ')),
+                key: const Key('line-added-so-far'),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.cobaltDeep,
+                ),
+              ),
+            ],
           ],
         ],
       ),

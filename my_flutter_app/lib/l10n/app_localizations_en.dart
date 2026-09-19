@@ -8837,6 +8837,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctrOwnerStockNote => 'Bought to sell abroad. No customer to name.';
 
   @override
+  String get ctrReceiver => 'Receiver at destination';
+
+  @override
+  String get ctrReceiverHint => 'The name written on it';
+
+  @override
+  String get ctrReceiverPhone => 'Receiver\'s phone';
+
+  @override
+  String get ctrSplitHint =>
+      'Several customers\' barrels in one go? Save each customer\'s share and add the next.';
+
+  @override
+  String get ctrSaveAndAnother => 'Save & add another';
+
+  @override
+  String get ctrAddAndClose => 'Add & close';
+
+  @override
+  String ctrAddedSoFar(String list) {
+    return 'Added so far: $list';
+  }
+
+  @override
   String get ctrStock => 'Stock';
 
   @override

@@ -8978,6 +8978,30 @@ class AppLocalizationsFr extends AppLocalizations {
       'Acheté pour être vendu à l\'étranger. Aucun client à nommer.';
 
   @override
+  String get ctrReceiver => 'Destinataire à l\'arrivée';
+
+  @override
+  String get ctrReceiverHint => 'Le nom écrit dessus';
+
+  @override
+  String get ctrReceiverPhone => 'Téléphone du destinataire';
+
+  @override
+  String get ctrSplitHint =>
+      'Des barils de plusieurs clients d\'un coup ? Enregistrez la part de chaque client, puis ajoutez le suivant.';
+
+  @override
+  String get ctrSaveAndAnother => 'Enregistrer et ajouter un autre';
+
+  @override
+  String get ctrAddAndClose => 'Ajouter et fermer';
+
+  @override
+  String ctrAddedSoFar(String list) {
+    return 'Ajouté jusqu\'ici : $list';
+  }
+
+  @override
   String get ctrStock => 'Stock';
 
   @override

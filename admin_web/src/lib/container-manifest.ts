@@ -259,6 +259,9 @@ export type ContainerLineDraft = {
   ownerKind: ContainerOwnerKind;
   customerName: string;
   customerPhone: string;
+  /** Who collects it at the other end - the name written on the barrel. */
+  receiverName: string;
+  receiverPhone: string;
 };
 
 export const emptyContainerLineDraft: ContainerLineDraft = {
@@ -274,6 +277,8 @@ export const emptyContainerLineDraft: ContainerLineDraft = {
   ownerKind: "customer",
   customerName: "",
   customerPhone: "",
+  receiverName: "",
+  receiverPhone: "",
 };
 
 export type ContainerLineError =
@@ -330,6 +335,10 @@ export function containerLinePayload(draft: ContainerLineDraft) {
     ownerKind: owner,
     customerName: customer ? text(draft.customerName, MAX_LABEL) : "",
     customerPhone: customer ? text(draft.customerPhone, 40) : "",
+    // Either owner kind may name a receiver: stock goes to the business's
+    // own agent at the port.
+    receiverName: text(draft.receiverName, MAX_LABEL),
+    receiverPhone: text(draft.receiverPhone, 40),
   };
 }
 
@@ -654,10 +663,16 @@ export function searchContainerLines(
     const vin = cleanVin(r.vinNumber);
     const name = text(r.customerName, MAX_LABEL).toLowerCase();
     const phone = text(r.customerPhone, 40).replace(/\D+/g, "");
+    // The receiver is who the port asks about ("is there anything for
+    // Mariama Bah?"), so the search answers for that name too.
+    const receiver = text(r.receiverName, MAX_LABEL).toLowerCase();
+    const receiverPhone = text(r.receiverPhone, 40).replace(/\D+/g, "");
     const matches =
       (qVin.length >= 2 && vin.includes(qVin)) ||
       (name && name.includes(q)) ||
-      (qDigits.length >= 3 && phone.includes(qDigits));
+      (receiver && receiver.includes(q)) ||
+      (qDigits.length >= 3 && phone.includes(qDigits)) ||
+      (qDigits.length >= 3 && receiverPhone.includes(qDigits));
     if (!matches) continue;
     const container = byId.get(text(r.containerId, MAX_LABEL));
     hits.push({

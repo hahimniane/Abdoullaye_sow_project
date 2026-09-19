@@ -201,6 +201,11 @@ function containerLineRecord(input, opts = {}) {
     ownerKind: owner,
     customerName: customer ? text(input.customerName, MAX_LABEL) : "",
     customerPhone: customer ? text(input.customerPhone, 40) : "",
+    // Who collects it at the other end - the name written on the barrel.
+    // Usually not the customer who handed it in here, sometimes nobody
+    // named yet; either owner kind may have one (stock goes to an agent).
+    receiverName: text(input.receiverName, MAX_LABEL),
+    receiverPhone: text(input.receiverPhone, 40),
     addedByStaffId: text(opts.addedByStaffId, MAX_LABEL),
   };
 }

@@ -156,6 +156,9 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
   const [containerDraft, setContainerDraft] = useState<ContainerDraft>(emptyContainerDraft);
   const [editingContainerId, setEditingContainerId] = useState("");
   const [lineDraft, setLineDraft] = useState<ContainerLineDraft>(emptyContainerLineDraft);
+  // Lines saved from this one opening of the form. Five barrels for three
+  // customers are three lines, entered back to back without closing it.
+  const [addedThisSitting, setAddedThisSitting] = useState<string[]>([]);
   const [vinHint, setVinHint] = useState("");
   const lastVinRef = useRef("");
   const [customerPick, setCustomerPick] = useState<LotCustomer | null>(null);
@@ -432,6 +435,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
 
   function openAddLine() {
     setLineDraft(emptyContainerLineDraft);
+    setAddedThisSitting([]);
     setVinHint("");
     lastVinRef.current = "";
     setParkedFilter("");
@@ -563,7 +567,9 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
     }
   }
 
-  async function saveLine() {
+  // `andAnother` keeps the form open after the save with the same kind of
+  // cargo selected and the customer cleared, for the next customer's share.
+  async function saveLine(andAnother = false) {
     if (!selected) return;
     const errors = validateContainerLineDraft(lineDraft);
     if (errors.length) {
@@ -582,9 +588,19 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
         return;
       }
     }
-    await runPanelAction(setBusy, setFlash, "Line added.", async () => {
+    await runPanelAction(setBusy, setFlash, andAnother ? "" : "Line added.", async () => {
       await httpsCallable(functions, "addContainerLine")({ businessId, containerId: selectedId, line });
-      closeModal();
+      if (!andAnother) {
+        closeModal();
+        return;
+      }
+      const what = line.kind === "barrels" ? `${line.quantity} barrels` : `${line.quantity} × ${line.description}`;
+      const whose = line.customerName || "Business stock";
+      setAddedThisSitting((list) => [...list, `${what} — ${whose}${line.receiverName ? ` → ${line.receiverName}` : ""}`]);
+      setCustomerPick(null);
+      setCustomerMenuOpen(false);
+      setDraftError("");
+      setLineDraft((d) => ({ ...emptyContainerLineDraft, kind: d.kind, description: d.description, ownerKind: d.ownerKind }));
     }, failInModal);
   }
 
@@ -727,6 +743,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                       <span>
                         {stock ? <strong>Business stock</strong> : <strong>{text(row.customerName, "")}</strong>}
                         {!stock && <small>{text(row.customerPhone, "")}</small>}
+                        {text(row.receiverName, "") && <small>→ {text(row.receiverName, "")}{text(row.receiverPhone, "") ? ` · ${text(row.receiverPhone, "")}` : ""}</small>}
                       </span>
                       <span><strong>{formatDate(row.createdAt)}</strong>{by && <small>{by}</small>}</span>
                       <span className="ctn-row-actions">
@@ -1003,6 +1020,9 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                 <label className="lst-radio"><input type="radio" name="ctnowner" checked={lineDraft.ownerKind === "stock"} onChange={() => { setCustomerMenuOpen(false); setLineDraft((d) => ({ ...d, ownerKind: "stock", customerName: "", customerPhone: "" })); }} /><span>Business stock — your own goods, nobody to name</span></label>
               </fieldset>
               )}
+              {addedThisSitting.length > 0 && (
+                <p className="lst-hint" role="status">Added so far: {addedThisSitting.join("; ")}.</p>
+              )}
               {ownerVisible && lineDraft.ownerKind === "customer" && (
                 <div className="lst-form-grid">
                   <label className="lst-field" style={{ position: "relative" }}><span>Customer</span>
@@ -1018,12 +1038,24 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                   <label className="lst-field"><span>Phone</span><input value={lineDraft.customerPhone} onChange={(e) => setLineDraft((d) => ({ ...d, customerPhone: e.target.value }))} /></label>
                 </div>
               )}
+              {ownerVisible && (
+                <div className="lst-form-grid">
+                  <label className="lst-field"><span>Receiver at destination</span><input value={lineDraft.receiverName} placeholder="The name written on it" onChange={(e) => setLineDraft((d) => ({ ...d, receiverName: e.target.value }))} /></label>
+                  <label className="lst-field"><span>Receiver's phone</span><input value={lineDraft.receiverPhone} onChange={(e) => setLineDraft((d) => ({ ...d, receiverPhone: e.target.value }))} /></label>
+                </div>
+              )}
+              {ownerVisible && lineDraft.kind !== "car" && (
+                <p className="lst-hint">Several customers' barrels in one go? Save each customer's share and add the next.</p>
+              )}
             </div>
             <footer className="lst-modal-foot">
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
+              {ownerVisible && lineDraft.kind !== "car" && (
+                <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => void saveLine(true)}>Save & add another</button>
+              )}
               <button className="lst-add" type="button" disabled={busy || !ownerVisible} aria-busy={busy} onClick={() => void saveLine()}>
                 {busy ? <RefreshCw className="spin" size={16} /> : <Plus size={16} />}
-                {busy ? "Saving..." : "Add line"}
+                {busy ? "Saving..." : (addedThisSitting.length > 0 ? "Add & close" : "Add line")}
               </button>
             </footer>
           </div>

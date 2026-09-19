@@ -25,7 +25,8 @@ const lines = [
   {kind: "car", vinNumber: "1HGCM82633A004352", carYear: "2003",
     carMake: "Honda", carModel: "Accord", ownerKind: "stock"},
   {kind: "barrels", quantity: 8, ownerKind: "customer",
-    customerName: "Fatou Diallo", customerPhone: "+1 646 555 0199"},
+    customerName: "Fatou Diallo", customerPhone: "+1 646 555 0199",
+    receiverName: "Mariama Bah", receiverPhone: "+224 620 00 00 00"},
 ];
 
 describe("the loading list wears the shipper's identity", () => {
@@ -92,6 +93,10 @@ describe("what the loading list prints", () => {
     assert.match(html, /Barrels/);
     assert.match(html, /Fatou Diallo/);
     assert.match(html, /1 car · 8 barrels/);
+    // The receiver is the name on the barrel; the list prints it beside
+    // the customer so the box can be checked off at the port.
+    assert.match(html, /<th>Receiver<\/th>/);
+    assert.match(html, /<b>Mariama Bah<\/b><span class="sub">\+224 620/);
     assert.match(html, /Guinea/);
     assert.match(html, /tyres on top/);
   });

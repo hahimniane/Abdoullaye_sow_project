@@ -85,6 +85,19 @@ describe("a container's life", () => {
 });
 
 describe("a line on the list", () => {
+  // The name painted on the barrel is the receiver's, not the sender's;
+  // whoever opens the box in Conakry matches lines by it. Stock has one too
+  // (the business's agent), so it is never tied to the owner kind.
+  it("keeps the receiver at destination for any owner", () => {
+    const line = containerLineRecord({
+      kind: "barrels", quantity: 3, ownerKind: "stock",
+      receiverName: "  Mariama Bah ", receiverPhone: "+224 620 00 00 00",
+    }, {containerId: "c1"});
+    assert.equal(line.receiverName, "Mariama Bah");
+    assert.equal(line.receiverPhone, "+224 620 00 00 00");
+    assert.equal(line.customerName, "");
+  });
+
   it("asks each kind for what identifies it", () => {
     assert.deepEqual(validateContainerLine(car({ownerKind: "stock"})), []);
     assert.deepEqual(
@@ -128,6 +141,8 @@ describe("a line on the list", () => {
       kind: "barrels", quantity: 8, ownerKind: "customer",
       customerName: "Fatou Diallo", customerPhone: "+1 646 555 0100",
     }, {containerId: "c1"});
+    assert.equal(barrels.receiverName, "", "no receiver until one is named");
+    assert.equal(barrels.receiverPhone, "");
     assert.equal(barrels.quantity, 8);
     assert.equal(barrels.vinNumber, "");
     assert.equal(barrels.customerName, "Fatou Diallo");
