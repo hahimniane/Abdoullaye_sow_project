@@ -13945,3 +13945,8 @@ button[data-loading="true"]::before {
 .ctn-placement { color: var(--brand-strong, #0f766e); font-weight: 600; }
 .pk-row small.ctn-placement,
 .lot-activity-table .mini-table-row > span > small.ctn-placement { color: var(--brand-strong, #0f766e); }
+
+/* One-tap copy beside a value nobody should retype (VIN, customer name). */
+.copy-value{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:6px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;vertical-align:middle}
+.copy-value:hover{background:var(--mist);color:var(--brand-strong)}
+.copy-value.copied{color:var(--brand-strong)}
