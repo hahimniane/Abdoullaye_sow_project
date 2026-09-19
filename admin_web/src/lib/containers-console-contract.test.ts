@@ -96,7 +96,57 @@ test("the line form reuses the ledger's VIN prefill and customer memory rather t
   // The car fields stay catalog pickers, never free text.
   assert.match(panelSource, /\{getMakes\(\)\.map\(\(m\) => \(<option key=\{m\} value=\{m\}>\{m\}<\/option>\)\)\}/);
   // Stock lines name nobody: the customer fields are hidden, not greyed.
-  assert.match(panelSource, /\{lineDraft\.ownerKind === "customer" && \(\s*<div className="lst-form-grid">/);
+  assert.match(panelSource, /\{ownerVisible && lineDraft\.ownerKind === "customer" && \(\s*<div className="lst-form-grid">/);
+});
+
+test("a car line asks whether the car is in the lot before it shows a VIN field", () => {
+  const question = panelSource.indexOf('<legend>Is this car parked in your lot?</legend>');
+  const vinField = panelSource.indexOf('<label className="lst-field wide"><span>VIN</span>');
+  assert.ok(question > 0, "the question is not asked");
+  assert.ok(vinField > question, "the VIN field renders before the question");
+  // Two answers and nothing else until one is chosen: the car fields, the
+  // owner fields and the Add button all wait on the answer.
+  assert.match(panelSource, /name="ctninlot" checked=\{lineDraft\.inLot === "yes"\} onChange=\{\(\) => answerInLot\("yes"\)\} \/><span>Yes<\/span>/);
+  assert.match(panelSource, /name="ctninlot" checked=\{lineDraft\.inLot === "no"\} onChange=\{\(\) => answerInLot\("no"\)\} \/><span>No<\/span>/);
+  assert.match(panelSource, /const carFieldsVisible = lineDraft\.inLot === "no" \|\| Boolean\(lineDraft\.parkedCarId\);/);
+  assert.match(panelSource, /const ownerVisible = lineDraft\.kind !== "car" \|\| carFieldsVisible;/);
+  assert.match(panelSource, /\{lineDraft\.kind === "car" && carFieldsVisible && \(\s*<>\s*<label className="lst-field wide"><span>VIN<\/span>/);
+  assert.match(panelSource, /disabled=\{busy \|\| !ownerVisible\} aria-busy=\{busy\} onClick=\{\(\) => void saveLine\(\)\}/);
+  // The answer lives in the draft and is reset with the kind and on open.
+  assert.match(panelSource, /function setLineKind\(kind: ContainerLineDraft\["kind"\]\) \{[\s\S]*?inLot: "",\s*parkedCarId: "",/);
+  assert.match(panelSource, /onChange=\{\(\) => setLineKind\("car"\)\} \/><span>A car<\/span>/);
+  assert.match(panelSource, /function openAddLine\(\) \{\s*setLineDraft\(emptyContainerLineDraft\);/);
+});
+
+test("the pick list is the parked cars in the lot, from the subscription the VIN prefill already holds", () => {
+  const subscriptions = panelSource.match(/useBusinessCollection\("parkedCars", businessId, enabled, \d+\)/g) ?? [];
+  assert.equal(subscriptions.length, 1, "one parkedCars subscription per panel, not one per modal");
+  assert.match(panelSource, /parkedCarsInLot\(parkedCars\.rows\)\.map\(\(row\) => parkedCarPick\(row, vinPlacements\)\)/);
+  assert.match(panelSource, /const vinPlacements = useMemo\(\s*\(\) => buildVinPlacementIndex\(lines\.rows, containers\.rows\),/);
+  assert.match(panelSource, /filterParkedCarPicks\(parkedPicks, parkedFilter\)/);
+  assert.match(panelSource, /<input type="search" placeholder="VIN, owner, make" aria-label="Filter parked cars" value=\{parkedFilter\}/);
+  assert.match(panelSource, /<div className="mini-table-head"><span>Car<\/span><span>VIN<\/span><span>Owner<\/span><\/div>/);
+  // Empty lot: say so and offer the other answer.
+  assert.match(panelSource, /No cars are parked in your lot right now\.\s*<button className="ghost-button" type="button" onClick=\{\(\) => answerInLot\("no"\)\}>Enter the VIN instead<\/button>/);
+});
+
+test("a parked car already on an open container is shown disabled with that container named", () => {
+  assert.match(panelSource, /const taken = Boolean\(pick\.takenBy\);/);
+  assert.match(panelSource, /className=\{`mini-table-row \$\{taken \? "ctn-pick-taken" : "ctn-clickable"\}`\}/);
+  assert.match(panelSource, /tabIndex=\{taken \? -1 : 0\}\s*aria-disabled=\{taken\}/);
+  assert.match(panelSource, /\{taken && <small className="ctn-placement">\{vinPlacementText\(pick\.takenBy, lang\)\}<\/small>\}/);
+  assert.match(panelSource, /function pickParkedCar\(pick: ParkedCarPick\) \{\s*if \(pick\.takenBy\) return;/);
+  assert.match(stylesSource, /\.ctn-table \.mini-table-row\.ctn-pick-taken \{ cursor: not-allowed; \}/);
+});
+
+test("picking a parked car fills the car and the owner through the shared helper, then shows the fields", () => {
+  assert.match(panelSource, /setLineDraft\(\(d\) => lineDraftFromParkedCar\(d, pick\)\);/);
+  // The VIN is known: the decoder must not fire once the field renders.
+  assert.match(panelSource, /lastVinRef\.current = pick\.vin;\s*setLineDraft\(\(d\) => lineDraftFromParkedCar\(d, pick\)\);/);
+  assert.match(panelSource, /setVinHint\(recordHint\(pick\.car === "Car" \? "" : pick\.car, pick\.owner\)\);/);
+  // Same sentence the typed-VIN prefill shows, so the two paths read alike.
+  assert.match(panelSource, /function recordHint\(car: string, who: string\) \{\s*return `Filled from an existing record\$\{car \? `: \$\{car\}` : ""\}\$\{who \? ` for \$\{who\}` : ""\}\. You can change anything below\.`;/);
+  assert.match(panelSource, /onClick=\{\(\) => answerInLot\("yes"\)\}>Pick another car<\/button>/);
 });
 
 test("a parked-car row and a ledger activity say which container the car is on", () => {
@@ -148,6 +198,18 @@ test("every string the panel shows has French", () => {
     "Sailing 3 Oct, box 2",
     "Move to another container",
     "Remove line",
+    "Is this car parked in your lot?",
+    "Yes",
+    "No",
+    "Pick the car from your lot. It fills the VIN and the owner.",
+    "No cars are parked in your lot right now.",
+    "No parked car matches that filter.",
+    "Enter the VIN instead",
+    "Pick another car",
+    "VIN, owner, make",
+    "Filter parked cars",
+    "Owner",
+    "Car",
   ];
   for (const english of strings) {
     const french = translateValue(english, "fr");

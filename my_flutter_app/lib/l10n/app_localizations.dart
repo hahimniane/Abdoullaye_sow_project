@@ -15941,6 +15941,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You can only move a line to a container that is still loading.'**
   String get ctrErrMoveTarget;
+
+  /// No description provided for @ctrLotQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Is this car parked in your lot?'**
+  String get ctrLotQuestion;
+
+  /// No description provided for @ctrLotYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get ctrLotYes;
+
+  /// No description provided for @ctrLotYesNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick it from the cars in the lot.'**
+  String get ctrLotYesNote;
+
+  /// No description provided for @ctrLotNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get ctrLotNo;
+
+  /// No description provided for @ctrLotNoNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter or scan the VIN.'**
+  String get ctrLotNoNote;
+
+  /// No description provided for @ctrLotChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get ctrLotChange;
+
+  /// No description provided for @ctrLotPickTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Which car?'**
+  String get ctrLotPickTitle;
+
+  /// No description provided for @ctrLotFilterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN, owner or make'**
+  String get ctrLotFilterHint;
+
+  /// No description provided for @ctrLotNoCars.
+  ///
+  /// In en, this message translates to:
+  /// **'No cars are parked right now.'**
+  String get ctrLotNoCars;
+
+  /// No description provided for @ctrLotNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No parked car matches.'**
+  String get ctrLotNoMatch;
+
+  /// No description provided for @ctrLotEnterVinInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the VIN instead'**
+  String get ctrLotEnterVinInstead;
+
+  /// No description provided for @ctrLotCarUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Car'**
+  String get ctrLotCarUnknown;
+
+  /// No description provided for @ctrLotTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'Already on {container}'**
+  String ctrLotTaken(String container);
+
+  /// No description provided for @ctrLotPicked.
+  ///
+  /// In en, this message translates to:
+  /// **'Filled in from the car in your lot.'**
+  String get ctrLotPicked;
+
+  /// No description provided for @ctrLotPickAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a different car'**
+  String get ctrLotPickAnother;
 }
 
 class _AppLocalizationsDelegate

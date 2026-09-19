@@ -52,14 +52,21 @@ import {
   emptyContainerDraft,
   emptyContainerLineDraft,
   filterContainers,
+  filterParkedCarPicks,
+  lineDraftFromParkedCar,
   nextContainerStatus,
   openContainerHoldingVin,
+  parkedCarPick,
+  parkedCarsInLot,
   searchContainerLines,
   validateContainerDraft,
   validateContainerLineDraft,
+  vinPlacementText,
   type ContainerDraft,
   type ContainerLineDraft,
+  type ContainerLineInLot,
   type ContainerStatus,
+  type ParkedCarPick,
 } from "@/lib/container-manifest";
 import {
   destinationCountryName,
@@ -151,6 +158,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
   const lastVinRef = useRef("");
   const [customerPick, setCustomerPick] = useState<LotCustomer | null>(null);
   const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
+  const [parkedFilter, setParkedFilter] = useState("");
   const [moveLineId, setMoveLineId] = useState("");
   const [moveTargetId, setMoveTargetId] = useState("");
   const [historyRows, setHistoryRows] = useState<FirestoreRow[]>([]);
@@ -236,6 +244,25 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
   const loadingContainers = useMemo(
     () => containers.rows.filter((row) => containerIsOpen(row)),
     [containers.rows],
+  );
+
+  // Every VIN on a container that has not arrived — the same index the
+  // parking list and the ledger use for their cross-links. Here it marks a
+  // parked car as already taken before it can be picked.
+  const vinPlacements = useMemo(
+    () => buildVinPlacementIndex(lines.rows, containers.rows),
+    [lines.rows, containers.rows],
+  );
+  // The cars in the lot right now, as the line form offers them. Built from
+  // the parkedCars rows the VIN prefill already subscribes to — one list per
+  // panel, not one per modal.
+  const parkedPicks = useMemo(
+    () => parkedCarsInLot(parkedCars.rows).map((row) => parkedCarPick(row, vinPlacements)),
+    [parkedCars.rows, vinPlacements],
+  );
+  const visibleParkedPicks = useMemo(
+    () => filterParkedCarPicks(parkedPicks, parkedFilter),
+    [parkedPicks, parkedFilter],
   );
 
   const knownCustomers = useMemo(
@@ -405,11 +432,66 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
     setLineDraft(emptyContainerLineDraft);
     setVinHint("");
     lastVinRef.current = "";
+    setParkedFilter("");
     setCustomerPick(null);
     setCustomerMenuOpen(false);
     setDraftError("");
     setConflictId("");
     setModal("line");
+  }
+
+  // Changing what the line is starts the car over: the in-the-lot question
+  // is asked again and nothing filled for a car survives into barrels.
+  function setLineKind(kind: ContainerLineDraft["kind"]) {
+    setVinHint("");
+    lastVinRef.current = "";
+    setConflictId("");
+    setParkedFilter("");
+    setLineDraft((d) => ({
+      ...d,
+      kind,
+      inLot: "",
+      parkedCarId: "",
+      vinNumber: "",
+      carMake: "",
+      carModel: "",
+      carYear: "",
+    }));
+  }
+
+  // "Is this car parked in your lot?" — the first thing the car form asks.
+  // Either answer clears whatever the other answer had filled: a picked car
+  // must not leak its VIN into the typed flow, and a typed VIN must not sit
+  // behind the pick list. The owner a pick filled goes with it.
+  function answerInLot(inLot: ContainerLineInLot) {
+    setVinHint("");
+    lastVinRef.current = "";
+    setConflictId("");
+    setParkedFilter("");
+    setCustomerPick(null);
+    setCustomerMenuOpen(false);
+    setLineDraft((d) => ({
+      ...d,
+      inLot,
+      parkedCarId: "",
+      vinNumber: "",
+      carMake: "",
+      carModel: "",
+      carYear: "",
+      customerName: d.parkedCarId ? "" : d.customerName,
+      customerPhone: d.parkedCarId ? "" : d.customerPhone,
+    }));
+  }
+
+  function pickParkedCar(pick: ParkedCarPick) {
+    if (pick.takenBy) return;
+    setCustomerPick(null);
+    setCustomerMenuOpen(false);
+    setConflictId("");
+    // The VIN is known, so the decoder must not fire when the field renders.
+    lastVinRef.current = pick.vin;
+    setLineDraft((d) => lineDraftFromParkedCar(d, pick));
+    setVinHint(recordHint(pick.car === "Car" ? "" : pick.car, pick.owner));
   }
 
   function pickCustomer(c: LotCustomer) {
@@ -447,9 +529,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
       }));
       const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")].filter(Boolean).join(" ");
       const who = text(match.customerName ?? match.ownerName, "");
-      setVinHint(
-        `Filled from an existing record${car ? `: ${car}` : ""}${who ? ` for ${who}` : ""}. You can change anything below.`,
-      );
+      setVinHint(recordHint(car, who));
       return;
     }
     // The yard has never seen this VIN: decode it. Only on a full VIN, and once
@@ -536,6 +616,11 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
     }, failInModal);
   }
 
+  // A car's fields wait behind the in-the-lot question: "no" shows the VIN
+  // flow, "yes" shows them once a car is picked. Barrels and other cargo have
+  // no such step.
+  const carFieldsVisible = lineDraft.inLot === "no" || Boolean(lineDraft.parkedCarId);
+  const ownerVisible = lineDraft.kind !== "car" || carFieldsVisible;
   const moveTargets = loadingContainers.filter((row) => String(row.id) !== selectedId);
   const movingLine = moveLineId ? selectedLines.find((row) => String(row.id) === moveLineId) : undefined;
   const conflictContainer = conflictId ? containerById.get(conflictId) : undefined;
@@ -820,12 +905,64 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                 </div>
               )}
               <fieldset className="lst-fieldset">
-                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "car"} onChange={() => { setVinHint(""); setLineDraft((d) => ({ ...d, kind: "car" })); }} /><span>A car</span></label>
-                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "barrels"} onChange={() => setLineDraft((d) => ({ ...d, kind: "barrels" }))} /><span>Barrels</span></label>
-                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "other"} onChange={() => setLineDraft((d) => ({ ...d, kind: "other" }))} /><span>Something else</span></label>
+                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "car"} onChange={() => setLineKind("car")} /><span>A car</span></label>
+                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "barrels"} onChange={() => setLineKind("barrels")} /><span>Barrels</span></label>
+                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "other"} onChange={() => setLineKind("other")} /><span>Something else</span></label>
               </fieldset>
+              {lineDraft.kind === "car" && (
+                <fieldset className="lst-fieldset ctn-inlot">
+                  <legend>Is this car parked in your lot?</legend>
+                  <label className="lst-radio"><input type="radio" name="ctninlot" checked={lineDraft.inLot === "yes"} onChange={() => answerInLot("yes")} /><span>Yes</span></label>
+                  <label className="lst-radio"><input type="radio" name="ctninlot" checked={lineDraft.inLot === "no"} onChange={() => answerInLot("no")} /><span>No</span></label>
+                  {lineDraft.parkedCarId && (
+                    <button className="ghost-button ctn-pick-again" type="button" onClick={() => answerInLot("yes")}>Pick another car</button>
+                  )}
+                </fieldset>
+              )}
+              {lineDraft.kind === "car" && lineDraft.inLot === "yes" && !lineDraft.parkedCarId && (
+                <div className="ctn-pick">
+                  {parkedPicks.length === 0 ? (
+                    <div className="empty-state">
+                      No cars are parked in your lot right now.
+                      <button className="ghost-button" type="button" onClick={() => answerInLot("no")}>Enter the VIN instead</button>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="lst-hint">Pick the car from your lot. It fills the VIN and the owner.</p>
+                      <input type="search" placeholder="VIN, owner, make" aria-label="Filter parked cars" value={parkedFilter} onChange={(e) => setParkedFilter(e.target.value)} autoFocus />
+                      {visibleParkedPicks.length === 0 ? (
+                        <EmptyState text="No parked car matches that filter." />
+                      ) : (
+                        <div className="mini-table">
+                          <div className="ctn-table ctn-pick-table">
+                            <div className="mini-table-head"><span>Car</span><span>VIN</span><span>Owner</span></div>
+                            {visibleParkedPicks.map((pick) => {
+                              const taken = Boolean(pick.takenBy);
+                              return (
+                                <div
+                                  className={`mini-table-row ${taken ? "ctn-pick-taken" : "ctn-clickable"}`}
+                                  key={pick.id}
+                                  role="button"
+                                  tabIndex={taken ? -1 : 0}
+                                  aria-disabled={taken}
+                                  onClick={() => pickParkedCar(pick)}
+                                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickParkedCar(pick); } }}
+                                >
+                                  <span><strong>{pick.car}</strong>{taken && <small className="ctn-placement">{vinPlacementText(pick.takenBy, lang)}</small>}</span>
+                                  <span><strong>{pick.vin || "—"}</strong></span>
+                                  <span><strong>{pick.owner || "—"}</strong>{pick.phone && <small>{pick.phone}</small>}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               <div className="lst-form-grid">
-                {lineDraft.kind === "car" && (
+                {lineDraft.kind === "car" && carFieldsVisible && (
                   <>
                     <label className="lst-field wide"><span>VIN</span><input value={lineDraft.vinNumber} onChange={(e) => applyVin(e.target.value)} placeholder="17 characters" autoFocus />{vinHint && <small className="lst-hint" style={{ color: "var(--money)" }}>{vinHint}</small>}</label>
                     <label className="lst-field"><span>Car make</span>
@@ -858,11 +995,13 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                   </>
                 )}
               </div>
+              {ownerVisible && (
               <fieldset className="lst-fieldset">
                 <label className="lst-radio"><input type="radio" name="ctnowner" checked={lineDraft.ownerKind === "customer"} onChange={() => setLineDraft((d) => ({ ...d, ownerKind: "customer" }))} /><span>A customer's — say who</span></label>
                 <label className="lst-radio"><input type="radio" name="ctnowner" checked={lineDraft.ownerKind === "stock"} onChange={() => { setCustomerMenuOpen(false); setLineDraft((d) => ({ ...d, ownerKind: "stock", customerName: "", customerPhone: "" })); }} /><span>Business stock — your own goods, nobody to name</span></label>
               </fieldset>
-              {lineDraft.ownerKind === "customer" && (
+              )}
+              {ownerVisible && lineDraft.ownerKind === "customer" && (
                 <div className="lst-form-grid">
                   <label className="lst-field" style={{ position: "relative" }}><span>Customer</span>
                     <input value={lineDraft.customerName} autoComplete="off" onFocus={() => setCustomerMenuOpen(true)} onBlur={() => window.setTimeout(() => setCustomerMenuOpen(false), 150)} onChange={(e) => { setCustomerPick(null); setCustomerMenuOpen(true); setLineDraft((d) => ({ ...d, customerName: e.target.value })); }} />
@@ -880,7 +1019,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
             </div>
             <footer className="lst-modal-foot">
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void saveLine()}>
+              <button className="lst-add" type="button" disabled={busy || !ownerVisible} aria-busy={busy} onClick={() => void saveLine()}>
                 {busy ? <RefreshCw className="spin" size={16} /> : <Plus size={16} />}
                 {busy ? "Saving..." : "Add line"}
               </button>
@@ -944,6 +1083,11 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
       )}
     </div>
   );
+}
+
+/** "Filled from an existing record: 2019 Toyota Camry for Aissatou. You can change anything below." */
+function recordHint(car: string, who: string) {
+  return `Filled from an existing record${car ? `: ${car}` : ""}${who ? ` for ${who}` : ""}. You can change anything below.`;
 }
 
 /** The audit actions the server writes for a container, as a word. */

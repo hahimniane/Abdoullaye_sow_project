@@ -26,8 +26,12 @@ import {
   emptyContainerDraft,
   emptyContainerLineDraft,
   filterContainers,
+  filterParkedCarPicks,
+  lineDraftFromParkedCar,
   nextContainerStatus,
   openContainerHoldingVin,
+  parkedCarPick,
+  parkedCarsInLot,
   searchContainerLines,
   shortDayMonth,
   validateContainerDraft,
@@ -210,6 +214,10 @@ test("a customer's line names the customer; stock names no one", () => {
 test("the line payload keeps only the fields its kind and owner use", () => {
   const car = containerLinePayload({
     kind: "car",
+    // The form's own bookkeeping — the in-the-lot answer and which parked
+    // car was picked — never reaches the server.
+    inLot: "yes",
+    parkedCarId: "ignored",
     vinNumber: " 1hgcm82633a004352 ",
     carMake: "Honda",
     carModel: "Accord",
@@ -427,4 +435,114 @@ test("every refusal sentence has a French translation", () => {
     const french = translateValue(english, "fr");
     assert.notEqual(french, english, `no French for ${code}: "${english}"`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Picking a car that is already in the lot.
+// ---------------------------------------------------------------------------
+
+test("the car form opens with the in-the-lot question unanswered", () => {
+  assert.equal(emptyContainerLineDraft.inLot, "");
+  assert.equal(emptyContainerLineDraft.parkedCarId, "");
+});
+
+test("the pick list is the parked cars not cancelled and not past their end date", () => {
+  const now = new Date("2026-09-18T12:00:00Z");
+  const rows = [
+    { id: "open", vinNumber: "A", status: "reserved" },
+    { id: "ends-later", vinNumber: "B", status: "reserved", parkingEndDate: "2026-10-01" },
+    { id: "ends-today", vinNumber: "C", status: "reserved", parkingEndDate: "2026-09-18" },
+    { id: "left", vinNumber: "D", status: "reserved", parkingEndDate: "2026-09-01" },
+    { id: "cancelled", vinNumber: "E", status: "cancelled" },
+    { id: "walk-up", vinNumber: "F", source: "business" },
+  ];
+  assert.deepEqual(
+    parkedCarsInLot(rows, now).map((row) => row.id),
+    ["open", "ends-later", "ends-today", "walk-up"],
+  );
+  assert.deepEqual(parkedCarsInLot(undefined as never), []);
+});
+
+test("a parked car is offered as its car, VIN and owner, and marked taken from the placement index", () => {
+  const placements = buildVinPlacementIndex(
+    [{ kind: "car", vinNumber: "1HGCM82633A004352", containerId: "box2" }],
+    [{ id: "box2", label: "Box 2", status: "loading" }],
+  );
+  const known = parkedCarPick(
+    {
+      id: "p1",
+      vinNumber: " 1hgcm-82633a004352 ",
+      carMake: "Honda",
+      carModel: "Accord",
+      carYear: "2003",
+      customerName: "Aissatou Bah",
+      ownerName: "ignored when customerName is set",
+      customerPhone: "+1 646 555 0100",
+    },
+    placements,
+  );
+  assert.equal(known.id, "p1");
+  assert.equal(known.vin, "1HGCM82633A004352");
+  assert.equal(known.car, "2003 Honda Accord");
+  assert.equal(known.owner, "Aissatou Bah");
+  assert.equal(known.phone, "+1 646 555 0100");
+  assert.equal(known.takenBy?.title, "Box 2", "the container holding the car is named");
+
+  const bare = parkedCarPick({ id: "p2", vinNumber: "WBA12345", ownerName: "Mamadou" }, placements);
+  assert.equal(bare.car, "Car", "nothing known about the car reads as a car, not a blank");
+  assert.equal(bare.owner, "Mamadou", "ownerName stands in when customerName is absent");
+  assert.equal(bare.takenBy, undefined);
+});
+
+test("the pick list narrows by VIN, owner or make and ignores VIN punctuation", () => {
+  const picks = [
+    parkedCarPick({ id: "1", vinNumber: "1HGCM82633A004352", carMake: "Honda", carModel: "Accord", carYear: "2003", customerName: "Aissatou Bah" }, new Map()),
+    parkedCarPick({ id: "2", vinNumber: "JTDKB20U", carMake: "Toyota", carModel: "Prius", customerName: "Mamadou Diallo" }, new Map()),
+  ];
+  const ids = (query: string) => filterParkedCarPicks(picks, query).map((p) => p.id);
+  assert.deepEqual(ids(""), ["1", "2"]);
+  assert.deepEqual(ids("  "), ["1", "2"]);
+  assert.deepEqual(ids("1hgcm-826"), ["1"]);
+  assert.deepEqual(ids("diallo"), ["2"]);
+  assert.deepEqual(ids("toyota"), ["2"]);
+  assert.deepEqual(ids("2003"), ["1"]);
+  assert.deepEqual(ids("nissan"), []);
+});
+
+test("picking a parked car fills the car and the owner and keeps the answer at yes", () => {
+  const pick = parkedCarPick(
+    { id: "p1", vinNumber: "1HGCM82633A004352", carMake: "Honda", carModel: "Accord", carYear: "2003", customerName: "Aissatou Bah", customerPhone: "+1 646 555 0100" },
+    new Map(),
+  );
+  const typed = { ...emptyContainerLineDraft, inLot: "yes" as const, ownerKind: "stock" as const, customerName: "", customerPhone: "" };
+  const filled = lineDraftFromParkedCar(typed, pick);
+  assert.equal(filled.inLot, "yes");
+  assert.equal(filled.parkedCarId, "p1");
+  assert.equal(filled.vinNumber, "1HGCM82633A004352");
+  assert.equal(filled.carMake, "Honda");
+  assert.equal(filled.carModel, "Accord");
+  assert.equal(filled.carYear, "2003");
+  assert.equal(filled.ownerKind, "customer", "a named owner makes it a customer's line");
+  assert.equal(filled.customerName, "Aissatou Bah");
+  assert.equal(filled.customerPhone, "+1 646 555 0100");
+  assert.deepEqual(validateContainerLineDraft(filled), [], "what a pick fills is enough to save");
+
+  // A record naming nobody leaves the owner fields alone so the form still asks.
+  const nameless = parkedCarPick({ id: "p2", vinNumber: "WBA12345" }, new Map());
+  const kept = lineDraftFromParkedCar({ ...emptyContainerLineDraft, customerName: "Typed", customerPhone: "555" }, nameless);
+  assert.equal(kept.ownerKind, "customer");
+  assert.equal(kept.customerName, "Typed");
+  assert.equal(kept.customerPhone, "555");
+  assert.equal(kept.parkedCarId, "p2");
+});
+
+// A booking whose checkout never completed has no car in the yard; the app's
+// picker excludes it, and the console must offer the same cars.
+test("a pending-payment booking is not a car in the lot", () => {
+  const rows = [
+    { id: "a", status: "reserved", vinNumber: "1HGCM82633A004352" },
+    { id: "b", status: "pending_payment", vinNumber: "2HGCM82633A004352" },
+    { id: "c", status: "cancelled", vinNumber: "3HGCM82633A004352" },
+  ];
+  assert.deepEqual(parkedCarsInLot(rows).map((r) => r.id), ["a"]);
 });

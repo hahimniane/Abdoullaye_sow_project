@@ -4001,5 +4001,27 @@
       }
     }
   },
-  "ctrErrMoveTarget": "You can only move a line to a container that is still loading."
+  "ctrErrMoveTarget": "You can only move a line to a container that is still loading.",
+  "ctrLotQuestion": "Is this car parked in your lot?",
+  "ctrLotYes": "Yes",
+  "ctrLotYesNote": "Pick it from the cars in the lot.",
+  "ctrLotNo": "No",
+  "ctrLotNoNote": "Enter or scan the VIN.",
+  "ctrLotChange": "Change",
+  "ctrLotPickTitle": "Which car?",
+  "ctrLotFilterHint": "VIN, owner or make",
+  "ctrLotNoCars": "No cars are parked right now.",
+  "ctrLotNoMatch": "No parked car matches.",
+  "ctrLotEnterVinInstead": "Enter the VIN instead",
+  "ctrLotCarUnknown": "Car",
+  "ctrLotTaken": "Already on {container}",
+  "@ctrLotTaken": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLotPicked": "Filled in from the car in your lot.",
+  "ctrLotPickAnother": "Choose a different car"
 }

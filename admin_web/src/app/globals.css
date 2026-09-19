@@ -13923,6 +13923,25 @@ button[data-loading="true"]::before {
 }
 /* The cross-link under a car in the parking list and the ledger: where the
    car is now, if it was loaded. */
+/* "Is this car parked in your lot?" — the car form's first question, and the
+   pick list it opens. Three columns instead of the list's four; a car already
+   on an open container stays visible but reads as taken. */
+.ctn-inlot .lst-radio { display: inline-flex; margin-right: 18px; }
+.ctn-inlot .ctn-pick-again { align-self: flex-start; padding: 0; }
+.ctn-pick { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.ctn-pick > .lst-hint { margin: 0; }
+.ctn-pick > input[type="search"] { width: 100%; }
+.ctn-pick .empty-state { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px; }
+.ctn-pick .mini-table { max-height: 280px; overflow-y: auto; }
+.ctn-pick-table .mini-table-head,
+.ctn-pick-table .mini-table-row {
+  grid-template-columns:
+    minmax(160px, 1.6fr)
+    minmax(150px, 1.4fr)
+    minmax(140px, 1.2fr);
+}
+.ctn-table .mini-table-row.ctn-pick-taken { cursor: not-allowed; }
+.ctn-table .mini-table-row.ctn-pick-taken > span > strong { color: var(--muted); }
 .ctn-placement { color: var(--brand-strong, #0f766e); font-weight: 600; }
 .pk-row small.ctn-placement,
 .lot-activity-table .mini-table-row > span > small.ctn-placement { color: var(--brand-strong, #0f766e); }
