@@ -15597,15 +15597,17 @@ exports.addContainerLine = onCall(
         containerStatus: String(current.status || CONTAINER_STATUS.LOADING),
         addedByStaffId: uid,
       });
-      // A car on two open containers is a mistake every time. Refuse, and
-      // say which container has it.
+      // A car on two open containers is a mistake every time - and so is the
+      // same car twice on one list. Refuse either, and say which container
+      // has it. (Only a move is allowed to find the car on its own source
+      // container; an add never is.)
       if (record.kind === "car") {
         const sameVin = await db.collection("containerLines")
             .where("businessId", "==", businessId)
             .where("vinNumber", "==", record.vinNumber)
             .get();
         const conflict = openContainerHoldingVin(
-            sameVin.docs.map((d) => d.data() || {}), ref.id);
+            sameVin.docs.map((d) => d.data() || {}));
         if (conflict) {
           throw new HttpsError(
               "failed-precondition",

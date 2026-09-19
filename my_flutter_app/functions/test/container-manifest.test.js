@@ -208,6 +208,9 @@ describe("the container callables and their gates", () => {
     const body = callable("addContainerLine");
     assert.match(body, /openContainerHoldingVin\(/);
     assert.match(body, /conflictContainerId: conflict/);
+    // Adding never exempts the container being added to: the same car twice
+    // on one list is a mistake too. Only a move passes an exemption.
+    assert.doesNotMatch(body, /openContainerHoldingVin\([\s\S]*?, ref\.id\)/);
   });
 
   it("audits every change as a container", () => {
