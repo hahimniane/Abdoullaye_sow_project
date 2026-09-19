@@ -74,6 +74,7 @@ import {
 } from "@/lib/destination-countries";
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
+import { overlayDismiss } from "@/lib/overlay-dismiss";
 import {
   lotCustomerFromRow,
   lotCustomerFromStaffRow,
@@ -841,7 +842,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
       )}
 
       {modal === "container" && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head">
               <div>
@@ -889,7 +890,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
       )}
 
       {modal === "line" && selected && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 660 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head">
               <div><h3>Add a line</h3><p>{containerTitle(selected)} — what went in, and whose it is.</p></div>
@@ -1029,7 +1030,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
       )}
 
       {modal === "move" && movingLine && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head">
               <div><h3>Move line</h3><p>{containerLineTitle(movingLine)} goes to another container that is still loading.</p></div>
@@ -1060,7 +1061,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
       )}
 
       {modal === "history" && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>Change history</h3><p>Every change on this container, most recent first.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">

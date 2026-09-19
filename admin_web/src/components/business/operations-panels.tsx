@@ -261,6 +261,7 @@ import {
 import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/lib/car-catalog";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
+import { overlayDismiss } from "@/lib/overlay-dismiss";
 import type { FirestoreRow } from "@/types/admin";
 
 type PanelProps = {
@@ -8678,7 +8679,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       )}
 
       {modal === "activity" && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 660 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>{editId ? "Edit this activity" : "Record activity"}</h3><p>{editId ? "Changing the fee on an unpaid link re-issues it at the new amount." : "Log a job the lot billed for."}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
@@ -8790,7 +8791,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       )}
 
       {modal === "types" && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 700 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>Activities &amp; rates</h3><p>What this lot charges for.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
@@ -8829,7 +8830,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
         const chaseRemainingCents = chaseRow ? lotActivityRemainingCents(chaseRow) : 0;
         const recordingPart = chaseAmountMode === "part";
         return (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>{chaseDirectOnly ? "Record payment" : "Chase payment"}</h3><p>{chaseDirectOnly ? "Mark this activity's money as received." : "Send the link again, or record the money if it came in another way."}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
@@ -8873,7 +8874,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       })()}
 
       {modal === "expense-line" && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>{editLineId ? "Edit expense line" : "Add expense line"}</h3><p>{editLineId ? "Changes are kept in this line's history." : "A cost the lot carries."}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
@@ -8891,7 +8892,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       )}
 
       {(modal === "purchases" || modal === "edit-purchase") && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>{modal === "edit-purchase" ? "Edit purchase" : "Add a purchase"} — {text(purchaseLine?.label, "expense")}</h3><p>{modal === "edit-purchase" ? "Changes are logged in this line's history." : `A purchase for ${lotMonthLabel(month)}.`}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
@@ -8910,7 +8911,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       )}
 
       {modal === "void" && voidTarget && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>Void this entry</h3><p>It stays on the record (struck through) and drops out of the totals — it is never deleted. Other staff see who voided it and why.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
@@ -8923,7 +8924,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       )}
 
       {modal === "history" && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeModal}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head"><div><h3>Change history</h3><p>Every edit and void on this entry, most recent first.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
