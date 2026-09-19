@@ -9013,4 +9013,51 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get ctrErrMoveTarget =>
       'You can only move a line to a container that is still loading.';
+
+  @override
+  String get ctrLotQuestion => 'Is this car parked in your lot?';
+
+  @override
+  String get ctrLotYes => 'Yes';
+
+  @override
+  String get ctrLotYesNote => 'Pick it from the cars in the lot.';
+
+  @override
+  String get ctrLotNo => 'No';
+
+  @override
+  String get ctrLotNoNote => 'Enter or scan the VIN.';
+
+  @override
+  String get ctrLotChange => 'Change';
+
+  @override
+  String get ctrLotPickTitle => 'Which car?';
+
+  @override
+  String get ctrLotFilterHint => 'VIN, owner or make';
+
+  @override
+  String get ctrLotNoCars => 'No cars are parked right now.';
+
+  @override
+  String get ctrLotNoMatch => 'No parked car matches.';
+
+  @override
+  String get ctrLotEnterVinInstead => 'Enter the VIN instead';
+
+  @override
+  String get ctrLotCarUnknown => 'Car';
+
+  @override
+  String ctrLotTaken(String container) {
+    return 'Already on $container';
+  }
+
+  @override
+  String get ctrLotPicked => 'Filled in from the car in your lot.';
+
+  @override
+  String get ctrLotPickAnother => 'Choose a different car';
 }

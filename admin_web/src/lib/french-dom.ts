@@ -4705,10 +4705,22 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Filled from an existing record": "Rempli depuis une fiche existante",
   "— set the model/year.": "— indiquez le modèle et l’année.",
   "You can change anything below.": "Vous pouvez tout modifier ci-dessous.",
+  // The car form's first question and the list of parked cars it opens.
+  "Is this car parked in your lot?": "Cette voiture est-elle garée dans votre parc ?",
+  "Pick the car from your lot. It fills the VIN and the owner.":
+    "Choisissez la voiture dans votre parc. Cela remplit le VIN et le propriétaire.",
+  "No cars are parked in your lot right now.":
+    "Aucune voiture n’est garée dans votre parc en ce moment.",
+  "No parked car matches that filter.":
+    "Aucune voiture garée ne correspond à ce filtre.",
+  "Enter the VIN instead": "Saisir le VIN à la place",
+  "Pick another car": "Choisir une autre voiture",
 });
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "17 characters": "17 caractères",
+  "VIN, owner, make": "VIN, propriétaire, marque",
+  "Filter parked cars": "Filtrer les voitures garées",
   // Placeholder on the part-payment note.
   "e.g. first instalment": "p. ex. premier versement",
   "Add a photo by URL": "Ajouter une photo par URL",

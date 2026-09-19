@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
+import '../services/container_lot_cars.dart';
 import '../services/container_manifest.dart';
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
@@ -52,8 +53,17 @@ class _ContainersScreenState extends State<ContainersScreen> {
   List<ContainerLine> _lines = const [];
   List<LotStaff> _staff = const [];
   List<LotCustomer> _customers = const [];
-  List<LotKnownCar> _parkedCars = const [];
+
+  /// The business's `parkedCars` rows as stored, each with its `id`. One
+  /// subscription feeds two readers: the VIN memory below, and the "is this
+  /// car parked in your lot?" picker on the add-line sheet, which needs the
+  /// status and dates a bare known-car does not keep.
+  List<Map<String, dynamic>> _parkedCarRows = const [];
   List<LotKnownCar> _activityCars = const [];
+
+  List<LotKnownCar> get _parkedCars => [
+        for (final row in _parkedCarRows) LotKnownCar.fromMap(row),
+      ];
   List<DestinationCountry> _destinations = const [];
   String _businessName = '';
 
@@ -142,8 +152,8 @@ class _ContainersScreenState extends State<ContainersScreen> {
 
     _subs.add(scoped('parkedCars').limit(500).snapshots().listen((snap) {
       if (!mounted) return;
-      setState(() => _parkedCars = [
-            for (final d in snap.docs) LotKnownCar.fromMap(d.data()),
+      setState(() => _parkedCarRows = [
+            for (final d in snap.docs) {...d.data(), 'id': d.id},
           ]);
     }, onError: (_) {}));
 
@@ -221,6 +231,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
           staff: _staff,
           customers: _customers,
           knownCars: _knownCars,
+          parkedCarRows: _parkedCarRows,
           destinations: _destinations,
           onCustomerRecorded: _loadCustomers,
         ),
@@ -786,6 +797,7 @@ class ContainerDetailScreen extends StatefulWidget {
     required this.staff,
     required this.customers,
     required this.knownCars,
+    this.parkedCarRows = const [],
     required this.destinations,
     required this.onCustomerRecorded,
   });
@@ -795,6 +807,10 @@ class ContainerDetailScreen extends StatefulWidget {
   final List<LotStaff> staff;
   final List<LotCustomer> customers;
   final List<LotKnownCar> knownCars;
+
+  /// The business's `parkedCars` rows, from the subscription the list screen
+  /// already holds: the add-line sheet offers the ones standing in the lot.
+  final List<Map<String, dynamic>> parkedCarRows;
   final List<DestinationCountry> destinations;
   final VoidCallback onCustomerRecorded;
 
@@ -920,6 +936,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         lines: _allLines,
         customers: widget.customers,
         knownCars: widget.knownCars,
+        parkedCarRows: widget.parkedCarRows,
       ),
     );
     if (added == true) widget.onCustomerRecorded();
@@ -2022,6 +2039,7 @@ class _LineFormSheet extends StatefulWidget {
     required this.lines,
     required this.customers,
     required this.knownCars,
+    this.parkedCarRows = const [],
   });
 
   final String businessId;
@@ -2033,6 +2051,10 @@ class _LineFormSheet extends StatefulWidget {
   final List<ContainerLine> lines;
   final List<LotCustomer> customers;
   final List<LotKnownCar> knownCars;
+
+  /// The raw `parkedCars` rows: the "parked in your lot?" picker is built
+  /// from these, joined in memory to the open containers.
+  final List<Map<String, dynamic>> parkedCarRows;
 
   @override
   State<_LineFormSheet> createState() => _LineFormSheetState();
@@ -2047,6 +2069,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   final _description = TextEditingController();
   final _customer = TextEditingController();
   final _phone = TextEditingController();
+  final _lotFilter = TextEditingController();
 
   String _kind = containerLineKindCar;
   String _owner = containerOwnerCustomer;
@@ -2055,6 +2078,15 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   String _serverNote = '';
   String _conflictName = '';
   List<LotCustomer> _suggestions = const [];
+
+  /// "Is this car parked in your lot?" - unanswered until one of the two is
+  /// tapped, and nothing about the car is asked until then. Part of the
+  /// draft: the sheet opens unanswered and a change of kind clears it.
+  bool? _inLot;
+
+  /// The parked car chosen from the lot, once one is. The fields it filled
+  /// stay editable; this only remembers where they came from.
+  LotCarChoice? _pickedCar;
 
   final VinDecoderService _vinDecoder = NhtsaVinDecoderService();
   String _vinHint = '';
@@ -2065,10 +2097,87 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   void dispose() {
     for (final c in [
       _vin, _make, _model, _year, _quantity, _description, _customer, _phone,
+      _lotFilter,
     ]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// The cars standing in the lot right now, joined to the open container
+  /// already holding each - the same join the parked-car list draws its
+  /// chip from, so "already on MSKU1234567" here and there agree.
+  List<LotCarChoice> get _lotCars => lotCarChoices(
+        widget.parkedCarRows,
+        containerVinLinks(widget.lines, widget.containers),
+      );
+
+  /// Answering the question, or changing the answer. Everything the answer
+  /// controls is cleared with it: a car picked under "Yes" must not linger
+  /// as typed values under "No", and the other way round.
+  void _answerInLot(bool? answer) {
+    AppHaptics.selection();
+    setState(() {
+      _inLot = answer;
+      _clearCarDraft();
+    });
+  }
+
+  void _clearCarDraft() {
+    final picked = _pickedCar;
+    _pickedCar = null;
+    _lotFilter.clear();
+    _vin.clear();
+    _make.clear();
+    _model.clear();
+    _year.clear();
+    _vinHint = '';
+    _decodedVin = '';
+    _conflictName = '';
+    _errors = {..._errors}
+      ..remove('vin_required')
+      ..remove('vin_already_loaded');
+    // The owner came with the pick; only what the pick wrote is taken back,
+    // so a name typed by hand survives.
+    if (picked != null) {
+      if (_customer.text == picked.ownerName) _customer.clear();
+      if (_phone.text == picked.ownerPhone) _phone.clear();
+    }
+  }
+
+  /// A car chosen off the lot: the VIN, make, model and year are certain, and
+  /// the parked car's owner is the customer unless one was already named.
+  void _pickLotCar(LotCarChoice car) {
+    final l10n = AppLocalizations.of(context)!;
+    if (car.isTaken) {
+      AppHaptics.refuse();
+      return;
+    }
+    AppHaptics.commit();
+    setState(() {
+      _pickedCar = car;
+      _vin.text = car.vin;
+      _make.text = car.make;
+      _model.text = car.model;
+      _year.text = car.year;
+      // Already filled from the lot's own record, so the decoder has nothing
+      // to add; mark it decoded so an untouched VIN never triggers a lookup.
+      _decodedVin = car.vin;
+      _vinHint = l10n.ctrLotPicked;
+      _conflictName = '';
+      _errors = {..._errors}
+        ..remove('vin_required')
+        ..remove('vin_already_loaded');
+      if (car.ownerName.isNotEmpty) {
+        _owner = containerOwnerCustomer;
+        if (_customer.text.trim().isEmpty) _customer.text = car.ownerName;
+        if (_phone.text.trim().isEmpty && car.ownerPhone.isNotEmpty) {
+          _phone.text = car.ownerPhone;
+        }
+        _errors = {..._errors}..remove('customer_name_required');
+      }
+      _suggestions = const [];
+    });
   }
 
   void _clearError(String code) {
@@ -2268,6 +2377,11 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         : null;
     final isCar = _kind == containerLineKindCar;
     final isOther = _kind == containerLineKindOther;
+    // A car's fields (and whose it is) appear once the lot question is
+    // answered: straight away under "No", after a pick under "Yes".
+    final showCarFields =
+        isCar && (_inLot == false || (_inLot == true && _pickedCar != null));
+    final showOwner = !isCar || showCarFields;
 
     return LotSheetShell(
       title: l10n.ctrAddLine,
@@ -2307,9 +2421,32 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               _kind = k;
               _errors = {};
               _serverNote = '';
+              // The lot question belongs to a car; a new kind starts over.
+              _inLot = null;
+              _clearCarDraft();
             }),
           ),
+          // A car is asked about before any VIN is: is it parked here?
+          // Until that is answered nothing else is shown, and a "Yes" shows
+          // the lot's cars until one is picked.
           if (isCar) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _LotQuestion(
+              answer: _inLot,
+              onAnswer: _answerInLot,
+            ),
+          ],
+          if (isCar && _inLot == true && _pickedCar == null) ...[
+            const SizedBox(height: AppSpacing.md),
+            _LotCarPicker(
+              cars: _lotCars,
+              filter: _lotFilter,
+              onPick: _pickLotCar,
+              onFilterChanged: (_) => setState(() {}),
+              onEnterVinInstead: () => _answerInLot(false),
+            ),
+          ],
+          if (isCar && showCarFields) ...[
             const SizedBox(height: AppSpacing.md),
             TextField(
               key: const Key('line-vin'),
@@ -2376,6 +2513,31 @@ class _LineFormSheetState extends State<_LineFormSheet> {
                 ),
               ],
             ),
+            if (_pickedCar != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PressableScale(
+                  scale: 0.96,
+                  onTap: () {
+                    AppHaptics.selection();
+                    setState(_clearCarDraft);
+                  },
+                  child: Padding(
+                    key: const Key('line-lot-pick-another'),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      l10n.ctrLotPickAnother,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.cobaltDeep,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
           if (isOther) ...[
             const SizedBox(height: AppSpacing.md),
@@ -2403,101 +2565,388 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               ),
             ),
           ],
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            l10n.ctrOwner,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          LotChoiceCard(
-            title: l10n.ctrOwnerCustomer,
-            note: l10n.ctrOwnerCustomerNote,
-            selected: _owner == containerOwnerCustomer,
-            onTap: () => setState(() => _owner = containerOwnerCustomer),
-          ),
-          if (_owner == containerOwnerCustomer) ...[
-            TextField(
-              key: const Key('line-customer'),
-              controller: _customer,
-              textCapitalization: TextCapitalization.words,
-              onChanged: (value) {
-                _clearError('customer_name_required');
-                setState(() => _suggestions =
-                    matchLotCustomers(widget.customers, value).toList());
-              },
-              decoration: InputDecoration(
-                labelText: l10n.lotCustomer,
-                errorText: errorFor('customer_name_required'),
+          if (showOwner) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              l10n.ctrOwner,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+                color: AppColors.ink,
               ),
             ),
-            // The lot's memory, offered inline rather than in a menu that
-            // floats over the form and hides the field being typed into.
-            if (_suggestions.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                l10n.lotSavedCustomers,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.muted,
+            const SizedBox(height: AppSpacing.sm),
+            LotChoiceCard(
+              title: l10n.ctrOwnerCustomer,
+              note: l10n.ctrOwnerCustomerNote,
+              selected: _owner == containerOwnerCustomer,
+              onTap: () => setState(() => _owner = containerOwnerCustomer),
+            ),
+            if (_owner == containerOwnerCustomer) ...[
+              TextField(
+                key: const Key('line-customer'),
+                controller: _customer,
+                textCapitalization: TextCapitalization.words,
+                onChanged: (value) {
+                  _clearError('customer_name_required');
+                  setState(() => _suggestions =
+                      matchLotCustomers(widget.customers, value).toList());
+                },
+                decoration: InputDecoration(
+                  labelText: l10n.lotCustomer,
+                  errorText: errorFor('customer_name_required'),
                 ),
               ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final c in _suggestions.take(4))
-                    PressableScale(
-                      scale: 0.95,
-                      onTap: () => _applyCustomer(c),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: AppColors.mist,
-                          borderRadius:
-                              BorderRadius.circular(AppSpacing.radiusSm),
-                          border: Border.all(
-                              color: AppColors.cobalt.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          c.name,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.cobaltDeep,
+              // The lot's memory, offered inline rather than in a menu that
+              // floats over the form and hides the field being typed into.
+              if (_suggestions.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  l10n.lotSavedCustomers,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.muted,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final c in _suggestions.take(4))
+                      PressableScale(
+                        scale: 0.95,
+                        onTap: () => _applyCustomer(c),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: AppColors.mist,
+                            borderRadius:
+                                BorderRadius.circular(AppSpacing.radiusSm),
+                            border: Border.all(
+                                color: AppColors.cobalt.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            c.name,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.cobaltDeep,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                key: const Key('line-phone'),
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(labelText: l10n.lotPhone),
               ),
+              const SizedBox(height: AppSpacing.sm),
             ],
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              key: const Key('line-phone'),
-              controller: _phone,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(labelText: l10n.lotPhone),
+            LotChoiceCard(
+              title: l10n.ctrOwnerStock,
+              note: l10n.ctrOwnerStockNote,
+              selected: _owner == containerOwnerStock,
+              onTap: () => setState(() {
+                _owner = containerOwnerStock;
+                _errors = {..._errors}..remove('customer_name_required');
+              }),
             ),
-            const SizedBox(height: AppSpacing.sm),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// "Is this car parked in your lot?" Two cards until answered; once
+/// answered, the question folds to one line with the answer and a way back,
+/// so the fields below keep the room.
+class _LotQuestion extends StatelessWidget {
+  const _LotQuestion({required this.answer, required this.onAnswer});
+
+  final bool? answer;
+  final ValueChanged<bool?> onAnswer;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final title = Text(
+      l10n.ctrLotQuestion,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.2,
+        color: AppColors.ink,
+      ),
+    );
+    if (answer == null) {
+      return Column(
+        key: const Key('line-lot-question'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          title,
+          const SizedBox(height: AppSpacing.sm),
           LotChoiceCard(
-            title: l10n.ctrOwnerStock,
-            note: l10n.ctrOwnerStockNote,
-            selected: _owner == containerOwnerStock,
-            onTap: () => setState(() {
-              _owner = containerOwnerStock;
-              _errors = {..._errors}..remove('customer_name_required');
-            }),
+            key: const Key('line-lot-yes'),
+            title: l10n.ctrLotYes,
+            note: l10n.ctrLotYesNote,
+            selected: false,
+            onTap: () => onAnswer(true),
+          ),
+          LotChoiceCard(
+            key: const Key('line-lot-no'),
+            title: l10n.ctrLotNo,
+            note: l10n.ctrLotNoNote,
+            selected: false,
+            onTap: () => onAnswer(false),
           ),
         ],
+      );
+    }
+    return Row(
+      key: const Key('line-lot-answered'),
+      children: [
+        Expanded(child: title),
+        const SizedBox(width: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.mist,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            border: Border.all(color: AppColors.cobalt.withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            answer! ? l10n.ctrLotYes : l10n.ctrLotNo,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.cobaltDeep,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        PressableScale(
+          scale: 0.96,
+          onTap: () => onAnswer(null),
+          child: Padding(
+            key: const Key('line-lot-change'),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Text(
+              l10n.ctrLotChange,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.cobaltDeep,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The cars in the lot, one tap each. A car already on an open container is
+/// listed but greyed and says which box has it. Nothing parked, or nothing
+/// matching the filter, says so and offers the VIN route instead.
+class _LotCarPicker extends StatelessWidget {
+  const _LotCarPicker({
+    required this.cars,
+    required this.filter,
+    required this.onPick,
+    required this.onFilterChanged,
+    required this.onEnterVinInstead,
+  });
+
+  final List<LotCarChoice> cars;
+  final TextEditingController filter;
+  final ValueChanged<LotCarChoice> onPick;
+  final ValueChanged<String> onFilterChanged;
+  final VoidCallback onEnterVinInstead;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final shown = filterLotCarChoices(cars, filter.text);
+    final sectionTitle = Text(
+      l10n.ctrLotPickTitle,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.2,
+        color: AppColors.ink,
+      ),
+    );
+    final switchToVin = Align(
+      alignment: Alignment.centerLeft,
+      child: PressableScale(
+        scale: 0.96,
+        onTap: onEnterVinInstead,
+        child: Padding(
+          key: const Key('line-lot-enter-vin'),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Text(
+            l10n.ctrLotEnterVinInstead,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.cobaltDeep,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (cars.isEmpty) {
+      return Column(
+        key: const Key('line-lot-empty'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.parchment,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              border: Border.all(color: AppColors.rule),
+            ),
+            child: Text(
+              l10n.ctrLotNoCars,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: AppColors.muted,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          switchToVin,
+        ],
+      );
+    }
+
+    return Column(
+      key: const Key('line-lot-picker'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        sectionTitle,
+        const SizedBox(height: AppSpacing.sm),
+        TextField(
+          key: const Key('line-lot-filter'),
+          controller: filter,
+          textCapitalization: TextCapitalization.characters,
+          onChanged: onFilterChanged,
+          decoration: InputDecoration(
+            hintText: l10n.ctrLotFilterHint,
+            prefixIcon: const Icon(Icons.search, size: 20),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (shown.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Text(
+              l10n.ctrLotNoMatch,
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+          ),
+        for (final car in shown)
+          _LotCarRow(
+            key: ValueKey('lot-car-${car.id}'),
+            car: car,
+            onTap: () => onPick(car),
+          ),
+        const SizedBox(height: AppSpacing.xs),
+        switchToVin,
+      ],
+    );
+  }
+}
+
+class _LotCarRow extends StatelessWidget {
+  const _LotCarRow({super.key, required this.car, required this.onTap});
+
+  final LotCarChoice car;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final taken = car.isTaken;
+    final ink = taken ? AppColors.muted : AppColors.ink;
+    final vehicle =
+        car.vehicleLabel.isEmpty ? l10n.ctrLotCarUnknown : car.vehicleLabel;
+    return PressableScale(
+      onTap: taken ? null : onTap,
+      scale: 0.99,
+      child: Opacity(
+        opacity: taken ? 0.55 : 1,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.parchment,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            border: Border.all(color: AppColors.rule),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                taken ? Icons.lock_outline : Icons.directions_car_outlined,
+                size: 18,
+                color: taken ? AppColors.muted : AppColors.cobalt,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      vehicle,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      car.ownerName.isEmpty
+                          ? car.vin
+                          : '${car.vin} · ${car.ownerName}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    if (taken) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.ctrLotTaken(car.onContainer!.containerName),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.errorRed,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

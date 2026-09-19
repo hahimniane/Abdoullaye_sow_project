@@ -15,6 +15,8 @@
  * validates it without a browser. Copy that shape from `lot-ledger.ts`.
  */
 
+import { businessParkingEndLabel } from "./business-parking-entry.ts";
+
 export const CONTAINER_STATUSES = ["loading", "shipped", "arrived"] as const;
 export type ContainerStatus = (typeof CONTAINER_STATUSES)[number];
 
@@ -235,8 +237,18 @@ export function nextContainerStatus(current: unknown): ContainerStatus | null {
 // A line on the list.
 // ---------------------------------------------------------------------------
 
+/**
+ * The first question the car form asks, before any VIN field: is the car in
+ * the lot? "" until answered; "yes" offers the parked cars to pick from,
+ * "no" is the VIN-first flow. Reset with the kind.
+ */
+export type ContainerLineInLot = "" | "yes" | "no";
+
 export type ContainerLineDraft = {
   kind: ContainerLineKind;
+  inLot: ContainerLineInLot;
+  /** The parkedCars row the car fields were filled from, when one was picked. */
+  parkedCarId: string;
   vinNumber: string;
   carMake: string;
   carModel: string;
@@ -251,6 +263,8 @@ export type ContainerLineDraft = {
 
 export const emptyContainerLineDraft: ContainerLineDraft = {
   kind: "car",
+  inLot: "",
+  parkedCarId: "",
   vinNumber: "",
   carMake: "",
   carModel: "",
@@ -336,6 +350,98 @@ export function openContainerHoldingVin(
     if (id && id !== text(ignoreContainerId, MAX_LABEL)) return id;
   }
   return "";
+}
+
+// ---------------------------------------------------------------------------
+// Picking a car that is already in the lot.
+// ---------------------------------------------------------------------------
+
+/**
+ * The parked cars that are in the lot right now: not cancelled and not past
+ * their end date — the same rows the parking panel counts as "In the lot".
+ * A car that has left, or a booking that was cancelled, is not there to load.
+ */
+export function parkedCarsInLot(rows: readonly unknown[], now: Date = new Date()): Row[] {
+  return (Array.isArray(rows) ? rows : [])
+    .map(asRow)
+    .filter((row) => text(row.status, 40) !== "cancelled")
+    // A booking whose checkout never completed has no car in the yard. The
+    // app draws the same line, so both pickers offer the same cars.
+    .filter((row) => text(row.status, 40) !== "pending_payment")
+    .filter((row) => businessParkingEndLabel(row, now) !== "Ended");
+}
+
+export type ParkedCarPick = {
+  id: string;
+  vin: string;
+  /** "2019 Toyota Camry", or "Car" when nothing is known about it. */
+  car: string;
+  make: string;
+  model: string;
+  year: string;
+  owner: string;
+  phone: string;
+  /** Set when the car is already on a container that has not arrived. */
+  takenBy: VinPlacement | undefined;
+};
+
+/**
+ * A parked car as the pick list shows it, looked up in the placement index
+ * the panel already builds so a car on another open container is offered
+ * disabled with that container named, rather than picked and then refused.
+ */
+export function parkedCarPick(row: unknown, placements: ReadonlyMap<string, VinPlacement>): ParkedCarPick {
+  const r = asRow(row);
+  const vin = cleanVin(r.vinNumber);
+  const make = text(r.carMake, 80);
+  const model = text(r.carModel, 80);
+  const year = text(r.carYear, 8);
+  return {
+    id: text(r.id, MAX_LABEL),
+    vin,
+    car: [year, make, model].filter(Boolean).join(" ") || "Car",
+    make,
+    model,
+    year,
+    owner: text(r.customerName, MAX_LABEL) || text(r.ownerName, MAX_LABEL),
+    phone: text(r.customerPhone, 40),
+    takenBy: vin ? placements.get(vin) : undefined,
+  };
+}
+
+/** Narrow the pick list by VIN, owner or make (model and year too, since they sit in the same label). */
+export function filterParkedCarPicks(picks: readonly ParkedCarPick[], query: string): ParkedCarPick[] {
+  const q = text(query, 120).toLowerCase();
+  if (!q) return [...picks];
+  const qVin = q.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return picks.filter(
+    (pick) =>
+      (qVin.length > 0 && pick.vin.includes(qVin)) ||
+      pick.owner.toLowerCase().includes(q) ||
+      pick.car.toLowerCase().includes(q),
+  );
+}
+
+/**
+ * The draft after a parked car is picked: the car fields and the owner come
+ * from the record, and the answer stays "yes". The owner is a customer when
+ * the record names one; a record with no name leaves the owner fields as
+ * they were so the form still asks whose it is.
+ */
+export function lineDraftFromParkedCar(draft: ContainerLineDraft, pick: ParkedCarPick): ContainerLineDraft {
+  return {
+    ...draft,
+    kind: "car",
+    inLot: "yes",
+    parkedCarId: pick.id,
+    vinNumber: pick.vin,
+    carMake: pick.make,
+    carModel: pick.model,
+    carYear: pick.year,
+    ownerKind: pick.owner ? "customer" : draft.ownerKind,
+    customerName: pick.owner || draft.customerName,
+    customerPhone: pick.owner ? pick.phone || draft.customerPhone : draft.customerPhone,
+  };
 }
 
 export type ContainerCounts = {

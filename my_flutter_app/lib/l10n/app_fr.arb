@@ -4001,5 +4001,27 @@
       }
     }
   },
-  "ctrErrMoveTarget": "Une ligne ne peut être déplacée que vers un conteneur encore en chargement."
+  "ctrErrMoveTarget": "Une ligne ne peut être déplacée que vers un conteneur encore en chargement.",
+  "ctrLotQuestion": "Cette voiture est-elle garée dans votre parc ?",
+  "ctrLotYes": "Oui",
+  "ctrLotYesNote": "Choisissez-la parmi les voitures du parc.",
+  "ctrLotNo": "Non",
+  "ctrLotNoNote": "Saisissez ou scannez le VIN.",
+  "ctrLotChange": "Modifier",
+  "ctrLotPickTitle": "Quelle voiture ?",
+  "ctrLotFilterHint": "VIN, propriétaire ou marque",
+  "ctrLotNoCars": "Aucune voiture n'est garée pour le moment.",
+  "ctrLotNoMatch": "Aucune voiture garée ne correspond.",
+  "ctrLotEnterVinInstead": "Saisir le VIN à la place",
+  "ctrLotCarUnknown": "Voiture",
+  "ctrLotTaken": "Déjà dans {container}",
+  "@ctrLotTaken": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLotPicked": "Rempli à partir de la voiture de votre parc.",
+  "ctrLotPickAnother": "Choisir une autre voiture"
 }

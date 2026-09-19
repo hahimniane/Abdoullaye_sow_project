@@ -114,6 +114,58 @@ void main() {
     expect(screen, contains('containerOwnerStock'));
   });
 
+  test('a car is asked "parked in your lot?" before any VIN is shown', () {
+    // The question is part of the sheet's draft state, unanswered when it
+    // opens and reset by a change of kind; nothing about the car shows until
+    // it is answered.
+    expect(screen, contains('bool? _inLot;'));
+    expect(screen, contains("Key('line-lot-question')"));
+    expect(screen, contains("Key('line-lot-yes')"));
+    expect(screen, contains("Key('line-lot-no')"));
+    final question = screen.indexOf('_LotQuestion(\n');
+    final vinField = screen.indexOf("key: const Key('line-vin')");
+    expect(question, greaterThan(0));
+    expect(vinField, greaterThan(question),
+        reason: 'the lot question is built before the VIN field');
+    expect(
+      screen,
+      contains(
+          'isCar && (_inLot == false || (_inLot == true && _pickedCar != null))'),
+      reason: 'car fields wait for "No", or for a pick under "Yes"',
+    );
+    expect(screen, contains('_inLot = null;\n              _clearCarDraft();'),
+        reason: 'a change of kind resets the answer and what it filled');
+  });
+
+  test('the "Yes" list is the business parkedCars rows, joined in memory', () {
+    final picker = read('lib/services/container_lot_cars.dart');
+    // One subscription on the list screen feeds both the VIN memory and the
+    // picker; the raw rows travel down by constructor, and nothing on the
+    // detail screen or the sheet opens a second `parkedCars` stream.
+    expect(screen, contains("scoped('parkedCars').limit(500).snapshots()"));
+    expect("scoped('parkedCars')".allMatches(screen).length, 1,
+        reason: 'exactly one parkedCars subscription on the containers screens');
+    expect(screen, contains('parkedCarRows: _parkedCarRows'));
+    expect(screen, contains('parkedCarRows: widget.parkedCarRows'));
+    expect(screen, contains('lotCarChoices(\n        widget.parkedCarRows,'));
+    // In the lot = not cancelled, not ended, through the parking helpers.
+    expect(picker, contains('parkingRowKind(row, now: now)'));
+    expect(picker, contains('ParkingKind.inLot || kind == ParkingKind.reserved'));
+    // Taken = the existing VIN → open-container join, not a new query.
+    expect(screen, contains('containerVinLinks(widget.lines, widget.containers)'));
+    expect(picker, contains('onContainer: links[vin]'));
+    expect(screen, contains('onTap: taken ? null : onTap'));
+    expect(screen, contains('l10n.ctrLotTaken(car.onContainer!.containerName)'));
+    // The filter and the empty state that offers the VIN route.
+    expect(screen, contains("Key('line-lot-filter')"));
+    expect(screen, contains('filterLotCarChoices(cars, filter.text)'));
+    expect(screen, contains("Key('line-lot-empty')"));
+    expect(screen, contains('onEnterVinInstead: () => _answerInLot(false)'));
+    // A pick fills the car and the owner, then shows the normal fields.
+    expect(screen, contains('void _pickLotCar(LotCarChoice car)'));
+    expect(screen, contains('_customer.text = car.ownerName'));
+  });
+
   test('server refusals land where the person is looking', () {
     expect(model, contains('ContainerRefusal parseContainerRefusal('));
     expect(screen, contains('parseContainerRefusal(error.details, error.message)'));

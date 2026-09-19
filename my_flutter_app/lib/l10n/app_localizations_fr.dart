@@ -9157,4 +9157,51 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get ctrErrMoveTarget =>
       'Une ligne ne peut être déplacée que vers un conteneur encore en chargement.';
+
+  @override
+  String get ctrLotQuestion => 'Cette voiture est-elle garée dans votre parc ?';
+
+  @override
+  String get ctrLotYes => 'Oui';
+
+  @override
+  String get ctrLotYesNote => 'Choisissez-la parmi les voitures du parc.';
+
+  @override
+  String get ctrLotNo => 'Non';
+
+  @override
+  String get ctrLotNoNote => 'Saisissez ou scannez le VIN.';
+
+  @override
+  String get ctrLotChange => 'Modifier';
+
+  @override
+  String get ctrLotPickTitle => 'Quelle voiture ?';
+
+  @override
+  String get ctrLotFilterHint => 'VIN, propriétaire ou marque';
+
+  @override
+  String get ctrLotNoCars => 'Aucune voiture n\'est garée pour le moment.';
+
+  @override
+  String get ctrLotNoMatch => 'Aucune voiture garée ne correspond.';
+
+  @override
+  String get ctrLotEnterVinInstead => 'Saisir le VIN à la place';
+
+  @override
+  String get ctrLotCarUnknown => 'Voiture';
+
+  @override
+  String ctrLotTaken(String container) {
+    return 'Déjà dans $container';
+  }
+
+  @override
+  String get ctrLotPicked => 'Rempli à partir de la voiture de votre parc.';
+
+  @override
+  String get ctrLotPickAnother => 'Choisir une autre voiture';
 }
