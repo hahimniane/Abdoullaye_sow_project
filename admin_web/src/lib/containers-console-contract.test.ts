@@ -43,6 +43,12 @@ test("the panel reads containers and lines by business and writes only through c
   assert.match(panelSource, /useBusinessCollection\("containers", businessId, enabled, \d+\)/);
   assert.match(panelSource, /useBusinessCollection\("containerLines", businessId, enabled, \d+\)/);
   assert.match(panelSource, /useBusinessDestinations\(businessId, enabled, \d+\)/, "destinations come from the business's own list");
+  // The business's own destinations come first, but a container may go
+  // anywhere: a business with no Services & coverage list still gets the
+  // whole catalogue, never an empty picker.
+  assert.match(panelSource, /DESTINATION_COUNTRIES\s*\.filter\(\(c\) => !ownIds\.has\(c\.id\)\)/);
+  assert.match(panelSource, /<optgroup label="Your destinations">/);
+  assert.match(panelSource, /<optgroup label="Every other country">/);
   for (const callable of [
     "createContainer",
     "updateContainer",

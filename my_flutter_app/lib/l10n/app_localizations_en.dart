@@ -8712,8 +8712,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctrChooseDestination => 'Choose a country';
 
   @override
-  String get ctrNoDestinations =>
-      'No destinations set up yet. Add countries under Services & coverage first.';
+  String get ctrSearchCountries => 'Search countries';
+
+  @override
+  String get ctrYourDestinations => 'Your destinations';
+
+  @override
+  String get ctrEveryOtherCountry => 'Every other country';
+
+  @override
+  String get ctrEveryCountry => 'Every country';
 
   @override
   String get ctrDestinationUnset => 'No destination yet';

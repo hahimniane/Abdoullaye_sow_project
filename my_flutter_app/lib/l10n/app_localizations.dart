@@ -15468,11 +15468,29 @@ abstract class AppLocalizations {
   /// **'Choose a country'**
   String get ctrChooseDestination;
 
-  /// No description provided for @ctrNoDestinations.
+  /// No description provided for @ctrSearchCountries.
   ///
   /// In en, this message translates to:
-  /// **'No destinations set up yet. Add countries under Services & coverage first.'**
-  String get ctrNoDestinations;
+  /// **'Search countries'**
+  String get ctrSearchCountries;
+
+  /// No description provided for @ctrYourDestinations.
+  ///
+  /// In en, this message translates to:
+  /// **'Your destinations'**
+  String get ctrYourDestinations;
+
+  /// No description provided for @ctrEveryOtherCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Every other country'**
+  String get ctrEveryOtherCountry;
+
+  /// No description provided for @ctrEveryCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Every country'**
+  String get ctrEveryCountry;
 
   /// No description provided for @ctrDestinationUnset.
   ///

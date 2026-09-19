@@ -59,11 +59,16 @@ void main() {
 
   test('it reads the business own collections, scoped and unordered', () {
     // No orderBy on either query, so neither needs a composite index; the
-    // module sorts. The destination picker is the business's own list.
+    // module sorts. The destination picker leads with the business's own
+    // list and then offers every other country, so a business that has
+    // listed nothing under Services & coverage never meets an empty sheet.
     for (final collection in ['containers', 'containerLines', 'lotCustomers']) {
       expect(screen, contains("'$collection'"));
     }
     expect(screen, contains("collection('destinationCountries')"));
+    expect(screen, contains('CountryCatalog.all'));
+    expect(screen, contains('pickLotSearchableOption<String>('));
+    expect(screen, isNot(contains('ctrNoDestinations')));
     expect(screen, contains("where('businessId', isEqualTo: id)"));
     expect(model, contains('List<ShippingContainer> sortContainers('));
     expect(screen, isNot(contains("scoped('containers').orderBy")));

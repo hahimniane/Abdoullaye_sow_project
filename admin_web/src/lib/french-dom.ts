@@ -4594,6 +4594,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Booking / BL reference": "Référence de réservation / BL",
   "Working name": "Nom de travail",
   "Not chosen yet": "Pas encore choisie",
+  "Your destinations": "Vos destinations",
+  "Every other country": "Tous les autres pays",
   "Your destinations come from Services & coverage.":
     "Vos destinations viennent de Services et couverture.",
   "Four letters and seven digits, when the shipping line sends it.":
