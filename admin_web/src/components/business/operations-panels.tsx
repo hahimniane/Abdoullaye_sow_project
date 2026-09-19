@@ -56,6 +56,7 @@ import { FieldInfo } from "@/components/field-info";
 import { ContainerTrackingCard } from "@/components/business/container-tracking-card";
 import { TrackingUpdatesSection } from "@/components/business/tracking-updates-section";
 import { SearchableSelect } from "@/components/searchable-select";
+import { CopyValue } from "@/components/copy-value";
 import { db, functions, storage } from "@/lib/firebase";
 import {
   DESTINATION_COUNTRIES,
@@ -5655,12 +5656,12 @@ export function ParkingPanel({
                 <div className="pk-row" key={String(row.id)} role="row">
                   <span>
                     <b>{vehicle}</b>
-                    <small>{text(row.vinNumber, "") || text(row.trackingCode, "")}</small>
+                    <small>{text(row.vinNumber, "") || text(row.trackingCode, "")}{text(row.vinNumber, "") && <CopyValue value={text(row.vinNumber, "")} label="Copy VIN" />}</small>
                     {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
                       <small className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</small>
                     )}
                   </span>
-                  <span><b>{text(row.customerName ?? row.ownerName, "—")}</b><small>{text(row.customerPhone, "")}</small></span>
+                  <span><b>{text(row.customerName ?? row.ownerName, "—")}<CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b><small>{text(row.customerPhone, "")}</small></span>
                   <span>{formatDate(row.parkingDate) || "—"}</span>
                   <span className={openEnded ? "muted" : undefined}>{openEnded ? "Open" : formatDate(row.parkingEndDate)}</span>
                   <span className="num">{businessParkingStayDays(row)}</span>
@@ -5736,8 +5737,8 @@ export function ParkingPanel({
                 </span>
               </div>
               <div className="pur-info">
-                <div><span>Owner</span><b>{text(row.customerName ?? row.ownerName, "—")}</b></div>
-                <div><span>VIN</span><b>{text(row.vinNumber, "—")}</b></div>
+                <div><span>Owner</span><b>{text(row.customerName ?? row.ownerName, "—")}<CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b></div>
+                <div><span>VIN</span><b>{text(row.vinNumber, "—")}<CopyValue value={text(row.vinNumber, "")} label="Copy VIN" /></b></div>
                 {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
                   <div><span>Container</span><b className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</b></div>
                 )}
