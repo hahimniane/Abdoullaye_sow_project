@@ -4593,6 +4593,10 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Container number": "Numéro de conteneur",
   "Booking / BL reference": "Référence de réservation / BL",
   "Working name": "Nom de travail",
+  "Optional once there is a container or booking number.":
+    "Facultatif dès qu’il y a un numéro de conteneur ou de réservation.",
+  "Give the container a working name, or its container or booking number.":
+    "Donnez au conteneur un nom de travail, ou son numéro de conteneur ou de réservation.",
   "Not chosen yet": "Pas encore choisie",
   "Your destinations": "Vos destinations",
   "Every other country": "Tous les autres pays",

@@ -23,6 +23,9 @@ describe("a container's identity", () => {
   it("needs a working name and nothing else to exist", () => {
     assert.deepEqual(validateContainer({label: "Sailing 3 Oct"}), []);
     assert.deepEqual(validateContainer({}), ["container_label_required"]);
+    // A number or a booking reference is a name enough.
+    assert.deepEqual(validateContainer({containerNumber: "MSKU1234567"}), []);
+    assert.deepEqual(validateContainer({bookingReference: "CMA-77120"}), []);
   });
 
   // The number arrives from the line after the box is half full; when it

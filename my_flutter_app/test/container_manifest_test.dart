@@ -68,6 +68,16 @@ void main() {
     test('needs a name; a number, when given, must be ISO 6346', () {
       expect(validateContainer(const ContainerDraft()),
           ['container_label_required']);
+      // A number or a booking reference is a name enough.
+      expect(
+        validateContainer(
+            const ContainerDraft(containerNumber: 'MSKU1234567')),
+        isEmpty,
+      );
+      expect(
+        validateContainer(const ContainerDraft(bookingReference: 'CMA-77120')),
+        isEmpty,
+      );
       expect(
         validateContainer(const ContainerDraft(label: 'Box 2')),
         isEmpty,
@@ -86,8 +96,8 @@ void main() {
       );
       expect(
         validateContainer(const ContainerDraft(containerNumber: 'MSKU12345')),
-        ['container_label_required', 'container_number_invalid'],
-        reason: 'every problem at once',
+        ['container_number_invalid'],
+        reason: 'a number that needs fixing is still the name; one problem, not two',
       );
     });
 

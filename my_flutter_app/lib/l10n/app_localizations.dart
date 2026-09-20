@@ -15438,6 +15438,12 @@ abstract class AppLocalizations {
   /// **'e.g. Sailing 3 Oct, box 2'**
   String get ctrLabelHint;
 
+  /// No description provided for @ctrLabelOptionalNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional once there is a container or booking number.'**
+  String get ctrLabelOptionalNote;
+
   /// No description provided for @ctrNumber.
   ///
   /// In en, this message translates to:
@@ -15927,7 +15933,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctrErrLabelRequired.
   ///
   /// In en, this message translates to:
-  /// **'Give the container a name to find it by.'**
+  /// **'Give the container a working name, or its container or booking number.'**
   String get ctrErrLabelRequired;
 
   /// No description provided for @ctrErrNumberInvalid.

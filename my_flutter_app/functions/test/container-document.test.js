@@ -60,6 +60,12 @@ describe("the loading list's title and stamp", () => {
     assert.equal(model.bookingReference, "CMA-77120");
   });
 
+  it("falls back to the booking reference when that is all there is", () => {
+    const model = containerDocumentModel({container: box(
+        {containerNumber: "", label: ""}), lines, business});
+    assert.equal(model.reference, "CMA-77120");
+  });
+
   it("stands the working name in until the number is known", () => {
     const model = containerDocumentModel(
         {container: box({containerNumber: ""}), lines, business});

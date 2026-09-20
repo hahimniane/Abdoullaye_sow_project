@@ -61,8 +61,14 @@ const positiveInt = (value) => {
  */
 function validateContainer(input) {
   const errors = [];
-  if (!text(input?.label, MAX_LABEL)) errors.push("container_label_required");
   const number = text(input?.containerNumber, 20).toUpperCase();
+  // The working name is for the box that has no number yet. Once the
+  // shipping line has given a container or booking number, that is what
+  // everyone calls it, and inventing a name on top is a chore.
+  if (!text(input?.label, MAX_LABEL) && !number &&
+      !text(input?.bookingReference, 60)) {
+    errors.push("container_label_required");
+  }
   if (number && !ISO_CONTAINER_NUMBER.test(number)) {
     errors.push("container_number_invalid");
   }
@@ -252,7 +258,8 @@ function containerCounts(lines) {
 }
 
 const CONTAINER_MESSAGES = Object.freeze({
-  container_label_required: "Give the container a name to find it by.",
+  container_label_required:
+    "Give the container a working name, or its container or booking number.",
   container_number_invalid:
     "A container number is four letters and seven digits, like MSKU1234567. " +
     "Booking numbers and bills of lading go in the reference field.",

@@ -117,10 +117,14 @@ class ContainerDraft {
 /// Error codes, every problem at once. Mirrors `validateContainer`.
 List<String> validateContainer(ContainerDraft input) {
   final errors = <String>[];
-  if (_text(input.label, containerMaxLabel).isEmpty) {
+  final number = _text(input.containerNumber, 20).toUpperCase();
+  // The working name is for the box that has no number yet; a container or
+  // booking number is a name enough.
+  if (_text(input.label, containerMaxLabel).isEmpty &&
+      number.isEmpty &&
+      _text(input.bookingReference, 60).isEmpty) {
     errors.add('container_label_required');
   }
-  final number = _text(input.containerNumber, 20).toUpperCase();
   if (number.isNotEmpty && !isoContainerNumber.hasMatch(number)) {
     errors.add('container_number_invalid');
   }
@@ -223,7 +227,9 @@ class ShippingContainer {
   /// The number once the line has sent it, the working name until then.
   /// "MSKU1234567" is what a tracking site wants; "Sailing 3 Oct, box 2" is
   /// what the yard calls it.
-  String get displayName => containerNumber.isNotEmpty ? containerNumber : label;
+  String get displayName => containerNumber.isNotEmpty
+      ? containerNumber
+      : (label.isNotEmpty ? label : bookingReference);
 
   bool get isEmpty => lineCount <= 0;
 }

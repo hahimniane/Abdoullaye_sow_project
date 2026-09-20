@@ -85,7 +85,7 @@ export type ContainerRefusal =
   | "move_target_not_loading";
 
 export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
-  container_label_required: "Give the container a name to find it by.",
+  container_label_required: "Give the container a working name, or its container or booking number.",
   container_number_invalid:
     "A container number is four letters and seven digits, like MSKU1234567. " +
     "Booking numbers and bills of lading go in the reference field.",
@@ -147,8 +147,12 @@ export type ContainerError =
 /** Same checks as the server's `validateContainer`, every problem at once. */
 export function validateContainerDraft(draft: ContainerDraft): ContainerError[] {
   const errors: ContainerError[] = [];
-  if (!text(draft.label, MAX_LABEL)) errors.push("container_label_required");
   const number = text(draft.containerNumber, 20).toUpperCase();
+  // The working name is for the box that has no number yet; a container or
+  // booking number is a name enough.
+  if (!text(draft.label, MAX_LABEL) && !number && !text(draft.bookingReference, 60)) {
+    errors.push("container_label_required");
+  }
   if (number && !ISO_CONTAINER_NUMBER.test(number)) {
     errors.push("container_number_invalid");
   }
@@ -495,7 +499,7 @@ export function containerRowCounts(row: unknown, lines: readonly unknown[]): Con
 /** The container number when known, else the working name. */
 export function containerTitle(row: unknown): string {
   const r = asRow(row);
-  return text(r.containerNumber, 20) || text(r.label, MAX_LABEL) || "Container";
+  return text(r.containerNumber, 20) || text(r.label, MAX_LABEL) || text(r.bookingReference, 60) || "Container";
 }
 
 /** "2019 Toyota Camry" / "12 barrels" / "3 × tires"; a car with no decode shows its VIN. */
