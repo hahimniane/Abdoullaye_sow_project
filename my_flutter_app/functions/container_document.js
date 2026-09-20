@@ -64,14 +64,15 @@ function containerDocumentModel({container, lines, business}) {
   const rows = Array.isArray(lines) ? lines : [];
   const number = text(c.containerNumber, 20);
   const label = text(c.label, 120);
+  const booking = text(c.bookingReference, 60);
   return {
     title: "Loading list",
     // The number is what the port knows the box by; until there is one, the
     // working name stands in and the label line is left empty rather than
     // saying the same thing twice.
-    reference: number || label || "Container",
+    reference: number || label || booking || "Container",
     label: number && label ? label : "",
-    bookingReference: text(c.bookingReference, 60),
+    bookingReference: booking,
     logo: documentLogo(org),
     businessName: text(org.name, 160),
     businessAddress: formatBusinessAddress({business: org, entry: {}}),

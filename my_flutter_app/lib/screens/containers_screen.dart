@@ -1983,6 +1983,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
             decoration: InputDecoration(
               labelText: l10n.ctrLabel,
               hintText: l10n.ctrLabelHint,
+              helperText: l10n.ctrLabelOptionalNote,
               errorText: errorFor('container_label_required'),
             ),
           ),

@@ -8835,6 +8835,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get ctrLabelHint => 'ex. Départ 3 oct., boîte 2';
 
   @override
+  String get ctrLabelOptionalNote =>
+      'Facultatif dès qu\'il y a un numéro de conteneur ou de réservation.';
+
+  @override
   String get ctrNumber => 'Numéro de conteneur';
 
   @override
@@ -9139,7 +9143,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get ctrErrLabelRequired =>
-      'Donnez un nom au conteneur pour le retrouver.';
+      'Donnez au conteneur un nom de travail, ou son numéro de conteneur ou de réservation.';
 
   @override
   String get ctrErrNumberInvalid =>

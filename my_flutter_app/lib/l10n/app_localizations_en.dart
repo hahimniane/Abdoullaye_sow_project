@@ -8696,6 +8696,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctrLabelHint => 'e.g. Sailing 3 Oct, box 2';
 
   @override
+  String get ctrLabelOptionalNote =>
+      'Optional once there is a container or booking number.';
+
+  @override
   String get ctrNumber => 'Container number';
 
   @override
@@ -8995,7 +8999,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctrCouldNotLoad => 'The containers could not be loaded.';
 
   @override
-  String get ctrErrLabelRequired => 'Give the container a name to find it by.';
+  String get ctrErrLabelRequired =>
+      'Give the container a working name, or its container or booking number.';
 
   @override
   String get ctrErrNumberInvalid =>

@@ -894,7 +894,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
               <div className="lst-form-grid">
                 {(!editingContainerId || selectedOpen) && (
                   <>
-                    <label className="lst-field wide"><span>Working name</span><input value={containerDraft.label} onChange={(e) => setContainerDraft((d) => ({ ...d, label: e.target.value }))} placeholder="Sailing 3 Oct, box 2" /></label>
+                    <label className="lst-field wide"><span>Working name</span><input value={containerDraft.label} onChange={(e) => setContainerDraft((d) => ({ ...d, label: e.target.value }))} placeholder="Sailing 3 Oct, box 2" /><small className="lst-hint">Optional once there is a container or booking number.</small></label>
                     <label className="lst-field"><span>Container number</span><input value={containerDraft.containerNumber} onChange={(e) => setContainerDraft((d) => ({ ...d, containerNumber: e.target.value.toUpperCase() }))} placeholder="e.g. MSKU1234567" /><small className="lst-hint">Four letters and seven digits, when the shipping line sends it.</small></label>
                     <label className="lst-field"><span>Booking / BL reference</span><input value={containerDraft.bookingReference} onChange={(e) => setContainerDraft((d) => ({ ...d, bookingReference: e.target.value }))} /></label>
                     <label className="lst-field wide"><span>Destination</span>

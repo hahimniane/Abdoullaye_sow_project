@@ -80,6 +80,10 @@ test("statuses, kinds, owners and the ISO shape match the server", () => {
 
 test("a container needs a name; the number is optional but must be ISO 6346", () => {
   assert.deepEqual(validateContainerDraft(emptyContainerDraft), ["container_label_required"]);
+  // A number or a booking reference is a name enough.
+  assert.deepEqual(validateContainerDraft({ ...emptyContainerDraft, containerNumber: "MSKU1234567" }), []);
+  assert.deepEqual(validateContainerDraft({ ...emptyContainerDraft, bookingReference: "CMA-77120" }), []);
+  assert.equal(containerTitle({ bookingReference: "CMA-77120" }), "CMA-77120");
   assert.deepEqual(validateContainerDraft({ ...emptyContainerDraft, label: "Box 2" }), []);
   assert.deepEqual(
     validateContainerDraft({ ...emptyContainerDraft, label: "Box 2", containerNumber: "msku1234567" }),
@@ -92,8 +96,8 @@ test("a container needs a name; the number is optional but must be ISO 6346", ()
   );
   assert.deepEqual(
     validateContainerDraft({ ...emptyContainerDraft, containerNumber: "BL-99" }),
-    ["container_label_required", "container_number_invalid"],
-    "every problem at once",
+    ["container_number_invalid"],
+    "a number that needs fixing is still the name; one problem to solve, not two",
   );
 });
 
