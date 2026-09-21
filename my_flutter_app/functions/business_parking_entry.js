@@ -643,9 +643,26 @@ const BUSINESS_PARKING_EDIT_REFUSALS = Object.freeze({
 });
 
 /**
+ * The calendar day a stored or submitted parking date falls on, or "" for
+ * none (an open-ended stay has no end day).
+ * @param {*} value Timestamp, Date, or "YYYY-MM-DD..." string.
+ * @return {string} "YYYY-MM-DD" or "".
+ */
+function parkingDayKey(value) {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+    if (match) return match[1];
+  }
+  const date = typeof value.toDate === "function" ? value.toDate() :
+    new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+/**
  * Decides what an edit is allowed to do.
  * @param {Object} args entry plus the requested changes.
- * @return {Object} {ok, reason, changes, repricing, relinking}.
+ * @return {Object} {ok, reason, changes, repricing, extending, relinking}.
  */
 function businessParkingEditPlan({entry, changes}) {
   const record = entry && typeof entry === "object" ? entry : {};
@@ -672,8 +689,29 @@ function businessParkingEditPlan({entry, changes}) {
   }
 
   // Dates move the amount owed; the method decides how it is collected.
+  // A form sends every field on every save, so a date being PRESENT says
+  // nothing: only a date that lands on a different day than the stored one
+  // moves the price. Treating presence as change made fixing a customer's
+  // name re-run the capacity check (refusing the edit on a full lot, for a
+  // car already standing on it) and reissue a payment link nobody repriced.
   const has = (field) => Object.prototype.hasOwnProperty.call(applied, field);
-  const repricing = has("startDate") || has("endDate");
+  const repricing =
+    (has("startDate") &&
+      parkingDayKey(applied.startDate) !== parkingDayKey(record.parkingDate)) ||
+    (has("endDate") &&
+      parkingDayKey(applied.endDate) !== parkingDayKey(record.parkingEndDate));
+  // Only a stay that reaches into days it did not hold before needs a free
+  // space. Closing an open stay, or shortening one, gives space back - and
+  // refusing that because the lot is full keeps the lot full.
+  const oldStart = parkingDayKey(record.parkingDate);
+  const oldEnd = parkingDayKey(record.parkingEndDate);
+  const newStart = has("startDate") ?
+    parkingDayKey(applied.startDate) : oldStart;
+  const newEnd = has("endDate") ? parkingDayKey(applied.endDate) : oldEnd;
+  const extending = repricing && (
+    (newStart && oldStart && newStart < oldStart) ||
+    (oldEnd && (!newEnd || newEnd > oldEnd))
+  );
   const currentMethod = text(record.paymentMethod, 40);
   const nextMethod = text(applied.paymentMethod, 40) || currentMethod;
   const methodChanged = nextMethod !== currentMethod;
@@ -690,6 +728,7 @@ function businessParkingEditPlan({entry, changes}) {
     nextMethod,
     methodChanged,
     repricing,
+    extending: Boolean(extending),
     relinking,
     // Leaving the link path means the outstanding session must die.
     cancelling: currentMethod === "payment_link" &&

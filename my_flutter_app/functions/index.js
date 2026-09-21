@@ -12847,7 +12847,8 @@ exports.updateBusinessParkingEntry = onCall(
           customerLatitude: null,
           customerLongitude: null,
         });
-        if (plan.repricing && option.availableSpaces <= 0) {
+        // Space is only needed for days the stay did not already hold.
+        if (plan.extending && option.availableSpaces <= 0) {
           throw new HttpsError(
               "failed-precondition",
               "No parking spaces are available for those dates",
