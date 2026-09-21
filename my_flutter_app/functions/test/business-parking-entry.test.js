@@ -726,6 +726,55 @@ describe("editing a walk-up record", () => {
         {customerEmail: "new@example.com", vinNumber: "ABC"});
   });
 
+  // The console sends every field on every save. KEREN could not fix a
+  // customer's details on a full lot: the unchanged dates counted as a date
+  // change, and the capacity check refused a car already standing there.
+  it("does not count unchanged dates as a date change", () => {
+    const stored = {
+      ...unpaidLink,
+      parkingDate: {toDate: () => new Date("2026-09-01T12:00:00Z")},
+      parkingEndDate: null,
+    };
+    const same = businessParkingEditPlan({
+      entry: stored,
+      changes: {customerName: "Amadou Bah",
+        startDate: "2026-09-01T12:00:00", endDate: "T12:00:00"},
+    });
+    assert.equal(same.ok, true);
+    assert.equal(same.repricing, false);
+    assert.equal(same.relinking, false);
+    const moved = businessParkingEditPlan({
+      entry: stored,
+      changes: {startDate: "2026-09-02T12:00:00", endDate: "T12:00:00"},
+    });
+    assert.equal(moved.repricing, true);
+    const closed = businessParkingEditPlan({
+      entry: stored,
+      changes: {startDate: "2026-09-01T12:00:00",
+        endDate: "2026-09-20T12:00:00"},
+    });
+    assert.equal(closed.repricing, true);
+    // Closing an open stay hands days back; it never needs a free space.
+    assert.equal(closed.extending, false);
+    assert.equal(same.extending, false);
+    // Arriving earlier reaches into days the stay did not hold.
+    const earlier = businessParkingEditPlan({
+      entry: stored,
+      changes: {startDate: "2026-08-25T12:00:00", endDate: "T12:00:00"},
+    });
+    assert.equal(earlier.extending, true);
+    assert.equal(moved.extending, false, "a later start is a shorter stay");
+    // A dated stay pushed later, or reopened, grows.
+    const dated = {...stored,
+      parkingEndDate: {toDate: () => new Date("2026-09-10T12:00:00Z")}};
+    assert.equal(businessParkingEditPlan({entry: dated,
+      changes: {endDate: "2026-09-15T12:00:00"}}).extending, true);
+    assert.equal(businessParkingEditPlan({entry: dated,
+      changes: {endDate: "T12:00:00"}}).extending, true);
+    assert.equal(businessParkingEditPlan({entry: dated,
+      changes: {endDate: "2026-09-05T12:00:00"}}).extending, false);
+  });
+
   it("reissues the link whenever the dates move the price", () => {
     const plan = businessParkingEditPlan({
       entry: unpaidLink,
