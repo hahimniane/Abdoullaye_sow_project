@@ -209,8 +209,29 @@ function invoicePaymentRecord(input, today = "") {
     method: text(input.method, 40),
     paidOn: dayKey(input.paidOn) || dayKey(today),
     note: text(input.note),
+    // What the money was for: one of the invoice's lines, or blank for the
+    // invoice as a whole. The description is copied so the payment still
+    // reads right after the line is edited or removed.
+    forLineId: text(input.forLineId, 200),
+    forDescription: text(input.forDescription),
     reverted: false,
   };
+}
+
+/**
+ * How a payment reads in a list or on the paper: day, method, what for.
+ *
+ * @param {object} payment The stored payment.
+ * @return {string} "2026-09-26 · cash · for 2014 Toyota Corolla".
+ */
+function invoicePaymentLabel(payment) {
+  const p = payment || {};
+  return [
+    dayKey(p.paidOn),
+    text(p.method, 40),
+    text(p.forDescription) ? `for ${text(p.forDescription)}` : "",
+    text(p.note),
+  ].filter(Boolean).join(" · ");
 }
 
 // -------------------------------------------------------------------------
@@ -314,7 +335,13 @@ function invoiceTextSummary({invoice, lines, payments, businessName}) {
       (text(l?.vinNumber, 17) ? `\nVIN ${text(l?.vinNumber, 17)}` : ""));
   }
   out.push("", `Total: ${moneyText(totals.totalCents)}`);
-  if (totals.paidCents > 0) out.push(`Paid: -${moneyText(totals.paidCents)}`);
+  if (totals.paidCents > 0) {
+    out.push(`Paid: -${moneyText(totals.paidCents)}`);
+    for (const p of (Array.isArray(payments) ? payments : [])
+        .filter((x) => x && x.reverted !== true)) {
+      out.push(`  ${invoicePaymentLabel(p)} — ${moneyText(p.amountCents)}`);
+    }
+  }
   out.push(totals.balanceCents > 0 ?
     `BALANCE DUE: ${moneyText(totals.balanceCents)}` +
       (dayKey(inv.dueOn) ? ` (due ${dayKey(inv.dueOn)})` : "") :
@@ -335,6 +362,7 @@ module.exports = {
   invoiceLineRecord,
   validateInvoicePayment,
   invoicePaymentRecord,
+  invoicePaymentLabel,
   invoiceTotals,
   invoiceIsOverdue,
   invoiceNumber,

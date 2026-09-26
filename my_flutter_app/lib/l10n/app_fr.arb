@@ -4204,5 +4204,18 @@
   "invPdfPayments": "Paiements reçus",
   "invPdfIssuedBy": "Émis par",
   "invPdfCustomer": "Client",
-  "invPdfFooter": "Émis via Laawol Digital · laawoldigital.com"
+  "invPdfFooter": "Émis via Laawol Digital · laawoldigital.com",
+  "invLineVinFirst": "VIN (vous vendez une voiture ? commencez ici)",
+  "invLineVinFills": "17 caractères — remplit la voiture ci-dessous",
+  "invPayFor": "Pour quoi",
+  "invPayWholeInvoice": "Toute la facture",
+  "invPayForLine": "pour {what}",
+  "@invPayForLine": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+  "invPdfFor": "pour"
 }

@@ -42,6 +42,7 @@ class InvoicePdfCopy {
     required this.customer,
     required this.footer,
     required this.methodLabel,
+    this.forLine = 'for',
   });
 
   final String invoice;
@@ -64,6 +65,7 @@ class InvoicePdfCopy {
   final String customer;
   final String footer;
   final String Function(String method) methodLabel;
+  final String forLine;
 }
 
 String invoiceBusinessAddress(Map<String, dynamic> business) {
@@ -320,7 +322,9 @@ Future<Uint8List> buildInvoicePdf({
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    '${p.paidOn}  ·  ${copy.methodLabel(p.method)}${p.note.isNotEmpty ? '  ·  ${p.note}' : ''}',
+                    '${p.paidOn}  ·  ${copy.methodLabel(p.method)}'
+                    '${p.forDescription.isNotEmpty ? '  ·  ${copy.forLine} ${p.forDescription}' : ''}'
+                    '${p.note.isNotEmpty ? '  ·  ${p.note}' : ''}',
                     style: const pw.TextStyle(fontSize: 9.5, color: _ink),
                   ),
                   pw.Text(invoiceMoney(p.amountCents), style: const pw.TextStyle(fontSize: 9.5, color: _ink)),

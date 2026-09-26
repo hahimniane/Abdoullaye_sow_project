@@ -10,6 +10,7 @@ const {
   invoiceLineRecord,
   validateInvoicePayment,
   invoicePaymentRecord,
+  invoicePaymentLabel,
   invoiceTotals,
   invoiceIsOverdue,
   invoiceNumber,
@@ -91,6 +92,20 @@ describe("a payment", () => {
         "2026-09-26");
     assert.equal(rec.paidOn, "2026-09-26");
     assert.equal(rec.reverted, false);
+    assert.equal(rec.forLineId, "", "for the whole invoice unless told");
+  });
+
+  // "What was this $2,000 for?" is the question a month later; the payment
+  // keeps the line's words, so the answer survives the line being edited.
+  it("remembers what it was for, in the line's own words", () => {
+    const rec = invoicePaymentRecord({amountCents: 200000, method: "zelle",
+      forLineId: "l1", forDescription: " 2014 Toyota Corolla "}, "2026-09-26");
+    assert.equal(rec.forLineId, "l1");
+    assert.equal(rec.forDescription, "2014 Toyota Corolla");
+    assert.equal(invoicePaymentLabel(rec),
+        "2026-09-26 · zelle · for 2014 Toyota Corolla");
+    assert.equal(invoicePaymentLabel({paidOn: "2026-09-26", method: "cash",
+      note: "first half"}), "2026-09-26 · cash · first half");
   });
 });
 
@@ -138,9 +153,12 @@ describe("the WhatsApp text", () => {
         {description: "Barrels", quantity: 8, unitPriceCents: 12000,
           amountCents: 96000},
       ],
-      payments: [{amountCents: 200000}],
+      payments: [{amountCents: 200000, paidOn: "2026-09-26", method: "zelle",
+        forDescription: "2014 Toyota Corolla"}],
     });
     assert.match(txt, /^Keren Auto Sales — Invoice INV-0007\n/);
+    assert.match(txt, /Paid: -\$2,000\.00\n {2}2026-09-26 · zelle · /);
+    assert.match(txt, /for 2014 Toyota Corolla — \$2,000\.00\n/);
     assert.match(txt,
         /2014 Toyota Corolla — \$5,500\.00\nVIN 1HGCM82633A004352/);
     assert.match(txt, /Barrels \(8 × \$120\.00\) — \$960\.00/);

@@ -16847,6 +16847,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Issued through Laawol Digital · laawoldigital.com'**
   String get invPdfFooter;
+
+  /// No description provided for @invLineVinFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN (selling a car? start here)'**
+  String get invLineVinFirst;
+
+  /// No description provided for @invLineVinFills.
+  ///
+  /// In en, this message translates to:
+  /// **'17 characters — fills in the car below'**
+  String get invLineVinFills;
+
+  /// No description provided for @invPayFor.
+  ///
+  /// In en, this message translates to:
+  /// **'What it is for'**
+  String get invPayFor;
+
+  /// No description provided for @invPayWholeInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'The whole invoice'**
+  String get invPayWholeInvoice;
+
+  /// No description provided for @invPayForLine.
+  ///
+  /// In en, this message translates to:
+  /// **'for {what}'**
+  String invPayForLine(String what);
+
+  /// No description provided for @invPdfFor.
+  ///
+  /// In en, this message translates to:
+  /// **'for'**
+  String get invPdfFor;
 }
 
 class _AppLocalizationsDelegate

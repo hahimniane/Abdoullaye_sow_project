@@ -9,7 +9,9 @@ import 'package:share_plus/share_plus.dart';
 import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart';
 import '../services/lot_customers.dart';
-import '../services/lot_ledger.dart' show LotStaff;
+import '../services/lot_ledger.dart'
+    show LotKnownCar, LotStaff, lotFindKnownCar;
+import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -18,6 +20,7 @@ import '../utils/invoice_pdf.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
+import 'vin_scanner_screen.dart';
 
 /// Invoices and receipts the business writes by hand: what it sold to
 /// someone - a car, barrels, tyres, anything, whether or not it exists
@@ -45,6 +48,12 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   List<Invoice> _invoices = const [];
   List<LotStaff> _staff = const [];
   List<LotCustomer> _customers = const [];
+
+  /// Every vehicle this business has on file - parked cars and past ledger
+  /// jobs - so typing a VIN it recognises never means re-typing the car.
+  List<LotKnownCar> _parkedCars = const [];
+  List<LotKnownCar> _activityCars = const [];
+  List<LotKnownCar> get _knownCars => [..._parkedCars, ..._activityCars];
   Map<String, dynamic> _business = const {};
   String _filter = invoiceFilterOpen;
   String _search = '';
@@ -81,6 +90,20 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
         });
       }
     }));
+    _subs.add(scoped('parkedCars').snapshots().listen((snap) {
+      if (!mounted) return;
+      setState(() => _parkedCars = [
+            for (final d in snap.docs) LotKnownCar.fromMap(d.data()),
+          ]);
+    }, onError: (_) {}));
+    _subs.add(scoped('lotActivities').snapshots().listen((snap) {
+      if (!mounted) return;
+      setState(() => _activityCars = [
+            for (final d in snap.docs)
+              if ((d.data()['vinNumber'] ?? '').toString().isNotEmpty)
+                LotKnownCar.fromMap(d.data()),
+          ]);
+    }, onError: (_) {}));
     // The list reads the totals stamped on each invoice; only the detail
     // screen subscribes to lines and payments, and only for its own invoice.
     _subs.add(_db
@@ -146,6 +169,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           invoiceId: invoiceId,
           staff: _staff,
           customers: _customers,
+          knownCars: _knownCars,
           business: _business,
           onCustomerRecorded: _loadCustomers,
         ),
@@ -683,12 +707,14 @@ class InvoiceDetailScreen extends StatefulWidget {
     required this.customers,
     required this.business,
     required this.onCustomerRecorded,
+    this.knownCars = const [],
   });
 
   final String businessId;
   final String invoiceId;
   final List<LotStaff> staff;
   final List<LotCustomer> customers;
+  final List<LotKnownCar> knownCars;
   final Map<String, dynamic> business;
   final VoidCallback onCustomerRecorded;
 
@@ -802,7 +828,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     if (invoice == null) return;
     await showLotSheet<bool>(
       context,
-      _LineFormSheet(businessId: widget.businessId, invoice: invoice),
+      _LineFormSheet(
+        businessId: widget.businessId,
+        invoice: invoice,
+        knownCars: widget.knownCars,
+      ),
     );
   }
 
@@ -812,7 +842,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     await showLotSheet<bool>(
       context,
       _LineFormSheet(
-          businessId: widget.businessId, invoice: invoice, existing: line),
+        businessId: widget.businessId,
+        invoice: invoice,
+        knownCars: widget.knownCars,
+        existing: line,
+      ),
     );
   }
 
@@ -859,6 +893,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       _PaymentFormSheet(
         businessId: widget.businessId,
         invoice: invoice,
+        lines: _lines,
         balanceCents: totals.balanceCents,
       ),
     );
@@ -940,6 +975,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           customer: l10n.invPdfCustomer,
           footer: l10n.invPdfFooter,
           methodLabel: (m) => _methodLabel(l10n, m),
+          forLine: l10n.invPdfFor,
         ),
       );
       await shareInvoicePdf(bytes, invoiceFileName(invoice, _businessName));
@@ -1464,10 +1500,15 @@ class _PaymentTile extends StatelessWidget {
                     decoration: muted ? TextDecoration.lineThrough : null,
                   ),
                 ),
-                if (receivedBy.isNotEmpty || payment.note.isNotEmpty || muted)
+                if (receivedBy.isNotEmpty ||
+                    payment.note.isNotEmpty ||
+                    payment.forDescription.isNotEmpty ||
+                    muted)
                   Text(
                     [
                       if (muted) l10n.invReverted,
+                      if (payment.forDescription.isNotEmpty)
+                        l10n.invPayForLine(payment.forDescription),
                       if (payment.note.isNotEmpty) payment.note,
                       if (receivedBy.isNotEmpty) receivedBy,
                     ].join(' · '),
@@ -1790,11 +1831,13 @@ class _LineFormSheet extends StatefulWidget {
   const _LineFormSheet({
     required this.businessId,
     required this.invoice,
+    this.knownCars = const [],
     this.existing,
   });
 
   final String businessId;
   final Invoice invoice;
+  final List<LotKnownCar> knownCars;
   final InvoiceLine? existing;
 
   @override
@@ -1816,12 +1859,86 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   bool _busy = false;
   int _addedThisSitting = 0;
 
+  final VinDecoderService _vinDecoder = NhtsaVinDecoderService();
+  String _vinHint = '';
+  bool _vinBusy = false;
+  String _decodedVin = '';
+
   @override
   void dispose() {
     for (final c in [_description, _quantity, _unit, _vin]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// The VIN is the vehicle's identity, so typing one should end the typing:
+  /// the business's own records first (a parked car, a past job), then the
+  /// decoder. The description is filled only while it is empty, so a name
+  /// the person already chose is never overwritten.
+  void _applyVin(String raw) {
+    final l10n = AppLocalizations.of(context)!;
+    var clean = raw.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    if (clean.length > invoiceMaxVin) clean = clean.substring(0, invoiceMaxVin);
+    if (clean != _vin.text) {
+      _vin.value = TextEditingValue(
+        text: clean,
+        selection: TextSelection.collapsed(offset: clean.length),
+      );
+    }
+    if (_errors.contains('vin_invalid')) {
+      setState(() => _errors = {..._errors}..remove('vin_invalid'));
+    }
+    final known = lotFindKnownCar(clean, widget.knownCars);
+    if (known != null && known.hasVehicle) {
+      setState(() {
+        final car = [known.year, known.make, known.model]
+            .where((p) => p.isNotEmpty)
+            .join(' ');
+        if (_description.text.trim().isEmpty) _description.text = car;
+        _vinHint = l10n.lotVinMatchedExisting;
+      });
+      return;
+    }
+    if (_vinHint.isNotEmpty) setState(() => _vinHint = '');
+    if (clean.length == invoiceMaxVin && clean != _decodedVin) _decodeVin(clean);
+  }
+
+  Future<void> _decodeVin(String vin) async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() {
+      _vinBusy = true;
+      _decodedVin = vin;
+    });
+    try {
+      final decoded = await _vinDecoder.decode(vin);
+      if (!mounted) return;
+      setState(() {
+        final car = [decoded.year, decoded.make, decoded.model]
+            .map((p) => (p ?? '').trim())
+            .where((p) => p.isNotEmpty)
+            .join(' ');
+        if (car.isNotEmpty && _description.text.trim().isEmpty) {
+          _description.text = car;
+        }
+        _vinHint = decoded.summary.isEmpty
+            ? ''
+            : l10n.vinDecodedVehicle(decoded.summary);
+      });
+      if (decoded.hasIdentity) AppHaptics.commit();
+    } catch (_) {
+      if (mounted) setState(() => _vinHint = '');
+    } finally {
+      if (mounted) setState(() => _vinBusy = false);
+    }
+  }
+
+  Future<void> _scanVin() async {
+    final vin = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const VinScannerScreen()),
+    );
+    if (vin == null || !mounted) return;
+    _applyVin(vin);
   }
 
   InvoiceLineDraft get _draft => InvoiceLineDraft(
@@ -1930,9 +2047,48 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
+            key: const Key('line-vin'),
+            controller: _vin,
+            autofocus: !editing,
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+              LengthLimitingTextInputFormatter(invoiceMaxVin),
+            ],
+            onChanged: _applyVin,
+            decoration: InputDecoration(
+              labelText: l10n.invLineVinFirst,
+              helperText: _vinBusy
+                  ? l10n.lotDecodingVin
+                  : (_vinHint.isEmpty ? l10n.invLineVinFills : _vinHint),
+              helperStyle: _vinHint.isEmpty && !_vinBusy
+                  ? null
+                  : const TextStyle(
+                      color: AppColors.sage,
+                      fontWeight: FontWeight.w600,
+                    ),
+              helperMaxLines: 2,
+              errorText: errorFor('vin_invalid'),
+              suffixIcon: _vinBusy
+                  ? const Padding(
+                      padding: EdgeInsets.all(13),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.document_scanner_outlined),
+                      tooltip: l10n.scanVin,
+                      onPressed: _scanVin,
+                    ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
             key: const Key('line-description'),
             controller: _description,
-            autofocus: true,
             textCapitalization: TextCapitalization.sentences,
             onChanged: (_) => clear('description_required'),
             decoration: InputDecoration(
@@ -1977,21 +2133,6 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            key: const Key('line-vin'),
-            controller: _vin,
-            textCapitalization: TextCapitalization.characters,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
-              LengthLimitingTextInputFormatter(invoiceMaxVin),
-            ],
-            onChanged: (_) => clear('vin_invalid'),
-            decoration: InputDecoration(
-              labelText: l10n.invLineVin,
-              errorText: errorFor('vin_invalid'),
-            ),
-          ),
         ],
       ),
     );
@@ -2004,11 +2145,13 @@ class _PaymentFormSheet extends StatefulWidget {
     required this.businessId,
     required this.invoice,
     required this.balanceCents,
+    this.lines = const [],
   });
 
   final String businessId;
   final Invoice invoice;
   final int balanceCents;
+  final List<InvoiceLine> lines;
 
   @override
   State<_PaymentFormSheet> createState() => _PaymentFormSheetState();
@@ -2019,6 +2162,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
   final _note = TextEditingController();
   String _method = 'cash';
   String _paidOn = invoiceTodayKey();
+  String _forLineId = '';
   Set<String> _errors = {};
   String _serverNote = '';
   bool _busy = false;
@@ -2035,7 +2179,25 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
         method: _method,
         paidOn: _paidOn,
         note: _note.text,
+        forLineId: _forLineId,
       );
+
+  Future<void> _pickFor() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.invPayFor,
+      selected: _forLineId,
+      options: [
+        LotOption('', l10n.invPayWholeInvoice),
+        for (final line in widget.lines)
+          LotOption(line.id, line.description,
+              detail: invoiceMoney(line.amountCents)),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _forLineId = picked);
+  }
 
   Future<void> _pickMethod() async {
     final l10n = AppLocalizations.of(context)!;
@@ -2173,6 +2335,19 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
             placeholder: l10n.invPayDate,
             onTap: _pickDay,
             error: errorFor('paid_on_invalid'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          LotPickerField(
+            label: l10n.invPayFor,
+            value: _forLineId.isEmpty
+                ? l10n.invPayWholeInvoice
+                : (widget.lines
+                        .where((l) => l.id == _forLineId)
+                        .firstOrNull
+                        ?.description ??
+                    l10n.invPayWholeInvoice),
+            placeholder: l10n.invPayWholeInvoice,
+            onTap: _pickFor,
           ),
           const SizedBox(height: AppSpacing.md),
           TextField(

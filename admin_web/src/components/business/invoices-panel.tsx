@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   collection,
   getDocs,
@@ -47,6 +47,7 @@ import {
   invoiceLinePayload,
   invoiceMessage,
   invoicePayload,
+  invoicePaymentLabel,
   invoicePaymentPayload,
   invoiceStatus,
   invoiceTextSummary,
@@ -73,6 +74,13 @@ import {
   type LotCustomer,
 } from "@/lib/lot-customers";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
+import {
+  VIN_LOOKING_UP,
+  VIN_SERVICE_UNREACHABLE,
+  decodeVinWithCatalog,
+  findVehicleRecordByVin,
+  vinDecodeHint,
+} from "@/lib/vin-lookup";
 import { CopyValue } from "@/components/copy-value";
 import type { FirestoreRow } from "@/types/admin";
 
@@ -112,6 +120,10 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
   const staff = useBusinessStaff(businessId, enabled, 200);
   // The lot's customer memory, offered back as staff type a name.
   const lotCustomers = useBusinessCollection("lotCustomers", businessId, enabled, 500);
+  // The same records the ledger's form scans when a VIN is typed: a parked
+  // car or a past activity already says what the car is.
+  const parkedCars = useBusinessCollection("parkedCars", businessId, enabled, 500);
+  const activities = useBusinessCollection("lotActivities", businessId, enabled, 1000);
 
   const [filter, setFilter] = useState<InvoiceFilter>("");
   const [search, setSearch] = useState("");
@@ -129,6 +141,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
   const [paymentDraft, setPaymentDraft] = useState<InvoicePaymentDraft>(emptyInvoicePaymentDraft);
   const [customerPick, setCustomerPick] = useState<LotCustomer | null>(null);
   const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
+  const [vinHint, setVinHint] = useState("");
+  const lastVinRef = useRef("");
   const [historyRows, setHistoryRows] = useState<FirestoreRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [textPreview, setTextPreview] = useState("");
@@ -319,6 +333,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
   function openAddLine() {
     setLineDraft(emptyInvoiceLineDraft);
     setEditingLineId("");
+    setVinHint("");
+    lastVinRef.current = "";
     setDraftError("");
     setModal("line");
   }
@@ -326,8 +342,52 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
   function openEditLine(row: Row) {
     setLineDraft(invoiceLineDraftFromRow(row));
     setEditingLineId(String(row.id));
+    setVinHint("");
+    lastVinRef.current = "";
     setDraftError("");
     setModal("line");
+  }
+
+  // The VIN is the vehicle's identity, so typing one should end the typing:
+  // the business's own records first (a parked car, a past job), then the
+  // decoder. The description is filled only while it is empty, so a name
+  // the person already chose is never overwritten.
+  function applyLineVin(rawVin: string) {
+    const clean = rawVin.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 17);
+    setLineDraft((d) => ({ ...d, vinNumber: clean }));
+    if (clean.length < 6) {
+      setVinHint("");
+      lastVinRef.current = "";
+      return;
+    }
+    const match = findVehicleRecordByVin([...parkedCars.rows, ...activities.rows], clean);
+    if (match) {
+      lastVinRef.current = clean;
+      const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")].filter(Boolean).join(" ");
+      if (car) {
+        setLineDraft((d) => ({ ...d, description: d.description.trim() ? d.description : car }));
+        setVinHint(`Filled from an existing record: ${car}. You can change anything below.`);
+      }
+      return;
+    }
+    setVinHint("");
+    if (clean.length === 17 && clean !== lastVinRef.current) {
+      lastVinRef.current = clean;
+      void decodeLineVin(clean);
+    }
+  }
+
+  async function decodeLineVin(vin: string) {
+    setVinHint(VIN_LOOKING_UP);
+    try {
+      const result = await decodeVinWithCatalog(vin);
+      if (lastVinRef.current !== vin) return;
+      const car = [result.year, result.make, result.model].filter(Boolean).join(" ") || result.seen;
+      if (car) setLineDraft((d) => ({ ...d, description: d.description.trim() ? d.description : car }));
+      setVinHint(vinDecodeHint(result));
+    } catch {
+      if (lastVinRef.current === vin) setVinHint(VIN_SERVICE_UNREACHABLE);
+    }
   }
 
   async function saveLine(andAnother = false) {
@@ -550,7 +610,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                   return (
                     <div className={`mini-table-row${reverted ? " inv-reverted" : ""}`} key={String(row.id)}>
                       <span><strong>{formatDate(invoiceDayKey(row.paidOn))}</strong><small>{staffName(text(row.receivedByStaffId, ""))}</small></span>
-                      <span><strong>{method}</strong>{text(row.note, "") && <small>{text(row.note, "")}</small>}{reverted && <small>Reverted</small>}</span>
+                      <span><strong>{method}</strong>{text(row.forDescription, "") && <small>for {text(row.forDescription, "")}</small>}{text(row.note, "") && <small>{text(row.note, "")}</small>}{reverted && <small>Reverted</small>}</span>
                       <span><strong>{moneyText(row.amountCents)}</strong></span>
                       <span className="ctn-row-actions">
                         {!reverted && (
@@ -678,10 +738,10 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
             <div className="lst-modal-body">
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
               <div className="lst-form-grid">
-                <label className="lst-field wide"><span>What it is</span><input value={lineDraft.description} onChange={(e) => setLineDraft((d) => ({ ...d, description: e.target.value }))} placeholder="e.g. 2014 Toyota Corolla, or Barrels to Conakry" autoFocus /></label>
+                <label className="lst-field wide"><span>VIN (selling a car? start here)</span><input value={lineDraft.vinNumber} onChange={(e) => applyLineVin(e.target.value)} placeholder="17 characters — fills in the car below" autoFocus={!editingLineId} />{vinHint && <small className="lst-hint" style={{ color: "var(--money)" }}>{vinHint}</small>}</label>
+                <label className="lst-field wide"><span>What it is</span><input value={lineDraft.description} onChange={(e) => setLineDraft((d) => ({ ...d, description: e.target.value }))} placeholder="e.g. 2014 Toyota Corolla, or Barrels to Conakry" /></label>
                 <label className="lst-field"><span>How many</span><input inputMode="numeric" value={lineDraft.quantity} onChange={(e) => setLineDraft((d) => ({ ...d, quantity: e.target.value }))} /></label>
                 <label className="lst-field"><span>Price for one ($)</span><input inputMode="decimal" value={lineDraft.unitPrice} onChange={(e) => setLineDraft((d) => ({ ...d, unitPrice: e.target.value }))} placeholder="0.00" /></label>
-                <label className="lst-field wide"><span>VIN (cars only)</span><input value={lineDraft.vinNumber} onChange={(e) => setLineDraft((d) => ({ ...d, vinNumber: e.target.value.toUpperCase() }))} placeholder="17 characters, printed on the paper" /></label>
               </div>
             </div>
             <footer className="lst-modal-foot">
@@ -715,7 +775,13 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                   </select>
                 </label>
                 <label className="lst-field"><span>Date</span><input type="date" value={paymentDraft.paidOn} onChange={(e) => setPaymentDraft((d) => ({ ...d, paidOn: e.target.value }))} /></label>
-                <label className="lst-field"><span>Note</span><input value={paymentDraft.note} onChange={(e) => setPaymentDraft((d) => ({ ...d, note: e.target.value }))} placeholder="optional" /></label>
+                <label className="lst-field"><span>What it is for</span>
+                  <select value={paymentDraft.forLineId} onChange={(e) => setPaymentDraft((d) => ({ ...d, forLineId: e.target.value }))}>
+                    <option value="">The whole invoice</option>
+                    {selectedLines.map((row) => (<option key={String(row.id)} value={String(row.id)}>{text(row.description, "")} — {moneyText(row.amountCents)}</option>))}
+                  </select>
+                </label>
+                <label className="lst-field wide"><span>Note</span><input value={paymentDraft.note} onChange={(e) => setPaymentDraft((d) => ({ ...d, note: e.target.value }))} placeholder="optional" /></label>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <button className="lst-btn ghost" type="button" onClick={() => setPaymentDraft((d) => ({ ...d, amount: (selectedTotals.balanceCents / 100).toFixed(2).replace(/\.00$/, "") }))}>Pay the whole balance</button>
