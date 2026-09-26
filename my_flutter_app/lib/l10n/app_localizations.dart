@@ -16121,6 +16121,732 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose a different car'**
   String get ctrLotPickAnother;
+
+  /// No description provided for @invMenuTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices & receipts'**
+  String get invMenuTitle;
+
+  /// No description provided for @invMenuSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What you sold and what is owed, as PDFs to send.'**
+  String get invMenuSubtitle;
+
+  /// No description provided for @invTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices & receipts'**
+  String get invTitle;
+
+  /// No description provided for @invNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New invoice'**
+  String get invNew;
+
+  /// No description provided for @invSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Number, title, customer or phone'**
+  String get invSearchHint;
+
+  /// No description provided for @invFilterOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get invFilterOpen;
+
+  /// No description provided for @invFilterOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get invFilterOverdue;
+
+  /// No description provided for @invFilterPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get invFilterPaid;
+
+  /// No description provided for @invFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get invFilterAll;
+
+  /// No description provided for @invStatOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get invStatOpen;
+
+  /// No description provided for @invStatOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed to you'**
+  String get invStatOwed;
+
+  /// No description provided for @invStatCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get invStatCollected;
+
+  /// No description provided for @invEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No invoices yet'**
+  String get invEmptyTitle;
+
+  /// No description provided for @invEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Open one the next time you sell something.'**
+  String get invEmptyHint;
+
+  /// No description provided for @invNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No invoices match.'**
+  String get invNoMatch;
+
+  /// No description provided for @invStatusOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get invStatusOpen;
+
+  /// No description provided for @invStatusOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get invStatusOverdue;
+
+  /// No description provided for @invStatusPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get invStatusPaid;
+
+  /// No description provided for @invKindInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice'**
+  String get invKindInvoice;
+
+  /// No description provided for @invKindReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get invKindReceipt;
+
+  /// No description provided for @invFor.
+  ///
+  /// In en, this message translates to:
+  /// **'For {name}'**
+  String invFor(String name);
+
+  /// No description provided for @invDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {day}'**
+  String invDue(String day);
+
+  /// No description provided for @invPaidOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid on {day}'**
+  String invPaidOn(String day);
+
+  /// No description provided for @invNoDueDate.
+  ///
+  /// In en, this message translates to:
+  /// **'No due date'**
+  String get invNoDueDate;
+
+  /// No description provided for @invTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get invTotal;
+
+  /// No description provided for @invPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get invPaid;
+
+  /// No description provided for @invBalanceDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance due'**
+  String get invBalanceDue;
+
+  /// No description provided for @invLines.
+  ///
+  /// In en, this message translates to:
+  /// **'Lines'**
+  String get invLines;
+
+  /// No description provided for @invPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get invPayments;
+
+  /// No description provided for @invNoLines.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing on this invoice yet. Add the first line.'**
+  String get invNoLines;
+
+  /// No description provided for @invNoPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'No payment recorded yet.'**
+  String get invNoPayments;
+
+  /// No description provided for @invAddLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Add line'**
+  String get invAddLine;
+
+  /// No description provided for @invEditLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit line'**
+  String get invEditLine;
+
+  /// No description provided for @invRemoveLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove line'**
+  String get invRemoveLine;
+
+  /// No description provided for @invRemoveLineMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'It comes off the invoice and the balance drops. The history keeps it.'**
+  String get invRemoveLineMessage;
+
+  /// No description provided for @invRecordPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a payment'**
+  String get invRecordPayment;
+
+  /// No description provided for @invRevertPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert payment'**
+  String get invRevertPayment;
+
+  /// No description provided for @invRevertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The balance goes back up. The payment stays in the history, struck through.'**
+  String get invRevertMessage;
+
+  /// No description provided for @invReverted.
+  ///
+  /// In en, this message translates to:
+  /// **'Reverted'**
+  String get invReverted;
+
+  /// No description provided for @invSavePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as PDF'**
+  String get invSavePdf;
+
+  /// No description provided for @invShareText.
+  ///
+  /// In en, this message translates to:
+  /// **'Send as text'**
+  String get invShareText;
+
+  /// No description provided for @invHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get invHistory;
+
+  /// No description provided for @invEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get invEdit;
+
+  /// No description provided for @invDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete invoice'**
+  String get invDelete;
+
+  /// No description provided for @invDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Its number will not be reused.'**
+  String get invDeleteMessage;
+
+  /// No description provided for @invFormTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get invFormTitle;
+
+  /// No description provided for @invFormTitleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 2014 Corolla, or Barrels to Conakry'**
+  String get invFormTitleHint;
+
+  /// No description provided for @invFormEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get invFormEmail;
+
+  /// No description provided for @invFormIssuedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice date'**
+  String get invFormIssuedOn;
+
+  /// No description provided for @invFormDueOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Due date'**
+  String get invFormDueOn;
+
+  /// No description provided for @invFormDueHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave blank if there is no deadline'**
+  String get invFormDueHint;
+
+  /// No description provided for @invFormNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes on the paper'**
+  String get invFormNotes;
+
+  /// No description provided for @invOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open invoice'**
+  String get invOpen;
+
+  /// No description provided for @invOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening…'**
+  String get invOpening;
+
+  /// No description provided for @invSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get invSave;
+
+  /// No description provided for @invSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get invSaving;
+
+  /// No description provided for @invLineWhat.
+  ///
+  /// In en, this message translates to:
+  /// **'What it is'**
+  String get invLineWhat;
+
+  /// No description provided for @invLineWhatHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 2014 Toyota Corolla, or Barrels'**
+  String get invLineWhatHint;
+
+  /// No description provided for @invLineQty.
+  ///
+  /// In en, this message translates to:
+  /// **'How many'**
+  String get invLineQty;
+
+  /// No description provided for @invLineUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'Price for one (\$)'**
+  String get invLineUnit;
+
+  /// No description provided for @invLineVin.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN (cars only)'**
+  String get invLineVin;
+
+  /// No description provided for @invLineEach.
+  ///
+  /// In en, this message translates to:
+  /// **'{qty} × {each}'**
+  String invLineEach(int qty, String each);
+
+  /// No description provided for @invSaveAndAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Save & add another'**
+  String get invSaveAndAnother;
+
+  /// No description provided for @invAddAndClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Add & close'**
+  String get invAddAndClose;
+
+  /// No description provided for @invPayAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount received (\$)'**
+  String get invPayAmount;
+
+  /// No description provided for @invPayMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'How it arrived'**
+  String get invPayMethod;
+
+  /// No description provided for @invPayDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get invPayDate;
+
+  /// No description provided for @invPayNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get invPayNote;
+
+  /// No description provided for @invPayWhole.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay the whole balance'**
+  String get invPayWhole;
+
+  /// No description provided for @invPayStillOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} still owed'**
+  String invPayStillOwed(String amount);
+
+  /// No description provided for @invOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice opened. Add the first line.'**
+  String get invOpened;
+
+  /// No description provided for @invUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved.'**
+  String get invUpdated;
+
+  /// No description provided for @invDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice deleted.'**
+  String get invDeleted;
+
+  /// No description provided for @invLineAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Line added.'**
+  String get invLineAdded;
+
+  /// No description provided for @invLineUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Line updated.'**
+  String get invLineUpdated;
+
+  /// No description provided for @invLineRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Line removed.'**
+  String get invLineRemoved;
+
+  /// No description provided for @invPaymentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment recorded.'**
+  String get invPaymentRecorded;
+
+  /// No description provided for @invPaidInFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid in full — this is now a receipt.'**
+  String get invPaidInFull;
+
+  /// No description provided for @invPaymentReverted.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reverted.'**
+  String get invPaymentReverted;
+
+  /// No description provided for @invNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That invoice no longer exists.'**
+  String get invNotFound;
+
+  /// No description provided for @invMethodCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get invMethodCash;
+
+  /// No description provided for @invMethodZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle'**
+  String get invMethodZelle;
+
+  /// No description provided for @invMethodCashapp.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash App'**
+  String get invMethodCashapp;
+
+  /// No description provided for @invMethodVenmo.
+  ///
+  /// In en, this message translates to:
+  /// **'Venmo'**
+  String get invMethodVenmo;
+
+  /// No description provided for @invMethodCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check'**
+  String get invMethodCheck;
+
+  /// No description provided for @invMethodCardInPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Card in person'**
+  String get invMethodCardInPerson;
+
+  /// No description provided for @invMethodOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get invMethodOther;
+
+  /// No description provided for @invErrTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Give the invoice a short title (what it is for).'**
+  String get invErrTitle;
+
+  /// No description provided for @invErrCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Say who the invoice is for.'**
+  String get invErrCustomer;
+
+  /// No description provided for @invErrIssuedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'The invoice date is not a real date.'**
+  String get invErrIssuedOn;
+
+  /// No description provided for @invErrDueOn.
+  ///
+  /// In en, this message translates to:
+  /// **'The due date is not a real date.'**
+  String get invErrDueOn;
+
+  /// No description provided for @invErrDueOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'The due date is before the invoice date.'**
+  String get invErrDueOrder;
+
+  /// No description provided for @invErrDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what the line is.'**
+  String get invErrDescription;
+
+  /// No description provided for @invErrQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter how many (at least one).'**
+  String get invErrQuantity;
+
+  /// No description provided for @invErrUnitPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the price for one.'**
+  String get invErrUnitPrice;
+
+  /// No description provided for @invErrTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That amount is larger than an invoice can carry.'**
+  String get invErrTooLarge;
+
+  /// No description provided for @invErrVin.
+  ///
+  /// In en, this message translates to:
+  /// **'A VIN is 17 letters and digits.'**
+  String get invErrVin;
+
+  /// No description provided for @invErrAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount received.'**
+  String get invErrAmount;
+
+  /// No description provided for @invErrMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Say how the payment arrived.'**
+  String get invErrMethod;
+
+  /// No description provided for @invErrPaidOn.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment date is not a real date.'**
+  String get invErrPaidOn;
+
+  /// No description provided for @invErrExceeds.
+  ///
+  /// In en, this message translates to:
+  /// **'That is more than what is still owed.'**
+  String get invErrExceeds;
+
+  /// No description provided for @invErrHasLines.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the lines and payments before deleting.'**
+  String get invErrHasLines;
+
+  /// No description provided for @invPdfInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'INVOICE'**
+  String get invPdfInvoice;
+
+  /// No description provided for @invPdfReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'RECEIPT'**
+  String get invPdfReceipt;
+
+  /// No description provided for @invPdfBilledTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Billed to'**
+  String get invPdfBilledTo;
+
+  /// No description provided for @invPdfDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get invPdfDate;
+
+  /// No description provided for @invPdfDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Due'**
+  String get invPdfDue;
+
+  /// No description provided for @invPdfPaidOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid on'**
+  String get invPdfPaidOn;
+
+  /// No description provided for @invPdfDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get invPdfDescription;
+
+  /// No description provided for @invPdfQty.
+  ///
+  /// In en, this message translates to:
+  /// **'Qty'**
+  String get invPdfQty;
+
+  /// No description provided for @invPdfEach.
+  ///
+  /// In en, this message translates to:
+  /// **'Each'**
+  String get invPdfEach;
+
+  /// No description provided for @invPdfAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get invPdfAmount;
+
+  /// No description provided for @invPdfTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get invPdfTotal;
+
+  /// No description provided for @invPdfPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get invPdfPaid;
+
+  /// No description provided for @invPdfBalanceDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance due'**
+  String get invPdfBalanceDue;
+
+  /// No description provided for @invPdfPaidInFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid in full'**
+  String get invPdfPaidInFull;
+
+  /// No description provided for @invPdfNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get invPdfNotes;
+
+  /// No description provided for @invPdfPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments received'**
+  String get invPdfPayments;
+
+  /// No description provided for @invPdfIssuedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued by'**
+  String get invPdfIssuedBy;
+
+  /// No description provided for @invPdfCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer'**
+  String get invPdfCustomer;
+
+  /// No description provided for @invPdfFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued through Laawol Digital · laawoldigital.com'**
+  String get invPdfFooter;
 }
 
 class _AppLocalizationsDelegate

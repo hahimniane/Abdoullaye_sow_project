@@ -328,6 +328,18 @@ const {
   containerCounts,
 } = require("./container_manifest");
 const {
+  INVOICE_MESSAGES,
+  INVOICE_STATUS,
+  validateInvoice,
+  invoiceRecord,
+  validateInvoiceLine,
+  invoiceLineRecord,
+  validateInvoicePayment,
+  invoicePaymentRecord,
+  invoiceTotals,
+  invoiceNumber,
+} = require("./invoice_ledger");
+const {
   containerDocumentModel,
   renderContainerDocument,
 } = require("./container_document");
@@ -15766,6 +15778,361 @@ exports.setContainerStatus = onCall(
             `Shipped with ${lineCount} line${lineCount === 1 ? "" : "s"}` :
             "Marked arrived");
       return {success: true, containerId: ref.id, status: next};
+    },
+);
+
+// ---------------------------------------------------------------------------
+// Invoices: what a business sold to someone, typed by hand, and what has been
+// paid against it. One open tab per deal; the paper is a PDF the console or
+// app builds from these rows. Gated on the ledger permission - the same
+// people who work the lot's money.
+// ---------------------------------------------------------------------------
+
+const INVOICE_SECTION = "ledger";
+
+function invoiceMessage(codes) {
+  return (Array.isArray(codes) ? codes : [codes])
+      .map((code) => INVOICE_MESSAGES[code] || code).join(" ");
+}
+
+function invoiceToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Load an invoice the caller may act on.
+ *
+ * @param {object} db Firestore.
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @param {string} invoiceId The invoice.
+ * @return {Promise<{ref: object, data: object}>} The document.
+ */
+async function loadInvoiceFor(db, uid, businessId, invoiceId) {
+  await requireBusinessPermission(uid, businessId, INVOICE_SECTION);
+  const ref = db.collection("invoices").doc(String(invoiceId || ""));
+  const doc = invoiceId ? await ref.get() : null;
+  if (!doc || !doc.exists || String(doc.data()?.businessId) !== businessId) {
+    throw new HttpsError("not-found", INVOICE_MESSAGES.invoice_not_found);
+  }
+  return {ref, data: doc.data() || {}};
+}
+
+/**
+ * Recompute what the invoice carries from its rows and stamp it, so the
+ * list can be scanned without loading every line.
+ *
+ * @param {object} db Firestore.
+ * @param {object} ref The invoice document.
+ * @return {Promise<object>} The totals written.
+ */
+async function refreshInvoiceTotals(db, ref) {
+  const [lines, payments] = await Promise.all([
+    db.collection("invoiceLines").where("invoiceId", "==", ref.id).get(),
+    db.collection("invoicePayments").where("invoiceId", "==", ref.id).get(),
+  ]);
+  const totals = invoiceTotals(
+      lines.docs.map((d) => d.data() || {}),
+      payments.docs.map((d) => d.data() || {}),
+  );
+  const before = (await ref.get()).data() || {};
+  await ref.set({
+    ...totals,
+    // The day it settled, kept for the paper and the list; cleared if a
+    // reverted payment reopens it.
+    paidOn: totals.status === INVOICE_STATUS.PAID ?
+      (before.paidOn || invoiceToday()) : "",
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  return totals;
+}
+
+function invoiceAudit(businessId, invoiceId, action, uid, summary) {
+  return writeLotLedgerAudit({
+    businessId, entityType: "invoice", entityId: invoiceId,
+    action, byStaffId: uid, summary, changes: [],
+  });
+}
+
+exports.createInvoice = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, INVOICE_SECTION);
+      const errors = validateInvoice(data);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", invoiceMessage(errors));
+      }
+      const db = admin.firestore();
+      const record = invoiceRecord(data, invoiceToday());
+      const businessRef = db.collection("businesses").doc(businessId);
+      const ref = db.collection("invoices").doc();
+      // The number is counted on the business in the same transaction that
+      // writes the invoice, so two staff creating at once never share one.
+      let number = "";
+      await db.runTransaction(async (tx) => {
+        const business = await tx.get(businessRef);
+        if (!business.exists) {
+          throw new HttpsError("not-found", "Business not found");
+        }
+        const counter = (Number(business.data()?.invoiceCounter) || 0) + 1;
+        number = invoiceNumber(counter);
+        tx.set(businessRef, {invoiceCounter: counter}, {merge: true});
+        tx.set(ref, {
+          businessId,
+          number,
+          ...record,
+          ...invoiceTotals([], []),
+          paidOn: "",
+          createdByStaffId: uid,
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      });
+      await rememberLotCustomer(db, {
+        businessId,
+        seen: {customerName: record.customerName,
+          customerPhone: record.customerPhone,
+          customerEmail: record.customerEmail},
+        source: "invoice",
+        staffId: uid,
+      });
+      await invoiceAudit(businessId, ref.id, "created", uid,
+          `Opened ${number} — ${record.title} for ${record.customerName}`);
+      return {success: true, invoiceId: ref.id, number};
+    },
+);
+
+exports.updateInvoice = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadInvoiceFor(db, uid, businessId, data.invoiceId);
+      const merged = {...current, ...(data.changes || {})};
+      const errors = validateInvoice(merged);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", invoiceMessage(errors));
+      }
+      const record = invoiceRecord(merged, current.issuedOn || invoiceToday());
+      await ref.set({
+        ...record, updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      if (record.customerName !== current.customerName ||
+          record.customerPhone !== current.customerPhone) {
+        await rememberLotCustomer(db, {
+          businessId,
+          seen: {customerName: record.customerName,
+            customerPhone: record.customerPhone,
+            customerEmail: record.customerEmail},
+          source: "invoice",
+          staffId: uid,
+        });
+      }
+      await invoiceAudit(businessId, ref.id, "updated", uid,
+          `Changed ${String(current.number || "")} — ${record.title}`);
+      return {success: true, invoiceId: ref.id};
+    },
+);
+
+exports.deleteInvoice = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadInvoiceFor(db, uid, businessId, data.invoiceId);
+      const totals = await refreshInvoiceTotals(db, ref);
+      // A blank tab can go; one with history keeps it (the paper may be in
+      // the customer's hands). Empty it line by line first, on purpose.
+      if (totals.lineCount > 0 || totals.paymentCount > 0) {
+        throw new HttpsError(
+            "failed-precondition", INVOICE_MESSAGES.invoice_has_lines);
+      }
+      await ref.delete();
+      await invoiceAudit(businessId, ref.id, "deleted", uid,
+          `Deleted ${String(current.number || "")} — ` +
+          `${String(current.title || "")}`);
+      return {success: true, invoiceId: ref.id};
+    },
+);
+
+exports.addInvoiceLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadInvoiceFor(db, uid, businessId, data.invoiceId);
+      const line = data.line && typeof data.line === "object" ? data.line : {};
+      const errors = validateInvoiceLine(line);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", invoiceMessage(errors));
+      }
+      const record = invoiceLineRecord(line);
+      const lineRef = db.collection("invoiceLines").doc();
+      await lineRef.set({
+        businessId,
+        invoiceId: ref.id,
+        ...record,
+        addedByStaffId: uid,
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      const totals = await refreshInvoiceTotals(db, ref);
+      await invoiceAudit(businessId, ref.id, "line_added", uid,
+          `Added ${record.quantity > 1 ? `${record.quantity} × ` : ""}` +
+          `${record.description} (${lotMoney(record.amountCents)}) to ` +
+          `${String(current.number || "")}`);
+      return {success: true, lineId: lineRef.id, invoiceId: ref.id,
+        balanceCents: totals.balanceCents};
+    },
+);
+
+exports.updateInvoiceLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadInvoiceFor(db, uid, businessId, data.invoiceId);
+      const lineRef = db.collection("invoiceLines")
+          .doc(String(data.lineId || ""));
+      const lineDoc = data.lineId ? await lineRef.get() : null;
+      if (!lineDoc || !lineDoc.exists ||
+          String(lineDoc.data()?.invoiceId) !== ref.id) {
+        throw new HttpsError("not-found", INVOICE_MESSAGES.line_not_found);
+      }
+      const merged = {...lineDoc.data(), ...(data.line || {})};
+      const errors = validateInvoiceLine(merged);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", invoiceMessage(errors));
+      }
+      const record = invoiceLineRecord(merged);
+      await lineRef.set({
+        ...record, updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      const totals = await refreshInvoiceTotals(db, ref);
+      await invoiceAudit(businessId, ref.id, "line_changed", uid,
+          `Changed ${record.description} to ${lotMoney(record.amountCents)} ` +
+          `on ${String(current.number || "")}`);
+      return {success: true, lineId: lineRef.id, invoiceId: ref.id,
+        balanceCents: totals.balanceCents};
+    },
+);
+
+exports.removeInvoiceLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadInvoiceFor(db, uid, businessId, data.invoiceId);
+      const lineRef = db.collection("invoiceLines")
+          .doc(String(data.lineId || ""));
+      const lineDoc = data.lineId ? await lineRef.get() : null;
+      if (!lineDoc || !lineDoc.exists ||
+          String(lineDoc.data()?.invoiceId) !== ref.id) {
+        throw new HttpsError("not-found", INVOICE_MESSAGES.line_not_found);
+      }
+      const line = lineDoc.data() || {};
+      await lineRef.delete();
+      const totals = await refreshInvoiceTotals(db, ref);
+      await invoiceAudit(businessId, ref.id, "line_removed", uid,
+          `Removed ${String(line.description || "a line")} ` +
+          `(${lotMoney(line.amountCents)}) from ` +
+          `${String(current.number || "")}`);
+      return {success: true, invoiceId: ref.id,
+        balanceCents: totals.balanceCents};
+    },
+);
+
+exports.recordInvoicePayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadInvoiceFor(db, uid, businessId, data.invoiceId);
+      // Validate against the balance as it stands now, not as the client
+      // last saw it.
+      const totals = await refreshInvoiceTotals(db, ref);
+      const payment = data.payment && typeof data.payment === "object" ?
+        data.payment : {};
+      const errors = validateInvoicePayment(payment, totals.balanceCents);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", invoiceMessage(errors));
+      }
+      const record = invoicePaymentRecord(payment, invoiceToday());
+      const payRef = db.collection("invoicePayments").doc();
+      await payRef.set({
+        businessId,
+        invoiceId: ref.id,
+        ...record,
+        receivedByStaffId: uid,
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      const after = await refreshInvoiceTotals(db, ref);
+      await invoiceAudit(businessId, ref.id, "payment", uid,
+          `Received ${lotMoney(record.amountCents)} (${record.method}) on ` +
+          `${String(current.number || "")}` +
+          (after.status === INVOICE_STATUS.PAID ? " — paid in full" : ""));
+      return {success: true, paymentId: payRef.id, invoiceId: ref.id,
+        balanceCents: after.balanceCents, status: after.status};
+    },
+);
+
+exports.revertInvoicePayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref, data: current} =
+        await loadInvoiceFor(db, uid, businessId, data.invoiceId);
+      const payRef = db.collection("invoicePayments")
+          .doc(String(data.paymentId || ""));
+      const payDoc = data.paymentId ? await payRef.get() : null;
+      if (!payDoc || !payDoc.exists ||
+          String(payDoc.data()?.invoiceId) !== ref.id) {
+        throw new HttpsError("not-found", INVOICE_MESSAGES.payment_not_found);
+      }
+      const payment = payDoc.data() || {};
+      if (payment.reverted === true) {
+        throw new HttpsError(
+            "failed-precondition", INVOICE_MESSAGES.payment_already_reverted);
+      }
+      // Struck through, not erased: the history keeps what was once recorded.
+      await payRef.set({
+        reverted: true,
+        revertedByStaffId: uid,
+        revertedAt: FirestoreFieldValue.serverTimestamp(),
+        revertNote: cleanText(data.note, 200),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      const after = await refreshInvoiceTotals(db, ref);
+      await invoiceAudit(businessId, ref.id, "payment_reverted", uid,
+          `Reverted a ${lotMoney(payment.amountCents)} payment on ` +
+          `${String(current.number || "")}`);
+      return {success: true, invoiceId: ref.id,
+        balanceCents: after.balanceCents, status: after.status};
     },
 );
 

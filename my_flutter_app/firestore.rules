@@ -625,6 +625,20 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // Invoices and receipts the business writes by hand: read by the
+    // business's managers, written only through the invoice callables.
+    match /invoices/{invoiceId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /invoiceLines/{lineId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /invoicePayments/{paymentId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
     // The change log (edits and voids) — read-only to a business's managers;
     // every write is made by the ledger callables as admin.
     match /lotLedgerAudit/{eventId} {
