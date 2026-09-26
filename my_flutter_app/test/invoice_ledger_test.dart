@@ -184,7 +184,14 @@ void main() {
           'amountCents': 96000,
         }),
       ],
-      payments: [InvoicePayment.fromMap('p1', {'amountCents': 200000})],
+      payments: [
+        InvoicePayment.fromMap('p1', {
+          'amountCents': 200000,
+          'paidOn': '2026-09-26',
+          'method': 'zelle',
+          'forDescription': '2014 Toyota Corolla',
+        })
+      ],
     );
     expect(txt, [
       'Keren Auto Sales — Invoice INV-0007',
@@ -196,6 +203,7 @@ void main() {
       '',
       'Total: \$6,460.00',
       'Paid: -\$2,000.00',
+      '  2026-09-26 · zelle · for 2014 Toyota Corolla — \$2,000.00',
       'BALANCE DUE: \$4,460.00 (due 2026-10-15)',
     ].join('\n'));
   });

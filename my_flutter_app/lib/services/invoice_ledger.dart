@@ -189,12 +189,16 @@ class InvoicePaymentDraft {
     this.method = 'cash',
     this.paidOn = '',
     this.note = '',
+    this.forLineId = '',
   });
 
   final int? amountCents;
   final String method;
   final String paidOn;
   final String note;
+
+  /// One of the invoice's line ids, or '' for the invoice as a whole.
+  final String forLineId;
 }
 
 /// Error codes. Mirrors `validateInvoicePayment`.
@@ -223,7 +227,18 @@ Map<String, dynamic> invoicePaymentPayload(InvoicePaymentDraft d) => {
       'method': _text(d.method, 40),
       'paidOn': invoiceDayKey(d.paidOn),
       'note': _text(d.note),
+      'forLineId': _text(d.forLineId),
     };
+
+/// How a payment reads in a list or on the paper. Mirrors the server's.
+String invoicePaymentLabel(InvoicePayment p,
+        [String Function(String method)? methodLabel]) =>
+    [
+      p.paidOn,
+      p.method.isEmpty ? '' : (methodLabel ?? (m) => m)(p.method),
+      p.forDescription.isEmpty ? '' : 'for ${p.forDescription}',
+      p.note,
+    ].where((x) => x.isNotEmpty).join(' · ');
 
 // ---------------------------------------------------------------------------
 // Stored records.
@@ -351,6 +366,8 @@ class InvoicePayment {
     required this.reverted,
     required this.receivedByStaffId,
     required this.createdAt,
+    this.forLineId = '',
+    this.forDescription = '',
   });
 
   final String id;
@@ -360,6 +377,10 @@ class InvoicePayment {
   final String paidOn;
   final String note;
   final bool reverted;
+
+  /// What the money was for, in the line's own words at the time.
+  final String forLineId;
+  final String forDescription;
   final String receivedByStaffId;
   final DateTime? createdAt;
 
@@ -374,6 +395,8 @@ class InvoicePayment {
         reverted: d['reverted'] == true,
         receivedByStaffId: _text(d['receivedByStaffId']),
         createdAt: lotDateOf(d['createdAt']),
+        forLineId: _text(d['forLineId']),
+        forDescription: _text(d['forDescription']),
       );
 }
 
@@ -495,7 +518,12 @@ String invoiceTextSummary({
   out
     ..add('')
     ..add('Total: ${invoiceMoney(totals.totalCents)}');
-  if (totals.paidCents > 0) out.add('Paid: -${invoiceMoney(totals.paidCents)}');
+  if (totals.paidCents > 0) {
+    out.add('Paid: -${invoiceMoney(totals.paidCents)}');
+    for (final p in payments.where((x) => !x.reverted)) {
+      out.add('  ${invoicePaymentLabel(p)} — ${invoiceMoney(p.amountCents)}');
+    }
+  }
   out.add(totals.balanceCents > 0
       ? 'BALANCE DUE: ${invoiceMoney(totals.balanceCents)}'
           '${invoice.dueOn.isNotEmpty ? ' (due ${invoice.dueOn})' : ''}'

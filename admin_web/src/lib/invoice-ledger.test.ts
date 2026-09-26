@@ -59,8 +59,8 @@ test("a payment must fit the balance and say how it arrived", () => {
   assert.deepEqual(validateInvoicePaymentDraft(emptyInvoicePaymentDraft, 10000), ["amount_required"]);
   assert.deepEqual(validateInvoicePaymentDraft({ ...emptyInvoicePaymentDraft, amount: "200" }, 10000), ["payment_exceeds_balance"]);
   assert.deepEqual(validateInvoicePaymentDraft({ ...emptyInvoicePaymentDraft, amount: "100", method: "zelle" }, 10000), []);
-  assert.deepEqual(invoicePaymentPayload({ amount: "50", method: "cash", paidOn: "2026-09-26", note: "" }),
-    { amountCents: 5000, method: "cash", paidOn: "2026-09-26", note: "" });
+  assert.deepEqual(invoicePaymentPayload({ amount: "50", method: "cash", paidOn: "2026-09-26", note: "", forLineId: " l1 " }),
+    { amountCents: 5000, method: "cash", paidOn: "2026-09-26", note: "", forLineId: "l1" });
 });
 
 test("totals, status, overdue and the list filters", () => {
@@ -95,7 +95,7 @@ test("the WhatsApp text mirrors the server's", () => {
       { description: "2014 Toyota Corolla", quantity: 1, unitPriceCents: 550000, amountCents: 550000, vinNumber: "1HGCM82633A004352" },
       { description: "Barrels", quantity: 8, unitPriceCents: 12000, amountCents: 96000 },
     ],
-    payments: [{ amountCents: 200000 }],
+    payments: [{ amountCents: 200000, paidOn: "2026-09-26", method: "zelle", forDescription: "2014 Toyota Corolla" }],
   });
   assert.equal(txt, [
     "Keren Auto Sales — Invoice INV-0007",
@@ -107,6 +107,7 @@ test("the WhatsApp text mirrors the server's", () => {
     "",
     "Total: $6,460.00",
     "Paid: -$2,000.00",
+    "  2026-09-26 · zelle · for 2014 Toyota Corolla — $2,000.00",
     "BALANCE DUE: $4,460.00 (due 2026-10-15)",
   ].join("\n"));
 });

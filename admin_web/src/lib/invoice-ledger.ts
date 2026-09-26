@@ -233,6 +233,8 @@ export type InvoicePaymentDraft = {
   method: InvoicePaymentMethod;
   paidOn: string;
   note: string;
+  /** One of the invoice's line ids, or "" for the invoice as a whole. */
+  forLineId: string;
 };
 
 export const emptyInvoicePaymentDraft: InvoicePaymentDraft = {
@@ -240,6 +242,7 @@ export const emptyInvoicePaymentDraft: InvoicePaymentDraft = {
   method: "cash",
   paidOn: "",
   note: "",
+  forLineId: "",
 };
 
 /** Same checks as the server's `validateInvoicePayment`. */
@@ -263,7 +266,18 @@ export function invoicePaymentPayload(draft: InvoicePaymentDraft) {
     method: text(draft.method, 40),
     paidOn: invoiceDayKey(draft.paidOn),
     note: text(draft.note),
+    forLineId: text(draft.forLineId, 200),
   };
+}
+
+/** How a payment reads in a list or on the paper. Mirrors the server's. */
+export function invoicePaymentLabel(payment: Row, methodLabel: (m: string) => string = (m) => m): string {
+  return [
+    invoiceDayKey(payment.paidOn),
+    text(payment.method, 40) ? methodLabel(text(payment.method, 40)) : "",
+    text(payment.forDescription) ? `for ${text(payment.forDescription)}` : "",
+    text(payment.note),
+  ].filter(Boolean).join(" · ");
 }
 
 // ---------------------------------------------------------------------------
@@ -368,7 +382,12 @@ export function invoiceTextSummary(input: {
     out.push(`${text(l.description)}${each} — ${moneyText(l.amountCents)}${vin ? `\nVIN ${vin}` : ""}`);
   }
   out.push("", `Total: ${moneyText(totals.totalCents)}`);
-  if (totals.paidCents > 0) out.push(`Paid: -${moneyText(totals.paidCents)}`);
+  if (totals.paidCents > 0) {
+    out.push(`Paid: -${moneyText(totals.paidCents)}`);
+    for (const p of input.payments.filter((x) => x.reverted !== true)) {
+      out.push(`  ${invoicePaymentLabel(p)} — ${moneyText(p.amountCents)}`);
+    }
+  }
   const due = invoiceDayKey(inv.dueOn);
   out.push(totals.balanceCents > 0
     ? `BALANCE DUE: ${moneyText(totals.balanceCents)}${due ? ` (due ${due})` : ""}`

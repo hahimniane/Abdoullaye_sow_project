@@ -9487,4 +9487,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get invPdfFooter =>
       'Issued through Laawol Digital · laawoldigital.com';
+
+  @override
+  String get invLineVinFirst => 'VIN (selling a car? start here)';
+
+  @override
+  String get invLineVinFills => '17 characters — fills in the car below';
+
+  @override
+  String get invPayFor => 'What it is for';
+
+  @override
+  String get invPayWholeInvoice => 'The whole invoice';
+
+  @override
+  String invPayForLine(String what) {
+    return 'for $what';
+  }
+
+  @override
+  String get invPdfFor => 'for';
 }

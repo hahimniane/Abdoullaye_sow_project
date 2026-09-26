@@ -4570,6 +4570,11 @@ Object.assign(TEXT_TRANSLATIONS, {
   // Containers — the business's own loading lists (containers-panel.tsx,
   // container-manifest.ts, vin-lookup.ts). Whole sentences, longest first
   // where one contains another, so the substring pass never leaves a hybrid.
+  "VIN (selling a car? start here)": "VIN (vous vendez une voiture ? commencez ici)",
+  "17 characters — fills in the car below": "17 caractères — remplit la voiture ci-dessous",
+  "What it is for": "Pour quoi",
+  "The whole invoice": "Toute la facture",
+  "Filled from an existing record:": "Rempli depuis un dossier existant :",
   "Invoices & receipts": "Factures et reçus",
   "Invoices": "Factures",
   "Receipts and what is owed": "Reçus et sommes dues",

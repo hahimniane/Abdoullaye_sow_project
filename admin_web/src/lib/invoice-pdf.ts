@@ -35,7 +35,7 @@ const COPY = {
     each: "Each", amount: "Amount", total: "Total", paid: "Paid",
     balanceDue: "Balance due", paidInFull: "Paid in full", notes: "Notes",
     payments: "Payments received", issuedBy: "Issued by", customer: "Customer",
-    footer: "Issued through Laawol Digital · laawoldigital.com",
+    footer: "Issued through Laawol Digital · laawoldigital.com", forLine: "for",
   },
   fr: {
     invoice: "FACTURE", receipt: "REÇU", billedTo: "Facturé à", date: "Date",
@@ -43,7 +43,7 @@ const COPY = {
     each: "Unité", amount: "Montant", total: "Total", paid: "Payé",
     balanceDue: "Solde dû", paidInFull: "Payé en totalité", notes: "Notes",
     payments: "Paiements reçus", issuedBy: "Émis par", customer: "Client",
-    footer: "Émis via Laawol Digital · laawoldigital.com",
+    footer: "Émis via Laawol Digital · laawoldigital.com", forLine: "pour",
   },
 } as const;
 
@@ -223,7 +223,8 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Blob> {
         y = M;
       }
       const method = INVOICE_PAYMENT_METHOD_LABELS[text(p.method, 40) as InvoicePaymentMethod] ?? text(p.method, 40);
-      doc.text(`${invoiceDayKey(p.paidOn)}  ·  ${method}${text(p.note) ? `  ·  ${text(p.note, 80)}` : ""}`, M, y);
+      const what = text(p.forDescription, 80);
+      doc.text(`${invoiceDayKey(p.paidOn)}  ·  ${method}${what ? `  ·  ${t.forLine} ${what}` : ""}${text(p.note) ? `  ·  ${text(p.note, 80)}` : ""}`, M, y);
       doc.text(moneyText(p.amountCents), R, y, { align: "right" });
       y += 14;
     }

@@ -16079,6 +16079,18 @@ exports.recordInvoicePayment = onCall(
         throw new HttpsError("invalid-argument", invoiceMessage(errors));
       }
       const record = invoicePaymentRecord(payment, invoiceToday());
+      // A payment "for" a line names one of THIS invoice's lines, in the
+      // line's own words; anything else is a stale pick and is refused.
+      if (record.forLineId) {
+        const lineDoc = await db.collection("invoiceLines")
+            .doc(record.forLineId).get();
+        if (!lineDoc.exists || String(lineDoc.data()?.invoiceId) !== ref.id) {
+          throw new HttpsError("not-found", INVOICE_MESSAGES.line_not_found);
+        }
+        record.forDescription = String(lineDoc.data()?.description || "");
+      } else {
+        record.forDescription = "";
+      }
       const payRef = db.collection("invoicePayments").doc();
       await payRef.set({
         businessId,
@@ -16092,6 +16104,7 @@ exports.recordInvoicePayment = onCall(
       await invoiceAudit(businessId, ref.id, "payment", uid,
           `Received ${lotMoney(record.amountCents)} (${record.method}) on ` +
           `${String(current.number || "")}` +
+          (record.forDescription ? ` for ${record.forDescription}` : "") +
           (after.status === INVOICE_STATUS.PAID ? " — paid in full" : ""));
       return {success: true, paymentId: payRef.id, invoiceId: ref.id,
         balanceCents: after.balanceCents, status: after.status};
