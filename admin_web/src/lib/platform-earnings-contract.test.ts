@@ -74,6 +74,9 @@ test("the charts are inline SVG, with no charting dependency added", () => {
   assert.deepEqual(deps, [
     "firebase",
     "heic2any",
+    // Invoices are handed over as PDF files; jsPDF is loaded on first use
+    // from its own chunk, never from the main bundle. It draws no charts.
+    "jspdf",
     "lucide-react",
     "next",
     "react",

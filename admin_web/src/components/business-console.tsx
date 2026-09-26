@@ -25,6 +25,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Receipt,
   Star,
   Truck,
   UserCog,
@@ -32,6 +33,7 @@ import {
 
 import {AssistantWidget} from "@/components/business/assistant-widget";
 import {ContainersPanel} from "@/components/business/containers-panel";
+import {InvoicesPanel} from "@/components/business/invoices-panel";
 import {GrowthPanel} from "@/components/business/growth-panel";
 import {
   BarrelsPanel,
@@ -623,6 +625,14 @@ export function BusinessConsole({
           )}
           {activeTab === "containers" && (
             <ContainersPanel businessId={businessId} previewMode={previewMode} />
+          )}
+          {activeTab === "invoices" && (
+            <InvoicesPanel
+              businessId={businessId}
+              businessName={businessName}
+              business={business}
+              previewMode={previewMode}
+            />
           )}
           {activeTab === "destinations" && (
             <div className="business-service-workspace">
@@ -1626,6 +1636,7 @@ function tabIcon(tab: BusinessTab) {
     parking: <ParkingCircle {...props} />,
     ledger: <BookOpen {...props} />,
     containers: <Container {...props} />,
+    invoices: <Receipt {...props} />,
     destinations: <MapPinned {...props} />,
     people: <UserCog {...props} />,
     reviews: <Star {...props} />,

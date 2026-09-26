@@ -13950,3 +13950,15 @@ button[data-loading="true"]::before {
 .copy-value{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:6px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;vertical-align:middle}
 .copy-value:hover{background:var(--mist);color:var(--brand-strong)}
 .copy-value.copied{color:var(--brand-strong)}
+
+/* Invoices: the lines and payments tables share the container table's grid;
+   a reverted payment stays on the page, struck through, so the history is
+   visible without opening it. */
+.inv-table .mini-table-head,
+.inv-table .mini-table-row { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 0.9fr) 72px; }
+.inv-list-table .mini-table-head,
+.inv-list-table .mini-table-row { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
+.inv-reverted > span > strong { text-decoration: line-through; color: var(--muted); }
+.inv-text { width: 100%; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 12px; border: 1.5px solid var(--rule); border-radius: 12px; resize: vertical; color: var(--ink); background: var(--paper); }
+.lst-field textarea { font: inherit; padding: 10px 12px; border: 1.5px solid var(--rule); border-radius: 12px; resize: vertical; color: var(--ink); background: var(--paper); }
+

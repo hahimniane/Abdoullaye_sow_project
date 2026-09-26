@@ -28,6 +28,7 @@ import 'business_assistant_screen.dart';
 import 'business_reviews_screen.dart';
 import 'business_transport_screen.dart';
 import 'containers_screen.dart';
+import 'invoices_screen.dart';
 import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
@@ -1015,6 +1016,24 @@ class _ServicesSection extends StatelessWidget {
                         MaterialPageRoute<void>(
                           builder: (_) =>
                               ContainersScreen(businessId: ledgerBusinessId),
+                        ),
+                      );
+                    },
+                  ),
+                // Invoices and receipts, written by hand for anything the
+                // business sold - on the platform or off it. Same gate as the
+                // ledger: the people who work the lot's money.
+                if (canUseLotLedger)
+                  _Destination(
+                    rowKey: const Key('open-invoices'),
+                    icon: Icons.receipt_long_outlined,
+                    title: l10n.invMenuTitle,
+                    subtitle: l10n.invMenuSubtitle,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              InvoicesScreen(businessId: ledgerBusinessId),
                         ),
                       );
                     },

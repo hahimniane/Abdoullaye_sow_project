@@ -10,6 +10,7 @@ export type BusinessTab =
   | "parking"
   | "ledger"
   | "containers"
+  | "invoices"
   | "destinations"
   | "people"
   | "reviews"
@@ -59,6 +60,10 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   // customer request and of which services it sells: no service gate, only
   // the permission.
   {id: "containers", label: "Containers", description: "Loading lists and sailings", group: "transport", permission: "containers"},
+  // Invoices are written by hand for anything the business sold, on the
+  // platform or off it, so no service gate; the ledger permission covers
+  // them - the same people who work the lot's money.
+  {id: "invoices", label: "Invoices", description: "Receipts and what is owed", group: "manage", permission: "ledger"},
   {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "manage", permission: "reviews"},
   {id: "cases", label: "Support", description: "Customers and help", group: "manage", permission: "support"},
   {id: "growth", label: "Growth", description: "Plan and advisor", group: "manage", permission: "growth"},

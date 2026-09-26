@@ -9109,4 +9109,382 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctrLotPickAnother => 'Choose a different car';
+
+  @override
+  String get invMenuTitle => 'Invoices & receipts';
+
+  @override
+  String get invMenuSubtitle =>
+      'What you sold and what is owed, as PDFs to send.';
+
+  @override
+  String get invTitle => 'Invoices & receipts';
+
+  @override
+  String get invNew => 'New invoice';
+
+  @override
+  String get invSearchHint => 'Number, title, customer or phone';
+
+  @override
+  String get invFilterOpen => 'Open';
+
+  @override
+  String get invFilterOverdue => 'Overdue';
+
+  @override
+  String get invFilterPaid => 'Paid';
+
+  @override
+  String get invFilterAll => 'All';
+
+  @override
+  String get invStatOpen => 'Open';
+
+  @override
+  String get invStatOwed => 'Owed to you';
+
+  @override
+  String get invStatCollected => 'Collected';
+
+  @override
+  String get invEmptyTitle => 'No invoices yet';
+
+  @override
+  String get invEmptyHint => 'Open one the next time you sell something.';
+
+  @override
+  String get invNoMatch => 'No invoices match.';
+
+  @override
+  String get invStatusOpen => 'Open';
+
+  @override
+  String get invStatusOverdue => 'Overdue';
+
+  @override
+  String get invStatusPaid => 'Paid';
+
+  @override
+  String get invKindInvoice => 'Invoice';
+
+  @override
+  String get invKindReceipt => 'Receipt';
+
+  @override
+  String invFor(String name) {
+    return 'For $name';
+  }
+
+  @override
+  String invDue(String day) {
+    return 'Due $day';
+  }
+
+  @override
+  String invPaidOn(String day) {
+    return 'Paid on $day';
+  }
+
+  @override
+  String get invNoDueDate => 'No due date';
+
+  @override
+  String get invTotal => 'Total';
+
+  @override
+  String get invPaid => 'Paid';
+
+  @override
+  String get invBalanceDue => 'Balance due';
+
+  @override
+  String get invLines => 'Lines';
+
+  @override
+  String get invPayments => 'Payments';
+
+  @override
+  String get invNoLines => 'Nothing on this invoice yet. Add the first line.';
+
+  @override
+  String get invNoPayments => 'No payment recorded yet.';
+
+  @override
+  String get invAddLine => 'Add line';
+
+  @override
+  String get invEditLine => 'Edit line';
+
+  @override
+  String get invRemoveLine => 'Remove line';
+
+  @override
+  String get invRemoveLineMessage =>
+      'It comes off the invoice and the balance drops. The history keeps it.';
+
+  @override
+  String get invRecordPayment => 'Record a payment';
+
+  @override
+  String get invRevertPayment => 'Revert payment';
+
+  @override
+  String get invRevertMessage =>
+      'The balance goes back up. The payment stays in the history, struck through.';
+
+  @override
+  String get invReverted => 'Reverted';
+
+  @override
+  String get invSavePdf => 'Save as PDF';
+
+  @override
+  String get invShareText => 'Send as text';
+
+  @override
+  String get invHistory => 'History';
+
+  @override
+  String get invEdit => 'Edit';
+
+  @override
+  String get invDelete => 'Delete invoice';
+
+  @override
+  String get invDeleteMessage => 'Its number will not be reused.';
+
+  @override
+  String get invFormTitle => 'Title';
+
+  @override
+  String get invFormTitleHint => 'e.g. 2014 Corolla, or Barrels to Conakry';
+
+  @override
+  String get invFormEmail => 'Email';
+
+  @override
+  String get invFormIssuedOn => 'Invoice date';
+
+  @override
+  String get invFormDueOn => 'Due date';
+
+  @override
+  String get invFormDueHint => 'Leave blank if there is no deadline';
+
+  @override
+  String get invFormNotes => 'Notes on the paper';
+
+  @override
+  String get invOpen => 'Open invoice';
+
+  @override
+  String get invOpening => 'Opening…';
+
+  @override
+  String get invSave => 'Save';
+
+  @override
+  String get invSaving => 'Saving…';
+
+  @override
+  String get invLineWhat => 'What it is';
+
+  @override
+  String get invLineWhatHint => 'e.g. 2014 Toyota Corolla, or Barrels';
+
+  @override
+  String get invLineQty => 'How many';
+
+  @override
+  String get invLineUnit => 'Price for one (\$)';
+
+  @override
+  String get invLineVin => 'VIN (cars only)';
+
+  @override
+  String invLineEach(int qty, String each) {
+    return '$qty × $each';
+  }
+
+  @override
+  String get invSaveAndAnother => 'Save & add another';
+
+  @override
+  String get invAddAndClose => 'Add & close';
+
+  @override
+  String get invPayAmount => 'Amount received (\$)';
+
+  @override
+  String get invPayMethod => 'How it arrived';
+
+  @override
+  String get invPayDate => 'Date';
+
+  @override
+  String get invPayNote => 'Note (optional)';
+
+  @override
+  String get invPayWhole => 'Pay the whole balance';
+
+  @override
+  String invPayStillOwed(String amount) {
+    return '$amount still owed';
+  }
+
+  @override
+  String get invOpened => 'Invoice opened. Add the first line.';
+
+  @override
+  String get invUpdated => 'Saved.';
+
+  @override
+  String get invDeleted => 'Invoice deleted.';
+
+  @override
+  String get invLineAdded => 'Line added.';
+
+  @override
+  String get invLineUpdated => 'Line updated.';
+
+  @override
+  String get invLineRemoved => 'Line removed.';
+
+  @override
+  String get invPaymentRecorded => 'Payment recorded.';
+
+  @override
+  String get invPaidInFull => 'Paid in full — this is now a receipt.';
+
+  @override
+  String get invPaymentReverted => 'Payment reverted.';
+
+  @override
+  String get invNotFound => 'That invoice no longer exists.';
+
+  @override
+  String get invMethodCash => 'Cash';
+
+  @override
+  String get invMethodZelle => 'Zelle';
+
+  @override
+  String get invMethodCashapp => 'Cash App';
+
+  @override
+  String get invMethodVenmo => 'Venmo';
+
+  @override
+  String get invMethodCheck => 'Check';
+
+  @override
+  String get invMethodCardInPerson => 'Card in person';
+
+  @override
+  String get invMethodOther => 'Other';
+
+  @override
+  String get invErrTitle => 'Give the invoice a short title (what it is for).';
+
+  @override
+  String get invErrCustomer => 'Say who the invoice is for.';
+
+  @override
+  String get invErrIssuedOn => 'The invoice date is not a real date.';
+
+  @override
+  String get invErrDueOn => 'The due date is not a real date.';
+
+  @override
+  String get invErrDueOrder => 'The due date is before the invoice date.';
+
+  @override
+  String get invErrDescription => 'Say what the line is.';
+
+  @override
+  String get invErrQuantity => 'Enter how many (at least one).';
+
+  @override
+  String get invErrUnitPrice => 'Enter the price for one.';
+
+  @override
+  String get invErrTooLarge =>
+      'That amount is larger than an invoice can carry.';
+
+  @override
+  String get invErrVin => 'A VIN is 17 letters and digits.';
+
+  @override
+  String get invErrAmount => 'Enter the amount received.';
+
+  @override
+  String get invErrMethod => 'Say how the payment arrived.';
+
+  @override
+  String get invErrPaidOn => 'The payment date is not a real date.';
+
+  @override
+  String get invErrExceeds => 'That is more than what is still owed.';
+
+  @override
+  String get invErrHasLines => 'Remove the lines and payments before deleting.';
+
+  @override
+  String get invPdfInvoice => 'INVOICE';
+
+  @override
+  String get invPdfReceipt => 'RECEIPT';
+
+  @override
+  String get invPdfBilledTo => 'Billed to';
+
+  @override
+  String get invPdfDate => 'Date';
+
+  @override
+  String get invPdfDue => 'Due';
+
+  @override
+  String get invPdfPaidOn => 'Paid on';
+
+  @override
+  String get invPdfDescription => 'Description';
+
+  @override
+  String get invPdfQty => 'Qty';
+
+  @override
+  String get invPdfEach => 'Each';
+
+  @override
+  String get invPdfAmount => 'Amount';
+
+  @override
+  String get invPdfTotal => 'Total';
+
+  @override
+  String get invPdfPaid => 'Paid';
+
+  @override
+  String get invPdfBalanceDue => 'Balance due';
+
+  @override
+  String get invPdfPaidInFull => 'Paid in full';
+
+  @override
+  String get invPdfNotes => 'Notes';
+
+  @override
+  String get invPdfPayments => 'Payments received';
+
+  @override
+  String get invPdfIssuedBy => 'Issued by';
+
+  @override
+  String get invPdfCustomer => 'Customer';
+
+  @override
+  String get invPdfFooter =>
+      'Issued through Laawol Digital · laawoldigital.com';
 }

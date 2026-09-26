@@ -4045,5 +4045,164 @@
     }
   },
   "ctrLotPicked": "Rempli à partir de la voiture de votre parc.",
-  "ctrLotPickAnother": "Choisir une autre voiture"
+  "ctrLotPickAnother": "Choisir une autre voiture",
+  "invMenuTitle": "Factures et reçus",
+  "invMenuSubtitle": "Ce que vous avez vendu et ce qui est dû, en PDF à envoyer.",
+  "invTitle": "Factures et reçus",
+  "invNew": "Nouvelle facture",
+  "invSearchHint": "Numéro, titre, client ou téléphone",
+  "invFilterOpen": "Ouvertes",
+  "invFilterOverdue": "En retard",
+  "invFilterPaid": "Payées",
+  "invFilterAll": "Toutes",
+  "invStatOpen": "Ouvertes",
+  "invStatOwed": "Ce qu'on vous doit",
+  "invStatCollected": "Encaissé",
+  "invEmptyTitle": "Aucune facture pour l'instant",
+  "invEmptyHint": "Ouvrez-en une à votre prochaine vente.",
+  "invNoMatch": "Aucune facture ne correspond.",
+  "invStatusOpen": "Ouverte",
+  "invStatusOverdue": "En retard",
+  "invStatusPaid": "Payée",
+  "invKindInvoice": "Facture",
+  "invKindReceipt": "Reçu",
+  "invFor": "Pour {name}",
+  "@invFor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invDue": "Échéance {day}",
+  "@invDue": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "invPaidOn": "Payée le {day}",
+  "@invPaidOn": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "invNoDueDate": "Pas d'échéance",
+  "invTotal": "Total",
+  "invPaid": "Payé",
+  "invBalanceDue": "Solde dû",
+  "invLines": "Lignes",
+  "invPayments": "Paiements",
+  "invNoLines": "Rien sur cette facture pour l'instant. Ajoutez la première ligne.",
+  "invNoPayments": "Aucun paiement enregistré pour l'instant.",
+  "invAddLine": "Ajouter une ligne",
+  "invEditLine": "Modifier la ligne",
+  "invRemoveLine": "Retirer la ligne",
+  "invRemoveLineMessage": "Elle sort de la facture et le solde baisse. L'historique la garde.",
+  "invRecordPayment": "Enregistrer un paiement",
+  "invRevertPayment": "Annuler le paiement",
+  "invRevertMessage": "Le solde remonte. Le paiement reste dans l'historique, barré.",
+  "invReverted": "Annulé",
+  "invSavePdf": "Enregistrer en PDF",
+  "invShareText": "Envoyer en texte",
+  "invHistory": "Historique",
+  "invEdit": "Modifier",
+  "invDelete": "Supprimer la facture",
+  "invDeleteMessage": "Son numéro ne sera pas réutilisé.",
+  "invFormTitle": "Titre",
+  "invFormTitleHint": "ex. Corolla 2014, ou Barils pour Conakry",
+  "invFormEmail": "E-mail",
+  "invFormIssuedOn": "Date de la facture",
+  "invFormDueOn": "Date d'échéance",
+  "invFormDueHint": "Laissez vide s'il n'y a pas d'échéance",
+  "invFormNotes": "Notes sur le document",
+  "invOpen": "Ouvrir la facture",
+  "invOpening": "Ouverture…",
+  "invSave": "Enregistrer",
+  "invSaving": "Enregistrement…",
+  "invLineWhat": "Ce que c'est",
+  "invLineWhatHint": "ex. Toyota Corolla 2014, ou Barils",
+  "invLineQty": "Combien",
+  "invLineUnit": "Prix unitaire ($)",
+  "invLineVin": "VIN (voitures uniquement)",
+  "invLineEach": "{qty} × {each}",
+  "@invLineEach": {
+    "placeholders": {
+      "qty": {
+        "type": "int"
+      },
+      "each": {
+        "type": "String"
+      }
+    }
+  },
+  "invSaveAndAnother": "Enregistrer et ajouter une autre",
+  "invAddAndClose": "Ajouter et fermer",
+  "invPayAmount": "Montant reçu ($)",
+  "invPayMethod": "Comment il est arrivé",
+  "invPayDate": "Date",
+  "invPayNote": "Note (facultatif)",
+  "invPayWhole": "Régler tout le solde",
+  "invPayStillOwed": "{amount} encore dû",
+  "@invPayStillOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invOpened": "Facture ouverte. Ajoutez la première ligne.",
+  "invUpdated": "Enregistré.",
+  "invDeleted": "Facture supprimée.",
+  "invLineAdded": "Ligne ajoutée.",
+  "invLineUpdated": "Ligne mise à jour.",
+  "invLineRemoved": "Ligne retirée.",
+  "invPaymentRecorded": "Paiement enregistré.",
+  "invPaidInFull": "Payée en totalité — c'est maintenant un reçu.",
+  "invPaymentReverted": "Paiement annulé.",
+  "invNotFound": "Cette facture n'existe plus.",
+  "invMethodCash": "Espèces",
+  "invMethodZelle": "Zelle",
+  "invMethodCashapp": "Cash App",
+  "invMethodVenmo": "Venmo",
+  "invMethodCheck": "Chèque",
+  "invMethodCardInPerson": "Carte en personne",
+  "invMethodOther": "Autre",
+  "invErrTitle": "Donnez un titre court à la facture (à quoi elle sert).",
+  "invErrCustomer": "Dites pour qui est la facture.",
+  "invErrIssuedOn": "La date de la facture n'est pas une vraie date.",
+  "invErrDueOn": "La date d'échéance n'est pas une vraie date.",
+  "invErrDueOrder": "La date d'échéance précède la date de la facture.",
+  "invErrDescription": "Dites ce qu'est la ligne.",
+  "invErrQuantity": "Indiquez combien (au moins un).",
+  "invErrUnitPrice": "Indiquez le prix unitaire.",
+  "invErrTooLarge": "Ce montant dépasse ce qu'une facture peut porter.",
+  "invErrVin": "Un VIN compte 17 lettres et chiffres.",
+  "invErrAmount": "Indiquez le montant reçu.",
+  "invErrMethod": "Dites comment le paiement est arrivé.",
+  "invErrPaidOn": "La date du paiement n'est pas une vraie date.",
+  "invErrExceeds": "C'est plus que ce qui reste dû.",
+  "invErrHasLines": "Retirez les lignes et paiements avant de supprimer.",
+  "invPdfInvoice": "FACTURE",
+  "invPdfReceipt": "REÇU",
+  "invPdfBilledTo": "Facturé à",
+  "invPdfDate": "Date",
+  "invPdfDue": "Échéance",
+  "invPdfPaidOn": "Payé le",
+  "invPdfDescription": "Description",
+  "invPdfQty": "Qté",
+  "invPdfEach": "Unité",
+  "invPdfAmount": "Montant",
+  "invPdfTotal": "Total",
+  "invPdfPaid": "Payé",
+  "invPdfBalanceDue": "Solde dû",
+  "invPdfPaidInFull": "Payé en totalité",
+  "invPdfNotes": "Notes",
+  "invPdfPayments": "Paiements reçus",
+  "invPdfIssuedBy": "Émis par",
+  "invPdfCustomer": "Client",
+  "invPdfFooter": "Émis via Laawol Digital · laawoldigital.com"
 }

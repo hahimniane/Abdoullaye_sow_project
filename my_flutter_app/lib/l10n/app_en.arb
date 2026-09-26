@@ -4045,5 +4045,164 @@
     }
   },
   "ctrLotPicked": "Filled in from the car in your lot.",
-  "ctrLotPickAnother": "Choose a different car"
+  "ctrLotPickAnother": "Choose a different car",
+  "invMenuTitle": "Invoices & receipts",
+  "invMenuSubtitle": "What you sold and what is owed, as PDFs to send.",
+  "invTitle": "Invoices & receipts",
+  "invNew": "New invoice",
+  "invSearchHint": "Number, title, customer or phone",
+  "invFilterOpen": "Open",
+  "invFilterOverdue": "Overdue",
+  "invFilterPaid": "Paid",
+  "invFilterAll": "All",
+  "invStatOpen": "Open",
+  "invStatOwed": "Owed to you",
+  "invStatCollected": "Collected",
+  "invEmptyTitle": "No invoices yet",
+  "invEmptyHint": "Open one the next time you sell something.",
+  "invNoMatch": "No invoices match.",
+  "invStatusOpen": "Open",
+  "invStatusOverdue": "Overdue",
+  "invStatusPaid": "Paid",
+  "invKindInvoice": "Invoice",
+  "invKindReceipt": "Receipt",
+  "invFor": "For {name}",
+  "@invFor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invDue": "Due {day}",
+  "@invDue": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "invPaidOn": "Paid on {day}",
+  "@invPaidOn": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "invNoDueDate": "No due date",
+  "invTotal": "Total",
+  "invPaid": "Paid",
+  "invBalanceDue": "Balance due",
+  "invLines": "Lines",
+  "invPayments": "Payments",
+  "invNoLines": "Nothing on this invoice yet. Add the first line.",
+  "invNoPayments": "No payment recorded yet.",
+  "invAddLine": "Add line",
+  "invEditLine": "Edit line",
+  "invRemoveLine": "Remove line",
+  "invRemoveLineMessage": "It comes off the invoice and the balance drops. The history keeps it.",
+  "invRecordPayment": "Record a payment",
+  "invRevertPayment": "Revert payment",
+  "invRevertMessage": "The balance goes back up. The payment stays in the history, struck through.",
+  "invReverted": "Reverted",
+  "invSavePdf": "Save as PDF",
+  "invShareText": "Send as text",
+  "invHistory": "History",
+  "invEdit": "Edit",
+  "invDelete": "Delete invoice",
+  "invDeleteMessage": "Its number will not be reused.",
+  "invFormTitle": "Title",
+  "invFormTitleHint": "e.g. 2014 Corolla, or Barrels to Conakry",
+  "invFormEmail": "Email",
+  "invFormIssuedOn": "Invoice date",
+  "invFormDueOn": "Due date",
+  "invFormDueHint": "Leave blank if there is no deadline",
+  "invFormNotes": "Notes on the paper",
+  "invOpen": "Open invoice",
+  "invOpening": "Opening…",
+  "invSave": "Save",
+  "invSaving": "Saving…",
+  "invLineWhat": "What it is",
+  "invLineWhatHint": "e.g. 2014 Toyota Corolla, or Barrels",
+  "invLineQty": "How many",
+  "invLineUnit": "Price for one ($)",
+  "invLineVin": "VIN (cars only)",
+  "invLineEach": "{qty} × {each}",
+  "@invLineEach": {
+    "placeholders": {
+      "qty": {
+        "type": "int"
+      },
+      "each": {
+        "type": "String"
+      }
+    }
+  },
+  "invSaveAndAnother": "Save & add another",
+  "invAddAndClose": "Add & close",
+  "invPayAmount": "Amount received ($)",
+  "invPayMethod": "How it arrived",
+  "invPayDate": "Date",
+  "invPayNote": "Note (optional)",
+  "invPayWhole": "Pay the whole balance",
+  "invPayStillOwed": "{amount} still owed",
+  "@invPayStillOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invOpened": "Invoice opened. Add the first line.",
+  "invUpdated": "Saved.",
+  "invDeleted": "Invoice deleted.",
+  "invLineAdded": "Line added.",
+  "invLineUpdated": "Line updated.",
+  "invLineRemoved": "Line removed.",
+  "invPaymentRecorded": "Payment recorded.",
+  "invPaidInFull": "Paid in full — this is now a receipt.",
+  "invPaymentReverted": "Payment reverted.",
+  "invNotFound": "That invoice no longer exists.",
+  "invMethodCash": "Cash",
+  "invMethodZelle": "Zelle",
+  "invMethodCashapp": "Cash App",
+  "invMethodVenmo": "Venmo",
+  "invMethodCheck": "Check",
+  "invMethodCardInPerson": "Card in person",
+  "invMethodOther": "Other",
+  "invErrTitle": "Give the invoice a short title (what it is for).",
+  "invErrCustomer": "Say who the invoice is for.",
+  "invErrIssuedOn": "The invoice date is not a real date.",
+  "invErrDueOn": "The due date is not a real date.",
+  "invErrDueOrder": "The due date is before the invoice date.",
+  "invErrDescription": "Say what the line is.",
+  "invErrQuantity": "Enter how many (at least one).",
+  "invErrUnitPrice": "Enter the price for one.",
+  "invErrTooLarge": "That amount is larger than an invoice can carry.",
+  "invErrVin": "A VIN is 17 letters and digits.",
+  "invErrAmount": "Enter the amount received.",
+  "invErrMethod": "Say how the payment arrived.",
+  "invErrPaidOn": "The payment date is not a real date.",
+  "invErrExceeds": "That is more than what is still owed.",
+  "invErrHasLines": "Remove the lines and payments before deleting.",
+  "invPdfInvoice": "INVOICE",
+  "invPdfReceipt": "RECEIPT",
+  "invPdfBilledTo": "Billed to",
+  "invPdfDate": "Date",
+  "invPdfDue": "Due",
+  "invPdfPaidOn": "Paid on",
+  "invPdfDescription": "Description",
+  "invPdfQty": "Qty",
+  "invPdfEach": "Each",
+  "invPdfAmount": "Amount",
+  "invPdfTotal": "Total",
+  "invPdfPaid": "Paid",
+  "invPdfBalanceDue": "Balance due",
+  "invPdfPaidInFull": "Paid in full",
+  "invPdfNotes": "Notes",
+  "invPdfPayments": "Payments received",
+  "invPdfIssuedBy": "Issued by",
+  "invPdfCustomer": "Customer",
+  "invPdfFooter": "Issued through Laawol Digital · laawoldigital.com"
 }
