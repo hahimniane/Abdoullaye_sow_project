@@ -376,6 +376,3 @@ pw.Widget _signature(String who, String label) => pw.Column(
       ],
     );
 
-/// Hand the file to the share sheet (WhatsApp is one tap away there).
-Future<void> shareInvoicePdf(Uint8List bytes, String fileName) =>
-    Printing.sharePdf(bytes: bytes, filename: '$fileName.pdf');

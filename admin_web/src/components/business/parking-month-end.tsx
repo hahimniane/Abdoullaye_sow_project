@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen } from "lucide-react";
 
 import { currentLanguage, text } from "@/lib/format";
-import { deliverPdf } from "@/lib/invoice-pdf";
+import { PdfPreview, type PdfPreviewFile } from "@/components/pdf-preview";
 import {
   buildParkingMonthBillPdf,
   buildParkingMonthSummaryPdf,
@@ -44,6 +44,7 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
   const [showAll, setShowAll] = useState(false);
   const [busyId, setBusyId] = useState("");
   const [flash, setFlash] = useState("");
+  const [preview, setPreview] = useState<PdfPreviewFile | null>(null);
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const orgName = text(business?.name, "") || businessName;
   const identity = useMemo(() => ({ ...(business ?? {}), name: orgName }), [business, orgName]);
@@ -62,8 +63,7 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
     setFlash("");
     try {
       const blob = await buildParkingMonthSummaryPdf({ business: identity, summary, language: lang });
-      const outcome = await deliverPdf(blob, parkingMonthFileName("summary", monthKey, "", orgName));
-      setFlash(outcome === "shared" ? "PDF handed to the share sheet." : "PDF saved to your downloads.");
+      setPreview({ blob, fileName: parkingMonthFileName("summary", monthKey, "", orgName), title: `Month end — ${monthLabel(monthKey, lang)}` });
     } catch {
       setFlash("The PDF could not be made. Try again.");
     } finally {
@@ -76,8 +76,7 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
     setFlash("");
     try {
       const blob = await buildParkingMonthBillPdf({ business: identity, bill, language: lang });
-      const outcome = await deliverPdf(blob, parkingMonthFileName("bill", monthKey, bill.customerName, orgName));
-      setFlash(outcome === "shared" ? "PDF handed to the share sheet." : "PDF saved to your downloads.");
+      setPreview({ blob, fileName: parkingMonthFileName("bill", monthKey, bill.customerName, orgName), title: `${bill.customerName || "Parking bill"} — ${monthLabel(monthKey, lang)}` });
     } catch {
       setFlash("The PDF could not be made. Try again.");
     } finally {
@@ -104,7 +103,7 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
           <button className="lst-icon-btn" type="button" aria-label="Next month" disabled={monthKey >= thisMonth} onClick={() => setMonthKey((m) => shiftMonthKey(m, 1))}><ChevronRight size={18} /></button>
         </div>
         <button className="lst-btn ghost" type="button" disabled={busyId !== ""} onClick={() => void saveSummary()}>
-          {busyId === "summary" ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} Save the month as PDF
+          {busyId === "summary" ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} View the month as PDF
         </button>
       </div>
       <p className="panel-lede">
@@ -156,7 +155,7 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
                       : <span className="lst-badge ok">Paid</span>}
                   </span>
                   <span className="ctn-row-actions pk-month-actions">
-                    <button className="ghost-button" type="button" disabled={busyId !== ""} title="Save the bill as PDF" onClick={() => void saveBill(bill)}>
+                    <button className="ghost-button" type="button" disabled={busyId !== ""} title="View the bill as PDF" onClick={() => void saveBill(bill)}>
                       {busyId === bill.id ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />}
                     </button>
                     <button className="ghost-button" type="button" title="Copy the bill as text" onClick={() => void copyBill(bill)}><Copy size={14} /></button>
@@ -168,6 +167,7 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
           </div>
         </div>
       )}
+      {preview && <PdfPreview {...preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }

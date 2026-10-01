@@ -9381,7 +9381,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get invReverted => 'Annulé';
 
   @override
-  String get invSavePdf => 'Enregistrer en PDF';
+  String get invSavePdf => 'Voir le PDF';
 
   @override
   String get invShareText => 'Envoyer en texte';
@@ -9662,7 +9662,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pmeButton => 'Fin de mois';
 
   @override
-  String get pmeShareMonth => 'Partager le mois en PDF';
+  String get pmeShareMonth => 'Voir le mois en PDF';
 
   @override
   String get pmePreviousMonth => 'Mois précédent';
@@ -9733,7 +9733,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get pmeSharePdf => 'Partager la facture en PDF';
+  String get pmeSharePdf => 'Voir la facture en PDF';
 
   @override
   String get pmeSendText => 'Envoyer en texte';

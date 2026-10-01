@@ -74,11 +74,10 @@ void main() {
     }
   });
 
-  test('the paper is a PDF handed to the share sheet, and the text a share', () {
+  test('the paper opens in a preview (print or share), and the text a share', () {
     expect(screen, contains('buildInvoicePdf('));
-    expect(screen, contains('shareInvoicePdf('));
+    expect(screen, contains('openPdfPreview('));
     expect(screen, contains('invoiceTextSummary('));
     expect(screen, contains('SharePlus.instance.share(ShareParams(text: text))'));
-    expect(read('lib/utils/invoice_pdf.dart'), contains('Printing.sharePdf('));
   });
 }

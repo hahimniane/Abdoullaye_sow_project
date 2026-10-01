@@ -302,5 +302,3 @@ String parkingMonthFileName(String kind, String monthKey, String who, String bus
   return [kind, monthKey, slug(who), slug(business)].where((p) => p.isNotEmpty).join('-');
 }
 
-Future<void> shareParkingMonthPdf(Uint8List bytes, String fileName) =>
-    Printing.sharePdf(bytes: bytes, filename: '$fileName.pdf');

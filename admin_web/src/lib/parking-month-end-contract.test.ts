@@ -32,7 +32,7 @@ test("the view never writes; every bill is worked out from the cars", () => {
 });
 
 test("its words read in French", () => {
-  for (const english of ["Month end", "Save the month as PDF", "Cars on the lot", "Who owes", "Every car", "Nobody owes anything for this month."]) {
+  for (const english of ["Month end", "View the month as PDF", "Print", "Download", "Share", "Open in a new tab", "Cars on the lot", "Who owes", "Every car", "Nobody owes anything for this month."]) {
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
   }
 });

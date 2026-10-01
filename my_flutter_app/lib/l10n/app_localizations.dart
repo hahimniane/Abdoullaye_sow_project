@@ -16359,7 +16359,7 @@ abstract class AppLocalizations {
   /// No description provided for @invSavePdf.
   ///
   /// In en, this message translates to:
-  /// **'Save as PDF'**
+  /// **'View PDF'**
   String get invSavePdf;
 
   /// No description provided for @invShareText.
@@ -16899,7 +16899,7 @@ abstract class AppLocalizations {
   /// No description provided for @pmeShareMonth.
   ///
   /// In en, this message translates to:
-  /// **'Share the month as PDF'**
+  /// **'View the month as PDF'**
   String get pmeShareMonth;
 
   /// No description provided for @pmePreviousMonth.
@@ -17001,7 +17001,7 @@ abstract class AppLocalizations {
   /// No description provided for @pmeSharePdf.
   ///
   /// In en, this message translates to:
-  /// **'Share the bill as PDF'**
+  /// **'View the bill as PDF'**
   String get pmeSharePdf;
 
   /// No description provided for @pmeSendText.

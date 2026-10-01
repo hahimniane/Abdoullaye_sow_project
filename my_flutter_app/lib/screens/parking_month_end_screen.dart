@@ -15,6 +15,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
 import 'parked_car_details_screen.dart';
+import 'pdf_preview_screen.dart';
 
 /// Settling the books for a month: every car that was on the lot that month,
 /// what it ran up, what came in, and who still owes - each with its own bill
@@ -131,8 +132,13 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         summary: summary,
         copy: _copy(l10n, locale),
       );
-      await shareParkingMonthPdf(bytes,
-          parkingMonthFileName('parking-month-end', _monthKey, '', _businessName));
+      if (!mounted) return;
+      await openPdfPreview(
+        context,
+        bytes: bytes,
+        fileName: parkingMonthFileName('parking-month-end', _monthKey, '', _businessName),
+        title: '${l10n.pmeTitle} — ${parkingMonthLabel(_monthKey, locale)}',
+      );
     });
   }
 
@@ -157,8 +163,14 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             bill: bill,
             copy: _copy(l10n, locale),
           );
-          await shareParkingMonthPdf(bytes,
-              parkingMonthFileName('parking-bill', _monthKey, bill.customerName, _businessName));
+          if (!mounted) return;
+          await openPdfPreview(
+            context,
+            bytes: bytes,
+            fileName: parkingMonthFileName(
+                'parking-bill', _monthKey, bill.customerName, _businessName),
+            title: bill.customerName.isEmpty ? l10n.pmePdfBill : bill.customerName,
+          );
         });
       case 'text':
         await SharePlus.instance

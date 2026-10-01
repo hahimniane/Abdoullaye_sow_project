@@ -4106,7 +4106,7 @@
   "invRevertPayment": "Revert payment",
   "invRevertMessage": "The balance goes back up. The payment stays in the history, struck through.",
   "invReverted": "Reverted",
-  "invSavePdf": "Save as PDF",
+  "invSavePdf": "View PDF",
   "invShareText": "Send as text",
   "invHistory": "History",
   "invEdit": "Edit",
@@ -4220,7 +4220,7 @@
   "invPdfFor": "for",
   "pmeTitle": "Month end",
   "pmeButton": "Month end",
-  "pmeShareMonth": "Share the month as PDF",
+  "pmeShareMonth": "View the month as PDF",
   "pmePreviousMonth": "Previous month",
   "pmeNextMonth": "Next month",
   "pmeCarsOnLot": "Cars on the lot",
@@ -4268,7 +4268,7 @@
       }
     }
   },
-  "pmeSharePdf": "Share the bill as PDF",
+  "pmeSharePdf": "View the bill as PDF",
   "pmeSendText": "Send as text",
   "pmeOpenCar": "Open the car to record a payment",
   "pmePdfFailed": "The PDF could not be made. Try again.",

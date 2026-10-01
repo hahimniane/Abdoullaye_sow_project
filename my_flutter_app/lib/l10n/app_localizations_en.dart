@@ -9237,7 +9237,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get invReverted => 'Reverted';
 
   @override
-  String get invSavePdf => 'Save as PDF';
+  String get invSavePdf => 'View PDF';
 
   @override
   String get invShareText => 'Send as text';
@@ -9515,7 +9515,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pmeButton => 'Month end';
 
   @override
-  String get pmeShareMonth => 'Share the month as PDF';
+  String get pmeShareMonth => 'View the month as PDF';
 
   @override
   String get pmePreviousMonth => 'Previous month';
@@ -9586,7 +9586,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get pmeSharePdf => 'Share the bill as PDF';
+  String get pmeSharePdf => 'View the bill as PDF';
 
   @override
   String get pmeSendText => 'Send as text';

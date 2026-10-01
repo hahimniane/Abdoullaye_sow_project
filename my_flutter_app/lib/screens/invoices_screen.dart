@@ -17,6 +17,7 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/invoice_pdf.dart';
+import 'pdf_preview_screen.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
@@ -978,7 +979,13 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           forLine: l10n.invPdfFor,
         ),
       );
-      await shareInvoicePdf(bytes, invoiceFileName(invoice, _businessName));
+      if (!mounted) return;
+      await openPdfPreview(
+        context,
+        bytes: bytes,
+        fileName: invoiceFileName(invoice, _businessName),
+        title: invoice.displayName,
+      );
     });
   }
 

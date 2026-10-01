@@ -65,7 +65,8 @@ import {
   type InvoicePaymentDraft,
   type InvoicePaymentMethod,
 } from "@/lib/invoice-ledger";
-import { buildInvoicePdf, deliverPdf, invoiceFileName } from "@/lib/invoice-pdf";
+import { buildInvoicePdf, invoiceFileName } from "@/lib/invoice-pdf";
+import { PdfPreview, type PdfPreviewFile } from "@/components/pdf-preview";
 import {
   lotCustomerFromRow,
   lotCustomerFromStaffRow,
@@ -146,6 +147,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
   const [historyRows, setHistoryRows] = useState<FirestoreRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [textPreview, setTextPreview] = useState("");
+  const [pdfPreview, setPdfPreview] = useState<PdfPreviewFile | null>(null);
 
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const orgName = text(business?.name, "") || businessName;
@@ -480,8 +482,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
         payments: selectedPayments,
         language: lang,
       });
-      const outcome = await deliverPdf(blob, invoiceFileName(selected, { name: orgName }));
-      setFlash(outcome === "shared" ? "PDF handed to the share sheet." : "PDF saved to your downloads.");
+      setPdfPreview({ blob, fileName: invoiceFileName(selected, { name: orgName }), title: `${invoiceKind(selected)} ${invoiceTitle(selected)}` });
     });
   }
 
@@ -541,7 +542,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
               <div className="ctn-detail-actions">
                 <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => openEdit(selected)}><Pencil size={14} /> Edit</button>
                 <button className="lst-btn ghost" type="button" disabled={busy} aria-busy={busy} onClick={() => void savePdf()}>
-                  {busy ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} Save as PDF
+                  {busy ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} View PDF
                 </button>
                 <button className="lst-btn ghost" type="button" disabled={busy} onClick={openText}><Copy size={14} /> Copy as text</button>
                 <button className="lst-btn ghost" type="button" onClick={() => void openHistory(selectedId)}><History size={14} /> History</button>
@@ -839,6 +840,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
           </div>
         </div>
       )}
+      {pdfPreview && <PdfPreview {...pdfPreview} onClose={() => setPdfPreview(null)} />}
     </div>
   );
 }

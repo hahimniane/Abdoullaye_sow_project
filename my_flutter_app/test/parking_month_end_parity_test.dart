@@ -29,6 +29,9 @@ void main() {
   test('payments are still recorded on the car, never on the bill', () {
     final screen = read('lib/screens/parking_month_end_screen.dart');
     expect(screen, contains('ParkedCarDetailsScreen('));
+    // Every paper opens in the preview first: read, then print or share.
+    expect(screen, contains('openPdfPreview('));
+    expect(screen, isNot(contains('shareParkingMonthPdf(')));
     expect(screen, isNot(contains('.set(')));
     expect(screen, isNot(contains('.update(')));
     expect(screen, isNot(contains('httpsCallable')));
