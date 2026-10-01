@@ -97,19 +97,68 @@ test("one bill per phone, every car with its dates; mirrors the server", () => {
   assert.equal(sow.dueCents, 35000);
   assert.equal(mostUsedName(["Abd Sow", "abdoulaye sow", "Abdoulaye Sow"]), "Abdoulaye Sow");
   assert.equal(parkingMonthCustomerText(sow, "Keren Auto Sales"), [
-    "Keren Auto Sales — Parking bill, September 2026",
+    "Keren Auto Sales — Monthly bill, September 2026",
     "For: Abdoulaye Sow · 347-562-8973",
     "",
+    "Parking",
     "2014 Toyota Corolla",
     "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
     "2015 Toyota RAV4 (registered to Ministre)",
     "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
     "2017 Toyota RAV4",
     "  2026-09-21 to 2026-09-24: 4 days × $12.00 — $48.00",
+    "  Paid — -$10.00",
     "",
     "Total for September — $360.00",
     "Paid — -$10.00",
     "BALANCE DUE: $350.00",
+  ].join("\n"));
+});
+
+test("activities join the month: dated in it, older unpaid carried, void and free dropped", () => {
+  const act = (over: Record<string, unknown>) => ({
+    businessId: "k", activityTypeLabel: "title", feeCents: 10000, customerName: "Abdoulaye Sow",
+    customerPhone: "3475628973", carYear: "2013", carMake: "Toyota", carModel: "RAV4",
+    paymentStatus: "awaiting_direct_payment", ...over,
+  });
+  const cars = [{ parkingDate: at("2026-09-18"), dailyRate: 12, paymentStatus: "awaiting_direct_payment", status: "reserved", id: "car",
+    customerName: "abdoulaye sow", customerPhone: "347-562-8973", carYear: "2014", carMake: "Toyota", carModel: "Corolla" }];
+  const acts = [
+    act({ id: "sep", activityDate: at("2026-09-14"), amountPaidCents: 4000 }),
+    act({ id: "aug", activityDate: at("2026-08-20"), feeCents: 9000 }),
+    act({ id: "augPaid", activityDate: at("2026-08-02"), paymentStatus: "succeeded" }),
+    act({ id: "void", activityDate: at("2026-09-15"), voided: true }),
+    act({ id: "free", activityDate: at("2026-09-16"), feeCents: 0 }),
+    act({ id: "oct", activityDate: at("2026-10-01") }),
+    act({ id: "other", activityDate: at("2026-09-03"), customerName: "Fatou", customerPhone: "6465550199", paymentStatus: "succeeded" }),
+  ];
+  const s = parkingMonthSummary(cars, "2026-09", OCT1, acts);
+  const sow = s.customers.find((c) => c.customerName === "Abdoulaye Sow")!;
+  assert.deepEqual(sow.activities.map((a) => a.id), ["sep"]);
+  assert.deepEqual(sow.olderActivities.map((a) => a.id), ["aug"]);
+  assert.equal(sow.dueCents, 15600 + 6000 + 9000);
+  assert.equal(s.billedCents, 15600 + 10000 + 10000);
+  assert.equal(s.collectedCents, 14000);
+  assert.deepEqual(s.customersOwing.map((c) => c.customerName), ["Abdoulaye Sow"]);
+  assert.equal(parkingMonthCustomerText(sow, "Keren"), [
+    "Keren — Monthly bill, September 2026",
+    "For: Abdoulaye Sow · 347-562-8973",
+    "",
+    "Parking",
+    "2014 Toyota Corolla",
+    "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
+    "",
+    "Activities",
+    "2026-09-14 · Title · 2013 Toyota RAV4 — $100.00",
+    "  Paid — -$40.00",
+    "",
+    "Unpaid from before",
+    "2026-08-20 · Title · 2013 Toyota RAV4 — $90.00",
+    "",
+    "Total for September — $256.00",
+    "Unpaid from before — $90.00",
+    "Paid — -$40.00",
+    "BALANCE DUE: $306.00",
   ].join("\n"));
 });
 

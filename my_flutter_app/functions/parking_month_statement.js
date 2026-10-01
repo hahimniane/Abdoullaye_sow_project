@@ -17,6 +17,8 @@
  * same numbers.
  */
 
+const {lotActivityPaidCents} = require("./lot_ledger");
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const MONTH_NAMES = Object.freeze([
@@ -216,34 +218,88 @@ function parkingMonthStatement(row, monthKey, now = new Date()) {
 }
 
 /**
- * The business's month: every car on the lot that month, what it ran up,
- * what came in, and who still owes - biggest first.
+ * One ledger activity on a month's bill: what it was, the day it was done,
+ * its fee, and what has been paid toward it - or null when it does not
+ * belong on this month's bill. An activity dated in the month is that
+ * month's; an older one still unpaid comes along as "unpaid from before".
+ * Voided and free activities never appear.
+ *
+ * @param {object} row A lotActivities document (with its `id`).
+ * @param {string} monthKey "YYYY-MM".
+ * @return {object|null} The item.
+ */
+function activityMonthItem(row, monthKey) {
+  const r = row && typeof row === "object" ? row : {};
+  if (r.voided === true) return null;
+  const feeCents = Math.max(0, Math.round(Number(r.feeCents) || 0));
+  if (feeCents <= 0) return null;
+  const month = monthDays(monthKey);
+  const day = dayNumber(r.activityDate) ?? dayNumber(r.createdAt);
+  if (!month || day === null || day > month.last) return null;
+  const paidCents = Math.min(feeCents, lotActivityPaidCents(r));
+  const dueCents = Math.max(0, feeCents - paidCents);
+  const prior = day < month.first;
+  if (prior && dueCents <= 0) return null;
+  const label = text(r.customLabel) || text(r.activityTypeLabel) || "Activity";
+  return {
+    id: text(r.id),
+    kind: "activity",
+    monthKey,
+    date: dayKeyOf(day),
+    label: label.charAt(0).toUpperCase() + label.slice(1),
+    feeCents,
+    paidCents,
+    dueCents,
+    prior,
+    customerName: text(r.customerName),
+    customerPhone: text(r.customerPhone, 40),
+    customerEmail: text(r.customerEmail, 180),
+    vehicle: [r.carYear, r.carMake, r.carModel].map((v) => text(v, 80))
+        .filter(Boolean).join(" "),
+    vinNumber: text(r.vinNumber, 17).toUpperCase(),
+    trackingCode: text(r.trackingCode, 40),
+  };
+}
+
+/**
+ * The business's month: every car on the lot that month and every ledger
+ * activity done in it (plus older activities still unpaid), what they ran
+ * up, what came in, and who still owes - one customer per phone, biggest
+ * first.
  *
  * @param {object[]} rows The business's parkedCars documents.
  * @param {string} monthKey "YYYY-MM".
  * @param {Date} [now] The moment.
+ * @param {object[]} [activityRows] The business's lotActivities documents.
  * @return {object} The summary and the bills.
  */
-function parkingMonthSummary(rows, monthKey, now = new Date()) {
+function parkingMonthSummary(rows, monthKey, now = new Date(),
+    activityRows = []) {
   const bills = (Array.isArray(rows) ? rows : [])
       .map((row) => parkingMonthStatement(row, monthKey, now))
+      .filter(Boolean);
+  const activities = (Array.isArray(activityRows) ? activityRows : [])
+      .map((row) => activityMonthItem(row, monthKey))
       .filter(Boolean);
   const owing = bills.filter((b) => b.owes)
       .sort((a, b) => b.dueCents - a.dueCents ||
         a.customerName.localeCompare(b.customerName));
   const sum = (list, key) => list.reduce((s, b) => s + b[key], 0);
-  const customers = parkingMonthCustomers(bills);
+  const inMonth = activities.filter((a) => !a.prior);
+  const customers = parkingMonthCustomers(bills, activities);
+  const customersOwing = customers.filter((c) => c.owes);
   return {
     monthKey,
     carsOnLot: bills.length,
     carsOwing: owing.length,
+    activitiesInMonth: inMonth.length,
     customers,
-    customersOwing: customers.filter((c) => c.owes),
-    billedCents: sum(bills, "monthCents"),
-    collectedCents: sum(bills, "monthPaidCents"),
-    owedCents: sum(bills, "monthUnpaidCents"),
-    olderOwedCents: sum(owing, "priorUnpaidCents"),
-    dueCents: sum(owing, "dueCents"),
+    customersOwing,
+    billedCents: sum(bills, "monthCents") + sum(inMonth, "feeCents"),
+    collectedCents: sum(bills, "monthPaidCents") + sum(inMonth, "paidCents"),
+    owedCents: sum(bills, "monthUnpaidCents") + sum(inMonth, "dueCents"),
+    olderOwedCents: sum(customersOwing, "priorUnpaidCents"),
+    dueCents: sum(customersOwing, "dueCents"),
     owing,
     bills,
   };
@@ -294,42 +350,62 @@ function mostUsedName(names) {
 
 /**
  * The month's bills grouped by customer - one bill per phone, listing each
- * car with the dates it covers. The name shown is the spelling used most
- * often on that phone (the longest, on a tie); a car registered under a
- * different name says so on its own line.
+ * car with the dates it covers and each activity with its date. The name
+ * shown is the spelling used most often on that phone; a car or activity
+ * registered under a different name says so on its own line.
  *
  * @param {object[]} bills From parkingMonthStatement.
+ * @param {object[]} [activities] From activityMonthItem.
  * @return {object[]} Customers, most owed first.
  */
-function parkingMonthCustomers(bills) {
+function parkingMonthCustomers(bills, activities = []) {
   const groups = new Map();
-  for (const bill of Array.isArray(bills) ? bills : []) {
-    const key = parkingCustomerKey(bill);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(bill);
+  const add = (item, field) => {
+    const key = parkingCustomerKey(item);
+    if (!groups.has(key)) groups.set(key, {cars: [], activities: []});
+    groups.get(key)[field].push(item);
+  };
+  for (const b of Array.isArray(bills) ? bills : []) add(b, "cars");
+  for (const a of Array.isArray(activities) ? activities : []) {
+    add(a, "activities");
   }
   const customers = [];
-  for (const [key, list] of groups) {
-    const customerName = mostUsedName(list.map((b) => b.customerName));
-    const cars = [...list].sort((a, b) =>
+  for (const [key, group] of groups) {
+    const all = [...group.cars, ...group.activities];
+    const customerName = mostUsedName(all.map((x) => x.customerName));
+    const tag = (x) => ({...x, registeredTo:
+      sameName(x.customerName, customerName) ? "" : x.customerName});
+    const cars = [...group.cars].sort((a, b) =>
       a.periodFrom.localeCompare(b.periodFrom) ||
-      a.vehicle.localeCompare(b.vehicle))
-        .map((b) => ({...b, registeredTo:
-          sameName(b.customerName, customerName) ? "" : b.customerName}));
-    const sum = (k) => cars.reduce((s, b) => s + b[k], 0);
+      a.vehicle.localeCompare(b.vehicle)).map(tag);
+    const acts = [...group.activities].sort((a, b) =>
+      a.date.localeCompare(b.date) || a.label.localeCompare(b.label))
+        .map(tag);
+    const inMonth = acts.filter((a) => !a.prior);
+    const older = acts.filter((a) => a.prior);
+    const sum = (list, k) => list.reduce((s, x) => s + x[k], 0);
+    const monthCents = sum(cars, "monthCents") + sum(inMonth, "feeCents");
+    const monthPaidCents = sum(cars, "monthPaidCents") +
+      sum(inMonth, "paidCents");
+    const monthUnpaidCents = sum(cars, "monthUnpaidCents") +
+      sum(inMonth, "dueCents");
+    const priorUnpaidCents = sum(cars, "priorUnpaidCents") +
+      sum(older, "dueCents");
     customers.push({
       key,
-      monthKey: cars[0].monthKey,
+      monthKey: (cars[0] || acts[0]).monthKey,
       customerName,
-      customerPhone: cars.find((b) => b.customerPhone)?.customerPhone || "",
-      customerEmail: cars.find((b) => b.customerEmail)?.customerEmail || "",
+      customerPhone: all.find((x) => x.customerPhone)?.customerPhone || "",
+      customerEmail: all.find((x) => x.customerEmail)?.customerEmail || "",
       cars,
-      monthCents: sum("monthCents"),
-      monthPaidCents: sum("monthPaidCents"),
-      monthUnpaidCents: sum("monthUnpaidCents"),
-      priorUnpaidCents: sum("priorUnpaidCents"),
-      dueCents: sum("dueCents"),
-      owes: cars.some((b) => b.owes),
+      activities: inMonth,
+      olderActivities: older,
+      monthCents,
+      monthPaidCents,
+      monthUnpaidCents,
+      priorUnpaidCents,
+      dueCents: monthUnpaidCents + priorUnpaidCents,
+      owes: monthUnpaidCents + priorUnpaidCents > 0,
       partialMonth: cars.some((b) => b.partialMonth),
     });
   }
@@ -377,8 +453,9 @@ function parkingMonthBillText(bill, businessName) {
 }
 
 /**
- * One customer's bill as WhatsApp text: every car, the dates it covers, and
- * what is owed in all.
+ * One customer's bill as WhatsApp text: every car with the dates it covers,
+ * every activity with its date, what was paid toward each, and what is owed
+ * in all.
  *
  * @param {object} customer From parkingMonthCustomers.
  * @param {string} businessName The lot.
@@ -386,24 +463,46 @@ function parkingMonthBillText(bill, businessName) {
  */
 function parkingMonthCustomerText(customer, businessName) {
   const c = customer || {};
+  const month = MONTH_NAMES[Number(String(c.monthKey).slice(5, 7)) - 1] ||
+    "the month";
   const lines = [
-    `${text(businessName) || "Parking"} — Parking bill, ` +
+    `${text(businessName) || "Parking"} — Monthly bill, ` +
       `${monthLabel(c.monthKey)}`,
     `For: ${[c.customerName || "—", c.customerPhone].filter(Boolean)
         .join(" · ")}`,
-    "",
   ];
+  const named = (x) => x.registeredTo ? ` (registered to ${x.registeredTo})` :
+    "";
+  if ((c.cars || []).length) lines.push("", "Parking");
   for (const b of c.cars || []) {
-    const car = [b.vehicle || "Car", b.vinNumber ? `VIN ${b.vinNumber}` : ""]
-        .filter(Boolean).join(" · ");
-    lines.push(car + (b.registeredTo ? ` (registered to ${b.registeredTo})` :
-      ""));
+    lines.push([b.vehicle || "Car", b.vinNumber ? `VIN ${b.vinNumber}` : ""]
+        .filter(Boolean).join(" · ") + named(b));
     lines.push(`  ${b.periodFrom} to ${b.periodTo}: ${b.days} day` +
       `${b.days === 1 ? "" : "s"} × ${moneyText(b.dayRateCents)} — ` +
       `${moneyText(b.monthCents)}`);
+    if (b.priorUnpaidCents > 0) {
+      lines.push(`  Unpaid from before — ${moneyText(b.priorUnpaidCents)}`);
+    }
+    if (b.monthPaidCents > 0) {
+      lines.push(`  Paid — -${moneyText(b.monthPaidCents)}`);
+    }
   }
-  lines.push("", `Total for ${MONTH_NAMES[Number(String(c.monthKey)
-      .slice(5, 7)) - 1] || "the month"} — ${moneyText(c.monthCents)}`);
+  if ((c.activities || []).length) lines.push("", "Activities");
+  for (const a of c.activities || []) {
+    lines.push(`${a.date} · ${a.label}` +
+      `${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ` +
+      `${moneyText(a.feeCents)}`);
+    if (a.paidCents > 0) lines.push(`  Paid — -${moneyText(a.paidCents)}`);
+  }
+  if ((c.olderActivities || []).length) {
+    lines.push("", "Unpaid from before");
+    for (const a of c.olderActivities) {
+      lines.push(`${a.date} · ${a.label}` +
+        `${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ` +
+        `${moneyText(a.dueCents)}`);
+    }
+  }
+  lines.push("", `Total for ${month} — ${moneyText(c.monthCents)}`);
   if (c.priorUnpaidCents > 0) {
     lines.push(`Unpaid from before — ${moneyText(c.priorUnpaidCents)}`);
   }
@@ -417,6 +516,7 @@ function parkingMonthCustomerText(customer, businessName) {
 
 module.exports = {
   MONTH_NAMES,
+  activityMonthItem,
   parkingCustomerKey,
   parkingMonthCustomers,
   parkingMonthCustomerText,

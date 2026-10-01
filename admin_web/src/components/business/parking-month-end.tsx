@@ -25,6 +25,9 @@ type Row = Record<string, unknown>;
 
 type ParkingMonthEndProps = {
   rows: readonly FirestoreRow[];
+  /** The business's ledger activities: those dated in the month, and older
+   * ones still unpaid, go on the same bills. */
+  activities?: readonly FirestoreRow[];
   business: Row | null;
   businessName: string;
   initialMonth: string;
@@ -39,7 +42,7 @@ type ParkingMonthEndProps = {
  * to send. Worked out live from the cars; payments are recorded on the car
  * as always, oldest month first, so a bill flips to paid by itself.
  */
-export function ParkingMonthEnd({ rows, business, businessName, initialMonth, onClose, onOpenCar }: ParkingMonthEndProps) {
+export function ParkingMonthEnd({ rows, activities = [], business, businessName, initialMonth, onClose, onOpenCar }: ParkingMonthEndProps) {
   const [monthKey, setMonthKey] = useState(initialMonth || previousMonthKey());
   const [showAll, setShowAll] = useState(false);
   const [busyId, setBusyId] = useState("");
@@ -49,7 +52,7 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
   const orgName = text(business?.name, "") || businessName;
   const identity = useMemo(() => ({ ...(business ?? {}), name: orgName }), [business, orgName]);
 
-  const summary = useMemo(() => parkingMonthSummary(rows, monthKey), [rows, monthKey]);
+  const summary = useMemo(() => parkingMonthSummary(rows, monthKey, new Date(), activities), [rows, activities, monthKey]);
   const thisMonth = new Date().toISOString().slice(0, 7);
   // One row per customer (grouped by phone), their cars underneath.
   const listed = showAll ? summary.customers : summary.customersOwing;
@@ -143,7 +146,7 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
               <header>
                 <div>
                   <strong>{customer.customerName || "—"}</strong>
-                  <small>{customer.customerPhone}{customer.customerPhone ? " · " : ""}{customer.cars.length} car{customer.cars.length === 1 ? "" : "s"}</small>
+                  <small>{[customer.customerPhone, customer.cars.length ? `${customer.cars.length} car${customer.cars.length === 1 ? "" : "s"}` : "", customer.activities.length + customer.olderActivities.length ? `${customer.activities.length + customer.olderActivities.length} activit${customer.activities.length + customer.olderActivities.length === 1 ? "y" : "ies"}` : ""].filter(Boolean).join(" · ")}</small>
                 </div>
                 <div className="pk-month-due">
                   {customer.dueCents > 0
@@ -168,11 +171,23 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
                       </span>
                       <span className="pk-month-period">{b.periodFrom} → {b.periodTo}</span>
                       <span className="pk-month-calc">{b.days} day{b.days === 1 ? "" : "s"} × {moneyText(b.dayRateCents)}</span>
-                      <span className="pk-month-amount"><strong>{moneyText(b.monthCents)}</strong>{b.dueCents > 0 ? <small>{moneyText(b.dueCents)} due</small> : <small>paid</small>}</span>
+                      <span className="pk-month-amount"><strong>{moneyText(b.monthCents)}</strong>{b.monthPaidCents > 0 && <small className="pk-paid">{moneyText(b.monthPaidCents)} paid</small>}{b.dueCents > 0 ? <small>{moneyText(b.dueCents)} due</small> : <small>paid in full</small>}</span>
                       {car && <button className="ghost-button" type="button" title="Open the car to record a payment" onClick={() => onOpenCar(car)}><SquarePen size={14} /></button>}
                     </li>
                   );
                 })}
+                {[...customer.activities, ...customer.olderActivities].map((a) => (
+                  <li key={`act-${a.id}`} className="pk-month-activity">
+                    <span className="pk-month-car">
+                      <strong>{a.label}{a.vehicle ? ` · ${a.vehicle}` : ""}</strong>
+                      <small>{[a.prior ? "unpaid from before" : "activity", a.vinNumber, a.registeredTo ? `registered to ${a.registeredTo}` : ""].filter(Boolean).join(" · ")}</small>
+                    </span>
+                    <span className="pk-month-period">{a.date}</span>
+                    <span className="pk-month-calc">{a.prior ? "" : "this month"}</span>
+                    <span className="pk-month-amount"><strong>{moneyText(a.prior ? a.dueCents : a.feeCents)}</strong>{a.paidCents > 0 && <small className="pk-paid">{moneyText(a.paidCents)} paid</small>}{a.dueCents > 0 ? <small>{moneyText(a.dueCents)} due</small> : <small>paid in full</small>}</span>
+                    <span aria-hidden="true"></span>
+                  </li>
+                ))}
               </ul>
             </article>
           ))}

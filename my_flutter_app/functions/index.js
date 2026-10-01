@@ -8510,10 +8510,15 @@ exports.chargeMonthlySubscriptions = onSchedule(
 // (parking_month_statement.js); nothing is stored here.
 async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
   const businessId = businessDoc.id;
-  const cars = await db.collection("parkedCars")
-      .where("businessId", "==", businessId).get();
+  const [cars, activities] = await Promise.all([
+    db.collection("parkedCars").where("businessId", "==", businessId).get(),
+    db.collection("lotActivities").where("businessId", "==", businessId)
+        .get(),
+  ]);
+  // Cars and the ledger's activities go on the same month bills.
   const summary = parkingMonthSummary(
-      cars.docs.map((d) => ({id: d.id, ...d.data()})), monthKey, now);
+      cars.docs.map((d) => ({id: d.id, ...d.data()})), monthKey, now,
+      activities.docs.map((d) => ({id: d.id, ...d.data()})));
   const owing = summary.customersOwing.length;
   if (owing === 0) return {businessId, notified: 0};
   const recipients = new Set();

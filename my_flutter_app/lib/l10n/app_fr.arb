@@ -4272,7 +4272,7 @@
   "pmeSendText": "Envoyer en texte",
   "pmeOpenCar": "Ouvrir la voiture pour enregistrer un paiement",
   "pmePdfFailed": "Le PDF n'a pas pu être créé. Réessayez.",
-  "pmePdfBill": "FACTURE DE PARKING",
+  "pmePdfBill": "FACTURE MENSUELLE",
   "pmePdfSummary": "FIN DE MOIS",
   "pmePdfVehicle": "Véhicule",
   "pmePdfPeriod": "Période",
@@ -4306,5 +4306,29 @@
       }
     }
   },
-  "pmePickCar": "Quelle voiture ?"
+  "pmePickCar": "Quelle voiture ?",
+  "pmeActivities": "Activités",
+  "pmeActivity": "Activité",
+  "pmeDate": "Date",
+  "pmeParking": "Parking",
+  "pmePaidToward": "Payé pour",
+  "pmePaidWord": "payé",
+  "pmeDueWord": "dû",
+  "pmeItems": "{count, plural, =1{1 élément} other{{count} éléments}}",
+  "@pmeItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeActivitiesCount": "{count, plural, =1{1 activité} other{{count} activités}}",
+  "@pmeActivitiesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmePaidInFull": "payé en totalité"
 }

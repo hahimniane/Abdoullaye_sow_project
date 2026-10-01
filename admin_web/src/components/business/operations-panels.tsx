@@ -4791,6 +4791,9 @@ export function ParkingPanel({
   // One index per render, never a query per row.
   const containerLines = useBusinessRows("containerLines", businessId, Boolean(businessId && !previewMode), 3000);
   const containerRows = useBusinessRows("containers", businessId, Boolean(businessId && !previewMode), 500);
+  // Ledger activities join the month-end bills (dated in the month, or older
+  // and still unpaid), so the month-end view needs them alongside the cars.
+  const monthEndActivities = useBusinessRows("lotActivities", businessId, Boolean(businessId && !previewMode), 1000);
   const vinPlacements = useMemo(
     () => buildVinPlacementIndex(containerLines.rows, containerRows.rows),
     [containerLines.rows, containerRows.rows],
@@ -5542,6 +5545,7 @@ export function ParkingPanel({
       {monthEndKey && (
         <ParkingMonthEnd
           rows={parkedCars.rows}
+          activities={monthEndActivities.rows}
           business={business}
           businessName={businessName}
           initialMonth={monthEndKey}

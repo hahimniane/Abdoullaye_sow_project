@@ -9745,7 +9745,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pmePdfFailed => 'Le PDF n\'a pas pu être créé. Réessayez.';
 
   @override
-  String get pmePdfBill => 'FACTURE DE PARKING';
+  String get pmePdfBill => 'FACTURE MENSUELLE';
 
   @override
   String get pmePdfSummary => 'FIN DE MOIS';
@@ -9803,4 +9803,50 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pmePickCar => 'Quelle voiture ?';
+
+  @override
+  String get pmeActivities => 'Activités';
+
+  @override
+  String get pmeActivity => 'Activité';
+
+  @override
+  String get pmeDate => 'Date';
+
+  @override
+  String get pmeParking => 'Parking';
+
+  @override
+  String get pmePaidToward => 'Payé pour';
+
+  @override
+  String get pmePaidWord => 'payé';
+
+  @override
+  String get pmeDueWord => 'dû';
+
+  @override
+  String pmeItems(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count éléments',
+      one: '1 élément',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pmeActivitiesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count activités',
+      one: '1 activité',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pmePaidInFull => 'payé en totalité';
 }

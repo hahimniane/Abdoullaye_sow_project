@@ -17025,7 +17025,7 @@ abstract class AppLocalizations {
   /// No description provided for @pmePdfBill.
   ///
   /// In en, this message translates to:
-  /// **'PARKING BILL'**
+  /// **'MONTHLY BILL'**
   String get pmePdfBill;
 
   /// No description provided for @pmePdfSummary.
@@ -17105,6 +17105,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Which car?'**
   String get pmePickCar;
+
+  /// No description provided for @pmeActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'Activities'**
+  String get pmeActivities;
+
+  /// No description provided for @pmeActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get pmeActivity;
+
+  /// No description provided for @pmeDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get pmeDate;
+
+  /// No description provided for @pmeParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking'**
+  String get pmeParking;
+
+  /// No description provided for @pmePaidToward.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid toward'**
+  String get pmePaidToward;
+
+  /// No description provided for @pmePaidWord.
+  ///
+  /// In en, this message translates to:
+  /// **'paid'**
+  String get pmePaidWord;
+
+  /// No description provided for @pmeDueWord.
+  ///
+  /// In en, this message translates to:
+  /// **'due'**
+  String get pmeDueWord;
+
+  /// No description provided for @pmeItems.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item} other{{count} items}}'**
+  String pmeItems(int count);
+
+  /// No description provided for @pmeActivitiesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 activity} other{{count} activities}}'**
+  String pmeActivitiesCount(int count);
+
+  /// No description provided for @pmePaidInFull.
+  ///
+  /// In en, this message translates to:
+  /// **'paid in full'**
+  String get pmePaidInFull;
 }
 
 class _AppLocalizationsDelegate

@@ -44,6 +44,10 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   final List<StreamSubscription<Object?>> _subs = [];
   late String _monthKey = widget.monthKey ?? previousParkingMonthKey();
   List<DocumentSnapshot<Map<String, dynamic>>> _docs = const [];
+
+  /// Ledger activities: those dated in the month, and older ones still
+  /// unpaid, go on the same bills as the cars.
+  List<Map<String, dynamic>> _activities = const [];
   Map<String, dynamic> _business = const {};
   bool _loading = true;
   bool _showAll = false;
@@ -65,6 +69,16 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     }, onError: (_) {
       if (mounted) setState(() => _loading = false);
     }));
+    _subs.add(_db
+        .collection('lotActivities')
+        .where('businessId', isEqualTo: widget.businessId)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      setState(() => _activities = [
+            for (final d in snap.docs) {...d.data(), 'id': d.id},
+          ]);
+    }, onError: (_) {}));
     _subs.add(_db.collection('businesses').doc(widget.businessId).snapshots().listen(
       (doc) {
         if (mounted) setState(() => _business = doc.data() ?? const {});
@@ -114,6 +128,14 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         registeredTo: l10n.pmeRegisteredTo,
         monthTotal: l10n.pmeMonthTotal,
         carsLabel: (n) => l10n.pmeCars(n),
+        itemsLabel: (n) => l10n.pmeItems(n),
+        activitiesTitle: l10n.pmeActivities,
+        activity: l10n.pmeActivity,
+        date: l10n.pmeDate,
+        parkingTitle: l10n.pmeParking,
+        paidToward: l10n.pmePaidToward,
+        paidWord: l10n.pmePaidWord,
+        dueWord: l10n.pmeDueWord,
       );
 
   Future<void> _run(String key, Future<void> Function() work) async {
@@ -157,7 +179,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       options: [
         LotOption('pdf', l10n.pmeSharePdf),
         LotOption('text', l10n.pmeSendText),
-        LotOption('open', l10n.pmeOpenCar),
+        if (customer.cars.isNotEmpty) LotOption('open', l10n.pmeOpenCar),
       ],
     );
     if (action == null || !mounted) return;
@@ -213,6 +235,8 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     final summary = parkingMonthSummary(
       [for (final d in _docs) {...?d.data(), 'id': d.id}],
       _monthKey,
+      null,
+      _activities,
     );
     final thisMonth = shiftParkingMonthKey(previousParkingMonthKey(), 1);
     // One card per customer (grouped by phone), their cars underneath.
@@ -496,9 +520,13 @@ class _CustomerTile extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        [customer.customerPhone, l10n.pmeCars(customer.cars.length)]
-                            .where((p) => p.isNotEmpty)
-                            .join(' · '),
+                        [
+                          customer.customerPhone,
+                          if (customer.cars.isNotEmpty) l10n.pmeCars(customer.cars.length),
+                          if (customer.activities.length + customer.olderActivities.length > 0)
+                            l10n.pmeActivitiesCount(
+                                customer.activities.length + customer.olderActivities.length),
+                        ].where((p) => p.isNotEmpty).join(' · '),
                         style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
                       ),
                     ],
@@ -556,14 +584,43 @@ class _CustomerTile extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Text(
-                      parkingMoney(customer.cars[i].monthCents),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: [FontFeature.tabularFigures()],
-                        color: AppColors.ink,
+                    _Amount(
+                      amount: customer.cars[i].monthCents,
+                      paid: customer.cars[i].monthPaidCents,
+                      due: customer.cars[i].dueCents,
+                    ),
+                  ],
+                ),
+              ),
+            for (final a in [...customer.activities, ...customer.olderActivities])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          Text(
+                            [a.date, if (a.prior) l10n.pmeFromBefore.toLowerCase()].join(' · '),
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+                          ),
+                        ],
                       ),
+                    ),
+                    _Amount(
+                      amount: a.prior ? a.dueCents : a.feeCents,
+                      paid: a.paidCents,
+                      due: a.dueCents,
                     ),
                   ],
                 ),
@@ -581,6 +638,42 @@ class _CustomerTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// An item's amount, with what was paid toward it and what is still due.
+class _Amount extends StatelessWidget {
+  const _Amount({required this.amount, required this.paid, required this.due});
+
+  final int amount;
+  final int paid;
+  final int due;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    const small = TextStyle(fontSize: 11, fontFeatures: [FontFeature.tabularFigures()]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          parkingMoney(amount),
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            fontFeatures: [FontFeature.tabularFigures()],
+            color: AppColors.ink,
+          ),
+        ),
+        if (paid > 0)
+          Text('${parkingMoney(paid)} ${l10n.pmePaidWord}',
+              style: small.copyWith(color: AppColors.sage)),
+        Text(
+          due > 0 ? '${parkingMoney(due)} ${l10n.pmeDueWord}' : l10n.pmePaidInFull,
+          style: small.copyWith(color: due > 0 ? AppColors.warn : AppColors.sage),
+        ),
+      ],
     );
   }
 }

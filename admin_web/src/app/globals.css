@@ -14003,4 +14003,6 @@ button[data-loading="true"]::before {
   .pk-month-customer li { grid-template-columns: 1fr auto; }
   .pk-month-period, .pk-month-calc { grid-column: 1; }
 }
+.pk-month-amount .pk-paid { color: var(--money, #15803d); }
+.pk-month-activity .pk-month-car strong { color: var(--ink); }
 

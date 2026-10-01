@@ -4272,7 +4272,7 @@
   "pmeSendText": "Send as text",
   "pmeOpenCar": "Open the car to record a payment",
   "pmePdfFailed": "The PDF could not be made. Try again.",
-  "pmePdfBill": "PARKING BILL",
+  "pmePdfBill": "MONTHLY BILL",
   "pmePdfSummary": "MONTH END",
   "pmePdfVehicle": "Vehicle",
   "pmePdfPeriod": "Period",
@@ -4306,5 +4306,29 @@
       }
     }
   },
-  "pmePickCar": "Which car?"
+  "pmePickCar": "Which car?",
+  "pmeActivities": "Activities",
+  "pmeActivity": "Activity",
+  "pmeDate": "Date",
+  "pmeParking": "Parking",
+  "pmePaidToward": "Paid toward",
+  "pmePaidWord": "paid",
+  "pmeDueWord": "due",
+  "pmeItems": "{count, plural, =1{1 item} other{{count} items}}",
+  "@pmeItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeActivitiesCount": "{count, plural, =1{1 activity} other{{count} activities}}",
+  "@pmeActivitiesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmePaidInFull": "paid in full"
 }

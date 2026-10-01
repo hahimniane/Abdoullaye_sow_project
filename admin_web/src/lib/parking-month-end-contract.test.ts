@@ -26,9 +26,10 @@ test("the notification on the 1st opens that month", () => {
   );
 });
 
-test("the view never writes; every bill is worked out from the cars", () => {
+test("the view never writes; every bill is worked out from the cars and activities", () => {
   assert.doesNotMatch(view, /httpsCallable|setDoc\(|updateDoc\(|addDoc\(/);
-  assert.match(view, /parkingMonthSummary\(rows, monthKey\)/);
+  // Cars and the ledger's activities, both read, never written.
+  assert.match(view, /parkingMonthSummary\(rows, monthKey, new Date\(\), activities\)/);
 });
 
 test("its words read in French", () => {
