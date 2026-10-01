@@ -460,11 +460,22 @@ function businessParkingRevertPaidUpdate({entry}) {
   if (text(data.paymentMethod, 40) !== "direct") {
     return {ok: false, update: null, reason: "payment_link_is_stripe_owned"};
   }
-  if (text(data.paymentStatus, 40) !== BUSINESS_PARKING_PAYMENT_STATUS.PAID) {
+  // Fully paid, or part paid: a wrong part payment has to be undoable too,
+  // or a car once given $50 by mistake can never read "not paid" again.
+  const paid =
+    text(data.paymentStatus, 40) === BUSINESS_PARKING_PAYMENT_STATUS.PAID;
+  const paidCents = Math.round(Number(data.amountPaidCents) || 0);
+  if (!paid && paidCents <= 0) {
     return {ok: false, update: null, reason: "not_paid"};
   }
+  // The instalments leave the live list - the chart and the month-end bills
+  // read it - but are kept, so the history still shows what was recorded.
+  const live = Array.isArray(data.parkingPayments) ? data.parkingPayments : [];
+  const earlier = Array.isArray(data.revertedParkingPayments) ?
+    data.revertedParkingPayments : [];
   return {
     ok: true,
+    undoneCents: paidCents,
     update: {
       paymentStatus: BUSINESS_PARKING_PAYMENT_STATUS.AWAITING_DIRECT,
       directPaymentReceived: false,
@@ -473,6 +484,8 @@ function businessParkingRevertPaidUpdate({entry}) {
       directPaymentMarkedByUid: "",
       amountPaidCents: 0,
       amountPaid: 0,
+      parkingPayments: [],
+      revertedParkingPayments: [...earlier, ...live],
       ...directPaymentPayoutFields(0),
     },
   };

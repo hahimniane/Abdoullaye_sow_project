@@ -7889,7 +7889,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get lotParkingMarkNotPaidConfirm =>
-      'Remettre cette voiture en attente de paiement ? Le changement est enregistré dans son historique.';
+      'Remettre cette voiture à non payée ? Tous les paiements enregistrés sont retirés. La modification reste dans son historique.';
 
   @override
   String get lotParkingHistoryTitle => 'Historique des modifications';
