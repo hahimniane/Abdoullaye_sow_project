@@ -131,6 +131,9 @@ export type ParkingMonthBill = {
   vehicle: string;
   vinNumber: string;
   trackingCode: string;
+  paymentMethod: string;
+  /** A payment can be recorded by hand: a direct car the business entered. */
+  recordable: boolean;
 };
 
 export function parkingMonthStatement(row: Row, monthKey: string, now: Date = new Date()): ParkingMonthBill | null {
@@ -179,6 +182,8 @@ export function parkingMonthStatement(row: Row, monthKey: string, now: Date = ne
     vehicle: [row.carYear, row.carMake, row.carModel].map((v) => text(v, 80)).filter(Boolean).join(" "),
     vinNumber: text(row.vinNumber, 17).toUpperCase(),
     trackingCode: text(row.trackingCode, 40),
+    paymentMethod: text(row.paymentMethod, 40),
+    recordable: text(row.paymentMethod, 40) === "direct" && (text(row.source, 40) === "business" || row.enteredByBusiness === true),
   };
 }
 
@@ -443,3 +448,28 @@ export function parkingMonthBillText(bill: ParkingMonthBill, businessName: strin
   lines.push(bill.dueCents > 0 ? `BALANCE DUE: ${moneyText(bill.dueCents)}` : "PAID IN FULL");
   return lines.join("\n");
 }
+
+export type MonthBillPaymentItem = { kind: "car" | "activity"; id: string; label: string; amountCents: number };
+
+/** "Mark all paid": what to record against each line, through the payment
+ * each line already takes. Payment-link cars are Stripe's. Mirrors the server. */
+export function monthBillPaymentPlan(c: ParkingMonthCustomer): {
+  items: MonthBillPaymentItem[];
+  skipped: (MonthBillPaymentItem & { reason: "payment_link" | "online" })[];
+  totalCents: number;
+} {
+  const items: MonthBillPaymentItem[] = [];
+  const skipped: (MonthBillPaymentItem & { reason: "payment_link" | "online" })[] = [];
+  for (const b of c.cars) {
+    if (b.dueCents <= 0) continue;
+    const entry: MonthBillPaymentItem = { kind: "car", id: b.id, label: b.vehicle || "Car", amountCents: b.dueCents };
+    if (!b.recordable) skipped.push({ ...entry, reason: b.paymentMethod === "payment_link" ? "payment_link" : "online" });
+    else items.push(entry);
+  }
+  for (const a of [...c.activities, ...c.olderActivities]) {
+    if (a.dueCents <= 0) continue;
+    items.push({ kind: "activity", id: a.id, label: `${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${a.date})`, amountCents: a.dueCents });
+  }
+  return { items, skipped, totalCents: items.reduce((s, x) => s + x.amountCents, 0) };
+}
+

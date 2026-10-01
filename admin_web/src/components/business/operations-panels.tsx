@@ -5546,6 +5546,7 @@ export function ParkingPanel({
         <ParkingMonthEnd
           rows={parkedCars.rows}
           activities={monthEndActivities.rows}
+          staff={parkingStaff.rows}
           business={business}
           businessName={businessName}
           initialMonth={monthEndKey}

@@ -9702,4 +9702,54 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pmePaidInFull => 'paid in full';
+
+  @override
+  String get pmeMarkAllPaid => 'Mark all paid';
+
+  @override
+  String get pmeSettleHint =>
+      'Each line is recorded the same way a payment is recorded by hand, so it shows on the car or the activity, in its history, and in your reports.';
+
+  @override
+  String get pmeTotalToRecord => 'Total to record';
+
+  @override
+  String get pmeWhoTookIt => 'Who took the money?';
+
+  @override
+  String get pmeSayWhoReceived => 'Say who received the money.';
+
+  @override
+  String get pmeNotIncluded => 'paid online, not included';
+
+  @override
+  String pmeRecordTotal(String amount) {
+    return 'Record $amount';
+  }
+
+  @override
+  String pmeTryAgain(int count) {
+    return 'Try the $count again';
+  }
+
+  @override
+  String pmeRecordingProgress(int done, int total) {
+    return 'Recording $done of $total…';
+  }
+
+  @override
+  String pmeRecordedAll(String amount, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items',
+      one: '1 item',
+    );
+    return 'Recorded $amount — $_temp0.';
+  }
+
+  @override
+  String pmeSomeFailed(int done, int total) {
+    return '$done of $total recorded. These did not save:';
+  }
 }

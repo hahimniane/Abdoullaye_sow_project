@@ -200,4 +200,24 @@ void main() {
       ].join('\n'),
     );
   });
+
+  test('mark all paid: each line through its own payment; link cars skipped', () {
+    Map<String, dynamic> car(Map<String, dynamic> over) => {
+          'dailyRate': 12, 'status': 'reserved', 'customerName': 'Sow', 'customerPhone': '3475628973', ...over,
+        };
+    final cars = [
+      car({'id': 'open', 'parkingDate': at('2026-09-18'), 'paymentStatus': 'awaiting_direct_payment', 'paymentMethod': 'direct', 'source': 'business', 'amountPaidCents': 6000, 'carYear': '2014', 'carMake': 'Toyota', 'carModel': 'Corolla'}),
+      car({'id': 'link', 'parkingDate': at('2026-09-20'), 'paymentStatus': 'awaiting_payment_link', 'paymentMethod': 'payment_link', 'carYear': '2015', 'carMake': 'Toyota', 'carModel': 'RAV4'}),
+      car({'id': 'paid', 'parkingDate': at('2026-09-01'), 'paymentStatus': 'paid', 'paymentMethod': 'direct'}),
+    ];
+    final acts = [
+      {'id': 'sep', 'activityDate': at('2026-09-14'), 'feeCents': 10000, 'amountPaidCents': 4000, 'activityTypeLabel': 'title', 'customerName': 'Sow', 'customerPhone': '3475628973'},
+      {'id': 'aug', 'activityDate': at('2026-08-20'), 'feeCents': 9000, 'activityTypeLabel': 'reassignment', 'customerName': 'Sow', 'customerPhone': '3475628973'},
+    ];
+    final plan = monthBillPaymentPlan(parkingMonthSummary(cars, '2026-09', oct1, acts).customers.first);
+    expect(plan.items.map((x) => '${x.kind}:${x.id}:${x.amountCents}').toList(),
+        ['car:open:9600', 'activity:sep:6000', 'activity:aug:9000']);
+    expect(plan.skipped.map((x) => x.id).toList(), ['link']);
+    expect(plan.totalCents, 24600);
+  });
 }

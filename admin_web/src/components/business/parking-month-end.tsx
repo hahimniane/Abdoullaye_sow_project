@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen } from "lucide-react";
+import { httpsCallable } from "firebase/functions";
+import { ArrowLeft, Banknote, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, X } from "lucide-react";
+
+import { auth, functions } from "@/lib/firebase";
+import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "@/lib/business-parking-entry";
+import { overlayDismiss } from "@/lib/overlay-dismiss";
 
 import { currentLanguage, text } from "@/lib/format";
 import { PdfPreview, type PdfPreviewFile } from "@/components/pdf-preview";
@@ -11,6 +16,7 @@ import {
   parkingMonthFileName,
 } from "@/lib/parking-month-pdf";
 import {
+  monthBillPaymentPlan,
   monthLabel,
   moneyText,
   parkingMonthCustomerText,
@@ -28,6 +34,8 @@ type ParkingMonthEndProps = {
   /** The business's ledger activities: those dated in the month, and older
    * ones still unpaid, go on the same bills. */
   activities?: readonly FirestoreRow[];
+  /** The team, for "Received by" when a whole bill is marked paid. */
+  staff?: readonly FirestoreRow[];
   business: Row | null;
   businessName: string;
   initialMonth: string;
@@ -42,12 +50,24 @@ type ParkingMonthEndProps = {
  * to send. Worked out live from the cars; payments are recorded on the car
  * as always, oldest month first, so a bill flips to paid by itself.
  */
-export function ParkingMonthEnd({ rows, activities = [], business, businessName, initialMonth, onClose, onOpenCar }: ParkingMonthEndProps) {
+export function ParkingMonthEnd({ rows, activities = [], staff = [], business, businessName, initialMonth, onClose, onOpenCar }: ParkingMonthEndProps) {
   const [monthKey, setMonthKey] = useState(initialMonth || previousMonthKey());
   const [showAll, setShowAll] = useState(false);
   const [busyId, setBusyId] = useState("");
   const [flash, setFlash] = useState("");
   const [preview, setPreview] = useState<PdfPreviewFile | null>(null);
+  // "Mark all paid": which customer, and the same details any payment takes.
+  const [settleKey, setSettleKey] = useState("");
+  const [settleVia, setSettleVia] = useState("cash");
+  const [settleBy, setSettleBy] = useState("");
+  const [settleNote, setSettleNote] = useState("");
+  const [settleBusy, setSettleBusy] = useState("");
+  const [settleError, setSettleError] = useState("");
+  const [settleFailed, setSettleFailed] = useState<{ id: string; label: string; reason: string }[]>([]);
+  const staffOptions = useMemo(() => staff.map((s) => ({
+    id: String(s.id),
+    name: text(s.fullName, "") || text(s.name, "") || text(s.email, ""),
+  })).filter((s) => s.name), [staff]);
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const orgName = text(business?.name, "") || businessName;
   const identity = useMemo(() => ({ ...(business ?? {}), name: orgName }), [business, orgName]);
@@ -85,6 +105,60 @@ export function ParkingMonthEnd({ rows, activities = [], business, businessName,
       setFlash("The PDF could not be made. Try again.");
     } finally {
       setBusyId("");
+    }
+  }
+
+  function openSettle(customer: ParkingMonthCustomer) {
+    setSettleKey(customer.key);
+    setSettleVia("cash");
+    // Whoever is signed in took it, unless they say otherwise.
+    const me = auth.currentUser?.uid ?? "";
+    setSettleBy(staffOptions.some((s) => s.id === me) ? me : "");
+    setSettleNote(`Month end — ${monthLabel(monthKey)}`);
+    setSettleError("");
+    setSettleFailed([]);
+  }
+
+  // Every line through the payment it already takes, one after another, so
+  // each lands exactly as a payment recorded by hand would: who received it,
+  // how, the note, the history, the reports. A line that fails is named and
+  // the rest still go through; trying again sends only the failed ones.
+  async function runSettle(customer: ParkingMonthCustomer, only?: Set<string>) {
+    if (!settleBy) {
+      setSettleError("Say who received the money.");
+      return;
+    }
+    const plan = monthBillPaymentPlan(customer);
+    const items = plan.items.filter((x) => !only || only.has(`${x.kind}:${x.id}`));
+    const failed: { id: string; label: string; reason: string }[] = [];
+    let done = 0;
+    let recordedCents = 0;
+    setSettleError("");
+    for (const item of items) {
+      setSettleBusy(`Recording ${done + 1} of ${items.length}…`);
+      try {
+        if (item.kind === "car") {
+          await httpsCallable(functions, "recordBusinessParkingPartialPayment")({
+            entryId: item.id, amountCents: item.amountCents, receivedVia: settleVia, receivedByStaffId: settleBy, note: settleNote,
+          });
+        } else {
+          await httpsCallable(functions, "recordLotActivityInstalment")({
+            activityId: item.id, amountCents: item.amountCents, receivedVia: settleVia, receivedByStaffId: settleBy, note: settleNote,
+          });
+        }
+        recordedCents += item.amountCents;
+      } catch (error) {
+        failed.push({ id: `${item.kind}:${item.id}`, label: item.label, reason: (error as { message?: string })?.message || "It did not save." });
+      }
+      done += 1;
+    }
+    setSettleBusy("");
+    setSettleFailed(failed);
+    if (failed.length === 0) {
+      setSettleKey("");
+      setFlash(`Recorded ${moneyText(recordedCents)} for ${customer.customerName} — ${items.length} item${items.length === 1 ? "" : "s"}, received by ${staffOptions.find((s) => s.id === settleBy)?.name ?? "your team"}.`);
+    } else {
+      setSettleError(`${items.length - failed.length} of ${items.length} recorded. These did not save:`);
     }
   }
 
@@ -158,6 +232,9 @@ export function ParkingMonthEnd({ rows, activities = [], business, businessName,
                     {busyId === customer.key ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} View bill
                   </button>
                   <button className="lst-btn ghost" type="button" onClick={() => void copyBill(customer)}><Copy size={14} /> Copy text</button>
+                  {customer.dueCents > 0 && monthBillPaymentPlan(customer).items.length > 0 && (
+                    <button className="lst-btn" type="button" disabled={busyId !== ""} onClick={() => openSettle(customer)}><Banknote size={14} /> Mark all paid</button>
+                  )}
                 </div>
               </header>
               <ul>
@@ -193,6 +270,63 @@ export function ParkingMonthEnd({ rows, activities = [], business, businessName,
           ))}
         </div>
       )}
+      {(() => {
+        const customer = summary.customers.find((c) => c.key === settleKey);
+        if (!customer) return null;
+        const plan = monthBillPaymentPlan(customer);
+        const retry = settleFailed.length > 0 ? new Set(settleFailed.map((f) => f.id)) : undefined;
+        return (
+          <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(() => { if (!settleBusy) setSettleKey(""); })}>
+            <div className="lst-modal" style={{ maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
+              <header className="lst-modal-head">
+                <div><h3>Mark all paid</h3><p>{customer.customerName} · {monthLabel(monthKey, lang)}</p></div>
+                <button className="lst-icon-btn" type="button" disabled={Boolean(settleBusy)} onClick={() => setSettleKey("")} aria-label="Close"><X size={18} /></button>
+              </header>
+              <div className="lst-modal-body">
+                {settleError && (
+                  <div className="lst-form-error" role="alert">
+                    {settleError}
+                    {settleFailed.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{settleFailed.map((f) => (<li key={f.id}>{f.label} — {f.reason}</li>))}</ul>}
+                  </div>
+                )}
+                <p className="lst-hint" style={{ marginTop: 0 }}>Each line is recorded the same way a payment is recorded by hand, so it shows on the car or the activity, in its history, and in your reports.</p>
+                <ul className="pk-settle-list">
+                  {plan.items.map((x) => (
+                    <li key={`${x.kind}:${x.id}`} className={retry && !retry.has(`${x.kind}:${x.id}`) ? "pk-settle-done" : ""}>
+                      <span>{x.kind === "car" ? "Parking" : "Activity"} · {x.label}</span><strong>{moneyText(x.amountCents)}</strong>
+                    </li>
+                  ))}
+                  {plan.skipped.map((x) => (
+                    <li key={`skip:${x.id}`} className="pk-settle-skip"><span>Parking · {x.label} — {x.reason === "payment_link" ? "paid by card link, not included" : "booked online, not included"}</span><strong>{moneyText(x.amountCents)}</strong></li>
+                  ))}
+                  <li className="pk-settle-total"><span>Total to record</span><strong>{moneyText(plan.totalCents)}</strong></li>
+                </ul>
+                <div className="lst-form-grid">
+                  <label className="lst-field"><span>How it was paid</span>
+                    <select value={settleVia} onChange={(e) => setSettleVia(e.target.value)}>
+                      {BUSINESS_PARKING_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                    </select>
+                  </label>
+                  <label className="lst-field"><span>Received by</span>
+                    <select value={settleBy} onChange={(e) => setSettleBy(e.target.value)} aria-label="Received by">
+                      <option value="">Who took the money?</option>
+                      {staffOptions.map((o) => (<option key={o.id} value={o.id}>{o.name}</option>))}
+                    </select>
+                  </label>
+                  <label className="lst-field wide"><span>Note</span><input value={settleNote} onChange={(e) => setSettleNote(e.target.value)} /></label>
+                </div>
+              </div>
+              <footer className="lst-modal-foot">
+                {settleBusy && <span className="lst-hint" role="status" style={{ marginRight: "auto" }}><RefreshCw className="spin" size={13} /> {settleBusy}</span>}
+                <button className="lst-btn ghost" type="button" disabled={Boolean(settleBusy)} onClick={() => setSettleKey("")}>Cancel</button>
+                <button className="lst-add" type="button" disabled={Boolean(settleBusy) || !settleBy} onClick={() => void runSettle(customer, retry)}>
+                  <Banknote size={16} /> {retry ? `Try the ${settleFailed.length} again` : `Record ${moneyText(plan.totalCents)}`}
+                </button>
+              </footer>
+            </div>
+          </div>
+        );
+      })()}
       {preview && <PdfPreview {...preview} onClose={() => setPreview(null)} />}
     </div>
   );

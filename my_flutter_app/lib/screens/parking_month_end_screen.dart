@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/parked_car.dart';
+import '../services/business_parking_entry.dart' show businessParkingReceivedViaValues;
 import '../services/parking_month_statement.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -48,6 +51,9 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   /// Ledger activities: those dated in the month, and older ones still
   /// unpaid, go on the same bills as the cars.
   List<Map<String, dynamic>> _activities = const [];
+
+  /// The team, for "Received by" when a whole bill is marked paid.
+  List<({String id, String name})> _staff = const [];
   Map<String, dynamic> _business = const {};
   bool _loading = true;
   bool _showAll = false;
@@ -69,6 +75,21 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     }, onError: (_) {
       if (mounted) setState(() => _loading = false);
     }));
+    _subs.add(_db
+        .collection('users')
+        .where('businessId', isEqualTo: widget.businessId)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      setState(() => _staff = [
+            for (final d in snap.docs)
+              (
+                id: d.id,
+                name: (d.data()['fullName'] ?? d.data()['name'] ?? d.data()['email'] ?? '')
+                    .toString(),
+              ),
+          ].where((s) => s.name.isNotEmpty).toList());
+    }, onError: (_) {}));
     _subs.add(_db
         .collection('lotActivities')
         .where('businessId', isEqualTo: widget.businessId)
@@ -179,11 +200,22 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       options: [
         LotOption('pdf', l10n.pmeSharePdf),
         LotOption('text', l10n.pmeSendText),
+        if (customer.dueCents > 0 && monthBillPaymentPlan(customer).items.isNotEmpty)
+          LotOption('settle', l10n.pmeMarkAllPaid),
         if (customer.cars.isNotEmpty) LotOption('open', l10n.pmeOpenCar),
       ],
     );
     if (action == null || !mounted) return;
     switch (action) {
+      case 'settle':
+        await showLotSheet<bool>(
+          context,
+          _SettleSheet(
+            customer: customer,
+            monthLabel: parkingMonthLabel(_monthKey, locale),
+            staff: _staff,
+          ),
+        );
       case 'pdf':
         await _run(customer.key, () async {
           final bytes = await buildParkingMonthBillPdf(
@@ -677,3 +709,244 @@ class _Amount extends StatelessWidget {
     );
   }
 }
+
+/// "Mark all paid": every line of the bill through the payment it already
+/// takes, with the same details any payment needs - how it was paid and who
+/// received it (required). Lines go one after another; a line that fails is
+/// named and the rest still go through.
+class _SettleSheet extends StatefulWidget {
+  const _SettleSheet({
+    required this.customer,
+    required this.monthLabel,
+    required this.staff,
+  });
+
+  final ParkingMonthCustomer customer;
+  final String monthLabel;
+  final List<({String id, String name})> staff;
+
+  @override
+  State<_SettleSheet> createState() => _SettleSheetState();
+}
+
+class _SettleSheetState extends State<_SettleSheet> {
+  String _via = 'cash';
+  late String _by = widget.staff
+          .where((s) => s.id == (FirebaseAuth.instance.currentUser?.uid ?? ''))
+          .firstOrNull
+          ?.id ??
+      '';
+  late final _note = TextEditingController(text: 'Month end — ${widget.monthLabel}');
+  bool _busy = false;
+  String _progress = '';
+  String _error = '';
+  List<({String key, String label, String reason})> _failed = const [];
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  String _methodLabel(AppLocalizations l10n, String m) => switch (m) {
+        'cash' => l10n.invMethodCash,
+        'zelle' => l10n.invMethodZelle,
+        'cashapp' => l10n.invMethodCashapp,
+        'venmo' => l10n.invMethodVenmo,
+        'check' => l10n.invMethodCheck,
+        'card_in_person' => l10n.invMethodCardInPerson,
+        _ => l10n.invMethodOther,
+      };
+
+  Future<void> _pickVia() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.invPayMethod,
+      selected: _via,
+      options: [
+        for (final m in businessParkingReceivedViaValues) LotOption(m, _methodLabel(l10n, m)),
+      ],
+    );
+    if (picked != null && mounted) setState(() => _via = picked);
+  }
+
+  Future<void> _pickBy() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.lotReceivedBy,
+      selected: _by,
+      options: [for (final s in widget.staff) LotOption(s.id, s.name)],
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _by = picked;
+        _error = '';
+      });
+    }
+  }
+
+  Future<void> _run() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_by.isEmpty) {
+      AppHaptics.refuse();
+      setState(() => _error = l10n.pmeSayWhoReceived);
+      return;
+    }
+    final plan = monthBillPaymentPlan(widget.customer);
+    final retry = _failed.isEmpty ? null : {for (final f in _failed) f.key};
+    final items = [
+      for (final x in plan.items)
+        if (retry == null || retry.contains('${x.kind}:${x.id}')) x,
+    ];
+    final failed = <({String key, String label, String reason})>[];
+    var recorded = 0;
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    for (var i = 0; i < items.length; i++) {
+      final x = items[i];
+      if (mounted) setState(() => _progress = l10n.pmeRecordingProgress(i + 1, items.length));
+      try {
+        await FirebaseFunctions.instance
+            .httpsCallable(x.kind == 'car'
+                ? 'recordBusinessParkingPartialPayment'
+                : 'recordLotActivityInstalment')
+            .call<Object?>({
+          if (x.kind == 'car') 'entryId': x.id else 'activityId': x.id,
+          'amountCents': x.amountCents,
+          'receivedVia': _via,
+          'receivedByStaffId': _by,
+          'note': _note.text.trim(),
+        });
+        recorded += x.amountCents;
+      } on FirebaseFunctionsException catch (error) {
+        failed.add((key: '${x.kind}:${x.id}', label: x.label, reason: error.message ?? l10n.lotCouldNotSave));
+      } catch (_) {
+        failed.add((key: '${x.kind}:${x.id}', label: x.label, reason: l10n.lotCouldNotSave));
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _progress = '';
+      _failed = failed;
+    });
+    if (failed.isEmpty) {
+      AppHaptics.commit();
+      Navigator.of(context).pop(true);
+      showSuccessSnackBar(context, l10n.pmeRecordedAll(parkingMoney(recorded), items.length));
+    } else {
+      AppHaptics.refuse();
+      setState(() => _error = l10n.pmeSomeFailed(items.length - failed.length, items.length));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final plan = monthBillPaymentPlan(widget.customer);
+    final retry = _failed.isEmpty ? null : {for (final f in _failed) f.key};
+    final byName = widget.staff.where((s) => s.id == _by).firstOrNull?.name;
+    return LotSheetShell(
+      title: l10n.pmeMarkAllPaid,
+      subtitle: '${widget.customer.customerName} · ${widget.monthLabel}',
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_error.isNotEmpty) ...[
+            Text(
+              [_error, for (final f in _failed) '• ${f.label} — ${f.reason}'].join('\n'),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.errorRed),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          LotSheetButton(
+            key: const Key('month-end-settle'),
+            label: retry == null
+                ? l10n.pmeRecordTotal(parkingMoney(plan.totalCents))
+                : l10n.pmeTryAgain(_failed.length),
+            busy: _busy,
+            busyLabel: _progress,
+            tone: LotTone.good,
+            onTap: _run,
+          ),
+        ],
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(l10n.pmeSettleHint, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+          const SizedBox(height: AppSpacing.md),
+          for (final x in plan.items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${x.kind == 'car' ? l10n.pmeParking : l10n.pmeActivity} · ${x.label}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: retry != null && !retry.contains('${x.kind}:${x.id}')
+                            ? AppColors.muted
+                            : AppColors.ink,
+                        decoration: retry != null && !retry.contains('${x.kind}:${x.id}')
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                  ),
+                  Text(parkingMoney(x.amountCents),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          for (final x in plan.skipped)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text('${l10n.pmeParking} · ${x.label} — ${l10n.pmeNotIncluded}',
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+            ),
+          const Divider(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: Text(l10n.pmeTotalToRecord,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              ),
+              Text(parkingMoney(plan.totalCents),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          LotPickerField(
+            label: l10n.invPayMethod,
+            value: _methodLabel(l10n, _via),
+            placeholder: l10n.invPayMethod,
+            onTap: _busy ? () {} : _pickVia,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          LotPickerField(
+            key: const Key('month-end-received-by'),
+            label: l10n.lotReceivedBy,
+            value: byName,
+            placeholder: l10n.pmeWhoTookIt,
+            onTap: _busy ? () {} : _pickBy,
+            error: _error.isNotEmpty && _by.isEmpty ? l10n.pmeSayWhoReceived : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _note,
+            enabled: !_busy,
+            decoration: InputDecoration(labelText: l10n.invPayNote),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

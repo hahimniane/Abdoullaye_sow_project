@@ -26,8 +26,15 @@ test("the notification on the 1st opens that month", () => {
   );
 });
 
-test("the view never writes; every bill is worked out from the cars and activities", () => {
-  assert.doesNotMatch(view, /httpsCallable|setDoc\(|updateDoc\(|addDoc\(/);
+test("the view is worked out from the cars and activities, and records only through existing payments", () => {
+  // It never writes the database itself. "Mark all paid" records through the
+  // two payments a line already takes - and only those - so each lands
+  // exactly as a hand-recorded payment would (received by, history, reports).
+  assert.doesNotMatch(view, /setDoc\(|updateDoc\(|addDoc\(|deleteDoc\(/);
+  const callables = [...view.matchAll(/httpsCallable\(functions, "(\w+)"\)/g)].map((m) => m[1]).sort();
+  assert.deepEqual([...new Set(callables)], ["recordBusinessParkingPartialPayment", "recordLotActivityInstalment"]);
+  assert.match(view, /receivedByStaffId: settleBy/, "who received the money is always sent");
+  assert.match(view, /if \(!settleBy\) \{/, "and required before anything is recorded");
   // Cars and the ledger's activities, both read, never written.
   assert.match(view, /parkingMonthSummary\(rows, monthKey, new Date\(\), activities\)/);
 });

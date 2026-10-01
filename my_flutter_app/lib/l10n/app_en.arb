@@ -4330,5 +4330,60 @@
       }
     }
   },
-  "pmePaidInFull": "paid in full"
+  "pmePaidInFull": "paid in full",
+  "pmeMarkAllPaid": "Mark all paid",
+  "pmeSettleHint": "Each line is recorded the same way a payment is recorded by hand, so it shows on the car or the activity, in its history, and in your reports.",
+  "pmeTotalToRecord": "Total to record",
+  "pmeWhoTookIt": "Who took the money?",
+  "pmeSayWhoReceived": "Say who received the money.",
+  "pmeNotIncluded": "paid online, not included",
+  "pmeRecordTotal": "Record {amount}",
+  "@pmeRecordTotal": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTryAgain": "Try the {count} again",
+  "@pmeTryAgain": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeRecordingProgress": "Recording {done} of {total}…",
+  "@pmeRecordingProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeRecordedAll": "Recorded {amount} — {count, plural, =1{1 item} other{{count} items}}.",
+  "@pmeRecordedAll": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeSomeFailed": "{done} of {total} recorded. These did not save:",
+  "@pmeSomeFailed": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
 }

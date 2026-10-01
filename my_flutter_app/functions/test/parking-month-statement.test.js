@@ -10,6 +10,7 @@ const {
   parkingMonthSummary,
   parkingMonthBillText,
   parkingMonthCustomerText,
+  monthBillPaymentPlan,
 } = require("../parking_month_statement");
 
 const at = (iso) => ({toDate: () => new Date(`${iso}T12:00:00Z`)});
@@ -268,6 +269,51 @@ describe("activities on the month's bill", () => {
       "Paid — -$40.00",
       "BALANCE DUE: $306.00",
     ].join("\n"));
+  });
+});
+
+// "Mark all paid": every line through the payment it already takes, for
+// exactly what the bill shows due on it; payment-link cars are Stripe's.
+describe("marking a whole bill paid", () => {
+  const cars = [
+    {id: "open", parkingDate: at("2026-09-18"), dailyRate: 12,
+      paymentStatus: "awaiting_direct_payment", paymentMethod: "direct",
+      source: "business", status: "reserved", customerName: "Sow",
+      customerPhone: "3475628973",
+      amountPaidCents: 6000, carYear: "2014", carMake: "Toyota",
+      carModel: "Corolla"},
+    {id: "link", parkingDate: at("2026-09-20"), dailyRate: 12,
+      paymentStatus: "awaiting_payment_link", paymentMethod: "payment_link",
+      status: "reserved", customerName: "Sow", customerPhone: "3475628973",
+      carYear: "2015", carMake: "Toyota", carModel: "RAV4"},
+    {id: "paid", parkingDate: at("2026-09-01"), dailyRate: 12,
+      paymentStatus: "paid", paymentMethod: "direct", status: "reserved",
+      customerName: "Sow", customerPhone: "3475628973"},
+  ];
+  const acts = [
+    {id: "sep", activityDate: at("2026-09-14"), feeCents: 10000,
+      amountPaidCents: 4000, activityTypeLabel: "title",
+      customerName: "Sow", customerPhone: "3475628973"},
+    {id: "aug", activityDate: at("2026-08-20"), feeCents: 9000,
+      activityTypeLabel: "reassignment", customerName: "Sow",
+      customerPhone: "3475628973"},
+  ];
+  it("records each line's due, skips link cars and settled lines", () => {
+    const sow = parkingMonthSummary(cars, "2026-09", OCT1, acts).customers[0];
+    const plan = monthBillPaymentPlan(sow);
+    assert.deepEqual(plan.items.map((x) => [x.kind, x.id, x.amountCents]), [
+      ["car", "open", 15600 - 6000],
+      ["activity", "sep", 6000],
+      ["activity", "aug", 9000],
+    ]);
+    assert.deepEqual(plan.skipped.map((x) => [x.id, x.reason]),
+        [["link", "payment_link"]]);
+    assert.equal(plan.totalCents, 9600 + 6000 + 9000);
+    // A car booked online (not entered by the business) is not ours to mark.
+    const online = parkingMonthSummary([{...cars[0], source: "customer"}],
+        "2026-09", OCT1).customers[0];
+    const reasons = monthBillPaymentPlan(online).skipped.map((x) => x.reason);
+    assert.deepEqual(reasons, ["online"]);
   });
 });
 

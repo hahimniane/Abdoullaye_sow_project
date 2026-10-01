@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  monthBillPaymentPlan,
   mostUsedName,
   monthLabel,
   parkingMonthCustomerText,
@@ -160,5 +161,25 @@ test("activities join the month: dated in it, older unpaid carried, void and fre
     "Paid — -$40.00",
     "BALANCE DUE: $306.00",
   ].join("\n"));
+});
+
+test("mark all paid: each line's due through its own payment; link cars skipped", () => {
+  const cars = [
+    { id: "open", parkingDate: at("2026-09-18"), dailyRate: 12, paymentStatus: "awaiting_direct_payment", paymentMethod: "direct", source: "business", status: "reserved",
+      customerName: "Sow", customerPhone: "3475628973", amountPaidCents: 6000, carYear: "2014", carMake: "Toyota", carModel: "Corolla" },
+    { id: "link", parkingDate: at("2026-09-20"), dailyRate: 12, paymentStatus: "awaiting_payment_link", paymentMethod: "payment_link", status: "reserved",
+      customerName: "Sow", customerPhone: "3475628973", carYear: "2015", carMake: "Toyota", carModel: "RAV4" },
+    { id: "paid", parkingDate: at("2026-09-01"), dailyRate: 12, paymentStatus: "paid", paymentMethod: "direct", status: "reserved", customerName: "Sow", customerPhone: "3475628973" },
+  ];
+  const acts = [
+    { id: "sep", activityDate: at("2026-09-14"), feeCents: 10000, amountPaidCents: 4000, activityTypeLabel: "title", customerName: "Sow", customerPhone: "3475628973" },
+    { id: "aug", activityDate: at("2026-08-20"), feeCents: 9000, activityTypeLabel: "reassignment", customerName: "Sow", customerPhone: "3475628973" },
+  ];
+  const plan = monthBillPaymentPlan(parkingMonthSummary(cars, "2026-09", OCT1, acts).customers[0]);
+  assert.deepEqual(plan.items.map((x) => [x.kind, x.id, x.amountCents]), [["car", "open", 9600], ["activity", "sep", 6000], ["activity", "aug", 9000]]);
+  assert.deepEqual(plan.skipped.map((x) => [x.id, x.reason]), [["link", "payment_link"]]);
+  assert.equal(plan.totalCents, 24600);
+  const online = parkingMonthSummary([{ ...cars[0], source: "customer" }], "2026-09", OCT1).customers[0];
+  assert.deepEqual(monthBillPaymentPlan(online).skipped.map((x) => x.reason), ["online"]);
 });
 
