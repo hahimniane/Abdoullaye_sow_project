@@ -17231,6 +17231,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{done} of {total} recorded. These did not save:'**
   String pmeSomeFailed(int done, int total);
+
+  /// No description provided for @pmeAlreadyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} already paid'**
+  String pmeAlreadyPaid(int count);
 }
 
 class _AppLocalizationsDelegate

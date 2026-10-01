@@ -8,7 +8,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/parked_car.dart';
-import '../services/business_parking_entry.dart' show businessParkingReceivedViaValues;
+import '../services/business_parking_entry.dart'
+    show businessParkingReceivedViaValues;
 import '../services/parking_month_statement.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -62,50 +63,68 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   @override
   void initState() {
     super.initState();
-    _subs.add(_db
-        .collection('parkedCars')
-        .where('businessId', isEqualTo: widget.businessId)
-        .snapshots()
-        .listen((snap) {
-      if (!mounted) return;
-      setState(() {
-        _docs = snap.docs;
-        _loading = false;
-      });
-    }, onError: (_) {
-      if (mounted) setState(() => _loading = false);
-    }));
-    _subs.add(_db
-        .collection('users')
-        .where('businessId', isEqualTo: widget.businessId)
-        .snapshots()
-        .listen((snap) {
-      if (!mounted) return;
-      setState(() => _staff = [
-            for (final d in snap.docs)
-              (
-                id: d.id,
-                name: (d.data()['fullName'] ?? d.data()['name'] ?? d.data()['email'] ?? '')
-                    .toString(),
-              ),
-          ].where((s) => s.name.isNotEmpty).toList());
-    }, onError: (_) {}));
-    _subs.add(_db
-        .collection('lotActivities')
-        .where('businessId', isEqualTo: widget.businessId)
-        .snapshots()
-        .listen((snap) {
-      if (!mounted) return;
-      setState(() => _activities = [
-            for (final d in snap.docs) {...d.data(), 'id': d.id},
-          ]);
-    }, onError: (_) {}));
-    _subs.add(_db.collection('businesses').doc(widget.businessId).snapshots().listen(
-      (doc) {
+    _subs.add(
+      _db
+          .collection('parkedCars')
+          .where('businessId', isEqualTo: widget.businessId)
+          .snapshots()
+          .listen(
+            (snap) {
+              if (!mounted) return;
+              setState(() {
+                _docs = snap.docs;
+                _loading = false;
+              });
+            },
+            onError: (_) {
+              if (mounted) setState(() => _loading = false);
+            },
+          ),
+    );
+    _subs.add(
+      _db
+          .collection('users')
+          .where('businessId', isEqualTo: widget.businessId)
+          .snapshots()
+          .listen((snap) {
+            if (!mounted) return;
+            setState(
+              () => _staff = [
+                for (final d in snap.docs)
+                  (
+                    id: d.id,
+                    name:
+                        (d.data()['fullName'] ??
+                                d.data()['name'] ??
+                                d.data()['email'] ??
+                                '')
+                            .toString(),
+                  ),
+              ].where((s) => s.name.isNotEmpty).toList(),
+            );
+          }, onError: (_) {}),
+    );
+    _subs.add(
+      _db
+          .collection('lotActivities')
+          .where('businessId', isEqualTo: widget.businessId)
+          .snapshots()
+          .listen((snap) {
+            if (!mounted) return;
+            setState(
+              () => _activities = [
+                for (final d in snap.docs) {...d.data(), 'id': d.id},
+              ],
+            );
+          }, onError: (_) {}),
+    );
+    _subs.add(
+      _db.collection('businesses').doc(widget.businessId).snapshots().listen((
+        doc,
+      ) {
         if (mounted) setState(() => _business = doc.data() ?? const {});
-      },
-      onError: (_) {},
-    ));
+      }, onError: (_) {}),
+    );
   }
 
   @override
@@ -185,7 +204,12 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       await openPdfPreview(
         context,
         bytes: bytes,
-        fileName: parkingMonthFileName('parking-month-end', _monthKey, '', _businessName),
+        fileName: parkingMonthFileName(
+          'parking-month-end',
+          _monthKey,
+          '',
+          _businessName,
+        ),
         title: '${l10n.pmeTitle} — ${parkingMonthLabel(_monthKey, locale)}',
       );
     });
@@ -196,11 +220,14 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     final locale = Localizations.localeOf(context).toLanguageTag();
     final action = await pickLotOption<String>(
       context,
-      title: customer.customerName.isEmpty ? l10n.pmePdfBill : customer.customerName,
+      title: customer.customerName.isEmpty
+          ? l10n.pmePdfBill
+          : customer.customerName,
       options: [
         LotOption('pdf', l10n.pmeSharePdf),
         LotOption('text', l10n.pmeSendText),
-        if (customer.dueCents > 0 && monthBillPaymentPlan(customer).items.isNotEmpty)
+        if (customer.dueCents > 0 &&
+            monthBillPaymentPlan(customer).items.isNotEmpty)
           LotOption('settle', l10n.pmeMarkAllPaid),
         if (customer.cars.isNotEmpty) LotOption('open', l10n.pmeOpenCar),
       ],
@@ -228,13 +255,20 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             context,
             bytes: bytes,
             fileName: parkingMonthFileName(
-                'parking-bill', _monthKey, customer.customerName, _businessName),
-            title: customer.customerName.isEmpty ? l10n.pmePdfBill : customer.customerName,
+              'parking-bill',
+              _monthKey,
+              customer.customerName,
+              _businessName,
+            ),
+            title: customer.customerName.isEmpty
+                ? l10n.pmePdfBill
+                : customer.customerName,
           );
         });
       case 'text':
         await SharePlus.instance.share(
-            ShareParams(text: parkingMonthCustomerText(customer, _businessName)));
+          ShareParams(text: parkingMonthCustomerText(customer, _businessName)),
+        );
       case 'open':
         // A customer with several cars: say which one the payment is for.
         var carId = customer.cars.first.id;
@@ -244,8 +278,11 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             title: l10n.pmePickCar,
             options: [
               for (final b in customer.cars)
-                LotOption(b.id, b.vehicle.isEmpty ? b.vinNumber : b.vehicle,
-                    detail: parkingMoney(b.dueCents)),
+                LotOption(
+                  b.id,
+                  b.vehicle.isEmpty ? b.vinNumber : b.vehicle,
+                  detail: parkingMoney(b.dueCents),
+                ),
             ],
           );
           if (picked == null || !mounted) return;
@@ -253,10 +290,12 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         }
         final doc = _docs.where((d) => d.id == carId).firstOrNull;
         if (doc == null || !mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) =>
-              ParkedCarDetailsScreen(parkedCar: ParkedCar.fromFirestore(doc)),
-        ));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                ParkedCarDetailsScreen(parkedCar: ParkedCar.fromFirestore(doc)),
+          ),
+        );
     }
   }
 
@@ -265,7 +304,9 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     final l10n = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).toLanguageTag();
     final summary = parkingMonthSummary(
-      [for (final d in _docs) {...?d.data(), 'id': d.id}],
+      [
+        for (final d in _docs) {...?d.data(), 'id': d.id},
+      ],
       _monthKey,
       null,
       _activities,
@@ -282,13 +323,20 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             decoration: BoxDecoration(
               color: AppColors.paper,
               border: Border(
-                bottom: BorderSide(color: AppColors.rule.withValues(alpha: 0.8)),
+                bottom: BorderSide(
+                  color: AppColors.rule.withValues(alpha: 0.8),
+                ),
               ),
             ),
             child: SafeArea(
               bottom: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(4, 4, AppSpacing.lg, AppSpacing.md),
+                padding: const EdgeInsets.fromLTRB(
+                  4,
+                  4,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -317,7 +365,9 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.picture_as_pdf_outlined),
                         ),
@@ -331,7 +381,9 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                           key: const Key('month-end-previous'),
                           tooltip: l10n.pmePreviousMonth,
                           onPressed: () => setState(
-                              () => _monthKey = shiftParkingMonthKey(_monthKey, -1)),
+                            () =>
+                                _monthKey = shiftParkingMonthKey(_monthKey, -1),
+                          ),
                           icon: const Icon(Icons.chevron_left),
                         ),
                         SizedBox(
@@ -352,47 +404,69 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                           onPressed: _monthKey.compareTo(thisMonth) >= 0
                               ? null
                               : () => setState(
-                                  () => _monthKey = shiftParkingMonthKey(_monthKey, 1)),
+                                  () => _monthKey = shiftParkingMonthKey(
+                                    _monthKey,
+                                    1,
+                                  ),
+                                ),
                           icon: const Icon(Icons.chevron_right),
                         ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    Row(children: [
-                      _Stat(label: l10n.pmeCarsOnLot, value: '${summary.carsOnLot}'),
-                      const SizedBox(width: AppSpacing.sm),
-                      _Stat(label: l10n.pmeBilled, value: parkingMoney(summary.billedCents)),
-                    ]),
+                    Row(
+                      children: [
+                        _Stat(
+                          label: l10n.pmeCarsOnLot,
+                          value: '${summary.carsOnLot}',
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        _Stat(
+                          label: l10n.pmeBilled,
+                          value: parkingMoney(summary.billedCents),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: AppSpacing.sm),
-                    Row(children: [
-                      _Stat(
+                    Row(
+                      children: [
+                        _Stat(
                           label: l10n.pmeCollected,
                           value: parkingMoney(summary.collectedCents),
-                          tone: AppColors.sage),
-                      const SizedBox(width: AppSpacing.sm),
-                      _Stat(
+                          tone: AppColors.sage,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        _Stat(
                           label: l10n.pmeStillOwed,
                           value: parkingMoney(summary.dueCents),
-                          tone: summary.dueCents > 0 ? AppColors.warn : null),
-                    ]),
+                          tone: summary.dueCents > 0 ? AppColors.warn : null,
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: AppSpacing.md),
-                    Row(children: [
-                      Expanded(
-                        child: _Tab(
-                          label: l10n.pmeWhoOwesCount(summary.customersOwing.length),
-                          selected: !_showAll,
-                          onTap: () => setState(() => _showAll = false),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _Tab(
+                            label: l10n.pmeWhoOwesCount(
+                              summary.customersOwing.length,
+                            ),
+                            selected: !_showAll,
+                            onTap: () => setState(() => _showAll = false),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: _Tab(
-                          label: l10n.pmeEveryoneCount(summary.customers.length),
-                          selected: _showAll,
-                          onTap: () => setState(() => _showAll = true),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: _Tab(
+                            label: l10n.pmeEveryoneCount(
+                              summary.customers.length,
+                            ),
+                            selected: _showAll,
+                            onTap: () => setState(() => _showAll = true),
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -402,23 +476,27 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : listed.isEmpty
-                    ? LotEmptyState(
-                        icon: Icons.event_available_outlined,
-                        title: summary.carsOnLot == 0
-                            ? l10n.pmeNoCars
-                            : l10n.pmeNobodyOwes,
-                      )
-                    : ListView.builder(
-                        key: const Key('month-end-list'),
-                        padding: const EdgeInsets.fromLTRB(
-                            AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 40),
-                        itemCount: listed.length,
-                        itemBuilder: (_, i) => _CustomerTile(
-                          customer: listed[i],
-                          busy: _busy == listed[i].key,
-                          onTap: () => _customerActions(listed[i]),
-                        ),
-                      ),
+                ? LotEmptyState(
+                    icon: Icons.event_available_outlined,
+                    title: summary.carsOnLot == 0
+                        ? l10n.pmeNoCars
+                        : l10n.pmeNobodyOwes,
+                  )
+                : ListView.builder(
+                    key: const Key('month-end-list'),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                      40,
+                    ),
+                    itemCount: listed.length,
+                    itemBuilder: (_, i) => _CustomerTile(
+                      customer: listed[i],
+                      busy: _busy == listed[i].key,
+                      onTap: () => _customerActions(listed[i]),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -438,7 +516,9 @@ class _Stat extends StatelessWidget {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           color: AppColors.cream,
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
@@ -476,7 +556,11 @@ class _Stat extends StatelessWidget {
 }
 
 class _Tab extends StatelessWidget {
-  const _Tab({required this.label, required this.selected, required this.onTap});
+  const _Tab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
   final bool selected;
@@ -494,7 +578,9 @@ class _Tab extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? AppColors.cobalt : AppColors.paper,
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          border: Border.all(color: selected ? AppColors.cobalt : AppColors.rule),
+          border: Border.all(
+            color: selected ? AppColors.cobalt : AppColors.rule,
+          ),
         ),
         child: Text(
           label,
@@ -509,17 +595,40 @@ class _Tab extends StatelessWidget {
   }
 }
 
-class _CustomerTile extends StatelessWidget {
-  const _CustomerTile({required this.customer, required this.busy, required this.onTap});
+/// One customer's card. What is left to collect leads; lines already paid
+/// fold away under one toggle so a paid car never looks owed. The bill itself
+/// (PDF, text) still lists everything.
+class _CustomerTile extends StatefulWidget {
+  const _CustomerTile({
+    required this.customer,
+    required this.busy,
+    required this.onTap,
+  });
 
   final ParkingMonthCustomer customer;
   final bool busy;
   final VoidCallback onTap;
 
   @override
+  State<_CustomerTile> createState() => _CustomerTileState();
+}
+
+class _CustomerTileState extends State<_CustomerTile> {
+  bool _showPaid = false;
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final customer = widget.customer;
+    final busy = widget.busy;
+    final onTap = widget.onTap;
     final owes = customer.dueCents > 0;
+    final paidLines =
+        customer.cars.where((b) => b.dueCents <= 0).length +
+        [
+          ...customer.activities,
+          ...customer.olderActivities,
+        ].where((a) => a.dueCents <= 0).length;
     return PressableScale(
       onTap: () {
         AppHaptics.selection();
@@ -544,7 +653,9 @@ class _CustomerTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        customer.customerName.isEmpty ? '—' : customer.customerName,
+                        customer.customerName.isEmpty
+                            ? '—'
+                            : customer.customerName,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -554,12 +665,20 @@ class _CustomerTile extends StatelessWidget {
                       Text(
                         [
                           customer.customerPhone,
-                          if (customer.cars.isNotEmpty) l10n.pmeCars(customer.cars.length),
-                          if (customer.activities.length + customer.olderActivities.length > 0)
+                          if (customer.cars.isNotEmpty)
+                            l10n.pmeCars(customer.cars.length),
+                          if (customer.activities.length +
+                                  customer.olderActivities.length >
+                              0)
                             l10n.pmeActivitiesCount(
-                                customer.activities.length + customer.olderActivities.length),
+                              customer.activities.length +
+                                  customer.olderActivities.length,
+                            ),
                         ].where((p) => p.isNotEmpty).join(' · '),
-                        style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.muted,
+                        ),
                       ),
                     ],
                   ),
@@ -584,77 +703,111 @@ class _CustomerTile extends StatelessWidget {
             ),
             const Divider(height: 16),
             for (var i = 0; i < customer.cars.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            customer.cars[i].vehicle.isEmpty
-                                ? l10n.pmeCar
-                                : customer.cars[i].vehicle,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.ink,
+              if (customer.cars[i].dueCents > 0 || _showPaid)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              customer.cars[i].vehicle.isEmpty
+                                  ? l10n.pmeCar
+                                  : customer.cars[i].vehicle,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink,
+                              ),
                             ),
-                          ),
-                          Text(
-                            [
-                              '${customer.cars[i].periodFrom} ${l10n.pmeTo} ${customer.cars[i].periodTo}',
-                              l10n.pmeParkingLine(customer.cars[i].days,
-                                  parkingMoney(customer.cars[i].dayRateCents)),
-                              if (customer.registeredTo[i].isNotEmpty)
-                                '${l10n.pmeRegisteredTo} ${customer.registeredTo[i]}',
-                            ].join(' · '),
-                            style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
-                          ),
-                        ],
+                            Text(
+                              [
+                                '${customer.cars[i].periodFrom} ${l10n.pmeTo} ${customer.cars[i].periodTo}',
+                                l10n.pmeParkingLine(
+                                  customer.cars[i].days,
+                                  parkingMoney(customer.cars[i].dayRateCents),
+                                ),
+                                if (customer.registeredTo[i].isNotEmpty)
+                                  '${l10n.pmeRegisteredTo} ${customer.registeredTo[i]}',
+                              ].join(' · '),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    _Amount(
-                      amount: customer.cars[i].monthCents,
-                      paid: customer.cars[i].monthPaidCents,
-                      due: customer.cars[i].dueCents,
-                    ),
-                  ],
+                      _Amount(
+                        amount: customer.cars[i].monthCents,
+                        paid: customer.cars[i].monthPaidCents,
+                        due: customer.cars[i].dueCents,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            for (final a in [...customer.activities, ...customer.olderActivities])
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.ink,
+            for (final a in [
+              ...customer.activities,
+              ...customer.olderActivities,
+            ])
+              if (a.dueCents > 0 || _showPaid)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink,
+                              ),
                             ),
-                          ),
-                          Text(
-                            [a.date, if (a.prior) l10n.pmeFromBefore.toLowerCase()].join(' · '),
-                            style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
-                          ),
-                        ],
+                            Text(
+                              [
+                                a.date,
+                                if (a.prior) l10n.pmeFromBefore.toLowerCase(),
+                              ].join(' · '),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    _Amount(
-                      amount: a.prior ? a.dueCents : a.feeCents,
-                      paid: a.paidCents,
-                      due: a.dueCents,
-                    ),
-                  ],
+                      _Amount(
+                        amount: a.prior ? a.dueCents : a.feeCents,
+                        paid: a.paidCents,
+                        due: a.dueCents,
+                      ),
+                    ],
+                  ),
+                ),
+            if (paidLines > 0)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('month-end-toggle-paid'),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 32),
+                    foregroundColor: AppColors.muted,
+                  ),
+                  onPressed: () => setState(() => _showPaid = !_showPaid),
+                  icon: Icon(
+                    _showPaid ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                  ),
+                  label: Text(l10n.pmeAlreadyPaid(paidLines)),
                 ),
               ),
             if (customer.priorUnpaidCents > 0 || customer.monthPaidCents > 0)
@@ -685,7 +838,10 @@ class _Amount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    const small = TextStyle(fontSize: 11, fontFeatures: [FontFeature.tabularFigures()]);
+    const small = TextStyle(
+      fontSize: 11,
+      fontFeatures: [FontFeature.tabularFigures()],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -699,11 +855,17 @@ class _Amount extends StatelessWidget {
           ),
         ),
         if (paid > 0)
-          Text('${parkingMoney(paid)} ${l10n.pmePaidWord}',
-              style: small.copyWith(color: AppColors.sage)),
+          Text(
+            '${parkingMoney(paid)} ${l10n.pmePaidWord}',
+            style: small.copyWith(color: AppColors.sage),
+          ),
         Text(
-          due > 0 ? '${parkingMoney(due)} ${l10n.pmeDueWord}' : l10n.pmePaidInFull,
-          style: small.copyWith(color: due > 0 ? AppColors.warn : AppColors.sage),
+          due > 0
+              ? '${parkingMoney(due)} ${l10n.pmeDueWord}'
+              : l10n.pmePaidInFull,
+          style: small.copyWith(
+            color: due > 0 ? AppColors.warn : AppColors.sage,
+          ),
         ),
       ],
     );
@@ -731,12 +893,15 @@ class _SettleSheet extends StatefulWidget {
 
 class _SettleSheetState extends State<_SettleSheet> {
   String _via = 'cash';
-  late String _by = widget.staff
+  late String _by =
+      widget.staff
           .where((s) => s.id == (FirebaseAuth.instance.currentUser?.uid ?? ''))
           .firstOrNull
           ?.id ??
       '';
-  late final _note = TextEditingController(text: 'Month end — ${widget.monthLabel}');
+  late final _note = TextEditingController(
+    text: 'Month end — ${widget.monthLabel}',
+  );
   bool _busy = false;
   String _progress = '';
   String _error = '';
@@ -749,14 +914,14 @@ class _SettleSheetState extends State<_SettleSheet> {
   }
 
   String _methodLabel(AppLocalizations l10n, String m) => switch (m) {
-        'cash' => l10n.invMethodCash,
-        'zelle' => l10n.invMethodZelle,
-        'cashapp' => l10n.invMethodCashapp,
-        'venmo' => l10n.invMethodVenmo,
-        'check' => l10n.invMethodCheck,
-        'card_in_person' => l10n.invMethodCardInPerson,
-        _ => l10n.invMethodOther,
-      };
+    'cash' => l10n.invMethodCash,
+    'zelle' => l10n.invMethodZelle,
+    'cashapp' => l10n.invMethodCashapp,
+    'venmo' => l10n.invMethodVenmo,
+    'check' => l10n.invMethodCheck,
+    'card_in_person' => l10n.invMethodCardInPerson,
+    _ => l10n.invMethodOther,
+  };
 
   Future<void> _pickVia() async {
     final l10n = AppLocalizations.of(context)!;
@@ -765,7 +930,8 @@ class _SettleSheetState extends State<_SettleSheet> {
       title: l10n.invPayMethod,
       selected: _via,
       options: [
-        for (final m in businessParkingReceivedViaValues) LotOption(m, _methodLabel(l10n, m)),
+        for (final m in businessParkingReceivedViaValues)
+          LotOption(m, _methodLabel(l10n, m)),
       ],
     );
     if (picked != null && mounted) setState(() => _via = picked);
@@ -808,24 +974,38 @@ class _SettleSheetState extends State<_SettleSheet> {
     });
     for (var i = 0; i < items.length; i++) {
       final x = items[i];
-      if (mounted) setState(() => _progress = l10n.pmeRecordingProgress(i + 1, items.length));
+      if (mounted) {
+        setState(
+          () => _progress = l10n.pmeRecordingProgress(i + 1, items.length),
+        );
+      }
       try {
         await FirebaseFunctions.instance
-            .httpsCallable(x.kind == 'car'
-                ? 'recordBusinessParkingPartialPayment'
-                : 'recordLotActivityInstalment')
+            .httpsCallable(
+              x.kind == 'car'
+                  ? 'recordBusinessParkingPartialPayment'
+                  : 'recordLotActivityInstalment',
+            )
             .call<Object?>({
-          if (x.kind == 'car') 'entryId': x.id else 'activityId': x.id,
-          'amountCents': x.amountCents,
-          'receivedVia': _via,
-          'receivedByStaffId': _by,
-          'note': _note.text.trim(),
-        });
+              if (x.kind == 'car') 'entryId': x.id else 'activityId': x.id,
+              'amountCents': x.amountCents,
+              'receivedVia': _via,
+              'receivedByStaffId': _by,
+              'note': _note.text.trim(),
+            });
         recorded += x.amountCents;
       } on FirebaseFunctionsException catch (error) {
-        failed.add((key: '${x.kind}:${x.id}', label: x.label, reason: error.message ?? l10n.lotCouldNotSave));
+        failed.add((
+          key: '${x.kind}:${x.id}',
+          label: x.label,
+          reason: error.message ?? l10n.lotCouldNotSave,
+        ));
       } catch (_) {
-        failed.add((key: '${x.kind}:${x.id}', label: x.label, reason: l10n.lotCouldNotSave));
+        failed.add((
+          key: '${x.kind}:${x.id}',
+          label: x.label,
+          reason: l10n.lotCouldNotSave,
+        ));
       }
     }
     if (!mounted) return;
@@ -837,10 +1017,18 @@ class _SettleSheetState extends State<_SettleSheet> {
     if (failed.isEmpty) {
       AppHaptics.commit();
       Navigator.of(context).pop(true);
-      showSuccessSnackBar(context, l10n.pmeRecordedAll(parkingMoney(recorded), items.length));
+      showSuccessSnackBar(
+        context,
+        l10n.pmeRecordedAll(parkingMoney(recorded), items.length),
+      );
     } else {
       AppHaptics.refuse();
-      setState(() => _error = l10n.pmeSomeFailed(items.length - failed.length, items.length));
+      setState(
+        () => _error = l10n.pmeSomeFailed(
+          items.length - failed.length,
+          items.length,
+        ),
+      );
     }
   }
 
@@ -859,7 +1047,10 @@ class _SettleSheetState extends State<_SettleSheet> {
         children: [
           if (_error.isNotEmpty) ...[
             Text(
-              [_error, for (final f in _failed) '• ${f.label} — ${f.reason}'].join('\n'),
+              [
+                _error,
+                for (final f in _failed) '• ${f.label} — ${f.reason}',
+              ].join('\n'),
               style: const TextStyle(fontSize: 12.5, color: AppColors.errorRed),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -879,7 +1070,10 @@ class _SettleSheetState extends State<_SettleSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(l10n.pmeSettleHint, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+          Text(
+            l10n.pmeSettleHint,
+            style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+          ),
           const SizedBox(height: AppSpacing.md),
           for (final x in plan.items)
             Padding(
@@ -891,35 +1085,56 @@ class _SettleSheetState extends State<_SettleSheet> {
                       '${x.kind == 'car' ? l10n.pmeParking : l10n.pmeActivity} · ${x.label}',
                       style: TextStyle(
                         fontSize: 13,
-                        color: retry != null && !retry.contains('${x.kind}:${x.id}')
+                        color:
+                            retry != null &&
+                                !retry.contains('${x.kind}:${x.id}')
                             ? AppColors.muted
                             : AppColors.ink,
-                        decoration: retry != null && !retry.contains('${x.kind}:${x.id}')
+                        decoration:
+                            retry != null &&
+                                !retry.contains('${x.kind}:${x.id}')
                             ? TextDecoration.lineThrough
                             : null,
                       ),
                     ),
                   ),
-                  Text(parkingMoney(x.amountCents),
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text(
+                    parkingMoney(x.amountCents),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
           for (final x in plan.skipped)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Text('${l10n.pmeParking} · ${x.label} — ${l10n.pmeNotIncluded}',
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+              child: Text(
+                '${l10n.pmeParking} · ${x.label} — ${l10n.pmeNotIncluded}',
+                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+              ),
             ),
           const Divider(height: 18),
           Row(
             children: [
               Expanded(
-                child: Text(l10n.pmeTotalToRecord,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                child: Text(
+                  l10n.pmeTotalToRecord,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-              Text(parkingMoney(plan.totalCents),
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              Text(
+                parkingMoney(plan.totalCents),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -936,7 +1151,9 @@ class _SettleSheetState extends State<_SettleSheet> {
             value: byName,
             placeholder: l10n.pmeWhoTookIt,
             onTap: _busy ? () {} : _pickBy,
-            error: _error.isNotEmpty && _by.isEmpty ? l10n.pmeSayWhoReceived : null,
+            error: _error.isNotEmpty && _by.isEmpty
+                ? l10n.pmeSayWhoReceived
+                : null,
           ),
           const SizedBox(height: AppSpacing.md),
           TextField(
@@ -949,4 +1166,3 @@ class _SettleSheetState extends State<_SettleSheet> {
     );
   }
 }
-

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
-import { ArrowLeft, Banknote, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, X } from "lucide-react";
+import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, X } from "lucide-react";
 
 import { auth, functions } from "@/lib/firebase";
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "@/lib/business-parking-entry";
@@ -53,6 +53,8 @@ type ParkingMonthEndProps = {
 export function ParkingMonthEnd({ rows, activities = [], staff = [], business, businessName, initialMonth, onClose, onOpenCar }: ParkingMonthEndProps) {
   const [monthKey, setMonthKey] = useState(initialMonth || previousMonthKey());
   const [showAll, setShowAll] = useState(false);
+  // Customers whose already-paid lines are unfolded on their card.
+  const [openPaid, setOpenPaid] = useState<Set<string>>(() => new Set());
   const [busyId, setBusyId] = useState("");
   const [flash, setFlash] = useState("");
   const [preview, setPreview] = useState<PdfPreviewFile | null>(null);
@@ -237,11 +239,14 @@ export function ParkingMonthEnd({ rows, activities = [], staff = [], business, b
                   )}
                 </div>
               </header>
-              <ul>
-                {customer.cars.map((b) => {
+              {(() => {
+                // What is left to collect leads; lines already paid fold away
+                // under one toggle so a paid car never looks like it is owed.
+                // The bill itself (PDF, text) still lists everything.
+                const carLine = (b: (typeof customer.cars)[number]) => {
                   const car = rowById.get(b.id);
                   return (
-                    <li key={b.id}>
+                    <li key={b.id} className={b.dueCents > 0 ? "" : "pk-month-paid"}>
                       <span className="pk-month-car">
                         <strong>{b.vehicle || "Car"}</strong>
                         <small>{[b.vinNumber, b.registeredTo ? `registered to ${b.registeredTo}` : "", b.stillParked ? "still parked" : "left"].filter(Boolean).join(" · ")}</small>
@@ -252,9 +257,9 @@ export function ParkingMonthEnd({ rows, activities = [], staff = [], business, b
                       {car && <button className="ghost-button" type="button" title="Open the car to record a payment" onClick={() => onOpenCar(car)}><SquarePen size={14} /></button>}
                     </li>
                   );
-                })}
-                {[...customer.activities, ...customer.olderActivities].map((a) => (
-                  <li key={`act-${a.id}`} className="pk-month-activity">
+                };
+                const actLine = (a: (typeof customer.activities)[number]) => (
+                  <li key={`act-${a.id}`} className={`pk-month-activity${a.dueCents > 0 ? "" : " pk-month-paid"}`}>
                     <span className="pk-month-car">
                       <strong>{a.label}{a.vehicle ? ` · ${a.vehicle}` : ""}</strong>
                       <small>{[a.prior ? "unpaid from before" : "activity", a.vinNumber, a.registeredTo ? `registered to ${a.registeredTo}` : ""].filter(Boolean).join(" · ")}</small>
@@ -264,8 +269,30 @@ export function ParkingMonthEnd({ rows, activities = [], staff = [], business, b
                     <span className="pk-month-amount"><strong>{moneyText(a.prior ? a.dueCents : a.feeCents)}</strong>{a.paidCents > 0 && <small className="pk-paid">{moneyText(a.paidCents)} paid</small>}{a.dueCents > 0 ? <small>{moneyText(a.dueCents)} due</small> : <small>paid in full</small>}</span>
                     <span aria-hidden="true"></span>
                   </li>
-                ))}
-              </ul>
+                );
+                const acts = [...customer.activities, ...customer.olderActivities];
+                const owingLines = [...customer.cars.filter((b) => b.dueCents > 0).map(carLine), ...acts.filter((a) => a.dueCents > 0).map(actLine)];
+                const paidLines = [...customer.cars.filter((b) => b.dueCents <= 0).map(carLine), ...acts.filter((a) => a.dueCents <= 0).map(actLine)];
+                const showPaid = openPaid.has(customer.key);
+                return (
+                  <ul>
+                    {owingLines}
+                    {paidLines.length > 0 && (
+                      <li className="pk-month-paid-toggle">
+                        <button className="ghost-button" type="button" aria-expanded={showPaid} onClick={() => setOpenPaid((current) => {
+                          const next = new Set(current);
+                          if (next.has(customer.key)) next.delete(customer.key);
+                          else next.add(customer.key);
+                          return next;
+                        })}>
+                          {showPaid ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {paidLines.length} already paid
+                        </button>
+                      </li>
+                    )}
+                    {showPaid && paidLines}
+                  </ul>
+                );
+              })()}
             </article>
           ))}
         </div>

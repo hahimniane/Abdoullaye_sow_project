@@ -415,7 +415,9 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
       ...cars.map((b) => b.customerName),
       ...acts.map((a) => a.customerName),
     ]);
-    String reg(String n) => _normName(n) == _normName(name) ? '' : n;
+    // Every line says whose name it was registered under, also when it is
+    // the name at the top of the bill, so a line never looks unnamed.
+    String reg(String n) => n.trim().replaceAll(RegExp(r'\s+'), ' ');
     final inMonth = acts.where((a) => !a.prior).toList();
     final older = acts.where((a) => a.prior).toList();
     int sumCars(int Function(ParkingMonthBill) f) => cars.fold(0, (s, b) => s + f(b));

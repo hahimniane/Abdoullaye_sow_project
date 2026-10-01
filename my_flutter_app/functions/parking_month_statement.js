@@ -327,7 +327,6 @@ function parkingCustomerKey(bill) {
 }
 
 const normName = (v) => text(v).toLowerCase().replace(/\s+/g, " ");
-const sameName = (a, b) => normName(a) === normName(b);
 
 /**
  * The name a customer goes by: the spelling used most often (capitals and
@@ -380,8 +379,10 @@ function parkingMonthCustomers(bills, activities = []) {
   for (const [key, group] of groups) {
     const all = [...group.cars, ...group.activities];
     const customerName = mostUsedName(all.map((x) => x.customerName));
+    // Every line says whose name it was registered under - also when that
+    // is the name at the top of the bill - so a line never looks unnamed.
     const tag = (x) => ({...x, registeredTo:
-      sameName(x.customerName, customerName) ? "" : x.customerName});
+      text(x.customerName).replace(/\s+/g, " ")});
     const cars = [...group.cars].sort((a, b) =>
       a.periodFrom.localeCompare(b.periodFrom) ||
       a.vehicle.localeCompare(b.vehicle)).map(tag);

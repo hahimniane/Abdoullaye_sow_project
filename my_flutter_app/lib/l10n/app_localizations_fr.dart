@@ -9899,4 +9899,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String pmeSomeFailed(int done, int total) {
     return '$done sur $total enregistrés. Ceux-ci n\'ont pas été enregistrés :';
   }
+
+  @override
+  String pmeAlreadyPaid(int count) {
+    return '$count déjà payés';
+  }
 }

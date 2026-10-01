@@ -44,3 +44,10 @@ test("its words read in French", () => {
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
   }
 });
+
+test("a paid line folds away on the card; only what is left to collect leads", () => {
+  assert.match(view, /const owingLines = \[\.\.\.customer\.cars\.filter\(\(b\) => b\.dueCents > 0\)/);
+  assert.match(view, /\{showPaid && paidLines\}/);
+  assert.match(view, /already paid/);
+});
+
