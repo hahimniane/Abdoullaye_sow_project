@@ -609,10 +609,11 @@ export function BusinessConsole({
           {activeTab === "parking" && (
             <ParkingPanel
               businessId={businessId}
+              previewMode={previewMode}
               businessName={businessName}
               business={business}
               focusRecordId={notificationFocusId}
-              previewMode={previewMode}
+              focusView={notificationFocusView}
             />
           )}
           {activeTab === "ledger" && (

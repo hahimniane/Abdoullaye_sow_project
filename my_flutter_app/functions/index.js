@@ -341,6 +341,12 @@ const {
   invoiceNumber,
 } = require("./invoice_ledger");
 const {
+  monthLabel: parkingMonthLabel,
+  parkingMonthSummary,
+  previousMonthKey: previousParkingMonthKey,
+  moneyText: parkingMoneyText,
+} = require("./parking_month_statement");
+const {
   containerDocumentModel,
   renderContainerDocument,
 } = require("./container_document");
@@ -8494,6 +8500,70 @@ exports.chargeMonthlySubscriptions = onSchedule(
       const month = prev.toISOString().slice(0, 7);
       const summary = await runMonthlySubscriptionBilling(month);
       logger.info("Monthly subscription billing run", summary);
+    },
+);
+
+// Settling the books: on the 1st, every lot whose cars still owe for the
+// month just ended hears about it once - the owner and the staff who work
+// parking - with a tap straight to that month's bills. A month nobody owes
+// on stays quiet. The bills themselves are worked out live from the cars
+// (parking_month_statement.js); nothing is stored here.
+async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
+  const businessId = businessDoc.id;
+  const cars = await db.collection("parkedCars")
+      .where("businessId", "==", businessId).get();
+  const summary = parkingMonthSummary(
+      cars.docs.map((d) => ({id: d.id, ...d.data()})), monthKey, now);
+  if (summary.carsOwing === 0) return {businessId, notified: 0};
+  const recipients = new Set();
+  const ownerUid = String(businessDoc.data()?.ownerUid || "").trim();
+  if (ownerUid) recipients.add(ownerUid);
+  const team = await db.collection("users")
+      .where("businessId", "==", businessId).get();
+  for (const doc of team.docs) {
+    const user = {id: doc.id, ...doc.data()};
+    if (user.role === "businessOwner" ||
+        (user.role === "staff" && hasBusinessPermission(user, "parking"))) {
+      recipients.add(doc.id);
+    }
+  }
+  const month = parkingMonthLabel(monthKey).split(" ")[0];
+  const owingText = summary.carsOwing === 1 ? "1 car still owes" :
+    `${summary.carsOwing} cars still owe`;
+  await Promise.all([...recipients].map((uid) =>
+    safeSendPreferenceNotification({
+      uid,
+      preferenceKey: "businessActivity",
+      title: `${month} is over`,
+      body: `${owingText} ${parkingMoneyText(summary.dueCents)}. ` +
+        "Send their bills.",
+      data: {type: "parking_month_end", businessId, monthKey},
+    })));
+  return {businessId, notified: recipients.size,
+    carsOwing: summary.carsOwing, dueCents: summary.dueCents};
+}
+
+exports.notifyParkingMonthEnd = onSchedule(
+    {schedule: "0 9 1 * *", timeZone: "America/New_York"},
+    async () => {
+      const db = admin.firestore();
+      const now = new Date();
+      const monthKey = previousParkingMonthKey(now);
+      const lots = await db.collection("businesses")
+          .where("enabledServices", "array-contains", "carParking").get();
+      const results = [];
+      for (const doc of lots.docs) {
+        try {
+          results.push(await notifyParkingMonthEndFor(db, doc, monthKey, now));
+        } catch (error) {
+          logger.warn("Parking month-end notice failed", {
+            businessId: doc.id, error: String(error?.message || error),
+          });
+        }
+      }
+      logger.info("Parking month-end notices", {monthKey,
+        lots: results.length,
+        notified: results.filter((r) => r.notified > 0).length});
     },
 );
 

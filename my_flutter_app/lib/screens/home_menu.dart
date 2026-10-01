@@ -29,6 +29,7 @@ import 'business_reviews_screen.dart';
 import 'business_transport_screen.dart';
 import 'containers_screen.dart';
 import 'invoices_screen.dart';
+import 'parking_month_end_screen.dart';
 import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
@@ -1514,13 +1515,32 @@ class _ActivitySection extends StatelessWidget {
           // carries the columns a card cannot: days, rate, total, who
           // registered the car and who took the money.
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _ParkingViewToggle(
-              l10n: l10n,
-              dense: denseList,
-              onChanged: onDenseListChanged,
-            ),
+          Row(
+            children: [
+              // Settling the books: the month just ended, its bills to send.
+              TextButton.icon(
+                key: const Key('open-parking-month-end'),
+                onPressed: () {
+                  final businessId =
+                      context.read<AuthProvider>().businessId ?? '';
+                  if (businessId.isEmpty) return;
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          ParkingMonthEndScreen(businessId: businessId),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.event_available_outlined, size: 18),
+                label: Text(l10n.pmeButton),
+              ),
+              const Spacer(),
+              _ParkingViewToggle(
+                l10n: l10n,
+                dense: denseList,
+                onChanged: onDenseListChanged,
+              ),
+            ],
           ),
           // Tracking code, owner, car, VIN - the same fields the console
           // searches, in the same order, so the same query finds the same car

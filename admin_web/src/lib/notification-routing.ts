@@ -39,7 +39,9 @@ export type BusinessPanelView =
   | "opportunities"
   | "jobs"
   | "requests"
-  | "shipments";
+  | "shipments"
+  // Parking's month-end bills for one month, e.g. "month_end:2026-09".
+  | `month_end:${string}`;
 
 export type BusinessNotificationTarget = {
   tab: BusinessTab;
@@ -85,6 +87,7 @@ const TYPE_COLLECTIONS: Record<string, string> = {
   transport_quote_lost: "transportRequests",
   transport_job_paid: "transportRequests",
   parking_reservation_status: "parkedCars",
+  parking_month_end: "",
   car_purchase_status: "carPurchases",
   car_viewing_status: "carPurchases",
   review_request: "",
@@ -255,6 +258,9 @@ export function businessTargetForNotification(
       return {tab: "freight", focusId, panelView: "requests"};
     case "parking_reservation_status":
       return {tab: "parking", focusId};
+    // The 1st of the month: the month just ended, its bills ready to send.
+    case "parking_month_end":
+      return {tab: "parking", panelView: `month_end:${data.monthKey ?? ""}`};
     case "car_viewing_status":
       return {tab: "viewings", focusId};
     case "car_purchase_status":

@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Car,
   CheckCircle2,
+  CalendarCheck,
   CircleDollarSign,
   ClipboardList,
   Clock3,
@@ -54,6 +55,8 @@ import {
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { FieldInfo } from "@/components/field-info";
 import { ContainerTrackingCard } from "@/components/business/container-tracking-card";
+import { ParkingMonthEnd } from "@/components/business/parking-month-end";
+import { previousMonthKey } from "@/lib/parking-month-statement";
 import { TrackingUpdatesSection } from "@/components/business/tracking-updates-section";
 import { SearchableSelect } from "@/components/searchable-select";
 import { CopyValue } from "@/components/copy-value";
@@ -4771,9 +4774,11 @@ function awaitingDirectRow(row: FirestoreRow) {
 
 export function ParkingPanel({
   businessId,
+  businessName = "",
   business = null,
   previewMode = false,
   focusRecordId = "",
+  focusView = "",
 }: PanelProps) {
   const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
   const parkingStaff = useBusinessStaff(businessId, Boolean(businessId && !previewMode), 200);
@@ -4792,6 +4797,13 @@ export function ParkingPanel({
   );
   const placementLang = currentLanguage() === "fr" ? "fr" : "en";
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
+  // Settling the books: which month's bills are open, "" for the list. A
+  // notification on the 1st arrives as "month_end:YYYY-MM" and opens it.
+  const [monthEndKey, setMonthEndKey] = useState(() =>
+    focusView.startsWith("month_end") ? focusView.split(":")[1] || previousMonthKey() : "");
+  useEffect(() => {
+    if (focusView.startsWith("month_end")) setMonthEndKey(focusView.split(":")[1] || previousMonthKey());
+  }, [focusView]);
   const [search, setSearch] = useState("");
   // Two facets that compose: which status kinds and which payment classes to
   // keep. Empty means "do not narrow", so no chips shows everything, and a
@@ -5520,12 +5532,25 @@ export function ParkingPanel({
               amount due, no space check, no payment plan - a record the
               payment system could not settle. "Record a parked car" goes
               through createBusinessParkingEntry and does all of it. */}
+          <button className="lst-btn ghost" type="button" aria-pressed={Boolean(monthEndKey)} onClick={() => setMonthEndKey(monthEndKey ? "" : previousMonthKey())}><CalendarCheck size={16} /> Month end</button>
           <button className="lst-add" type="button" onClick={openEntry}><Plus size={17} /> Record a parked car</button>
         </div>
       </header>
 
       {parkedCars.error && <div className="error-box">{parkedCars.error}</div>}
 
+      {monthEndKey && (
+        <ParkingMonthEnd
+          rows={parkedCars.rows}
+          business={business}
+          businessName={businessName}
+          initialMonth={monthEndKey}
+          onClose={() => setMonthEndKey("")}
+          onOpenCar={(row) => editParking(row)}
+        />
+      )}
+
+      <div hidden={Boolean(monthEndKey)}>
       <div className="lst-toolbar">
         <div className="lst-search">
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tracking, owner, car, VIN…" />
@@ -5880,6 +5905,7 @@ export function ParkingPanel({
         })}
       </div>
       )}
+      </div>
 
       {historyId && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => setHistoryId("")}>

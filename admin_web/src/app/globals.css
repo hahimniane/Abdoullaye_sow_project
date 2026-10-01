@@ -13962,3 +13962,15 @@ button[data-loading="true"]::before {
 .inv-text { width: 100%; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 12px; border: 1.5px solid var(--rule); border-radius: 12px; resize: vertical; color: var(--ink); background: var(--paper); }
 .lst-field textarea { font: inherit; padding: 10px 12px; border: 1.5px solid var(--rule); border-radius: 12px; resize: vertical; color: var(--ink); background: var(--paper); }
 
+/* Month end: the month's bills, opened from the parking list. */
+.pk-month { display: flex; flex-direction: column; gap: 10px; }
+.pk-month-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+.pk-month-picker { display: flex; align-items: center; gap: 8px; }
+.pk-month-picker strong { font-size: 18px; min-width: 150px; text-align: center; color: var(--ink); }
+.pk-month-picker .lst-icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+.pk-month-tools { display: flex; justify-content: flex-end; }
+.pk-month-table .mini-table-head,
+.pk-month-table .mini-table-row { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.6fr) minmax(0, 1.4fr) minmax(0, 0.9fr) 104px; }
+.pk-month-table .pk-owed { color: #b45309; }
+.pk-month-actions { opacity: 1 !important; }
+

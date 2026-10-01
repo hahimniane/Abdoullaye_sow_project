@@ -9507,4 +9507,108 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get invPdfFor => 'for';
+
+  @override
+  String get pmeTitle => 'Month end';
+
+  @override
+  String get pmeButton => 'Month end';
+
+  @override
+  String get pmeShareMonth => 'Share the month as PDF';
+
+  @override
+  String get pmePreviousMonth => 'Previous month';
+
+  @override
+  String get pmeNextMonth => 'Next month';
+
+  @override
+  String get pmeCarsOnLot => 'Cars on the lot';
+
+  @override
+  String get pmeBilled => 'Billed';
+
+  @override
+  String get pmeCollected => 'Collected';
+
+  @override
+  String get pmeStillOwed => 'Still owed';
+
+  @override
+  String pmeWhoOwesCount(int count) {
+    return 'Who owes ($count)';
+  }
+
+  @override
+  String pmeEveryCarCount(int count) {
+    return 'Every car ($count)';
+  }
+
+  @override
+  String get pmeNoCars => 'No car was on the lot that month.';
+
+  @override
+  String get pmeNobodyOwes => 'Nobody owes anything for this month.';
+
+  @override
+  String get pmeStillParked => 'Still parked';
+
+  @override
+  String get pmeLeft => 'Left';
+
+  @override
+  String get pmeSoFar => 'so far';
+
+  @override
+  String get pmeFromBefore => 'Unpaid from before';
+
+  @override
+  String pmeParkingLine(int days, String rate) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days',
+      one: '1 day',
+    );
+    return '$_temp0 × $rate';
+  }
+
+  @override
+  String pmeDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pmeSharePdf => 'Share the bill as PDF';
+
+  @override
+  String get pmeSendText => 'Send as text';
+
+  @override
+  String get pmeOpenCar => 'Open the car to record a payment';
+
+  @override
+  String get pmePdfFailed => 'The PDF could not be made. Try again.';
+
+  @override
+  String get pmePdfBill => 'PARKING BILL';
+
+  @override
+  String get pmePdfSummary => 'MONTH END';
+
+  @override
+  String get pmePdfVehicle => 'Vehicle';
+
+  @override
+  String get pmePdfPeriod => 'Period';
+
+  @override
+  String get pmeWhoOwes => 'Who still owes';
 }

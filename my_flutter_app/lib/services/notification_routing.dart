@@ -293,6 +293,12 @@ NotificationRoute? _businessRouteForNotificationData(
         default:
           return const NotificationRoute('/business-home');
       }
+    // The 1st of the month: the month just ended, its bills ready to send.
+    case 'parking_month_end':
+      return NotificationRoute(
+        '/business-parking-month-end',
+        arguments: data['monthKey']?.toString() ?? '',
+      );
     case 'parking_reservation_status':
       return _businessRecord(
         'parkedCars',

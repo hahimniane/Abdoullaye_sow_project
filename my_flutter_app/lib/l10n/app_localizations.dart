@@ -16883,6 +16883,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'for'**
   String get invPdfFor;
+
+  /// No description provided for @pmeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Month end'**
+  String get pmeTitle;
+
+  /// No description provided for @pmeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Month end'**
+  String get pmeButton;
+
+  /// No description provided for @pmeShareMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Share the month as PDF'**
+  String get pmeShareMonth;
+
+  /// No description provided for @pmePreviousMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous month'**
+  String get pmePreviousMonth;
+
+  /// No description provided for @pmeNextMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Next month'**
+  String get pmeNextMonth;
+
+  /// No description provided for @pmeCarsOnLot.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars on the lot'**
+  String get pmeCarsOnLot;
+
+  /// No description provided for @pmeBilled.
+  ///
+  /// In en, this message translates to:
+  /// **'Billed'**
+  String get pmeBilled;
+
+  /// No description provided for @pmeCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get pmeCollected;
+
+  /// No description provided for @pmeStillOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Still owed'**
+  String get pmeStillOwed;
+
+  /// No description provided for @pmeWhoOwesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Who owes ({count})'**
+  String pmeWhoOwesCount(int count);
+
+  /// No description provided for @pmeEveryCarCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Every car ({count})'**
+  String pmeEveryCarCount(int count);
+
+  /// No description provided for @pmeNoCars.
+  ///
+  /// In en, this message translates to:
+  /// **'No car was on the lot that month.'**
+  String get pmeNoCars;
+
+  /// No description provided for @pmeNobodyOwes.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody owes anything for this month.'**
+  String get pmeNobodyOwes;
+
+  /// No description provided for @pmeStillParked.
+  ///
+  /// In en, this message translates to:
+  /// **'Still parked'**
+  String get pmeStillParked;
+
+  /// No description provided for @pmeLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get pmeLeft;
+
+  /// No description provided for @pmeSoFar.
+  ///
+  /// In en, this message translates to:
+  /// **'so far'**
+  String get pmeSoFar;
+
+  /// No description provided for @pmeFromBefore.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid from before'**
+  String get pmeFromBefore;
+
+  /// No description provided for @pmeParkingLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day} other{{days} days}} × {rate}'**
+  String pmeParkingLine(int days, String rate);
+
+  /// No description provided for @pmeDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day} other{{days} days}}'**
+  String pmeDays(int days);
+
+  /// No description provided for @pmeSharePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Share the bill as PDF'**
+  String get pmeSharePdf;
+
+  /// No description provided for @pmeSendText.
+  ///
+  /// In en, this message translates to:
+  /// **'Send as text'**
+  String get pmeSendText;
+
+  /// No description provided for @pmeOpenCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the car to record a payment'**
+  String get pmeOpenCar;
+
+  /// No description provided for @pmePdfFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The PDF could not be made. Try again.'**
+  String get pmePdfFailed;
+
+  /// No description provided for @pmePdfBill.
+  ///
+  /// In en, this message translates to:
+  /// **'PARKING BILL'**
+  String get pmePdfBill;
+
+  /// No description provided for @pmePdfSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'MONTH END'**
+  String get pmePdfSummary;
+
+  /// No description provided for @pmePdfVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get pmePdfVehicle;
+
+  /// No description provided for @pmePdfPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Period'**
+  String get pmePdfPeriod;
+
+  /// No description provided for @pmeWhoOwes.
+  ///
+  /// In en, this message translates to:
+  /// **'Who still owes'**
+  String get pmeWhoOwes;
 }
 
 class _AppLocalizationsDelegate
