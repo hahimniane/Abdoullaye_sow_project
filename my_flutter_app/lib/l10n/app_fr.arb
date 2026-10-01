@@ -4217,5 +4217,64 @@
       }
     }
   },
-  "invPdfFor": "pour"
+  "invPdfFor": "pour",
+  "pmeTitle": "Fin de mois",
+  "pmeButton": "Fin de mois",
+  "pmeShareMonth": "Partager le mois en PDF",
+  "pmePreviousMonth": "Mois précédent",
+  "pmeNextMonth": "Mois suivant",
+  "pmeCarsOnLot": "Voitures au parking",
+  "pmeBilled": "Facturé",
+  "pmeCollected": "Encaissé",
+  "pmeStillOwed": "Encore dû",
+  "pmeWhoOwesCount": "Qui doit ({count})",
+  "@pmeWhoOwesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeEveryCarCount": "Toutes les voitures ({count})",
+  "@pmeEveryCarCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeNoCars": "Aucune voiture n'était au parking ce mois-là.",
+  "pmeNobodyOwes": "Personne ne doit rien pour ce mois.",
+  "pmeStillParked": "Toujours garée",
+  "pmeLeft": "Partie",
+  "pmeSoFar": "à ce jour",
+  "pmeFromBefore": "Impayé des mois précédents",
+  "pmeParkingLine": "{days, plural, =1{1 jour} other{{days} jours}} × {rate}",
+  "@pmeParkingLine": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDays": "{days, plural, =1{1 jour} other{{days} jours}}",
+  "@pmeDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeSharePdf": "Partager la facture en PDF",
+  "pmeSendText": "Envoyer en texte",
+  "pmeOpenCar": "Ouvrir la voiture pour enregistrer un paiement",
+  "pmePdfFailed": "Le PDF n'a pas pu être créé. Réessayez.",
+  "pmePdfBill": "FACTURE DE PARKING",
+  "pmePdfSummary": "FIN DE MOIS",
+  "pmePdfVehicle": "Véhicule",
+  "pmePdfPeriod": "Période",
+  "pmeWhoOwes": "Qui doit encore"
 }

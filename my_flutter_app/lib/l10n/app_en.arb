@@ -4217,5 +4217,64 @@
       }
     }
   },
-  "invPdfFor": "for"
+  "invPdfFor": "for",
+  "pmeTitle": "Month end",
+  "pmeButton": "Month end",
+  "pmeShareMonth": "Share the month as PDF",
+  "pmePreviousMonth": "Previous month",
+  "pmeNextMonth": "Next month",
+  "pmeCarsOnLot": "Cars on the lot",
+  "pmeBilled": "Billed",
+  "pmeCollected": "Collected",
+  "pmeStillOwed": "Still owed",
+  "pmeWhoOwesCount": "Who owes ({count})",
+  "@pmeWhoOwesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeEveryCarCount": "Every car ({count})",
+  "@pmeEveryCarCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeNoCars": "No car was on the lot that month.",
+  "pmeNobodyOwes": "Nobody owes anything for this month.",
+  "pmeStillParked": "Still parked",
+  "pmeLeft": "Left",
+  "pmeSoFar": "so far",
+  "pmeFromBefore": "Unpaid from before",
+  "pmeParkingLine": "{days, plural, =1{1 day} other{{days} days}} × {rate}",
+  "@pmeParkingLine": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDays": "{days, plural, =1{1 day} other{{days} days}}",
+  "@pmeDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeSharePdf": "Share the bill as PDF",
+  "pmeSendText": "Send as text",
+  "pmeOpenCar": "Open the car to record a payment",
+  "pmePdfFailed": "The PDF could not be made. Try again.",
+  "pmePdfBill": "PARKING BILL",
+  "pmePdfSummary": "MONTH END",
+  "pmePdfVehicle": "Vehicle",
+  "pmePdfPeriod": "Period",
+  "pmeWhoOwes": "Who still owes"
 }

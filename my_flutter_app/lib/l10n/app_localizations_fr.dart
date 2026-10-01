@@ -9654,4 +9654,108 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get invPdfFor => 'pour';
+
+  @override
+  String get pmeTitle => 'Fin de mois';
+
+  @override
+  String get pmeButton => 'Fin de mois';
+
+  @override
+  String get pmeShareMonth => 'Partager le mois en PDF';
+
+  @override
+  String get pmePreviousMonth => 'Mois précédent';
+
+  @override
+  String get pmeNextMonth => 'Mois suivant';
+
+  @override
+  String get pmeCarsOnLot => 'Voitures au parking';
+
+  @override
+  String get pmeBilled => 'Facturé';
+
+  @override
+  String get pmeCollected => 'Encaissé';
+
+  @override
+  String get pmeStillOwed => 'Encore dû';
+
+  @override
+  String pmeWhoOwesCount(int count) {
+    return 'Qui doit ($count)';
+  }
+
+  @override
+  String pmeEveryCarCount(int count) {
+    return 'Toutes les voitures ($count)';
+  }
+
+  @override
+  String get pmeNoCars => 'Aucune voiture n\'était au parking ce mois-là.';
+
+  @override
+  String get pmeNobodyOwes => 'Personne ne doit rien pour ce mois.';
+
+  @override
+  String get pmeStillParked => 'Toujours garée';
+
+  @override
+  String get pmeLeft => 'Partie';
+
+  @override
+  String get pmeSoFar => 'à ce jour';
+
+  @override
+  String get pmeFromBefore => 'Impayé des mois précédents';
+
+  @override
+  String pmeParkingLine(int days, String rate) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days jours',
+      one: '1 jour',
+    );
+    return '$_temp0 × $rate';
+  }
+
+  @override
+  String pmeDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days jours',
+      one: '1 jour',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pmeSharePdf => 'Partager la facture en PDF';
+
+  @override
+  String get pmeSendText => 'Envoyer en texte';
+
+  @override
+  String get pmeOpenCar => 'Ouvrir la voiture pour enregistrer un paiement';
+
+  @override
+  String get pmePdfFailed => 'Le PDF n\'a pas pu être créé. Réessayez.';
+
+  @override
+  String get pmePdfBill => 'FACTURE DE PARKING';
+
+  @override
+  String get pmePdfSummary => 'FIN DE MOIS';
+
+  @override
+  String get pmePdfVehicle => 'Véhicule';
+
+  @override
+  String get pmePdfPeriod => 'Période';
+
+  @override
+  String get pmeWhoOwes => 'Qui doit encore';
 }

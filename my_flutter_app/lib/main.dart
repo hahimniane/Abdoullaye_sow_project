@@ -19,6 +19,7 @@ import 'l10n/app_localizations.dart';
 import 'widgets/app_gate_boundary.dart';
 import 'widgets/app_snackbars.dart';
 import 'widgets/biometric_lock_gate.dart';
+import 'screens/parking_month_end_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/customer_home_screen.dart';
 import 'screens/staff_home_screen.dart';
@@ -338,6 +339,16 @@ class MyApp extends StatelessWidget {
                 return HomeMenu(
                   initialCategory: serviceCategoryFromKey(args?.category),
                   showBackButton: true,
+                );
+              },
+              '/business-parking-month-end': (context) {
+                final monthKey =
+                    ModalRoute.of(context)!.settings.arguments as String?;
+                final businessId =
+                    context.read<AuthProvider>().businessId ?? '';
+                return ParkingMonthEndScreen(
+                  businessId: businessId,
+                  monthKey: (monthKey ?? '').isEmpty ? null : monthKey,
                 );
               },
               '/business-record': (context) {

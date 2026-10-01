@@ -62,7 +62,7 @@ export function invoiceFileName(invoice: Row, business: Row): string {
 }
 
 /** The logo as a data URL, or "" when it cannot be fetched (CORS, offline). */
-async function fetchLogo(url: string): Promise<{ data: string; type: "PNG" | "JPEG" } | null> {
+export async function fetchLogo(url: string): Promise<{ data: string; type: "PNG" | "JPEG" } | null> {
   if (!/^https:\/\//.test(url)) return null;
   try {
     const res = await fetch(url, { mode: "cors" });
