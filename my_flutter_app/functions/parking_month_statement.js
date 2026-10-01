@@ -214,6 +214,11 @@ function parkingMonthStatement(row, monthKey, now = new Date()) {
         .filter(Boolean).join(" "),
     vinNumber: text(r.vinNumber, 17).toUpperCase(),
     trackingCode: text(r.trackingCode, 40),
+    paymentMethod: text(r.paymentMethod, 40),
+    // A payment can be recorded by hand only on a car the business entered
+    // and is paid directly (cash, Zelle...); anything else is Stripe's.
+    recordable: text(r.paymentMethod, 40) === "direct" &&
+      (text(r.source, 40) === "business" || r.enteredByBusiness === true),
   };
 }
 
@@ -514,8 +519,44 @@ function parkingMonthCustomerText(customer, businessName) {
   return lines.join("\n");
 }
 
+/**
+ * "Mark all paid" on a customer's bill: what to record against each line,
+ * through the same payment each line already takes - a part payment on a
+ * car (what the bill shows due on it; a car still parked keeps running into
+ * next month), an instalment on an activity (the rest of its fee). A car on
+ * a payment link is skipped: that money is Stripe's to record.
+ *
+ * @param {object} customer From parkingMonthCustomers.
+ * @return {{items: object[], skipped: object[], totalCents: number}} Plan.
+ */
+function monthBillPaymentPlan(customer) {
+  const c = customer || {};
+  const items = [];
+  const skipped = [];
+  for (const b of c.cars || []) {
+    if (b.dueCents <= 0) continue;
+    const entry = {kind: "car", id: b.id, label: b.vehicle || "Car",
+      amountCents: b.dueCents};
+    if (!b.recordable) {
+      skipped.push({...entry, reason: b.paymentMethod === "payment_link" ?
+        "payment_link" : "online"});
+    } else {
+      items.push(entry);
+    }
+  }
+  for (const a of [...(c.activities || []), ...(c.olderActivities || [])]) {
+    if (a.dueCents <= 0) continue;
+    items.push({kind: "activity", id: a.id,
+      label: `${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${a.date})`,
+      amountCents: a.dueCents});
+  }
+  return {items, skipped,
+    totalCents: items.reduce((s, x) => s + x.amountCents, 0)};
+}
+
 module.exports = {
   MONTH_NAMES,
+  monthBillPaymentPlan,
   activityMonthItem,
   parkingCustomerKey,
   parkingMonthCustomers,

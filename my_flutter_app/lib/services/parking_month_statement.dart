@@ -137,6 +137,8 @@ class ParkingMonthBill {
     required this.vehicle,
     required this.vinNumber,
     required this.trackingCode,
+    this.paymentMethod = '',
+    this.recordable = false,
   });
 
   final String id;
@@ -159,6 +161,10 @@ class ParkingMonthBill {
   final String vehicle;
   final String vinNumber;
   final String trackingCode;
+  final String paymentMethod;
+
+  /// A payment can be recorded by hand: a direct car the business entered.
+  final bool recordable;
 }
 
 /// One car's bill for one month, or null when it was not on the lot then.
@@ -215,6 +221,9 @@ ParkingMonthBill? parkingMonthStatement(
         .join(' '),
     vinNumber: _text(row['vinNumber'], 17).toUpperCase(),
     trackingCode: _text(row['trackingCode'], 40),
+    paymentMethod: _text(row['paymentMethod'], 40),
+    recordable: _text(row['paymentMethod'], 40) == 'direct' &&
+        (_text(row['source'], 40) == 'business' || row['enteredByBusiness'] == true),
   );
 }
 
@@ -599,3 +608,54 @@ String parkingMonthBillText(ParkingMonthBill b, String businessName) {
       : 'PAID IN FULL');
   return lines.join('\n');
 }
+
+/// One line of "Mark all paid".
+class MonthBillPaymentItem {
+  const MonthBillPaymentItem({
+    required this.kind,
+    required this.id,
+    required this.label,
+    required this.amountCents,
+  });
+
+  /// 'car' or 'activity'.
+  final String kind;
+  final String id;
+  final String label;
+  final int amountCents;
+}
+
+/// "Mark all paid": what to record against each line, through the payment
+/// each line already takes - a part payment on a car (what the bill shows
+/// due on it), an instalment on an activity (the rest of its fee). Payment-
+/// link cars are Stripe's to record and are skipped. Mirrors the server.
+({List<MonthBillPaymentItem> items, List<MonthBillPaymentItem> skipped, int totalCents})
+    monthBillPaymentPlan(ParkingMonthCustomer c) {
+  final items = <MonthBillPaymentItem>[];
+  final skipped = <MonthBillPaymentItem>[];
+  for (final b in c.cars) {
+    if (b.dueCents <= 0) continue;
+    final entry = MonthBillPaymentItem(
+        kind: 'car', id: b.id, label: b.vehicle.isEmpty ? 'Car' : b.vehicle, amountCents: b.dueCents);
+    if (!b.recordable) {
+      skipped.add(entry);
+    } else {
+      items.add(entry);
+    }
+  }
+  for (final a in [...c.activities, ...c.olderActivities]) {
+    if (a.dueCents <= 0) continue;
+    items.add(MonthBillPaymentItem(
+      kind: 'activity',
+      id: a.id,
+      label: '${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''} (${a.date})',
+      amountCents: a.dueCents,
+    ));
+  }
+  return (
+    items: items,
+    skipped: skipped,
+    totalCents: items.fold(0, (s, x) => s + x.amountCents),
+  );
+}
+

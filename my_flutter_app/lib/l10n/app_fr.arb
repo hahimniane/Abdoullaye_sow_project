@@ -4330,5 +4330,60 @@
       }
     }
   },
-  "pmePaidInFull": "payé en totalité"
+  "pmePaidInFull": "payé en totalité",
+  "pmeMarkAllPaid": "Tout marquer payé",
+  "pmeSettleHint": "Chaque ligne est enregistrée comme un paiement saisi à la main : elle apparaît sur la voiture ou l'activité, dans son historique et dans vos rapports.",
+  "pmeTotalToRecord": "Total à enregistrer",
+  "pmeWhoTookIt": "Qui a reçu l'argent ?",
+  "pmeSayWhoReceived": "Indiquez qui a reçu l'argent.",
+  "pmeNotIncluded": "payé en ligne, non inclus",
+  "pmeRecordTotal": "Enregistrer {amount}",
+  "@pmeRecordTotal": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTryAgain": "Réessayer les {count}",
+  "@pmeTryAgain": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeRecordingProgress": "Enregistrement {done} sur {total}…",
+  "@pmeRecordingProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeRecordedAll": "{amount} enregistrés — {count, plural, =1{1 élément} other{{count} éléments}}.",
+  "@pmeRecordedAll": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeSomeFailed": "{done} sur {total} enregistrés. Ceux-ci n'ont pas été enregistrés :",
+  "@pmeSomeFailed": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
 }

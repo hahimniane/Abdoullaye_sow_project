@@ -14006,3 +14006,12 @@ button[data-loading="true"]::before {
 .pk-month-amount .pk-paid { color: var(--money, #15803d); }
 .pk-month-activity .pk-month-car strong { color: var(--ink); }
 
+/* Mark all paid: what will be recorded, line by line. */
+.pk-settle-list { list-style: none; margin: 10px 0 14px; padding: 0; border: 1px solid var(--rule); border-radius: 10px; }
+.pk-settle-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--rule); font-size: 13.5px; }
+.pk-settle-list li:last-child { border-bottom: 0; }
+.pk-settle-list li strong { font-variant-numeric: tabular-nums; }
+.pk-settle-list .pk-settle-skip { color: var(--muted); }
+.pk-settle-list .pk-settle-done { color: var(--muted); text-decoration: line-through; }
+.pk-settle-list .pk-settle-total { background: var(--bg, #f6f8f8); font-weight: 700; }
+

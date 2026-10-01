@@ -17165,6 +17165,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'paid in full'**
   String get pmePaidInFull;
+
+  /// No description provided for @pmeMarkAllPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all paid'**
+  String get pmeMarkAllPaid;
+
+  /// No description provided for @pmeSettleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Each line is recorded the same way a payment is recorded by hand, so it shows on the car or the activity, in its history, and in your reports.'**
+  String get pmeSettleHint;
+
+  /// No description provided for @pmeTotalToRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Total to record'**
+  String get pmeTotalToRecord;
+
+  /// No description provided for @pmeWhoTookIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Who took the money?'**
+  String get pmeWhoTookIt;
+
+  /// No description provided for @pmeSayWhoReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Say who received the money.'**
+  String get pmeSayWhoReceived;
+
+  /// No description provided for @pmeNotIncluded.
+  ///
+  /// In en, this message translates to:
+  /// **'paid online, not included'**
+  String get pmeNotIncluded;
+
+  /// No description provided for @pmeRecordTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Record {amount}'**
+  String pmeRecordTotal(String amount);
+
+  /// No description provided for @pmeTryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Try the {count} again'**
+  String pmeTryAgain(int count);
+
+  /// No description provided for @pmeRecordingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording {done} of {total}…'**
+  String pmeRecordingProgress(int done, int total);
+
+  /// No description provided for @pmeRecordedAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded {amount} — {count, plural, =1{1 item} other{{count} items}}.'**
+  String pmeRecordedAll(String amount, int count);
+
+  /// No description provided for @pmeSomeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} recorded. These did not save:'**
+  String pmeSomeFailed(int done, int total);
 }
 
 class _AppLocalizationsDelegate

@@ -26,7 +26,7 @@ void main() {
         contains('case "parking_month_end":'));
   });
 
-  test('payments are still recorded on the car, never on the bill', () {
+  test('payments are recorded through the existing payments only, never written directly', () {
     final screen = read('lib/screens/parking_month_end_screen.dart');
     expect(screen, contains('ParkedCarDetailsScreen('));
     // Every paper opens in the preview first: read, then print or share.
@@ -34,6 +34,11 @@ void main() {
     expect(screen, isNot(contains('shareParkingMonthPdf(')));
     expect(screen, isNot(contains('.set(')));
     expect(screen, isNot(contains('.update(')));
-    expect(screen, isNot(contains('httpsCallable')));
+    // "Mark all paid" records only through the two payments a line already
+    // takes, always naming who received the money.
+    final callables = RegExp(r"'(record\w+)'").allMatches(screen).map((m) => m[1]).toSet();
+    expect(callables, {'recordBusinessParkingPartialPayment', 'recordLotActivityInstalment'});
+    expect(screen, contains("'receivedByStaffId': _by"));
+    expect(screen, contains('if (_by.isEmpty) {'));
   });
 }
