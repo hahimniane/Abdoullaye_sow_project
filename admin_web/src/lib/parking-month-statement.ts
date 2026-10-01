@@ -138,7 +138,8 @@ export type ParkingMonthBill = {
 
 export function parkingMonthStatement(row: Row, monthKey: string, now: Date = new Date()): ParkingMonthBill | null {
   if (text(row.status, 40) === "cancelled") return null;
-  if (text(row.paymentStatus, 40) === "not_required") return null;
+  // "not_required" is not skipped: open stays were saved that way by mistake
+  // while still running up days. A truly free stay runs up $0 and drops out.
   const month = monthDays(monthKey);
   const start = dayNumber(row.parkingDate);
   const today = dayNumber(now);

@@ -246,6 +246,28 @@ describe("business parking payment plan", () => {
     }
   });
 
+  // Every open stay recorded from the console was saved as "nothing to
+  // collect" (its up-front price is $0), so the month-end bills skipped it
+  // while the parking list still counted it as owing.
+  it("an open stay with a daily rate waits for payment, never 'free'", () => {
+    const open = businessParkingPaymentPlan({paymentMethod: "direct",
+      totalCents: 0, openEnded: true, dailyRateCents: 1200});
+    assert.equal(open.paymentStatus, "awaiting_direct_payment");
+    assert.equal(open.amountDueCents, 0, "it is billed day by day");
+    // A truly free stay, a dated $0 stay, and a link with nothing to charge
+    // still have nothing to collect.
+    for (const plan of [
+      businessParkingPaymentPlan({paymentMethod: "direct", totalCents: 0,
+        openEnded: true, dailyRateCents: 0}),
+      businessParkingPaymentPlan({paymentMethod: "direct", totalCents: 0,
+        openEnded: false, dailyRateCents: 1200}),
+      businessParkingPaymentPlan({paymentMethod: "payment_link",
+        totalCents: 0, openEnded: true, dailyRateCents: 1200}),
+    ]) {
+      assert.equal(plan.paymentStatus, "not_required");
+    }
+  });
+
   it("clamps a negative or unusable total to zero", () => {
     for (const total of [-1, -5000, NaN, undefined, "abc"]) {
       const plan = businessParkingPaymentPlan({

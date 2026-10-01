@@ -220,4 +220,9 @@ void main() {
     expect(plan.skipped.map((x) => x.id).toList(), ['link']);
     expect(plan.totalCents, 24600);
   });
+
+  test('an open stay mislabelled "nothing to collect" still owes its days', () {
+    expect(parkingMonthStatement(diallo({'paymentStatus': 'not_required'}), '2026-09', oct1)!.dueCents, 45000);
+    expect(parkingMonthStatement(diallo({'paymentStatus': 'not_required', 'dailyRate': 0}), '2026-09', oct1), isNull);
+  });
 }
