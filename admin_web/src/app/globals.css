@@ -13974,3 +13974,11 @@ button[data-loading="true"]::before {
 .pk-month-table .pk-owed { color: #b45309; }
 .pk-month-actions { opacity: 1 !important; }
 
+/* A paper opens here before it goes anywhere: read it, then print, download
+   or share. */
+.lst-modal.pdf-preview { max-width: 920px; height: 92vh; max-height: 92vh; }
+.pdf-preview-body { flex: 1; min-height: 0; background: #525659; }
+.pdf-preview-body iframe { width: 100%; height: 100%; border: 0; display: block; }
+.pdf-preview .lst-modal-foot { flex-wrap: wrap; }
+.pdf-preview .lst-modal-foot a.lst-btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+

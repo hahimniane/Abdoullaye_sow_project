@@ -53,7 +53,9 @@ test("the panel reads the three collections by business and writes only through 
 
 test("the paper leaves as a PDF file or as WhatsApp text, never a raw page", () => {
   assert.match(panelSource, /buildInvoicePdf\(/);
-  assert.match(panelSource, /deliverPdf\(/);
+  // Opened in a preview first - read, print, download or share - never
+  // straight to a download nobody could check.
+  assert.match(panelSource, /<PdfPreview \{\.\.\.pdfPreview\}/);
   assert.match(panelSource, /invoiceTextSummary\(/);
   assert.match(panelSource, /navigator\.clipboard\.writeText\(textPreview\)/);
 });
