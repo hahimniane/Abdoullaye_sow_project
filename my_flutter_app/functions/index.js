@@ -12137,6 +12137,8 @@ exports.createBusinessParkingEntry = onCall(
           paymentMethod: input.paymentMethod,
           totalCents: centsFromDollars(option.estimatedTotal),
           simulatePayments: SIMULATE_PAYMENTS,
+          openEnded: !input.endDate,
+          dailyRateCents: centsFromDollars(option.dailyRate),
         });
 
         if (plan.takesPlatformCut) {
@@ -12955,6 +12957,9 @@ exports.updateBusinessParkingEntry = onCall(
           paymentMethod: input.paymentMethod,
           totalCents: ownRateCents ?? centsFromDollars(option.estimatedTotal),
           simulatePayments: SIMULATE_PAYMENTS,
+          openEnded: !input.endDate,
+          dailyRateCents: centsFromDollars(before.dailyRate) ||
+            centsFromDollars(option.dailyRate),
         });
         if (pricing.takesPlatformCut) {
           const pricingDoc = await transaction.get(

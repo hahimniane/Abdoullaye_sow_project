@@ -85,7 +85,12 @@ describe("one car's month", () => {
     assert.equal(parkingMonthStatement(
         {...diallo, status: "cancelled"}, "2026-09", OCT1), null);
     assert.equal(parkingMonthStatement(
-        {...diallo, paymentStatus: "not_required"}, "2026-09", OCT1), null);
+        {...diallo, dailyRate: 0, paymentStatus: "not_required"}, "2026-09",
+        OCT1), null, "a free stay runs up nothing");
+    // An open stay mislabelled "nothing to collect" still owes its days.
+    assert.equal(parkingMonthStatement(
+        {...diallo, paymentStatus: "not_required"}, "2026-09", OCT1).dueCents,
+    45000);
     assert.equal(parkingMonthStatement(diallo, "2026-08", OCT1), null,
         "not there yet in August");
   });

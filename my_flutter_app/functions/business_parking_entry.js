@@ -220,16 +220,24 @@ function businessParkingPaymentPlan({
   paymentMethod,
   totalCents,
   simulatePayments = false,
+  openEnded = false,
+  dailyRateCents = 0,
 }) {
   const method = text(paymentMethod, 40);
   if (!BUSINESS_PARKING_PAYMENT_METHODS.includes(method)) return null;
 
   const amountDueCents = Math.max(0, Math.round(Number(totalCents) || 0));
   const billedByPlatform = method === "payment_link";
+  // An open stay has no total up front - it runs day by day at its rate -
+  // so a $0 price here means "not priced yet", not "free". Marking it
+  // not_required hid every open car from the month-end bills while the
+  // parking list still counted it as owing.
+  const accruesDaily = openEnded &&
+    Math.round(Number(dailyRateCents) || 0) > 0;
 
   // Nothing to collect: neither path has a payment to wait for, so the entry
   // must not sit in a "pending payment" state forever.
-  if (amountDueCents === 0) {
+  if (amountDueCents === 0 && !(accruesDaily && !billedByPlatform)) {
     return Object.freeze({
       paymentMethod: method,
       amountDueCents,
