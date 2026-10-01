@@ -276,7 +276,9 @@ const {
 const {
   BUSINESS_PARKING_EDIT_REFUSALS,
   BUSINESS_PARKING_PAYMENT_TYPE,
+  businessParkingEditChanges,
   businessParkingEditPlan,
+  businessParkingEditSummary,
   businessParkingOwnRateCents,
   PARKING_LINK_STATES,
   parkingPaymentLinkState,
@@ -13005,6 +13007,34 @@ exports.updateBusinessParkingEntry = onCall(
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
       });
+
+      // Every edit lands in the car's History with what changed and who
+      // changed it. Before, only payments did, so a phone moved from one
+      // customer to another left no trace of who moved it.
+      const editChanges = businessParkingEditChanges(before, {
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        customerEmail: input.customerEmail,
+        vinNumber: input.vinNumber,
+        carYear: input.carYear,
+        carMake: input.carMake,
+        carModel: input.carModel,
+        parkingDate: input.startDate,
+        parkingEndDate: input.endDate,
+        paymentMethod: input.paymentMethod,
+        amountDueCents: pricing.amountDueCents,
+      });
+      if (editChanges.length > 0) {
+        await writeLotLedgerAudit({
+          businessId,
+          entityType: "parking",
+          entityId: entryId,
+          action: "edited",
+          byStaffId: uid,
+          summary: businessParkingEditSummary(editChanges),
+          changes: editChanges,
+        });
+      }
 
       const connectedAccountId =
         String(payoutFields?.stripeConnectedAccountId || "").trim() ||
