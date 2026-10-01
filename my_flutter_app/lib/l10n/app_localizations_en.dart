@@ -9611,4 +9611,49 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pmeWhoOwes => 'Who still owes';
+
+  @override
+  String pmeCars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cars',
+      one: '1 car',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pmeCar => 'Car';
+
+  @override
+  String get pmeAmount => 'Amount';
+
+  @override
+  String get pmeTo => 'to';
+
+  @override
+  String get pmeRegisteredTo => 'registered to';
+
+  @override
+  String get pmeMonthTotal => 'Total for the month';
+
+  @override
+  String pmeEveryoneCount(int count) {
+    return 'Everyone ($count)';
+  }
+
+  @override
+  String pmeCustomersOwe(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count customers owe',
+      one: '1 customer owes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pmePickCar => 'Which car?';
 }

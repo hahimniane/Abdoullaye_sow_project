@@ -218,11 +218,161 @@ ParkingMonthBill? parkingMonthStatement(
   );
 }
 
+/// One customer for the month: every car on their phone, with its dates.
+class ParkingMonthCustomer {
+  const ParkingMonthCustomer({
+    required this.key,
+    required this.monthKey,
+    required this.customerName,
+    required this.customerPhone,
+    required this.customerEmail,
+    required this.cars,
+    required this.registeredTo,
+    required this.monthCents,
+    required this.monthPaidCents,
+    required this.monthUnpaidCents,
+    required this.priorUnpaidCents,
+    required this.dueCents,
+    required this.owes,
+    required this.partialMonth,
+  });
+
+  final String key;
+  final String monthKey;
+  final String customerName;
+  final String customerPhone;
+  final String customerEmail;
+  final List<ParkingMonthBill> cars;
+
+  /// Per car (same order): the name it was registered under when it is not
+  /// the customer's, else ''.
+  final List<String> registeredTo;
+  final int monthCents;
+  final int monthPaidCents;
+  final int monthUnpaidCents;
+  final int priorUnpaidCents;
+  final int dueCents;
+  final bool owes;
+  final bool partialMonth;
+}
+
+String _normName(String v) => v.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+/// Who a bill goes to: the phone, last ten digits. Mirrors the server.
+String parkingCustomerKey(ParkingMonthBill b) {
+  var digits = b.customerPhone.replaceAll(RegExp(r'\D+'), '');
+  if (digits.length > 10) digits = digits.substring(digits.length - 10);
+  if (digits.length >= 7) return 'phone:$digits';
+  return 'name:${_normName(b.customerName)}';
+}
+
+/// The spelling used most often (capitals ignored), capitalised when typed so.
+String mostUsedName(Iterable<String> names) {
+  final groups = <String, List<String>>{};
+  for (final raw in names) {
+    final name = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (name.isEmpty) continue;
+    groups.putIfAbsent(_normName(name), () => []).add(name);
+  }
+  if (groups.isEmpty) return '';
+  final best = groups.entries.toList()
+    ..sort((a, b) {
+      final byCount = b.value.length.compareTo(a.value.length);
+      if (byCount != 0) return byCount;
+      final byLength = b.key.length.compareTo(a.key.length);
+      return byLength != 0 ? byLength : a.key.compareTo(b.key);
+    });
+  int capitalised(String n) =>
+      n.split(' ').where((w) => RegExp(r'^[A-ZÀ-Ý]').hasMatch(w)).length;
+  final variants = [...best.first.value]
+    ..sort((a, b) => capitalised(b).compareTo(capitalised(a)));
+  return variants.first;
+}
+
+/// One bill per phone, every car on it with its dates. Mirrors the server.
+List<ParkingMonthCustomer> parkingMonthCustomers(Iterable<ParkingMonthBill> bills) {
+  final groups = <String, List<ParkingMonthBill>>{};
+  for (final b in bills) {
+    groups.putIfAbsent(parkingCustomerKey(b), () => []).add(b);
+  }
+  final customers = <ParkingMonthCustomer>[];
+  groups.forEach((key, list) {
+    final name = mostUsedName(list.map((b) => b.customerName));
+    final cars = [...list]
+      ..sort((a, b) {
+        final byFrom = a.periodFrom.compareTo(b.periodFrom);
+        return byFrom != 0 ? byFrom : a.vehicle.compareTo(b.vehicle);
+      });
+    int sum(int Function(ParkingMonthBill) f) => cars.fold(0, (s, b) => s + f(b));
+    customers.add(ParkingMonthCustomer(
+      key: key,
+      monthKey: cars.first.monthKey,
+      customerName: name,
+      customerPhone: cars.firstWhere((b) => b.customerPhone.isNotEmpty,
+              orElse: () => cars.first)
+          .customerPhone,
+      customerEmail: cars.firstWhere((b) => b.customerEmail.isNotEmpty,
+              orElse: () => cars.first)
+          .customerEmail,
+      cars: cars,
+      registeredTo: [
+        for (final b in cars)
+          _normName(b.customerName) == _normName(name) ? '' : b.customerName,
+      ],
+      monthCents: sum((b) => b.monthCents),
+      monthPaidCents: sum((b) => b.monthPaidCents),
+      monthUnpaidCents: sum((b) => b.monthUnpaidCents),
+      priorUnpaidCents: sum((b) => b.priorUnpaidCents),
+      dueCents: sum((b) => b.dueCents),
+      owes: cars.any((b) => b.owes),
+      partialMonth: cars.any((b) => b.partialMonth),
+    ));
+  });
+  customers.sort((a, b) {
+    final byDue = b.dueCents.compareTo(a.dueCents);
+    return byDue != 0 ? byDue : a.customerName.compareTo(b.customerName);
+  });
+  return customers;
+}
+
+/// One customer's bill as WhatsApp text. Mirrors the server's byte for byte.
+String parkingMonthCustomerText(ParkingMonthCustomer c, String businessName) {
+  final lines = <String>[
+    '${businessName.trim().isEmpty ? 'Parking' : businessName.trim()} — '
+        'Parking bill, ${_monthLabelEn(c.monthKey)}',
+    'For: ${[c.customerName.isEmpty ? '—' : c.customerName, c.customerPhone].where((p) => p.isNotEmpty).join(' · ')}',
+    '',
+  ];
+  for (var i = 0; i < c.cars.length; i++) {
+    final b = c.cars[i];
+    final car = [b.vehicle.isEmpty ? 'Car' : b.vehicle, if (b.vinNumber.isNotEmpty) 'VIN ${b.vinNumber}']
+        .join(' · ');
+    lines
+      ..add(car + (c.registeredTo[i].isNotEmpty ? ' (registered to ${c.registeredTo[i]})' : ''))
+      ..add('  ${b.periodFrom} to ${b.periodTo}: ${b.days} day'
+          '${b.days == 1 ? '' : 's'} × ${parkingMoney(b.dayRateCents)} — '
+          '${parkingMoney(b.monthCents)}');
+  }
+  final month = int.tryParse(c.monthKey.length >= 7 ? c.monthKey.substring(5, 7) : '') ?? 0;
+  lines
+    ..add('')
+    ..add('Total for ${month >= 1 && month <= 12 ? _monthNamesEn[month - 1] : 'the month'} — '
+        '${parkingMoney(c.monthCents)}');
+  if (c.priorUnpaidCents > 0) {
+    lines.add('Unpaid from before — ${parkingMoney(c.priorUnpaidCents)}');
+  }
+  if (c.monthPaidCents > 0) lines.add('Paid — -${parkingMoney(c.monthPaidCents)}');
+  lines.add(c.dueCents > 0 ? 'BALANCE DUE: ${parkingMoney(c.dueCents)}' : 'PAID IN FULL');
+  return lines.join('\n');
+}
+
 class ParkingMonthSummary {
   const ParkingMonthSummary({
     required this.monthKey,
     required this.carsOnLot,
     required this.carsOwing,
+    required this.customers,
+    required this.customersOwing,
     required this.billedCents,
     required this.collectedCents,
     required this.owedCents,
@@ -235,6 +385,8 @@ class ParkingMonthSummary {
   final String monthKey;
   final int carsOnLot;
   final int carsOwing;
+  final List<ParkingMonthCustomer> customers;
+  final List<ParkingMonthCustomer> customersOwing;
   final int billedCents;
   final int collectedCents;
   final int owedCents;
@@ -256,10 +408,13 @@ ParkingMonthSummary parkingMonthSummary(
     });
   int sum(Iterable<ParkingMonthBill> list, int Function(ParkingMonthBill) f) =>
       list.fold(0, (s, b) => s + f(b));
+  final customers = parkingMonthCustomers(bills);
   return ParkingMonthSummary(
     monthKey: monthKey,
     carsOnLot: bills.length,
     carsOwing: owing.length,
+    customers: customers,
+    customersOwing: customers.where((c) => c.owes).toList(),
     billedCents: sum(bills, (b) => b.monthCents),
     collectedCents: sum(bills, (b) => b.monthPaidCents),
     owedCents: sum(bills, (b) => b.monthUnpaidCents),

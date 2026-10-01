@@ -44,6 +44,12 @@ class ParkingMonthPdfCopy {
     required this.nobodyOwes,
     required this.daysLabel,
     required this.footer,
+    this.car = 'Car',
+    this.amount = 'Amount',
+    this.to = 'to',
+    this.registeredTo = 'registered to',
+    this.monthTotal = 'Total for the month',
+    this.carsLabel,
   });
 
   final String bill;
@@ -70,6 +76,14 @@ class ParkingMonthPdfCopy {
   final String nobodyOwes;
   final String Function(int days) daysLabel;
   final String footer;
+  final String car;
+  final String amount;
+  final String to;
+  final String registeredTo;
+  final String monthTotal;
+
+  /// "3 cars".
+  final String Function(int cars)? carsLabel;
 }
 
 String _t(Object? v) => (v ?? '').toString().trim();
@@ -169,11 +183,20 @@ pw.Widget _footer(String text) => pw.Center(
 
 Future<Uint8List> buildParkingMonthBillPdf({
   required Map<String, dynamic> business,
-  required ParkingMonthBill bill,
+  required ParkingMonthCustomer customer,
   required ParkingMonthPdfCopy copy,
 }) async {
-  final b = bill;
-  final head = await _header(business, copy.bill, copy.monthLabel, b.trackingCode);
+  final c = customer;
+  final head = await _header(business, copy.bill, copy.monthLabel,
+      copy.carsLabel?.call(c.cars.length) ?? '');
+  pw.Widget cell(String text, {bool bold = false, pw.TextAlign align = pw.TextAlign.left}) =>
+      pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 6),
+        child: pw.Text(text,
+            textAlign: align,
+            style: pw.TextStyle(
+                fontSize: 10, color: _ink, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+      );
   final doc = pw.Document(title: '${copy.bill} ${copy.monthLabel}');
   doc.addPage(pw.MultiPage(
     pageFormat: PdfPageFormat.letter,
@@ -181,53 +204,65 @@ Future<Uint8List> buildParkingMonthBillPdf({
     footer: (_) => _footer(copy.footer),
     build: (_) => [
       head,
-      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-        pw.Expanded(
-          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            _label(copy.billedTo),
-            pw.SizedBox(height: 4),
-            pw.Text(b.customerName.isEmpty ? '—' : b.customerName,
-                style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: _ink)),
-            if ([b.customerPhone, b.customerEmail].any((p) => p.isNotEmpty))
-              pw.Text(
-                [b.customerPhone, b.customerEmail].where((p) => p.isNotEmpty).join('  |  '),
-                style: const pw.TextStyle(fontSize: 9.5, color: _muted),
-              ),
+      _label(copy.billedTo),
+      pw.SizedBox(height: 4),
+      pw.Text(c.customerName.isEmpty ? '—' : c.customerName,
+          style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: _ink)),
+      if ([c.customerPhone, c.customerEmail].any((p) => p.isNotEmpty))
+        pw.Text([c.customerPhone, c.customerEmail].where((p) => p.isNotEmpty).join('  |  '),
+            style: const pw.TextStyle(fontSize: 9.5, color: _muted)),
+      pw.SizedBox(height: 16),
+      // One line per car: what it is, the days it covers, days x rate, amount.
+      pw.Table(
+        columnWidths: const {
+          0: pw.FlexColumnWidth(3.2),
+          1: pw.FlexColumnWidth(2.4),
+          2: pw.FlexColumnWidth(1.4),
+          3: pw.FlexColumnWidth(1.3),
+        },
+        border: const pw.TableBorder(
+          horizontalInside: pw.BorderSide(color: _rule, width: 0.5),
+          bottom: pw.BorderSide(color: _rule, width: 0.5),
+        ),
+        children: [
+          pw.TableRow(children: [
+            pw.Padding(padding: const pw.EdgeInsets.only(bottom: 6), child: _label(copy.car)),
+            pw.Padding(padding: const pw.EdgeInsets.only(bottom: 6), child: _label(copy.period)),
+            pw.Padding(padding: const pw.EdgeInsets.only(bottom: 6), child: pw.Align(alignment: pw.Alignment.centerRight, child: _label('×'))),
+            pw.Padding(padding: const pw.EdgeInsets.only(bottom: 6), child: pw.Align(alignment: pw.Alignment.centerRight, child: _label(copy.amount))),
           ]),
-        ),
-        pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-          _label(copy.vehicle),
-          pw.SizedBox(height: 4),
-          pw.Text(b.vehicle.isEmpty ? '—' : b.vehicle,
-              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: _ink)),
-          if (b.vinNumber.isNotEmpty)
-            pw.Text('VIN ${b.vinNumber}',
-                style: pw.TextStyle(fontSize: 8.5, color: _muted, font: pw.Font.courier())),
-        ]),
-      ]),
-      pw.SizedBox(height: 18),
-      pw.Row(children: [
-        _label(copy.period),
-        pw.SizedBox(width: 12),
-        pw.Expanded(
-          child: pw.Text(
-            '${b.periodFrom} → ${b.periodTo}${b.partialMonth ? ' (${copy.soFar})' : ''}',
-            style: const pw.TextStyle(fontSize: 10.5, color: _ink),
-          ),
-        ),
-        pw.Text(b.stillParked ? copy.stillParked : copy.left,
-            style: const pw.TextStyle(fontSize: 10.5, color: _ink)),
-      ]),
-      pw.Container(height: 1, color: _rule, margin: const pw.EdgeInsets.symmetric(vertical: 10)),
-      _row(copy.parkingLine(b.days, parkingMoney(b.dayRateCents)), parkingMoney(b.monthCents),
-          color: _ink),
-      if (b.priorUnpaidCents > 0)
-        _row(copy.priorUnpaid, parkingMoney(b.priorUnpaidCents), color: _due),
-      if (b.monthPaidCents > 0)
-        _row(copy.paid, '-${parkingMoney(b.monthPaidCents)}', color: _ok),
+          for (var i = 0; i < c.cars.length; i++)
+            pw.TableRow(children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(vertical: 6),
+                child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                  pw.Text(c.cars[i].vehicle.isEmpty ? copy.car : c.cars[i].vehicle,
+                      style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: _ink)),
+                  pw.Text(
+                    [
+                      if (c.cars[i].vinNumber.isNotEmpty) 'VIN ${c.cars[i].vinNumber}',
+                      if (c.registeredTo[i].isNotEmpty) '${copy.registeredTo} ${c.registeredTo[i]}',
+                      c.cars[i].stillParked ? copy.stillParked : copy.left,
+                    ].join('  ·  '),
+                    style: const pw.TextStyle(fontSize: 8.5, color: _muted),
+                  ),
+                ]),
+              ),
+              cell('${c.cars[i].periodFrom} ${copy.to} ${c.cars[i].periodTo}'),
+              cell('${c.cars[i].days} × ${parkingMoney(c.cars[i].dayRateCents)}', align: pw.TextAlign.right),
+              cell(parkingMoney(c.cars[i].monthCents), bold: true, align: pw.TextAlign.right),
+            ]),
+        ],
+      ),
+      pw.SizedBox(height: 10),
+      _row(copy.monthTotal, parkingMoney(c.monthCents), color: _ink),
+      if (c.priorUnpaidCents > 0)
+        _row(copy.priorUnpaid, parkingMoney(c.priorUnpaidCents), color: _due),
+      if (c.monthPaidCents > 0)
+        _row(copy.paid, '-${parkingMoney(c.monthPaidCents)}', color: _ok),
       pw.Container(height: 1.2, color: _ink, margin: const pw.EdgeInsets.symmetric(vertical: 6)),
-      b.dueCents > 0
-          ? _row(copy.balanceDue, parkingMoney(b.dueCents), bold: true, color: _due)
+      c.dueCents > 0
+          ? _row(copy.balanceDue, parkingMoney(c.dueCents), bold: true, color: _due)
           : _row(copy.paidInFull, parkingMoney(0), bold: true, color: _ok),
     ],
   ));
@@ -263,11 +298,11 @@ Future<Uint8List> buildParkingMonthSummaryPdf({
         stat(copy.owed, parkingMoney(s.dueCents), s.dueCents > 0 ? _due : _ink),
       ]),
       pw.SizedBox(height: 20),
-      _label('${copy.whoOwes} (${s.carsOwing})'),
+      _label('${copy.whoOwes} (${s.customersOwing.length})'),
       pw.Container(height: 1, color: _rule, margin: const pw.EdgeInsets.symmetric(vertical: 6)),
-      if (s.owing.isEmpty)
+      if (s.customersOwing.isEmpty)
         pw.Text(copy.nobodyOwes, style: const pw.TextStyle(fontSize: 10.5, color: _ink)),
-      for (final b in s.owing)
+      for (final b in s.customersOwing)
         pw.Container(
           padding: const pw.EdgeInsets.symmetric(vertical: 5),
           decoration: const pw.BoxDecoration(
@@ -281,7 +316,9 @@ Future<Uint8List> buildParkingMonthSummaryPdf({
             ),
             pw.Expanded(
               child: pw.Text(
-                '${b.vehicle}${b.vinNumber.isNotEmpty ? ' · ${b.vinNumber.length > 8 ? b.vinNumber.substring(b.vinNumber.length - 8) : b.vinNumber}' : ''} · ${copy.daysLabel(b.days)}',
+                '${b.customerPhone}${b.customerPhone.isNotEmpty ? ' · ' : ''}${copy.carsLabel?.call(b.cars.length) ?? '${b.cars.length}'}: ${b.cars.map((car) => car.vehicle).join(', ')}',
+                maxLines: 1,
+                overflow: pw.TextOverflow.clip,
                 style: const pw.TextStyle(fontSize: 9, color: _muted),
               ),
             ),

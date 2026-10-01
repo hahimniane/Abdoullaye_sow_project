@@ -17051,6 +17051,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Who still owes'**
   String get pmeWhoOwes;
+
+  /// No description provided for @pmeCars.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 car} other{{count} cars}}'**
+  String pmeCars(int count);
+
+  /// No description provided for @pmeCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Car'**
+  String get pmeCar;
+
+  /// No description provided for @pmeAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get pmeAmount;
+
+  /// No description provided for @pmeTo.
+  ///
+  /// In en, this message translates to:
+  /// **'to'**
+  String get pmeTo;
+
+  /// No description provided for @pmeRegisteredTo.
+  ///
+  /// In en, this message translates to:
+  /// **'registered to'**
+  String get pmeRegisteredTo;
+
+  /// No description provided for @pmeMonthTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total for the month'**
+  String get pmeMonthTotal;
+
+  /// No description provided for @pmeEveryoneCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone ({count})'**
+  String pmeEveryoneCount(int count);
+
+  /// No description provided for @pmeCustomersOwe.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 customer owes} other{{count} customers owe}}'**
+  String pmeCustomersOwe(int count);
+
+  /// No description provided for @pmePickCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Which car?'**
+  String get pmePickCar;
 }
 
 class _AppLocalizationsDelegate

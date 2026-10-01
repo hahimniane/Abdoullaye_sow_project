@@ -13,11 +13,11 @@ import {
 import {
   monthLabel,
   moneyText,
-  parkingMonthBillText,
+  parkingMonthCustomerText,
   parkingMonthSummary,
   previousMonthKey,
   shiftMonthKey,
-  type ParkingMonthBill,
+  type ParkingMonthCustomer,
 } from "@/lib/parking-month-statement";
 import type { FirestoreRow } from "@/types/admin";
 
@@ -51,7 +51,8 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
 
   const summary = useMemo(() => parkingMonthSummary(rows, monthKey), [rows, monthKey]);
   const thisMonth = new Date().toISOString().slice(0, 7);
-  const listed = showAll ? [...summary.bills].sort((a, b) => b.dueCents - a.dueCents || a.customerName.localeCompare(b.customerName)) : summary.owing;
+  // One row per customer (grouped by phone), their cars underneath.
+  const listed = showAll ? summary.customers : summary.customersOwing;
   const rowById = useMemo(() => {
     const map = new Map<string, FirestoreRow>();
     rows.forEach((r) => map.set(String(r.id), r));
@@ -71,12 +72,12 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
     }
   }
 
-  async function saveBill(bill: ParkingMonthBill) {
-    setBusyId(bill.id);
+  async function saveBill(customer: ParkingMonthCustomer) {
+    setBusyId(customer.key);
     setFlash("");
     try {
-      const blob = await buildParkingMonthBillPdf({ business: identity, bill, language: lang });
-      setPreview({ blob, fileName: parkingMonthFileName("bill", monthKey, bill.customerName, orgName), title: `${bill.customerName || "Parking bill"} — ${monthLabel(monthKey, lang)}` });
+      const blob = await buildParkingMonthBillPdf({ business: identity, customer, language: lang });
+      setPreview({ blob, fileName: parkingMonthFileName("bill", monthKey, customer.customerName, orgName), title: `${customer.customerName || "Parking bill"} — ${monthLabel(monthKey, lang)}` });
     } catch {
       setFlash("The PDF could not be made. Try again.");
     } finally {
@@ -84,10 +85,10 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
     }
   }
 
-  async function copyBill(bill: ParkingMonthBill) {
+  async function copyBill(customer: ParkingMonthCustomer) {
     try {
-      await navigator.clipboard.writeText(parkingMonthBillText(bill, orgName));
-      setFlash(`Copied ${bill.customerName}'s bill — paste it into WhatsApp.`);
+      await navigator.clipboard.writeText(parkingMonthCustomerText(customer, orgName));
+      setFlash(`Copied ${customer.customerName}'s bill — paste it into WhatsApp.`);
     } catch {
       setFlash("Copy is blocked here. Use Save as PDF instead.");
     }
@@ -118,53 +119,63 @@ export function ParkingMonthEnd({ rows, business, businessName, initialMonth, on
       )}
 
       <div className="pk-scoreboard" role="group" aria-label="Month totals">
-        <div className="pk-stat"><span>Cars on the lot</span><b>{summary.carsOnLot}</b><small>{summary.carsOwing} still owing</small></div>
+        <div className="pk-stat"><span>Cars on the lot</span><b>{summary.carsOnLot}</b><small>{summary.customersOwing.length} customers still owe</small></div>
         <div className="pk-stat"><span>Billed</span><b>{moneyText(summary.billedCents)}</b><small>for the month</small></div>
         <div className="pk-stat"><span>Collected</span><b>{moneyText(summary.collectedCents)}</b><small>toward the month</small></div>
         <div className="pk-stat"><span>Still owed</span><b className={summary.dueCents > 0 ? "owed" : ""}>{moneyText(summary.dueCents)}</b>
-          <small>{summary.olderOwedCents > 0 ? `incl. ${moneyText(summary.olderOwedCents)} from before` : "by the cars below"}</small>
+          <small>{summary.olderOwedCents > 0 ? `incl. ${moneyText(summary.olderOwedCents)} from before` : "by the customers below"}</small>
         </div>
       </div>
 
       <div className="pk-month-tools">
-        <div className="pk-view" role="group" aria-label="Which cars">
-          <button type="button" className={!showAll ? "on" : ""} aria-pressed={!showAll} onClick={() => setShowAll(false)}>Who owes ({summary.carsOwing})</button>
-          <button type="button" className={showAll ? "on" : ""} aria-pressed={showAll} onClick={() => setShowAll(true)}>Every car ({summary.carsOnLot})</button>
+        <div className="pk-view" role="group" aria-label="Which customers">
+          <button type="button" className={!showAll ? "on" : ""} aria-pressed={!showAll} onClick={() => setShowAll(false)}>Who owes ({summary.customersOwing.length})</button>
+          <button type="button" className={showAll ? "on" : ""} aria-pressed={showAll} onClick={() => setShowAll(true)}>Everyone ({summary.customers.length})</button>
         </div>
       </div>
 
       {listed.length === 0 ? (
         <div className="empty-state">{summary.carsOnLot === 0 ? "No car was on the lot that month." : "Nobody owes anything for this month."}</div>
       ) : (
-        <div className="mini-table">
-          <div className="ctn-table pk-month-table">
-            <div className="mini-table-head"><span>Customer</span><span>Car</span><span>This month</span><span>Due</span><span aria-hidden="true"></span></div>
-            {listed.map((bill) => {
-              const car = rowById.get(bill.id);
-              return (
-                <div className="mini-table-row" key={bill.id}>
-                  <span><strong>{bill.customerName || "—"}</strong>{bill.customerPhone && <small>{bill.customerPhone}</small>}</span>
-                  <span><strong>{bill.vehicle || "—"}</strong><small>{bill.vinNumber ? bill.vinNumber : bill.trackingCode}{bill.stillParked ? " · still parked" : " · left"}</small></span>
-                  <span>
-                    <strong>{moneyText(bill.monthCents)}</strong>
-                    <small>{bill.days} day{bill.days === 1 ? "" : "s"} × {moneyText(bill.dayRateCents)}{bill.priorUnpaidCents > 0 ? ` · + ${moneyText(bill.priorUnpaidCents)} from before` : ""}</small>
-                  </span>
-                  <span>
-                    {bill.dueCents > 0
-                      ? <><strong className="pk-owed">{moneyText(bill.dueCents)}</strong>{bill.monthPaidCents > 0 && <small>{moneyText(bill.monthPaidCents)} paid</small>}</>
-                      : <span className="lst-badge ok">Paid</span>}
-                  </span>
-                  <span className="ctn-row-actions pk-month-actions">
-                    <button className="ghost-button" type="button" disabled={busyId !== ""} title="View the bill as PDF" onClick={() => void saveBill(bill)}>
-                      {busyId === bill.id ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />}
-                    </button>
-                    <button className="ghost-button" type="button" title="Copy the bill as text" onClick={() => void copyBill(bill)}><Copy size={14} /></button>
-                    {car && <button className="ghost-button" type="button" title="Open the car to record a payment" onClick={() => onOpenCar(car)}><SquarePen size={14} /></button>}
-                  </span>
+        <div className="pk-month-list">
+          {listed.map((customer) => (
+            <article className="pk-month-customer" key={customer.key}>
+              <header>
+                <div>
+                  <strong>{customer.customerName || "—"}</strong>
+                  <small>{customer.customerPhone}{customer.customerPhone ? " · " : ""}{customer.cars.length} car{customer.cars.length === 1 ? "" : "s"}</small>
                 </div>
-              );
-            })}
-          </div>
+                <div className="pk-month-due">
+                  {customer.dueCents > 0
+                    ? <><strong className="pk-owed">{moneyText(customer.dueCents)}</strong><small>{customer.monthPaidCents > 0 ? `${moneyText(customer.monthPaidCents)} paid · ` : ""}{moneyText(customer.monthCents)} this month{customer.priorUnpaidCents > 0 ? ` + ${moneyText(customer.priorUnpaidCents)} from before` : ""}</small></>
+                    : <span className="lst-badge ok">Paid</span>}
+                </div>
+                <div className="pk-month-actions">
+                  <button className="lst-btn ghost" type="button" disabled={busyId !== ""} onClick={() => void saveBill(customer)}>
+                    {busyId === customer.key ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} View bill
+                  </button>
+                  <button className="lst-btn ghost" type="button" onClick={() => void copyBill(customer)}><Copy size={14} /> Copy text</button>
+                </div>
+              </header>
+              <ul>
+                {customer.cars.map((b) => {
+                  const car = rowById.get(b.id);
+                  return (
+                    <li key={b.id}>
+                      <span className="pk-month-car">
+                        <strong>{b.vehicle || "Car"}</strong>
+                        <small>{[b.vinNumber, b.registeredTo ? `registered to ${b.registeredTo}` : "", b.stillParked ? "still parked" : "left"].filter(Boolean).join(" · ")}</small>
+                      </span>
+                      <span className="pk-month-period">{b.periodFrom} → {b.periodTo}</span>
+                      <span className="pk-month-calc">{b.days} day{b.days === 1 ? "" : "s"} × {moneyText(b.dayRateCents)}</span>
+                      <span className="pk-month-amount"><strong>{moneyText(b.monthCents)}</strong>{b.dueCents > 0 ? <small>{moneyText(b.dueCents)} due</small> : <small>paid</small>}</span>
+                      {car && <button className="ghost-button" type="button" title="Open the car to record a payment" onClick={() => onOpenCar(car)}><SquarePen size={14} /></button>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </article>
+          ))}
         </div>
       )}
       {preview && <PdfPreview {...preview} onClose={() => setPreview(null)} />}

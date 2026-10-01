@@ -232,10 +232,13 @@ function parkingMonthSummary(rows, monthKey, now = new Date()) {
       .sort((a, b) => b.dueCents - a.dueCents ||
         a.customerName.localeCompare(b.customerName));
   const sum = (list, key) => list.reduce((s, b) => s + b[key], 0);
+  const customers = parkingMonthCustomers(bills);
   return {
     monthKey,
     carsOnLot: bills.length,
     carsOwing: owing.length,
+    customers,
+    customersOwing: customers.filter((c) => c.owes),
     billedCents: sum(bills, "monthCents"),
     collectedCents: sum(bills, "monthPaidCents"),
     owedCents: sum(bills, "monthUnpaidCents"),
@@ -244,6 +247,94 @@ function parkingMonthSummary(rows, monthKey, now = new Date()) {
     owing,
     bills,
   };
+}
+
+/**
+ * Who a bill goes to: the phone number, last ten digits. Names are typed a
+ * dozen ways for the same person ("Abd Sow", "abdoulaye sow"); the phone is
+ * what the WhatsApp reaches, and every parked car carries one.
+ *
+ * @param {object} bill From parkingMonthStatement.
+ * @return {string} The grouping key.
+ */
+function parkingCustomerKey(bill) {
+  const digits = text(bill?.customerPhone, 40).replace(/\D+/g, "").slice(-10);
+  if (digits.length >= 7) return `phone:${digits}`;
+  return `name:${text(bill?.customerName).toLowerCase().replace(/\s+/g, " ")}`;
+}
+
+const normName = (v) => text(v).toLowerCase().replace(/\s+/g, " ");
+const sameName = (a, b) => normName(a) === normName(b);
+
+/**
+ * The name a customer goes by: the spelling used most often (capitals and
+ * spacing ignored), the longest on a tie, shown in its capitalised form when
+ * one was typed.
+ *
+ * @param {string[]} names The names on the customer's cars.
+ * @return {string} The name to print.
+ */
+function mostUsedName(names) {
+  const groups = new Map();
+  for (const raw of names) {
+    const name = text(raw).replace(/\s+/g, " ");
+    if (!name) continue;
+    const key = normName(name);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(name);
+  }
+  const best = [...groups.entries()].sort((a, b) =>
+    b[1].length - a[1].length || b[0].length - a[0].length ||
+    a[0].localeCompare(b[0]))[0];
+  if (!best) return "";
+  const capitalised = (n) => n.split(" ").filter((w) => /^[A-ZÀ-Ý]/.test(w))
+      .length;
+  return [...best[1]].sort((a, b) => capitalised(b) - capitalised(a))[0];
+}
+
+/**
+ * The month's bills grouped by customer - one bill per phone, listing each
+ * car with the dates it covers. The name shown is the spelling used most
+ * often on that phone (the longest, on a tie); a car registered under a
+ * different name says so on its own line.
+ *
+ * @param {object[]} bills From parkingMonthStatement.
+ * @return {object[]} Customers, most owed first.
+ */
+function parkingMonthCustomers(bills) {
+  const groups = new Map();
+  for (const bill of Array.isArray(bills) ? bills : []) {
+    const key = parkingCustomerKey(bill);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(bill);
+  }
+  const customers = [];
+  for (const [key, list] of groups) {
+    const customerName = mostUsedName(list.map((b) => b.customerName));
+    const cars = [...list].sort((a, b) =>
+      a.periodFrom.localeCompare(b.periodFrom) ||
+      a.vehicle.localeCompare(b.vehicle))
+        .map((b) => ({...b, registeredTo:
+          sameName(b.customerName, customerName) ? "" : b.customerName}));
+    const sum = (k) => cars.reduce((s, b) => s + b[k], 0);
+    customers.push({
+      key,
+      monthKey: cars[0].monthKey,
+      customerName,
+      customerPhone: cars.find((b) => b.customerPhone)?.customerPhone || "",
+      customerEmail: cars.find((b) => b.customerEmail)?.customerEmail || "",
+      cars,
+      monthCents: sum("monthCents"),
+      monthPaidCents: sum("monthPaidCents"),
+      monthUnpaidCents: sum("monthUnpaidCents"),
+      priorUnpaidCents: sum("priorUnpaidCents"),
+      dueCents: sum("dueCents"),
+      owes: cars.some((b) => b.owes),
+      partialMonth: cars.some((b) => b.partialMonth),
+    });
+  }
+  return customers.sort((a, b) => b.dueCents - a.dueCents ||
+    a.customerName.localeCompare(b.customerName));
 }
 
 function moneyText(cents) {
@@ -285,8 +376,50 @@ function parkingMonthBillText(bill, businessName) {
   return lines.join("\n");
 }
 
+/**
+ * One customer's bill as WhatsApp text: every car, the dates it covers, and
+ * what is owed in all.
+ *
+ * @param {object} customer From parkingMonthCustomers.
+ * @param {string} businessName The lot.
+ * @return {string} Plain text.
+ */
+function parkingMonthCustomerText(customer, businessName) {
+  const c = customer || {};
+  const lines = [
+    `${text(businessName) || "Parking"} — Parking bill, ` +
+      `${monthLabel(c.monthKey)}`,
+    `For: ${[c.customerName || "—", c.customerPhone].filter(Boolean)
+        .join(" · ")}`,
+    "",
+  ];
+  for (const b of c.cars || []) {
+    const car = [b.vehicle || "Car", b.vinNumber ? `VIN ${b.vinNumber}` : ""]
+        .filter(Boolean).join(" · ");
+    lines.push(car + (b.registeredTo ? ` (registered to ${b.registeredTo})` :
+      ""));
+    lines.push(`  ${b.periodFrom} to ${b.periodTo}: ${b.days} day` +
+      `${b.days === 1 ? "" : "s"} × ${moneyText(b.dayRateCents)} — ` +
+      `${moneyText(b.monthCents)}`);
+  }
+  lines.push("", `Total for ${MONTH_NAMES[Number(String(c.monthKey)
+      .slice(5, 7)) - 1] || "the month"} — ${moneyText(c.monthCents)}`);
+  if (c.priorUnpaidCents > 0) {
+    lines.push(`Unpaid from before — ${moneyText(c.priorUnpaidCents)}`);
+  }
+  if (c.monthPaidCents > 0) {
+    lines.push(`Paid — -${moneyText(c.monthPaidCents)}`);
+  }
+  lines.push(c.dueCents > 0 ?
+    `BALANCE DUE: ${moneyText(c.dueCents)}` : "PAID IN FULL");
+  return lines.join("\n");
+}
+
 module.exports = {
   MONTH_NAMES,
+  parkingCustomerKey,
+  parkingMonthCustomers,
+  parkingMonthCustomerText,
   dayNumber,
   monthDays,
   previousMonthKey,

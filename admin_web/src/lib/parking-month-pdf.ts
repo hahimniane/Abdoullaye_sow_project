@@ -9,7 +9,7 @@ import { businessAddressText, fetchLogo } from "./invoice-pdf.ts";
 import {
   monthLabel,
   moneyText,
-  type ParkingMonthBill,
+  type ParkingMonthCustomer,
   type ParkingMonthSummary,
 } from "./parking-month-statement.ts";
 
@@ -25,6 +25,7 @@ const COPY = {
     left: "Left", carsOnLot: "Cars on the lot", carsOwing: "Still owing", billed: "Billed",
     collected: "Collected", owed: "Still owed", whoOwes: "Who still owes", customer: "Customer",
     due: "Due", none: "Nobody owes anything for this month.", soFar: "so far",
+    car: "Car", amount: "Amount", to: "to", registeredTo: "registered to", monthTotal: "Total for the month", cars: "cars",
     footer: "Issued through Laawol Digital · laawoldigital.com",
   },
   fr: {
@@ -34,6 +35,7 @@ const COPY = {
     left: "Partie", carsOnLot: "Voitures au parking", carsOwing: "Doivent encore", billed: "Facturé",
     collected: "Encaissé", owed: "Encore dû", whoOwes: "Qui doit encore", customer: "Client",
     due: "Dû", none: "Personne ne doit rien pour ce mois.", soFar: "à ce jour",
+    car: "Voiture", amount: "Montant", to: "au", registeredTo: "enregistrée au nom de", monthTotal: "Total du mois", cars: "voitures",
     footer: "Émis via Laawol Digital · laawoldigital.com",
   },
 } as const;
@@ -89,44 +91,68 @@ function row(doc: Doc, y: number, label: string, value: string, opts: { bold?: b
   doc.text(value, R, y, { align: "right" });
 }
 
-export async function buildParkingMonthBillPdf(input: { business: Row; bill: ParkingMonthBill; language: Lang }): Promise<Blob> {
+export async function buildParkingMonthBillPdf(input: { business: Row; customer: ParkingMonthCustomer; language: Lang }): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const t = COPY[input.language];
-  const b = input.bill;
+  const c = input.customer;
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-  let y = await header(doc, input.business, t.bill, monthLabel(b.monthKey, input.language), b.trackingCode);
+  let y = await header(doc, input.business, t.bill, monthLabel(c.monthKey, input.language), `${c.cars.length} ${c.cars.length === 1 ? t.car.toLowerCase() : t.cars}`);
 
   doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED).text(t.billedTo.toUpperCase(), M, y);
-  doc.setFontSize(13).setTextColor(...INK).text(b.customerName || "—", M, y + 16);
+  doc.setFontSize(13).setTextColor(...INK).text(c.customerName || "—", M, y + 16);
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(...MUTED);
-  const who = [b.customerPhone, b.customerEmail].filter(Boolean).join("  |  ");
+  const who = [c.customerPhone, c.customerEmail].filter(Boolean).join("  |  ");
   if (who) doc.text(who, M, y + 30);
-  doc.setFont("helvetica", "bold").setFontSize(8).text(t.vehicle.toUpperCase(), R - 200, y);
-  doc.setFontSize(11).setTextColor(...INK).text(b.vehicle || "—", R - 200, y + 16);
-  if (b.vinNumber) doc.setFont("courier", "normal").setFontSize(8.5).setTextColor(...MUTED).text(`VIN ${b.vinNumber}`, R - 200, y + 30);
-  y += 64;
+  y += 54;
 
-  const period = `${b.periodFrom} → ${b.periodTo}${b.partialMonth ? ` (${t.soFar})` : ""}`;
-  doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED).text(t.period.toUpperCase(), M, y);
-  doc.setFont("helvetica", "normal").setFontSize(10.5).setTextColor(...INK).text(period, M + 70, y);
-  doc.text(b.stillParked ? t.stillParked : t.left, R, y, { align: "right" });
-  y += 12;
-  doc.setDrawColor(230, 233, 232).setLineWidth(1).line(M, y, R, y);
-  y += 24;
+  // One line per car: what it is, the days it covers, days x rate, amount.
+  const colPeriod = M + 220;
+  const colRate = R - 90;
+  const head = () => {
+    doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED);
+    doc.text(t.car.toUpperCase(), M, y);
+    doc.text(t.period.toUpperCase(), colPeriod, y);
+    doc.text(`${t.days.toUpperCase()} ×`, colRate, y, { align: "right" });
+    doc.text(t.amount.toUpperCase(), R, y, { align: "right" });
+    y += 6;
+    doc.setDrawColor(230, 233, 232).setLineWidth(1).line(M, y, R, y);
+    y += 16;
+  };
+  head();
+  for (const b of c.cars) {
+    if (y > 792 - 140) {
+      footer(doc, input.language);
+      doc.addPage();
+      y = M;
+      head();
+    }
+    doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...INK).text(b.vehicle || t.car, M, y);
+    doc.setFont("helvetica", "normal").setFontSize(10).text(`${b.periodFrom} ${t.to} ${b.periodTo}`, colPeriod, y);
+    doc.text(`${b.days} × ${moneyText(b.dayRateCents)}`, colRate, y, { align: "right" });
+    doc.setFont("helvetica", "bold").text(moneyText(b.monthCents), R, y, { align: "right" });
+    let ly = y + 12;
+    const sub = [b.vinNumber ? `VIN ${b.vinNumber}` : "", b.registeredTo ? `${t.registeredTo} ${b.registeredTo}` : "", b.stillParked ? t.stillParked : t.left]
+      .filter(Boolean).join("  ·  ");
+    doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(...MUTED).text(sub, M, ly);
+    ly += 8;
+    doc.setDrawColor(236, 238, 237).setLineWidth(0.5).line(M, ly, R, ly);
+    y = ly + 16;
+  }
 
-  row(doc, y, `${t.parking}: ${b.days} ${b.days === 1 ? t.day : t.days} × ${moneyText(b.dayRateCents)}`, moneyText(b.monthCents), { color: INK });
+  y += 4;
+  row(doc, y, t.monthTotal, moneyText(c.monthCents), { color: INK });
   y += 18;
-  if (b.priorUnpaidCents > 0) {
-    row(doc, y, t.priorUnpaid, moneyText(b.priorUnpaidCents), { color: DUE });
+  if (c.priorUnpaidCents > 0) {
+    row(doc, y, t.priorUnpaid, moneyText(c.priorUnpaidCents), { color: DUE });
     y += 18;
   }
-  if (b.monthPaidCents > 0) {
-    row(doc, y, t.paid, `-${moneyText(b.monthPaidCents)}`, { color: OK });
+  if (c.monthPaidCents > 0) {
+    row(doc, y, t.paid, `-${moneyText(c.monthPaidCents)}`, { color: OK });
     y += 18;
   }
   doc.setDrawColor(...INK).setLineWidth(1.2).line(M, y - 6, R, y - 6);
   y += 12;
-  if (b.dueCents > 0) row(doc, y, t.balanceDue, moneyText(b.dueCents), { bold: true, color: DUE });
+  if (c.dueCents > 0) row(doc, y, t.balanceDue, moneyText(c.dueCents), { bold: true, color: DUE });
   else row(doc, y, t.paidInFull, moneyText(0), { bold: true, color: OK });
 
   footer(doc, input.language);
@@ -154,14 +180,14 @@ export async function buildParkingMonthSummaryPdf(input: { business: Row; summar
   });
   y += 48;
 
-  doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED).text(`${t.whoOwes.toUpperCase()} (${s.carsOwing})`, M, y);
+  doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED).text(`${t.whoOwes.toUpperCase()} (${s.customersOwing.length})`, M, y);
   y += 8;
   doc.setDrawColor(230, 233, 232).setLineWidth(1).line(M, y, R, y);
   y += 16;
-  if (s.owing.length === 0) {
+  if (s.customersOwing.length === 0) {
     doc.setFont("helvetica", "normal").setFontSize(10.5).setTextColor(...INK).text(t.none, M, y);
   }
-  for (const b of s.owing) {
+  for (const b of s.customersOwing) {
     if (y > 792 - 80) {
       footer(doc, input.language);
       doc.addPage();
@@ -169,7 +195,7 @@ export async function buildParkingMonthSummaryPdf(input: { business: Row; summar
     }
     doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...INK).text(b.customerName || "—", M, y);
     doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED)
-      .text(`${b.vehicle}${b.vinNumber ? ` · ${b.vinNumber.slice(-8)}` : ""} · ${b.days} ${b.days === 1 ? t.day : t.days}`, M + 150, y);
+      .text((doc.splitTextToSize(`${b.customerPhone}${b.customerPhone ? " · " : ""}${b.cars.length} ${b.cars.length === 1 ? t.car.toLowerCase() : t.cars}: ${b.cars.map((car) => car.vehicle).join(", ")}`, R - 80 - (M + 150)) as string[])[0], M + 150, y);
     doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...DUE).text(moneyText(b.dueCents), R, y, { align: "right" });
     y += 6;
     doc.setDrawColor(236, 238, 237).setLineWidth(0.5).line(M, y, R, y);

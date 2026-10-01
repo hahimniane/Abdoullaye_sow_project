@@ -4276,5 +4276,35 @@
   "pmePdfSummary": "FIN DE MOIS",
   "pmePdfVehicle": "Véhicule",
   "pmePdfPeriod": "Période",
-  "pmeWhoOwes": "Qui doit encore"
+  "pmeWhoOwes": "Qui doit encore",
+  "pmeCars": "{count, plural, =1{1 voiture} other{{count} voitures}}",
+  "@pmeCars": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeCar": "Voiture",
+  "pmeAmount": "Montant",
+  "pmeTo": "au",
+  "pmeRegisteredTo": "enregistrée au nom de",
+  "pmeMonthTotal": "Total du mois",
+  "pmeEveryoneCount": "Tout le monde ({count})",
+  "@pmeEveryoneCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeCustomersOwe": "{count, plural, =1{1 client doit} other{{count} clients doivent}}",
+  "@pmeCustomersOwe": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmePickCar": "Quelle voiture ?"
 }

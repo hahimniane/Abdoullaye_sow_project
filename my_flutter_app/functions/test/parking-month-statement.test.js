@@ -9,6 +9,7 @@ const {
   parkingMonthStatement,
   parkingMonthSummary,
   parkingMonthBillText,
+  parkingMonthCustomerText,
 } = require("../parking_month_statement");
 
 const at = (iso) => ({toDate: () => new Date(`${iso}T12:00:00Z`)});
@@ -141,3 +142,57 @@ describe("words", () => {
     ].join("\n"));
   });
 });
+
+// Names are typed a dozen ways for the same person; the phone is who the
+// WhatsApp reaches. One bill per phone, every car on it with its dates.
+describe("one bill per customer", () => {
+  const base = {parkingDate: at("2026-09-18"), dailyRate: 12,
+    paymentStatus: "awaiting_direct_payment", status: "reserved"};
+  const rows = [
+    {...base, id: "a", customerName: "abdoulaye sow",
+      customerPhone: "347-562-8973", carYear: "2014", carMake: "Toyota",
+      carModel: "Corolla"},
+    {...base, id: "b", customerName: "Abdoulaye Sow",
+      customerPhone: "+1 (347) 562 8973", parkingDate: at("2026-09-21"),
+      parkingEndDate: at("2026-09-24"), amountDueCents: 4800,
+      carYear: "2017", carMake: "Toyota", carModel: "RAV4",
+      amountPaidCents: 1000},
+    {...base, id: "c", customerName: "Ministre", customerPhone: "3475628973",
+      carYear: "2015", carMake: "Toyota", carModel: "RAV4"},
+    {...diallo, customerPhone: "6465550000"},
+  ];
+
+  it("groups by phone whatever the name, most used spelling shown", () => {
+    const s = parkingMonthSummary(rows, "2026-09", OCT1);
+    assert.equal(s.customers.length, 2);
+    const sow = s.customers.find((c) => c.cars.length === 3);
+    assert.equal(sow.customerName, "Abdoulaye Sow");
+    assert.deepEqual(sow.cars.map((b) => b.registeredTo), ["", "Ministre", ""]);
+    assert.equal(sow.monthCents, 15600 + 15600 + 4800);
+    assert.equal(sow.monthPaidCents, 1000);
+    assert.equal(sow.dueCents, 15600 + 15600 + 3800);
+    assert.deepEqual(s.customersOwing.map((c) => c.customerName),
+        ["Diallo", "Abdoulaye Sow"]);
+  });
+
+  it("writes one text listing every car and its dates", () => {
+    const sow = parkingMonthSummary(rows, "2026-09", OCT1).customers
+        .find((c) => c.cars.length === 3);
+    assert.equal(parkingMonthCustomerText(sow, "Keren Auto Sales"), [
+      "Keren Auto Sales — Parking bill, September 2026",
+      "For: Abdoulaye Sow · 347-562-8973",
+      "",
+      "2014 Toyota Corolla",
+      "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
+      "2015 Toyota RAV4 (registered to Ministre)",
+      "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
+      "2017 Toyota RAV4",
+      "  2026-09-21 to 2026-09-24: 4 days × $12.00 — $48.00",
+      "",
+      "Total for September — $360.00",
+      "Paid — -$10.00",
+      "BALANCE DUE: $350.00",
+    ].join("\n"));
+  });
+});
+
