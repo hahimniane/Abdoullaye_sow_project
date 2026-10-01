@@ -727,6 +727,76 @@ function businessParkingOwnRateCents({record, start, end}) {
   return Math.max(0, total);
 }
 
+const BUSINESS_PARKING_EDIT_LABELS = Object.freeze([
+  ["customerName", "Owner"],
+  ["customerPhone", "Phone"],
+  ["customerEmail", "Email"],
+  ["vinNumber", "VIN"],
+  ["carYear", "Year"],
+  ["carMake", "Make"],
+  ["carModel", "Model"],
+  ["parkingDate", "In date"],
+  ["parkingEndDate", "Out date"],
+  ["paymentMethod", "Payment method"],
+  ["amountDueCents", "Total"],
+]);
+
+/**
+ * What an edit changed on a parked car, field by field, in the words the
+ * History shows - so "who changed this car's phone" always has an answer.
+ * Dates compare as calendar days (an open stay reads "Open"), money as
+ * dollars, text ignoring surrounding spaces.
+ *
+ * @param {object} before The stored car.
+ * @param {object} after The values the edit wrote.
+ * @return {{field: string, from: string, to: string}[]} The changes.
+ */
+function businessParkingEditChanges(before, after) {
+  const b = before && typeof before === "object" ? before : {};
+  const a = after && typeof after === "object" ? after : {};
+  const day = (v) => {
+    if (!v) return "Open";
+    const d = typeof v.toDate === "function" ? v.toDate() : new Date(v);
+    return Number.isNaN(d.getTime()) ? "Open" : d.toISOString().slice(0, 10);
+  };
+  const money = (v) => `$${(Math.round(Number(v) || 0) / 100).toFixed(2)}`;
+  const shown = (key, v) => {
+    if (key === "parkingDate" || key === "parkingEndDate") return day(v);
+    if (key === "amountDueCents") return money(v);
+    if (key === "paymentMethod") {
+      return text(v, 40) === "payment_link" ? "Payment link" :
+        text(v, 40) === "direct" ? "Direct (cash, Zelle...)" : text(v, 40);
+    }
+    return text(v, 200) || "—";
+  };
+  const changes = [];
+  for (const [key, field] of BUSINESS_PARKING_EDIT_LABELS) {
+    if (!Object.prototype.hasOwnProperty.call(a, key)) continue;
+    const from = shown(key, key === "customerName" ?
+      (b.customerName ?? b.ownerName) : b[key]);
+    const to = shown(key, a[key]);
+    const same = key === "vinNumber" ?
+      from.toUpperCase() === to.toUpperCase() : from === to;
+    if (!same) changes.push({field, from, to});
+  }
+  return changes;
+}
+
+/**
+ * One History line for an edit: every change spelled out, since the History
+ * shows the summary.
+ *
+ * @param {{field: string, from: string, to: string}[]} changes From
+ *   businessParkingEditChanges.
+ * @return {string} "Edited — Phone: A → B; Out date: Open → 2026-10-01".
+ */
+function businessParkingEditSummary(changes) {
+  const list = Array.isArray(changes) ? changes : [];
+  if (!list.length) return "Edited — nothing changed";
+  return "Edited — " +
+    list.map((c) => `${c.field}: ${c.from} → ${c.to}`).join("; ");
+}
+
 /**
  * Decides what an edit is allowed to do.
  * @param {Object} args entry plus the requested changes.
@@ -878,6 +948,8 @@ function parkingRateSelection(business, rateId) {
 }
 
 module.exports = {
+  businessParkingEditChanges,
+  businessParkingEditSummary,
   businessParkingOwnRateCents,
   BUSINESS_PARKING_EDITABLE_FIELDS,
   BUSINESS_PARKING_EDIT_REFUSALS,

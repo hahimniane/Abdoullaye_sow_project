@@ -923,3 +923,46 @@ describe("setting a part-paid car back to not paid", () => {
   });
 });
 
+// An edit to a parked car left no History, so nobody could say who moved
+// the Kia's phone from one customer to another.
+describe("what an edit changed, for the History", () => {
+  const {businessParkingEditChanges, businessParkingEditSummary} =
+    require("../business_parking_entry");
+  const before = {
+    customerName: "BT", customerPhone: "+13475628973", customerEmail: "",
+    vinNumber: "cg228524", carYear: "2011", carMake: "KIA",
+    carModel: "Sorento", paymentMethod: "direct", amountDueCents: 9600,
+    parkingDate: {toDate: () => new Date("2026-09-01T12:00:00Z")},
+    parkingEndDate: null,
+  };
+
+  it("lists only what changed, in the History's words", () => {
+    const changes = businessParkingEditChanges(before, {
+      ...before, customerPhone: "+13476413811", vinNumber: "CG228524",
+      parkingDate: new Date("2026-09-01T12:00:00Z"),
+      parkingEndDate: new Date("2026-09-08T12:00:00Z"),
+    });
+    assert.deepEqual(changes, [
+      {field: "Phone", from: "+13475628973", to: "+13476413811"},
+      {field: "Out date", from: "Open", to: "2026-09-08"},
+    ]);
+    assert.equal(businessParkingEditSummary(changes),
+        "Edited — Phone: +13475628973 → +13476413811; " +
+        "Out date: Open → 2026-09-08");
+  });
+
+  it("reads money as dollars and the old owner name as a fallback", () => {
+    const changes = businessParkingEditChanges(
+        {...before, customerName: undefined, ownerName: "BT"},
+        {customerName: "Bailo", amountDueCents: 12000});
+    assert.deepEqual(changes, [
+      {field: "Owner", from: "BT", to: "Bailo"},
+      {field: "Total", from: "$96.00", to: "$120.00"},
+    ]);
+  });
+
+  it("says nothing when nothing changed", () => {
+    assert.deepEqual(businessParkingEditChanges(before, {...before}), []);
+  });
+});
+
