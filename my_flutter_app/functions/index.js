@@ -277,6 +277,7 @@ const {
   BUSINESS_PARKING_EDIT_REFUSALS,
   BUSINESS_PARKING_PAYMENT_TYPE,
   businessParkingEditPlan,
+  businessParkingOwnRateCents,
   PARKING_LINK_STATES,
   parkingPaymentLinkState,
   parkingRateSelection,
@@ -12866,9 +12867,16 @@ exports.updateBusinessParkingEntry = onCall(
               "No parking spaces are available for those dates",
           );
         }
+        // The car's own rate, not the lot's rate today: a price agreed with
+        // (or corrected for) this customer must survive a date change.
+        const ownRateCents = businessParkingOwnRateCents({
+          record: before,
+          start: input.startDate,
+          end: input.endDate,
+        });
         pricing = businessParkingPaymentPlan({
           paymentMethod: input.paymentMethod,
-          totalCents: centsFromDollars(option.estimatedTotal),
+          totalCents: ownRateCents ?? centsFromDollars(option.estimatedTotal),
           simulatePayments: SIMULATE_PAYMENTS,
         });
         if (pricing.takesPlatformCut) {

@@ -833,3 +833,33 @@ describe("a card-paid parking entry records when it was paid", () => {
     assert.match(body, /FirestoreFieldValue\.serverTimestamp\(\)\}\)/);
   });
 });
+
+// Diallo's F-150 was corrected to $15/day; setting its leave date re-priced
+// it at the lot's $12 and billed $372 for 31 days instead of $465.
+describe("an edited stay keeps the car's own rate", () => {
+  const {businessParkingOwnRateCents} = require("../business_parking_entry");
+  const at = (iso) => ({toDate: () => new Date(`${iso}T12:00:00Z`)});
+  it("prices the days at the car's daily rate", () => {
+    assert.equal(businessParkingOwnRateCents({
+      record: {dailyRate: 15, weeklyRate: 0, monthlyRate: 0},
+      start: at("2026-09-01"), end: new Date("2026-10-01T12:00:00Z"),
+    }), 46500);
+  });
+
+  it("uses the car's weekly and monthly rates the way the lot's estimate does",
+      () => {
+        assert.equal(businessParkingOwnRateCents({
+          record: {dailyRate: 10, weeklyRate: 60, monthlyRate: 0},
+          start: at("2026-09-01"), end: at("2026-09-10"),
+        }), 6000 + 3 * 1000);
+      });
+
+  it("leaves the lot's estimate standing when the car has no rate", () => {
+    assert.equal(businessParkingOwnRateCents({
+      record: {}, start: at("2026-09-01"), end: at("2026-09-10")}), null);
+    assert.equal(businessParkingOwnRateCents({
+      record: {dailyRate: 12}, start: at("2026-09-01"), end: null}), null,
+    "an open stay is billed day by day, not up front");
+  });
+});
+

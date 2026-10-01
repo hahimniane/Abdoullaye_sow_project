@@ -660,6 +660,53 @@ function parkingDayKey(value) {
 }
 
 /**
+ * What a stay with a leave date costs at the car's OWN rates - the ones it
+ * was recorded with, or corrected to - rather than whatever the lot charges
+ * today. Repricing an edit at the lot's current rate silently changed a
+ * customer's price: a car corrected to $15/day was re-billed at $12 the
+ * moment someone set its leave date, and a lot that raised its rate would
+ * have re-billed every old car it edited.
+ *
+ * Same arithmetic as the lot's estimate: inclusive days, whole months at the
+ * monthly rate, whole weeks at the weekly rate, the rest at the daily rate.
+ *
+ * @param {{record: object, start: *, end: *}} input The stored car and the
+ *   stay's dates.
+ * @return {number|null} Cents, or null when the car carries no rate of its
+ *   own (or the stay is still open), so the lot's estimate stands.
+ */
+function businessParkingOwnRateCents({record, start, end}) {
+  const r = record && typeof record === "object" ? record : {};
+  const daily = Math.round((Number(r.dailyRate) || 0) * 100);
+  const weekly = Math.round((Number(r.weeklyRate) || 0) * 100);
+  const monthly = Math.round((Number(r.monthlyRate) || 0) * 100);
+  if (daily <= 0 && weekly <= 0 && monthly <= 0) return null;
+  const toDay = (v) => {
+    const d = v && typeof v.toDate === "function" ? v.toDate() : new Date(v);
+    return Number.isNaN(d.getTime()) ? null :
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  };
+  if (!end) return null;
+  const from = toDay(start);
+  const to = toDay(end);
+  if (from === null || to === null || to < from) return null;
+  let days = Math.round((to - from) / 86400000) + 1;
+  let total = 0;
+  if (monthly > 0) {
+    const months = Math.floor(days / 30);
+    total += months * monthly;
+    days -= months * 30;
+  }
+  if (weekly > 0) {
+    const weeks = Math.floor(days / 7);
+    total += weeks * weekly;
+    days -= weeks * 7;
+  }
+  total += days * daily;
+  return Math.max(0, total);
+}
+
+/**
  * Decides what an edit is allowed to do.
  * @param {Object} args entry plus the requested changes.
  * @return {Object} {ok, reason, changes, repricing, extending, relinking}.
@@ -810,6 +857,7 @@ function parkingRateSelection(business, rateId) {
 }
 
 module.exports = {
+  businessParkingOwnRateCents,
   BUSINESS_PARKING_EDITABLE_FIELDS,
   BUSINESS_PARKING_EDIT_REFUSALS,
   businessParkingEditPlan,
