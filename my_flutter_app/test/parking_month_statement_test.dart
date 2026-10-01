@@ -95,4 +95,45 @@ void main() {
       ].join('\n'),
     );
   });
+
+  test('one bill per phone, every car with its dates; mirrors the server', () {
+    Map<String, dynamic> car(Map<String, dynamic> over) => {
+          'parkingDate': at('2026-09-18'),
+          'dailyRate': 12,
+          'paymentStatus': 'awaiting_direct_payment',
+          'status': 'reserved',
+          ...over,
+        };
+    final rows = [
+      car({'id': 'a', 'customerName': 'abdoulaye sow', 'customerPhone': '347-562-8973', 'carYear': '2014', 'carMake': 'Toyota', 'carModel': 'Corolla'}),
+      car({'id': 'b', 'customerName': 'Abdoulaye Sow', 'customerPhone': '+1 (347) 562 8973', 'parkingDate': at('2026-09-21'), 'parkingEndDate': at('2026-09-24'), 'amountDueCents': 4800, 'carYear': '2017', 'carMake': 'Toyota', 'carModel': 'RAV4', 'amountPaidCents': 1000}),
+      car({'id': 'c', 'customerName': 'Ministre', 'customerPhone': '3475628973', 'carYear': '2015', 'carMake': 'Toyota', 'carModel': 'RAV4'}),
+      diallo({'customerPhone': '6465550000'}),
+    ];
+    final s = parkingMonthSummary(rows, '2026-09', oct1);
+    expect(s.customers.length, 2);
+    expect(s.customersOwing.map((c) => c.customerName).toList(), ['Diallo', 'Abdoulaye Sow']);
+    final sow = s.customers.firstWhere((c) => c.cars.length == 3);
+    expect(sow.registeredTo, ['', 'Ministre', '']);
+    expect(sow.dueCents, 35000);
+    expect(mostUsedName(['Abd Sow', 'abdoulaye sow', 'Abdoulaye Sow']), 'Abdoulaye Sow');
+    expect(
+      parkingMonthCustomerText(sow, 'Keren Auto Sales'),
+      [
+        'Keren Auto Sales — Parking bill, September 2026',
+        'For: Abdoulaye Sow · 347-562-8973',
+        '',
+        '2014 Toyota Corolla',
+        '  2026-09-18 to 2026-09-30: 13 days × \$12.00 — \$156.00',
+        '2015 Toyota RAV4 (registered to Ministre)',
+        '  2026-09-18 to 2026-09-30: 13 days × \$12.00 — \$156.00',
+        '2017 Toyota RAV4',
+        '  2026-09-21 to 2026-09-24: 4 days × \$12.00 — \$48.00',
+        '',
+        'Total for September — \$360.00',
+        'Paid — -\$10.00',
+        'BALANCE DUE: \$350.00',
+      ].join('\n'),
+    );
+  });
 }

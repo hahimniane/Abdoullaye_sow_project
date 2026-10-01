@@ -8514,7 +8514,8 @@ async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
       .where("businessId", "==", businessId).get();
   const summary = parkingMonthSummary(
       cars.docs.map((d) => ({id: d.id, ...d.data()})), monthKey, now);
-  if (summary.carsOwing === 0) return {businessId, notified: 0};
+  const owing = summary.customersOwing.length;
+  if (owing === 0) return {businessId, notified: 0};
   const recipients = new Set();
   const ownerUid = String(businessDoc.data()?.ownerUid || "").trim();
   if (ownerUid) recipients.add(ownerUid);
@@ -8528,8 +8529,9 @@ async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
     }
   }
   const month = parkingMonthLabel(monthKey).split(" ")[0];
-  const owingText = summary.carsOwing === 1 ? "1 car still owes" :
-    `${summary.carsOwing} cars still owe`;
+  // Counted by customer (one per phone), the way the bills go out.
+  const owingText = owing === 1 ? "1 customer still owes" :
+    `${owing} customers still owe`;
   await Promise.all([...recipients].map((uid) =>
     safeSendPreferenceNotification({
       uid,
@@ -8540,7 +8542,7 @@ async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
       data: {type: "parking_month_end", businessId, monthKey},
     })));
   return {businessId, notified: recipients.size,
-    carsOwing: summary.carsOwing, dueCents: summary.dueCents};
+    customersOwing: owing, dueCents: summary.dueCents};
 }
 
 exports.notifyParkingMonthEnd = onSchedule(

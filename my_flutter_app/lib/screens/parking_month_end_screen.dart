@@ -108,6 +108,12 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         nobodyOwes: l10n.pmeNobodyOwes,
         daysLabel: (d) => l10n.pmeDays(d),
         footer: l10n.invPdfFooter,
+        car: l10n.pmeCar,
+        amount: l10n.pmeAmount,
+        to: l10n.pmeTo,
+        registeredTo: l10n.pmeRegisteredTo,
+        monthTotal: l10n.pmeMonthTotal,
+        carsLabel: (n) => l10n.pmeCars(n),
       );
 
   Future<void> _run(String key, Future<void> Function() work) async {
@@ -142,12 +148,12 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     });
   }
 
-  Future<void> _billActions(ParkingMonthBill bill) async {
+  Future<void> _customerActions(ParkingMonthCustomer customer) async {
     final l10n = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).toLanguageTag();
     final action = await pickLotOption<String>(
       context,
-      title: bill.customerName.isEmpty ? bill.vehicle : bill.customerName,
+      title: customer.customerName.isEmpty ? l10n.pmePdfBill : customer.customerName,
       options: [
         LotOption('pdf', l10n.pmeSharePdf),
         LotOption('text', l10n.pmeSendText),
@@ -157,10 +163,10 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     if (action == null || !mounted) return;
     switch (action) {
       case 'pdf':
-        await _run(bill.id, () async {
+        await _run(customer.key, () async {
           final bytes = await buildParkingMonthBillPdf(
             business: {..._business, 'name': _businessName},
-            bill: bill,
+            customer: customer,
             copy: _copy(l10n, locale),
           );
           if (!mounted) return;
@@ -168,16 +174,31 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             context,
             bytes: bytes,
             fileName: parkingMonthFileName(
-                'parking-bill', _monthKey, bill.customerName, _businessName),
-            title: bill.customerName.isEmpty ? l10n.pmePdfBill : bill.customerName,
+                'parking-bill', _monthKey, customer.customerName, _businessName),
+            title: customer.customerName.isEmpty ? l10n.pmePdfBill : customer.customerName,
           );
         });
       case 'text':
-        await SharePlus.instance
-            .share(ShareParams(text: parkingMonthBillText(bill, _businessName)));
+        await SharePlus.instance.share(
+            ShareParams(text: parkingMonthCustomerText(customer, _businessName)));
       case 'open':
-        final doc = _docs.where((d) => d.id == bill.id).firstOrNull;
-        if (doc == null) return;
+        // A customer with several cars: say which one the payment is for.
+        var carId = customer.cars.first.id;
+        if (customer.cars.length > 1) {
+          final picked = await pickLotOption<String>(
+            context,
+            title: l10n.pmePickCar,
+            options: [
+              for (final b in customer.cars)
+                LotOption(b.id, b.vehicle.isEmpty ? b.vinNumber : b.vehicle,
+                    detail: parkingMoney(b.dueCents)),
+            ],
+          );
+          if (picked == null || !mounted) return;
+          carId = picked;
+        }
+        final doc = _docs.where((d) => d.id == carId).firstOrNull;
+        if (doc == null || !mounted) return;
         await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) =>
               ParkedCarDetailsScreen(parkedCar: ParkedCar.fromFirestore(doc)),
@@ -194,9 +215,8 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       _monthKey,
     );
     final thisMonth = shiftParkingMonthKey(previousParkingMonthKey(), 1);
-    final listed = _showAll
-        ? ([...summary.bills]..sort((a, b) => b.dueCents.compareTo(a.dueCents)))
-        : summary.owing;
+    // One card per customer (grouped by phone), their cars underneath.
+    final listed = _showAll ? summary.customers : summary.customersOwing;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -303,7 +323,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                     Row(children: [
                       Expanded(
                         child: _Tab(
-                          label: l10n.pmeWhoOwesCount(summary.carsOwing),
+                          label: l10n.pmeWhoOwesCount(summary.customersOwing.length),
                           selected: !_showAll,
                           onTap: () => setState(() => _showAll = false),
                         ),
@@ -311,7 +331,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: _Tab(
-                          label: l10n.pmeEveryCarCount(summary.carsOnLot),
+                          label: l10n.pmeEveryoneCount(summary.customers.length),
                           selected: _showAll,
                           onTap: () => setState(() => _showAll = true),
                         ),
@@ -337,10 +357,10 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                         padding: const EdgeInsets.fromLTRB(
                             AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 40),
                         itemCount: listed.length,
-                        itemBuilder: (_, i) => _BillTile(
-                          bill: listed[i],
-                          busy: _busy == listed[i].id,
-                          onTap: () => _billActions(listed[i]),
+                        itemBuilder: (_, i) => _CustomerTile(
+                          customer: listed[i],
+                          busy: _busy == listed[i].key,
+                          onTap: () => _customerActions(listed[i]),
                         ),
                       ),
           ),
@@ -433,17 +453,17 @@ class _Tab extends StatelessWidget {
   }
 }
 
-class _BillTile extends StatelessWidget {
-  const _BillTile({required this.bill, required this.busy, required this.onTap});
+class _CustomerTile extends StatelessWidget {
+  const _CustomerTile({required this.customer, required this.busy, required this.onTap});
 
-  final ParkingMonthBill bill;
+  final ParkingMonthCustomer customer;
   final bool busy;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final owes = bill.dueCents > 0;
+    final owes = customer.dueCents > 0;
     return PressableScale(
       onTap: () {
         AppHaptics.selection();
@@ -458,59 +478,105 @@ class _BillTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           border: Border.all(color: AppColors.rule),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        customer.customerName.isEmpty ? '—' : customer.customerName,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      Text(
+                        [customer.customerPhone, l10n.pmeCars(customer.cars.length)]
+                            .where((p) => p.isNotEmpty)
+                            .join(' · '),
+                        style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                if (busy)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
                   Text(
-                    bill.customerName.isEmpty ? '—' : bill.customerName,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
+                    owes ? parkingMoney(customer.dueCents) : l10n.invStatusPaid,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: owes ? AppColors.warn : AppColors.sage,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    [
-                      bill.vehicle,
-                      bill.stillParked ? l10n.pmeStillParked : l10n.pmeLeft,
-                    ].where((p) => p.isNotEmpty).join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    [
-                      '${l10n.pmeParkingLine(bill.days, parkingMoney(bill.dayRateCents))}'
-                          ' = ${parkingMoney(bill.monthCents)}',
-                      if (bill.priorUnpaidCents > 0)
-                        '+ ${parkingMoney(bill.priorUnpaidCents)} ${l10n.pmeFromBefore.toLowerCase()}',
-                    ].join(' · '),
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
-                ],
-              ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.sm),
-            if (busy)
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              Text(
-                owes ? parkingMoney(bill.dueCents) : l10n.invStatusPaid,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  color: owes ? AppColors.warn : AppColors.sage,
+            const Divider(height: 16),
+            for (var i = 0; i < customer.cars.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            customer.cars[i].vehicle.isEmpty
+                                ? l10n.pmeCar
+                                : customer.cars[i].vehicle,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          Text(
+                            [
+                              '${customer.cars[i].periodFrom} ${l10n.pmeTo} ${customer.cars[i].periodTo}',
+                              l10n.pmeParkingLine(customer.cars[i].days,
+                                  parkingMoney(customer.cars[i].dayRateCents)),
+                              if (customer.registeredTo[i].isNotEmpty)
+                                '${l10n.pmeRegisteredTo} ${customer.registeredTo[i]}',
+                            ].join(' · '),
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      parkingMoney(customer.cars[i].monthCents),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+            if (customer.priorUnpaidCents > 0 || customer.monthPaidCents > 0)
+              Text(
+                [
+                  if (customer.priorUnpaidCents > 0)
+                    '+ ${parkingMoney(customer.priorUnpaidCents)} ${l10n.pmeFromBefore.toLowerCase()}',
+                  if (customer.monthPaidCents > 0)
+                    '${l10n.invPdfPaid} ${parkingMoney(customer.monthPaidCents)}',
+                ].join(' · '),
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),
           ],
         ),

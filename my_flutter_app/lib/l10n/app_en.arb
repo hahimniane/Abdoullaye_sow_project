@@ -4276,5 +4276,35 @@
   "pmePdfSummary": "MONTH END",
   "pmePdfVehicle": "Vehicle",
   "pmePdfPeriod": "Period",
-  "pmeWhoOwes": "Who still owes"
+  "pmeWhoOwes": "Who still owes",
+  "pmeCars": "{count, plural, =1{1 car} other{{count} cars}}",
+  "@pmeCars": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeCar": "Car",
+  "pmeAmount": "Amount",
+  "pmeTo": "to",
+  "pmeRegisteredTo": "registered to",
+  "pmeMonthTotal": "Total for the month",
+  "pmeEveryoneCount": "Everyone ({count})",
+  "@pmeEveryoneCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeCustomersOwe": "{count, plural, =1{1 customer owes} other{{count} customers owe}}",
+  "@pmeCustomersOwe": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmePickCar": "Which car?"
 }
