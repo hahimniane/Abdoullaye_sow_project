@@ -9230,10 +9230,17 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
   // A car can be saved marked as paid; if that was wrong, set it back to
   // awaiting the payment. Only a hand-marked direct payment can be undone —
   // a Stripe payment-link settlement is Stripe's record. Logged in History.
+  // A part payment recorded by mistake is undone the same way.
   const canRevertPaid = isBusinessEnteredParking(row) &&
     String(r.paymentMethod) === "direct" &&
-    String(r.paymentStatus) === "paid";
+    (String(r.paymentStatus) === "paid" || businessParkingIsPartlyPaid(row));
   async function revertPaid() {
+    const paidNow = businessParkingAmountPaid(row);
+    const ok = await confirmImportantAction(
+      `Set this car back to not paid? The ${formatMoney(paidNow, "USD")} recorded on it is removed. The change is kept in its history.`,
+      `Remettre cette voiture à non payée ? Les ${formatMoney(paidNow, "USD")} enregistrés sont retirés. La modification reste dans son historique.`,
+    );
+    if (!ok) return;
     await runPanelAction(setBusy, setFlash, "Set back to not paid.", async () => {
       await httpsCallable(functions, "revertBusinessParkingPaid")({ entryId: row.id });
     });

@@ -7756,7 +7756,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lotParkingMarkNotPaidConfirm =>
-      'Set this car back to awaiting payment? The change is logged in its history.';
+      'Set this car back to not paid? Every payment recorded on it is removed. The change is kept in its history.';
 
   @override
   String get lotParkingHistoryTitle => 'Change history';

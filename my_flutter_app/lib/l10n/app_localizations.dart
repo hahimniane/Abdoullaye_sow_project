@@ -13791,7 +13791,7 @@ abstract class AppLocalizations {
   /// No description provided for @lotParkingMarkNotPaidConfirm.
   ///
   /// In en, this message translates to:
-  /// **'Set this car back to awaiting payment? The change is logged in its history.'**
+  /// **'Set this car back to not paid? Every payment recorded on it is removed. The change is kept in its history.'**
   String get lotParkingMarkNotPaidConfirm;
 
   /// No description provided for @lotParkingHistoryTitle.

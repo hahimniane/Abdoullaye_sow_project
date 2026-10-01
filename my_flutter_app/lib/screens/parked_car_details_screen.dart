@@ -1820,6 +1820,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           'directPaymentMethod': '',
           'amountPaidCents': 0,
           'amountPaid': 0,
+          'parkingPayments': const <Object>[],
         };
       });
       showSuccessSnackBar(context, l10n.lotParkingMarkedNotPaid);
@@ -2275,10 +2276,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
               ),
             ),
           ],
-          // Undo a hand-marked direct payment. A Stripe payment-link
-          // settlement is Stripe's record and cannot be undone here, so this
-          // shows only on a paid, direct, business-entered car.
-          if (isPaid &&
+          // Undo a hand-marked direct payment - full or part. A Stripe
+          // payment-link settlement is Stripe's record and cannot be undone
+          // here, so this shows only on a direct, business-entered car.
+          if ((isPaid || businessParkingIsPartlyPaid(_paymentFields)) &&
               canRecordPayment &&
               isBusinessEnteredParking(_paymentFields) &&
               (_paymentFields['paymentMethod'] ?? '').toString() == 'direct') ...[

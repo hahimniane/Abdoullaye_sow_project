@@ -13507,6 +13507,7 @@ exports.revertBusinessParkingPaid = onCall(
       const businessId = String(existing.data()?.businessId || "");
       await requireBusinessPermission(uid, businessId, "parking");
 
+      let undoneCents = 0;
       await db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(entryRef);
         if (!snapshot.exists) {
@@ -13522,6 +13523,7 @@ exports.revertBusinessParkingPaid = onCall(
                 "This parking payment cannot be undone",
           );
         }
+        undoneCents = decision.undoneCents || 0;
         transaction.update(entryRef, {
           ...decision.update,
           directPaymentReceivedAt: null,
@@ -13537,8 +13539,9 @@ exports.revertBusinessParkingPaid = onCall(
         entityId: entryId,
         action: "payment_reverted",
         byStaffId: uid,
-        summary: reason ?
-          `Set back to not paid — ${reason}` : "Set back to not paid",
+        summary: "Set back to not paid" +
+          (undoneCents > 0 ? ` — ${lotMoney(undoneCents)} removed` : "") +
+          (reason ? ` — ${reason}` : ""),
         changes: [],
       });
 

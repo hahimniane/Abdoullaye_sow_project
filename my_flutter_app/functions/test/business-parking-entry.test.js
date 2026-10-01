@@ -863,3 +863,41 @@ describe("an edited stay keeps the car's own rate", () => {
   });
 });
 
+// A part payment recorded by mistake left a car that could never read "not
+// paid" again: undo only accepted fully paid records.
+describe("setting a part-paid car back to not paid", () => {
+  const {businessParkingRevertPaidUpdate} =
+    require("../business_parking_entry");
+  const partPaid = {
+    source: "business", paymentMethod: "direct",
+    paymentStatus: "awaiting_direct_payment", amountPaidCents: 5000,
+    parkingPayments: [{amountCents: 5000, receivedVia: "cash"}],
+  };
+
+  it("is allowed, and clears what was recorded", () => {
+    const d = businessParkingRevertPaidUpdate({entry: partPaid});
+    assert.equal(d.ok, true);
+    assert.equal(d.undoneCents, 5000);
+    assert.equal(d.update.amountPaidCents, 0);
+    assert.equal(d.update.paymentStatus, "awaiting_direct_payment");
+    assert.deepEqual(d.update.parkingPayments, []);
+    // Kept as history, never silently erased.
+    assert.deepEqual(d.update.revertedParkingPayments,
+        [{amountCents: 5000, receivedVia: "cash"}]);
+  });
+
+  it("still refuses a car with nothing paid, or a Stripe link", () => {
+    assert.equal(businessParkingRevertPaidUpdate({entry: {...partPaid,
+      amountPaidCents: 0, parkingPayments: []}}).reason, "not_paid");
+    assert.equal(businessParkingRevertPaidUpdate({entry: {...partPaid,
+      paymentMethod: "payment_link"}}).ok, false);
+  });
+
+  it("keeps earlier undone payments in the history too", () => {
+    const d = businessParkingRevertPaidUpdate({entry: {...partPaid,
+      revertedParkingPayments: [{amountCents: 100}]}});
+    assert.deepEqual(d.update.revertedParkingPayments.map((p) => p.amountCents),
+        [100, 5000]);
+  });
+});
+
