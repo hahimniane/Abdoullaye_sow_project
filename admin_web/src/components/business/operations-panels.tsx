@@ -5672,10 +5672,10 @@ export function ParkingPanel({
                     : <em className="pk-pill">{parkingStatusLabel(row)}</em>}</span>
                   <span>{text(row.enteredByUid, "")
                     ? <small className={nameForStaff(row.enteredByUid) ? undefined : "muted"} title={nameForStaff(row.enteredByUid) ? undefined : STAFF_UNKNOWN}>{nameForStaff(row.enteredByUid) || STAFF_UNKNOWN}</small>
-                    : <small className="muted">\u2014</small>}</span>
+                    : <small className="muted">—</small>}</span>
                   <span>{tone === "paid" || businessParkingIsPartlyPaid(row)
                     ? <small className={nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) ? undefined : "muted"} title={nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) ? undefined : STAFF_UNKNOWN}>{nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) || STAFF_UNKNOWN}</small>
-                    : <small className="muted">\u2014</small>}</span>
+                    : <small className="muted">—</small>}</span>
                   <span className="pk-acts">
                     <button type="button" className="pk-act" disabled={rowBusy} title={isReceipt ? "Print receipt" : "Print invoice"} aria-label={isReceipt ? "Print receipt" : "Print invoice"} onClick={() => void openParkingDocument(row)}>
                       {rowBusy ? <RefreshCw className="spin" size={13} /> : <Printer size={13} />}
