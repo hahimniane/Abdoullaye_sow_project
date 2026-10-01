@@ -95,7 +95,7 @@ test("one bill per phone, every car with its dates; mirrors the server", () => {
   assert.equal(s.customers.length, 2);
   assert.deepEqual(s.customersOwing.map((c) => c.customerName), ["Diallo", "Abdoulaye Sow"]);
   const sow = s.customers.find((c) => c.cars.length === 3)!;
-  assert.deepEqual(sow.cars.map((b) => b.registeredTo), ["", "Ministre", ""]);
+  assert.deepEqual(sow.cars.map((b) => b.registeredTo), ["abdoulaye sow", "Ministre", "Abdoulaye Sow"]);
   assert.equal(sow.dueCents, 35000);
   assert.equal(mostUsedName(["Abd Sow", "abdoulaye sow", "Abdoulaye Sow"]), "Abdoulaye Sow");
   assert.equal(parkingMonthCustomerText(sow, "Keren Auto Sales"), [
@@ -103,11 +103,11 @@ test("one bill per phone, every car with its dates; mirrors the server", () => {
     "For: Abdoulaye Sow · 347-562-8973",
     "",
     "Parking",
-    "2014 Toyota Corolla",
+    "2014 Toyota Corolla (registered to abdoulaye sow)",
     "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
     "2015 Toyota RAV4 (registered to Ministre)",
     "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
-    "2017 Toyota RAV4",
+    "2017 Toyota RAV4 (registered to Abdoulaye Sow)",
     "  2026-09-21 to 2026-09-24: 4 days × $12.00 — $48.00",
     "  Paid — -$10.00",
     "",
@@ -147,15 +147,15 @@ test("activities join the month: dated in it, older unpaid carried, void and fre
     "For: Abdoulaye Sow · 347-562-8973",
     "",
     "Parking",
-    "2014 Toyota Corolla",
+    "2014 Toyota Corolla (registered to abdoulaye sow)",
     "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
     "",
     "Activities",
-    "2026-09-14 · Title · 2013 Toyota RAV4 — $100.00",
+    "2026-09-14 · Title · 2013 Toyota RAV4 (registered to Abdoulaye Sow) — $100.00",
     "  Paid — -$40.00",
     "",
     "Unpaid from before",
-    "2026-08-20 · Title · 2013 Toyota RAV4 — $90.00",
+    "2026-08-20 · Title · 2013 Toyota RAV4 (registered to Abdoulaye Sow) — $90.00",
     "",
     "Total for September — $256.00",
     "Unpaid from before — $90.00",

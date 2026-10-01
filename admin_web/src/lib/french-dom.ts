@@ -4632,6 +4632,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "paid by card link, not included": "payé par lien carte, non inclus",
   "These did not save:": "Ceux-ci n’ont pas été enregistrés :",
   "booked online, not included": "réservée en ligne, non incluse",
+  "already paid": "déjà payés",
   "Invoices & receipts": "Factures et reçus",
   "Invoices": "Factures",
   "Receipts and what is owed": "Reçus et sommes dues",

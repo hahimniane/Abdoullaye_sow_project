@@ -254,7 +254,9 @@ export function parkingMonthCustomers(
   for (const [key, g] of groups) {
     const all = [...g.cars, ...g.activities];
     const customerName = mostUsedName(all.map((x) => x.customerName));
-    const reg = (name: string) => (normName(name) === normName(customerName) ? "" : name);
+    // Every line says whose name it was registered under, also when it is
+    // the name at the top of the bill, so a line never looks unnamed.
+    const reg = (name: string) => text(name).replace(/\s+/g, " ");
     const cars: ParkingMonthCar[] = [...g.cars]
       .sort((a, b) => a.periodFrom.localeCompare(b.periodFrom) || a.vehicle.localeCompare(b.vehicle))
       .map((b) => ({ ...b, registeredTo: reg(b.customerName) }));

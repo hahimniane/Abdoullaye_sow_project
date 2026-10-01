@@ -114,7 +114,7 @@ void main() {
     expect(s.customers.length, 2);
     expect(s.customersOwing.map((c) => c.customerName).toList(), ['Diallo', 'Abdoulaye Sow']);
     final sow = s.customers.firstWhere((c) => c.cars.length == 3);
-    expect(sow.registeredTo, ['', 'Ministre', '']);
+    expect(sow.registeredTo, ['abdoulaye sow', 'Ministre', 'Abdoulaye Sow']);
     expect(sow.dueCents, 35000);
     expect(mostUsedName(['Abd Sow', 'abdoulaye sow', 'Abdoulaye Sow']), 'Abdoulaye Sow');
     expect(
@@ -124,11 +124,11 @@ void main() {
         'For: Abdoulaye Sow · 347-562-8973',
         '',
         'Parking',
-        '2014 Toyota Corolla',
+        '2014 Toyota Corolla (registered to abdoulaye sow)',
         '  2026-09-18 to 2026-09-30: 13 days × \$12.00 — \$156.00',
         '2015 Toyota RAV4 (registered to Ministre)',
         '  2026-09-18 to 2026-09-30: 13 days × \$12.00 — \$156.00',
-        '2017 Toyota RAV4',
+        '2017 Toyota RAV4 (registered to Abdoulaye Sow)',
         '  2026-09-21 to 2026-09-24: 4 days × \$12.00 — \$48.00',
         '  Paid — -\$10.00',
         '',
@@ -183,15 +183,15 @@ void main() {
         'For: Abdoulaye Sow · 347-562-8973',
         '',
         'Parking',
-        '2014 Toyota Corolla',
+        '2014 Toyota Corolla (registered to abdoulaye sow)',
         '  2026-09-18 to 2026-09-30: 13 days × \$12.00 — \$156.00',
         '',
         'Activities',
-        '2026-09-14 · Title · 2013 Toyota RAV4 — \$100.00',
+        '2026-09-14 · Title · 2013 Toyota RAV4 (registered to Abdoulaye Sow) — \$100.00',
         '  Paid — -\$40.00',
         '',
         'Unpaid from before',
-        '2026-08-20 · Title · 2013 Toyota RAV4 — \$90.00',
+        '2026-08-20 · Title · 2013 Toyota RAV4 (registered to Abdoulaye Sow) — \$90.00',
         '',
         'Total for September — \$256.00',
         'Unpaid from before — \$90.00',

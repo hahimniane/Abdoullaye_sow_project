@@ -4385,5 +4385,13 @@
         "type": "int"
       }
     }
+  },
+  "pmeAlreadyPaid": "{count} déjà payés",
+  "@pmeAlreadyPaid": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }
