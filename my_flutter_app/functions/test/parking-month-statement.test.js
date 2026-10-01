@@ -179,19 +179,94 @@ describe("one bill per customer", () => {
     const sow = parkingMonthSummary(rows, "2026-09", OCT1).customers
         .find((c) => c.cars.length === 3);
     assert.equal(parkingMonthCustomerText(sow, "Keren Auto Sales"), [
-      "Keren Auto Sales — Parking bill, September 2026",
+      "Keren Auto Sales — Monthly bill, September 2026",
       "For: Abdoulaye Sow · 347-562-8973",
       "",
+      "Parking",
       "2014 Toyota Corolla",
       "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
       "2015 Toyota RAV4 (registered to Ministre)",
       "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
       "2017 Toyota RAV4",
       "  2026-09-21 to 2026-09-24: 4 days × $12.00 — $48.00",
+      "  Paid — -$10.00",
       "",
       "Total for September — $360.00",
       "Paid — -$10.00",
       "BALANCE DUE: $350.00",
+    ].join("\n"));
+  });
+});
+
+// Ledger activities join the month: dated in the month, they are its; an
+// older one still unpaid comes along as "unpaid from before". Same customer
+// key (the phone), so cars and jobs land on one bill.
+describe("activities on the month's bill", () => {
+  const act = (over) => ({
+    businessId: "k", activityTypeLabel: "title", feeCents: 10000,
+    customerName: "Abdoulaye Sow", customerPhone: "3475628973",
+    carYear: "2013", carMake: "Toyota", carModel: "RAV4",
+    paymentStatus: "awaiting_direct_payment", ...over,
+  });
+  const cars = [{parkingDate: at("2026-09-18"), dailyRate: 12,
+    paymentStatus: "awaiting_direct_payment", status: "reserved", id: "car",
+    customerName: "abdoulaye sow", customerPhone: "347-562-8973",
+    carYear: "2014", carMake: "Toyota", carModel: "Corolla"}];
+  const acts = [
+    act({id: "sep", activityDate: at("2026-09-14"), amountPaidCents: 4000}),
+    act({id: "aug", activityDate: at("2026-08-20"), feeCents: 9000}),
+    act({id: "augPaid", activityDate: at("2026-08-02"),
+      paymentStatus: "succeeded"}),
+    act({id: "void", activityDate: at("2026-09-15"), voided: true}),
+    act({id: "free", activityDate: at("2026-09-16"), feeCents: 0}),
+    act({id: "oct", activityDate: at("2026-10-01")}),
+    act({id: "other", activityDate: at("2026-09-03"), customerName: "Fatou",
+      customerPhone: "6465550199", paymentStatus: "succeeded"}),
+  ];
+
+  it("counts the month's, carries older unpaid, drops void and free", () => {
+    const s = parkingMonthSummary(cars, "2026-09", OCT1, acts);
+    const sow = s.customers.find((c) => c.customerName === "Abdoulaye Sow");
+    assert.deepEqual(sow.cars.map((c) => c.id), ["car"]);
+    assert.deepEqual(sow.activities.map((a) => a.id), ["sep"]);
+    assert.deepEqual(sow.olderActivities.map((a) => a.id), ["aug"]);
+    assert.equal(sow.activities[0].label, "Title");
+    assert.equal(sow.activities[0].paidCents, 4000);
+    assert.equal(sow.monthCents, 15600 + 10000);
+    assert.equal(sow.monthPaidCents, 4000);
+    assert.equal(sow.priorUnpaidCents, 9000);
+    assert.equal(sow.dueCents, 15600 + 6000 + 9000);
+    const fatou = s.customers.find((c) => c.customerName === "Fatou");
+    assert.equal(fatou.owes, false, "paid activity, nothing owed");
+    assert.equal(s.activitiesInMonth, 2);
+    assert.equal(s.billedCents, 15600 + 10000 + 10000);
+    assert.equal(s.collectedCents, 4000 + 10000);
+    assert.deepEqual(s.customersOwing.map((c) => c.customerName),
+        ["Abdoulaye Sow"]);
+  });
+
+  it("lists every activity and what was paid toward it in the text", () => {
+    const sow = parkingMonthSummary(cars, "2026-09", OCT1, acts).customers
+        .find((c) => c.customerName === "Abdoulaye Sow");
+    assert.equal(parkingMonthCustomerText(sow, "Keren"), [
+      "Keren — Monthly bill, September 2026",
+      "For: Abdoulaye Sow · 347-562-8973",
+      "",
+      "Parking",
+      "2014 Toyota Corolla",
+      "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
+      "",
+      "Activities",
+      "2026-09-14 · Title · 2013 Toyota RAV4 — $100.00",
+      "  Paid — -$40.00",
+      "",
+      "Unpaid from before",
+      "2026-08-20 · Title · 2013 Toyota RAV4 — $90.00",
+      "",
+      "Total for September — $256.00",
+      "Unpaid from before — $90.00",
+      "Paid — -$40.00",
+      "BALANCE DUE: $306.00",
     ].join("\n"));
   });
 });

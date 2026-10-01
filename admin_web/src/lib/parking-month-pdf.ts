@@ -19,23 +19,23 @@ const text = (value: unknown, max = 200) => String(value ?? "").trim().slice(0, 
 
 const COPY = {
   en: {
-    bill: "PARKING BILL", summary: "MONTH END", billedTo: "Billed to", vehicle: "Vehicle",
+    bill: "MONTHLY BILL", summary: "MONTH END", billedTo: "Billed to", vehicle: "Vehicle",
     period: "Period", days: "days", day: "day", parking: "Parking", priorUnpaid: "Unpaid from before",
     paid: "Paid", balanceDue: "Balance due", paidInFull: "Paid in full", stillParked: "Still parked",
     left: "Left", carsOnLot: "Cars on the lot", carsOwing: "Still owing", billed: "Billed",
     collected: "Collected", owed: "Still owed", whoOwes: "Who still owes", customer: "Customer",
     due: "Due", none: "Nobody owes anything for this month.", soFar: "so far",
-    car: "Car", amount: "Amount", to: "to", registeredTo: "registered to", monthTotal: "Total for the month", cars: "cars",
+    car: "Car", amount: "Amount", to: "to", activities: "Activities", date: "Date", activity: "Activity", item: "item", items: "items", paidToward: "Paid toward", dueLabel: "due", paidLabel: "paid", olderItems: "Unpaid from before", registeredTo: "registered to", monthTotal: "Total for the month", cars: "cars",
     footer: "Issued through Laawol Digital · laawoldigital.com",
   },
   fr: {
-    bill: "FACTURE DE PARKING", summary: "FIN DE MOIS", billedTo: "Facturé à", vehicle: "Véhicule",
+    bill: "FACTURE MENSUELLE", summary: "FIN DE MOIS", billedTo: "Facturé à", vehicle: "Véhicule",
     period: "Période", days: "jours", day: "jour", parking: "Parking", priorUnpaid: "Impayé des mois précédents",
     paid: "Payé", balanceDue: "Solde dû", paidInFull: "Payé en totalité", stillParked: "Toujours garée",
     left: "Partie", carsOnLot: "Voitures au parking", carsOwing: "Doivent encore", billed: "Facturé",
     collected: "Encaissé", owed: "Encore dû", whoOwes: "Qui doit encore", customer: "Client",
     due: "Dû", none: "Personne ne doit rien pour ce mois.", soFar: "à ce jour",
-    car: "Voiture", amount: "Montant", to: "au", registeredTo: "enregistrée au nom de", monthTotal: "Total du mois", cars: "voitures",
+    car: "Voiture", amount: "Montant", to: "au", activities: "Activités", date: "Date", activity: "Activité", item: "élément", items: "éléments", paidToward: "Payé pour", dueLabel: "dû", paidLabel: "payé", olderItems: "Impayé des mois précédents", registeredTo: "enregistrée au nom de", monthTotal: "Total du mois", cars: "voitures",
     footer: "Émis via Laawol Digital · laawoldigital.com",
   },
 } as const;
@@ -96,49 +96,81 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
   const t = COPY[input.language];
   const c = input.customer;
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-  let y = await header(doc, input.business, t.bill, monthLabel(c.monthKey, input.language), `${c.cars.length} ${c.cars.length === 1 ? t.car.toLowerCase() : t.cars}`);
+  const items = c.cars.length + c.activities.length;
+  let y = await header(doc, input.business, t.bill, monthLabel(c.monthKey, input.language), `${items} ${items === 1 ? t.item : t.items}`);
 
   doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED).text(t.billedTo.toUpperCase(), M, y);
   doc.setFontSize(13).setTextColor(...INK).text(c.customerName || "—", M, y + 16);
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(...MUTED);
   const who = [c.customerPhone, c.customerEmail].filter(Boolean).join("  |  ");
   if (who) doc.text(who, M, y + 30);
-  y += 54;
+  y += 50;
 
-  // One line per car: what it is, the days it covers, days x rate, amount.
-  const colPeriod = M + 220;
+  const colMid = M + 220;
   const colRate = R - 90;
-  const head = () => {
-    doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED);
-    doc.text(t.car.toUpperCase(), M, y);
-    doc.text(t.period.toUpperCase(), colPeriod, y);
-    doc.text(`${t.days.toUpperCase()} ×`, colRate, y, { align: "right" });
-    doc.text(t.amount.toUpperCase(), R, y, { align: "right" });
-    y += 6;
-    doc.setDrawColor(230, 233, 232).setLineWidth(1).line(M, y, R, y);
-    y += 16;
-  };
-  head();
-  for (const b of c.cars) {
-    if (y > 792 - 140) {
+  const room = (need: number) => {
+    if (y + need > 792 - 70) {
       footer(doc, input.language);
       doc.addPage();
       y = M;
-      head();
     }
-    doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...INK).text(b.vehicle || t.car, M, y);
-    doc.setFont("helvetica", "normal").setFontSize(10).text(`${b.periodFrom} ${t.to} ${b.periodTo}`, colPeriod, y);
-    doc.text(`${b.days} × ${moneyText(b.dayRateCents)}`, colRate, y, { align: "right" });
-    doc.setFont("helvetica", "bold").text(moneyText(b.monthCents), R, y, { align: "right" });
+  };
+  const section = (title: string, first: string, mid: string, rate: string) => {
+    room(60);
+    doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(...BRAND).text(title, M, y);
+    y += 14;
+    doc.setFontSize(8).setTextColor(...MUTED);
+    doc.text(first.toUpperCase(), M, y);
+    doc.text(mid.toUpperCase(), colMid, y);
+    if (rate) doc.text(rate.toUpperCase(), colRate, y, { align: "right" });
+    doc.text(t.amount.toUpperCase(), R, y, { align: "right" });
+    y += 6;
+    doc.setDrawColor(230, 233, 232).setLineWidth(1).line(M, y, R, y);
+    y += 15;
+  };
+  const line = (title: string, mid: string, rate: string, amount: string, sub: string) => {
+    room(34);
+    doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...INK).text((doc.splitTextToSize(title, colMid - M - 10) as string[])[0], M, y);
+    doc.setFont("helvetica", "normal").setFontSize(10).text(mid, colMid, y);
+    if (rate) doc.text(rate, colRate, y, { align: "right" });
+    doc.setFont("helvetica", "bold").text(amount, R, y, { align: "right" });
     let ly = y + 12;
-    const sub = [b.vinNumber ? `VIN ${b.vinNumber}` : "", b.registeredTo ? `${t.registeredTo} ${b.registeredTo}` : "", b.stillParked ? t.stillParked : t.left]
-      .filter(Boolean).join("  ·  ");
-    doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(...MUTED).text(sub, M, ly);
-    ly += 8;
+    if (sub) {
+      doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(...MUTED).text((doc.splitTextToSize(sub, R - M) as string[])[0], M, ly);
+      ly += 8;
+    }
     doc.setDrawColor(236, 238, 237).setLineWidth(0.5).line(M, ly, R, ly);
-    y = ly + 16;
+    y = ly + 15;
+  };
+  // What each item stands at: paid toward it, still due on it.
+  const standing = (paid: number, due: number) =>
+    [paid > 0 ? `${moneyText(paid)} ${t.paidLabel}` : "", due > 0 ? `${moneyText(due)} ${t.dueLabel}` : ""].filter(Boolean).join(" · ");
+
+  if (c.cars.length) {
+    section(t.parking, t.car, t.period, `${t.days} ×`);
+    for (const b of c.cars) {
+      line(b.vehicle || t.car, `${b.periodFrom} ${t.to} ${b.periodTo}`, `${b.days} × ${moneyText(b.dayRateCents)}`, moneyText(b.monthCents),
+        [b.vinNumber ? `VIN ${b.vinNumber}` : "", b.registeredTo ? `${t.registeredTo} ${b.registeredTo}` : "", b.stillParked ? t.stillParked : t.left,
+          b.priorUnpaidCents > 0 ? `+ ${moneyText(b.priorUnpaidCents)} ${t.priorUnpaid.toLowerCase()}` : "",
+          standing(b.monthPaidCents, b.monthUnpaidCents + b.priorUnpaidCents)].filter(Boolean).join("  ·  "));
+    }
+  }
+  if (c.activities.length) {
+    section(t.activities, t.activity, t.date, "");
+    for (const a of c.activities) {
+      line(`${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}`, a.date, "", moneyText(a.feeCents),
+        [a.vinNumber ? `VIN ${a.vinNumber}` : "", a.registeredTo ? `${t.registeredTo} ${a.registeredTo}` : "", standing(a.paidCents, a.dueCents)].filter(Boolean).join("  ·  "));
+    }
+  }
+  if (c.olderActivities.length) {
+    section(t.olderItems, t.activity, t.date, "");
+    for (const a of c.olderActivities) {
+      line(`${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}`, a.date, "", moneyText(a.dueCents),
+        [a.vinNumber ? `VIN ${a.vinNumber}` : "", a.registeredTo ? `${t.registeredTo} ${a.registeredTo}` : "", standing(a.paidCents, a.dueCents)].filter(Boolean).join("  ·  "));
+    }
   }
 
+  room(120);
   y += 4;
   row(doc, y, t.monthTotal, moneyText(c.monthCents), { color: INK });
   y += 18;
@@ -146,12 +178,21 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
     row(doc, y, t.priorUnpaid, moneyText(c.priorUnpaidCents), { color: DUE });
     y += 18;
   }
-  if (c.monthPaidCents > 0) {
-    row(doc, y, t.paid, `-${moneyText(c.monthPaidCents)}`, { color: OK });
-    y += 18;
+  // Which item each payment went toward, not just a lump sum.
+  for (const b of c.cars) {
+    if (b.monthPaidCents <= 0) continue;
+    room(20);
+    row(doc, y, `${t.paidToward} ${b.vehicle || t.car}`, `-${moneyText(b.monthPaidCents)}`, { color: OK });
+    y += 16;
   }
-  doc.setDrawColor(...INK).setLineWidth(1.2).line(M, y - 6, R, y - 6);
-  y += 12;
+  for (const a of c.activities) {
+    if (a.paidCents <= 0) continue;
+    room(20);
+    row(doc, y, `${t.paidToward} ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${a.date})`, `-${moneyText(a.paidCents)}`, { color: OK });
+    y += 16;
+  }
+  doc.setDrawColor(...INK).setLineWidth(1.2).line(M, y - 4, R, y - 4);
+  y += 14;
   if (c.dueCents > 0) row(doc, y, t.balanceDue, moneyText(c.dueCents), { bold: true, color: DUE });
   else row(doc, y, t.paidInFull, moneyText(0), { bold: true, color: OK });
 
@@ -195,7 +236,7 @@ export async function buildParkingMonthSummaryPdf(input: { business: Row; summar
     }
     doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...INK).text(b.customerName || "—", M, y);
     doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED)
-      .text((doc.splitTextToSize(`${b.customerPhone}${b.customerPhone ? " · " : ""}${b.cars.length} ${b.cars.length === 1 ? t.car.toLowerCase() : t.cars}: ${b.cars.map((car) => car.vehicle).join(", ")}`, R - 80 - (M + 150)) as string[])[0], M + 150, y);
+      .text((doc.splitTextToSize(`${b.customerPhone}${b.customerPhone ? " · " : ""}${[...b.cars.map((car) => car.vehicle), ...b.activities.map((x) => x.label), ...b.olderActivities.map((x) => x.label)].join(", ")}`, R - 80 - (M + 150)) as string[])[0], M + 150, y);
     doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...DUE).text(moneyText(b.dueCents), R, y, { align: "right" });
     y += 6;
     doc.setDrawColor(236, 238, 237).setLineWidth(0.5).line(M, y, R, y);

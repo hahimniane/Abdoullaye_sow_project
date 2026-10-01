@@ -4622,6 +4622,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Copy text": "Copier le texte",
   "this month": "ce mois-ci",
   "registered to": "enregistrée au nom de",
+  "unpaid from before": "impayé des mois précédents",
+  "paid in full": "payé en totalité",
   "Invoices & receipts": "Factures et reçus",
   "Invoices": "Factures",
   "Receipts and what is owed": "Reçus et sommes dues",

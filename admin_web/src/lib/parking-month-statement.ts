@@ -5,6 +5,8 @@
  * unpaid from before as its own line, payments applied oldest month first.
  */
 
+import { lotActivityPaidCents } from "./lot-ledger.ts";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const MONTH_NAMES_EN = [
@@ -183,6 +185,7 @@ export function parkingMonthStatement(row: Row, monthKey: string, now: Date = ne
 /** One car on a customer's bill: its own bill plus the name it was
  * registered under when that differs from the customer's. */
 export type ParkingMonthCar = ParkingMonthBill & { registeredTo: string };
+export type ParkingMonthActivityLine = ParkingMonthActivity & { registeredTo: string };
 
 export type ParkingMonthCustomer = {
   key: string;
@@ -191,6 +194,8 @@ export type ParkingMonthCustomer = {
   customerPhone: string;
   customerEmail: string;
   cars: ParkingMonthCar[];
+  activities: ParkingMonthActivityLine[];
+  olderActivities: ParkingMonthActivityLine[];
   monthCents: number;
   monthPaidCents: number;
   monthUnpaidCents: number;
@@ -226,35 +231,53 @@ export function mostUsedName(names: readonly string[]): string {
   return [...best[1]].sort((a, b) => capitalised(b) - capitalised(a))[0];
 }
 
-/** One bill per phone, every car on it with its dates. Mirrors the server. */
-export function parkingMonthCustomers(bills: readonly ParkingMonthBill[]): ParkingMonthCustomer[] {
-  const groups = new Map<string, ParkingMonthBill[]>();
-  for (const bill of bills) {
-    const key = parkingCustomerKey(bill);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(bill);
-  }
+/** One bill per phone: every car with its dates, every activity with its
+ * date. Mirrors the server. */
+export function parkingMonthCustomers(
+  bills: readonly ParkingMonthBill[],
+  activities: readonly ParkingMonthActivity[] = [],
+): ParkingMonthCustomer[] {
+  const groups = new Map<string, { cars: ParkingMonthBill[]; activities: ParkingMonthActivity[] }>();
+  const group = (key: string) => {
+    if (!groups.has(key)) groups.set(key, { cars: [], activities: [] });
+    return groups.get(key)!;
+  };
+  for (const b of bills) group(parkingCustomerKey(b)).cars.push(b);
+  for (const a of activities) group(parkingCustomerKey(a)).activities.push(a);
   const customers: ParkingMonthCustomer[] = [];
-  for (const [key, list] of groups) {
-    const customerName = mostUsedName(list.map((b) => b.customerName));
-    const cars: ParkingMonthCar[] = [...list]
+  for (const [key, g] of groups) {
+    const all = [...g.cars, ...g.activities];
+    const customerName = mostUsedName(all.map((x) => x.customerName));
+    const reg = (name: string) => (normName(name) === normName(customerName) ? "" : name);
+    const cars: ParkingMonthCar[] = [...g.cars]
       .sort((a, b) => a.periodFrom.localeCompare(b.periodFrom) || a.vehicle.localeCompare(b.vehicle))
-      .map((b) => ({ ...b, registeredTo: normName(b.customerName) === normName(customerName) ? "" : b.customerName }));
-    const sum = (k: "monthCents" | "monthPaidCents" | "monthUnpaidCents" | "priorUnpaidCents" | "dueCents") =>
-      cars.reduce((s, b) => s + b[k], 0);
+      .map((b) => ({ ...b, registeredTo: reg(b.customerName) }));
+    const acts: ParkingMonthActivityLine[] = [...g.activities]
+      .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label))
+      .map((a) => ({ ...a, registeredTo: reg(a.customerName) }));
+    const inMonth = acts.filter((a) => !a.prior);
+    const older = acts.filter((a) => a.prior);
+    const sumCars = (k: "monthCents" | "monthPaidCents" | "monthUnpaidCents" | "priorUnpaidCents") => cars.reduce((s, b) => s + b[k], 0);
+    const sumActs = (list: ParkingMonthActivityLine[], k: "feeCents" | "paidCents" | "dueCents") => list.reduce((s, a) => s + a[k], 0);
+    const monthCents = sumCars("monthCents") + sumActs(inMonth, "feeCents");
+    const monthPaidCents = sumCars("monthPaidCents") + sumActs(inMonth, "paidCents");
+    const monthUnpaidCents = sumCars("monthUnpaidCents") + sumActs(inMonth, "dueCents");
+    const priorUnpaidCents = sumCars("priorUnpaidCents") + sumActs(older, "dueCents");
     customers.push({
       key,
-      monthKey: cars[0].monthKey,
+      monthKey: (cars[0] ?? acts[0]).monthKey,
       customerName,
-      customerPhone: cars.find((b) => b.customerPhone)?.customerPhone ?? "",
-      customerEmail: cars.find((b) => b.customerEmail)?.customerEmail ?? "",
+      customerPhone: all.find((x) => x.customerPhone)?.customerPhone ?? "",
+      customerEmail: all.find((x) => x.customerEmail)?.customerEmail ?? "",
       cars,
-      monthCents: sum("monthCents"),
-      monthPaidCents: sum("monthPaidCents"),
-      monthUnpaidCents: sum("monthUnpaidCents"),
-      priorUnpaidCents: sum("priorUnpaidCents"),
-      dueCents: sum("dueCents"),
-      owes: cars.some((b) => b.owes),
+      activities: inMonth,
+      olderActivities: older,
+      monthCents,
+      monthPaidCents,
+      monthUnpaidCents,
+      priorUnpaidCents,
+      dueCents: monthUnpaidCents + priorUnpaidCents,
+      owes: monthUnpaidCents + priorUnpaidCents > 0,
       partialMonth: cars.some((b) => b.partialMonth),
     });
   }
@@ -265,6 +288,7 @@ export type ParkingMonthSummary = {
   monthKey: string;
   carsOnLot: number;
   carsOwing: number;
+  activitiesInMonth: number;
   customers: ParkingMonthCustomer[];
   customersOwing: ParkingMonthCustomer[];
   billedCents: number;
@@ -276,27 +300,90 @@ export type ParkingMonthSummary = {
   bills: ParkingMonthBill[];
 };
 
-export function parkingMonthSummary(rows: readonly Row[], monthKey: string, now: Date = new Date()): ParkingMonthSummary {
+/** One ledger activity on a month's bill. Mirrors the server. */
+export type ParkingMonthActivity = {
+  id: string;
+  kind: "activity";
+  monthKey: string;
+  date: string;
+  label: string;
+  feeCents: number;
+  paidCents: number;
+  dueCents: number;
+  prior: boolean;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  vehicle: string;
+  vinNumber: string;
+  trackingCode: string;
+};
+
+/** An activity dated in the month is that month's; an older one still unpaid
+ * comes along as "unpaid from before"; voided and free ones never appear. */
+export function activityMonthItem(row: Row, monthKey: string): ParkingMonthActivity | null {
+  if (row.voided === true) return null;
+  const feeCents = Math.max(0, Math.round(Number(row.feeCents) || 0));
+  if (feeCents <= 0) return null;
+  const month = monthDays(monthKey);
+  const day = dayNumber(row.activityDate) ?? dayNumber(row.createdAt);
+  if (!month || day === null || day > month.last) return null;
+  const paidCents = Math.min(feeCents, lotActivityPaidCents(row));
+  const dueCents = Math.max(0, feeCents - paidCents);
+  const prior = day < month.first;
+  if (prior && dueCents <= 0) return null;
+  const label = text(row.customLabel) || text(row.activityTypeLabel) || "Activity";
+  return {
+    id: text(row.id),
+    kind: "activity",
+    monthKey,
+    date: dayKeyOf(day),
+    label: label.charAt(0).toUpperCase() + label.slice(1),
+    feeCents,
+    paidCents,
+    dueCents,
+    prior,
+    customerName: text(row.customerName),
+    customerPhone: text(row.customerPhone, 40),
+    customerEmail: text(row.customerEmail, 180),
+    vehicle: [row.carYear, row.carMake, row.carModel].map((v) => text(v, 80)).filter(Boolean).join(" "),
+    vinNumber: text(row.vinNumber, 17).toUpperCase(),
+    trackingCode: text(row.trackingCode, 40),
+  };
+}
+
+export function parkingMonthSummary(
+  rows: readonly Row[],
+  monthKey: string,
+  now: Date = new Date(),
+  activityRows: readonly Row[] = [],
+): ParkingMonthSummary {
   const bills = rows
     .map((row) => parkingMonthStatement(row, monthKey, now))
     .filter((b): b is ParkingMonthBill => b !== null);
+  const activities = activityRows
+    .map((row) => activityMonthItem(row, monthKey))
+    .filter((a): a is ParkingMonthActivity => a !== null);
   const owing = bills
     .filter((b) => b.owes)
     .sort((a, b) => b.dueCents - a.dueCents || a.customerName.localeCompare(b.customerName));
-  const sum = (list: ParkingMonthBill[], key: keyof ParkingMonthBill) =>
-    list.reduce((s, b) => s + (b[key] as number), 0);
-  const customers = parkingMonthCustomers(bills);
+  const inMonth = activities.filter((a) => !a.prior);
+  const sumBills = (k: "monthCents" | "monthPaidCents" | "monthUnpaidCents") => bills.reduce((s, b) => s + b[k], 0);
+  const sumActs = (k: "feeCents" | "paidCents" | "dueCents") => inMonth.reduce((s, a) => s + a[k], 0);
+  const customers = parkingMonthCustomers(bills, activities);
+  const customersOwing = customers.filter((c) => c.owes);
   return {
     monthKey,
     carsOnLot: bills.length,
     carsOwing: owing.length,
+    activitiesInMonth: inMonth.length,
     customers,
-    customersOwing: customers.filter((c) => c.owes),
-    billedCents: sum(bills, "monthCents"),
-    collectedCents: sum(bills, "monthPaidCents"),
-    owedCents: sum(bills, "monthUnpaidCents"),
-    olderOwedCents: sum(owing, "priorUnpaidCents"),
-    dueCents: sum(owing, "dueCents"),
+    customersOwing,
+    billedCents: sumBills("monthCents") + sumActs("feeCents"),
+    collectedCents: sumBills("monthPaidCents") + sumActs("paidCents"),
+    owedCents: sumBills("monthUnpaidCents") + sumActs("dueCents"),
+    olderOwedCents: customersOwing.reduce((s, c) => s + c.priorUnpaidCents, 0),
+    dueCents: customersOwing.reduce((s, c) => s + c.dueCents, 0),
     owing,
     bills,
   };
@@ -311,17 +398,31 @@ export function moneyText(cents: number): string {
 
 /** One customer's bill as WhatsApp text. Mirrors the server's byte for byte. */
 export function parkingMonthCustomerText(c: ParkingMonthCustomer, businessName: string): string {
+  const month = MONTH_NAMES_EN[Number(c.monthKey.slice(5, 7)) - 1] ?? "the month";
   const lines = [
-    `${text(businessName) || "Parking"} — Parking bill, ${monthLabel(c.monthKey)}`,
+    `${text(businessName) || "Parking"} — Monthly bill, ${monthLabel(c.monthKey)}`,
     `For: ${[c.customerName || "—", c.customerPhone].filter(Boolean).join(" · ")}`,
-    "",
   ];
+  const named = (x: { registeredTo: string }) => (x.registeredTo ? ` (registered to ${x.registeredTo})` : "");
+  if (c.cars.length) lines.push("", "Parking");
   for (const b of c.cars) {
-    const car = [b.vehicle || "Car", b.vinNumber ? `VIN ${b.vinNumber}` : ""].filter(Boolean).join(" · ");
-    lines.push(car + (b.registeredTo ? ` (registered to ${b.registeredTo})` : ""));
+    lines.push([b.vehicle || "Car", b.vinNumber ? `VIN ${b.vinNumber}` : ""].filter(Boolean).join(" · ") + named(b));
     lines.push(`  ${b.periodFrom} to ${b.periodTo}: ${b.days} day${b.days === 1 ? "" : "s"} × ${moneyText(b.dayRateCents)} — ${moneyText(b.monthCents)}`);
+    if (b.priorUnpaidCents > 0) lines.push(`  Unpaid from before — ${moneyText(b.priorUnpaidCents)}`);
+    if (b.monthPaidCents > 0) lines.push(`  Paid — -${moneyText(b.monthPaidCents)}`);
   }
-  lines.push("", `Total for ${MONTH_NAMES_EN[Number(c.monthKey.slice(5, 7)) - 1] ?? "the month"} — ${moneyText(c.monthCents)}`);
+  if (c.activities.length) lines.push("", "Activities");
+  for (const a of c.activities) {
+    lines.push(`${a.date} · ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ${moneyText(a.feeCents)}`);
+    if (a.paidCents > 0) lines.push(`  Paid — -${moneyText(a.paidCents)}`);
+  }
+  if (c.olderActivities.length) {
+    lines.push("", "Unpaid from before");
+    for (const a of c.olderActivities) {
+      lines.push(`${a.date} · ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ${moneyText(a.dueCents)}`);
+    }
+  }
+  lines.push("", `Total for ${month} — ${moneyText(c.monthCents)}`);
   if (c.priorUnpaidCents > 0) lines.push(`Unpaid from before — ${moneyText(c.priorUnpaidCents)}`);
   if (c.monthPaidCents > 0) lines.push(`Paid — -${moneyText(c.monthPaidCents)}`);
   lines.push(c.dueCents > 0 ? `BALANCE DUE: ${moneyText(c.dueCents)}` : "PAID IN FULL");

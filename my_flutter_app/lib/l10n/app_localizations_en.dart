@@ -9598,7 +9598,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pmePdfFailed => 'The PDF could not be made. Try again.';
 
   @override
-  String get pmePdfBill => 'PARKING BILL';
+  String get pmePdfBill => 'MONTHLY BILL';
 
   @override
   String get pmePdfSummary => 'MONTH END';
@@ -9656,4 +9656,50 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pmePickCar => 'Which car?';
+
+  @override
+  String get pmeActivities => 'Activities';
+
+  @override
+  String get pmeActivity => 'Activity';
+
+  @override
+  String get pmeDate => 'Date';
+
+  @override
+  String get pmeParking => 'Parking';
+
+  @override
+  String get pmePaidToward => 'Paid toward';
+
+  @override
+  String get pmePaidWord => 'paid';
+
+  @override
+  String get pmeDueWord => 'due';
+
+  @override
+  String pmeItems(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items',
+      one: '1 item',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pmeActivitiesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count activities',
+      one: '1 activity',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pmePaidInFull => 'paid in full';
 }
