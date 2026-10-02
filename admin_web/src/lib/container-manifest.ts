@@ -532,11 +532,11 @@ function rowDate(value: unknown): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/** "3 Oct" / "3 oct." — the day a box sailed, short enough for a sub-line. */
+/** "Oct 3" / "3 oct." — the day a box sailed, short enough for a sub-line. */
 export function shortDayMonth(value: unknown, lang: "en" | "fr" = "en"): string {
   const date = rowDate(value);
   if (!date) return "";
-  return new Intl.DateTimeFormat(lang === "fr" ? "fr-FR" : "en-GB", {
+  return new Intl.DateTimeFormat(lang === "fr" ? "fr-FR" : "en-US", {
     day: "numeric",
     month: "short",
   }).format(date);
@@ -591,7 +591,7 @@ export function buildVinPlacementIndex(
 }
 
 /**
- * The cross-link under a car: "In MSKU1234567 · sailed 3 Oct", or
+ * The cross-link under a car: "In MSKU1234567 · sailed Oct 3", or
  * "Loading in Box 2". Built in the reader's language here rather than by the
  * DOM translator because the container's name sits inside the sentence, and
  * a bare "In" is a dictionary key that would also rewrite the parking list's

@@ -28,7 +28,7 @@ import { ServiceRequestForm } from "@/components/service-request-form";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions } from "@/lib/firebase";
-import { formatDate, formatMoney, text } from "@/lib/format";
+import { currentLocale, formatDate, formatMoney, text } from "@/lib/format";
 import { isValidPhone } from "@/lib/phone";
 import {
   SERVICE_SORT_LABELS,
@@ -1739,7 +1739,7 @@ function localDateToIso(value: string, hour: number) {
 }
 
 function formatLocalDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(currentLocale(), {
     month: "short",
     day: "numeric",
     year: "numeric",

@@ -83,6 +83,14 @@ export function invoiceDayKey(value: unknown): string {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
+/** "Sep 1, 2026" — an invoice day, US style, for the English text. Mirrors the server's. */
+export function invoiceDayLabel(value: unknown): string {
+  const key = invoiceDayKey(value);
+  if (!key) return "";
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(key.slice(5, 7)) - 1];
+  return `${month} ${Number(key.slice(8, 10))}, ${key.slice(0, 4)}`;
+}
+
 export function todayKey(): string {
   const now = new Date();
   const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -273,7 +281,7 @@ export function invoicePaymentPayload(draft: InvoicePaymentDraft) {
 /** How a payment reads in a list or on the paper. Mirrors the server's. */
 export function invoicePaymentLabel(payment: Row, methodLabel: (m: string) => string = (m) => m): string {
   return [
-    invoiceDayKey(payment.paidOn),
+    invoiceDayLabel(payment.paidOn),
     text(payment.method, 40) ? methodLabel(text(payment.method, 40)) : "",
     text(payment.forDescription) ? `for ${text(payment.forDescription)}` : "",
     text(payment.note),
@@ -371,7 +379,7 @@ export function invoiceTextSummary(input: {
   const number = text(inv.number, 20);
   const out = [
     `${text(input.businessName) || "Invoice"} — ${totals.status === "paid" ? "Receipt" : "Invoice"}${number ? ` ${number}` : ""}`,
-    `${text(inv.title)}${invoiceDayKey(inv.issuedOn) ? ` · ${invoiceDayKey(inv.issuedOn)}` : ""}`,
+    `${text(inv.title)}${invoiceDayKey(inv.issuedOn) ? ` · ${invoiceDayLabel(inv.issuedOn)}` : ""}`,
     `For: ${text(inv.customerName) || "—"}`,
     "",
   ];
@@ -388,7 +396,7 @@ export function invoiceTextSummary(input: {
       out.push(`  ${invoicePaymentLabel(p)} — ${moneyText(p.amountCents)}`);
     }
   }
-  const due = invoiceDayKey(inv.dueOn);
+  const due = invoiceDayLabel(inv.dueOn);
   out.push(totals.balanceCents > 0
     ? `BALANCE DUE: ${moneyText(totals.balanceCents)}${due ? ` (due ${due})` : ""}`
     : "PAID IN FULL");

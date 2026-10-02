@@ -66,6 +66,18 @@ const _monthNamesEn = [
   'August', 'September', 'October', 'November', 'December',
 ];
 
+/// How a day reads to a person, US style: "Sep 1, 2026" (the key itself when
+/// it is not a day). Mirrors the server's `dayLabel` byte for byte - it is
+/// what the WhatsApp text shows, so it stays English and needs no intl.
+String dayLabel(String key) {
+  final k = _text(key, 10);
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(k);
+  if (m == null) return k;
+  final month = int.parse(m[2]!);
+  if (month < 1 || month > 12) return k;
+  return '${_monthNamesEn[month - 1].substring(0, 3)} ${int.parse(m[3]!)}, ${m[1]}';
+}
+
 String _monthLabelEn(String monthKey) {
   final m = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(monthKey.trim());
   if (m == null) return monthKey;
@@ -473,7 +485,7 @@ String parkingMonthCustomerText(ParkingMonthCustomer c, String businessName) {
     lines
       ..add([b.vehicle.isEmpty ? 'Car' : b.vehicle, if (b.vinNumber.isNotEmpty) 'VIN ${b.vinNumber}'].join(' · ') +
           named(c.registeredTo[i]))
-      ..add('  ${b.periodFrom} to ${b.periodTo}: ${b.days} day'
+      ..add('  ${dayLabel(b.periodFrom)} to ${dayLabel(b.periodTo)}: ${b.days} day'
           '${b.days == 1 ? '' : 's'} × ${parkingMoney(b.dayRateCents)} — '
           '${parkingMoney(b.monthCents)}');
     if (b.priorUnpaidCents > 0) {
@@ -484,7 +496,7 @@ String parkingMonthCustomerText(ParkingMonthCustomer c, String businessName) {
   if (c.activities.isNotEmpty) lines..add('')..add('Activities');
   for (var i = 0; i < c.activities.length; i++) {
     final a = c.activities[i];
-    lines.add('${a.date} · ${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''}'
+    lines.add('${dayLabel(a.date)} · ${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''}'
         '${named(c.activityRegisteredTo[i])} — ${parkingMoney(a.feeCents)}');
     if (a.paidCents > 0) lines.add('  Paid — -${parkingMoney(a.paidCents)}');
   }
@@ -492,7 +504,7 @@ String parkingMonthCustomerText(ParkingMonthCustomer c, String businessName) {
     lines..add('')..add('Unpaid from before');
     for (var i = 0; i < c.olderActivities.length; i++) {
       final a = c.olderActivities[i];
-      lines.add('${a.date} · ${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''}'
+      lines.add('${dayLabel(a.date)} · ${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''}'
           '${named(c.olderRegisteredTo[i])} — ${parkingMoney(a.dueCents)}');
     }
   }
@@ -597,7 +609,7 @@ String parkingMonthBillText(ParkingMonthBill b, String businessName) {
   if (car.isNotEmpty) lines.add(car);
   lines
     ..add('')
-    ..add('${b.periodFrom} to ${b.periodTo}: ${b.days} day'
+    ..add('${dayLabel(b.periodFrom)} to ${dayLabel(b.periodTo)}: ${b.days} day'
         '${b.days == 1 ? '' : 's'} × ${parkingMoney(b.dayRateCents)} — '
         '${parkingMoney(b.monthCents)}');
   if (b.priorUnpaidCents > 0) {
@@ -651,7 +663,7 @@ class MonthBillPaymentItem {
     items.add(MonthBillPaymentItem(
       kind: 'activity',
       id: a.id,
-      label: '${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''} (${a.date})',
+      label: '${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''} (${dayLabel(a.date)})',
       amountCents: a.dueCents,
     ));
   }

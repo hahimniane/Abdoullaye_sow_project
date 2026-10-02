@@ -99,7 +99,7 @@ test("the WhatsApp text mirrors the server's", () => {
   });
   assert.equal(txt, [
     "Keren Auto Sales — Invoice INV-0007",
-    "Corolla · 2026-09-26",
+    "Corolla · Sep 26, 2026",
     "For: Amadou Bah",
     "",
     "2014 Toyota Corolla — $5,500.00\nVIN 1HGCM82633A004352",
@@ -107,7 +107,7 @@ test("the WhatsApp text mirrors the server's", () => {
     "",
     "Total: $6,460.00",
     "Paid: -$2,000.00",
-    "  2026-09-26 · zelle · for 2014 Toyota Corolla — $2,000.00",
-    "BALANCE DUE: $4,460.00 (due 2026-10-15)",
+    "  Sep 26, 2026 · zelle · for 2014 Toyota Corolla — $2,000.00",
+    "BALANCE DUE: $4,460.00 (due Oct 15, 2026)",
   ].join("\n"));
 });

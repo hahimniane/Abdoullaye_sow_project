@@ -42,7 +42,7 @@ import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import { db, functions } from "@/lib/firebase";
-import { formatMoney, text } from "@/lib/format";
+import { formatDateTime, formatMoney, text } from "@/lib/format";
 import { isValidPhone } from "@/lib/phone";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
@@ -890,7 +890,7 @@ function CarActionForm({
           buyerName: buyerName.trim(),
           buyerPhone: buyerPhone.trim(),
           appointmentStart: new Date(appointmentStart).toISOString(),
-          appointmentLabel: new Date(appointmentStart).toLocaleString(),
+          appointmentLabel: formatDateTime(appointmentStart),
         });
         onComplete();
         return;
@@ -934,7 +934,7 @@ function CarActionForm({
           {action === "viewing" && (
             <Detail
               label="Appointment"
-              value={new Date(appointmentStart).toLocaleString()}
+              value={formatDateTime(appointmentStart)}
             />
           )}
           {action === "deposit" && (

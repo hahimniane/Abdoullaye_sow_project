@@ -29,7 +29,7 @@ import { runPanelAction } from "@/components/business/operations-panels";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import { useBusinessCollection, useBusinessStaff } from "@/lib/business-data";
 import { db, functions } from "@/lib/firebase";
-import { currentLanguage, formatDate, text } from "@/lib/format";
+import { currentLanguage, formatDate, formatDayKey, text } from "@/lib/format";
 import {
   INVOICE_MESSAGES,
   INVOICE_PAYMENT_METHODS,
@@ -459,8 +459,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
   async function revertPayment(row: Row) {
     if (!selected) return;
     const ok = await confirmImportantAction(
-      `Revert the ${moneyText(row.amountCents)} payment of ${invoiceDayKey(row.paidOn)}? The balance goes back up.`,
-      `Annuler le paiement de ${moneyText(row.amountCents)} du ${invoiceDayKey(row.paidOn)} ? Le solde remonte.`,
+      `Revert the ${moneyText(row.amountCents)} payment of ${formatDayKey(invoiceDayKey(row.paidOn), "en")}? The balance goes back up.`,
+      `Annuler le paiement de ${moneyText(row.amountCents)} du ${formatDayKey(invoiceDayKey(row.paidOn), "fr")} ? Le solde remonte.`,
     );
     if (!ok) return;
     await runPanelAction(setBusy, setFlash, "Payment reverted.", async () => {
@@ -535,8 +535,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                 <p className="panel-lede">
                   {invoiceKind(selected)} for <strong>{text(selected.customerName, "")}</strong>
                   {text(selected.customerPhone, "") && <> · {text(selected.customerPhone, "")}<CopyValue value={text(selected.customerPhone, "")} label="Copy phone" /></>}
-                  {" · "}{formatDate(invoiceDayKey(selected.issuedOn))}
-                  {invoiceDayKey(selected.dueOn) && selectedOpen && <> · due {formatDate(invoiceDayKey(selected.dueOn))}</>}
+                  {" · "}{formatDayKey(invoiceDayKey(selected.issuedOn))}
+                  {invoiceDayKey(selected.dueOn) && selectedOpen && <> · due {formatDayKey(invoiceDayKey(selected.dueOn))}</>}
                 </p>
               </div>
               <div className="ctn-detail-actions">
@@ -559,7 +559,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
               <div className="pk-stat"><span>Total</span><b>{moneyText(selectedTotals.totalCents)}</b><small>{selectedLines.length} line{selectedLines.length === 1 ? "" : "s"}</small></div>
               <div className="pk-stat"><span>Paid</span><b>{moneyText(selectedTotals.paidCents)}</b><small>{selectedTotals.paymentCount} payment{selectedTotals.paymentCount === 1 ? "" : "s"}</small></div>
               <div className="pk-stat"><span>Balance due</span><b className={selectedTotals.balanceCents > 0 ? "owed" : ""}>{moneyText(selectedTotals.balanceCents)}</b>
-                <small>{selectedTotals.status === "paid" ? `Paid in full${invoiceDayKey(selected.paidOn) ? ` on ${formatDate(invoiceDayKey(selected.paidOn))}` : ""}` : invoiceDayKey(selected.dueOn) ? `Due ${formatDate(invoiceDayKey(selected.dueOn))}` : "No due date"}</small>
+                <small>{selectedTotals.status === "paid" ? `Paid in full${invoiceDayKey(selected.paidOn) ? ` on ${formatDayKey(invoiceDayKey(selected.paidOn))}` : ""}` : invoiceDayKey(selected.dueOn) ? `Due ${formatDayKey(invoiceDayKey(selected.dueOn))}` : "No due date"}</small>
               </div>
             </div>
             {text(selected.notes, "") && <p className="ctn-notes">{text(selected.notes, "")}</p>}
@@ -610,7 +610,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                   const method = INVOICE_PAYMENT_METHOD_LABELS[text(row.method, "") as InvoicePaymentMethod] ?? text(row.method, "");
                   return (
                     <div className={`mini-table-row${reverted ? " inv-reverted" : ""}`} key={String(row.id)}>
-                      <span><strong>{formatDate(invoiceDayKey(row.paidOn))}</strong><small>{staffName(text(row.receivedByStaffId, ""))}</small></span>
+                      <span><strong>{formatDayKey(invoiceDayKey(row.paidOn))}</strong><small>{staffName(text(row.receivedByStaffId, ""))}</small></span>
                       <span><strong>{method}</strong>{text(row.forDescription, "") && <small>for {text(row.forDescription, "")}</small>}{text(row.note, "") && <small>{text(row.note, "")}</small>}{reverted && <small>Reverted</small>}</span>
                       <span><strong>{moneyText(row.amountCents)}</strong></span>
                       <span className="ctn-row-actions">
@@ -670,13 +670,13 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                       onClick={() => setSelectedId(id)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(id); } }}
                     >
-                      <span><strong>{invoiceTitle(row)}</strong><small>{formatDate(invoiceDayKey(row.issuedOn))}</small></span>
+                      <span><strong>{invoiceTitle(row)}</strong><small>{formatDayKey(invoiceDayKey(row.issuedOn))}</small></span>
                       <span><strong>{text(row.customerName, "")}</strong>{text(row.customerPhone, "") && <small>{text(row.customerPhone, "")}</small>}</span>
                       <span><strong>{moneyText(row.balanceCents)}</strong><small>of {moneyText(row.totalCents)}</small></span>
                       <span>
                         <StatusBadge row={row} />
-                        {invoiceStatus(row) === "open" && invoiceDayKey(row.dueOn) && <small>due {formatDate(invoiceDayKey(row.dueOn))}</small>}
-                        {invoiceStatus(row) === "paid" && invoiceDayKey(row.paidOn) && <small>{formatDate(invoiceDayKey(row.paidOn))}</small>}
+                        {invoiceStatus(row) === "open" && invoiceDayKey(row.dueOn) && <small>due {formatDayKey(invoiceDayKey(row.dueOn))}</small>}
+                        {invoiceStatus(row) === "paid" && invoiceDayKey(row.paidOn) && <small>{formatDayKey(invoiceDayKey(row.paidOn))}</small>}
                       </span>
                     </div>
                   );

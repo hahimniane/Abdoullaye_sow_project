@@ -195,7 +195,7 @@ void main() {
     );
     expect(txt, [
       'Keren Auto Sales — Invoice INV-0007',
-      'Corolla · 2026-09-26',
+      'Corolla · Sep 26, 2026',
       'For: Amadou Bah',
       '',
       '2014 Toyota Corolla — \$5,500.00\nVIN 1HGCM82633A004352',
@@ -203,8 +203,24 @@ void main() {
       '',
       'Total: \$6,460.00',
       'Paid: -\$2,000.00',
-      '  2026-09-26 · zelle · for 2014 Toyota Corolla — \$2,000.00',
-      'BALANCE DUE: \$4,460.00 (due 2026-10-15)',
+      '  Sep 26, 2026 · zelle · for 2014 Toyota Corolla — \$2,000.00',
+      'BALANCE DUE: \$4,460.00 (due Oct 15, 2026)',
     ].join('\n'));
+  });
+
+  test('a day reads US style, the same as the server', () {
+    expect(dayLabel('2026-09-26'), 'Sep 26, 2026');
+    expect(dayLabel('2026-10-05T12:00:00'), 'Oct 5, 2026');
+    expect(dayLabel(DateTime.utc(2026, 9, 1, 23)), 'Sep 1, 2026');
+    expect(dayLabel('2026-02-30'), '');
+    expect(dayLabel(''), '');
+    expect(dayLabel(null), '');
+    expect(
+        invoicePaymentLabel(InvoicePayment.fromMap('p', {
+          'paidOn': '2026-09-26',
+          'method': 'cash',
+          'note': 'first half',
+        })),
+        'Sep 26, 2026 · cash · first half');
   });
 }

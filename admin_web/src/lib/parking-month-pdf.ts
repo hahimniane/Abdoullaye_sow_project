@@ -5,6 +5,7 @@
  * customer who has had one recognises the other. jsPDF loads on first use.
  */
 
+import { formatDayKey } from "./format.ts";
 import { businessAddressText, fetchLogo } from "./invoice-pdf.ts";
 import {
   monthLabel,
@@ -94,6 +95,7 @@ function row(doc: Doc, y: number, label: string, value: string, opts: { bold?: b
 export async function buildParkingMonthBillPdf(input: { business: Row; customer: ParkingMonthCustomer; language: Lang }): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const t = COPY[input.language];
+  const day = (key: string) => formatDayKey(key, input.language);
   const c = input.customer;
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const items = c.cars.length + c.activities.length;
@@ -149,7 +151,7 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
   if (c.cars.length) {
     section(t.parking, t.car, t.period, `${t.days} ×`);
     for (const b of c.cars) {
-      line(b.vehicle || t.car, `${b.periodFrom} ${t.to} ${b.periodTo}`, `${b.days} × ${moneyText(b.dayRateCents)}`, moneyText(b.monthCents),
+      line(b.vehicle || t.car, `${day(b.periodFrom)} ${t.to} ${day(b.periodTo)}`, `${b.days} × ${moneyText(b.dayRateCents)}`, moneyText(b.monthCents),
         [b.vinNumber ? `VIN ${b.vinNumber}` : "", b.registeredTo ? `${t.registeredTo} ${b.registeredTo}` : "", b.stillParked ? t.stillParked : t.left,
           b.priorUnpaidCents > 0 ? `+ ${moneyText(b.priorUnpaidCents)} ${t.priorUnpaid.toLowerCase()}` : "",
           standing(b.monthPaidCents, b.monthUnpaidCents + b.priorUnpaidCents)].filter(Boolean).join("  ·  "));
@@ -158,14 +160,14 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
   if (c.activities.length) {
     section(t.activities, t.activity, t.date, "");
     for (const a of c.activities) {
-      line(`${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}`, a.date, "", moneyText(a.feeCents),
+      line(`${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}`, day(a.date), "", moneyText(a.feeCents),
         [a.vinNumber ? `VIN ${a.vinNumber}` : "", a.registeredTo ? `${t.registeredTo} ${a.registeredTo}` : "", standing(a.paidCents, a.dueCents)].filter(Boolean).join("  ·  "));
     }
   }
   if (c.olderActivities.length) {
     section(t.olderItems, t.activity, t.date, "");
     for (const a of c.olderActivities) {
-      line(`${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}`, a.date, "", moneyText(a.dueCents),
+      line(`${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}`, day(a.date), "", moneyText(a.dueCents),
         [a.vinNumber ? `VIN ${a.vinNumber}` : "", a.registeredTo ? `${t.registeredTo} ${a.registeredTo}` : "", standing(a.paidCents, a.dueCents)].filter(Boolean).join("  ·  "));
     }
   }
@@ -188,7 +190,7 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
   for (const a of c.activities) {
     if (a.paidCents <= 0) continue;
     room(20);
-    row(doc, y, `${t.paidToward} ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${a.date})`, `-${moneyText(a.paidCents)}`, { color: OK });
+    row(doc, y, `${t.paidToward} ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${day(a.date)})`, `-${moneyText(a.paidCents)}`, { color: OK });
     y += 16;
   }
   doc.setDrawColor(...INK).setLineWidth(1.2).line(M, y - 4, R, y - 4);

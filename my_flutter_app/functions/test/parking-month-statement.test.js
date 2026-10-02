@@ -142,7 +142,7 @@ describe("words", () => {
       "For: Diallo",
       "2024 Ford F150 · VIN 1FTFW1E50PFA63120",
       "",
-      "2026-09-01 to 2026-09-30: 30 days × $15.00 — $450.00",
+      "Sep 1, 2026 to Sep 30, 2026: 30 days × $15.00 — $450.00",
       "Paid — -$50.00",
       "BALANCE DUE: $400.00",
     ].join("\n"));
@@ -191,11 +191,11 @@ describe("one bill per customer", () => {
       "",
       "Parking",
       "2014 Toyota Corolla (registered to abdoulaye sow)",
-      "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
+      "  Sep 18, 2026 to Sep 30, 2026: 13 days × $12.00 — $156.00",
       "2015 Toyota RAV4 (registered to Ministre)",
-      "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
+      "  Sep 18, 2026 to Sep 30, 2026: 13 days × $12.00 — $156.00",
       "2017 Toyota RAV4 (registered to Abdoulaye Sow)",
-      "  2026-09-21 to 2026-09-24: 4 days × $12.00 — $48.00",
+      "  Sep 21, 2026 to Sep 24, 2026: 4 days × $12.00 — $48.00",
       "  Paid — -$10.00",
       "",
       "Total for September — $360.00",
@@ -261,15 +261,15 @@ describe("activities on the month's bill", () => {
       "",
       "Parking",
       "2014 Toyota Corolla (registered to abdoulaye sow)",
-      "  2026-09-18 to 2026-09-30: 13 days × $12.00 — $156.00",
+      "  Sep 18, 2026 to Sep 30, 2026: 13 days × $12.00 — $156.00",
       "",
       "Activities",
-      "2026-09-14 · Title · 2013 Toyota RAV4 " +
+      "Sep 14, 2026 · Title · 2013 Toyota RAV4 " +
         "(registered to Abdoulaye Sow) — $100.00",
       "  Paid — -$40.00",
       "",
       "Unpaid from before",
-      "2026-08-20 · Title · 2013 Toyota RAV4 " +
+      "Aug 20, 2026 · Title · 2013 Toyota RAV4 " +
         "(registered to Abdoulaye Sow) — $90.00",
       "",
       "Total for September — $256.00",
@@ -325,3 +325,12 @@ describe("marking a whole bill paid", () => {
   });
 });
 
+
+describe("days people read", () => {
+  it("reads month first, US style", () => {
+    const {dayLabel} = require("../parking_month_statement");
+    assert.equal(dayLabel("2026-09-01"), "Sep 1, 2026");
+    assert.equal(require("../invoice_ledger").dayLabel("2026-10-15"),
+        "Oct 15, 2026");
+  });
+});

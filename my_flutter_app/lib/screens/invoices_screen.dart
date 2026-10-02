@@ -16,6 +16,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/date_display.dart';
 import '../utils/invoice_pdf.dart';
 import 'pdf_preview_screen.dart';
 import '../widgets/app_back_button.dart';
@@ -623,9 +624,10 @@ class _InvoiceCard extends StatelessWidget {
                   Text(
                     [
                       invoice.customerName,
-                      invoice.issuedOn,
+                      displayDay(invoice.issuedOn, dateLocaleOf(context)),
                       if (invoice.isOpen && invoice.dueOn.isNotEmpty)
-                        l10n.invDue(invoice.dueOn),
+                        l10n.invDue(
+                            displayDay(invoice.dueOn, dateLocaleOf(context))),
                     ].where((p) => p.isNotEmpty).join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -947,6 +949,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
   Future<void> _savePdf() async {
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).toLanguageTag();
     final invoice = _invoice;
     if (invoice == null) return;
     await _run('pdf', () async {
@@ -977,6 +980,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           footer: l10n.invPdfFooter,
           methodLabel: (m) => _methodLabel(l10n, m),
           forLine: l10n.invPdfFor,
+          locale: locale,
         ),
       );
       if (!mounted) return;
@@ -1140,10 +1144,12 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                       Text(
                         paid
                             ? (invoice.paidOn.isNotEmpty
-                                ? l10n.invPaidOn(invoice.paidOn)
+                                ? l10n.invPaidOn(displayDay(
+                                    invoice.paidOn, dateLocaleOf(context)))
                                 : l10n.invStatusPaid)
                             : (invoice.dueOn.isNotEmpty
-                                ? l10n.invDue(invoice.dueOn)
+                                ? l10n.invDue(displayDay(
+                                    invoice.dueOn, dateLocaleOf(context)))
                                 : l10n.invNoDueDate),
                         style: const TextStyle(fontSize: 12, color: AppColors.muted),
                       ),
@@ -1499,7 +1505,8 @@ class _PaymentTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${payment.paidOn} · ${_methodLabel(l10n, payment.method)}',
+                  '${displayDay(payment.paidOn, dateLocaleOf(context))} · '
+                  '${_methodLabel(l10n, payment.method)}',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -1799,7 +1806,7 @@ class _InvoiceFormSheetState extends State<_InvoiceFormSheet> {
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
             label: l10n.invFormIssuedOn,
-            value: _issuedOn,
+            value: displayDay(_issuedOn, dateLocaleOf(context)),
             placeholder: l10n.invFormIssuedOn,
             onTap: () => _pickDay(false),
             error: errorFor('issued_on_invalid'),
@@ -1807,7 +1814,9 @@ class _InvoiceFormSheetState extends State<_InvoiceFormSheet> {
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
             label: l10n.invFormDueOn,
-            value: _dueOn.isEmpty ? null : _dueOn,
+            value: _dueOn.isEmpty
+                ? null
+                : displayDay(_dueOn, dateLocaleOf(context)),
             placeholder: l10n.invFormDueHint,
             onTap: () => _pickDay(true),
             error: errorFor('due_on_invalid') ?? errorFor('due_before_issued'),
@@ -2338,7 +2347,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
             label: l10n.invPayDate,
-            value: _paidOn,
+            value: displayDay(_paidOn, dateLocaleOf(context)),
             placeholder: l10n.invPayDate,
             onTap: _pickDay,
             error: errorFor('paid_on_invalid'),

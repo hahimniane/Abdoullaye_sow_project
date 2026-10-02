@@ -23,6 +23,7 @@ import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
+import '../utils/date_display.dart';
 import '../utils/vin_utils.dart';
 import '../utils/parking_status_options.dart';
 import '../widgets/app_back_button.dart';
@@ -693,6 +694,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
 
   Future<void> _generateFinalReceipt() async {
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).toLanguageTag();
     if (_parkingEndDate == null || _costPerDayController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -800,7 +802,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                     _buildPdfRow(l10n.trackingNumberPdf, _trackingCode),
                     _buildPdfRow(
                       l10n.generatedOn,
-                      DateFormat('MMM dd, yyyy - HH:mm').format(DateTime.now()),
+                      displayDateTime(DateTime.now(), locale),
                     ),
                     pw.SizedBox(height: 20),
                     pw.Text(
@@ -818,11 +820,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                     _buildPdfRow(l10n.vinNumberPdf, _vinController.text),
                     _buildPdfRow(
                       l10n.parkingStartPdf,
-                      DateFormat('MMM dd, yyyy').format(_parkingStartDate),
+                      displayDate(_parkingStartDate, locale),
                     ),
                     _buildPdfRow(
                       l10n.parkingEndPdf,
-                      DateFormat('MMM dd, yyyy').format(_parkingEndDate!),
+                      displayDate(_parkingEndDate!, locale),
                     ),
                     _buildPdfRow(l10n.totalDaysPdf, totalDays.toString()),
                     pw.SizedBox(height: 20),

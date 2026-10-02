@@ -88,6 +88,20 @@ function dayKey(value) {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
+/**
+ * How a day reads to a person, US style: month first.
+ *
+ * @param {*} value A "YYYY-MM-DD" key, Date or Timestamp.
+ * @return {string} "Sep 1, 2026", or "" when it is not a day.
+ */
+function dayLabel(value) {
+  const key = dayKey(value);
+  if (!key) return "";
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
+    "Sep", "Oct", "Nov", "Dec"][Number(key.slice(5, 7)) - 1];
+  return `${month} ${Number(key.slice(8, 10))}, ${key.slice(0, 4)}`;
+}
+
 // -------------------------------------------------------------------------
 // The invoice itself.
 // -------------------------------------------------------------------------
@@ -222,12 +236,12 @@ function invoicePaymentRecord(input, today = "") {
  * How a payment reads in a list or on the paper: day, method, what for.
  *
  * @param {object} payment The stored payment.
- * @return {string} "2026-09-26 · cash · for 2014 Toyota Corolla".
+ * @return {string} "Sep 26, 2026 · cash · for 2014 Toyota Corolla".
  */
 function invoicePaymentLabel(payment) {
   const p = payment || {};
   return [
-    dayKey(p.paidOn),
+    dayLabel(p.paidOn),
     text(p.method, 40),
     text(p.forDescription) ? `for ${text(p.forDescription)}` : "",
     text(p.note),
@@ -324,7 +338,7 @@ function invoiceTextSummary({invoice, lines, payments, businessName}) {
     `${text(businessName) || "Invoice"} — ` +
       `${invoiceKind({...inv, status: totals.status})}` +
       `${text(inv.number, 20) ? ` ${text(inv.number, 20)}` : ""}`,
-    `${text(inv.title)}${inv.issuedOn ? ` · ${dayKey(inv.issuedOn)}` : ""}`,
+    `${text(inv.title)}${inv.issuedOn ? ` · ${dayLabel(inv.issuedOn)}` : ""}`,
     `For: ${text(inv.customerName) || "—"}`,
     "",
   ];
@@ -344,7 +358,7 @@ function invoiceTextSummary({invoice, lines, payments, businessName}) {
   }
   out.push(totals.balanceCents > 0 ?
     `BALANCE DUE: ${moneyText(totals.balanceCents)}` +
-      (dayKey(inv.dueOn) ? ` (due ${dayKey(inv.dueOn)})` : "") :
+      (dayKey(inv.dueOn) ? ` (due ${dayLabel(inv.dueOn)})` : "") :
     "PAID IN FULL");
   return out.join("\n");
 }
@@ -356,6 +370,7 @@ module.exports = {
   INVOICE_MESSAGES,
   MAX_CENTS,
   dayKey,
+  dayLabel,
   validateInvoice,
   invoiceRecord,
   validateInvoiceLine,

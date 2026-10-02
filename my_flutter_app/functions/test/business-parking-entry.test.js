@@ -944,11 +944,11 @@ describe("what an edit changed, for the History", () => {
     });
     assert.deepEqual(changes, [
       {field: "Phone", from: "+13475628973", to: "+13476413811"},
-      {field: "Out date", from: "Open", to: "2026-09-08"},
+      {field: "Out date", from: "Open", to: "Sep 8, 2026"},
     ]);
     assert.equal(businessParkingEditSummary(changes),
         "Edited — Phone: +13475628973 → +13476413811; " +
-        "Out date: Open → 2026-09-08");
+        "Out date: Open → Sep 8, 2026");
   });
 
   it("reads money as dollars and the old owner name as a fallback", () => {

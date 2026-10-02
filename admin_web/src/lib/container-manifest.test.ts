@@ -356,7 +356,7 @@ test("the VIN index joins lines to containers once, skipping arrived boxes", () 
   assert.equal(index.get("VIN000SHIPPED")?.title, "MSKU1234567");
   assert.equal(index.get("VIN000SHIPPED")?.status, "shipped");
   assert.equal(vinPlacementText(index.get("VIN000LOADING")), "Loading in Box 2");
-  assert.equal(vinPlacementText(index.get("VIN000SHIPPED")), "In MSKU1234567 · sailed 3 Oct");
+  assert.equal(vinPlacementText(index.get("VIN000SHIPPED")), "In MSKU1234567 · sailed Oct 3");
   assert.equal(vinPlacementText(index.get("VIN000ARRIVED")), "");
   assert.equal(vinPlacementText(undefined), "");
 });
@@ -380,7 +380,7 @@ test("the cross-link reads in French too, so the DOM translator can leave it alo
   ]) {
     assert.equal(translateValue(sentence, "fr"), sentence);
   }
-  assert.equal(shortDayMonth({ seconds: 1791028800 }, "en"), "3 Oct");
+  assert.equal(shortDayMonth({ seconds: 1791028800 }, "en"), "Oct 3");
   assert.equal(shortDayMonth("not a date"), "");
 });
 

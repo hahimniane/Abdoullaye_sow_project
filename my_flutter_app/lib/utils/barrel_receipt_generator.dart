@@ -4,12 +4,12 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../models/barrel_shipment.dart';
+import 'date_display.dart';
 
 Future<void> generateBarrelShipmentReceipt({
   required BarrelShipment shipment,
 }) async {
   final pdf = pw.Document();
-  final dateFormat = DateFormat('MMM dd, yyyy - HH:mm');
 
   pw.Widget buildRow(String label, String value) {
     return pw.Padding(
@@ -82,8 +82,8 @@ Future<void> generateBarrelShipmentReceipt({
                   ),
                   pw.SizedBox(height: 12),
                   buildRow('Tracking Number', shipment.trackingCode),
-                  buildRow('Created At', dateFormat.format(shipment.createdAt)),
-                  buildRow('Generated On', dateFormat.format(DateTime.now())),
+                  buildRow('Created At', displayDateTime(shipment.createdAt, 'en')),
+                  buildRow('Generated On', displayDateTime(DateTime.now(), 'en')),
                   pw.SizedBox(height: 20),
                   pw.Text(
                     'Sender Information',
@@ -109,7 +109,7 @@ Future<void> generateBarrelShipmentReceipt({
                   if (shipment.pickupDateTime != null)
                     buildRow(
                       'Pickup Time',
-                      dateFormat.format(shipment.pickupDateTime!),
+                      displayDateTime(shipment.pickupDateTime!, 'en'),
                     ),
                   pw.SizedBox(height: 20),
                   pw.Text(
@@ -187,7 +187,6 @@ Future<void> generateBarrelOrderReceipt({
 
   final pdf = pw.Document();
   final currency = NumberFormat.simpleCurrency();
-  final dateFormat = DateFormat('MMM dd, yyyy - HH:mm');
   final total = shipments.fold<double>(0, (sum, item) => sum + item.price);
 
   pw.Widget buildLine(BarrelShipment shipment) {
@@ -245,7 +244,7 @@ Future<void> generateBarrelOrderReceipt({
           ),
         ),
         pw.SizedBox(height: 18),
-        pw.Text('Generated: ${dateFormat.format(DateTime.now())}'),
+        pw.Text('Generated: ${displayDateTime(DateTime.now(), 'en')}'),
         pw.SizedBox(height: 12),
         ...shipments.map(buildLine),
         pw.Divider(),
