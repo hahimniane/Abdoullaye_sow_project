@@ -12,6 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../services/invoice_ledger.dart';
+import 'date_display.dart';
 
 const _ink = PdfColor.fromInt(0xFF12211F);
 const _muted = PdfColor.fromInt(0xFF5B6B68);
@@ -43,6 +44,7 @@ class InvoicePdfCopy {
     required this.footer,
     required this.methodLabel,
     this.forLine = 'for',
+    this.locale = 'en',
   });
 
   final String invoice;
@@ -66,6 +68,9 @@ class InvoicePdfCopy {
   final String footer;
   final String Function(String method) methodLabel;
   final String forLine;
+
+  /// The reader's locale tag, for how dates read ("Sep 1, 2026" in English).
+  final String locale;
 }
 
 String invoiceBusinessAddress(Map<String, dynamic> business) {
@@ -212,21 +217,21 @@ Future<Uint8List> buildInvoicePdf({
                 pw.Row(mainAxisSize: pw.MainAxisSize.min, children: [
                   small(copy.date),
                   pw.SizedBox(width: 12),
-                  pw.Text(invoice.issuedOn,
+                  pw.Text(displayDay(invoice.issuedOn, copy.locale),
                       style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _ink)),
                 ]),
                 if (paid && invoice.paidOn.isNotEmpty)
                   pw.Row(mainAxisSize: pw.MainAxisSize.min, children: [
                     small(copy.paidOn),
                     pw.SizedBox(width: 12),
-                    pw.Text(invoice.paidOn,
+                    pw.Text(displayDay(invoice.paidOn, copy.locale),
                         style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _ink)),
                   ])
                 else if (invoice.dueOn.isNotEmpty)
                   pw.Row(mainAxisSize: pw.MainAxisSize.min, children: [
                     small(copy.due),
                     pw.SizedBox(width: 12),
-                    pw.Text(invoice.dueOn,
+                    pw.Text(displayDay(invoice.dueOn, copy.locale),
                         style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _ink)),
                   ]),
               ],
@@ -322,7 +327,7 @@ Future<Uint8List> buildInvoicePdf({
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    '${p.paidOn}  ·  ${copy.methodLabel(p.method)}'
+                    '${displayDay(p.paidOn, copy.locale)}  ·  ${copy.methodLabel(p.method)}'
                     '${p.forDescription.isNotEmpty ? '  ·  ${copy.forLine} ${p.forDescription}' : ''}'
                     '${p.note.isNotEmpty ? '  ·  ${p.note}' : ''}',
                     style: const pw.TextStyle(fontSize: 9.5, color: _ink),

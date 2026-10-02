@@ -43,6 +43,14 @@ function dayKeyOf(day: number) {
   return new Date(day * DAY_MS).toISOString().slice(0, 10);
 }
 
+/** "Sep 1, 2026" — a day key, US style, for the English text. Mirrors the server's. */
+export function dayLabel(key: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text(key, 10));
+  const name = match ? MONTH_NAMES_EN[Number(match[2]) - 1] : undefined;
+  if (!match || !name) return text(key, 10);
+  return `${name.slice(0, 3)} ${Number(match[3])}, ${match[1]}`;
+}
+
 export function monthDays(monthKey: string): { first: number; last: number } | null {
   const match = /^(\d{4})-(\d{2})$/.exec(text(monthKey, 7));
   if (!match) return null;
@@ -415,19 +423,19 @@ export function parkingMonthCustomerText(c: ParkingMonthCustomer, businessName: 
   if (c.cars.length) lines.push("", "Parking");
   for (const b of c.cars) {
     lines.push([b.vehicle || "Car", b.vinNumber ? `VIN ${b.vinNumber}` : ""].filter(Boolean).join(" · ") + named(b));
-    lines.push(`  ${b.periodFrom} to ${b.periodTo}: ${b.days} day${b.days === 1 ? "" : "s"} × ${moneyText(b.dayRateCents)} — ${moneyText(b.monthCents)}`);
+    lines.push(`  ${dayLabel(b.periodFrom)} to ${dayLabel(b.periodTo)}: ${b.days} day${b.days === 1 ? "" : "s"} × ${moneyText(b.dayRateCents)} — ${moneyText(b.monthCents)}`);
     if (b.priorUnpaidCents > 0) lines.push(`  Unpaid from before — ${moneyText(b.priorUnpaidCents)}`);
     if (b.monthPaidCents > 0) lines.push(`  Paid — -${moneyText(b.monthPaidCents)}`);
   }
   if (c.activities.length) lines.push("", "Activities");
   for (const a of c.activities) {
-    lines.push(`${a.date} · ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ${moneyText(a.feeCents)}`);
+    lines.push(`${dayLabel(a.date)} · ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ${moneyText(a.feeCents)}`);
     if (a.paidCents > 0) lines.push(`  Paid — -${moneyText(a.paidCents)}`);
   }
   if (c.olderActivities.length) {
     lines.push("", "Unpaid from before");
     for (const a of c.olderActivities) {
-      lines.push(`${a.date} · ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ${moneyText(a.dueCents)}`);
+      lines.push(`${dayLabel(a.date)} · ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ${moneyText(a.dueCents)}`);
     }
   }
   lines.push("", `Total for ${month} — ${moneyText(c.monthCents)}`);
@@ -445,7 +453,7 @@ export function parkingMonthBillText(bill: ParkingMonthBill, businessName: strin
   ];
   const car = [bill.vehicle, bill.vinNumber ? `VIN ${bill.vinNumber}` : ""].filter(Boolean).join(" · ");
   if (car) lines.push(car);
-  lines.push("", `${bill.periodFrom} to ${bill.periodTo}: ${bill.days} day${bill.days === 1 ? "" : "s"} × ${moneyText(bill.dayRateCents)} — ${moneyText(bill.monthCents)}`);
+  lines.push("", `${dayLabel(bill.periodFrom)} to ${dayLabel(bill.periodTo)}: ${bill.days} day${bill.days === 1 ? "" : "s"} × ${moneyText(bill.dayRateCents)} — ${moneyText(bill.monthCents)}`);
   if (bill.priorUnpaidCents > 0) lines.push(`Unpaid from before — ${moneyText(bill.priorUnpaidCents)}`);
   if (bill.monthPaidCents > 0) lines.push(`Paid — -${moneyText(bill.monthPaidCents)}`);
   lines.push(bill.dueCents > 0 ? `BALANCE DUE: ${moneyText(bill.dueCents)}` : "PAID IN FULL");
@@ -471,7 +479,7 @@ export function monthBillPaymentPlan(c: ParkingMonthCustomer): {
   }
   for (const a of [...c.activities, ...c.olderActivities]) {
     if (a.dueCents <= 0) continue;
-    items.push({ kind: "activity", id: a.id, label: `${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${a.date})`, amountCents: a.dueCents });
+    items.push({ kind: "activity", id: a.id, label: `${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${dayLabel(a.date)})`, amountCents: a.dueCents });
   }
   return { items, skipped, totalCents: items.reduce((s, x) => s + x.amountCents, 0) };
 }

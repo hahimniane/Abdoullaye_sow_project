@@ -58,6 +58,21 @@ String invoiceDayKey(Object? value) {
   return date == null ? '' : date.toUtc().toIso8601String().substring(0, 10);
 }
 
+const _monthsEn = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// How a day reads to a person, US style: "Sep 1, 2026", or "" when it is not
+/// a day. Mirrors the server's `dayLabel` byte for byte - it is what the
+/// WhatsApp text shows, so it stays English and needs no intl.
+String dayLabel(Object? value) {
+  final key = invoiceDayKey(value);
+  if (key.isEmpty) return '';
+  return '${_monthsEn[int.parse(key.substring(5, 7)) - 1]} '
+      '${int.parse(key.substring(8, 10))}, ${key.substring(0, 4)}';
+}
+
 String invoiceTodayKey([DateTime? now]) =>
     DateFormat('yyyy-MM-dd').format(now ?? DateTime.now());
 
@@ -234,7 +249,7 @@ Map<String, dynamic> invoicePaymentPayload(InvoicePaymentDraft d) => {
 String invoicePaymentLabel(InvoicePayment p,
         [String Function(String method)? methodLabel]) =>
     [
-      p.paidOn,
+      dayLabel(p.paidOn),
       p.method.isEmpty ? '' : (methodLabel ?? (m) => m)(p.method),
       p.forDescription.isEmpty ? '' : 'for ${p.forDescription}',
       p.note,
@@ -504,7 +519,7 @@ String invoiceTextSummary({
   final out = <String>[
     '${businessName.trim().isEmpty ? 'Invoice' : businessName.trim()} — $kind'
         '${invoice.number.isNotEmpty ? ' ${invoice.number}' : ''}',
-    '${invoice.title}${invoice.issuedOn.isNotEmpty ? ' · ${invoice.issuedOn}' : ''}',
+    '${invoice.title}${invoice.issuedOn.isNotEmpty ? ' · ${dayLabel(invoice.issuedOn)}' : ''}',
     'For: ${invoice.customerName.isEmpty ? '—' : invoice.customerName}',
     '',
   ];
@@ -526,7 +541,7 @@ String invoiceTextSummary({
   }
   out.add(totals.balanceCents > 0
       ? 'BALANCE DUE: ${invoiceMoney(totals.balanceCents)}'
-          '${invoice.dueOn.isNotEmpty ? ' (due ${invoice.dueOn})' : ''}'
+          '${invoice.dueOn.isNotEmpty ? ' (due ${dayLabel(invoice.dueOn)})' : ''}'
       : 'PAID IN FULL');
   return out.join('\n');
 }

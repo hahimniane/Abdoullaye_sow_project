@@ -61,6 +61,19 @@ function dayKeyOf(day) {
 }
 
 /**
+ * How a day reads to a person, US style: month first.
+ *
+ * @param {string} key "YYYY-MM-DD".
+ * @return {string} "Sep 1, 2026" (the key itself when it is not a day).
+ */
+function dayLabel(key) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text(key, 10));
+  const name = match && MONTH_NAMES[Number(match[2]) - 1];
+  if (!name) return text(key, 10);
+  return `${name.slice(0, 3)} ${Number(match[3])}, ${match[1]}`;
+}
+
+/**
  * @param {string} monthKey "YYYY-MM".
  * @return {{first: number, last: number}|null} Its first and last day.
  */
@@ -446,7 +459,7 @@ function parkingMonthBillText(bill, businessName) {
       .filter(Boolean).join(" · ");
   if (car) lines.push(car);
   lines.push("",
-      `${b.periodFrom} to ${b.periodTo}: ${b.days} day` +
+      `${dayLabel(b.periodFrom)} to ${dayLabel(b.periodTo)}: ${b.days} day` +
       `${b.days === 1 ? "" : "s"} × ${moneyText(b.dayRateCents)} — ` +
       `${moneyText(b.monthCents)}`);
   if (b.priorUnpaidCents > 0) {
@@ -485,7 +498,8 @@ function parkingMonthCustomerText(customer, businessName) {
   for (const b of c.cars || []) {
     lines.push([b.vehicle || "Car", b.vinNumber ? `VIN ${b.vinNumber}` : ""]
         .filter(Boolean).join(" · ") + named(b));
-    lines.push(`  ${b.periodFrom} to ${b.periodTo}: ${b.days} day` +
+    lines.push(`  ${dayLabel(b.periodFrom)} to ${dayLabel(b.periodTo)}: ` +
+      `${b.days} day` +
       `${b.days === 1 ? "" : "s"} × ${moneyText(b.dayRateCents)} — ` +
       `${moneyText(b.monthCents)}`);
     if (b.priorUnpaidCents > 0) {
@@ -497,7 +511,7 @@ function parkingMonthCustomerText(customer, businessName) {
   }
   if ((c.activities || []).length) lines.push("", "Activities");
   for (const a of c.activities || []) {
-    lines.push(`${a.date} · ${a.label}` +
+    lines.push(`${dayLabel(a.date)} · ${a.label}` +
       `${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ` +
       `${moneyText(a.feeCents)}`);
     if (a.paidCents > 0) lines.push(`  Paid — -${moneyText(a.paidCents)}`);
@@ -505,7 +519,7 @@ function parkingMonthCustomerText(customer, businessName) {
   if ((c.olderActivities || []).length) {
     lines.push("", "Unpaid from before");
     for (const a of c.olderActivities) {
-      lines.push(`${a.date} · ${a.label}` +
+      lines.push(`${dayLabel(a.date)} · ${a.label}` +
         `${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ` +
         `${moneyText(a.dueCents)}`);
     }
@@ -550,7 +564,8 @@ function monthBillPaymentPlan(customer) {
   for (const a of [...(c.activities || []), ...(c.olderActivities || [])]) {
     if (a.dueCents <= 0) continue;
     items.push({kind: "activity", id: a.id,
-      label: `${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${a.date})`,
+      label: `${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} ` +
+        `(${dayLabel(a.date)})`,
       amountCents: a.dueCents});
   }
   return {items, skipped,
@@ -564,6 +579,7 @@ module.exports = {
   parkingCustomerKey,
   parkingMonthCustomers,
   parkingMonthCustomerText,
+  dayLabel,
   dayNumber,
   monthDays,
   previousMonthKey,

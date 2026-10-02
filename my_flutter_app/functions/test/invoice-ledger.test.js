@@ -103,9 +103,9 @@ describe("a payment", () => {
     assert.equal(rec.forLineId, "l1");
     assert.equal(rec.forDescription, "2014 Toyota Corolla");
     assert.equal(invoicePaymentLabel(rec),
-        "2026-09-26 · zelle · for 2014 Toyota Corolla");
+        "Sep 26, 2026 · zelle · for 2014 Toyota Corolla");
     assert.equal(invoicePaymentLabel({paidOn: "2026-09-26", method: "cash",
-      note: "first half"}), "2026-09-26 · cash · first half");
+      note: "first half"}), "Sep 26, 2026 · cash · first half");
   });
 });
 
@@ -157,13 +157,13 @@ describe("the WhatsApp text", () => {
         forDescription: "2014 Toyota Corolla"}],
     });
     assert.match(txt, /^Keren Auto Sales — Invoice INV-0007\n/);
-    assert.match(txt, /Paid: -\$2,000\.00\n {2}2026-09-26 · zelle · /);
+    assert.match(txt, /Paid: -\$2,000\.00\n {2}Sep 26, 2026 · zelle · /);
     assert.match(txt, /for 2014 Toyota Corolla — \$2,000\.00\n/);
     assert.match(txt,
         /2014 Toyota Corolla — \$5,500\.00\nVIN 1HGCM82633A004352/);
     assert.match(txt, /Barrels \(8 × \$120\.00\) — \$960\.00/);
     assert.match(txt, /Total: \$6,460\.00\nPaid: -\$2,000\.00\n/);
-    assert.match(txt, /BALANCE DUE: \$4,460\.00 \(due 2026-10-15\)$/);
+    assert.match(txt, /BALANCE DUE: \$4,460\.00 \(due Oct 15, 2026\)$/);
     const paid = invoiceTextSummary({businessName: "K", invoice: {title: "t",
       customerName: "c"}, lines: [{amountCents: 100}],
     payments: [{amountCents: 100}]});

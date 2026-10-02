@@ -3923,7 +3923,9 @@ exports.createTransportRequest = onCall(
           .map((part) => String(part || "").trim())
           .filter(Boolean)
           .join(" ") || "A vehicle";
-      const quoteByDate = quoteDeadlineAt.toDate().toISOString().slice(0, 10);
+      const quoteByDate = quoteDeadlineAt.toDate().toLocaleDateString(
+          "en-US", {month: "short", day: "numeric", year: "numeric",
+            timeZone: "America/New_York"});
       await Promise.all(providers.map((provider) => {
         const ownerUid = String(provider.business?.ownerUid || "").trim();
         if (!ownerUid) return null;

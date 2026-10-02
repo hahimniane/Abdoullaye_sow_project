@@ -118,7 +118,7 @@ import {
 import { db, functions } from "@/lib/firebase";
 import { withGuestContact } from "@/lib/guest-checkout";
 import { ensureGuestOrAccount } from "@/lib/guest-session";
-import { formatDate, formatMoney, text } from "@/lib/format";
+import { formatDate, formatDayKey, formatMoney, text } from "@/lib/format";
 import { currentWebLanguage } from "@/lib/language";
 import { isValidPhone } from "@/lib/phone";
 import {
@@ -5420,8 +5420,8 @@ function TransportRequestForm({
                     value={
                       preferredDate
                         ? flexibleDates
-                          ? `${preferredDate} · Flexible`
-                          : preferredDate
+                          ? `${formatDayKey(preferredDate)} · Flexible`
+                          : formatDayKey(preferredDate)
                         : "Flexible"
                     }
                   />

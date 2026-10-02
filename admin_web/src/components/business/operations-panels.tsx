@@ -242,7 +242,7 @@ import {
   carPurchaseCanMarkCompleted,
   carPurchaseCanMarkSold,
 } from "@/lib/car-purchase";
-import { asDate, currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
+import { asDate, currentLanguage, formatDate, formatDayKey, formatMoney, text } from "@/lib/format";
 import {
   ACRONYMS,
   bodyTypeOptions,
@@ -7289,9 +7289,16 @@ function downloadCsv(filename: string, rows: FirestoreRow[], columns: string[]) 
 }
 
 function csvCell(value: unknown) {
-  const raw = value && typeof value === "object" && "toDate" in value
+  // Dates read month first (US) whether stored as a Timestamp, a Date, a day
+  // key or an ISO moment.
+  const asText = String(value ?? "");
+  const raw = value instanceof Date || (value && typeof value === "object" && "toDate" in value)
     ? formatDate(value)
-    : String(value ?? "");
+    : /^\d{4}-\d{2}-\d{2}$/.test(asText)
+      ? formatDayKey(asText)
+      : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(asText)
+        ? formatDate(asText)
+        : asText;
   return `"${raw.replace(/"/g, '""')}"`;
 }
 

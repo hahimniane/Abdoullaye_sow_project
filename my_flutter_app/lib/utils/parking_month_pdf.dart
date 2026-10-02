@@ -11,6 +11,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../services/parking_month_statement.dart';
+import 'date_display.dart';
 import 'invoice_pdf.dart' show invoiceBusinessAddress;
 
 const _ink = PdfColor.fromInt(0xFF12211F);
@@ -58,6 +59,7 @@ class ParkingMonthPdfCopy {
     this.paidWord = 'paid',
     this.dueWord = 'due',
     this.itemsLabel,
+    this.locale = 'en',
   });
 
   final String bill;
@@ -102,6 +104,9 @@ class ParkingMonthPdfCopy {
 
   /// "4 items".
   final String Function(int items)? itemsLabel;
+
+  /// The reader's locale tag, for how dates read ("Sep 1, 2026" in English).
+  final String locale;
 }
 
 String _t(Object? v) => (v ?? '').toString().trim();
@@ -289,7 +294,8 @@ Future<Uint8List> buildParkingMonthBillPdf({
                       c.cars[i].monthUnpaidCents + c.cars[i].priorUnpaidCents),
                 ]),
               ),
-              text('${c.cars[i].periodFrom} ${copy.to} ${c.cars[i].periodTo}'),
+              text('${displayDay(c.cars[i].periodFrom, copy.locale)} ${copy.to} '
+                  '${displayDay(c.cars[i].periodTo, copy.locale)}'),
               text('${c.cars[i].days} × ${parkingMoney(c.cars[i].dayRateCents)}', align: pw.TextAlign.right),
               text(parkingMoney(c.cars[i].monthCents), bold: true, align: pw.TextAlign.right),
             ]),
@@ -311,7 +317,7 @@ Future<Uint8List> buildParkingMonthBillPdf({
                 if (c.activityRegisteredTo[i].isNotEmpty) '${copy.registeredTo} ${c.activityRegisteredTo[i]}',
                 standing(c.activities[i].paidCents, c.activities[i].dueCents),
               ])),
-              text(c.activities[i].date),
+              text(displayDay(c.activities[i].date, copy.locale)),
               text(''),
               text(parkingMoney(c.activities[i].feeCents), bold: true, align: pw.TextAlign.right),
             ]),
@@ -333,7 +339,7 @@ Future<Uint8List> buildParkingMonthBillPdf({
                 if (c.olderRegisteredTo[i].isNotEmpty) '${copy.registeredTo} ${c.olderRegisteredTo[i]}',
                 standing(c.olderActivities[i].paidCents, c.olderActivities[i].dueCents),
               ])),
-              text(c.olderActivities[i].date),
+              text(displayDay(c.olderActivities[i].date, copy.locale)),
               text(''),
               text(parkingMoney(c.olderActivities[i].dueCents), bold: true, align: pw.TextAlign.right),
             ]),
@@ -350,7 +356,7 @@ Future<Uint8List> buildParkingMonthBillPdf({
               '-${parkingMoney(b.monthPaidCents)}', color: _ok),
       for (final a in c.activities)
         if (a.paidCents > 0)
-          _row('${copy.paidToward} ${actTitle(a)} (${a.date})', '-${parkingMoney(a.paidCents)}', color: _ok),
+          _row('${copy.paidToward} ${actTitle(a)} (${displayDay(a.date, copy.locale)})', '-${parkingMoney(a.paidCents)}', color: _ok),
       pw.Container(height: 1.2, color: _ink, margin: const pw.EdgeInsets.symmetric(vertical: 6)),
       c.dueCents > 0
           ? _row(copy.balanceDue, parkingMoney(c.dueCents), bold: true, color: _due)

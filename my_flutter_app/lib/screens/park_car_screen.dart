@@ -26,6 +26,7 @@ import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../data/car_catalog.dart';
 import '../utils/business_parking_localization.dart';
+import '../utils/date_display.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/vin_utils.dart';
 import '../theme/app_colors.dart';
@@ -812,6 +813,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
 
   Future<void> _generateAndPrintReceipt(ParkedCar record) async {
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).toLanguageTag();
     final pdf = pw.Document();
 
     pdf.addPage(
@@ -885,13 +887,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                     ),
                     _buildReceiptRow(
                       l10n.dateTimePdf,
-                      DateFormat(
-                        'MMM dd, yyyy - HH:mm',
-                      ).format(record.parkingDate),
+                      displayDateTime(record.parkingDate, locale),
                     ),
                     _buildReceiptRow(
                       l10n.generatedOn,
-                      DateFormat('MMM dd, yyyy - HH:mm').format(DateTime.now()),
+                      displayDateTime(DateTime.now(), locale),
                     ),
 
                     pw.SizedBox(height: 20),
@@ -1906,9 +1906,12 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              DateFormat(
-                                                'MMM dd, yyyy - HH:mm',
-                                              ).format(_selectedDateTime),
+                                              displayDateTime(
+                                                _selectedDateTime,
+                                                Localizations.localeOf(
+                                                  context,
+                                                ).toLanguageTag(),
+                                              ),
                                               style: const TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w500,

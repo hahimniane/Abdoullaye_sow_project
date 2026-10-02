@@ -8,6 +8,7 @@
  * jsPDF is loaded on first use so the console's main bundle never carries it.
  */
 
+import { formatDayKey } from "./format.ts";
 import {
   invoiceDayKey,
   invoiceTotals,
@@ -139,9 +140,10 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Blob> {
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(...MUTED);
   const who = [text(invoice.customerPhone, 40), text(invoice.customerEmail, 180)].filter(Boolean).join("  |  ");
   if (who) doc.text(who, M, y + 30);
-  const meta: Array<[string, string]> = [[t.date, invoiceDayKey(invoice.issuedOn)]];
-  if (paid && invoiceDayKey(invoice.paidOn)) meta.push([t.paidOn, invoiceDayKey(invoice.paidOn)]);
-  else if (invoiceDayKey(invoice.dueOn)) meta.push([t.due, invoiceDayKey(invoice.dueOn)]);
+  const day = (value: unknown) => formatDayKey(invoiceDayKey(value), input.language);
+  const meta: Array<[string, string]> = [[t.date, day(invoice.issuedOn)]];
+  if (paid && invoiceDayKey(invoice.paidOn)) meta.push([t.paidOn, day(invoice.paidOn)]);
+  else if (invoiceDayKey(invoice.dueOn)) meta.push([t.due, day(invoice.dueOn)]);
   let my = y;
   for (const [label, value] of meta) {
     doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(...MUTED).text(label.toUpperCase(), R - 110, my);
@@ -224,7 +226,7 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Blob> {
       }
       const method = INVOICE_PAYMENT_METHOD_LABELS[text(p.method, 40) as InvoicePaymentMethod] ?? text(p.method, 40);
       const what = text(p.forDescription, 80);
-      doc.text(`${invoiceDayKey(p.paidOn)}  ·  ${method}${what ? `  ·  ${t.forLine} ${what}` : ""}${text(p.note) ? `  ·  ${text(p.note, 80)}` : ""}`, M, y);
+      doc.text(`${formatDayKey(invoiceDayKey(p.paidOn), input.language)}  ·  ${method}${what ? `  ·  ${t.forLine} ${what}` : ""}${text(p.note) ? `  ·  ${text(p.note, 80)}` : ""}`, M, y);
       doc.text(moneyText(p.amountCents), R, y, { align: "right" });
       y += 14;
     }

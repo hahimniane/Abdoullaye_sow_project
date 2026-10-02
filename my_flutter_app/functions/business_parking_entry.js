@@ -757,7 +757,9 @@ function businessParkingEditChanges(before, after) {
   const day = (v) => {
     if (!v) return "Open";
     const d = typeof v.toDate === "function" ? v.toDate() : new Date(v);
-    return Number.isNaN(d.getTime()) ? "Open" : d.toISOString().slice(0, 10);
+    return Number.isNaN(d.getTime()) ? "Open" : d.toLocaleDateString(
+        "en-US", {month: "short", day: "numeric", year: "numeric",
+          timeZone: "UTC"});
   };
   const money = (v) => `$${(Math.round(Number(v) || 0) / 100).toFixed(2)}`;
   const shown = (key, v) => {

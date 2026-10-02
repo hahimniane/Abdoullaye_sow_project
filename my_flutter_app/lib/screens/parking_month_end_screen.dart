@@ -14,6 +14,7 @@ import '../services/parking_month_statement.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
+import '../utils/date_display.dart';
 import '../utils/parking_month_pdf.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
@@ -176,6 +177,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         paidToward: l10n.pmePaidToward,
         paidWord: l10n.pmePaidWord,
         dueWord: l10n.pmeDueWord,
+        locale: locale,
       );
 
   Future<void> _run(String key, Future<void> Function() work) async {
@@ -725,7 +727,9 @@ class _CustomerTileState extends State<_CustomerTile> {
                             ),
                             Text(
                               [
-                                '${customer.cars[i].periodFrom} ${l10n.pmeTo} ${customer.cars[i].periodTo}',
+                                '${displayDay(customer.cars[i].periodFrom, dateLocaleOf(context))} '
+                                    '${l10n.pmeTo} '
+                                    '${displayDay(customer.cars[i].periodTo, dateLocaleOf(context))}',
                                 l10n.pmeParkingLine(
                                   customer.cars[i].days,
                                   parkingMoney(customer.cars[i].dayRateCents),
@@ -773,7 +777,7 @@ class _CustomerTileState extends State<_CustomerTile> {
                             ),
                             Text(
                               [
-                                a.date,
+                                displayDay(a.date, dateLocaleOf(context)),
                                 if (a.prior) l10n.pmeFromBefore.toLowerCase(),
                               ].join(' · '),
                               style: const TextStyle(

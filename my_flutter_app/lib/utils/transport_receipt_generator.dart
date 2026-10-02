@@ -4,12 +4,12 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../models/transport_request.dart';
+import 'date_display.dart';
 
 Future<void> generateTransportReceipt({
   required TransportRequest request,
 }) async {
   final pdf = pw.Document();
-  final dateFormat = DateFormat('MMM dd, yyyy - HH:mm');
 
   pw.Widget buildRow(String label, String value) {
     return pw.Padding(
@@ -83,8 +83,8 @@ Future<void> generateTransportReceipt({
                   pw.SizedBox(height: 12),
                   buildRow('Tracking Number', request.trackingCode),
                   buildRow('Receipt Number', request.id),
-                  buildRow('Created On', dateFormat.format(request.createdAt)),
-                  buildRow('Generated On', dateFormat.format(DateTime.now())),
+                  buildRow('Created On', displayDateTime(request.createdAt, 'en')),
+                  buildRow('Generated On', displayDateTime(DateTime.now(), 'en')),
                   pw.SizedBox(height: 20),
                   pw.Text(
                     'Vehicle Information',
@@ -102,7 +102,7 @@ Future<void> generateTransportReceipt({
                   buildRow('Destination', request.destinationCountryName),
                   buildRow(
                     'Transport Date',
-                    DateFormat('MMM dd, yyyy').format(request.transportDate),
+                    displayDate(request.transportDate, 'en'),
                   ),
                   pw.SizedBox(height: 20),
                   pw.Text(

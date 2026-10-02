@@ -18,6 +18,7 @@ import '../services/customer_checkout.dart';
 import '../services/destination_country_service.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/barrel_receipt_generator.dart';
+import '../utils/date_display.dart';
 import '../utils/receiver_phone_rules.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
@@ -812,9 +813,10 @@ class _BarrelShipmentDetailsScreenState
     final media = MediaQuery.of(context);
     final horizontalPadding = media.size.width >= 720 ? 32.0 : 20.0;
     final maxContentWidth = media.size.width >= 900 ? 760.0 : double.infinity;
-    final dateLabel = DateFormat(
-      'MMM dd, yyyy - HH:mm',
-    ).format(_currentShipment.createdAt);
+    final dateLabel = displayDateTime(
+      _currentShipment.createdAt,
+      Localizations.localeOf(context).toLanguageTag(),
+    );
     final shippingFee =
         _selectedDestinationOptionDraft?.country.barrelShippingPrice ??
         _selectedDestinationDraft?.barrelShippingPrice ??
@@ -1576,7 +1578,10 @@ class _PickupTimeEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = value == null
         ? 'Choose pickup time'
-        : DateFormat('MMM dd, yyyy - h:mm a').format(value!);
+        : displayDateTime(
+            value!,
+            Localizations.localeOf(context).toLanguageTag(),
+          );
 
     return FormField<DateTime>(
       initialValue: value,

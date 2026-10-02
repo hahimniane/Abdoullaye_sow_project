@@ -37,7 +37,7 @@ import {
 
 import { AttachmentPreview } from "@/components/support/attachment-preview";
 import { db, functions } from "@/lib/firebase";
-import { asDate, formatDate, formatMoney, text } from "@/lib/format";
+import { asDate, currentLocale, formatDate, formatMoney, text } from "@/lib/format";
 import { uploadSupportAttachmentFile } from "@/lib/support-attachments";
 import type {
   ActionConfirmationOptions,
@@ -75,7 +75,7 @@ const RESOLVED_STATUSES = new Set(["resolved", "closed"]);
 function formatDateTime(value: unknown): string {
   const date = asDate(value);
   if (!date) return "";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(currentLocale(), {
     month: "short",
     day: "numeric",
     hour: "numeric",

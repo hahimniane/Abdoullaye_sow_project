@@ -22,6 +22,7 @@ import '../services/business_service_overview.dart';
 import '../services/container_manifest.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
+import '../utils/date_display.dart';
 import '../widgets/container_link_chip.dart';
 import '../widgets/customer_notification_bell.dart';
 import 'business_assistant_screen.dart';
@@ -2180,7 +2181,7 @@ class _RecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final formatter = DateFormat('MMM dd, yyyy');
+    final locale = Localizations.localeOf(context).toLanguageTag();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -2247,7 +2248,7 @@ class _RecordCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      formatter.format(date),
+                      displayDate(date, locale),
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.muted,

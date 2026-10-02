@@ -89,7 +89,7 @@ void main() {
         'For: Diallo',
         '2024 Ford F150 · VIN 1FTFW1E50PFA63120',
         '',
-        '2026-09-01 to 2026-09-30: 30 days × \$15.00 — \$450.00',
+        'Sep 1, 2026 to Sep 30, 2026: 30 days × \$15.00 — \$450.00',
         'Paid — -\$50.00',
         'BALANCE DUE: \$400.00',
       ].join('\n'),
@@ -125,11 +125,11 @@ void main() {
         '',
         'Parking',
         '2014 Toyota Corolla (registered to abdoulaye sow)',
-        '  2026-09-18 to 2026-09-30: 13 days × \$12.00 — \$156.00',
+        '  Sep 18, 2026 to Sep 30, 2026: 13 days × \$12.00 — \$156.00',
         '2015 Toyota RAV4 (registered to Ministre)',
-        '  2026-09-18 to 2026-09-30: 13 days × \$12.00 — \$156.00',
+        '  Sep 18, 2026 to Sep 30, 2026: 13 days × \$12.00 — \$156.00',
         '2017 Toyota RAV4 (registered to Abdoulaye Sow)',
-        '  2026-09-21 to 2026-09-24: 4 days × \$12.00 — \$48.00',
+        '  Sep 21, 2026 to Sep 24, 2026: 4 days × \$12.00 — \$48.00',
         '  Paid — -\$10.00',
         '',
         'Total for September — \$360.00',
@@ -184,14 +184,14 @@ void main() {
         '',
         'Parking',
         '2014 Toyota Corolla (registered to abdoulaye sow)',
-        '  2026-09-18 to 2026-09-30: 13 days × \$12.00 — \$156.00',
+        '  Sep 18, 2026 to Sep 30, 2026: 13 days × \$12.00 — \$156.00',
         '',
         'Activities',
-        '2026-09-14 · Title · 2013 Toyota RAV4 (registered to Abdoulaye Sow) — \$100.00',
+        'Sep 14, 2026 · Title · 2013 Toyota RAV4 (registered to Abdoulaye Sow) — \$100.00',
         '  Paid — -\$40.00',
         '',
         'Unpaid from before',
-        '2026-08-20 · Title · 2013 Toyota RAV4 (registered to Abdoulaye Sow) — \$90.00',
+        'Aug 20, 2026 · Title · 2013 Toyota RAV4 (registered to Abdoulaye Sow) — \$90.00',
         '',
         'Total for September — \$256.00',
         'Unpaid from before — \$90.00',
@@ -217,6 +217,8 @@ void main() {
     final plan = monthBillPaymentPlan(parkingMonthSummary(cars, '2026-09', oct1, acts).customers.first);
     expect(plan.items.map((x) => '${x.kind}:${x.id}:${x.amountCents}').toList(),
         ['car:open:9600', 'activity:sep:6000', 'activity:aug:9000']);
+    expect(plan.items.skip(1).map((x) => x.label).toList(),
+        ['Title (Sep 14, 2026)', 'Reassignment (Aug 20, 2026)']);
     expect(plan.skipped.map((x) => x.id).toList(), ['link']);
     expect(plan.totalCents, 24600);
   });
@@ -224,5 +226,19 @@ void main() {
   test('an open stay mislabelled "nothing to collect" still owes its days', () {
     expect(parkingMonthStatement(diallo({'paymentStatus': 'not_required'}), '2026-09', oct1)!.dueCents, 45000);
     expect(parkingMonthStatement(diallo({'paymentStatus': 'not_required', 'dailyRate': 0}), '2026-09', oct1), isNull);
+  });
+
+  test('a day reads US style, the same as the server', () {
+    expect(dayLabel('2026-09-01'), 'Sep 1, 2026');
+    expect(dayLabel('2026-12-31'), 'Dec 31, 2026');
+    expect(dayLabel(' 2027-01-09 '), 'Jan 9, 2027');
+    expect(dayLabel('2026-13-01'), '2026-13-01');
+    expect(dayLabel('2026-00-05'), '2026-00-05');
+    // The server only checks the shape and the month; so does the phone.
+    expect(dayLabel('2026-09-00'), 'Sep 0, 2026');
+    expect(dayLabel('2026-02-30'), 'Feb 30, 2026');
+    expect(dayLabel('2026-10-05T12:00:00'), 'Oct 5, 2026');
+    expect(dayLabel('not a day'), 'not a day');
+    expect(dayLabel(''), '');
   });
 }
