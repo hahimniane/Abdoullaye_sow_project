@@ -366,6 +366,11 @@ const {
   containerDocumentModel,
   renderContainerDocument,
 } = require("./container_document");
+const {
+  labelFormat,
+  containerLabelsModel,
+  renderContainerLabels,
+} = require("./container_labels");
 const {parkingAvailability} = require("./parking_occupancy");
 const {lotCustomerKey, mergeLotCustomer} = require("./lot_customers");
 const {
@@ -12613,6 +12618,30 @@ exports.parkingDocument = onRequest(
               .doc(String(box.data()?.businessId || "")).get()
               .catch(() => null);
           res.set("Content-Type", "text/html; charset=utf-8");
+          if (String(req.query?.view || "") === "labels") {
+            // The package labels: same token, same lines, a QR per line.
+            const model = containerLabelsModel({
+              container: box.data() || {},
+              lines: lineDocs.docs.map((d) => d.data() || {})
+                  .sort((a, b) => (a.createdAt?.toMillis?.() || 0) -
+                    (b.createdAt?.toMillis?.() || 0)),
+              business: boxBusiness && boxBusiness.exists ?
+                boxBusiness.data() : {},
+              consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+            });
+            const qrSvgByCode = {};
+            for (const label of model.labels) {
+              if (qrSvgByCode[label.code]) continue;
+              qrSvgByCode[label.code] = await QRCode.toString(label.link, {
+                type: "svg", errorCorrectionLevel: "H", margin: 1,
+              });
+            }
+            return res.status(200).send(renderContainerLabels(model, {
+              format: labelFormat(req.query?.labels),
+              qrSvgByCode,
+              query: `t=${encodeURIComponent(token)}&view=labels`,
+            }));
+          }
           return res.status(200).send(renderContainerDocument(
               containerDocumentModel({
                 container: box.data() || {},
@@ -16717,7 +16746,27 @@ exports.getContainerDocumentUrl = onCall(
       }
       const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
         "https://laawoldigital.com/d";
-      return {success: true, url: `${base}?t=${encodeURIComponent(token)}`};
+      const url = `${base}?t=${encodeURIComponent(token)}`;
+      if (String(data.view || "") !== "labels") return {success: true, url};
+      // Labels need every line's code; lines from before codes existed get
+      // theirs now rather than printing a sheet with gaps.
+      const lines = await db.collection("containerLines")
+          .where("containerId", "==", ref.id).get();
+      const codes = await assignMissingLineCodes(db, lines.docs);
+      if (codes.size > 0) {
+        const batch = db.batch();
+        lines.docs.forEach((d) => {
+          if (codes.has(d.id)) {
+            batch.set(d.ref, {trackingCode: codes.get(d.id),
+              updatedAt: FirestoreFieldValue.serverTimestamp()}, {merge: true});
+          }
+        });
+        await batch.commit();
+      }
+      return {
+        success: true,
+        url: `${url}&view=labels&labels=${labelFormat(data.format)}`,
+      };
     },
 );
 
