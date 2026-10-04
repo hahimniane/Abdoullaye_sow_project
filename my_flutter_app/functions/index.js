@@ -2,6 +2,7 @@ const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {setGlobalOptions} = require("firebase-functions/v2");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {
+  onDocumentCreated,
   onDocumentDeleted,
   onDocumentUpdated,
   onDocumentWritten,
@@ -172,6 +173,7 @@ const {
   validateContainerNumber,
   inferRequestType,
   milestoneForContainerStatus,
+  CONTAINER_STATUS_LABEL,
   carrierEventDocId,
   parseTrackingRequestResponse,
   parseContainersFromIncluded,
@@ -333,6 +335,16 @@ const {
   containerCounts,
 } = require("./container_manifest");
 const {
+  updateForContainerStatus,
+  updateForCarrierStatus,
+  containerStatusFromCarrier,
+  carrierTrackingFinished,
+  recipientsForLine,
+  containerUpdateMessageId,
+  whatsappUpdateMessage,
+  whatsappConfigured,
+} = require("./container_updates");
+const {
   INVOICE_MESSAGES,
   INVOICE_STATUS,
   validateInvoice,
@@ -445,6 +457,12 @@ const twilioAuthToken = defineSecret("TWILIO_AUTH_TOKEN");
 const twilioFromNumber = defineSecret("TWILIO_FROM_NUMBER");
 const googleMapsApiKey = defineSecret("GOOGLE_MAPS_API_KEY");
 const terminal49ApiKey = defineSecret("TERMINAL49_API_KEY");
+// WhatsApp Cloud API, for container updates to customers. Both stay set to
+// the placeholder "unset" until Meta approves the business; until then every
+// update is recorded as waiting and nothing is sent.
+const whatsappAccessToken = defineSecret("WHATSAPP_ACCESS_TOKEN");
+const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
+const WHATSAPP_GRAPH_URL = "https://graph.facebook.com/v21.0";
 const TERMINAL49_BASE_URL = "https://api.terminal49.com/v2";
 const DEPOSIT_CURRENCY = "usd";
 const DEFAULT_HOLD_MAX_DAYS = 14;
@@ -2450,6 +2468,20 @@ exports.pollContainerTracking = onSchedule(
           await pollOneCarrierTrackedShipment(
               db, relatedCollection, doc.id, doc.data() || {},
           );
+        }
+      }
+      // A business's own containers follow the same feed.
+      const containers = await db.collection("containers")
+          .where("trackingProvider", "==", "carrier_api")
+          .where("carrierTrackingDone", "==", false)
+          .get();
+      for (const doc of containers.docs) {
+        try {
+          await pollOneTrackedContainer(db, doc);
+        } catch (error) {
+          logger.error("Container carrier poll failed", {
+            containerId: doc.id, error: String(error),
+          });
         }
       }
     },
@@ -15936,6 +15968,76 @@ exports.updateContainerLineContacts = onCall(
     },
 );
 
+/**
+ * Moves a container to its next state and brings its lines along: each line
+ * carries the state (so "is this car on an open container" is one query),
+ * and every line has its tracking code before anyone is told it sailed.
+ *
+ * @param {object} db Firestore.
+ * @param {object} ref The container document.
+ * @param {string} next The new status.
+ * @param {object} by {staffId} for a person, {source: "carrier"} for the
+ *   carrier feed.
+ * @return {Promise<void>}
+ */
+async function applyContainerStatus(db, ref, next, by = {}) {
+  const update = {
+    status: next,
+    statusSource: by.source || "staff",
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  };
+  if (next === CONTAINER_STATUS.SHIPPED) {
+    update.sailedAt = FirestoreFieldValue.serverTimestamp();
+    update.shippedByStaffId = by.staffId || "";
+  } else {
+    update.arrivedAt = FirestoreFieldValue.serverTimestamp();
+    update.arrivedByStaffId = by.staffId || "";
+  }
+  await ref.set(update, {merge: true});
+  const lines = await db.collection("containerLines")
+      .where("containerId", "==", ref.id).get();
+  const codes = await assignMissingLineCodes(db, lines.docs);
+  const batch = db.batch();
+  lines.docs.forEach((d) => batch.set(d.ref, {
+    containerStatus: next,
+    ...(codes.has(d.id) ? {trackingCode: codes.get(d.id)} : {}),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true}));
+  await batch.commit();
+}
+
+/**
+ * Writes one moment on the container's timeline. A moment that customers
+ * care about carries `customerUpdate`, which is what sends the WhatsApp
+ * messages (see sendContainerCustomerUpdates). The id is fixed per moment
+ * so a repeat - a second tap, a re-poll - writes nothing new.
+ *
+ * @param {object} ref The container document.
+ * @param {string} eventId The fixed id.
+ * @param {object} event {label, description, source, customerUpdate,
+ *   carrierEventCode, createdBy}.
+ * @return {Promise<boolean>} True when the moment was new.
+ */
+async function recordContainerEvent(ref, eventId, event) {
+  try {
+    await ref.collection("trackingEvents").doc(eventId).create({
+      label: String(event.label || ""),
+      description: String(event.description || ""),
+      location: "",
+      source: String(event.source || "staff"),
+      customerUpdate: event.customerUpdate || null,
+      ...(event.carrierEventCode ?
+        {carrierEventCode: event.carrierEventCode} : {}),
+      ...(event.createdBy ? {createdBy: event.createdBy} : {}),
+      timestamp: FirestoreFieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    if (error.code === 6 || error.code === "already-exists") return false;
+    throw error;
+  }
+}
+
 exports.setContainerStatus = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -15952,37 +16054,281 @@ exports.setContainerStatus = onCall(
         throw new HttpsError(
             "failed-precondition", CONTAINER_MESSAGES[refusal]);
       }
-      const update = {
-        status: next,
-        updatedAt: FirestoreFieldValue.serverTimestamp(),
-      };
-      if (next === CONTAINER_STATUS.SHIPPED) {
-        update.sailedAt = FirestoreFieldValue.serverTimestamp();
-        update.shippedByStaffId = uid;
-      } else {
-        update.arrivedAt = FirestoreFieldValue.serverTimestamp();
-        update.arrivedByStaffId = uid;
-      }
-      await ref.set(update, {merge: true});
-      // Lines carry the container's state so "is this car already on an open
-      // container" is one query on lines.
-      const lines = await db.collection("containerLines")
-          .where("containerId", "==", ref.id).get();
-      const codes = await assignMissingLineCodes(db, lines.docs);
-      const batch = db.batch();
-      lines.docs.forEach((d) => batch.set(d.ref, {
-        containerStatus: next,
-        ...(codes.has(d.id) ? {trackingCode: codes.get(d.id)} : {}),
-        updatedAt: FirestoreFieldValue.serverTimestamp(),
-      }, {merge: true}));
-      await batch.commit();
+      await applyContainerStatus(db, ref, next, {staffId: uid});
       await containerAudit(businessId, ref.id, next, uid,
           next === CONTAINER_STATUS.SHIPPED ?
             `Shipped with ${lineCount} line${lineCount === 1 ? "" : "s"}` :
             "Marked arrived");
+      await recordContainerEvent(ref, `staff_${next}`, {
+        label: next === CONTAINER_STATUS.SHIPPED ?
+          "Container shipped" : "Container arrived",
+        source: "staff",
+        createdBy: uid,
+        customerUpdate: updateForContainerStatus(next),
+      });
       return {success: true, containerId: ref.id, status: next};
     },
 );
+
+// ---------------------------------------------------------------------------
+// Container updates to customers, by WhatsApp. Each moment on a container's
+// timeline that carries `customerUpdate` becomes one message per person per
+// line. The rules of who and what live in container_updates.js.
+// ---------------------------------------------------------------------------
+
+/**
+ * Sends one WhatsApp template message.
+ *
+ * @param {object} body The /messages request body.
+ * @return {Promise<{ok: boolean, messageId: string, error: string}>}
+ */
+async function sendWhatsAppMessage(body) {
+  const token = safeSecretValue(whatsappAccessToken).trim();
+  const numberId = safeSecretValue(whatsappPhoneNumberId).trim();
+  try {
+    const response = await fetch(
+        `${WHATSAPP_GRAPH_URL}/${encodeURIComponent(numberId)}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {ok: false, messageId: "",
+        error: String(data?.error?.message || `HTTP ${response.status}`)
+            .slice(0, 300)};
+    }
+    return {ok: true, messageId: String(data?.messages?.[0]?.id || ""),
+      error: ""};
+  } catch (error) {
+    return {ok: false, messageId: "", error: String(error).slice(0, 300)};
+  }
+}
+
+exports.sendContainerCustomerUpdates = onDocumentCreated(
+    {
+      document: "containers/{containerId}/trackingEvents/{eventId}",
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+      timeoutSeconds: 300,
+    },
+    async (event) => {
+      const moment = event.data?.data() || {};
+      const update = String(moment.customerUpdate || "");
+      if (!update) return;
+      const db = admin.firestore();
+      const containerId = event.params.containerId;
+      const containerDoc =
+        await db.collection("containers").doc(containerId).get();
+      if (!containerDoc.exists) return;
+      const container = containerDoc.data() || {};
+      const businessId = String(container.businessId || "");
+      const businessDoc = businessId ?
+        await db.collection("businesses").doc(businessId).get() : null;
+      const businessName = String(businessDoc?.data()?.name || "");
+      const configured = whatsappConfigured({
+        accessToken: safeSecretValue(whatsappAccessToken),
+        phoneNumberId: safeSecretValue(whatsappPhoneNumberId),
+      });
+      const lines = await db.collection("containerLines")
+          .where("containerId", "==", containerId).get();
+      for (const lineDoc of lines.docs) {
+        const line = lineDoc.data() || {};
+        const trackingCode = String(line.trackingCode || "");
+        const {send, skipped} = recipientsForLine(line);
+        const results = skipped.map((who) =>
+          ({role: who.role, status: "skipped", reason: who.reason}));
+        for (const who of send) {
+          const messageRef = db.collection("containerUpdates")
+              .doc(containerUpdateMessageId(lineDoc.id, who.role, update));
+          try {
+            await messageRef.create({
+              businessId, containerId, lineId: lineDoc.id, update,
+              role: who.role, phone: who.phone, trackingCode,
+              status: configured ? "sending" : "waiting_for_whatsapp",
+              createdAt: FirestoreFieldValue.serverTimestamp(),
+            });
+          } catch (error) {
+            // Already told about this, by whichever source came first.
+            if (error.code === 6 || error.code === "already-exists") continue;
+            throw error;
+          }
+          if (!configured) {
+            results.push({role: who.role, status: "waiting_for_whatsapp"});
+            continue;
+          }
+          const sent = await sendWhatsAppMessage(whatsappUpdateMessage({
+            phone: who.phone, name: who.name, businessName, line, update,
+            trackingCode,
+          }));
+          await messageRef.set({
+            status: sent.ok ? "sent" : "failed",
+            whatsappMessageId: sent.messageId,
+            error: sent.error,
+            sentAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true});
+          if (!sent.ok) {
+            logger.warn("WhatsApp container update failed", {
+              containerId, lineId: lineDoc.id, role: who.role,
+              error: sent.error,
+            });
+          }
+          results.push({role: who.role, status: sent.ok ? "sent" : "failed"});
+        }
+        if (results.length > 0) {
+          // What the business sees on the line: who was told the latest
+          // news, and why anyone was not.
+          await lineDoc.ref.set({
+            lastCustomerUpdate: {update, results,
+              atMs: Date.now()},
+          }, {merge: true});
+        }
+      }
+    },
+);
+
+// ---------------------------------------------------------------------------
+// Carrier tracking for containers. As soon as a container has a real ISO
+// number it is followed on Terminal49 (the same feed barrels use); the
+// scheduled poll below moves the container forward and records the moments
+// customers hear about.
+// ---------------------------------------------------------------------------
+
+exports.startContainerCarrierTracking = onDocumentWritten(
+    {
+      document: "containers/{containerId}",
+      secrets: [terminal49ApiKey],
+    },
+    async (event) => {
+      const after = event.data?.after?.data();
+      if (!after) return;
+      const number = String(after.containerNumber || "");
+      if (!/^[A-Z]{4}\d{7}$/.test(number)) return;
+      if (after.status === CONTAINER_STATUS.ARRIVED) return;
+      // Already followed, or already tried for this exact number and the
+      // carrier could not be found - a new number gets a new try.
+      if (after.trackingProvider === "carrier_api" &&
+          after.trackedContainerNumber === number) return;
+      if (after.carrierTrackingFailedFor === number) return;
+      if (!safeSecretValue(terminal49ApiKey).trim()) return;
+      const ref = event.data.after.ref;
+      let scac = String(after.carrierScac || "").toUpperCase();
+      try {
+        if (!scac) scac = await inferContainerCarrierScac(number);
+        if (!scac) {
+          await ref.set({
+            carrierTrackingFailedFor: number,
+            carrierTrackingError: "carrier_unknown",
+          }, {merge: true});
+          return;
+        }
+        const {ok, data} = await terminal49Request("/tracking_requests", {
+          method: "POST",
+          body: {data: {type: "tracking_request", attributes: {
+            request_type: "container_number", request_number: number, scac,
+          }}},
+        });
+        const parsed = ok ? parseTrackingRequestResponse(data) : null;
+        if (!parsed) {
+          await ref.set({
+            carrierTrackingFailedFor: number,
+            carrierTrackingError: String(
+                data?.errors?.[0]?.detail || "tracking_request_failed")
+                .slice(0, 300),
+          }, {merge: true});
+          return;
+        }
+        await ref.set({
+          trackingProvider: "carrier_api",
+          trackedContainerNumber: number,
+          carrierScac: scac,
+          externalTrackingId: parsed.id,
+          trackingRequestStatus: parsed.status || "pending",
+          terminal49ShipmentId: parsed.trackedObjectType === "shipment" ?
+            parsed.trackedObjectId : "",
+          carrierTrackingDone: false,
+          carrierTrackingError: "",
+        }, {merge: true});
+        await recordContainerEvent(ref, `carrier_start_${number}`, {
+          label: "Automatic carrier tracking started",
+          description: `Container ${number} (${scac})`,
+          source: "carrier_api",
+        });
+      } catch (error) {
+        logger.error("Container carrier tracking failed to start", {
+          containerId: event.params.containerId, error: String(error),
+        });
+      }
+    },
+);
+
+/**
+ * Reads the carrier's latest word on one container, records it, and moves
+ * the container forward when the sea says so.
+ *
+ * @param {object} db Firestore.
+ * @param {object} doc The container snapshot.
+ * @return {Promise<void>}
+ */
+async function pollOneTrackedContainer(db, doc) {
+  const container = doc.data() || {};
+  const ref = doc.ref;
+  let shipmentId = String(container.terminal49ShipmentId || "");
+  if (!shipmentId) {
+    const {ok, data} = await terminal49Request(
+        `/tracking_requests/${container.externalTrackingId}`);
+    const parsed = ok ? parseTrackingRequestResponse(data) : null;
+    if (!parsed) return;
+    if (parsed.status === "failed") {
+      await ref.set({trackingRequestStatus: "failed",
+        carrierTrackingDone: true}, {merge: true});
+      return;
+    }
+    if (parsed.trackedObjectType !== "shipment" || !parsed.trackedObjectId) {
+      return;
+    }
+    shipmentId = parsed.trackedObjectId;
+    await ref.set({terminal49ShipmentId: shipmentId,
+      trackingRequestStatus: parsed.status || "tracking"}, {merge: true});
+  }
+  const {ok, data} = await terminal49Request(
+      `/shipments/${shipmentId}?include=containers`);
+  if (!ok) return;
+  const number = String(container.trackedContainerNumber ||
+    container.containerNumber || "");
+  const found = parseContainersFromIncluded(data)
+      .find((row) => row.number === number);
+  if (!found) return;
+  const carrierStatus = found.currentStatus;
+  if (!CONTAINER_STATUS_LABEL[carrierStatus]) return;
+  const before = String(container.status || CONTAINER_STATUS.LOADING);
+  const next = containerStatusFromCarrier(carrierStatus, before);
+  if (next) {
+    // Shipping still needs a destination and something aboard; a box the
+    // business has not finished recording is left for staff to ship.
+    const lineCount = await refreshContainerCounts(db, ref);
+    const stepFrom = next === CONTAINER_STATUS.ARRIVED &&
+      before === CONTAINER_STATUS.LOADING ?
+      {...container, status: CONTAINER_STATUS.SHIPPED} : container;
+    if (!containerTransitionRefusal(stepFrom, next, lineCount)) {
+      await applyContainerStatus(db, ref, next, {source: "carrier"});
+      await containerAudit(String(container.businessId || ""), ref.id, next,
+          "", `Carrier reported ${CONTAINER_STATUS_LABEL[carrierStatus]}`);
+    }
+  }
+  await recordContainerEvent(ref, carrierEventDocId(number, carrierStatus), {
+    label: CONTAINER_STATUS_LABEL[carrierStatus],
+    description: `Container ${number}`,
+    source: "carrier_api",
+    carrierEventCode: carrierStatus,
+    customerUpdate: updateForCarrierStatus(carrierStatus, before),
+  });
+  if (carrierTrackingFinished(carrierStatus)) {
+    await ref.set({carrierTrackingDone: true}, {merge: true});
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Invoices: what a business sold to someone, typed by hand, and what has been

@@ -620,6 +620,20 @@ service cloud.firestore {
     match /containers/{containerId} {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
+      // The container's timeline: staff moves and carrier reports. Written
+      // only by the server, read by whoever may read the container.
+      match /trackingEvents/{eventId} {
+        allow read: if lotLedgerRead(
+            get(/databases/$(database)/documents/containers/$(containerId))
+                .data.businessId);
+        allow write: if false;
+      }
+    }
+    // One row per WhatsApp update to one person about one line: sent,
+    // waiting for WhatsApp to be connected, or failed. Server-written.
+    match /containerUpdates/{messageId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
     }
     match /containerLines/{lineId} {
       allow read: if lotLedgerRead(resource.data.businessId);

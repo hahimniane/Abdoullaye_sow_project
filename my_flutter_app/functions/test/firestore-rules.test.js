@@ -980,6 +980,41 @@ describe("business dashboard Firestore rules", () => {
         }
       });
 
+  // The timeline and the WhatsApp log are the business's to read and the
+  // server's alone to write - a client that could write an update could
+  // message every customer on a box.
+  it("lets the lot read a container's timeline and update log, never write",
+      async () => {
+        const {query, collection, where, getDocs, doc, setDoc, getDoc} =
+            require("firebase/firestore");
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+          const db = context.firestore();
+          await setDoc(doc(db, "containers/box_a"),
+              {businessId: "biz_a", label: "Sailing 3 Oct", status: "shipped"});
+          await setDoc(doc(db, "containers/box_a/trackingEvents/staff_shipped"),
+              {label: "Container shipped", customerUpdate: "shipped"});
+          await setDoc(doc(db, "containerUpdates/line_a_sender_shipped"),
+              {businessId: "biz_a", containerId: "box_a", lineId: "line_a",
+                status: "waiting_for_whatsapp"});
+        });
+        const owner = firestoreFor("owner-a");
+        await assertSucceeds(getDoc(
+            doc(owner, "containers/box_a/trackingEvents/staff_shipped")));
+        await assertSucceeds(getDocs(query(
+            collection(owner, "containerUpdates"),
+            where("businessId", "==", "biz_a"))));
+        await assertFails(getDocs(query(
+            collection(owner, "containerUpdates"),
+            where("businessId", "==", "biz_b"))));
+        await assertFails(getDoc(doc(firestoreFor("owner-b"),
+            "containers/box_a/trackingEvents/staff_shipped")));
+        await assertFails(setDoc(
+            doc(owner, "containers/box_a/trackingEvents/forged"),
+            {label: "x", customerUpdate: "arrived"}));
+        await assertFails(setDoc(doc(owner, "containerUpdates/forged"),
+            {businessId: "biz_a", status: "sent"}));
+      });
+
   it("never lets a client write a container or a line", async () => {
     const {doc, setDoc, updateDoc} = require("firebase/firestore");
     const db = firestoreFor("owner-a");
