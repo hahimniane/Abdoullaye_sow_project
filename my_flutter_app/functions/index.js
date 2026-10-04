@@ -18,6 +18,7 @@ const {
 const {
   isValidPhoneNumber,
   normalizePhoneAlias,
+  smsDestination,
 } = require("./phone_number");
 const {
   validateFreightContents,
@@ -13231,8 +13232,14 @@ async function completeBusinessParkingEntryPayment(target) {
  * @return {!Promise<boolean>} True when Twilio accepted the message.
  */
 async function smsWalkUpParkingCustomer({to, body}) {
-  const digits = String(to || "").replace(/[^\d+]/g, "");
-  if (digits.replace(/\D/g, "").length < 8) return false;
+  const destination = smsDestination(to);
+  if (!destination) {
+    // A local number with no country code: guessing one misroutes the text.
+    if (String(to || "").trim()) {
+      logger.info("Walk-up parking SMS skipped: number has no country code");
+    }
+    return false;
+  }
   let sid = "";
   let token = "";
   let from = "";
@@ -13251,7 +13258,7 @@ async function smsWalkUpParkingCustomer({to, body}) {
   }
   try {
     const params = new URLSearchParams({
-      To: digits.startsWith("+") ? digits : `+1${digits}`,
+      To: destination,
       From: from,
       Body: body,
     });

@@ -42,8 +42,36 @@ function normalizePhoneAlias(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
+/** E.164: a plus, a non-zero country code, 8 to 15 digits in all. */
+const E164 = /^\+[1-9]\d{7,14}$/;
+
+/** A North American number: area code and exchange never start 0 or 1. */
+const NANP_TEN = /^[2-9]\d{2}[2-9]\d{6}$/;
+const NANP_ELEVEN = /^1[2-9]\d{2}[2-9]\d{6}$/;
+
+/**
+ * The number to hand an SMS provider, or "" when we cannot tell where it is.
+ *
+ * Unlike isValidPhoneNumber this is strict on purpose. Local numbers are fine
+ * to store, but a text needs a country, and guessing one sends a Conakry
+ * customer's receipt to a stranger in the US. So: an international number is
+ * used as typed, a clear US/Canada number gets its +1, anything else is
+ * skipped.
+ *
+ * @param {*} value raw phone input
+ * @return {string} an E.164 number, or "" when the country is unknown
+ */
+function smsDestination(value) {
+  const normalized = String(value || "").trim().replace(FORMATTING, "");
+  if (E164.test(normalized)) return normalized;
+  if (NANP_TEN.test(normalized)) return `+1${normalized}`;
+  if (NANP_ELEVEN.test(normalized)) return `+${normalized}`;
+  return "";
+}
+
 module.exports = {
   isValidPhoneNumber,
   normalizePhoneAlias,
   normalizePhoneNumber,
+  smsDestination,
 };
