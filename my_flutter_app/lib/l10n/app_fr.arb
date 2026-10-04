@@ -1802,6 +1802,7 @@
   "noTransportBusinessesYet": "Aucune entreprise ne propose encore le transport de voiture",
   "noTransportBusinessesSubtitle": "Revenez bientôt — les entreprises ajoutent leurs trajets de transport lorsqu’elles arrivent en ligne.",
   "couldNotLoadTransportOptions": "Impossible de charger les options de transport",
+  "signInToRequestTransport": "Connectez-vous ou créez un compte pour demander un transport de voiture et comparer les devis des entreprises de transport.",
   "receiverWhatsAppNumberTitle": "Ce numéro de destinataire est utilisé sur WhatsApp",
   "receiverWhatsAppNumberSubtitle": "Utilisez ceci seulement si le destinataire utilise un numéro d’un autre pays sur WhatsApp.",
   "invalidPhoneWithCountryCode": "Entrez un numéro de téléphone valide avec l’indicatif du pays.",

@@ -19,7 +19,10 @@ import '../widgets/searchable_destination_country_field.dart';
 /// eligible verified business. Businesses submit comparable quotes and the
 /// customer chooses one later; nothing is paid here.
 class RequestTransportScreen extends StatefulWidget {
-  const RequestTransportScreen({super.key});
+  const RequestTransportScreen({super.key, this.service});
+
+  /// Injected by tests; the app builds its own.
+  final TransportService? service;
 
   @override
   State<RequestTransportScreen> createState() => _RequestTransportScreenState();
@@ -27,7 +30,7 @@ class RequestTransportScreen extends StatefulWidget {
 
 class _RequestTransportScreenState extends State<RequestTransportScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _service = TransportService();
+  late final TransportService _service = widget.service ?? TransportService();
 
   final _ownerController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -52,11 +55,22 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
   bool _flexibleDates = true;
   bool _loading = true;
   bool _submitting = false;
-  String? _loadError;
+  bool _loadFailed = false;
+  bool? _signedIn;
 
+  // A request can only be sent from an account, so a signed-out customer is
+  // asked to sign in before anything loads. Loading follows the auth state
+  // rather than running once from initState, so returning from sign-in (or
+  // signing in anywhere else) brings the form up without a manual retry.
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final signedIn = Provider.of<AuthProvider>(context).isAuthenticated;
+    if (signedIn == _signedIn) return;
+    _signedIn = signedIn;
+    if (!signedIn) return;
+    _loading = true;
+    _loadFailed = false;
     _bootstrap();
   }
 
@@ -71,27 +85,51 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
     super.dispose();
   }
 
+  // Every path ends in setState with _loading false: the catalog load sits
+  // inside the try so a failure there cannot leave the spinner up.
   Future<void> _bootstrap() async {
-    final auth = context.read<AuthProvider>();
-    _ownerController.text = auth.buyerName == 'Customer' ? '' : auth.buyerName;
-    _phoneController.text = auth.customerPhone ?? '';
-    await CarCatalog.instance.load();
-    if (!mounted) return;
-    _makeOptions = CarCatalog.instance.getMakes();
     try {
+      await CarCatalog.instance.load();
       final options = await _service.activeTransportOptions();
       if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      _ownerController.text = auth.buyerName == 'Customer'
+          ? ''
+          : auth.buyerName;
+      _phoneController.text = auth.customerPhone ?? '';
       setState(() {
+        _makeOptions = CarCatalog.instance.getMakes();
         _options = options;
         _loading = false;
       });
     } catch (error) {
+      // The raw error (often a platform stack trace) is for the log only;
+      // the customer gets a short localized message and a retry.
+      debugPrint('Could not load transport options: $error');
       if (!mounted) return;
       setState(() {
-        _loadError = error.toString();
+        _loadFailed = true;
         _loading = false;
       });
     }
+  }
+
+  void _retryLoad() {
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+    });
+    _bootstrap();
+  }
+
+  // Same entry point the other customer flows use: the auth screens pop back
+  // here on success, and didChangeDependencies then loads the form.
+  void _openAuth(String route) {
+    Navigator.pushNamed(
+      context,
+      route,
+      arguments: const {'returnToPrevious': true},
+    );
   }
 
   List<DestinationCountry> get _destinationCountries {
@@ -189,20 +227,17 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
 
   Widget _buildBody() {
     final l10n = AppLocalizations.of(context)!;
+    if (_signedIn != true) {
+      return _SignedOutState(
+        onSignIn: () => _openAuth('/login'),
+        onCreateAccount: () => _openAuth('/signup'),
+      );
+    }
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_loadError != null) {
-      return _ErrorState(
-        message: _loadError!,
-        onRetry: () {
-          setState(() {
-            _loading = true;
-            _loadError = null;
-          });
-          _bootstrap();
-        },
-      );
+    if (_loadFailed) {
+      return _ErrorState(onRetry: _retryLoad);
     }
     if (_options.isEmpty) {
       return const _EmptyState();
@@ -547,73 +582,131 @@ class _CardField extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+/// Centred icon, title, message and optional actions for the screen's
+/// non-form states. Scrolls instead of overflowing when the copy outgrows the
+/// viewport (a short phone, large accessibility text, French copy).
+class _StatusMessage extends StatelessWidget {
+  const _StatusMessage({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.message,
+    this.actions = const [],
+  });
+
+  static const _padding = 32.0;
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String message;
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.local_shipping_outlined,
-              size: 56,
-              color: AppColors.muted,
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.all(_padding),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: (constraints.maxHeight - _padding * 2).clamp(
+              0.0,
+              double.infinity,
             ),
-            const SizedBox(height: 16),
-            Text(
-              l10n.noTransportBusinessesYet,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 52, color: iconColor),
+                const SizedBox(height: 14),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.muted),
+                ),
+                for (var i = 0; i < actions.length; i++) ...[
+                  SizedBox(height: i == 0 ? 18 : 10),
+                  actions[i],
+                ],
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.noTransportBusinessesSubtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.muted),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
+class _SignedOutState extends StatelessWidget {
+  const _SignedOutState({
+    required this.onSignIn,
+    required this.onCreateAccount,
+  });
+  final VoidCallback onSignIn;
+  final VoidCallback onCreateAccount;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _StatusMessage(
+      icon: Icons.person_outline,
+      iconColor: AppColors.cobalt,
+      title: l10n.accountRequiredTitle,
+      message: l10n.signInToRequestTransport,
+      actions: [
+        FilledButton.icon(
+          onPressed: onSignIn,
+          icon: const Icon(Icons.login),
+          label: Text(l10n.signIn),
+        ),
+        OutlinedButton.icon(
+          onPressed: onCreateAccount,
+          icon: const Icon(Icons.person_add_outlined),
+          label: Text(l10n.createAccount),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _StatusMessage(
+      icon: Icons.local_shipping_outlined,
+      iconColor: AppColors.muted,
+      title: l10n.noTransportBusinessesYet,
+      message: l10n.noTransportBusinessesSubtitle,
+    );
+  }
+}
+
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
-  final String message;
+  const _ErrorState({required this.onRetry});
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 52, color: AppColors.warn),
-            const SizedBox(height: 14),
-            Text(
-              l10n.couldNotLoadTransportOptions,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.muted),
-            ),
-            const SizedBox(height: 18),
-            FilledButton(onPressed: onRetry, child: Text(l10n.retry)),
-          ],
-        ),
-      ),
+    return _StatusMessage(
+      icon: Icons.error_outline,
+      iconColor: AppColors.warn,
+      title: l10n.couldNotLoadTransportOptions,
+      message: l10n.genericError,
+      actions: [FilledButton(onPressed: onRetry, child: Text(l10n.retry))],
     );
   }
 }

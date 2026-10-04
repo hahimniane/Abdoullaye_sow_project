@@ -4324,6 +4324,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de charger les options de transport';
 
   @override
+  String get signInToRequestTransport =>
+      'Connectez-vous ou créez un compte pour demander un transport de voiture et comparer les devis des entreprises de transport.';
+
+  @override
   String get receiverWhatsAppNumberTitle =>
       'Ce numéro de destinataire est utilisé sur WhatsApp';
 

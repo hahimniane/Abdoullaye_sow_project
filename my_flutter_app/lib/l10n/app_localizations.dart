@@ -7691,6 +7691,12 @@ abstract class AppLocalizations {
   /// **'Could not load transport options'**
   String get couldNotLoadTransportOptions;
 
+  /// No description provided for @signInToRequestTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in or create an account to request car transport and compare quotes from transport businesses.'**
+  String get signInToRequestTransport;
+
   /// No description provided for @receiverWhatsAppNumberTitle.
   ///
   /// In en, this message translates to:

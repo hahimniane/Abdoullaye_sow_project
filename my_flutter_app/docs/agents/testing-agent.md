@@ -387,3 +387,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `none` + failed probe = offline). Do not switch Stripe mode or pass
   `pk_live`. Maestro `localEmulator()` is not coverage for the real
   AppGate path.
+- A screen that loads from a callable must never render `error.toString()`:
+  `FirebaseException.toString()` appends the full stack trace, which shipped
+  to customers in an unscrollable column (Request car transport, 1.0.7).
+  Gate signed-out customers before any account-only call, show a localized
+  message plus Retry, and keep every empty/error/sign-in state scrollable.
+  Regression pattern: `test/request_transport_screen_test.dart` fakes
+  `AuthProvider` and the service by interface, injects the service through the
+  screen constructor, and asserts no overflow at 320x480 with 2x text.
+  `[firebase_functions/unauthenticated]` from a callable that never reads
+  `request.auth` (e.g. `listTransportBusinessOptions`) is App Check, not
+  sign-in; see the simulator debug-token note in the guardrails.

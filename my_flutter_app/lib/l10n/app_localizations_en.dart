@@ -4233,6 +4233,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get couldNotLoadTransportOptions => 'Could not load transport options';
 
   @override
+  String get signInToRequestTransport =>
+      'Sign in or create an account to request car transport and compare quotes from transport businesses.';
+
+  @override
   String get receiverWhatsAppNumberTitle =>
       'This receiver number is used on WhatsApp';
 
