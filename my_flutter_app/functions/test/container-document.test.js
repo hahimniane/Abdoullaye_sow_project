@@ -5,6 +5,7 @@ const {describe, it} = require("node:test");
 
 const {
   containerDocumentModel,
+  maskedPhone,
   renderContainerDocument,
 } = require("../container_document");
 
@@ -102,7 +103,7 @@ describe("what the loading list prints", () => {
     // The receiver is the name on the barrel; the list prints it beside
     // the customer so the box can be checked off at the port.
     assert.match(html, /<th>Receiver<\/th>/);
-    assert.match(html, /<b>Mariama Bah<\/b><span class="sub">\+224 620/);
+    assert.match(html, /<b>Mariama Bah<\/b><span class="sub">•••• 0000/);
     assert.match(html, /Guinea/);
     assert.match(html, /tyres on top/);
   });
@@ -120,6 +121,65 @@ describe("what the loading list prints", () => {
     assert.match(html, /window\.print\(\)/);
     assert.match(html,
         /<title>Loading list MSKU1234567 - Conakry Express Shipping<\/title>/);
+  });
+
+  // Regression: the page is a bearer link (/d?t=...) that travels to agents,
+  // ports and customs, and it used to print every customer's and receiver's
+  // full phone number. It now prints the last four digits only. The names,
+  // quantities and VINs the box is checked off by stay whole.
+  it("masks every phone number but keeps names and quantities", () => {
+    const crowded = [
+      ...lines,
+      {kind: "barrels", quantity: 3, ownerKind: "customer",
+        customerName: "Ibrahima Sow", customerPhone: "(207) 555-4821",
+        receiverName: "Aissatou Sow", receiverPhone: "+224 655 12 34 56"},
+      {kind: "other", description: "Generator", quantity: 2,
+        ownerKind: "customer", customerName: "Short Number",
+        customerPhone: "98761"},
+    ];
+    const model = containerDocumentModel(
+        {container: box(), lines: crowded, business});
+    const html = renderContainerDocument(model);
+
+    for (const full of ["+1 646 555 0199", "6465550199", "+224 620 00 00 00",
+      "(207) 555-4821", "2075554821", "+224 655 12 34 56", "224655123456",
+      "98761"]) {
+      assert.ok(!html.includes(full), `${full} must not be printed`);
+    }
+    // Not even with the formatting stripped out of the page.
+    const digitsOnly = html.replace(/[^\d]/g, "");
+    for (const full of ["6465550199", "2075554821", "224655123456"]) {
+      assert.ok(!digitsOnly.includes(full), `${full} leaks as digits`);
+    }
+
+    assert.equal(model.lines[1].phone, "•••• 0199");
+    assert.equal(model.lines[1].receiverPhone, "•••• 0000");
+    assert.equal(model.lines[2].phone, "•••• 4821");
+    assert.equal(model.lines[2].receiverPhone, "•••• 3456");
+    // Too short to be a number: masked whole rather than printed in full.
+    assert.equal(model.lines[3].phone, "••••");
+    // Business stock has no customer, so no phone at all.
+    assert.equal(model.lines[0].phone, "");
+
+    for (const name of ["Fatou Diallo", "Mariama Bah", "Ibrahima Sow",
+      "Aissatou Sow", "Short Number", "Business stock"]) {
+      assert.match(html, new RegExp(`<b>${name}</b>`));
+    }
+    assert.match(html, /1HGCM82633A004352/);
+    assert.match(html, /<td class="qty">8<\/td>/);
+    assert.match(html, /<td class="qty">3<\/td>/);
+    assert.match(html, /<td class="qty">2<\/td>/);
+    // The shipper's own contact is public on purpose and stays whole.
+    assert.match(html, /\+1 646 555 0100/);
+  });
+
+  it("masks a phone to its last four digits", () => {
+    assert.equal(maskedPhone("+1 646 555 0199"), "•••• 0199");
+    assert.equal(maskedPhone("6465550199"), "•••• 0199");
+    assert.equal(maskedPhone("123456"), "••••");
+    assert.equal(maskedPhone(""), "");
+    assert.equal(maskedPhone(undefined), "");
+    assert.equal(maskedPhone("no number"), "");
   });
 
   it("escapes what the business typed", () => {
