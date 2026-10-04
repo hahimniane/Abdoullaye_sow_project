@@ -368,6 +368,7 @@ const {
 } = require("./container_document");
 const {
   labelFormat,
+  labelCopies,
   containerLabelsModel,
   renderContainerLabels,
 } = require("./container_labels");
@@ -12628,6 +12629,8 @@ exports.parkingDocument = onRequest(
               business: boxBusiness && boxBusiness.exists ?
                 boxBusiness.data() : {},
               consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+              onlyCode: String(req.query?.code || ""),
+              copies: req.query?.copies,
             });
             const qrSvgByCode = {};
             for (const label of model.labels) {
@@ -16767,10 +16770,22 @@ exports.getContainerDocumentUrl = onCall(
         });
         await batch.commit();
       }
-      return {
-        success: true,
-        url: `${url}&view=labels&labels=${labelFormat(data.format)}`,
-      };
+      // One line's labels - a reprint for one barrel - or the whole box.
+      const lineId = String(data.lineId || "");
+      const lineDoc = lineId ?
+        lines.docs.find((d) => d.id === lineId) : null;
+      if (lineId && !lineDoc) {
+        throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+      }
+      const code = lineDoc ? String(codes.get(lineDoc.id) ||
+        lineDoc.data()?.trackingCode || "") : "";
+      const query = new URLSearchParams({
+        view: "labels",
+        labels: labelFormat(data.format),
+        copies: String(labelCopies(data.copies)),
+        ...(code ? {code} : {}),
+      });
+      return {success: true, url: `${url}&${query.toString()}`};
     },
 );
 

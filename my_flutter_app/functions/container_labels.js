@@ -59,6 +59,17 @@ function labelFormat(value) {
 }
 
 /**
+ * Labels per package: two by default (two sides), one when the business is
+ * reprinting a single torn label.
+ *
+ * @param {*} value A requested count.
+ * @return {1|2} The count.
+ */
+function labelCopies(value) {
+  return Number(value) === 1 ? 1 : LABELS_PER_PACKAGE;
+}
+
+/**
  * What one package is, for the label.
  *
  * @param {object} line A containerLines row.
@@ -82,7 +93,10 @@ function packageName(line) {
  * @param {object} input {container, lines, business, consoleUrl}.
  * @return {object} The labels model.
  */
-function containerLabelsModel({container, lines, business, consoleUrl}) {
+function containerLabelsModel({container, lines, business, consoleUrl,
+  onlyCode = "", copies = LABELS_PER_PACKAGE}) {
+  const only = text(onlyCode, 40).toUpperCase();
+  const perPackage = labelCopies(copies);
   const c = container && typeof container === "object" ? container : {};
   const org = business && typeof business === "object" ? business : {};
   const reference = text(c.containerNumber, 20) || text(c.label, 120) ||
@@ -92,13 +106,13 @@ function containerLabelsModel({container, lines, business, consoleUrl}) {
   for (const row of Array.isArray(lines) ? lines : []) {
     const line = row && typeof row === "object" ? row : {};
     const code = text(line.trackingCode, 40);
-    if (!code) continue;
+    if (!code || (only && code !== only)) continue;
     codes.push(code);
     const packages = text(line.kind, 20) === "car" ?
       1 : Math.max(1, positiveInt(line.quantity));
     const stock = text(line.ownerKind, 20) === "stock";
     for (let n = 1; n <= packages; n++) {
-      for (let copy = 1; copy <= LABELS_PER_PACKAGE; copy++) {
+      for (let copy = 1; copy <= perPackage; copy++) {
         if (labels.length >= MAX_LABELS) break;
         labels.push({
           code,
@@ -123,6 +137,8 @@ function containerLabelsModel({container, lines, business, consoleUrl}) {
     logo: documentLogo(org),
     codes: [...new Set(codes)],
     labels,
+    onlyCode: only,
+    copies: perPackage,
     truncated: labels.length >= MAX_LABELS,
   };
 }
@@ -165,6 +181,11 @@ function renderContainerLabels(model, opts = {}) {
   }
   const title = `Labels ${m.reference || ""} - ${m.businessName || "Laawol"}`;
   const big = format === "thermal";
+  // Each toolbar link changes one setting and keeps the others.
+  const current = {labels: format, copies: String(m.copies || 2),
+    ...(m.onlyCode ? {code: m.onlyCode} : {})};
+  const link = (change) => escape(`${opts.query || ""}&${
+    new URLSearchParams({...current, ...change}).toString()}`);
   const empty = "<p class=\"hint\">No packages on this container yet.</p>";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -222,19 +243,28 @@ function renderContainerLabels(model, opts = {}) {
   }
 </style></head><body>
 <div class="actions">
-  <b>${escape(m.labels?.length || 0)} labels &middot; ${escape(m.reference)}</b>
-  <a class="${format === "sheet" ? "" : "off"}" href="?${escape(
-    opts.query || "")}&amp;labels=sheet">Sheet (Avery 5524)</a>
-  <a class="${format === "thermal" ? "" : "off"}" href="?${escape(
-    opts.query || "")}&amp;labels=thermal">Thermal 4&times;6</a>
+  <b>${escape(m.labels?.length || 0)} labels &middot; ${escape(
+    m.onlyCode || m.reference)}</b>
+  <a class="${format === "sheet" ? "" : "off"}" href="?${link(
+    {labels: "sheet"})}">Sheet (Avery 5524)</a>
+  <a class="${format === "thermal" ? "" : "off"}" href="?${link(
+    {labels: "thermal"})}">Thermal 4&times;6</a>
+  <a class="${m.copies === 1 ? "off" : ""}" href="?${link(
+    {copies: "2"})}">2 per package</a>
+  <a class="${m.copies === 1 ? "" : "off"}" href="?${link(
+    {copies: "1"})}">1 per package</a>
   <button type="button" onclick="window.print()">Print</button>
 </div>
-<p class="hint">Two labels per package: stick them on two different sides.
-Weatherproof label stock (polyester or vinyl) survives rain and handling far
-better than paper. If a label won't scan, type the code shown under it.<br>
-Deux étiquettes par colis, sur deux côtés différents. Si une étiquette ne se
-lit plus, saisissez le code imprimé.${m.truncated ?
-    "<br><b>Only the first 1200 labels are shown.</b>" : ""}</p>
+<p class="hint">Stick each label flat on a clean, dry surface - the lid
+or the upper side of a barrel, never across a seam - and cover it with clear
+packing tape. Use weatherproof polyester or vinyl labels; on a thermal
+printer use thermal-transfer labels with a resin ribbon, because direct
+thermal labels fade in a hot container. Write the code on the package in
+marker too. If a label won't scan, type the code shown on it.<br>
+Collez chaque étiquette à plat sur une surface propre et sèche, couvrez-la
+de ruban adhésif transparent et écrivez aussi le code au marqueur sur le
+colis. Si une étiquette ne se lit plus, saisissez le code imprimé.${
+  m.truncated ? "<br><b>Only the first 1200 labels are shown.</b>" : ""}</p>
 ${pages.join("\n") || empty}
 </body></html>`;
 }
@@ -243,6 +273,7 @@ module.exports = {
   LABELS_PER_PACKAGE,
   LABEL_FORMATS,
   labelFormat,
+  labelCopies,
   containerLabelsModel,
   renderContainerLabels,
 };

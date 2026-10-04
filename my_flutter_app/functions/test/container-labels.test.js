@@ -82,3 +82,24 @@ describe("package labels", () => {
     assert.doesNotMatch(page, /<script>x/);
   });
 });
+
+describe("reprinting one package", () => {
+  // A torn label on one barrel is a reprint of that line, not the box.
+  it("prints only the asked-for line, one label per package when asked",
+      () => {
+        const m = containerLabelsModel({container, lines, business,
+          onlyCode: "cl-b3c4d5", copies: 1});
+        assert.equal(m.labels.length, 1);
+        assert.equal(m.labels[0].code, "CL-B3C4D5");
+        const page = renderContainerLabels(m, {query: "t=x&view=labels"});
+        // The toolbar keeps the line filter when switching format.
+        assert.match(page, /code=CL-B3C4D5/);
+        assert.match(page, /copies=1/);
+      });
+
+  it("tells staff how to make a label last", () => {
+    const page = renderContainerLabels(model(), {});
+    assert.match(page, /clear\s+packing tape/);
+    assert.match(page, /direct\s+thermal labels fade/);
+  });
+});
