@@ -15,6 +15,7 @@
 
 const {containerCounts} = require("./container_manifest");
 const {documentLogo, formatBusinessAddress} = require("./parking_document");
+const {normalizePhoneAlias} = require("./phone_number");
 
 const LOGO_URL = "https://laawoldigital.com/assets/logo.png";
 
@@ -51,6 +52,24 @@ function containerStamp(c) {
     return {text: on ? `SAILED ${on}` : "SAILED", tone: "sailed"};
   }
   return {text: "LOADING", tone: "loading"};
+}
+
+/**
+ * A phone number as the loading list prints it: the last four digits only.
+ * The page is a bearer link that travels to agents, ports and customs, so it
+ * must not hand out every customer's number in the box. Four digits are
+ * enough to tell two "Mamadou Diallo"s apart against the barrel label; the
+ * full numbers stay in the business's own console and app. Anything too short
+ * to be a number (fewer than seven digits) is masked whole, so a stray "1234"
+ * is never printed in full.
+ *
+ * @param {*} value The stored phone number.
+ * @return {string} "•••• 0199", or "" when there is no number.
+ */
+function maskedPhone(value) {
+  const digits = normalizePhoneAlias(text(value, 40));
+  if (!digits) return "";
+  return digits.length < 7 ? "••••" : `•••• ${digits.slice(-4)}`;
 }
 
 /**
@@ -105,10 +124,10 @@ function containerDocumentModel({container, lines, business}) {
         vin: kind === "car" ? text(r.vinNumber, 17) : "",
         quantity: kind === "car" ? 1 : Math.max(1, Number(r.quantity) || 1),
         whose: stock ? "Business stock" : text(r.customerName, 120),
-        phone: stock ? "" : text(r.customerPhone, 40),
+        phone: stock ? "" : maskedPhone(r.customerPhone),
         // The name on the barrel: whoever collects it at the port.
         receiver: text(r.receiverName, 120),
-        receiverPhone: text(r.receiverPhone, 40),
+        receiverPhone: maskedPhone(r.receiverPhone),
       };
     }),
     printedOn: dateLabel(new Date()),
@@ -253,4 +272,4 @@ function renderContainerDocument(model) {
 </body></html>`;
 }
 
-module.exports = {containerDocumentModel, renderContainerDocument};
+module.exports = {containerDocumentModel, maskedPhone, renderContainerDocument};
