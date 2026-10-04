@@ -8,6 +8,7 @@ import {
   callingCodeOptionForCountry,
   callingCodeOptionForPhone,
   composeInternationalPhone,
+  phoneFromTyped,
 } from "@/lib/calling-code-catalog";
 import { currentWebLanguage } from "@/lib/language";
 
@@ -117,9 +118,11 @@ export function CustomerPhoneField({
           inputMode="tel"
           onChange={(event) =>
             onChange(
-              composeInternationalPhone(
-                option.callingCode,
+              phoneFromTyped(
                 event.target.value,
+                option,
+                initialCountryCode,
+                setCountryCode,
               ),
             )
           }

@@ -15682,6 +15682,40 @@ async function refreshContainerCounts(db, ref) {
 const CONTAINER_LINE_CODE_PREFIX = "CL";
 
 /**
+ * "1 barrel", "3 barrels" - the history reads like a sentence.
+ *
+ * @param {*} quantity The count.
+ * @return {string} The phrase.
+ */
+function barrelsLabel(quantity) {
+  const n = Number(quantity) || 0;
+  return `${n} barrel${n === 1 ? "" : "s"}`;
+}
+
+// How the history names a contact field, instead of its Firestore key.
+const CONTACT_FIELD_LABELS = Object.freeze({
+  customerName: "customer's name",
+  customerPhone: "customer's phone",
+  receiverName: "receiver's name",
+  receiverPhone: "receiver's phone",
+  notifyCustomer: "customer's WhatsApp updates",
+  notifyReceiver: "receiver's WhatsApp updates",
+});
+
+/**
+ * Whether the Terminal49 key is a real one. The secret holds the
+ * placeholder "unset" until a key is bought, and a request made with it is
+ * refused - which must not be mistaken for "this carrier is unknown".
+ *
+ * @return {boolean} True when carrier tracking can be asked for.
+ */
+function terminal49Configured() {
+  const key = safeSecretValue(terminal49ApiKey).trim();
+  return Boolean(key) &&
+    !["unset", "none", "placeholder", "todo"].includes(key.toLowerCase());
+}
+
+/**
  * Gives every line on a container its tracking code. Lines added before codes
  * existed get one the first time the container moves, so a customer can be
  * told how to follow their goods the moment they sail.
@@ -15868,7 +15902,7 @@ exports.addContainerLine = onCall(
       }
       const what = record.kind === "car" ?
         `car ${record.vinNumber}` :
-        (record.kind === "barrels" ? `${record.quantity} barrels` :
+        (record.kind === "barrels" ? barrelsLabel(record.quantity) :
           `${record.quantity} × ${record.description}`);
       await containerAudit(businessId, ref.id, "line_added", uid,
           `Added ${what}` + (record.customerName ?
@@ -15902,7 +15936,7 @@ exports.removeContainerLine = onCall(
       await refreshContainerCounts(db, ref);
       await containerAudit(businessId, ref.id, "line_removed", uid,
           `Removed ${line.kind === "car" ? `car ${line.vinNumber}` :
-            (line.kind === "barrels" ? `${line.quantity} barrels` :
+            (line.kind === "barrels" ? barrelsLabel(line.quantity) :
               String(line.description || "a line"))}`);
       return {success: true, containerId: ref.id};
     },
@@ -15944,7 +15978,7 @@ exports.moveContainerLine = onCall(
       await refreshContainerCounts(db, from.ref);
       await refreshContainerCounts(db, to.ref);
       const what = line.kind === "car" ? `car ${line.vinNumber}` :
-        (line.kind === "barrels" ? `${line.quantity} barrels` :
+        (line.kind === "barrels" ? barrelsLabel(line.quantity) :
           String(line.description || "a line"));
       await containerAudit(businessId, from.ref.id, "line_moved", uid,
           `Moved ${what} to ${String(to.data.label || to.ref.id)}`);
@@ -15998,7 +16032,8 @@ exports.updateContainerLineContacts = onCall(
       }
       await containerAudit(businessId, String(line.containerId || ""),
           "line_contacts_edited", uid,
-          `Changed ${changed.join(", ")}` +
+          `Changed ${changed.map((key) => CONTACT_FIELD_LABELS[key] || key)
+              .join(", ")}` +
             (update.customerName ? ` for ${update.customerName}` : ""));
       return {success: true, lineId: lineRef.id};
     },
@@ -16248,7 +16283,7 @@ exports.startContainerCarrierTracking = onDocumentWritten(
       if (after.trackingProvider === "carrier_api" &&
           after.trackedContainerNumber === number) return;
       if (after.carrierTrackingFailedFor === number) return;
-      if (!safeSecretValue(terminal49ApiKey).trim()) return;
+      if (!terminal49Configured()) return;
       const ref = event.data.after.ref;
       let scac = String(after.carrierScac || "").toUpperCase();
       try {

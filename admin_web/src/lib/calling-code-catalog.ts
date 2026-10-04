@@ -96,6 +96,34 @@ export function composeInternationalPhone(
   return code && national ? `+${code}${national}` : "";
 }
 
+/**
+ * What the field stores for what was typed or pasted. A number typed with
+ * its own "+" is already international: it names its country, and putting
+ * the selected calling code in front of it again would store an unreachable
+ * number (+224 620... becoming +224224620...).
+ */
+export function phoneFromTyped(
+  typed: string,
+  selected: { code: string; callingCode: string },
+  fallbackCountryCode: string,
+  selectCountry?: (code: string) => void,
+) {
+  const normalized = typed.trim().replace(/[\s().-]/g, "");
+  if (!normalized.startsWith("+")) {
+    return composeInternationalPhone(selected.callingCode, typed);
+  }
+  const digits = normalized.slice(1).replace(/\D/g, "");
+  const named = callingCodeOptionForPhone(normalized, fallbackCountryCode);
+  if (!named || !digits.startsWith(named.callingCode)) {
+    return digits ? `+${digits}` : "";
+  }
+  if (named.code !== selected.code) selectCountry?.(named.code);
+  return composeInternationalPhone(
+    named.callingCode,
+    digits.slice(named.callingCode.length),
+  );
+}
+
 function pinnedIndex(code: string) {
   const index = PINNED_COUNTRIES.indexOf(code);
   return index < 0 ? Number.MAX_SAFE_INTEGER : index;

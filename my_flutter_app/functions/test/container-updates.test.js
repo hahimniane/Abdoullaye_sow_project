@@ -225,6 +225,23 @@ describe("the server wiring", () => {
     assert.match(body, /assignMissingLineCodes\(db, lines\.docs\)/);
   });
 
+  // Regression: with the placeholder key the trigger asked Terminal49
+  // anyway, was refused, and stamped the box "carrier unknown" for good.
+  it("never asks the carrier feed with the placeholder key", () => {
+    const body = section("exports.startContainerCarrierTracking",
+        "\nexports.");
+    assert.match(body, /if \(!terminal49Configured\(\)\) return;/);
+    const check = section("function terminal49Configured(", "\n}\n");
+    assert.match(check, /"unset"/);
+  });
+
+  // Regression: the history said "Changed receiverPhone" and "1 barrels".
+  it("names changed contact fields and counts barrels in words", () => {
+    assert.match(source, /receiverPhone: "receiver's phone"/);
+    assert.match(source, /CONTACT_FIELD_LABELS\[key\] \|\| key/);
+    assert.doesNotMatch(source, /\.quantity\} barrels`/);
+  });
+
   it("follows a numbered container on the carrier feed and polls it", () => {
     assert.match(source,
         /exports\.startContainerCarrierTracking = onDocumentWritten\(/);

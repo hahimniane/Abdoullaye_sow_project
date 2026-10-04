@@ -13893,6 +13893,11 @@ button[data-loading="true"]::before {
 }
 .ctn-table .mini-table-row:hover .ctn-row-actions,
 .ctn-table .mini-table-row:focus-within .ctn-row-actions { opacity: 1; }
+/* A phone has no hover: the line actions (print labels, edit contacts)
+   would never appear. */
+@media (hover: none) {
+  .ctn-table .ctn-row-actions { opacity: 1; }
+}
 .ctn-table .mini-table-row.ctn-clickable { cursor: pointer; }
 .ctn-table .mini-table-row.ctn-clickable:hover { background: rgba(13, 148, 136, 0.055); }
 .ctn-table .mini-table-row.ctn-clickable:focus-visible {
