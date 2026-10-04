@@ -5,8 +5,10 @@ import test from "node:test";
 import { translateValue } from "./french-dom.ts";
 import {
   CONTAINER_LINE_KINDS,
+  CONTAINER_LABEL_CHOICE_KEY,
   CONTAINER_MESSAGES,
   CONTAINER_OWNER_KINDS,
+  DEFAULT_CONTAINER_LABEL_CHOICE,
   CONTAINER_STATUSES,
   ISO_CONTAINER_NUMBER,
   buildVinPlacementIndex,
@@ -21,6 +23,8 @@ import {
   containerLineWhatsAppText,
   containerDeleteRefusal,
   containerDraftFromRow,
+  containerLabelChoice,
+  containerLabelsRequest,
   containerIsOpen,
   containerLinePayload,
   containerLineTitle,
@@ -42,6 +46,7 @@ import {
   parkedCarsInLot,
   phoneCountryForBusiness,
   phoneCountryForDestination,
+  readContainerLabelChoice,
   searchContainerLines,
   updateContainerLineContactsRequest,
   shortDayMonth,
@@ -49,6 +54,7 @@ import {
   validateContainerLineContactsDraft,
   validateContainerLineDraft,
   vinPlacementText,
+  writeContainerLabelChoice,
   type ContainerRefusal,
 } from "./container-manifest.ts";
 
@@ -801,4 +807,74 @@ test("search finds a line by its tracking code, with or without the dash", () =>
   const containers = [{ id: "C", status: "shipped" }];
   assert.deepEqual(searchContainerLines(lines, containers, "cl-k7m4p2").map((h) => h.line.id), ["a"]);
   assert.deepEqual(searchContainerLines(lines, containers, "K7M4").map((h) => h.line.id), ["a"]);
+});
+
+// ---------------------------------------------------------------------------
+// Package labels: the callable request and the remembered choice.
+// ---------------------------------------------------------------------------
+
+test("a labels request asks for view \"labels\" with the format and count, for the whole container", () => {
+  assert.deepEqual(
+    containerLabelsRequest(" biz1 ", "ctn1", { format: "thermal", copies: 1 }),
+    { businessId: "biz1", containerId: "ctn1", view: "labels", format: "thermal", copies: 1 },
+  );
+  // No lineId key at all for the whole box, not an empty one.
+  assert.equal("lineId" in containerLabelsRequest("biz1", "ctn1", DEFAULT_CONTAINER_LABEL_CHOICE, ""), false);
+});
+
+test("a line's labels carry its lineId so the server prints only that line", () => {
+  assert.deepEqual(
+    containerLabelsRequest("biz1", "ctn1", { format: "sheet", copies: 2 }, "line9"),
+    { businessId: "biz1", containerId: "ctn1", view: "labels", format: "sheet", copies: 2, lineId: "line9" },
+  );
+});
+
+test("a label choice normalizes the way the server does: sheet unless thermal, two unless one", () => {
+  assert.deepEqual(DEFAULT_CONTAINER_LABEL_CHOICE, { format: "sheet", copies: 2 });
+  assert.deepEqual(containerLabelChoice({ format: "thermal", copies: 1 }), { format: "thermal", copies: 1 });
+  assert.deepEqual(containerLabelChoice({ format: "a4", copies: 7 }), { format: "sheet", copies: 2 });
+  assert.deepEqual(containerLabelChoice('{"format":"thermal","copies":"1"}'), { format: "thermal", copies: 1 });
+  assert.deepEqual(containerLabelChoice("not json"), { format: "sheet", copies: 2 });
+  assert.deepEqual(containerLabelChoice(null), { format: "sheet", copies: 2 });
+  // A tampered stored value never reaches the server as anything else.
+  assert.deepEqual(
+    containerLabelsRequest("b", "c", { format: "x", copies: 3 } as never),
+    { businessId: "b", containerId: "c", view: "labels", format: "sheet", copies: 2 },
+  );
+});
+
+test("the last label choice is remembered per browser and survives blocked storage", () => {
+  const store = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => { store.set(key, value); },
+  };
+  assert.deepEqual(readContainerLabelChoice(storage), { format: "sheet", copies: 2 });
+  writeContainerLabelChoice(storage, { format: "thermal", copies: 1 });
+  assert.equal(store.get(CONTAINER_LABEL_CHOICE_KEY), '{"format":"thermal","copies":1}');
+  assert.deepEqual(readContainerLabelChoice(storage), { format: "thermal", copies: 1 });
+
+  const blocked = {
+    getItem: () => { throw new Error("SecurityError"); },
+    setItem: () => { throw new Error("QuotaExceededError"); },
+  };
+  assert.deepEqual(readContainerLabelChoice(blocked), { format: "sheet", copies: 2 });
+  assert.doesNotThrow(() => writeContainerLabelChoice(blocked, { format: "thermal", copies: 1 }));
+  assert.deepEqual(readContainerLabelChoice(null), { format: "sheet", copies: 2 });
+  // The default is a copy: changing what one caller got never changes the next.
+  const first = readContainerLabelChoice(null);
+  first.copies = 1;
+  assert.deepEqual(readContainerLabelChoice(null), { format: "sheet", copies: 2 });
+});
+
+test("the label request mirrors what the server's callable and label page read", () => {
+  const labels = readFileSync(new URL("../../../my_flutter_app/functions/container_labels.js", import.meta.url), "utf8");
+  const index = readFileSync(new URL("../../../my_flutter_app/functions/index.js", import.meta.url), "utf8");
+  assert.match(labels, /=== "thermal" \? "thermal" : "sheet"/);
+  assert.match(labels, /Number\(value\) === 1 \? 1 : LABELS_PER_PACKAGE/);
+  const callable = index.slice(index.indexOf("exports.getContainerDocumentUrl"));
+  assert.match(callable, /String\(data\.view \|\| ""\) !== "labels"/);
+  assert.match(callable, /labelFormat\(data\.format\)/);
+  assert.match(callable, /labelCopies\(data\.copies\)/);
+  assert.match(callable, /const lineId = String\(data\.lineId \|\| ""\);/);
 });

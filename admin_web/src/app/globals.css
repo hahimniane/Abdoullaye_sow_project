@@ -13962,6 +13962,15 @@ button[data-loading="true"]::before {
 .ctn-table .mini-table-row > span > small.ctn-code-row { display: inline-flex; align-items: center; overflow: visible; }
 .ctn-code { font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 6px; background: var(--mist); color: var(--brand-strong, #0f766e); }
 .ctn-table .mini-table-row > span > small.ctn-wa-warn { color: #92400e; font-weight: 600; }
+/* Package labels: a search hit's state cell carries the line's print action
+   at its right edge, and the label modal's durability tip reads as a note. */
+.ctn-table .mini-table-row > span.ctn-hit-state { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
+.ctn-hit-state > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ctn-hit-state > span > .lst-badge { align-self: flex-start; }
+.ctn-hit-state > span > small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.ctn-hit-state > .ghost-button { flex: none; }
+.lst-modal-head h3 .ctn-code { font-size: 0.85em; vertical-align: 0.08em; }
+.ctn-label-tip { margin: 14px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--mist); line-height: 1.45; }
 
 /* One-tap copy beside a value nobody should retype (VIN, customer name). */
 .copy-value{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:6px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;vertical-align:middle}

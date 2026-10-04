@@ -21,6 +21,7 @@ import {
   Printer,
   RefreshCw,
   Ship,
+  Tag,
   Trash2,
   X,
 } from "lucide-react";
@@ -36,6 +37,9 @@ import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/
 import {
   CONTAINER_MESSAGES,
   buildVinPlacementIndex,
+  containerLabelsRequest,
+  readContainerLabelChoice,
+  writeContainerLabelChoice,
   cleanVin,
   containerCallableFailure,
   containerDeleteRefusal,
@@ -72,6 +76,7 @@ import {
   validateContainerLineDraft,
   vinPlacementText,
   type ContainerDraft,
+  type ContainerLabelChoice,
   type ContainerLineContactsDraft,
   type ContainerLineDraft,
   type ContainerLineInLot,
@@ -86,6 +91,7 @@ import {
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
+import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
 import { CopyValue } from "@/components/copy-value";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import {
@@ -113,7 +119,7 @@ type ContainersPanelProps = {
   previewMode?: boolean;
 };
 
-type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts";
+type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels";
 
 const STATUS_LABELS: Record<ContainerStatus, string> = {
   loading: "Loading",
@@ -270,6 +276,13 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
   // The line whose contacts are being corrected, and the form for it.
   const [contactsLineId, setContactsLineId] = useState("");
   const [contactsDraft, setContactsDraft] = useState<ContainerLineContactsDraft>(() => containerLineContactsDraftFromRow({}));
+  // Package labels: the container they print for, the one line when it is a
+  // reprint for one shipment, the format and count, and the link to show
+  // when the browser refused the new tab.
+  const [labelsContainerId, setLabelsContainerId] = useState("");
+  const [labelsLineId, setLabelsLineId] = useState("");
+  const [labelChoice, setLabelChoice] = useState<ContainerLabelChoice>(() => readContainerLabelChoice(null));
+  const [labelsLink, setLabelsLink] = useState("");
 
   const lang = currentLanguage() === "fr" ? "fr" : "en";
 
@@ -417,6 +430,9 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
     setMoveLineId("");
     setMoveTargetId("");
     setContactsLineId("");
+    setLabelsContainerId("");
+    setLabelsLineId("");
+    setLabelsLink("");
   }
 
   function failInModal(error: unknown) {
@@ -520,15 +536,49 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
 
   async function openLoadingList(row: FirestoreRow) {
     setDocumentLink("");
+    // Opened inside the click, before the await, so a popup blocker lets it
+    // through; it is pointed at the list once the server answers.
+    const tab = openPendingTab(window);
     await runPanelAction(setBusy, setFlash, "", async () => {
       const response = await httpsCallable(functions, "getContainerDocumentUrl")({ businessId, containerId: String(row.id) });
       const data = (response.data ?? {}) as { url?: string };
       const url = text(data.url, "");
       if (!url) throw new Error("The loading list is not ready yet. Try again in a moment.");
-      // Awaited call, so this open is outside the click gesture; a blocker can
-      // refuse it. Leave the link on screen rather than a button that did nothing.
-      const opened = window.open(url, "_blank", "noopener");
-      if (!opened) setDocumentLink(url);
+      // Blocked even so: leave the link on screen rather than a button that did nothing.
+      if (!sendPendingTab(tab, url)) setDocumentLink(url);
+    }, () => closePendingTab(tab));
+  }
+
+  // Labels print in every state: a torn label needs replacing most once the
+  // box has sailed. `line` scopes the sheet to that line's packages.
+  function openLabels(containerId: string, line?: Row) {
+    if (!containerId) return;
+    setLabelsContainerId(containerId);
+    setLabelsLineId(line ? String(line.id) : "");
+    setLabelChoice(readContainerLabelChoice(labelStorage()));
+    setLabelsLink("");
+    setDraftError("");
+    setConflictId("");
+    setModal("labels");
+  }
+
+  async function printLabels() {
+    if (!labelsContainerId) return;
+    setLabelsLink("");
+    setDraftError("");
+    writeContainerLabelChoice(labelStorage(), labelChoice);
+    const tab = openPendingTab(window);
+    const request = containerLabelsRequest(businessId, labelsContainerId, labelChoice, labelsLineId);
+    await runPanelAction(setBusy, setFlash, "", async () => {
+      const response = await httpsCallable(functions, "getContainerDocumentUrl")(request);
+      const data = (response.data ?? {}) as { url?: string };
+      const url = text(data.url, "");
+      if (!url) throw new Error("The labels are not ready yet. Try again in a moment.");
+      if (sendPendingTab(tab, url)) closeModal();
+      else setLabelsLink(url);
+    }, (message) => {
+      closePendingTab(tab);
+      failInModal(message);
     });
   }
 
@@ -792,6 +842,9 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
   const movingLine = moveLineId ? selectedLines.find((row) => String(row.id) === moveLineId) : undefined;
   const contactsLine = contactsLineId ? lines.rows.find((row) => String(row.id) === contactsLineId) : undefined;
   const contactsLineContainer = contactsLine ? containerById.get(text(contactsLine.containerId, "")) : undefined;
+  const labelsContainer = labelsContainerId ? containerById.get(labelsContainerId) : undefined;
+  const labelsLine = labelsLineId ? lines.rows.find((row) => String(row.id) === labelsLineId) : undefined;
+  const labelsLineCode = labelsLine ? text(labelsLine.trackingCode, "") : "";
   const conflictContainer = conflictId ? containerById.get(conflictId) : undefined;
 
   function jumpToConflict() {
@@ -842,6 +895,9 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                 </button>
                 <button className="lst-btn ghost" type="button" disabled={busy} aria-busy={busy} onClick={() => void openLoadingList(selected)}>
                   {busy ? <RefreshCw className="spin" size={14} /> : <Printer size={14} />} Loading list
+                </button>
+                <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => openLabels(selectedId)}>
+                  <Tag size={14} /> Print labels
                 </button>
                 <button className="lst-btn ghost" type="button" onClick={() => void openHistory(selectedId)}><History size={14} /> History</button>
                 {selectedStatus === "loading" && (
@@ -899,6 +955,7 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                       </span>
                       <span><strong>{formatDate(row.createdAt)}</strong>{by && <small>{by}</small>}</span>
                       <span className="ctn-row-actions">
+                        <button className="ghost-button" type="button" disabled={busy} onClick={() => openLabels(selectedId, row)} title="Print labels" aria-label="Print labels"><Tag size={14} /></button>
                         <button className="ghost-button" type="button" disabled={busy} onClick={() => openContacts(row)} title="Edit contacts" aria-label="Edit contacts"><Phone size={14} /></button>
                         {selectedOpen && (
                           <>
@@ -965,7 +1022,23 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                           <LineWhatsApp line={hit.line} />
                         </span>
                         <span><strong>{hit.container ? containerTitle(hit.container) : "—"}</strong>{hit.container && <small>{destinationLabel(hit.container)}</small>}</span>
-                        <span><StatusBadge status={hit.status} />{Boolean(hit.sailedAt) && <small>{formatDate(hit.sailedAt)}</small>}</span>
+                        <span className="ctn-hit-state">
+                          <span><StatusBadge status={hit.status} />{Boolean(hit.sailedAt) && <small>{formatDate(hit.sailedAt)}</small>}</span>
+                          {containerId && (
+                            <button
+                              className="ghost-button"
+                              type="button"
+                              disabled={busy}
+                              title="Print labels"
+                              aria-label="Print labels"
+                              // The row opens the container; this button must not.
+                              onClick={(e) => { e.stopPropagation(); openLabels(containerId, hit.line); }}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              <Tag size={14} />
+                            </button>
+                          )}
+                        </span>
                       </div>
                     );
                   })}
@@ -1327,6 +1400,54 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
         </div>
       )}
 
+      {modal === "labels" && labelsContainer && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
+          <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head">
+              <div>
+                {labelsLine ? (
+                  <h3>Labels for {labelsLineCode ? <code className="ctn-code">{labelsLineCode}</code> : containerLineTitle(labelsLine)}</h3>
+                ) : (
+                  <h3>Print labels</h3>
+                )}
+                {labelsLine ? (
+                  <p>{containerLineTitle(labelsLine)} — only this line's packages.</p>
+                ) : (
+                  <p>{containerTitle(labelsContainer)} — a QR code and tracking code for every package on this container.</p>
+                )}
+              </div>
+              <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="lst-modal-body">
+              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              {labelsLink && (
+                <div className="lst-form-error" role="status" style={{ background: "var(--mist)", color: "var(--brand-strong)" }}>
+                  Your browser blocked the new tab. <a href={labelsLink} target="_blank" rel="noopener noreferrer">Open the labels page</a>
+                </div>
+              )}
+              <fieldset className="lst-fieldset">
+                <legend>Label format</legend>
+                <label className="lst-radio"><input type="radio" name="ctnlabelformat" checked={labelChoice.format === "sheet"} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, format: "sheet" }))} /><span>Letter sheet — Avery 5524 weatherproof, 6 per page</span></label>
+                <label className="lst-radio"><input type="radio" name="ctnlabelformat" checked={labelChoice.format === "thermal"} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, format: "thermal" }))} /><span>Thermal printer 4×6</span></label>
+              </fieldset>
+              <fieldset className="lst-fieldset">
+                <legend>Labels per package</legend>
+                <label className="lst-radio"><input type="radio" name="ctnlabelcopies" checked={labelChoice.copies === 2} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, copies: 2 }))} /><span>2 — one for each side (recommended)</span></label>
+                <label className="lst-radio"><input type="radio" name="ctnlabelcopies" checked={labelChoice.copies === 1} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, copies: 1 }))} /><span>1 — to replace a single torn label</span></label>
+              </fieldset>
+              <p className="lst-hint ctn-label-tip">Use weatherproof polyester or vinyl labels and cover each one with clear packing tape. On a thermal printer use thermal-transfer labels with a resin ribbon; direct-thermal labels fade in a hot container.</p>
+            </div>
+            <footer className="lst-modal-foot">
+              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void printLabels()}>
+                {busy ? <RefreshCw className="spin" size={16} /> : <Tag size={16} />}
+                {busy ? "Opening..." : "Open labels"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
       {modal === "history" && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
@@ -1351,6 +1472,15 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
       )}
     </div>
   );
+}
+
+/** This browser's storage, or null where reading it throws (a blocked or private window). */
+function labelStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 /** "Filled from an existing record: 2019 Toyota Camry for Aissatou. You can change anything below." */

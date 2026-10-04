@@ -315,3 +315,90 @@ test("every new contact and WhatsApp string has French", () => {
     assert.equal(translateValue(french, "en"), english, `"${english}" does not round-trip`);
   }
 });
+
+// Package labels: a QR and a large code per package, printed from the
+// container or from one line, on a Letter sheet or a thermal roll.
+test("the panel prints labels through getContainerDocumentUrl with view \"labels\"", () => {
+  assert.match(panelSource, /await httpsCallable\(functions, "getContainerDocumentUrl"\)\(request\);/);
+  assert.match(panelSource, /const request = containerLabelsRequest\(businessId, labelsContainerId, labelChoice, labelsLineId\);/);
+  // The loading list still asks without a view.
+  assert.match(panelSource, /httpsCallable\(functions, "getContainerDocumentUrl"\)\(\{ businessId, containerId: String\(row\.id\) \}\)/);
+  // A refusal lands in the modal and the waiting tab is closed.
+  assert.match(panelSource, /\(message\) => \{\s*closePendingTab\(tab\);\s*failInModal\(message\);\s*\}\);/);
+});
+
+test("Print labels sits next to the loading list, on every line and on every search hit", () => {
+  const detail = panelSource.match(/<div className="ctn-detail-actions">([\s\S]*?)\n {14}<\/div>/);
+  assert.ok(detail, "detail actions not found");
+  const listAt = detail[1].indexOf("Loading list");
+  const labelsAt = detail[1].indexOf("onClick={() => openLabels(selectedId)}");
+  assert.ok(listAt >= 0 && labelsAt > listAt, "Print labels must follow the loading list action");
+  // Line prints pass the line, so the server scopes the sheet with lineId.
+  assert.match(panelSource, /onClick=\{\(\) => openLabels\(selectedId, row\)\} title="Print labels" aria-label="Print labels"/);
+  assert.match(panelSource, /onClick=\{\(e\) => \{ e\.stopPropagation\(\); openLabels\(containerId, hit\.line\); \}\}/);
+  assert.match(panelSource, /setLabelsLineId\(line \? String\(line\.id\) : ""\);/);
+  // Labels print in every container state: not gated on the box still loading.
+  const row = panelSource.match(/<span className="ctn-row-actions">([\s\S]*?)<\/span>\s*<\/div>/);
+  assert.ok(row, "row actions not found");
+  const printAt = row[1].indexOf("openLabels(selectedId, row)");
+  const openOnlyAt = row[1].indexOf("{selectedOpen && (");
+  assert.ok(printAt >= 0 && openOnlyAt > printAt, "line labels must not be gated on the container still loading");
+  // A line's modal is titled with its tracking code.
+  assert.match(panelSource, /<h3>Labels for \{labelsLineCode \? <code className="ctn-code">\{labelsLineCode\}<\/code> : containerLineTitle\(labelsLine\)\}<\/h3>/);
+});
+
+test("the labels modal offers both formats and both counts, and remembers the choice", () => {
+  assert.match(panelSource, /checked=\{labelChoice\.format === "sheet"\}/);
+  assert.match(panelSource, /checked=\{labelChoice\.format === "thermal"\}/);
+  assert.match(panelSource, /checked=\{labelChoice\.copies === 2\}/);
+  assert.match(panelSource, /checked=\{labelChoice\.copies === 1\}/);
+  assert.match(panelSource, /<span>Letter sheet — Avery 5524 weatherproof, 6 per page<\/span>/);
+  assert.match(panelSource, /<span>Thermal printer 4×6<\/span>/);
+  assert.match(panelSource, /<span>2 — one for each side \(recommended\)<\/span>/);
+  assert.match(panelSource, /setLabelChoice\(readContainerLabelChoice\(labelStorage\(\)\)\);/);
+  assert.match(panelSource, /writeContainerLabelChoice\(labelStorage\(\), labelChoice\);/);
+  // Reading window.localStorage can itself throw in a blocked window.
+  assert.match(panelSource, /function labelStorage\(\): Storage \| null \{\s*try \{\s*return window\.localStorage;\s*\} catch \{\s*return null;/);
+});
+
+test("documents open in a tab made inside the click, with the link as the fallback", () => {
+  assert.match(panelSource, /import \{ closePendingTab, openPendingTab, sendPendingTab \} from "@\/lib\/pending-tab";/);
+  // The tab opens before the callable is awaited, for labels and the loading list.
+  for (const fn of ["printLabels", "openLoadingList"]) {
+    const body = panelSource.match(new RegExp(`async function ${fn}\\([^)]*\\) \\{([\\s\\S]*?)\\n  \\}\\n`));
+    assert.ok(body, `${fn} not found`);
+    const openAt = body[1].indexOf("openPendingTab(window)");
+    const awaitAt = body[1].indexOf("await ");
+    assert.ok(openAt >= 0 && openAt < awaitAt, `${fn} must open its tab before awaiting`);
+    assert.match(body[1], /sendPendingTab\(tab, url\)/);
+  }
+  assert.doesNotMatch(panelSource, /window\.open\(url/, "an open after the await is what blockers refuse");
+  assert.match(panelSource, /Your browser blocked the new tab\. <a href=\{labelsLink\} target="_blank" rel="noopener noreferrer">Open the labels page<\/a>/);
+});
+
+test("every label string has French", () => {
+  const strings = [
+    "Print labels",
+    "Labels for",
+    "— only this line's packages.",
+    "— a QR code and tracking code for every package on this container.",
+    "Label format",
+    "Letter sheet — Avery 5524 weatherproof, 6 per page",
+    "Thermal printer 4×6",
+    "Labels per package",
+    "2 — one for each side (recommended)",
+    "1 — to replace a single torn label",
+    "Use weatherproof polyester or vinyl labels and cover each one with clear packing tape. On a thermal printer use thermal-transfer labels with a resin ribbon; direct-thermal labels fade in a hot container.",
+    "Open labels",
+    "Your browser blocked the new tab.",
+    "Open the labels page",
+    "The labels are not ready yet. Try again in a moment.",
+    "Opening...",
+  ];
+  for (const english of strings) {
+    assert.ok(panelSource.includes(english), `"${english}" is no longer in the panel`);
+    const french = translateValue(english, "fr");
+    assert.notEqual(french, english, `no French for "${english}"`);
+    assert.equal(translateValue(french, "en"), english, `"${english}" does not round-trip`);
+  }
+});

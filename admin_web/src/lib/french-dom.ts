@@ -4922,6 +4922,26 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Save contacts": "Enregistrer les contacts",
   "Contacts updated.": "Contacts mis à jour.",
   "Contacts edited": "Contacts modifiés",
+  // Package labels for a container or one line (containers-panel.tsx).
+  "Print labels": "Imprimer les étiquettes",
+  "Labels for": "Étiquettes pour",
+  "— only this line's packages.": "— uniquement les colis de cette ligne.",
+  "— a QR code and tracking code for every package on this container.":
+    "— un code QR et un code de suivi pour chaque colis de ce conteneur.",
+  "Label format": "Format des étiquettes",
+  "Letter sheet — Avery 5524 weatherproof, 6 per page":
+    "Feuille Lettre — Avery 5524 résistante aux intempéries, 6 par page",
+  "Thermal printer 4×6": "Imprimante thermique 4×6",
+  "Labels per package": "Étiquettes par colis",
+  "2 — one for each side (recommended)": "2 — une pour chaque côté (recommandé)",
+  "1 — to replace a single torn label": "1 — pour remplacer une seule étiquette déchirée",
+  "Use weatherproof polyester or vinyl labels and cover each one with clear packing tape. On a thermal printer use thermal-transfer labels with a resin ribbon; direct-thermal labels fade in a hot container.":
+    "Utilisez des étiquettes en polyester ou en vinyle résistantes aux intempéries et couvrez chacune de ruban adhésif transparent. Sur une imprimante thermique, utilisez des étiquettes à transfert thermique avec un ruban résine ; les étiquettes thermiques directes s’effacent dans un conteneur chaud.",
+  "Open labels": "Ouvrir les étiquettes",
+  "Your browser blocked the new tab.": "Votre navigateur a bloqué le nouvel onglet.",
+  "Open the labels page": "Ouvrir la page des étiquettes",
+  "The labels are not ready yet. Try again in a moment.":
+    "Les étiquettes ne sont pas encore prêtes. Réessayez dans un instant.",
 });
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

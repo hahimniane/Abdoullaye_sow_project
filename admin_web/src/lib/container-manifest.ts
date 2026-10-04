@@ -572,6 +572,84 @@ export function updateContainerLineContactsRequest(
 }
 
 // ---------------------------------------------------------------------------
+// Package labels: the printable QR + code sheet for a container or one line.
+// ---------------------------------------------------------------------------
+
+/** A Letter sheet (Avery 5524, six per page) or a 4×6 thermal roll. */
+export type ContainerLabelFormat = "sheet" | "thermal";
+/** Two labels per package (one per side) by default; one to replace a torn label. */
+export type ContainerLabelCopies = 1 | 2;
+export type ContainerLabelChoice = { format: ContainerLabelFormat; copies: ContainerLabelCopies };
+
+export const DEFAULT_CONTAINER_LABEL_CHOICE: ContainerLabelChoice = { format: "sheet", copies: 2 };
+/** Where the console remembers the last format and count, per browser. */
+export const CONTAINER_LABEL_CHOICE_KEY = "laawol.containerLabels.v1";
+
+/**
+ * Any stored or typed choice, as one the server accepts. Mirrors the
+ * server's `labelFormat`/`labelCopies`: anything not "thermal" is a sheet,
+ * anything not 1 is two. Accepts the raw localStorage string too.
+ */
+export function containerLabelChoice(raw: unknown): ContainerLabelChoice {
+  let value: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      value = null;
+    }
+  }
+  const row = asRow(value);
+  return {
+    format: row.format === "thermal" ? "thermal" : "sheet",
+    copies: Number(row.copies) === 1 ? 1 : 2,
+  };
+}
+
+type ChoiceStorage = Pick<Storage, "getItem" | "setItem">;
+
+/** The last choice from this browser; the default when storage is empty or blocked. */
+export function readContainerLabelChoice(storage: ChoiceStorage | null | undefined): ContainerLabelChoice {
+  try {
+    const raw = storage?.getItem(CONTAINER_LABEL_CHOICE_KEY);
+    return raw ? containerLabelChoice(raw) : { ...DEFAULT_CONTAINER_LABEL_CHOICE };
+  } catch {
+    return { ...DEFAULT_CONTAINER_LABEL_CHOICE };
+  }
+}
+
+/** Remembers the choice; a private window or full storage just forgets it. */
+export function writeContainerLabelChoice(storage: ChoiceStorage | null | undefined, choice: ContainerLabelChoice): void {
+  try {
+    storage?.setItem(CONTAINER_LABEL_CHOICE_KEY, JSON.stringify(containerLabelChoice(choice)));
+  } catch {
+    // Remembering is a convenience; printing must not depend on it.
+  }
+}
+
+/**
+ * The `getContainerDocumentUrl` request for labels: the whole container, or
+ * only one line's packages when `lineId` is given (a reprint for one barrel).
+ */
+export function containerLabelsRequest(
+  businessId: string,
+  containerId: string,
+  choice: ContainerLabelChoice,
+  lineId = "",
+) {
+  const { format, copies } = containerLabelChoice(choice);
+  const line = text(lineId, MAX_LABEL);
+  return {
+    businessId: text(businessId, MAX_LABEL),
+    containerId: text(containerId, MAX_LABEL),
+    view: "labels" as const,
+    format,
+    copies,
+    ...(line ? { lineId: line } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Who hears about a line on WhatsApp, as the list shows it.
 // ---------------------------------------------------------------------------
 
