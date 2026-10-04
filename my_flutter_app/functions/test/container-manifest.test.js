@@ -11,6 +11,9 @@ const {
   containerDeleteRefusal,
   validateContainerLine,
   containerLineRecord,
+  validateContainerLineContacts,
+  containerLineContactsUpdate,
+  isInternationalPhone,
   openContainerHoldingVin,
   containerCounts,
 } = require("../container_manifest");
@@ -97,7 +100,8 @@ describe("a line on the list", () => {
       receiverName: "  Mariama Bah ", receiverPhone: "+224 620 00 00 00",
     }, {containerId: "c1"});
     assert.equal(line.receiverName, "Mariama Bah");
-    assert.equal(line.receiverPhone, "+224 620 00 00 00");
+    // Stored without the spaces, so the number can be messaged.
+    assert.equal(line.receiverPhone, "+224620000000");
     assert.equal(line.customerName, "");
   });
 
@@ -149,6 +153,95 @@ describe("a line on the list", () => {
     assert.equal(barrels.quantity, 8);
     assert.equal(barrels.vinNumber, "");
     assert.equal(barrels.customerName, "Fatou Diallo");
+  });
+});
+
+describe("who hears about a line", () => {
+  const customerLine = (extra = {}) => ({
+    kind: "barrels", quantity: 2, ownerKind: "customer",
+    customerName: "Fatou Diallo", ...extra,
+  });
+
+  // Both people are told the box sailed unless staff say otherwise; there is
+  // nobody to tell without a number, so the switch is off without one.
+  it("tells the sender and the receiver by default, when they have a number",
+      () => {
+        const line = containerLineRecord(customerLine({
+          customerPhone: "+1 (646) 555-0100",
+          receiverName: "Mariama", receiverPhone: "+224 620-00-00-00",
+        }));
+        assert.equal(line.customerPhone, "+16465550100");
+        assert.equal(line.notifyCustomer, true);
+        assert.equal(line.notifyReceiver, true);
+
+        const noPhones = containerLineRecord(customerLine());
+        assert.equal(noPhones.notifyCustomer, false);
+        assert.equal(noPhones.notifyReceiver, false);
+      });
+
+  it("keeps a person quiet when staff switch them off", () => {
+    const line = containerLineRecord(customerLine({
+      customerPhone: "+16465550100", notifyCustomer: false,
+      receiverPhone: "+224620000000", notifyReceiver: "false",
+    }));
+    assert.equal(line.notifyCustomer, false);
+    assert.equal(line.notifyReceiver, false);
+  });
+
+  // Stock has no customer to tell; its receiver (the business's agent) may
+  // still be told.
+  it("never keeps a customer phone on business stock", () => {
+    const line = containerLineRecord({
+      kind: "barrels", quantity: 1, ownerKind: "stock",
+      customerPhone: "+16465550100", receiverPhone: "+224620000000",
+    });
+    assert.equal(line.customerPhone, "");
+    assert.equal(line.notifyCustomer, false);
+    assert.equal(line.notifyReceiver, true);
+  });
+
+  it("refuses a phone that is not a phone, and allows none at all", () => {
+    assert.deepEqual(
+        validateContainerLine(customerLine({customerPhone: "call me"})),
+        ["customer_phone_invalid"]);
+    assert.deepEqual(
+        validateContainerLine(customerLine({receiverPhone: "12"})),
+        ["receiver_phone_invalid"]);
+    assert.deepEqual(validateContainerLine(customerLine()), []);
+    // Older app versions send local numbers; they are kept, not refused.
+    assert.deepEqual(
+        validateContainerLine(customerLine({customerPhone: "622 11 22 33"})),
+        []);
+  });
+
+  // Only the full international form can be messaged.
+  it("tells an international number from a local one", () => {
+    assert.equal(isInternationalPhone("+224 622 11 22 33"), true);
+    assert.equal(isInternationalPhone("622112233"), false);
+    assert.equal(isInternationalPhone(""), false);
+  });
+
+  it("corrects contacts later without losing what was not sent", () => {
+    const stored = containerLineRecord(customerLine({
+      customerPhone: "622112233", receiverName: "Mariama",
+      receiverPhone: "+224620000000",
+    }));
+    assert.deepEqual(
+        validateContainerLineContacts({customerPhone: "+224622112233"},
+            stored),
+        []);
+    const update = containerLineContactsUpdate(
+        {customerPhone: "+224 622 11 22 33"}, stored);
+    assert.equal(update.customerPhone, "+224622112233");
+    assert.equal(update.customerName, "Fatou Diallo");
+    assert.equal(update.receiverName, "Mariama");
+    assert.equal(update.notifyReceiver, true);
+    assert.deepEqual(
+        validateContainerLineContacts({customerName: " "}, stored),
+        ["customer_name_required"]);
+    assert.deepEqual(
+        validateContainerLineContacts({receiverPhone: "nope"}, stored),
+        ["receiver_phone_invalid"]);
   });
 });
 
@@ -208,7 +301,7 @@ describe("the container callables and their gates", () => {
     for (const name of ["createContainer", "updateContainer",
       "deleteContainer", "addContainerLine", "removeContainerLine",
       "moveContainerLine", "setContainerStatus",
-      "getContainerDocumentUrl"]) {
+      "updateContainerLineContacts", "getContainerDocumentUrl"]) {
       const body = callable(name);
       // The gate is either inline or the shared loader, which carries it.
       assert.match(body, /CONTAINER_SECTION|loadContainerFor\(/,

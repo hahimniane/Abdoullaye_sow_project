@@ -44,8 +44,58 @@ const MAX_VIN = 17;
 const MIN_VIN = 6;
 const MAX_QUANTITY = 999;
 
+// Formatting a person typed is theirs to type and ours to drop.
+const PHONE_FORMATTING = /[\s().-]/g;
+// The full international form, +<country code><number>. WhatsApp can only
+// reach a number written this way; a local "622 11 22 33" is a number for a
+// person to dial, not one a message can be sent to.
+const INTERNATIONAL_PHONE = /^\+[1-9]\d{7,14}$/;
+
 const text = (value, max = MAX_TEXT) =>
   String(value ?? "").trim().slice(0, max);
+/**
+ * A phone as stored: formatting dropped, the leading plus kept. Anything that
+ * is not 7-15 digits is returned as typed so the validator can name it.
+ *
+ * @param {*} value Raw input.
+ * @return {string} The stored form.
+ */
+const phone = (value) => {
+  const raw = text(value, 40);
+  const compact = raw.replace(PHONE_FORMATTING, "");
+  return /^\+?\d{7,15}$/.test(compact) ? compact : raw;
+};
+
+/**
+ * @param {*} value A stored or typed phone.
+ * @return {boolean} Whether it is a reachable international number.
+ */
+function isInternationalPhone(value) {
+  return INTERNATIONAL_PHONE.test(phone(value));
+}
+
+/**
+ * Empty is fine (nobody to reach); anything else must look like a phone.
+ * Local numbers are still accepted - older app versions send them - but only
+ * an international one can be messaged, and the form says so.
+ *
+ * @param {*} value Raw input.
+ * @return {boolean} Whether it may be stored.
+ */
+function phoneAcceptable(value) {
+  const stored = phone(value);
+  if (!stored) return true;
+  return /^\+?\d{7,15}$/.test(stored);
+}
+
+/**
+ * A switch that is on unless it was explicitly turned off.
+ *
+ * @param {*} value Raw input.
+ * @return {boolean} The switch.
+ */
+const onUnlessOff = (value) => value !== false && value !== "false";
+
 const positiveInt = (value) => {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
@@ -178,7 +228,82 @@ function validateContainerLine(input) {
   if (owner === "customer" && !text(input?.customerName, MAX_LABEL)) {
     errors.push("customer_name_required");
   }
+  errors.push(...contactPhoneErrors(input, owner));
   return errors;
+}
+
+/**
+ * @param {object} input Raw contact fields.
+ * @param {string} owner The line's owner kind.
+ * @return {string[]} Phone error codes.
+ */
+function contactPhoneErrors(input, owner) {
+  const errors = [];
+  if (owner === "customer" && !phoneAcceptable(input?.customerPhone)) {
+    errors.push("customer_phone_invalid");
+  }
+  if (!phoneAcceptable(input?.receiverPhone)) {
+    errors.push("receiver_phone_invalid");
+  }
+  return errors;
+}
+
+/**
+ * The contact half of a line: who it belongs to, who collects it, and
+ * whether each of them hears about it. Shared by adding a line and by
+ * correcting its contacts later.
+ *
+ * @param {object} input Raw contact fields.
+ * @param {string} owner The line's owner kind.
+ * @return {object} The contact fields as stored.
+ */
+function containerLineContacts(input, owner) {
+  const customer = owner === "customer";
+  const customerPhone = customer ? phone(input.customerPhone) : "";
+  const receiverPhone = phone(input.receiverPhone);
+  return {
+    customerName: customer ? text(input.customerName, MAX_LABEL) : "",
+    customerPhone,
+    // Who collects it at the other end - the name written on the barrel.
+    // Usually not the customer who handed it in here, sometimes nobody
+    // named yet; either owner kind may have one (stock goes to an agent).
+    receiverName: text(input.receiverName, MAX_LABEL),
+    receiverPhone,
+    // Both people hear about the shipment unless staff switch one off.
+    // There is nobody to tell without a number, so the switch follows it.
+    notifyCustomer: Boolean(customerPhone) && onUnlessOff(input.notifyCustomer),
+    notifyReceiver: Boolean(receiverPhone) && onUnlessOff(input.notifyReceiver),
+  };
+}
+
+/**
+ * Checks a contact correction against the line it changes. Names and phones
+ * may be corrected at any point - a wrong number is useless after sailing
+ * too - but a customer's line keeps a customer name.
+ *
+ * @param {object} input Raw contact fields.
+ * @param {object} current The stored line.
+ * @return {string[]} Error codes.
+ */
+function validateContainerLineContacts(input, current) {
+  const owner = text(current?.ownerKind, 20);
+  const merged = {...(current || {}), ...(input || {})};
+  const errors = [];
+  if (owner === "customer" && !text(merged.customerName, MAX_LABEL)) {
+    errors.push("customer_name_required");
+  }
+  errors.push(...contactPhoneErrors(merged, owner));
+  return errors;
+}
+
+/**
+ * @param {object} input Validated contact fields.
+ * @param {object} current The stored line.
+ * @return {object} The contact fields to write.
+ */
+function containerLineContactsUpdate(input, current) {
+  const owner = text(current?.ownerKind, 20);
+  return containerLineContacts({...(current || {}), ...(input || {})}, owner);
 }
 
 /**
@@ -190,7 +315,6 @@ function containerLineRecord(input, opts = {}) {
   const kind = text(input.kind, 20);
   const owner = text(input.ownerKind, 20);
   const isCar = kind === "car";
-  const customer = owner === "customer";
   return {
     containerId: text(opts.containerId, MAX_LABEL),
     // Denormalised so "is this car already on an open container" is one
@@ -205,13 +329,7 @@ function containerLineRecord(input, opts = {}) {
     quantity: isCar ? 1 : Math.min(MAX_QUANTITY, positiveInt(input.quantity)),
     description: kind === "other" ? text(input.description, MAX_LABEL) : "",
     ownerKind: owner,
-    customerName: customer ? text(input.customerName, MAX_LABEL) : "",
-    customerPhone: customer ? text(input.customerPhone, 40) : "",
-    // Who collects it at the other end - the name written on the barrel.
-    // Usually not the customer who handed it in here, sometimes nobody
-    // named yet; either owner kind may have one (stock goes to an agent).
-    receiverName: text(input.receiverName, MAX_LABEL),
-    receiverPhone: text(input.receiverPhone, 40),
+    ...containerLineContacts(input, owner),
     addedByStaffId: text(opts.addedByStaffId, MAX_LABEL),
   };
 }
@@ -282,6 +400,10 @@ const CONTAINER_MESSAGES = Object.freeze({
   description_required: "Say what it is.",
   owner_kind_invalid: "Say whose this is: a customer, or your own stock.",
   customer_name_required: "Enter the customer's name.",
+  customer_phone_invalid:
+    "The customer's phone doesn't look like a phone number.",
+  receiver_phone_invalid:
+    "The receiver's phone doesn't look like a phone number.",
   vin_already_loaded:
     "This car is already on another container that hasn't arrived.",
   move_target_not_loading:
@@ -302,6 +424,9 @@ module.exports = {
   containerDeleteRefusal,
   validateContainerLine,
   containerLineRecord,
+  validateContainerLineContacts,
+  containerLineContactsUpdate,
+  isInternationalPhone,
   openContainerHoldingVin,
   containerCounts,
 };

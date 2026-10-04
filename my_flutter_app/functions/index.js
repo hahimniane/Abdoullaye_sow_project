@@ -327,6 +327,8 @@ const {
   containerDeleteRefusal,
   validateContainerLine,
   containerLineRecord,
+  validateContainerLineContacts,
+  containerLineContactsUpdate,
   openContainerHoldingVin,
   containerCounts,
 } = require("./container_manifest");
@@ -15613,6 +15615,27 @@ async function refreshContainerCounts(db, ref) {
   return counts.lineCount;
 }
 
+const CONTAINER_LINE_CODE_PREFIX = "CL";
+
+/**
+ * Gives every line on a container its tracking code. Lines added before codes
+ * existed get one the first time the container moves, so a customer can be
+ * told how to follow their goods the moment they sail.
+ *
+ * @param {object} db Firestore.
+ * @param {object[]} lineDocs The container's line snapshots.
+ * @return {Promise<Map<string, string>>} New codes by line id.
+ */
+async function assignMissingLineCodes(db, lineDocs) {
+  const assigned = new Map();
+  for (const d of lineDocs) {
+    if (String(d.data()?.trackingCode || "")) continue;
+    assigned.set(d.id, await generateTrackingCode(
+        CONTAINER_LINE_CODE_PREFIX, "containerLines"));
+  }
+  return assigned;
+}
+
 function containerAudit(businessId, containerId, action, uid, summary) {
   return writeLotLedgerAudit({
     businessId, entityType: "container", entityId: containerId,
@@ -15757,6 +15780,10 @@ exports.addContainerLine = onCall(
       await lineRef.set({
         businessId,
         ...record,
+        // What the customer types to follow it and what the package label
+        // carries - the same short code every other service uses.
+        trackingCode: await generateTrackingCode(
+            CONTAINER_LINE_CODE_PREFIX, "containerLines"),
         createdAt: FirestoreFieldValue.serverTimestamp(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
@@ -15860,6 +15887,55 @@ exports.moveContainerLine = onCall(
     },
 );
 
+// Who a line belongs to, who collects it, and whether each hears about the
+// shipment. Unlike the rest of the line this stays correctable after the box
+// sails: a wrong number is the one mistake that matters most once it has.
+exports.updateContainerLineContacts = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+      const db = admin.firestore();
+      const lineRef = db.collection("containerLines")
+          .doc(String(data.lineId || ""));
+      const lineDoc = data.lineId ? await lineRef.get() : null;
+      const line = lineDoc && lineDoc.exists ? lineDoc.data() || {} : null;
+      if (!line || String(line.businessId) !== businessId) {
+        throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+      }
+      const contacts = data.contacts && typeof data.contacts === "object" ?
+        data.contacts : {};
+      const errors = validateContainerLineContacts(contacts, line);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", containerMessage(errors));
+      }
+      const update = containerLineContactsUpdate(contacts, line);
+      const changed = Object.keys(update).filter((key) =>
+        String(line[key] ?? "") !== String(update[key]));
+      if (changed.length === 0) return {success: true, lineId: lineRef.id};
+      await lineRef.set({
+        ...update,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      if (line.ownerKind === "customer" && update.customerName) {
+        await rememberLotCustomer(db, {
+          businessId,
+          seen: {customerName: update.customerName,
+            customerPhone: update.customerPhone, customerEmail: ""},
+          source: "container",
+          staffId: uid,
+        });
+      }
+      await containerAudit(businessId, String(line.containerId || ""),
+          "line_contacts_edited", uid,
+          `Changed ${changed.join(", ")}` +
+            (update.customerName ? ` for ${update.customerName}` : ""));
+      return {success: true, lineId: lineRef.id};
+    },
+);
+
 exports.setContainerStatus = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -15892,9 +15968,11 @@ exports.setContainerStatus = onCall(
       // container" is one query on lines.
       const lines = await db.collection("containerLines")
           .where("containerId", "==", ref.id).get();
+      const codes = await assignMissingLineCodes(db, lines.docs);
       const batch = db.batch();
       lines.docs.forEach((d) => batch.set(d.ref, {
         containerStatus: next,
+        ...(codes.has(d.id) ? {trackingCode: codes.get(d.id)} : {}),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       }, {merge: true}));
       await batch.commit();

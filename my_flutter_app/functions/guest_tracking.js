@@ -13,7 +13,17 @@ const GUEST_TRACKING_COLLECTIONS = Object.freeze([
   Object.freeze({
     name: "freightQuoteRequests", prefix: "FQ", service: "freight_quote",
   }),
+  // Goods a business loaded into its own container for a customer. The code
+  // is printed on the package label and sent with every status message.
+  Object.freeze({name: "containerLines", prefix: "CL", service: "container"}),
 ]);
+
+// A container line follows its box: received into it, at sea, landed.
+const CONTAINER_STAGE_BY_STATUS = Object.freeze({
+  loading: "booked",
+  shipped: "in_transit",
+  arrived: "arrived",
+});
 
 const PUBLIC_STAGE_BY_STATUS = Object.freeze({
   // Not "booked": nothing is booked until it is paid for, and telling the
@@ -90,8 +100,12 @@ function publicGuestTrackingRecord({id, service, data}) {
   const row = data || {};
   const status = service === "transport" ?
     cleanText(row.fulfillmentStatus || row.status, 60).toLowerCase() :
-    cleanText(row.status, 60).toLowerCase();
-  const stage = PUBLIC_STAGE_BY_STATUS[status] || "booked";
+    service === "container" ?
+      cleanText(row.containerStatus, 60).toLowerCase() :
+      cleanText(row.status, 60).toLowerCase();
+  const stage = (service === "container" ?
+    CONTAINER_STAGE_BY_STATUS[status] :
+    PUBLIC_STAGE_BY_STATUS[status]) || "booked";
   return {
     trackingCode: cleanText(row.trackingCode || id, 60),
     service,

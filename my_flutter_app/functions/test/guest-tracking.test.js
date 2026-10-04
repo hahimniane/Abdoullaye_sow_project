@@ -20,6 +20,7 @@ test(
             "parkedCars",
             "barrelPools",
             "freightQuoteRequests",
+            "containerLines",
           ],
       );
     });
@@ -113,4 +114,21 @@ test("cancelled records never look like a stalled active journey", () => {
     data: {trackingCode: "FR-Q7M4P2", status: "cancelled"},
   });
   assert.equal(result.stage, "cancelled");
+});
+
+test("a container line follows its box, and shows nothing personal", () => {
+  const record = (containerStatus) => publicGuestTrackingRecord({
+    id: "line1",
+    service: "container",
+    data: {
+      trackingCode: "CL-K7M4P2", containerStatus,
+      customerName: "Fatou Diallo", customerPhone: "+16465550100",
+      receiverPhone: "+224620000000",
+    },
+  });
+  assert.equal(record("loading").stage, "booked");
+  assert.equal(record("shipped").stage, "in_transit");
+  assert.equal(record("arrived").stage, "arrived");
+  assert.deepEqual(Object.keys(record("shipped")).sort(),
+      ["service", "stage", "trackingCode", "updatedAtMs"]);
 });
