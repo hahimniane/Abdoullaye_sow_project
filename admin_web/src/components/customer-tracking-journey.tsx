@@ -13,19 +13,19 @@ import {
   relativeTime,
   transportJourneyStageFor,
 } from "@/lib/tracking-journey";
+import {
+  GUEST_JOURNEY_STAGES,
+  type GuestJourneyStage,
+} from "@/lib/guest-tracking";
 import type { FirestoreRow } from "@/types/admin";
-
-const PUBLIC_TRACKING_STAGES = [
-  {id: "booked", label: "Booked", hint: "Your booking is confirmed"},
-  {id: "in_transit", label: "In progress", hint: "The service is underway"},
-  {id: "arrived", label: "Ready", hint: "The service is ready for its final step"},
-  {id: "delivered", label: "Complete", hint: "The service is complete"},
-] as const;
 
 export function GuestJourneyProgress({
   stage,
+  stages = GUEST_JOURNEY_STAGES,
 }: {
   stage: "booked" | "in_transit" | "arrived" | "delivered" | "cancelled";
+  /** The steps to draw; a container line has three of its own. */
+  stages?: readonly GuestJourneyStage[];
 }) {
   if (stage === "cancelled") {
     return (
@@ -34,12 +34,10 @@ export function GuestJourneyProgress({
       </div>
     );
   }
-  const activeIndex = PUBLIC_TRACKING_STAGES.findIndex(
-    (item) => item.id === stage,
-  );
+  const activeIndex = stages.findIndex((item) => item.id === stage);
   return (
     <ol className="trk-journey" aria-label="Booking progress">
-      {PUBLIC_TRACKING_STAGES.map((item, index) => {
+      {stages.map((item, index) => {
         const done = index < activeIndex;
         const current = index === activeIndex;
         return (

@@ -5,6 +5,10 @@ enum GuestTrackingServiceType {
   parking,
   sharedBarrel,
   freightQuote,
+
+  /// Goods a business loaded into its own container for a customer (a
+  /// "CL-" code). Stages follow the box: booked, in transit, arrived.
+  container,
 }
 
 enum GuestTrackingStage {
@@ -85,6 +89,7 @@ GuestTrackingServiceType _serviceFromWire(Object? value) {
     'parking' => GuestTrackingServiceType.parking,
     'shared_barrel' => GuestTrackingServiceType.sharedBarrel,
     'freight_quote' => GuestTrackingServiceType.freightQuote,
+    'container' => GuestTrackingServiceType.container,
     _ => throw const FormatException('Unsupported guest tracking service'),
   };
 }

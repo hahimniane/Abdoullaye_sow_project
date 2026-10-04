@@ -16,6 +16,8 @@
  */
 
 import { businessParkingEndLabel } from "./business-parking-entry.ts";
+import { CALLING_CODE_BY_COUNTRY } from "./calling-code-catalog.ts";
+import { destinationCountryOptionForRow } from "./destination-countries.ts";
 
 export const CONTAINER_STATUSES = ["loading", "shipped", "arrived"] as const;
 export type ContainerStatus = (typeof CONTAINER_STATUSES)[number];
@@ -55,6 +57,105 @@ function asRow(value: unknown): Row {
   return value && typeof value === "object" ? (value as Row) : {};
 }
 
+// ---------------------------------------------------------------------------
+// Phones. Mirrors the server's `phone`, `isInternationalPhone` and
+// `phoneAcceptable`: formatting is the typist's and is dropped; the leading
+// plus is kept. Only the full international form can receive WhatsApp.
+// ---------------------------------------------------------------------------
+
+const PHONE_FORMATTING = /[\s().-]/g;
+/** +<country code><number> — the only form WhatsApp can reach. */
+export const INTERNATIONAL_PHONE = /^\+[1-9]\d{7,14}$/;
+const STORABLE_PHONE = /^\+?\d{7,15}$/;
+
+/**
+ * A phone as the server stores it: spaces, dots, dashes and parentheses
+ * dropped, the leading plus kept. Anything that is not 7-15 digits comes back
+ * as typed (trimmed) so the validator can name it.
+ */
+export function cleanContainerPhone(value: unknown): string {
+  const raw = text(value, 40);
+  const compact = raw.replace(PHONE_FORMATTING, "");
+  return STORABLE_PHONE.test(compact) ? compact : raw;
+}
+
+/** Whether a stored or typed phone is a reachable international number. */
+export function isInternationalPhone(value: unknown): boolean {
+  return INTERNATIONAL_PHONE.test(cleanContainerPhone(value));
+}
+
+/**
+ * Empty is fine (nobody to reach); anything else must look like a phone.
+ * Local numbers are still accepted, as the server accepts them from older
+ * app versions, but only an international one can be messaged.
+ */
+function phoneAcceptable(value: unknown): boolean {
+  const stored = cleanContainerPhone(value);
+  return !stored || STORABLE_PHONE.test(stored);
+}
+
+/**
+ * How a phone stands for WhatsApp: nothing typed, reachable, a local number
+ * missing its country code, or something too short or malformed to be one.
+ */
+export type ContactPhoneReach = "empty" | "international" | "local" | "incomplete";
+
+export function contactPhoneReach(value: unknown): ContactPhoneReach {
+  const stored = cleanContainerPhone(value);
+  if (!stored) return "empty";
+  if (INTERNATIONAL_PHONE.test(stored)) return "international";
+  if (!stored.startsWith("+") && STORABLE_PHONE.test(stored)) return "local";
+  return "incomplete";
+}
+
+/** A switch that is on unless it was explicitly turned off (server `onUnlessOff`). */
+function onUnlessOff(value: unknown): boolean {
+  return value !== false && value !== "false";
+}
+
+/**
+ * The ISO-2 code a phone picker should open on for the business's own
+ * customers: the business's country (stored as a name, e.g. "United States",
+ * or a code), else the US.
+ */
+export function phoneCountryForBusiness(business: unknown): string {
+  const r = asRow(business);
+  const option = destinationCountryOptionForRow({
+    name: r.country ?? r.addressCountry,
+    code: r.countryCode,
+  });
+  const code = text(option.code, 4).toUpperCase();
+  return code && CALLING_CODE_BY_COUNTRY[code] ? code : "US";
+}
+
+/**
+ * The ISO-2 code a receiver's phone picker should open on: the container's
+ * destination. `destinationCountryId` is a catalog slug ("guinea"), not a
+ * code, so it is mapped through the country catalog; an unknown destination
+ * falls back to `fallback`.
+ */
+export function phoneCountryForDestination(
+  container: unknown,
+  fallback = "US",
+  destinations: readonly unknown[] = [],
+): string {
+  const r = asRow(container);
+  const id = text(r.destinationCountryId, 60);
+  const name = text(r.destinationCountryName, MAX_LABEL);
+  if (!id && !name) return fallback;
+  // The business's own destination documents come first: their ids need not
+  // be catalog slugs, but they carry a code or a name that is (the mobile
+  // picker's `countryCodeForReference` searches them the same way).
+  const own = id
+    ? (Array.isArray(destinations) ? destinations : []).map(asRow).find((row) => text(row.id, MAX_LABEL) === id)
+    : undefined;
+  const ownCode = own ? text(destinationCountryOptionForRow(own).code, 4).toUpperCase() : "";
+  if (ownCode && CALLING_CODE_BY_COUNTRY[ownCode]) return ownCode;
+  const option = destinationCountryOptionForRow({ id, name });
+  const code = text(option.code, 4).toUpperCase();
+  return code && CALLING_CODE_BY_COUNTRY[code] ? code : fallback;
+}
+
 /** A VIN as the server stores it: upper-case, alphanumeric, at most 17. */
 export function cleanVin(value: unknown): string {
   return text(value, 40).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, MAX_VIN);
@@ -81,6 +182,8 @@ export type ContainerRefusal =
   | "description_required"
   | "owner_kind_invalid"
   | "customer_name_required"
+  | "customer_phone_invalid"
+  | "receiver_phone_invalid"
   | "vin_already_loaded"
   | "move_target_not_loading";
 
@@ -108,6 +211,10 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   description_required: "Say what it is.",
   owner_kind_invalid: "Say whose this is: a customer, or your own stock.",
   customer_name_required: "Enter the customer's name.",
+  customer_phone_invalid:
+    "The customer's phone doesn't look like a phone number.",
+  receiver_phone_invalid:
+    "The receiver's phone doesn't look like a phone number.",
   vin_already_loaded:
     "This car is already on another container that hasn't arrived.",
   move_target_not_loading:
@@ -266,6 +373,10 @@ export type ContainerLineDraft = {
   /** Who collects it at the other end - the name written on the barrel. */
   receiverName: string;
   receiverPhone: string;
+  /** Whether the customer hears about the shipment on WhatsApp. On by default. */
+  notifyCustomer: boolean;
+  /** Whether the receiver hears about the shipment on WhatsApp. On by default. */
+  notifyReceiver: boolean;
 };
 
 export const emptyContainerLineDraft: ContainerLineDraft = {
@@ -283,6 +394,8 @@ export const emptyContainerLineDraft: ContainerLineDraft = {
   customerPhone: "",
   receiverName: "",
   receiverPhone: "",
+  notifyCustomer: true,
+  notifyReceiver: true,
 };
 
 export type ContainerLineError =
@@ -291,7 +404,24 @@ export type ContainerLineError =
   | "quantity_required"
   | "description_required"
   | "owner_kind_invalid"
-  | "customer_name_required";
+  | "customer_name_required"
+  | "customer_phone_invalid"
+  | "receiver_phone_invalid";
+
+type ContactPhoneError = "customer_phone_invalid" | "receiver_phone_invalid";
+
+/** Same checks as the server's `contactPhoneErrors`. */
+function contactPhoneErrors(
+  input: { customerPhone?: unknown; receiverPhone?: unknown },
+  owner: string,
+): ContactPhoneError[] {
+  const errors: ContactPhoneError[] = [];
+  if (owner === "customer" && !phoneAcceptable(input.customerPhone)) {
+    errors.push("customer_phone_invalid");
+  }
+  if (!phoneAcceptable(input.receiverPhone)) errors.push("receiver_phone_invalid");
+  return errors;
+}
 
 /** Same checks as the server's `validateContainerLine`. */
 export function validateContainerLineDraft(
@@ -319,7 +449,39 @@ export function validateContainerLineDraft(
   if (owner === "customer" && !text(draft.customerName, MAX_LABEL)) {
     errors.push("customer_name_required");
   }
+  errors.push(...contactPhoneErrors(draft, owner));
   return errors;
+}
+
+/**
+ * The contact half of a line as the server's `containerLineContacts` stores
+ * it: phones stripped of formatting, a stock line naming no customer, and
+ * each WhatsApp switch forced off when there is no number to send to.
+ */
+function lineContacts(
+  input: {
+    customerName?: unknown;
+    customerPhone?: unknown;
+    receiverName?: unknown;
+    receiverPhone?: unknown;
+    notifyCustomer?: unknown;
+    notifyReceiver?: unknown;
+  },
+  owner: string,
+) {
+  const customer = owner === "customer";
+  const customerPhone = customer ? cleanContainerPhone(input.customerPhone) : "";
+  const receiverPhone = cleanContainerPhone(input.receiverPhone);
+  return {
+    customerName: customer ? text(input.customerName, MAX_LABEL) : "",
+    customerPhone,
+    // Either owner kind may name a receiver: stock goes to the business's
+    // own agent at the port.
+    receiverName: text(input.receiverName, MAX_LABEL),
+    receiverPhone,
+    notifyCustomer: Boolean(customerPhone) && onUnlessOff(input.notifyCustomer),
+    notifyReceiver: Boolean(receiverPhone) && onUnlessOff(input.notifyReceiver),
+  };
 }
 
 /** The `line` body `addContainerLine` takes, shaped as the server stores it. */
@@ -327,7 +489,6 @@ export function containerLinePayload(draft: ContainerLineDraft) {
   const kind = text(draft.kind, 20);
   const owner = text(draft.ownerKind, 20);
   const isCar = kind === "car";
-  const customer = owner === "customer";
   return {
     kind,
     vinNumber: isCar ? cleanVin(draft.vinNumber) : "",
@@ -337,13 +498,127 @@ export function containerLinePayload(draft: ContainerLineDraft) {
     quantity: isCar ? 1 : Math.min(MAX_QUANTITY, positiveInt(draft.quantity)),
     description: kind === "other" ? text(draft.description, MAX_LABEL) : "",
     ownerKind: owner,
-    customerName: customer ? text(draft.customerName, MAX_LABEL) : "",
-    customerPhone: customer ? text(draft.customerPhone, 40) : "",
-    // Either owner kind may name a receiver: stock goes to the business's
-    // own agent at the port.
-    receiverName: text(draft.receiverName, MAX_LABEL),
-    receiverPhone: text(draft.receiverPhone, 40),
+    ...lineContacts(draft, owner),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Correcting a line's contacts — allowed in every container state, because a
+// wrong number matters most once the box has sailed.
+// ---------------------------------------------------------------------------
+
+export type ContainerLineContactsDraft = {
+  customerName: string;
+  customerPhone: string;
+  receiverName: string;
+  receiverPhone: string;
+  notifyCustomer: boolean;
+  notifyReceiver: boolean;
+};
+
+/**
+ * A stored line back into the contacts form. A line saved before the
+ * switches existed has neither field; like the server's `onUnlessOff`, a
+ * missing switch reads as on.
+ */
+export function containerLineContactsDraftFromRow(line: unknown): ContainerLineContactsDraft {
+  const r = asRow(line);
+  return {
+    customerName: text(r.customerName, MAX_LABEL),
+    customerPhone: text(r.customerPhone, 40),
+    receiverName: text(r.receiverName, MAX_LABEL),
+    receiverPhone: text(r.receiverPhone, 40),
+    notifyCustomer: onUnlessOff(r.notifyCustomer),
+    notifyReceiver: onUnlessOff(r.notifyReceiver),
+  };
+}
+
+/** Same checks as the server's `validateContainerLineContacts`. */
+export function validateContainerLineContactsDraft(
+  draft: ContainerLineContactsDraft,
+  line: unknown,
+): ContainerLineError[] {
+  const owner = text(asRow(line).ownerKind, 20);
+  const errors: ContainerLineError[] = [];
+  if (owner === "customer" && !text(draft.customerName, MAX_LABEL)) {
+    errors.push("customer_name_required");
+  }
+  errors.push(...contactPhoneErrors(draft, owner));
+  return errors;
+}
+
+/**
+ * The `contacts` body `updateContainerLineContacts` takes, shaped as the
+ * server's `containerLineContactsUpdate` will store it for this line.
+ */
+export function containerLineContactsPayload(
+  draft: ContainerLineContactsDraft,
+  line: unknown,
+) {
+  return lineContacts(draft, text(asRow(line).ownerKind, 20));
+}
+
+/** The whole `updateContainerLineContacts` request. */
+export function updateContainerLineContactsRequest(
+  businessId: string,
+  line: unknown,
+  draft: ContainerLineContactsDraft,
+) {
+  return {
+    businessId: text(businessId, MAX_LABEL),
+    lineId: text(asRow(line).id, MAX_LABEL),
+    contacts: containerLineContactsPayload(draft, line),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Who hears about a line on WhatsApp, as the list shows it.
+// ---------------------------------------------------------------------------
+
+/**
+ * One person's WhatsApp standing on a line: "none" (no number, or not this
+ * line's to have), "off" (switched off), "on" (will be messaged), or
+ * "needs_code" (switched on, but the number cannot be reached as stored).
+ */
+export type LineWhatsAppState = "none" | "off" | "on" | "needs_code";
+
+export type LineWhatsApp = { customer: LineWhatsAppState; receiver: LineWhatsAppState };
+
+function whatsAppState(phone: unknown, notify: unknown): LineWhatsAppState {
+  const stored = cleanContainerPhone(phone);
+  if (!stored) return "none";
+  if (!onUnlessOff(notify)) return "off";
+  return INTERNATIONAL_PHONE.test(stored) ? "on" : "needs_code";
+}
+
+export function containerLineWhatsApp(line: unknown): LineWhatsApp {
+  const r = asRow(line);
+  const customer = text(r.ownerKind, 20) === "customer";
+  return {
+    customer: customer ? whatsAppState(r.customerPhone, r.notifyCustomer) : "none",
+    receiver: whatsAppState(r.receiverPhone, r.notifyReceiver),
+  };
+}
+
+/**
+ * The line under "Whose": who gets updates, then a warning per number that
+ * needs its country code. Whole sentences, so each is one dictionary key for
+ * the French translator rather than words stitched together.
+ */
+export function containerLineWhatsAppText(state: LineWhatsApp): { summary: string; warnings: string[] } {
+  const customer = state.customer === "on";
+  const receiver = state.receiver === "on";
+  const summary = customer && receiver
+    ? "WhatsApp updates: customer and receiver"
+    : customer
+      ? "WhatsApp updates: customer"
+      : receiver
+        ? "WhatsApp updates: receiver"
+        : "No WhatsApp updates";
+  const warnings: string[] = [];
+  if (state.customer === "needs_code") warnings.push("Customer's phone needs a country code");
+  if (state.receiver === "needs_code") warnings.push("Receiver's phone needs a country code");
+  return { summary, warnings };
 }
 
 /**
@@ -643,8 +918,8 @@ export type ContainerLineHit = {
 };
 
 /**
- * Lines matching a VIN, a customer's name or a phone number, each with the
- * container it sits on. Two characters is enough to start; digits match the
+ * Lines matching a VIN, a tracking code, a customer's name or a phone number,
+ * each with the container it sits on. Two characters is enough to start; digits match the
  * phone with its punctuation ignored.
  */
 export function searchContainerLines(
@@ -671,7 +946,10 @@ export function searchContainerLines(
     // Mariama Bah?"), so the search answers for that name too.
     const receiver = text(r.receiverName, MAX_LABEL).toLowerCase();
     const receiverPhone = text(r.receiverPhone, 40).replace(/\D+/g, "");
+    // A customer calling about a shipment reads out the code on their label.
+    const code = text(r.trackingCode, 40).toUpperCase().replace(/[^A-Z0-9]/g, "");
     const matches =
+      (qVin.length >= 4 && code.length > 0 && code.includes(qVin)) ||
       (qVin.length >= 2 && vin.includes(qVin)) ||
       (name && name.includes(q)) ||
       (receiver && receiver.includes(q)) ||
@@ -705,6 +983,12 @@ export type ContainerCallableFailure = {
  * the person can jump to it instead of hunting for it.
  */
 export function containerCallableFailure(error: unknown): ContainerCallableFailure {
+  // `runPanelAction` hands its onError the message it already read off the
+  // error, not the error itself. Read as a row, a string is empty, and every
+  // refusal used to collapse into "The change did not save."
+  if (typeof error === "string") {
+    return { message: text(error, 500) || "The change did not save.", conflictContainerId: "" };
+  }
   const e = asRow(error);
   const details = asRow(e.details);
   const reason = text(details.reason, 40);

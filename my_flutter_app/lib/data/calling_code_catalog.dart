@@ -291,6 +291,32 @@ class CallingCodeCatalog {
         .firstOrNull;
   }
 
+  /// The ISO code of the country a stored reference names, for seeding a
+  /// phone picker. Records name countries three ways - an ISO code ("GN"), a
+  /// catalogue or business destination id ("guinea"), or a display name
+  /// ("Guinea", as a business address stores it) - so all three resolve.
+  /// [extra] is searched first: a business's own destination documents can
+  /// carry ids the catalogue does not. Returns null when nothing matches a
+  /// country with a calling code.
+  static String? countryCodeForReference(
+    String? reference, {
+    Iterable<DestinationCountry> extra = const [],
+  }) {
+    final needle = reference?.trim() ?? '';
+    if (needle.isEmpty) return null;
+    final upper = needle.toUpperCase();
+    if (byCountryCode.containsKey(upper)) return upper;
+    final lower = needle.toLowerCase();
+    for (final country in [...extra, ...CountryCatalog.all]) {
+      if (country.id.toLowerCase() == lower ||
+          country.name.toLowerCase() == lower) {
+        final code = country.displayCode;
+        if (byCountryCode.containsKey(code)) return code;
+      }
+    }
+    return null;
+  }
+
   static PhoneCountryOption? optionForPhoneNumber(
     String value, {
     String fallbackCountryCode = 'US',

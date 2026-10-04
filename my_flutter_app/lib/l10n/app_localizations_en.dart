@@ -3004,6 +3004,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guestTrackingServiceFreightQuote => 'Freight quote request';
 
   @override
+  String get guestTrackingServiceContainer => 'Container shipment';
+
+  @override
   String get guestTrackingStageBooked => 'Booked';
 
   @override
@@ -9062,6 +9065,59 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get ctrErrMoveTarget =>
       'You can only move a line to a container that is still loading.';
+
+  @override
+  String get ctrErrCustomerPhoneInvalid =>
+      'The customer\'s phone doesn\'t look like a phone number.';
+
+  @override
+  String get ctrErrReceiverPhoneInvalid =>
+      'The receiver\'s phone doesn\'t look like a phone number.';
+
+  @override
+  String get ctrNotifyToggle =>
+      'Send this person WhatsApp updates about this shipment';
+
+  @override
+  String get ctrNotifyNeedsPhone => 'Add a phone number to turn this on.';
+
+  @override
+  String get ctrPhoneNeedsCountryCode =>
+      'Add the country code so WhatsApp updates can reach this number.';
+
+  @override
+  String ctrLineTrackingCode(String code) {
+    return 'Tracking code $code';
+  }
+
+  @override
+  String ctrUpdatesTo(String names) {
+    return 'WhatsApp updates to $names';
+  }
+
+  @override
+  String get ctrUpdatesOff => 'No WhatsApp updates';
+
+  @override
+  String get ctrCustomerPhoneNoCountryCode =>
+      'The customer\'s phone has no country code, so WhatsApp updates can\'t reach it.';
+
+  @override
+  String get ctrReceiverPhoneNoCountryCode =>
+      'The receiver\'s phone has no country code, so WhatsApp updates can\'t reach it.';
+
+  @override
+  String get ctrReceiverShort => 'Receiver';
+
+  @override
+  String get ctrEditContacts => 'Edit contacts';
+
+  @override
+  String get ctrEditContactsNote =>
+      'Names and phones can be corrected at any time, even after the container ships.';
+
+  @override
+  String get ctrContactsSaved => 'Contacts updated';
 
   @override
   String get ctrLotQuestion => 'Is this car parked in your lot?';

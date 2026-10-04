@@ -51,6 +51,7 @@ void main() {
       'moveContainerLine',
       'setContainerStatus',
       'getContainerDocumentUrl',
+      'updateContainerLineContacts',
     ]) {
       expect(screen, contains("httpsCallable('$callable')"),
           reason: '$callable is called by the console and not by the app');
@@ -86,6 +87,9 @@ void main() {
       'containerLineRecord',
       'openContainerHoldingVin',
       'containerCounts',
+      'validateContainerLineContacts',
+      'containerLineContactsUpdate',
+      'isInternationalPhone',
     ]) {
       expect(backend, contains('function $name('),
           reason: '$name is the server rule');
@@ -104,6 +108,70 @@ void main() {
           reason: '$code has no copy on the screen');
     }
     expect(model, contains(r"RegExp(r'^[A-Z]{4}\d{7}$')"));
+  });
+
+  test('phones are stored and judged the way the server stores and judges them',
+      () {
+    // The same formatting strip and the same "can WhatsApp reach it" rule.
+    expect(backend, contains(r'const PHONE_FORMATTING = /[\s().-]/g;'));
+    expect(model, contains(r"RegExp(r'[\s().-]')"));
+    expect(backend, contains(r'const INTERNATIONAL_PHONE = /^\+[1-9]\d{7,14}$/;'));
+    expect(model, contains(r"RegExp(r'^\+[1-9]\d{7,14}$')"));
+    expect(backend, contains(r'/^\+?\d{7,15}$/'));
+    expect(model, contains(r"RegExp(r'^\+?\d{7,15}$')"));
+    // Both switches travel with a new line and default on.
+    for (final field in ['notifyCustomer', 'notifyReceiver']) {
+      expect(backend, contains('$field:'));
+      expect(model, contains("'$field':"));
+      expect(model, contains('this.$field = true'));
+    }
+    expect(model, contains("trackingCode: _text(d['trackingCode']"));
+  });
+
+  test('container phones use the calling-code picker, never free text', () {
+    // Guardrails registry: phone country codes come from CountryPhoneField /
+    // CallingCodeCatalog. The add-line form and the contacts sheet both build
+    // their phones through `_ContactPhone`, which wraps the picker.
+    expect(screen, contains('CountryPhoneField('));
+    expect(screen, contains("import '../widgets/country_phone_field.dart';"));
+    for (final key in [
+      'line-phone',
+      'line-receiver-phone',
+      'contacts-phone',
+      'contacts-receiver-phone',
+    ]) {
+      expect(screen, contains("fieldKey: '$key'"),
+          reason: '$key is a picker field');
+    }
+    expect(screen, isNot(contains("key: const Key('line-phone')")),
+        reason: 'the plain TextField phone is gone');
+    expect(screen, isNot(contains("key: const Key('line-receiver-phone')")));
+    // Pickers start in the right country: the business's for the customer,
+    // the box's destination for the receiver, resolved through the catalogue.
+    expect(screen, contains('CallingCodeCatalog.countryCodeForReference('));
+    expect(screen, contains('container.destinationCountryId'));
+    expect(screen, contains('initialCountryCode: widget.receiverCountryCode'));
+    expect(screen, contains('initialCountryCode: widget.customerCountryCode'));
+    // The warning and the switch read the shared rules, not a local copy.
+    expect(screen, contains('containerPhoneLacksCountryCode('));
+    expect(screen, contains('l10n.ctrNotifyToggle'));
+    expect(screen, contains('l10n.ctrPhoneNeedsCountryCode'));
+  });
+
+  test('contacts are correctable in every state, through the mirror', () {
+    expect(screen, contains("Key('line-edit-contacts')"));
+    // The action is offered before the open-only actions, not inside them.
+    final contacts = screen.indexOf("Key('line-edit-contacts')");
+    final openOnly = screen.indexOf("key: const Key('line-move')");
+    expect(contacts, greaterThan(0));
+    expect(openOnly, greaterThan(contacts));
+    expect(screen, contains('validateContainerLineContacts(draft, widget.line)'));
+    expect(screen,
+        contains("'contacts': containerLineContactsUpdate(draft, widget.line)"));
+    // The tile names the code and who hears about the shipment.
+    expect(screen, contains('l10n.ctrLineTrackingCode(line.trackingCode)'));
+    expect(screen, contains('line.updatesCustomer'));
+    expect(screen, contains('line.receiverPhoneLacksCountryCode'));
   });
 
   test('a line is VIN first, filled from what the yard already knows', () {

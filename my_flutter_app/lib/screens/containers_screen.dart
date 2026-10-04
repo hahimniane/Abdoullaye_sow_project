@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/calling_code_catalog.dart';
 import '../data/country_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
@@ -21,6 +22,7 @@ import '../utils/action_confirmation.dart';
 import '../utils/vin_utils.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/lot_sheets.dart';
 import 'vin_scanner_screen.dart';
 
@@ -67,6 +69,11 @@ class _ContainersScreenState extends State<ContainersScreen> {
       ];
   List<DestinationCountry> _destinations = const [];
   String _businessName = '';
+
+  /// ISO code of the business's headquarters country, read from its address.
+  /// A customer handing goods in is usually local, so their phone picker
+  /// starts there. Empty until known.
+  String _businessCountryCode = '';
 
   String _filter = containerStatusLoading;
   String _search = '';
@@ -172,8 +179,13 @@ class _ContainersScreenState extends State<ContainersScreen> {
     _subs.add(_db.collection('businesses').doc(id).snapshots().listen((doc) {
       if (!mounted) return;
       final data = doc.data() ?? const <String, dynamic>{};
-      setState(() =>
-          _businessName = (data['name'] ?? data['businessName'] ?? '').toString());
+      setState(() {
+        _businessName = (data['name'] ?? data['businessName'] ?? '').toString();
+        _businessCountryCode = CallingCodeCatalog.countryCodeForReference(
+              (data['country'] ?? '').toString(),
+            ) ??
+            '';
+      });
     }, onError: (_) {}));
 
     // The business's own countries, the same list Services & coverage
@@ -235,6 +247,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
           knownCars: _knownCars,
           parkedCarRows: _parkedCarRows,
           destinations: _destinations,
+          businessCountryCode: _businessCountryCode,
           onCustomerRecorded: _loadCustomers,
         ),
       ),
@@ -801,6 +814,7 @@ class ContainerDetailScreen extends StatefulWidget {
     required this.knownCars,
     this.parkedCarRows = const [],
     required this.destinations,
+    this.businessCountryCode = '',
     required this.onCustomerRecorded,
   });
 
@@ -814,6 +828,9 @@ class ContainerDetailScreen extends StatefulWidget {
   /// already holds: the add-line sheet offers the ones standing in the lot.
   final List<Map<String, dynamic>> parkedCarRows;
   final List<DestinationCountry> destinations;
+
+  /// ISO code of the business's own country, when its address names one.
+  final String businessCountryCode;
   final VoidCallback onCustomerRecorded;
 
   @override
@@ -840,6 +857,27 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
 
   Map<String, ShippingContainer> get _byId =>
       {for (final c in _containers) c.id: c};
+
+  /// Where a customer's phone picker starts: the business's own country,
+  /// else the United States.
+  String get _customerCountryCode => widget.businessCountryCode.isNotEmpty
+      ? widget.businessCountryCode
+      : 'US';
+
+  /// Where a receiver's phone picker starts: the country the box is going
+  /// to. The destination is stored as a catalogue or business destination
+  /// id, so it is resolved through the calling-code catalogue; the name is
+  /// the fallback for older boxes.
+  String _receiverCountryCode(ShippingContainer container) =>
+      CallingCodeCatalog.countryCodeForReference(
+        container.destinationCountryId,
+        extra: widget.destinations,
+      ) ??
+      CallingCodeCatalog.countryCodeForReference(
+        container.destinationCountryName,
+        extra: widget.destinations,
+      ) ??
+      _customerCountryCode;
 
   @override
   void initState() {
@@ -939,6 +977,8 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         customers: widget.customers,
         knownCars: widget.knownCars,
         parkedCarRows: widget.parkedCarRows,
+        customerCountryCode: _customerCountryCode,
+        receiverCountryCode: _receiverCountryCode(container),
         onLineAdded: widget.onCustomerRecorded,
       ),
     );
@@ -1069,6 +1109,24 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
       ),
     );
     if (action == null || !mounted) return;
+    if (action == 'contacts') {
+      // Open in every state: a wrong number matters most once the box has
+      // sailed, which is when the updates start going out.
+      final saved = await showLotSheet<bool>(
+        context,
+        _LineContactsSheet(
+          businessId: widget.businessId,
+          line: line,
+          customerCountryCode: _customerCountryCode,
+          receiverCountryCode: _receiverCountryCode(container),
+        ),
+      );
+      if (saved != true || !mounted) return;
+      AppHaptics.commit();
+      showSuccessSnackBar(context, l10n.ctrContactsSaved);
+      widget.onCustomerRecorded();
+      return;
+    }
     if (action == 'move') {
       if (others.isEmpty) {
         AppHaptics.refuse();
@@ -1582,6 +1640,20 @@ class _LineCard extends StatelessWidget {
       owner,
       if (receiver.isNotEmpty) '→ $receiver',
     ].where((p) => p.isNotEmpty).join(' · ');
+    // Who will hear about the shipment on WhatsApp, and whose number cannot
+    // be reached because it has no country code.
+    final updated = [
+      if (line.updatesCustomer)
+        line.customerName.isNotEmpty ? line.customerName : l10n.lotCustomer,
+      if (line.updatesReceiver)
+        line.receiverName.isNotEmpty ? line.receiverName : l10n.ctrReceiverShort,
+    ];
+    final unreachable = [
+      if (line.customerPhoneLacksCountryCode) l10n.ctrCustomerPhoneNoCountryCode,
+      if (line.receiverPhoneLacksCountryCode) l10n.ctrReceiverPhoneNoCountryCode,
+    ];
+    final anyPhone = (!line.isStock && line.customerPhone.isNotEmpty) ||
+        line.receiverPhone.isNotEmpty;
 
     return PressableScale(
       onTap: onTap == null
@@ -1641,6 +1713,42 @@ class _LineCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (line.trackingCode.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.ctrLineTrackingCode(line.trackingCode),
+                      key: const Key('line-tracking-code'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                        color: AppColors.cobaltDeep,
+                      ),
+                    ),
+                  ],
+                  if (updated.isNotEmpty)
+                    _LineNote(
+                      key: const Key('line-updates'),
+                      icon: Icons.chat_outlined,
+                      text: l10n.ctrUpdatesTo(updated.join(', ')),
+                      color: AppColors.sage,
+                    )
+                  else if (anyPhone && unreachable.isEmpty)
+                    _LineNote(
+                      key: const Key('line-updates-off'),
+                      icon: Icons.notifications_off_outlined,
+                      text: l10n.ctrUpdatesOff,
+                      color: AppColors.muted,
+                    ),
+                  for (final warning in unreachable)
+                    _LineNote(
+                      key: ValueKey('line-phone-warning:$warning'),
+                      icon: Icons.warning_amber_rounded,
+                      text: warning,
+                      color: AppColors.warn,
+                    ),
                   if (addedBy.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
@@ -1662,6 +1770,48 @@ class _LineCard extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One short line under a line's details: an icon and what it says.
+class _LineNote extends StatelessWidget {
+  const _LineNote({
+    super.key,
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 14, color: color),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.3,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1691,8 +1841,16 @@ class _LineActionsSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _LineCard(line: line, staff: staff),
+          const SizedBox(height: AppSpacing.sm),
+          // Contacts stay correctable after the box ships; the rest of the
+          // line is the record of what went.
+          _SheetAction(
+            key: const Key('line-edit-contacts'),
+            icon: Icons.contact_phone_outlined,
+            label: l10n.ctrEditContacts,
+            onTap: () => Navigator.of(context).pop('contacts'),
+          ),
           if (open) ...[
-            const SizedBox(height: AppSpacing.sm),
             _SheetAction(
               key: const Key('line-move'),
               icon: Icons.drive_file_move_outlined,
@@ -2061,11 +2219,19 @@ class _LineFormSheet extends StatefulWidget {
     required this.customers,
     required this.knownCars,
     this.parkedCarRows = const [],
+    this.customerCountryCode = 'US',
+    this.receiverCountryCode = 'US',
     this.onLineAdded,
   });
 
   final String businessId;
   final ShippingContainer container;
+
+  /// Where the customer's phone picker starts: the business's country.
+  final String customerCountryCode;
+
+  /// Where the receiver's phone picker starts: the container's destination.
+  final String receiverCountryCode;
   final List<ShippingContainer> containers;
 
   /// Told after every save, including the ones that keep the sheet open
@@ -2106,6 +2272,11 @@ class _LineFormSheetState extends State<_LineFormSheet> {
 
   String _kind = containerLineKindCar;
   String _owner = containerOwnerCustomer;
+
+  /// Whether each person hears about the shipment on WhatsApp: on unless
+  /// staff switch it off, and only ever sent with a phone.
+  bool _notifyCustomer = true;
+  bool _notifyReceiver = true;
   bool _busy = false;
   Set<String> _errors = {};
   String _serverNote = '';
@@ -2333,6 +2504,8 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         customerPhone: _phone.text,
         receiverName: _receiver.text,
         receiverPhone: _receiverPhone.text,
+        notifyCustomer: _notifyCustomer,
+        notifyReceiver: _notifyReceiver,
       );
 
   /// What a saved line reads as in the "added so far" tally.
@@ -2385,6 +2558,8 @@ class _LineFormSheetState extends State<_LineFormSheet> {
           _phone.clear();
           _receiver.clear();
           _receiverPhone.clear();
+          _notifyCustomer = true;
+          _notifyReceiver = true;
           _suggestions = const [];
           _errors = {};
           _serverNote = '';
@@ -2431,6 +2606,8 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     'quantity_required',
     'description_required',
     'customer_name_required',
+    'customer_phone_invalid',
+    'receiver_phone_invalid',
   };
 
   @override
@@ -2718,11 +2895,15 @@ class _LineFormSheetState extends State<_LineFormSheet> {
                 ),
               ],
               const SizedBox(height: AppSpacing.md),
-              TextField(
-                key: const Key('line-phone'),
+              _ContactPhone(
+                fieldKey: 'line-phone',
                 controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(labelText: l10n.lotPhone),
+                label: l10n.lotPhone,
+                initialCountryCode: widget.customerCountryCode,
+                errorText: errorFor('customer_phone_invalid'),
+                notify: _notifyCustomer,
+                onNotifyChanged: (v) => setState(() => _notifyCustomer = v),
+                onChanged: () => _clearError('customer_phone_invalid'),
               ),
               const SizedBox(height: AppSpacing.sm),
             ],
@@ -2746,11 +2927,15 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            TextField(
-              key: const Key('line-receiver-phone'),
+            _ContactPhone(
+              fieldKey: 'line-receiver-phone',
               controller: _receiverPhone,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(labelText: l10n.ctrReceiverPhone),
+              label: l10n.ctrReceiverPhone,
+              initialCountryCode: widget.receiverCountryCode,
+              errorText: errorFor('receiver_phone_invalid'),
+              notify: _notifyReceiver,
+              onNotifyChanged: (v) => setState(() => _notifyReceiver = v),
+              onChanged: () => _clearError('receiver_phone_invalid'),
             ),
             if (!isCar) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -2772,6 +2957,329 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               ),
             ],
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A contact's phone the way WhatsApp needs it: the country picked from the
+/// calling-code catalogue rather than typed, a warning when the number still
+/// has no country code, and whether this person hears about the shipment.
+///
+/// The warning and the switch listen to the controller themselves and sit
+/// after the field, so a number the field rewrites into international form
+/// as it mounts is read in its final shape.
+class _ContactPhone extends StatelessWidget {
+  const _ContactPhone({
+    required this.fieldKey,
+    required this.controller,
+    required this.label,
+    required this.initialCountryCode,
+    required this.notify,
+    required this.onNotifyChanged,
+    required this.onChanged,
+    this.errorText,
+  });
+
+  /// The field's key; the warning and the switch take it as a prefix.
+  final String fieldKey;
+  final TextEditingController controller;
+  final String label;
+  final String initialCountryCode;
+  final String? errorText;
+  final bool notify;
+  final ValueChanged<bool> onNotifyChanged;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CountryPhoneField(
+          fieldKey: Key(fieldKey),
+          controller: controller,
+          labelText: label,
+          initialCountryCode: initialCountryCode,
+          errorText: errorText,
+          // Staff type someone else's number; offering their own is wrong.
+          autofillHints: null,
+          onChanged: (_) => onChanged(),
+        ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, _) {
+            final hasPhone = containerPhone(value.text).isNotEmpty;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (containerPhoneLacksCountryCode(value.text))
+                  Padding(
+                    key: Key('$fieldKey-country-warning'),
+                    padding: const EdgeInsets.only(top: 6, left: 2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          size: 16,
+                          color: AppColors.warn,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            l10n.ctrPhoneNeedsCountryCode,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.warn,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                SwitchListTile.adaptive(
+                  key: Key('$fieldKey-notify'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  value: hasPhone && notify,
+                  onChanged: hasPhone ? onNotifyChanged : null,
+                  title: Text(
+                    l10n.ctrNotifyToggle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.3,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  subtitle: hasPhone
+                      ? null
+                      : Text(
+                          l10n.ctrNotifyNeedsPhone,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.muted,
+                          ),
+                        ),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Correcting a line's contacts.
+// ---------------------------------------------------------------------------
+
+/// Who a line belongs to, who collects it, and whether each hears about the
+/// shipment - correctable in every container state, unlike the rest of the
+/// line, because a wrong number matters most once the box has sailed.
+class _LineContactsSheet extends StatefulWidget {
+  const _LineContactsSheet({
+    required this.businessId,
+    required this.line,
+    required this.customerCountryCode,
+    required this.receiverCountryCode,
+  });
+
+  final String businessId;
+  final ContainerLine line;
+  final String customerCountryCode;
+  final String receiverCountryCode;
+
+  @override
+  State<_LineContactsSheet> createState() => _LineContactsSheetState();
+}
+
+class _LineContactsSheetState extends State<_LineContactsSheet> {
+  late final _customer = TextEditingController(text: widget.line.customerName);
+  late final _phone = TextEditingController(text: widget.line.customerPhone);
+  late final _receiver = TextEditingController(text: widget.line.receiverName);
+  late final _receiverPhone =
+      TextEditingController(text: widget.line.receiverPhone);
+
+  /// A switch that was turned off stays off; a person who had no number yet
+  /// starts switched on, as on a new line.
+  late bool _notifyCustomer =
+      widget.line.customerPhone.isEmpty || widget.line.notifyCustomer;
+  late bool _notifyReceiver =
+      widget.line.receiverPhone.isEmpty || widget.line.notifyReceiver;
+
+  bool _busy = false;
+  Set<String> _errors = {};
+  String _serverNote = '';
+
+  bool get _customerLine => !widget.line.isStock;
+
+  @override
+  void dispose() {
+    for (final c in [_customer, _phone, _receiver, _receiverPhone]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _clearError(String code) {
+    if (_serverNote.isNotEmpty) setState(() => _serverNote = '');
+    if (!_errors.contains(code)) return;
+    setState(() => _errors = {..._errors}..remove(code));
+  }
+
+  ContainerLineContactsDraft get _draft => ContainerLineContactsDraft(
+        customerName: _customer.text,
+        customerPhone: _phone.text,
+        receiverName: _receiver.text,
+        receiverPhone: _receiverPhone.text,
+        notifyCustomer: _notifyCustomer,
+        notifyReceiver: _notifyReceiver,
+      );
+
+  static const _fieldCodes = {
+    'customer_name_required',
+    'customer_phone_invalid',
+    'receiver_phone_invalid',
+  };
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    final l10n = AppLocalizations.of(context)!;
+    final draft = _draft;
+    final errors = validateContainerLineContacts(draft, widget.line);
+    if (errors.isNotEmpty) {
+      AppHaptics.refuse();
+      setState(() => _errors = errors.toSet());
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _serverNote = '';
+    });
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('updateContainerLineContacts')
+          .call<Object?>({
+        'businessId': widget.businessId,
+        'lineId': widget.line.id,
+        'contacts': containerLineContactsUpdate(draft, widget.line),
+      });
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      final refusal = parseContainerRefusal(error.details, error.message);
+      final fieldCodes = refusal.codes.where(_fieldCodes.contains).toSet();
+      final rest = refusal.codes.where((c) => !_fieldCodes.contains(c));
+      setState(() {
+        _errors = fieldCodes;
+        _serverNote = rest.isNotEmpty
+            ? rest.map((c) => _containerErrorText(l10n, c)).join(' ')
+            : (fieldCodes.isEmpty
+                ? (refusal.message.isNotEmpty
+                    ? refusal.message
+                    : l10n.lotCouldNotSave)
+                : '');
+      });
+    } catch (_) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      setState(() => _serverNote = l10n.lotCouldNotSave);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    String? errorFor(String code) =>
+        _errors.contains(code) ? _containerErrorText(l10n, code) : null;
+
+    return LotSheetShell(
+      title: l10n.ctrEditContacts,
+      subtitle: _lineTitle(l10n, widget.line),
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_serverNote.isNotEmpty) ...[
+            _RefusalNote(text: _serverNote),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          LotSheetButton(
+            key: const Key('contacts-save'),
+            label: l10n.lotSave,
+            busy: _busy,
+            busyLabel: l10n.lotSaving,
+            onTap: _submit,
+          ),
+        ],
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.ctrEditContactsNote,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: AppColors.muted,
+            ),
+          ),
+          if (_customerLine) ...[
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              key: const Key('contacts-customer'),
+              controller: _customer,
+              textCapitalization: TextCapitalization.words,
+              onChanged: (_) => _clearError('customer_name_required'),
+              decoration: InputDecoration(
+                labelText: l10n.lotCustomer,
+                errorText: errorFor('customer_name_required'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _ContactPhone(
+              fieldKey: 'contacts-phone',
+              controller: _phone,
+              label: l10n.lotPhone,
+              initialCountryCode: widget.customerCountryCode,
+              errorText: errorFor('customer_phone_invalid'),
+              notify: _notifyCustomer,
+              onNotifyChanged: (v) => setState(() => _notifyCustomer = v),
+              onChanged: () => _clearError('customer_phone_invalid'),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            key: const Key('contacts-receiver'),
+            controller: _receiver,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (_) => _clearError('server'),
+            decoration: InputDecoration(
+              labelText: l10n.ctrReceiver,
+              hintText: l10n.ctrReceiverHint,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _ContactPhone(
+            fieldKey: 'contacts-receiver-phone',
+            controller: _receiverPhone,
+            label: l10n.ctrReceiverPhone,
+            initialCountryCode: widget.receiverCountryCode,
+            errorText: errorFor('receiver_phone_invalid'),
+            notify: _notifyReceiver,
+            onNotifyChanged: (v) => setState(() => _notifyReceiver = v),
+            onChanged: () => _clearError('receiver_phone_invalid'),
+          ),
         ],
       ),
     );
@@ -3267,6 +3775,8 @@ String _containerErrorText(
     'description_required' => l10n.ctrErrDescription,
     'owner_kind_invalid' => l10n.ctrErrOwnerKind,
     'customer_name_required' => l10n.lotErrCustomerName,
+    'customer_phone_invalid' => l10n.ctrErrCustomerPhoneInvalid,
+    'receiver_phone_invalid' => l10n.ctrErrReceiverPhoneInvalid,
     'vin_already_loaded' => conflictName.isEmpty
         ? l10n.ctrErrVinAlreadyLoaded
         : l10n.ctrErrVinAlreadyLoadedIn(conflictName),
@@ -3292,3 +3802,50 @@ String _refusalText(
       .map((c) => _containerErrorText(l10n, c, conflictName: conflict))
       .join(' ');
 }
+
+// ---------------------------------------------------------------------------
+// Test seams. The screens around these sheets need a signed-in business and
+// live Firestore streams; the sheets themselves only touch Firebase when a
+// valid form is submitted, so widget tests pump them directly.
+// ---------------------------------------------------------------------------
+
+/// The add-line sheet for [container], on its own.
+@visibleForTesting
+Widget containerLineFormSheetForTesting({
+  required ShippingContainer container,
+  List<LotCustomer> customers = const [],
+  String customerCountryCode = 'US',
+  String receiverCountryCode = 'US',
+}) =>
+    _LineFormSheet(
+      businessId: container.businessId,
+      container: container,
+      containers: [container],
+      lines: const [],
+      customers: customers,
+      knownCars: const [],
+      customerCountryCode: customerCountryCode,
+      receiverCountryCode: receiverCountryCode,
+    );
+
+/// The contacts sheet for [line], on its own.
+@visibleForTesting
+Widget containerLineContactsSheetForTesting({
+  required ContainerLine line,
+  String customerCountryCode = 'US',
+  String receiverCountryCode = 'US',
+}) =>
+    _LineContactsSheet(
+      businessId: line.businessId,
+      line: line,
+      customerCountryCode: customerCountryCode,
+      receiverCountryCode: receiverCountryCode,
+    );
+
+/// A line's actions sheet; [open] is whether its container still loads.
+@visibleForTesting
+Widget containerLineActionsSheetForTesting({
+  required ContainerLine line,
+  required bool open,
+}) =>
+    _LineActionsSheet(line: line, staff: const [], open: open);

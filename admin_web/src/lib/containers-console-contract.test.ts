@@ -35,7 +35,8 @@ test("the Containers tab sits under Transport & shipping, gated by its permissio
 
 test("the console routes the tab to ContainersPanel like every other panel", () => {
   assert.match(consoleSource, /import \{ContainersPanel\} from "@\/components\/business\/containers-panel";/);
-  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel businessId=\{businessId\} previewMode=\{previewMode\} \/>\s*\)\}/);
+  // The business record rides along so the phone pickers open on its country.
+  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel businessId=\{businessId\} business=\{business\} previewMode=\{previewMode\} \/>\s*\)\}/);
   assert.match(consoleSource, /containers: <Container \{\.\.\.props\} \/>,/, "the sidebar icon map must cover the tab");
 });
 
@@ -56,6 +57,7 @@ test("the panel reads containers and lines by business and writes only through c
     "addContainerLine",
     "removeContainerLine",
     "moveContainerLine",
+    "updateContainerLineContacts",
     "setContainerStatus",
     "getContainerDocumentUrl",
   ]) {
@@ -70,6 +72,7 @@ test("a server refusal lands inside the modal, not only in the panel banner", ()
   assert.match(panelSource, /await httpsCallable\(functions, "createContainer"\)[\s\S]*?\}, failInModal\);/);
   assert.match(panelSource, /await httpsCallable\(functions, "addContainerLine"\)[\s\S]*?\}, failInModal\);/);
   assert.match(panelSource, /await httpsCallable\(functions, "moveContainerLine"\)[\s\S]*?\}, failInModal\);/);
+  assert.match(panelSource, /await httpsCallable\(functions, "updateContainerLineContacts"\)\(updateContainerLineContactsRequest\(businessId, line, contactsDraft\)\);[\s\S]*?\}, failInModal\);/);
   assert.match(panelSource, /function failInModal\(error: unknown\) \{\s*const failure = containerCallableFailure\(error\);\s*setDraftError\(failure\.message\);\s*setConflictId\(failure\.conflictContainerId\);/);
   assert.match(panelSource, /\{draftError && <div className="lst-form-error" role="alert">\{draftError\}/);
   // The VIN conflict names the container and offers to open it.
@@ -235,4 +238,80 @@ test("one tap copies a VIN or a customer name where they are shown", () => {
   assert.equal((ctn.match(/<CopyValue value=\{vin\} label="Copy VIN" \/>/g) ?? []).length, 2);
   const fr = readFileSync("src/lib/french-dom.ts", "utf8");
   for (const key of ['"Copy VIN"', '"Copy name"']) assert.ok(fr.includes(key), `${key} needs French`);
+});
+
+// WhatsApp updates go to the numbers on a line, so the numbers must be whole:
+// the guardrails' rule that a phone takes the calling-code picker, never free
+// text, applies to both of the line's phones and to the contacts correction.
+test("a line's phones use the shared calling-code picker, never a free-text input", () => {
+  assert.match(panelSource, /import \{ CustomerPhoneField \} from "@\/components\/customer-phone-field";/);
+  assert.match(panelSource, /<CustomerPhoneField\s+id=\{id\}[\s\S]*?initialCountryCode=\{initialCountryCode\}/);
+  // No plain <input> is bound to either phone anywhere in the panel.
+  assert.doesNotMatch(panelSource, /<input[^>]*value=\{[^}]*(customerPhone|receiverPhone)\}/);
+  assert.doesNotMatch(panelSource, /<span>Phone<\/span><input/);
+  assert.doesNotMatch(panelSource, /<span>Receiver's phone<\/span><input/);
+  // The add form and the contacts modal each show both phones through it.
+  const phones = panelSource.match(/<ContactPhone\b/g) ?? [];
+  assert.equal(phones.length, 4, "customer + receiver in the add form and in the contacts modal");
+  // Customer phones open on the business's country; receivers' on the destination.
+  assert.match(panelSource, /const customerPhoneCountry = useMemo\(\(\) => phoneCountryForBusiness\(business\), \[business\]\);/);
+  assert.match(panelSource, /phoneCountryForDestination\(selected, customerPhoneCountry, destinations\.rows\)/);
+  assert.match(panelSource, /label="Phone"[\s\S]*?initialCountryCode=\{customerPhoneCountry\}/);
+  assert.match(panelSource, /label="Receiver's phone"[\s\S]*?initialCountryCode=\{receiverPhoneCountry\}/);
+  // Picking a remembered customer still fills the phone.
+  assert.match(panelSource, /function pickCustomer\(c: LotCustomer\) \{[\s\S]*?customerPhone: c\.phone \|\| d\.customerPhone,/);
+});
+
+test("each phone carries its WhatsApp switch, off without a number, and warns without a country code", () => {
+  assert.match(panelSource, /checked=\{notify && hasPhone\}\s*disabled=\{disabled \|\| !hasPhone\}/);
+  assert.match(panelSource, /<span>Send this person WhatsApp updates about this shipment<\/span>/);
+  assert.match(panelSource, /\{reach === "local" && \(\s*<small className="ctn-phone-warn" role="status">Add the country code so WhatsApp updates can reach this number\.<\/small>/);
+  assert.match(panelSource, /notify=\{lineDraft\.notifyCustomer\}/);
+  assert.match(panelSource, /notify=\{lineDraft\.notifyReceiver\}/);
+  assert.match(panelSource, /notify=\{contactsDraft\.notifyCustomer\}/);
+  assert.match(panelSource, /notify=\{contactsDraft\.notifyReceiver\}/);
+});
+
+test("every line shows its tracking code and who gets updates, in the list and in search", () => {
+  assert.equal((panelSource.match(/<LineTrackingCode code=\{text\((row|hit\.line)\.trackingCode, ""\)\} \/>/g) ?? []).length, 2);
+  assert.equal((panelSource.match(/<LineWhatsApp line=\{(row|hit\.line)\} \/>/g) ?? []).length, 2);
+  assert.match(panelSource, /<code className="ctn-code">\{code\}<\/code>/);
+  assert.match(stylesSource, /\.ctn-code \{/);
+});
+
+test("contacts can be corrected in every container state, from the line itself", () => {
+  // The Edit contacts button sits before, and outside, the loading-only actions.
+  const row = panelSource.match(/<span className="ctn-row-actions">([\s\S]*?)<\/span>\s*<\/div>/);
+  assert.ok(row, "row actions not found");
+  const editAt = row[1].indexOf('onClick={() => openContacts(row)} title="Edit contacts" aria-label="Edit contacts"');
+  const openOnlyAt = row[1].indexOf("{selectedOpen && (");
+  assert.ok(editAt >= 0, "no Edit contacts action on the line");
+  assert.ok(openOnlyAt > editAt, "Edit contacts must not be gated on the container still loading");
+  assert.match(panelSource, /\{modal === "contacts" && contactsLine && \(/);
+  assert.match(panelSource, /validateContainerLineContactsDraft\(contactsDraft, line\)/);
+  assert.match(panelSource, /line_contacts_edited: "Contacts edited",/);
+});
+
+test("every new contact and WhatsApp string has French", () => {
+  const strings = [
+    "Send this person WhatsApp updates about this shipment",
+    "Add the country code so WhatsApp updates can reach this number.",
+    "This number is too short to receive WhatsApp updates.",
+    "Edit contacts",
+    "— who it belongs to, who collects it, and who hears about it.",
+    "Names and phone numbers can be corrected at any time, even after the container has sailed.",
+    "Save contacts",
+    "Contacts updated.",
+    "Contacts edited",
+    "Copy tracking code",
+    "Phone",
+    "Receiver's phone",
+    "Phone country",
+    "Search country",
+  ];
+  for (const english of strings) {
+    const french = translateValue(english, "fr");
+    assert.notEqual(french, english, `no French for "${english}"`);
+    assert.equal(translateValue(french, "en"), english, `"${english}" does not round-trip`);
+  }
 });

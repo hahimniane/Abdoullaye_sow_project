@@ -11,8 +11,14 @@ import {
   ISO_CONTAINER_NUMBER,
   buildVinPlacementIndex,
   cleanVin,
+  cleanContainerPhone,
+  contactPhoneReach,
   containerCallableFailure,
   containerCounts,
+  containerLineContactsDraftFromRow,
+  containerLineContactsPayload,
+  containerLineWhatsApp,
+  containerLineWhatsAppText,
   containerDeleteRefusal,
   containerDraftFromRow,
   containerIsOpen,
@@ -27,14 +33,20 @@ import {
   emptyContainerLineDraft,
   filterContainers,
   filterParkedCarPicks,
+  INTERNATIONAL_PHONE,
+  isInternationalPhone,
   lineDraftFromParkedCar,
   nextContainerStatus,
   openContainerHoldingVin,
   parkedCarPick,
   parkedCarsInLot,
+  phoneCountryForBusiness,
+  phoneCountryForDestination,
   searchContainerLines,
+  updateContainerLineContactsRequest,
   shortDayMonth,
   validateContainerDraft,
+  validateContainerLineContactsDraft,
   validateContainerLineDraft,
   vinPlacementText,
   type ContainerRefusal,
@@ -246,6 +258,9 @@ test("the line payload keeps only the fields its kind and owner use", () => {
     customerPhone: "",
     receiverName: "",
     receiverPhone: "",
+    // Nobody to message without a number, so both switches are off.
+    notifyCustomer: false,
+    notifyReceiver: false,
   });
   const barrels = containerLinePayload({
     ...emptyContainerLineDraft,
@@ -258,7 +273,8 @@ test("the line payload keeps only the fields its kind and owner use", () => {
   assert.equal(barrels.quantity, 999, "capped like the server");
   assert.equal(barrels.carMake, "");
   assert.equal(barrels.customerName, "Aissatou Bah");
-  assert.equal(barrels.customerPhone, "+1 646 555 0100");
+  assert.equal(barrels.customerPhone, "+16465550100", "formatting dropped like the server");
+  assert.equal(barrels.notifyCustomer, true, "on by default once there is a number");
   assert.equal(barrels.receiverName, "", "no receiver until one is named");
   // The name on the barrel is the receiver's; stock names one too (the
   // business's agent), so it never depends on the owner kind.
@@ -271,7 +287,9 @@ test("the line payload keeps only the fields its kind and owner use", () => {
     receiverPhone: "+224 620 00 00 00",
   });
   assert.equal(toAgent.receiverName, "Mariama Bah");
-  assert.equal(toAgent.receiverPhone, "+224 620 00 00 00");
+  assert.equal(toAgent.receiverPhone, "+224620000000");
+  assert.equal(toAgent.notifyReceiver, true);
+  assert.equal(toAgent.notifyCustomer, false, "stock has no customer to message");
   assert.equal(toAgent.customerName, "");
   const other = containerLinePayload({
     ...emptyContainerLineDraft,
@@ -452,6 +470,14 @@ test("a callable failure yields the sentence and the conflicting container", () 
   const bare = containerCallableFailure({ details: { reason: "container_empty" } });
   assert.equal(bare.message, CONTAINER_MESSAGES.container_empty);
   assert.equal(containerCallableFailure(null).message, "The change did not save.");
+  // Regression: runPanelAction passes its onError the message string, not the
+  // error. The server's sentence must survive that, not collapse into the
+  // generic fallback.
+  assert.equal(
+    containerCallableFailure(CONTAINER_MESSAGES.customer_phone_invalid).message,
+    CONTAINER_MESSAGES.customer_phone_invalid,
+  );
+  assert.equal(containerCallableFailure("").message, "The change did not save.");
   assert.equal(containerMessage(["vin_required", "customer_name_required"]), "Enter the VIN. Enter the customer's name.");
 });
 
@@ -570,4 +596,209 @@ test("a pending-payment booking is not a car in the lot", () => {
     { id: "c", status: "cancelled", vinNumber: "3HGCM82633A004352" },
   ];
   assert.deepEqual(parkedCarsInLot(rows).map((r) => r.id), ["a"]);
+});
+
+// ---------------------------------------------------------------------------
+// Phones and WhatsApp switches: the server's `phone`, `isInternationalPhone`,
+// `contactPhoneErrors` and `containerLineContacts`, mirrored.
+// ---------------------------------------------------------------------------
+
+test("the international pattern is the server's", () => {
+  assert.match(serverSource, /const INTERNATIONAL_PHONE = \/\^\\\+\[1-9\]\\d\{7,14\}\$\/;/);
+  assert.equal(INTERNATIONAL_PHONE.source, "^\\+[1-9]\\d{7,14}$");
+  // The formatting the server strips, character for character.
+  assert.match(serverSource, /const PHONE_FORMATTING = \/\[\\s\(\)\.-\]\/g;/);
+});
+
+test("a phone is stored with its formatting dropped and the plus kept", () => {
+  assert.equal(cleanContainerPhone(" +1 (646) 555-0100 "), "+16465550100");
+  assert.equal(cleanContainerPhone("+224.620.00.00.00"), "+224620000000");
+  assert.equal(cleanContainerPhone("622 11 22 33"), "622112233", "a local number stays local");
+  assert.equal(cleanContainerPhone("call me"), "call me", "not a phone: returned as typed for the validator");
+  assert.equal(cleanContainerPhone("12 34"), "12 34", "too short: returned as typed");
+  assert.equal(cleanContainerPhone(undefined), "");
+});
+
+test("only a + international number can receive WhatsApp", () => {
+  assert.equal(isInternationalPhone("+1 646 555 0100"), true);
+  assert.equal(isInternationalPhone("+224 620 00 00 00"), true);
+  assert.equal(isInternationalPhone("622112233"), false, "local");
+  assert.equal(isInternationalPhone("+0123456789"), false, "no country code starts with 0");
+  assert.equal(isInternationalPhone("+1234567"), false, "seven digits is not enough");
+  assert.equal(isInternationalPhone(""), false);
+  assert.equal(contactPhoneReach(""), "empty");
+  assert.equal(contactPhoneReach("+16465550100"), "international");
+  assert.equal(contactPhoneReach("622 11 22 33"), "local");
+  assert.equal(contactPhoneReach("+1646"), "incomplete");
+  assert.equal(contactPhoneReach("not a phone"), "incomplete");
+});
+
+test("a phone that is there must look like one; a local number is still accepted", () => {
+  const barrels = { ...emptyContainerLineDraft, kind: "barrels" as const, quantity: "2", customerName: "Aissatou" };
+  assert.deepEqual(validateContainerLineDraft(barrels), []);
+  assert.deepEqual(validateContainerLineDraft({ ...barrels, customerPhone: "622 11 22 33" }), []);
+  assert.deepEqual(validateContainerLineDraft({ ...barrels, customerPhone: "+1 646 555 0100" }), []);
+  assert.deepEqual(validateContainerLineDraft({ ...barrels, customerPhone: "12345" }), ["customer_phone_invalid"]);
+  assert.deepEqual(
+    validateContainerLineDraft({ ...barrels, customerPhone: "abc", receiverPhone: "+1 2" }),
+    ["customer_phone_invalid", "receiver_phone_invalid"],
+  );
+  // Stock has no customer phone to check, but its receiver's is checked.
+  assert.deepEqual(
+    validateContainerLineDraft({ ...barrels, ownerKind: "stock", customerPhone: "abc", receiverPhone: "abc" }),
+    ["receiver_phone_invalid"],
+  );
+});
+
+test("the WhatsApp switches default on and follow the number", () => {
+  assert.equal(emptyContainerLineDraft.notifyCustomer, true);
+  assert.equal(emptyContainerLineDraft.notifyReceiver, true);
+  const base = { ...emptyContainerLineDraft, kind: "barrels" as const, quantity: "1", customerName: "A" };
+  const both = containerLinePayload({ ...base, customerPhone: "+16465550100", receiverPhone: "+224620000000" });
+  assert.equal(both.notifyCustomer, true);
+  assert.equal(both.notifyReceiver, true);
+  const off = containerLinePayload({
+    ...base,
+    customerPhone: "+16465550100",
+    receiverPhone: "+224620000000",
+    notifyCustomer: false,
+    notifyReceiver: false,
+  });
+  assert.equal(off.notifyCustomer, false);
+  assert.equal(off.notifyReceiver, false);
+  const noPhones = containerLinePayload(base);
+  assert.equal(noPhones.notifyCustomer, false, "forced off without a number, as the server does");
+  assert.equal(noPhones.notifyReceiver, false);
+});
+
+test("a contacts correction reads the stored line, and a missing switch reads as on", () => {
+  const legacy = {
+    id: "L1",
+    ownerKind: "customer",
+    customerName: "Aissatou Bah",
+    customerPhone: "6465550100",
+    receiverName: "Mariama",
+    receiverPhone: "+224620000000",
+  };
+  const draft = containerLineContactsDraftFromRow(legacy);
+  assert.deepEqual(draft, {
+    customerName: "Aissatou Bah",
+    customerPhone: "6465550100",
+    receiverName: "Mariama",
+    receiverPhone: "+224620000000",
+    notifyCustomer: true,
+    notifyReceiver: true,
+  });
+  assert.equal(containerLineContactsDraftFromRow({ notifyCustomer: false }).notifyCustomer, false);
+});
+
+test("a contacts correction is validated and shaped like the server's update", () => {
+  const customerLine = { id: "L1", ownerKind: "customer" };
+  const stockLine = { id: "L2", ownerKind: "stock" };
+  const draft = {
+    customerName: " Aissatou Bah ",
+    customerPhone: "+1 646 555 0100",
+    receiverName: " Mariama ",
+    receiverPhone: "",
+    notifyCustomer: true,
+    notifyReceiver: true,
+  };
+  assert.deepEqual(validateContainerLineContactsDraft(draft, customerLine), []);
+  assert.deepEqual(
+    validateContainerLineContactsDraft({ ...draft, customerName: "" }, customerLine),
+    ["customer_name_required"],
+  );
+  assert.deepEqual(
+    validateContainerLineContactsDraft({ ...draft, customerName: "", receiverPhone: "x" }, stockLine),
+    ["receiver_phone_invalid"],
+    "stock names no customer",
+  );
+  assert.deepEqual(containerLineContactsPayload(draft, customerLine), {
+    customerName: "Aissatou Bah",
+    customerPhone: "+16465550100",
+    receiverName: "Mariama",
+    receiverPhone: "",
+    notifyCustomer: true,
+    notifyReceiver: false,
+  });
+  assert.deepEqual(updateContainerLineContactsRequest("biz", customerLine, draft), {
+    businessId: "biz",
+    lineId: "L1",
+    contacts: containerLineContactsPayload(draft, customerLine),
+  });
+  const stock = containerLineContactsPayload({ ...draft, receiverPhone: "+224 620 00 00 00" }, stockLine);
+  assert.equal(stock.customerName, "");
+  assert.equal(stock.customerPhone, "");
+  assert.equal(stock.notifyCustomer, false);
+  assert.equal(stock.notifyReceiver, true);
+});
+
+test("the list says who gets WhatsApp updates and which number needs a country code", () => {
+  assert.deepEqual(
+    containerLineWhatsApp({ ownerKind: "customer", customerPhone: "+16465550100", receiverPhone: "+224620000000" }),
+    { customer: "on", receiver: "on" },
+  );
+  assert.deepEqual(
+    containerLineWhatsApp({ ownerKind: "customer", customerPhone: "6465550100", notifyCustomer: true, receiverPhone: "+224620000000", notifyReceiver: false }),
+    { customer: "needs_code", receiver: "off" },
+  );
+  assert.deepEqual(
+    containerLineWhatsApp({ ownerKind: "stock", customerPhone: "+16465550100" }),
+    { customer: "none", receiver: "none" },
+  );
+  assert.deepEqual(containerLineWhatsAppText({ customer: "on", receiver: "on" }), {
+    summary: "WhatsApp updates: customer and receiver",
+    warnings: [],
+  });
+  assert.equal(containerLineWhatsAppText({ customer: "on", receiver: "off" }).summary, "WhatsApp updates: customer");
+  assert.equal(containerLineWhatsAppText({ customer: "none", receiver: "on" }).summary, "WhatsApp updates: receiver");
+  assert.deepEqual(containerLineWhatsAppText({ customer: "needs_code", receiver: "needs_code" }), {
+    summary: "No WhatsApp updates",
+    warnings: ["Customer's phone needs a country code", "Receiver's phone needs a country code"],
+  });
+});
+
+test("every WhatsApp sentence the list shows has French", () => {
+  const sentences = [
+    "WhatsApp updates: customer and receiver",
+    "WhatsApp updates: customer",
+    "WhatsApp updates: receiver",
+    "No WhatsApp updates",
+    "Customer's phone needs a country code",
+    "Receiver's phone needs a country code",
+  ];
+  for (const english of sentences) {
+    const french = translateValue(english, "fr");
+    assert.notEqual(french, english, `no French for "${english}"`);
+    assert.equal(translateValue(french, "en"), english, `"${english}" does not round-trip`);
+  }
+});
+
+test("the phone pickers open on the business's country and the container's destination", () => {
+  assert.equal(phoneCountryForBusiness({ country: "United States" }), "US");
+  assert.equal(phoneCountryForBusiness({ country: "Guinea" }), "GN");
+  assert.equal(phoneCountryForBusiness({ countryCode: "sn" }), "SN");
+  assert.equal(phoneCountryForBusiness({}), "US");
+  assert.equal(phoneCountryForBusiness(null), "US");
+  assert.equal(phoneCountryForBusiness({ country: "Atlantis" }), "US");
+  // destinationCountryId is a catalog slug, not an ISO code.
+  assert.equal(phoneCountryForDestination({ destinationCountryId: "guinea" }), "GN");
+  assert.equal(phoneCountryForDestination({ destinationCountryId: "senegal", destinationCountryName: "Senegal" }), "SN");
+  assert.equal(phoneCountryForDestination({ destinationCountryId: "", destinationCountryName: "Mali" }), "ML");
+  assert.equal(phoneCountryForDestination({}, "GN"), "GN", "no destination yet: the fallback");
+  assert.equal(phoneCountryForDestination({ destinationCountryId: "nowhere_land" }, "US"), "US");
+  // A business destination document whose id is not a catalog slug.
+  const own = [{ id: "dest_8f2k", name: "Guinée", code: "GN" }];
+  assert.equal(phoneCountryForDestination({ destinationCountryId: "dest_8f2k", destinationCountryName: "Guinée" }, "US", own), "GN");
+  assert.equal(phoneCountryForDestination({ destinationCountryId: "dest_8f2k" }, "US", []), "US");
+});
+
+test("search finds a line by its tracking code, with or without the dash", () => {
+  const lines = [
+    { id: "a", containerId: "C", kind: "barrels", quantity: 2, customerName: "X", trackingCode: "CL-K7M4P2" },
+    { id: "b", containerId: "C", kind: "barrels", quantity: 1, customerName: "Y" },
+  ];
+  const containers = [{ id: "C", status: "shipped" }];
+  assert.deepEqual(searchContainerLines(lines, containers, "cl-k7m4p2").map((h) => h.line.id), ["a"]);
+  assert.deepEqual(searchContainerLines(lines, containers, "K7M4").map((h) => h.line.id), ["a"]);
 });

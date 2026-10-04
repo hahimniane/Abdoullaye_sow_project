@@ -1264,6 +1264,7 @@
   "guestTrackingServiceParking": "Stationnement de voiture",
   "guestTrackingServiceSharedBarrel": "Baril partagé",
   "guestTrackingServiceFreightQuote": "Demande de devis de fret",
+  "guestTrackingServiceContainer": "Envoi en conteneur",
   "guestTrackingStageBooked": "Réservé",
   "guestTrackingStageInTransit": "En transit",
   "guestTrackingStageArrived": "Arrivé",
@@ -4024,6 +4025,34 @@
     }
   },
   "ctrErrMoveTarget": "Une ligne ne peut être déplacée que vers un conteneur encore en chargement.",
+  "ctrErrCustomerPhoneInvalid": "Le téléphone du client ne ressemble pas à un numéro de téléphone.",
+  "ctrErrReceiverPhoneInvalid": "Le téléphone du destinataire ne ressemble pas à un numéro de téléphone.",
+  "ctrNotifyToggle": "Envoyer à cette personne les mises à jour WhatsApp de cet envoi",
+  "ctrNotifyNeedsPhone": "Ajoutez un numéro de téléphone pour activer cette option.",
+  "ctrPhoneNeedsCountryCode": "Ajoutez l'indicatif pays pour que les mises à jour WhatsApp puissent joindre ce numéro.",
+  "ctrLineTrackingCode": "Code de suivi {code}",
+  "@ctrLineTrackingCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrUpdatesTo": "Mises à jour WhatsApp pour {names}",
+  "@ctrUpdatesTo": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrUpdatesOff": "Aucune mise à jour WhatsApp",
+  "ctrCustomerPhoneNoCountryCode": "Le téléphone du client n'a pas d'indicatif pays : les mises à jour WhatsApp ne peuvent pas le joindre.",
+  "ctrReceiverPhoneNoCountryCode": "Le téléphone du destinataire n'a pas d'indicatif pays : les mises à jour WhatsApp ne peuvent pas le joindre.",
+  "ctrReceiverShort": "Destinataire",
+  "ctrEditContacts": "Modifier les contacts",
+  "ctrEditContactsNote": "Les noms et les numéros peuvent être corrigés à tout moment, même après le départ du conteneur.",
+  "ctrContactsSaved": "Contacts mis à jour",
   "ctrLotQuestion": "Cette voiture est-elle garée dans votre parc ?",
   "ctrLotYes": "Oui",
   "ctrLotYesNote": "Choisissez-la parmi les voitures du parc.",

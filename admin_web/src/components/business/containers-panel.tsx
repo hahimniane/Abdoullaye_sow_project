@@ -16,6 +16,7 @@ import {
   Container,
   History,
   Pencil,
+  Phone,
   Plus,
   Printer,
   RefreshCw,
@@ -40,9 +41,13 @@ import {
   containerDeleteRefusal,
   containerDraftFromRow,
   containerIsOpen,
+  containerLineContactsDraftFromRow,
   containerLineIsStock,
   containerLinePayload,
   containerLineTitle,
+  containerLineWhatsApp,
+  containerLineWhatsAppText,
+  contactPhoneReach,
   containerMessage,
   containerPayload,
   containerRowCounts,
@@ -58,11 +63,16 @@ import {
   openContainerHoldingVin,
   parkedCarPick,
   parkedCarsInLot,
+  phoneCountryForBusiness,
+  phoneCountryForDestination,
   searchContainerLines,
+  updateContainerLineContactsRequest,
   validateContainerDraft,
+  validateContainerLineContactsDraft,
   validateContainerLineDraft,
   vinPlacementText,
   type ContainerDraft,
+  type ContainerLineContactsDraft,
   type ContainerLineDraft,
   type ContainerLineInLot,
   type ContainerStatus,
@@ -77,6 +87,7 @@ import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { CopyValue } from "@/components/copy-value";
+import { CustomerPhoneField } from "@/components/customer-phone-field";
 import {
   lotCustomerFromRow,
   lotCustomerFromStaffRow,
@@ -97,10 +108,12 @@ type Row = Record<string, unknown>;
 
 type ContainersPanelProps = {
   businessId: string;
+  /** The business record, for the country its customers' phones default to. */
+  business?: FirestoreRow | null;
   previewMode?: boolean;
 };
 
-type ContainerModal = "" | "container" | "line" | "move" | "history";
+type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts";
 
 const STATUS_LABELS: Record<ContainerStatus, string> = {
   loading: "Loading",
@@ -123,11 +136,95 @@ function EmptyState({ text: message }: { text: string }) {
 }
 
 /**
+ * A contact's phone, the shared calling-code picker, and the WhatsApp switch
+ * under it. The switch cannot be on without a number; a number with no
+ * country code is saved (older app versions send them) but warned about,
+ * because WhatsApp cannot reach it.
+ */
+function ContactPhone({
+  id,
+  label,
+  value,
+  onChange,
+  notify,
+  onNotify,
+  initialCountryCode,
+  disabled = false,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  notify: boolean;
+  onNotify: (value: boolean) => void;
+  initialCountryCode: string;
+  disabled?: boolean;
+}) {
+  // A half-typed number is "incomplete" on every keystroke; only say so once
+  // the person has left the field.
+  const [touched, setTouched] = useState(false);
+  const reach = contactPhoneReach(value);
+  const hasPhone = reach !== "empty";
+  return (
+    <div className="ctn-phone">
+      <CustomerPhoneField
+        id={id}
+        label={label}
+        value={value}
+        onChange={(next) => { setTouched(false); onChange(next); }}
+        onBlur={() => setTouched(true)}
+        initialCountryCode={initialCountryCode}
+        disabled={disabled}
+      />
+      {reach === "local" && (
+        <small className="ctn-phone-warn" role="status">Add the country code so WhatsApp updates can reach this number.</small>
+      )}
+      {reach === "incomplete" && touched && (
+        <small className="ctn-phone-warn" role="status">This number is too short to receive WhatsApp updates.</small>
+      )}
+      <label className="ctn-notify">
+        <input
+          type="checkbox"
+          checked={notify && hasPhone}
+          disabled={disabled || !hasPhone}
+          onChange={(e) => onNotify(e.target.checked)}
+        />
+        <span>Send this person WhatsApp updates about this shipment</span>
+      </label>
+    </div>
+  );
+}
+
+/** The line's tracking code — what the customer types to follow it — with a copy. */
+function LineTrackingCode({ code }: { code: string }) {
+  if (!code) return null;
+  return (
+    <small className="ctn-code-row">
+      <code className="ctn-code">{code}</code>
+      <CopyValue value={code} label="Copy tracking code" />
+    </small>
+  );
+}
+
+/** Who hears about this line on WhatsApp, and which number cannot be reached yet. */
+function LineWhatsApp({ line }: { line: Row }) {
+  const { summary, warnings } = containerLineWhatsAppText(containerLineWhatsApp(line));
+  return (
+    <>
+      <small className="ctn-wa">{summary}</small>
+      {warnings.map((warning) => (
+        <small className="ctn-wa-warn" key={warning}>{warning}</small>
+      ))}
+    </>
+  );
+}
+
+/**
  * The business's own loading lists: which box each car, set of barrels or
  * other cargo went into, when it sailed, and when it landed. Customers never
  * see this; it is the yard's record of what it declared.
  */
-export function ContainersPanel({ businessId, previewMode = false }: ContainersPanelProps) {
+export function ContainersPanel({ businessId, business = null, previewMode = false }: ContainersPanelProps) {
   const enabled = Boolean(businessId && !previewMode);
   const containers = useBusinessCollection("containers", businessId, enabled, 500);
   const lines = useBusinessCollection("containerLines", businessId, enabled, 3000);
@@ -170,6 +267,9 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
   const [historyRows, setHistoryRows] = useState<FirestoreRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [documentLink, setDocumentLink] = useState("");
+  // The line whose contacts are being corrected, and the form for it.
+  const [contactsLineId, setContactsLineId] = useState("");
+  const [contactsDraft, setContactsDraft] = useState<ContainerLineContactsDraft>(() => containerLineContactsDraftFromRow({}));
 
   const lang = currentLanguage() === "fr" ? "fr" : "en";
 
@@ -255,6 +355,14 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
   const selectedStatus = selected ? containerStatus(selected) : "loading";
   const selectedCounts = selected ? containerRowCounts(selected, selectedLines) : null;
 
+  // Where the phone pickers open: the business's own country for the
+  // customer handing the goods in, the container's destination for whoever
+  // collects them there.
+  const customerPhoneCountry = useMemo(() => phoneCountryForBusiness(business), [business]);
+  const receiverPhoneCountry = selected
+    ? phoneCountryForDestination(selected, customerPhoneCountry, destinations.rows)
+    : customerPhoneCountry;
+
   // A container deleted or lost from the list closes its detail view.
   useEffect(() => {
     if (selectedId && !containers.loading && !containerById.has(selectedId)) {
@@ -308,6 +416,7 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
     setEditingContainerId("");
     setMoveLineId("");
     setMoveTargetId("");
+    setContactsLineId("");
   }
 
   function failInModal(error: unknown) {
@@ -632,6 +741,30 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
     });
   }
 
+  // Contacts stay correctable in every state: a wrong number matters most
+  // once the box has sailed.
+  function openContacts(row: FirestoreRow) {
+    setContactsLineId(String(row.id));
+    setContactsDraft(containerLineContactsDraftFromRow(row));
+    setDraftError("");
+    setConflictId("");
+    setModal("contacts");
+  }
+
+  async function saveContacts() {
+    const line = contactsLineId ? lines.rows.find((row) => String(row.id) === contactsLineId) : undefined;
+    if (!line) return;
+    const errors = validateContainerLineContactsDraft(contactsDraft, line);
+    if (errors.length) {
+      setDraftError(containerMessage(errors));
+      return;
+    }
+    await runPanelAction(setBusy, setFlash, "Contacts updated.", async () => {
+      await httpsCallable(functions, "updateContainerLineContacts")(updateContainerLineContactsRequest(businessId, line, contactsDraft));
+      closeModal();
+    }, failInModal);
+  }
+
   function openMove(row: FirestoreRow) {
     setMoveLineId(String(row.id));
     setMoveTargetId("");
@@ -657,6 +790,8 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
   const ownerVisible = lineDraft.kind !== "car" || carFieldsVisible;
   const moveTargets = loadingContainers.filter((row) => String(row.id) !== selectedId);
   const movingLine = moveLineId ? selectedLines.find((row) => String(row.id) === moveLineId) : undefined;
+  const contactsLine = contactsLineId ? lines.rows.find((row) => String(row.id) === contactsLineId) : undefined;
+  const contactsLineContainer = contactsLine ? containerById.get(text(contactsLine.containerId, "")) : undefined;
   const conflictContainer = conflictId ? containerById.get(conflictId) : undefined;
 
   function jumpToConflict() {
@@ -755,14 +890,16 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                   const by = staffName(text(row.addedByStaffId, ""));
                   return (
                     <div className="mini-table-row" key={String(row.id)}>
-                      <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}</span>
+                      <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /></span>
                       <span>
                         {stock ? <strong>Business stock</strong> : <strong>{text(row.customerName, "")}</strong>}
                         {!stock && <small>{text(row.customerPhone, "")}</small>}
                         {text(row.receiverName, "") && <small>→ {text(row.receiverName, "")}{text(row.receiverPhone, "") ? ` · ${text(row.receiverPhone, "")}` : ""}</small>}
+                        <LineWhatsApp line={row} />
                       </span>
                       <span><strong>{formatDate(row.createdAt)}</strong>{by && <small>{by}</small>}</span>
                       <span className="ctn-row-actions">
+                        <button className="ghost-button" type="button" disabled={busy} onClick={() => openContacts(row)} title="Edit contacts" aria-label="Edit contacts"><Phone size={14} /></button>
                         {selectedOpen && (
                           <>
                             <button className="ghost-button" type="button" disabled={busy} onClick={() => openMove(row)} title="Move to another container"><ArrowRightLeft size={14} /></button>
@@ -821,10 +958,11 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                         onClick={() => { if (containerId) { setSelectedId(containerId); } }}
                         onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && containerId) { e.preventDefault(); setSelectedId(containerId); } }}
                       >
-                        <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}</span>
+                        <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(hit.line.trackingCode, "")} /></span>
                         <span>
                           {stock ? <strong>Business stock</strong> : <strong>{text(hit.line.customerName, "")}</strong>}
                           {!stock && <small>{text(hit.line.customerPhone, "")}</small>}
+                          <LineWhatsApp line={hit.line} />
                         </span>
                         <span><strong>{hit.container ? containerTitle(hit.container) : "—"}</strong>{hit.container && <small>{destinationLabel(hit.container)}</small>}</span>
                         <span><StatusBadge status={hit.status} />{Boolean(hit.sailedAt) && <small>{formatDate(hit.sailedAt)}</small>}</span>
@@ -1061,13 +1199,29 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
                       </ul>
                     )}
                   </label>
-                  <label className="lst-field"><span>Phone</span><input value={lineDraft.customerPhone} onChange={(e) => setLineDraft((d) => ({ ...d, customerPhone: e.target.value }))} /></label>
+                  <ContactPhone
+                    id="ctn-customer-phone"
+                    label="Phone"
+                    value={lineDraft.customerPhone}
+                    onChange={(value) => setLineDraft((d) => ({ ...d, customerPhone: value }))}
+                    notify={lineDraft.notifyCustomer}
+                    onNotify={(value) => setLineDraft((d) => ({ ...d, notifyCustomer: value }))}
+                    initialCountryCode={customerPhoneCountry}
+                  />
                 </div>
               )}
               {ownerVisible && (
                 <div className="lst-form-grid">
                   <label className="lst-field"><span>Receiver at destination</span><input value={lineDraft.receiverName} placeholder="The name written on it" onChange={(e) => setLineDraft((d) => ({ ...d, receiverName: e.target.value }))} /></label>
-                  <label className="lst-field"><span>Receiver's phone</span><input value={lineDraft.receiverPhone} onChange={(e) => setLineDraft((d) => ({ ...d, receiverPhone: e.target.value }))} /></label>
+                  <ContactPhone
+                    id="ctn-receiver-phone"
+                    label="Receiver's phone"
+                    value={lineDraft.receiverPhone}
+                    onChange={(value) => setLineDraft((d) => ({ ...d, receiverPhone: value }))}
+                    notify={lineDraft.notifyReceiver}
+                    onNotify={(value) => setLineDraft((d) => ({ ...d, notifyReceiver: value }))}
+                    initialCountryCode={receiverPhoneCountry}
+                  />
                 </div>
               )}
               {ownerVisible && lineDraft.kind !== "car" && (
@@ -1119,6 +1273,60 @@ export function ContainersPanel({ businessId, previewMode = false }: ContainersP
         </div>
       )}
 
+      {modal === "contacts" && contactsLine && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
+          <div className="lst-modal" style={{ maxWidth: 660 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head">
+              <div><h3>Edit contacts</h3><p>{containerLineTitle(contactsLine)} — who it belongs to, who collects it, and who hears about it.</p></div>
+              <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="lst-modal-body">
+              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              <p className="lst-hint">Names and phone numbers can be corrected at any time, even after the container has sailed.</p>
+              {!containerLineIsStock(contactsLine) && (
+                <div className="lst-form-grid">
+                  <label className="lst-field"><span>Customer</span>
+                    <input value={contactsDraft.customerName} autoComplete="off" onChange={(e) => setContactsDraft((d) => ({ ...d, customerName: e.target.value }))} />
+                  </label>
+                  <ContactPhone
+                    id="ctn-contacts-customer-phone"
+                    label="Phone"
+                    value={contactsDraft.customerPhone}
+                    onChange={(value) => setContactsDraft((d) => ({ ...d, customerPhone: value }))}
+                    notify={contactsDraft.notifyCustomer}
+                    onNotify={(value) => setContactsDraft((d) => ({ ...d, notifyCustomer: value }))}
+                    initialCountryCode={customerPhoneCountry}
+                    disabled={busy}
+                  />
+                </div>
+              )}
+              <div className="lst-form-grid">
+                <label className="lst-field"><span>Receiver at destination</span>
+                  <input value={contactsDraft.receiverName} placeholder="The name written on it" onChange={(e) => setContactsDraft((d) => ({ ...d, receiverName: e.target.value }))} />
+                </label>
+                <ContactPhone
+                  id="ctn-contacts-receiver-phone"
+                  label="Receiver's phone"
+                  value={contactsDraft.receiverPhone}
+                  onChange={(value) => setContactsDraft((d) => ({ ...d, receiverPhone: value }))}
+                  notify={contactsDraft.notifyReceiver}
+                  onNotify={(value) => setContactsDraft((d) => ({ ...d, notifyReceiver: value }))}
+                  initialCountryCode={contactsLineContainer ? phoneCountryForDestination(contactsLineContainer, customerPhoneCountry, destinations.rows) : customerPhoneCountry}
+                  disabled={busy}
+                />
+              </div>
+            </div>
+            <footer className="lst-modal-foot">
+              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void saveContacts()}>
+                {busy ? <RefreshCw className="spin" size={16} /> : null}
+                {busy ? "Saving..." : "Save contacts"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
       {modal === "history" && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
@@ -1158,6 +1366,7 @@ function auditActionLabel(action: string) {
     line_added: "Line added",
     line_removed: "Line removed",
     line_moved: "Line moved",
+    line_contacts_edited: "Contacts edited",
     shipped: "Shipped",
     arrived: "Arrived",
     deleted: "Deleted",

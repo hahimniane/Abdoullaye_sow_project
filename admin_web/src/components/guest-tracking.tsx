@@ -19,8 +19,9 @@ import {
 } from "firebase/firestore";
 import { currentLocale } from "@/lib/format";
 import {
-  GUEST_SERVICE_LABEL,
-  GUEST_STAGE_LABEL,
+  guestJourneyStages,
+  guestServiceLabel,
+  guestStageLabel,
   guestTrackingErrorKind,
   parseGuestTrackingResponse,
   validGuestTrackingIdentifier,
@@ -270,15 +271,18 @@ export function GuestTracking({
               <span className="customer-service-kicker">Tracking result</span>
               <h2 id="guest-tracking-result-title">{record.trackingCode}</h2>
             </div>
-            <span className="status-pill compact">{GUEST_STAGE_LABEL[record.stage]}</span>
+            <span className="status-pill compact">{guestStageLabel(record.service, record.stage)}</span>
           </div>
-          <p className="guest-tracking-service">{GUEST_SERVICE_LABEL[record.service]}</p>
+          <p className="guest-tracking-service">{guestServiceLabel(record.service)}</p>
           {/* Nothing has started moving until it is paid for, so there is no
               journey to draw - showing one from "Booked" would imply the
               shipment is under way when it is waiting on the customer. */}
           {record.service !== "freight_quote" &&
             record.stage !== "awaiting_payment" && (
-            <GuestJourneyProgress stage={record.stage} />
+            <GuestJourneyProgress
+              stage={record.stage}
+              stages={guestJourneyStages(record.service)}
+            />
           )}
           {record.service === "freight_quote" && claimedRequest && (
             <div className="guest-quote-state guest-quote-open">

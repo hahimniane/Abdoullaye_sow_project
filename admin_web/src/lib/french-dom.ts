@@ -4225,6 +4225,14 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Car parking": "Stationnement de voiture",
   "Shared barrel": "Baril partagé",
   "Freight quote request": "Demande de devis de fret",
+  // A container line followed by its CL- code: loaded, at sea, landed.
+  "Container shipment": "Expédition en conteneur",
+  "Tracked shipment": "Envoi suivi",
+  "In the container": "Dans le conteneur",
+  "At sea": "En mer",
+  "Received and loaded into the container": "Reçu et chargé dans le conteneur",
+  "The container has sailed": "Le conteneur est parti",
+  "The container has reached its destination": "Le conteneur est arrivé à destination",
   Booked: "Réservé",
   "In progress": "En cours",
   Ready: "Prêt",
@@ -4885,6 +4893,35 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Aucune voiture garée ne correspond à ce filtre.",
   "Enter the VIN instead": "Saisir le VIN à la place",
   "Pick another car": "Choisir une autre voiture",
+  // A line's contacts and WhatsApp updates (containers-panel.tsx). The two
+  // phone refusals are the server's sentences, verbatim.
+  "The customer's phone doesn't look like a phone number.":
+    "Le téléphone du client ne ressemble pas à un numéro de téléphone.",
+  "The receiver's phone doesn't look like a phone number.":
+    "Le téléphone du destinataire ne ressemble pas à un numéro de téléphone.",
+  "Send this person WhatsApp updates about this shipment":
+    "Envoyer à cette personne des mises à jour WhatsApp sur cet envoi",
+  "Add the country code so WhatsApp updates can reach this number.":
+    "Ajoutez l’indicatif du pays pour que les mises à jour WhatsApp puissent atteindre ce numéro.",
+  "This number is too short to receive WhatsApp updates.":
+    "Ce numéro est trop court pour recevoir les mises à jour WhatsApp.",
+  "WhatsApp updates: customer and receiver":
+    "Mises à jour WhatsApp : client et destinataire",
+  "WhatsApp updates: customer": "Mises à jour WhatsApp : client",
+  "WhatsApp updates: receiver": "Mises à jour WhatsApp : destinataire",
+  "No WhatsApp updates": "Aucune mise à jour WhatsApp",
+  "Customer's phone needs a country code":
+    "Il manque l’indicatif du pays au téléphone du client",
+  "Receiver's phone needs a country code":
+    "Il manque l’indicatif du pays au téléphone du destinataire",
+  "Edit contacts": "Modifier les contacts",
+  "— who it belongs to, who collects it, and who hears about it.":
+    "— à qui c’est, qui le récupère et qui est tenu informé.",
+  "Names and phone numbers can be corrected at any time, even after the container has sailed.":
+    "Les noms et numéros de téléphone peuvent être corrigés à tout moment, même après le départ du conteneur.",
+  "Save contacts": "Enregistrer les contacts",
+  "Contacts updated.": "Contacts mis à jour.",
+  "Contacts edited": "Contacts modifiés",
 });
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

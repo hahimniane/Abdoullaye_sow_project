@@ -4,7 +4,9 @@ export type GuestTrackingService =
   | "transport"
   | "parking"
   | "shared_barrel"
-  | "freight_quote";
+  | "freight_quote"
+  // Goods a business loaded into its own container for a customer (CL- codes).
+  | "container";
 
 export type GuestTrackingStage =
   | "awaiting_payment"
@@ -35,6 +37,7 @@ const SERVICES = new Set<GuestTrackingService>([
   "parking",
   "shared_barrel",
   "freight_quote",
+  "container",
 ]);
 const STAGES = new Set<GuestTrackingStage>([
   "awaiting_payment",
@@ -114,7 +117,17 @@ export const GUEST_SERVICE_LABEL: Record<GuestTrackingService, string> = {
   parking: "Car parking",
   shared_barrel: "Shared barrel",
   freight_quote: "Freight quote request",
+  container: "Container shipment",
 };
+
+/**
+ * The service line on the result card. Total over any string, so a record
+ * whose service this build does not know yet reads as a plain shipment
+ * instead of rendering nothing.
+ */
+export function guestServiceLabel(service: string): string {
+  return GUEST_SERVICE_LABEL[service as GuestTrackingService] ?? "Tracked shipment";
+}
 
 export const GUEST_STAGE_LABEL: Record<GuestTrackingStage, string> = {
   awaiting_payment: "Waiting for payment",
@@ -124,3 +137,38 @@ export const GUEST_STAGE_LABEL: Record<GuestTrackingStage, string> = {
   delivered: "Complete",
   cancelled: "Cancelled",
 };
+
+export type GuestJourneyStage = {
+  id: "booked" | "in_transit" | "arrived" | "delivered";
+  label: string;
+  hint: string;
+};
+
+/** The generic four-step journey every booking-based service follows. */
+export const GUEST_JOURNEY_STAGES: readonly GuestJourneyStage[] = [
+  {id: "booked", label: "Booked", hint: "Your booking is confirmed"},
+  {id: "in_transit", label: "In progress", hint: "The service is underway"},
+  {id: "arrived", label: "Ready", hint: "The service is ready for its final step"},
+  {id: "delivered", label: "Complete", hint: "The service is complete"},
+];
+
+/**
+ * A container line follows its box: loaded, at sea, landed. The server maps
+ * the container's state onto booked / in_transit / arrived and nothing else,
+ * so the journey has three steps and its own words.
+ */
+export const GUEST_CONTAINER_STAGES: readonly GuestJourneyStage[] = [
+  {id: "booked", label: "In the container", hint: "Received and loaded into the container"},
+  {id: "in_transit", label: "At sea", hint: "The container has sailed"},
+  {id: "arrived", label: "Arrived", hint: "The container has reached its destination"},
+];
+
+export function guestJourneyStages(service: string): readonly GuestJourneyStage[] {
+  return service === "container" ? GUEST_CONTAINER_STAGES : GUEST_JOURNEY_STAGES;
+}
+
+/** The status pill: the service's own word for the stage when it has one. */
+export function guestStageLabel(service: string, stage: GuestTrackingStage): string {
+  const own = guestJourneyStages(service).find((item) => item.id === stage);
+  return own?.label ?? GUEST_STAGE_LABEL[stage] ?? stage;
+}

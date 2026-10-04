@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/data/calling_code_catalog.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
+import 'package:my_flutter_app/models/destination_country.dart';
 import 'package:my_flutter_app/widgets/country_phone_field.dart';
 
 Widget _host({
@@ -42,6 +43,28 @@ void main() {
     expect(
       CallingCodeCatalog.optionForPhoneNumber('+224622123456')?.countryCode,
       'GN',
+    );
+  });
+
+  test('a country reference resolves by ISO code, catalogue id or name', () {
+    // Containers store their destination as a catalogue or business
+    // destination id; business addresses store the country's name.
+    expect(CallingCodeCatalog.countryCodeForReference('GN'), 'GN');
+    expect(CallingCodeCatalog.countryCodeForReference('gn'), 'GN');
+    expect(CallingCodeCatalog.countryCodeForReference('guinea'), 'GN');
+    expect(CallingCodeCatalog.countryCodeForReference('United States'), 'US');
+    expect(CallingCodeCatalog.countryCodeForReference("Côte d'Ivoire"), 'CI');
+    expect(CallingCodeCatalog.countryCodeForReference(''), isNull);
+    expect(CallingCodeCatalog.countryCodeForReference(null), isNull);
+    expect(CallingCodeCatalog.countryCodeForReference('Atlantis'), isNull);
+    // A business's own destination document can carry an id the catalogue
+    // does not know; its code still answers.
+    expect(
+      CallingCodeCatalog.countryCodeForReference(
+        'dest-7',
+        extra: const [DestinationCountry(id: 'dest-7', name: 'Senegal', code: 'SN')],
+      ),
+      'SN',
     );
   });
 

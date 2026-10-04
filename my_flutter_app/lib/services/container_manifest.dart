@@ -74,6 +74,8 @@ const containerRefusalCodes = <String>[
   'description_required',
   'owner_kind_invalid',
   'customer_name_required',
+  'customer_phone_invalid',
+  'receiver_phone_invalid',
   'vin_already_loaded',
   'move_target_not_loading',
 ];
@@ -82,6 +84,59 @@ String _text(Object? value, [int max = containerMaxText]) {
   final t = (value ?? '').toString().trim();
   return t.length > max ? t.substring(0, max) : t;
 }
+
+// ---------------------------------------------------------------------------
+// Phones.
+// ---------------------------------------------------------------------------
+
+/// Formatting a person typed is theirs to type and ours to drop.
+final RegExp _phoneFormatting = RegExp(r'[\s().-]');
+
+/// 7-15 digits, the plus optional: the shape a stored phone may have.
+final RegExp _storablePhone = RegExp(r'^\+?\d{7,15}$');
+
+/// The full international form, `+<country code><number>`. WhatsApp can only
+/// reach a number written this way; a local "622 11 22 33" is a number for a
+/// person to dial, not one a message can be sent to. Mirrors
+/// `INTERNATIONAL_PHONE`.
+final RegExp internationalPhonePattern = RegExp(r'^\+[1-9]\d{7,14}$');
+
+/// A phone as stored: formatting dropped, the leading plus kept. Anything
+/// that is not 7-15 digits is returned as typed so the validator can name
+/// it. Mirrors the server's `phone`.
+String containerPhone(Object? value) {
+  final raw = _text(value, 40);
+  final compact = raw.replaceAll(_phoneFormatting, '');
+  return _storablePhone.hasMatch(compact) ? compact : raw;
+}
+
+/// Whether [value] is a reachable international number. Mirrors
+/// `isInternationalPhone`.
+bool isInternationalPhone(Object? value) =>
+    internationalPhonePattern.hasMatch(containerPhone(value));
+
+/// Empty is fine (nobody to reach); anything else must look like a phone.
+/// Local numbers are still accepted - older app versions send them - but
+/// only an international one can be messaged. Mirrors `phoneAcceptable`.
+bool containerPhoneAcceptable(Object? value) {
+  final stored = containerPhone(value);
+  if (stored.isEmpty) return true;
+  return _storablePhone.hasMatch(stored);
+}
+
+/// A number the server will store but WhatsApp cannot reach: it looks like a
+/// phone and is missing its country code. Empty and malformed numbers are
+/// not this - the first has nobody to reach, the second is refused.
+bool containerPhoneLacksCountryCode(Object? value) {
+  final stored = containerPhone(value);
+  return stored.isNotEmpty &&
+      containerPhoneAcceptable(stored) &&
+      !isInternationalPhone(stored);
+}
+
+/// A switch that is on unless it was explicitly turned off. Mirrors
+/// `onUnlessOff`.
+bool _onUnlessOff(Object? value) => value != false && value != 'false';
 
 int _positiveInt(Object? value) {
   final n = value is num
@@ -291,6 +346,8 @@ class ContainerLineDraft {
     this.customerPhone = '',
     this.receiverName = '',
     this.receiverPhone = '',
+    this.notifyCustomer = true,
+    this.notifyReceiver = true,
   });
 
   final String kind;
@@ -307,6 +364,12 @@ class ContainerLineDraft {
   /// Who collects it at the other end - the name written on the barrel.
   final String receiverName;
   final String receiverPhone;
+
+  /// Whether each person hears about the shipment on WhatsApp. On unless
+  /// staff switch it off; there is nobody to tell without a number, so the
+  /// record turns it off when the phone is empty.
+  final bool notifyCustomer;
+  final bool notifyReceiver;
 }
 
 /// Error codes. Mirrors `validateContainerLine`.
@@ -335,7 +398,55 @@ List<String> validateContainerLine(ContainerLineDraft input) {
       _text(input.customerName, containerMaxLabel).isEmpty) {
     errors.add('customer_name_required');
   }
+  errors.addAll(
+    _contactPhoneErrors(input.customerPhone, input.receiverPhone, owner),
+  );
   return errors;
+}
+
+/// Mirrors `contactPhoneErrors`: a customer's phone is only checked on a
+/// customer's line, the receiver's on any line.
+List<String> _contactPhoneErrors(
+  String customerPhone,
+  String receiverPhone,
+  String owner,
+) {
+  return [
+    if (owner == containerOwnerCustomer &&
+        !containerPhoneAcceptable(customerPhone))
+      'customer_phone_invalid',
+    if (!containerPhoneAcceptable(receiverPhone)) 'receiver_phone_invalid',
+  ];
+}
+
+/// The contact half of a line - who it belongs to, who collects it, and
+/// whether each of them hears about it - as the server stores it. Shared by
+/// adding a line and by correcting its contacts. Mirrors
+/// `containerLineContacts`.
+Map<String, dynamic> _containerLineContacts({
+  required String owner,
+  required String customerName,
+  required String customerPhone,
+  required String receiverName,
+  required String receiverPhone,
+  required Object? notifyCustomer,
+  required Object? notifyReceiver,
+}) {
+  final customer = owner == containerOwnerCustomer;
+  final storedCustomerPhone = customer ? containerPhone(customerPhone) : '';
+  final storedReceiverPhone = containerPhone(receiverPhone);
+  return {
+    'customerName': customer ? _text(customerName, containerMaxLabel) : '',
+    'customerPhone': storedCustomerPhone,
+    // Either owner kind may name a receiver: stock goes to the business's
+    // own agent at the port.
+    'receiverName': _text(receiverName, containerMaxLabel),
+    'receiverPhone': storedReceiverPhone,
+    'notifyCustomer':
+        storedCustomerPhone.isNotEmpty && _onUnlessOff(notifyCustomer),
+    'notifyReceiver':
+        storedReceiverPhone.isNotEmpty && _onUnlessOff(notifyReceiver),
+  };
 }
 
 /// The line body the callable is sent, shaped the way the server stores it:
@@ -345,7 +456,6 @@ Map<String, dynamic> containerLineRecord(ContainerLineDraft input) {
   final kind = _text(input.kind, 20);
   final owner = _text(input.ownerKind, 20);
   final isCar = kind == containerLineKindCar;
-  final customer = owner == containerOwnerCustomer;
   final quantity = _positiveInt(input.quantity);
   return {
     'kind': kind,
@@ -361,13 +471,89 @@ Map<String, dynamic> containerLineRecord(ContainerLineDraft input) {
         ? _text(input.description, containerMaxLabel)
         : '',
     'ownerKind': owner,
-    'customerName': customer ? _text(input.customerName, containerMaxLabel) : '',
-    'customerPhone': customer ? _text(input.customerPhone, 40) : '',
-    // Either owner kind may name a receiver: stock goes to the business's
-    // own agent at the port.
-    'receiverName': _text(input.receiverName, containerMaxLabel),
-    'receiverPhone': _text(input.receiverPhone, 40),
+    ..._containerLineContacts(
+      owner: owner,
+      customerName: input.customerName,
+      customerPhone: input.customerPhone,
+      receiverName: input.receiverName,
+      receiverPhone: input.receiverPhone,
+      notifyCustomer: input.notifyCustomer,
+      notifyReceiver: input.notifyReceiver,
+    ),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Correcting a line's contacts - allowed in every container state.
+// ---------------------------------------------------------------------------
+
+/// What staff typed when correcting who a line belongs to and who collects
+/// it. The server allows this after the box has sailed too: a wrong number
+/// is the one mistake that matters most once it has.
+class ContainerLineContactsDraft {
+  const ContainerLineContactsDraft({
+    this.customerName = '',
+    this.customerPhone = '',
+    this.receiverName = '',
+    this.receiverPhone = '',
+    this.notifyCustomer = true,
+    this.notifyReceiver = true,
+  });
+
+  /// The line's contacts as they stand, to start a correction from.
+  factory ContainerLineContactsDraft.fromLine(ContainerLine line) =>
+      ContainerLineContactsDraft(
+        customerName: line.customerName,
+        customerPhone: line.customerPhone,
+        receiverName: line.receiverName,
+        receiverPhone: line.receiverPhone,
+        notifyCustomer: line.notifyCustomer,
+        notifyReceiver: line.notifyReceiver,
+      );
+
+  final String customerName;
+  final String customerPhone;
+  final String receiverName;
+  final String receiverPhone;
+  final bool notifyCustomer;
+  final bool notifyReceiver;
+}
+
+/// Checks a contact correction against the line it changes: a customer's
+/// line keeps a customer name, and every phone must look like one. Mirrors
+/// `validateContainerLineContacts`.
+List<String> validateContainerLineContacts(
+  ContainerLineContactsDraft input,
+  ContainerLine current,
+) {
+  final owner = current.ownerKind;
+  final errors = <String>[];
+  if (owner == containerOwnerCustomer &&
+      _text(input.customerName, containerMaxLabel).isEmpty) {
+    errors.add('customer_name_required');
+  }
+  errors.addAll(
+    _contactPhoneErrors(input.customerPhone, input.receiverPhone, owner),
+  );
+  return errors;
+}
+
+/// The `contacts` payload for `updateContainerLineContacts`, shaped the way
+/// the server will store it: stock keeps no customer, a switch follows its
+/// phone. Mirrors `containerLineContactsUpdate`.
+Map<String, dynamic> containerLineContactsUpdate(
+  ContainerLineContactsDraft input,
+  ContainerLine current,
+) {
+  return _containerLineContacts(
+    owner: current.ownerKind,
+    customerName: input.customerName,
+    customerPhone: input.customerPhone,
+    receiverName: input.receiverName,
+    receiverPhone: input.receiverPhone,
+    notifyCustomer: input.notifyCustomer,
+    notifyReceiver: input.notifyReceiver,
+  );
 }
 
 /// A stored `containerLines/{id}` document.
@@ -389,6 +575,9 @@ class ContainerLine {
     required this.customerPhone,
     this.receiverName = '',
     this.receiverPhone = '',
+    this.trackingCode = '',
+    this.notifyCustomer = false,
+    this.notifyReceiver = false,
     required this.addedByStaffId,
     required this.createdAt,
     required this.updatedAt,
@@ -415,11 +604,23 @@ class ContainerLine {
   /// The name on the barrel: whoever collects it at the port.
   final String receiverName;
   final String receiverPhone;
+
+  /// "CL-XXXXXX": what the customer types to follow it and what the package
+  /// label carries. Empty on lines added before codes existed, until their
+  /// container next moves.
+  final String trackingCode;
+
+  /// Whether each person hears about the shipment. Read as the server would
+  /// decide it: on unless switched off, and never without a phone.
+  final bool notifyCustomer;
+  final bool notifyReceiver;
   final String addedByStaffId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   factory ContainerLine.fromMap(String id, Map<String, dynamic> d) {
+    final customerPhone = _text(d['customerPhone'], 40);
+    final receiverPhone = _text(d['receiverPhone'], 40);
     return ContainerLine(
       id: id,
       businessId: _text(d['businessId'], containerMaxLabel),
@@ -434,9 +635,14 @@ class ContainerLine {
       description: _text(d['description'], containerMaxLabel),
       ownerKind: _text(d['ownerKind'], 20),
       customerName: _text(d['customerName'], containerMaxLabel),
-      customerPhone: _text(d['customerPhone'], 40),
+      customerPhone: customerPhone,
       receiverName: _text(d['receiverName'], containerMaxLabel),
-      receiverPhone: _text(d['receiverPhone'], 40),
+      receiverPhone: receiverPhone,
+      trackingCode: _text(d['trackingCode'], 40).toUpperCase(),
+      notifyCustomer:
+          customerPhone.isNotEmpty && _onUnlessOff(d['notifyCustomer']),
+      notifyReceiver:
+          receiverPhone.isNotEmpty && _onUnlessOff(d['notifyReceiver']),
       addedByStaffId: _text(d['addedByStaffId'], containerMaxLabel),
       createdAt: lotDateOf(d['createdAt']),
       updatedAt: lotDateOf(d['updatedAt']),
@@ -447,6 +653,27 @@ class ContainerLine {
   bool get isBarrels => kind == containerLineKindBarrels;
   bool get isOther => kind == containerLineKindOther;
   bool get isStock => ownerKind == containerOwnerStock;
+
+  /// The customer will hear about the shipment on WhatsApp: switched on and
+  /// written in full international form. The same decision the server's
+  /// `recipientsForLine` makes before it sends.
+  bool get updatesCustomer =>
+      _isCustomerLine && notifyCustomer && isInternationalPhone(customerPhone);
+
+  /// The receiver will hear about the shipment on WhatsApp.
+  bool get updatesReceiver =>
+      notifyReceiver && isInternationalPhone(receiverPhone);
+
+  /// Switched on, but the number has no country code, so no message can
+  /// reach it. The tile says so; editing the contacts fixes it.
+  bool get customerPhoneLacksCountryCode =>
+      _isCustomerLine &&
+      notifyCustomer &&
+      containerPhoneLacksCountryCode(customerPhone);
+
+  bool get _isCustomerLine => ownerKind == containerOwnerCustomer;
+  bool get receiverPhoneLacksCountryCode =>
+      notifyReceiver && containerPhoneLacksCountryCode(receiverPhone);
 
   /// "2019 Toyota Camry" when the car is known, else the VIN.
   String get vehicleLabel {

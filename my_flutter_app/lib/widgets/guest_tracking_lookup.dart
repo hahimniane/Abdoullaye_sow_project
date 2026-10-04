@@ -544,6 +544,7 @@ String _serviceLabel(AppLocalizations l10n, GuestTrackingServiceType service) {
       l10n.guestTrackingServiceSharedBarrel,
     GuestTrackingServiceType.freightQuote =>
       l10n.guestTrackingServiceFreightQuote,
+    GuestTrackingServiceType.container => l10n.guestTrackingServiceContainer,
   };
 }
 

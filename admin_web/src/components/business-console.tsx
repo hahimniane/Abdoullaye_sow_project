@@ -625,7 +625,7 @@ export function BusinessConsole({
             />
           )}
           {activeTab === "containers" && (
-            <ContainersPanel businessId={businessId} previewMode={previewMode} />
+            <ContainersPanel businessId={businessId} business={business} previewMode={previewMode} />
           )}
           {activeTab === "invoices" && (
             <InvoicesPanel

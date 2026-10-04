@@ -13946,6 +13946,23 @@ button[data-loading="true"]::before {
 .pk-row small.ctn-placement,
 .lot-activity-table .mini-table-row > span > small.ctn-placement { color: var(--brand-strong, #0f766e); }
 
+/* A container line's contacts: the shared calling-code phone picker, a
+   warning when the number cannot be reached on WhatsApp, and the switch for
+   whether this person hears about the shipment. */
+.ctn-phone { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ctn-phone .customer-phone-label { display: flex; flex-direction: column; gap: 6px; }
+.ctn-phone .customer-phone-label > label { font-size: 13px; font-weight: 700; color: var(--ink-soft, #3c5450); }
+.ctn-phone-warn { color: #92400e; font-size: 12px; font-weight: 600; line-height: 1.35; }
+.ctn-notify { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.35; color: var(--ink); cursor: pointer; }
+.ctn-notify input { flex: none; width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--brand); cursor: pointer; }
+.ctn-notify input:disabled { cursor: not-allowed; }
+.ctn-notify input:disabled + span { color: var(--muted); }
+/* The line's tracking code (CL-XXXXXX) and who gets WhatsApp updates, under
+   the cargo and under whose it is. */
+.ctn-table .mini-table-row > span > small.ctn-code-row { display: inline-flex; align-items: center; overflow: visible; }
+.ctn-code { font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 6px; background: var(--mist); color: var(--brand-strong, #0f766e); }
+.ctn-table .mini-table-row > span > small.ctn-wa-warn { color: #92400e; font-weight: 600; }
+
 /* One-tap copy beside a value nobody should retype (VIN, customer name). */
 .copy-value{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:6px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;vertical-align:middle}
 .copy-value:hover{background:var(--mist);color:var(--brand-strong)}

@@ -263,7 +263,8 @@ void main() {
         receiverPhone: '+224 620 00 00 00',
       ));
       expect(toAgent['receiverName'], 'Mariama Bah');
-      expect(toAgent['receiverPhone'], '+224 620 00 00 00');
+      // Stored the way the server stores it: formatting dropped, plus kept.
+      expect(toAgent['receiverPhone'], '+224620000000');
       expect(toAgent['customerName'], '');
 
       final barrels = containerLineRecord(const ContainerLineDraft(
@@ -430,6 +431,235 @@ void main() {
       expect(links['BBBBBBBBBBBBBBBBB']!.isShipped, isTrue);
       expect(links['BBBBBBBBBBBBBBBBB']!.containerName, 'MSKU1234567');
       expect(links['BBBBBBBBBBBBBBBBB']!.sailedAt, DateTime(2026, 10, 3));
+    });
+  });
+
+  // Mirrors `describe("who hears about a line")` in
+  // functions/test/container-manifest.test.js, input for input.
+  group('who hears about a line', () {
+    ContainerLineDraft customerLine({
+      String customerPhone = '',
+      String receiverName = '',
+      String receiverPhone = '',
+      bool notifyCustomer = true,
+      bool notifyReceiver = true,
+    }) =>
+        ContainerLineDraft(
+          kind: containerLineKindBarrels,
+          quantity: 2,
+          ownerKind: containerOwnerCustomer,
+          customerName: 'Fatou Diallo',
+          customerPhone: customerPhone,
+          receiverName: receiverName,
+          receiverPhone: receiverPhone,
+          notifyCustomer: notifyCustomer,
+          notifyReceiver: notifyReceiver,
+        );
+
+    test('a phone is stored without formatting, the plus kept', () {
+      expect(containerPhone('+1 (646) 555-0100'), '+16465550100');
+      expect(containerPhone(' 622.11.22.33 '), '622112233');
+      // Not 7-15 digits: kept as typed so the validator can name it.
+      expect(containerPhone('call me'), 'call me');
+      expect(containerPhone('12'), '12');
+      expect(containerPhone(null), '');
+    });
+
+    test('tells the sender and the receiver by default, when they have a number',
+        () {
+      final line = containerLineRecord(customerLine(
+        customerPhone: '+1 (646) 555-0100',
+        receiverName: 'Mariama',
+        receiverPhone: '+224 620-00-00-00',
+      ));
+      expect(line['customerPhone'], '+16465550100');
+      expect(line['receiverPhone'], '+224620000000');
+      expect(line['notifyCustomer'], isTrue);
+      expect(line['notifyReceiver'], isTrue);
+
+      final noPhones = containerLineRecord(customerLine());
+      expect(noPhones['notifyCustomer'], isFalse);
+      expect(noPhones['notifyReceiver'], isFalse);
+    });
+
+    test('keeps a person quiet when staff switch them off', () {
+      final line = containerLineRecord(customerLine(
+        customerPhone: '+16465550100',
+        notifyCustomer: false,
+        receiverPhone: '+224620000000',
+        notifyReceiver: false,
+      ));
+      expect(line['notifyCustomer'], isFalse);
+      expect(line['notifyReceiver'], isFalse);
+    });
+
+    test('never keeps a customer phone on business stock', () {
+      final line = containerLineRecord(const ContainerLineDraft(
+        kind: containerLineKindBarrels,
+        quantity: 1,
+        ownerKind: containerOwnerStock,
+        customerPhone: '+16465550100',
+        receiverPhone: '+224620000000',
+      ));
+      expect(line['customerPhone'], '');
+      expect(line['notifyCustomer'], isFalse);
+      expect(line['notifyReceiver'], isTrue);
+    });
+
+    test('refuses a phone that is not a phone, and allows none at all', () {
+      expect(validateContainerLine(customerLine(customerPhone: 'call me')),
+          ['customer_phone_invalid']);
+      expect(validateContainerLine(customerLine(receiverPhone: '12')),
+          ['receiver_phone_invalid']);
+      expect(validateContainerLine(customerLine()), isEmpty);
+      // Older app versions send local numbers; they are kept, not refused.
+      expect(validateContainerLine(customerLine(customerPhone: '622 11 22 33')),
+          isEmpty);
+      // A stock line's customer phone is never read, so never refused.
+      expect(
+        validateContainerLine(const ContainerLineDraft(
+          kind: containerLineKindBarrels,
+          quantity: 1,
+          ownerKind: containerOwnerStock,
+          customerPhone: 'call me',
+        )),
+        isEmpty,
+      );
+    });
+
+    test('tells an international number from a local one', () {
+      expect(isInternationalPhone('+224 622 11 22 33'), isTrue);
+      expect(isInternationalPhone('622112233'), isFalse);
+      expect(isInternationalPhone(''), isFalse);
+      expect(isInternationalPhone('+0224622112233'), isFalse);
+      expect(isInternationalPhone('+1234567'), isFalse, reason: 'too short');
+      expect(internationalPhonePattern.pattern, r'^\+[1-9]\d{7,14}$');
+    });
+
+    test('a number lacks a country code only when it is a phone without one',
+        () {
+      expect(containerPhoneLacksCountryCode('622 11 22 33'), isTrue);
+      expect(containerPhoneLacksCountryCode('+224622112233'), isFalse);
+      expect(containerPhoneLacksCountryCode(''), isFalse,
+          reason: 'nobody to reach');
+      expect(containerPhoneLacksCountryCode('call me'), isFalse,
+          reason: 'refused, not warned about');
+      expect(containerPhoneAcceptable(''), isTrue);
+      expect(containerPhoneAcceptable('call me'), isFalse);
+    });
+
+    test('a stored line reads its code and who hears about it', () {
+      ContainerLine stored(Map<String, dynamic> extra) =>
+          ContainerLine.fromMap('l1', {
+            'businessId': 'b1',
+            'containerId': 'c1',
+            'kind': containerLineKindBarrels,
+            'quantity': 2,
+            'ownerKind': containerOwnerCustomer,
+            'customerName': 'Fatou Diallo',
+            ...extra,
+          });
+
+      final current = stored({
+        'trackingCode': 'cl-k7m4p2',
+        'customerPhone': '+16465550100',
+        'notifyCustomer': true,
+        'receiverName': 'Mariama Bah',
+        'receiverPhone': '+224620000000',
+        'notifyReceiver': false,
+      });
+      expect(current.trackingCode, 'CL-K7M4P2');
+      expect(current.updatesCustomer, isTrue);
+      expect(current.notifyReceiver, isFalse);
+      expect(current.updatesReceiver, isFalse);
+
+      // Lines from before the switches existed: on, as the server reads them,
+      // but never without a phone; and no code until the box next moves.
+      final older = stored({
+        'customerPhone': '622112233',
+        'receiverName': 'Mariama Bah',
+      });
+      expect(older.trackingCode, '');
+      expect(older.notifyCustomer, isTrue);
+      expect(older.updatesCustomer, isFalse);
+      expect(older.customerPhoneLacksCountryCode, isTrue);
+      expect(older.notifyReceiver, isFalse);
+      expect(older.receiverPhoneLacksCountryCode, isFalse);
+    });
+
+    test('corrects contacts later; a customer line keeps its customer', () {
+      final stored = ContainerLine.fromMap('l1', {
+        'kind': containerLineKindBarrels,
+        'quantity': 2,
+        'ownerKind': containerOwnerCustomer,
+        ...containerLineRecord(customerLine(
+          customerPhone: '622112233',
+          receiverName: 'Mariama',
+          receiverPhone: '+224620000000',
+        )),
+      });
+      final start = ContainerLineContactsDraft.fromLine(stored);
+      final fixed = ContainerLineContactsDraft(
+        customerName: start.customerName,
+        customerPhone: '+224 622 11 22 33',
+        receiverName: start.receiverName,
+        receiverPhone: start.receiverPhone,
+        notifyCustomer: start.notifyCustomer,
+        notifyReceiver: start.notifyReceiver,
+      );
+      expect(validateContainerLineContacts(fixed, stored), isEmpty);
+      final update = containerLineContactsUpdate(fixed, stored);
+      expect(update, {
+        'customerName': 'Fatou Diallo',
+        'customerPhone': '+224622112233',
+        'receiverName': 'Mariama',
+        'receiverPhone': '+224620000000',
+        'notifyCustomer': true,
+        'notifyReceiver': true,
+      });
+      expect(
+        validateContainerLineContacts(
+            const ContainerLineContactsDraft(customerName: ' '), stored),
+        ['customer_name_required'],
+      );
+      expect(
+        validateContainerLineContacts(
+          const ContainerLineContactsDraft(
+              customerName: 'Fatou', receiverPhone: 'nope'),
+          stored,
+        ),
+        ['receiver_phone_invalid'],
+      );
+    });
+
+    test('stock contacts name a receiver and never a customer', () {
+      final stock = ContainerLine.fromMap('l2', {
+        'kind': containerLineKindBarrels,
+        'quantity': 1,
+        'ownerKind': containerOwnerStock,
+      });
+      const draft = ContainerLineContactsDraft(
+        customerName: 'Nobody',
+        customerPhone: '+16465550100',
+        receiverName: 'Agent',
+        receiverPhone: '',
+      );
+      expect(validateContainerLineContacts(draft, stock), isEmpty);
+      final update = containerLineContactsUpdate(draft, stock);
+      expect(update['customerName'], '');
+      expect(update['customerPhone'], '');
+      expect(update['notifyCustomer'], isFalse);
+      expect(update['receiverName'], 'Agent');
+      expect(update['notifyReceiver'], isFalse, reason: 'no phone, no switch');
+    });
+
+    test('the phone refusals are part of the shared vocabulary', () {
+      expect(containerRefusalCodes,
+          containsAll(['customer_phone_invalid', 'receiver_phone_invalid']));
+      expect(
+        parseContainerRefusal({'codes': ['receiver_phone_invalid']}, '').codes,
+        ['receiver_phone_invalid'],
+      );
     });
   });
 

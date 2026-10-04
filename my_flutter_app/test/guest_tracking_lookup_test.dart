@@ -244,6 +244,61 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('a container line code parses instead of failing as unsupported', () {
+    // `lookupGuestTracking` answers CL- codes with service "container";
+    // before the app knew it, the parse threw and the guest saw "temporarily
+    // unavailable" for a code that was found.
+    final result = GuestTrackingResult.fromMap({
+      'version': 1,
+      'found': true,
+      'record': {
+        'trackingCode': 'CL-K7M4P2',
+        'service': 'container',
+        'stage': 'in_transit',
+        'updatedAtMs': 1767225600000,
+      },
+    });
+    expect(result.record!.service, GuestTrackingServiceType.container);
+    expect(result.record!.stage, GuestTrackingStage.inTransit);
+    for (final stage in ['booked', 'in_transit', 'arrived']) {
+      expect(
+        () => GuestTrackingRecord.fromMap({
+          'trackingCode': 'CL-K7M4P2',
+          'service': 'container',
+          'stage': stage,
+        }),
+        returnsNormally,
+      );
+    }
+  });
+
+  for (final (locale, label, stage) in [
+    (const Locale('en'), 'Container shipment', 'In transit'),
+    (const Locale('fr'), 'Envoi en conteneur', 'En transit'),
+  ]) {
+    testWidgets('a container line is labelled as a container shipment '
+        '(${locale.languageCode})', (tester) async {
+      final service = _FakeGuestTrackingService(
+        (_) async => const GuestTrackingResult.found(
+          GuestTrackingRecord(
+            trackingCode: 'CL-K7M4P2',
+            service: GuestTrackingServiceType.container,
+            stage: GuestTrackingStage.inTransit,
+          ),
+        ),
+      );
+      await _pumpLookup(tester, service, initialCode: 'CL-K7M4P2',
+          locale: locale);
+      await tester.pumpAndSettle();
+
+      // In the search field (handed in) and as the found record's heading.
+      expect(find.text('CL-K7M4P2'), findsNWidgets(2));
+      expect(find.text(label), findsOneWidget);
+      expect(find.text(stage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('no initial code means no lookup fires', (tester) async {
     final service = _FakeGuestTrackingService((_) async => _success);
     await _pumpLookup(tester, service);

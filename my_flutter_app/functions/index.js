@@ -15713,7 +15713,8 @@ exports.createContainer = onCall(
       await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
       const errors = validateContainer(data);
       if (errors.length > 0) {
-        throw new HttpsError("invalid-argument", containerMessage(errors));
+        throw new HttpsError("invalid-argument", containerMessage(errors),
+            {reasons: errors});
       }
       const db = admin.firestore();
       const ref = db.collection("containers").doc();
@@ -15747,7 +15748,8 @@ exports.updateContainer = onCall(
       const merged = containerRecord({...current, ...changes});
       const errors = validateContainer(merged);
       if (errors.length > 0) {
-        throw new HttpsError("invalid-argument", containerMessage(errors));
+        throw new HttpsError("invalid-argument", containerMessage(errors),
+            {reasons: errors});
       }
       // Once shipped, the list and its identity are the record of what was
       // declared. Only the notes stay open.
@@ -15812,7 +15814,8 @@ exports.addContainerLine = onCall(
       const line = data.line && typeof data.line === "object" ? data.line : {};
       const errors = validateContainerLine(line);
       if (errors.length > 0) {
-        throw new HttpsError("invalid-argument", containerMessage(errors));
+        throw new HttpsError("invalid-argument", containerMessage(errors),
+            {reasons: errors});
       }
       const record = containerLineRecord(line, {
         containerId: ref.id,
@@ -15970,7 +15973,8 @@ exports.updateContainerLineContacts = onCall(
         data.contacts : {};
       const errors = validateContainerLineContacts(contacts, line);
       if (errors.length > 0) {
-        throw new HttpsError("invalid-argument", containerMessage(errors));
+        throw new HttpsError("invalid-argument", containerMessage(errors),
+            {reasons: errors});
       }
       const update = containerLineContactsUpdate(contacts, line);
       const changed = Object.keys(update).filter((key) =>

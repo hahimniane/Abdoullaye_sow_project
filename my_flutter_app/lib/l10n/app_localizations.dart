@@ -5474,6 +5474,12 @@ abstract class AppLocalizations {
   /// **'Freight quote request'**
   String get guestTrackingServiceFreightQuote;
 
+  /// No description provided for @guestTrackingServiceContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Container shipment'**
+  String get guestTrackingServiceContainer;
+
   /// No description provided for @guestTrackingStageBooked.
   ///
   /// In en, this message translates to:
@@ -16031,6 +16037,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You can only move a line to a container that is still loading.'**
   String get ctrErrMoveTarget;
+
+  /// No description provided for @ctrErrCustomerPhoneInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer\'s phone doesn\'t look like a phone number.'**
+  String get ctrErrCustomerPhoneInvalid;
+
+  /// No description provided for @ctrErrReceiverPhoneInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The receiver\'s phone doesn\'t look like a phone number.'**
+  String get ctrErrReceiverPhoneInvalid;
+
+  /// No description provided for @ctrNotifyToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send this person WhatsApp updates about this shipment'**
+  String get ctrNotifyToggle;
+
+  /// No description provided for @ctrNotifyNeedsPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a phone number to turn this on.'**
+  String get ctrNotifyNeedsPhone;
+
+  /// No description provided for @ctrPhoneNeedsCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the country code so WhatsApp updates can reach this number.'**
+  String get ctrPhoneNeedsCountryCode;
+
+  /// No description provided for @ctrLineTrackingCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking code {code}'**
+  String ctrLineTrackingCode(String code);
+
+  /// No description provided for @ctrUpdatesTo.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp updates to {names}'**
+  String ctrUpdatesTo(String names);
+
+  /// No description provided for @ctrUpdatesOff.
+  ///
+  /// In en, this message translates to:
+  /// **'No WhatsApp updates'**
+  String get ctrUpdatesOff;
+
+  /// No description provided for @ctrCustomerPhoneNoCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer\'s phone has no country code, so WhatsApp updates can\'t reach it.'**
+  String get ctrCustomerPhoneNoCountryCode;
+
+  /// No description provided for @ctrReceiverPhoneNoCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'The receiver\'s phone has no country code, so WhatsApp updates can\'t reach it.'**
+  String get ctrReceiverPhoneNoCountryCode;
+
+  /// No description provided for @ctrReceiverShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver'**
+  String get ctrReceiverShort;
+
+  /// No description provided for @ctrEditContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit contacts'**
+  String get ctrEditContacts;
+
+  /// No description provided for @ctrEditContactsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Names and phones can be corrected at any time, even after the container ships.'**
+  String get ctrEditContactsNote;
+
+  /// No description provided for @ctrContactsSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Contacts updated'**
+  String get ctrContactsSaved;
 
   /// No description provided for @ctrLotQuestion.
   ///

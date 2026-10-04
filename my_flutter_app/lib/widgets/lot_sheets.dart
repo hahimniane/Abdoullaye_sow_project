@@ -262,12 +262,18 @@ class LotSheetButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              busy ? (busyLabel ?? label) : label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
+            // A long French label on a narrow phone shortens instead of
+            // overflowing the button.
+            Flexible(
+              child: Text(
+                busy ? (busyLabel ?? label) : label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],

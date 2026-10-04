@@ -3069,6 +3069,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get guestTrackingServiceFreightQuote => 'Demande de devis de fret';
 
   @override
+  String get guestTrackingServiceContainer => 'Envoi en conteneur';
+
+  @override
   String get guestTrackingStageBooked => 'Réservé';
 
   @override
@@ -9205,6 +9208,60 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get ctrErrMoveTarget =>
       'Une ligne ne peut être déplacée que vers un conteneur encore en chargement.';
+
+  @override
+  String get ctrErrCustomerPhoneInvalid =>
+      'Le téléphone du client ne ressemble pas à un numéro de téléphone.';
+
+  @override
+  String get ctrErrReceiverPhoneInvalid =>
+      'Le téléphone du destinataire ne ressemble pas à un numéro de téléphone.';
+
+  @override
+  String get ctrNotifyToggle =>
+      'Envoyer à cette personne les mises à jour WhatsApp de cet envoi';
+
+  @override
+  String get ctrNotifyNeedsPhone =>
+      'Ajoutez un numéro de téléphone pour activer cette option.';
+
+  @override
+  String get ctrPhoneNeedsCountryCode =>
+      'Ajoutez l\'indicatif pays pour que les mises à jour WhatsApp puissent joindre ce numéro.';
+
+  @override
+  String ctrLineTrackingCode(String code) {
+    return 'Code de suivi $code';
+  }
+
+  @override
+  String ctrUpdatesTo(String names) {
+    return 'Mises à jour WhatsApp pour $names';
+  }
+
+  @override
+  String get ctrUpdatesOff => 'Aucune mise à jour WhatsApp';
+
+  @override
+  String get ctrCustomerPhoneNoCountryCode =>
+      'Le téléphone du client n\'a pas d\'indicatif pays : les mises à jour WhatsApp ne peuvent pas le joindre.';
+
+  @override
+  String get ctrReceiverPhoneNoCountryCode =>
+      'Le téléphone du destinataire n\'a pas d\'indicatif pays : les mises à jour WhatsApp ne peuvent pas le joindre.';
+
+  @override
+  String get ctrReceiverShort => 'Destinataire';
+
+  @override
+  String get ctrEditContacts => 'Modifier les contacts';
+
+  @override
+  String get ctrEditContactsNote =>
+      'Les noms et les numéros peuvent être corrigés à tout moment, même après le départ du conteneur.';
+
+  @override
+  String get ctrContactsSaved => 'Contacts mis à jour';
 
   @override
   String get ctrLotQuestion => 'Cette voiture est-elle garée dans votre parc ?';

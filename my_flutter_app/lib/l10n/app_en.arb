@@ -1264,6 +1264,7 @@
   "guestTrackingServiceParking": "Car parking",
   "guestTrackingServiceSharedBarrel": "Shared barrel",
   "guestTrackingServiceFreightQuote": "Freight quote request",
+  "guestTrackingServiceContainer": "Container shipment",
   "guestTrackingStageBooked": "Booked",
   "guestTrackingStageInTransit": "In transit",
   "guestTrackingStageArrived": "Arrived",
@@ -4024,6 +4025,34 @@
     }
   },
   "ctrErrMoveTarget": "You can only move a line to a container that is still loading.",
+  "ctrErrCustomerPhoneInvalid": "The customer's phone doesn't look like a phone number.",
+  "ctrErrReceiverPhoneInvalid": "The receiver's phone doesn't look like a phone number.",
+  "ctrNotifyToggle": "Send this person WhatsApp updates about this shipment",
+  "ctrNotifyNeedsPhone": "Add a phone number to turn this on.",
+  "ctrPhoneNeedsCountryCode": "Add the country code so WhatsApp updates can reach this number.",
+  "ctrLineTrackingCode": "Tracking code {code}",
+  "@ctrLineTrackingCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrUpdatesTo": "WhatsApp updates to {names}",
+  "@ctrUpdatesTo": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrUpdatesOff": "No WhatsApp updates",
+  "ctrCustomerPhoneNoCountryCode": "The customer's phone has no country code, so WhatsApp updates can't reach it.",
+  "ctrReceiverPhoneNoCountryCode": "The receiver's phone has no country code, so WhatsApp updates can't reach it.",
+  "ctrReceiverShort": "Receiver",
+  "ctrEditContacts": "Edit contacts",
+  "ctrEditContactsNote": "Names and phones can be corrected at any time, even after the container ships.",
+  "ctrContactsSaved": "Contacts updated",
   "ctrLotQuestion": "Is this car parked in your lot?",
   "ctrLotYes": "Yes",
   "ctrLotYesNote": "Pick it from the cars in the lot.",
