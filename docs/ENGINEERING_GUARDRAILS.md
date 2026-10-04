@@ -340,7 +340,7 @@ Rules:
 | Data | Mobile (Flutter) | Web (admin_web) | Notes |
 | --- | --- | --- | --- |
 | **All countries** (complete) | `lib/data/country_catalog.dart` → `CountryCatalog.all` | `src/lib/country-catalog.ts` → `COUNTRY_CATALOG` / `COUNTRY_NAMES` | 249 ISO-3166 entries. For **address/location** pickers. |
-| **Phone calling codes** | `lib/data/calling_code_catalog.dart` → `CallingCodeCatalog` | n/a | Generated from libphonenumber metadata. Reuse for phone country selectors and validation. |
+| **Phone calling codes** | `lib/data/calling_code_catalog.dart` → `CallingCodeCatalog`; field: `lib/widgets/country_phone_field.dart` | `src/lib/calling-code-catalog.ts` (ported from the Dart file); field: `src/components/customer-phone-field.tsx` | Generated from libphonenumber metadata. Every phone input uses the field, so numbers are stored as `+<code><number>` — WhatsApp updates can only reach that form. |
 | **Business address country options** | `lib/data/business_location_catalog.dart` → `businessCountryOptions()` | use `COUNTRY_NAMES` | Full catalog with common countries pinned on top. |
 | **US states + cities** (complete) | `lib/data/us_locations.dart` → `usStateNames` | `src/lib/us-locations.ts` → `US_STATE_NAMES` | All states; cities per state. |
 | **Barrel destination countries** (CURATED) | Firestore `destinationCountries` / `country_catalog.dart` filtered | `operations-panels.tsx` `countries` | Deliberately limited (West Africa). Not for addresses. |
