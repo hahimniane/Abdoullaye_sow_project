@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.laawoldigital.app",
+      "sha256_cert_fingerprints": [
+        "BB:5B:8A:F8:73:CE:26:93:E6:88:B4:F0:9C:B6:F9:FE:EF:CA:13:3B:8A:ED:A6:80:3F:8B:B7:45:E4:E2:2D:85",
+        "B3:B7:1D:0A:95:5A:15:D4:98:24:D5:EA:80:C2:08:10:86:EC:14:75:37:56:FF:91:DC:51:87:9D:84:8F:5A:B3"
+      ]
+    }
+  }
+]

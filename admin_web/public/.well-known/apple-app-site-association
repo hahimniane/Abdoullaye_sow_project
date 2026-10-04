@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["GRKB7BXVZK.com.laawoldigital.app"],
+        "components": [
+          {"/": "/t/*", "comment": "Package and shipment tracking links (labels, WhatsApp updates)"}
+        ]
+      }
+    ]
+  }
+}

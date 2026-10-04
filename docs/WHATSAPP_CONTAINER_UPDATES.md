@@ -55,7 +55,7 @@ Hello {{1}}, an update from {{2}} about {{3}}: {{4}}. Tracking code: {{5}}.
 Button: *Visit website*, text `Track shipment`, URL type **Dynamic**:
 
 ```
-https://customer.laawoldigital.com/?service=tracking&code={{1}}
+https://customer.laawoldigital.com/t/{{1}}
 ```
 
 **French (`fr`)**

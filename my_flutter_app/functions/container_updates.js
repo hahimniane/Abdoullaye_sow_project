@@ -250,7 +250,11 @@ function containerUpdateMessageId(lineId, role, update) {
 }
 
 /**
- * The tracking page a customer opens from the message.
+ * The tracking link on a label and in every message: a short path the app
+ * claims as a universal/app link (only /t/, so payment and sign-in pages
+ * on the same host stay in the browser), and that the web host redirects
+ * to the tracking page when the app is not installed. Short on purpose: a
+ * shorter link is a less dense QR, and a less dense QR survives more damage.
  *
  * @param {string} consoleUrl The customer console's base URL.
  * @param {string} trackingCode The line's code.
@@ -259,10 +263,8 @@ function containerUpdateMessageId(lineId, role, update) {
 function trackingLink(consoleUrl, trackingCode) {
   const base = text(consoleUrl, 300).replace(/\/+$/, "") ||
     "https://customer.laawoldigital.com";
-  const query = new URLSearchParams({
-    service: "tracking", code: text(trackingCode, 40),
-  });
-  return `${base}/?${query.toString()}`;
+  const code = text(trackingCode, 40).toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  return `${base}/t/${code}`;
 }
 
 /**

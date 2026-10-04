@@ -44,7 +44,7 @@ describe("package labels", () => {
   it("encodes the public tracking link and prints no phone number", () => {
     const m = model();
     assert.equal(m.labels[0].link,
-        "https://customer.laawoldigital.com/?service=tracking&code=CL-K7M4P2");
+        "https://customer.laawoldigital.com/t/CL-K7M4P2");
     const page = renderContainerLabels(m, {qrSvgByCode: {}});
     assert.doesNotMatch(page, /\+224620000000|620000000/);
     assert.match(page, /CL-K7M4P2/);

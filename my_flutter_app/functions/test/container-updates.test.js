@@ -172,7 +172,7 @@ describe("what they read", () => {
   it("links to the public tracking page for the code", () => {
     const base = "https://customer.laawoldigital.com";
     assert.equal(trackingLink(`${base}/`, "CL-K7M4P2"),
-        `${base}/?service=tracking&code=CL-K7M4P2`);
+        `${base}/t/CL-K7M4P2`);
     assert.match(trackingLink("", "CL-K7M4P2"), /^https:\/\/customer\./);
   });
 });
