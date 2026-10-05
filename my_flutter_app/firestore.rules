@@ -551,8 +551,23 @@ service cloud.firestore {
       allow create: if request.auth != null &&
         (hasAdminCapability(request.auth.uid, 'operations') ||
          canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'parking'));
+      // Direct client updates are limited to what the app and console
+      // actually write: the status move (console updateParkingStatus, app
+      // _updateBusinessParkingStatus) and, on a legacy staff-keyed record, the
+      // descriptive/date/cost fields of the app's edit form. Everything else
+      // (amountPaidCents, paymentStatus, parkingPayments, billingHistory,
+      // recordedByStaffId, stripePaymentIntentId, checkoutSessionId,
+      // paymentLinkToken, customerUid, businessId, …) is server-owned and
+      // written only by the parking/billing callables and the Stripe webhook
+      // as admin. A business-entered record is priced by the server, so its
+      // dates and amount are edited only through the callable (which re-quotes
+      // and reissues links); a raw write there would contradict a payment link
+      // the customer already holds.
       allow update: if request.auth != null &&
         request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(parkedCarClientEditableFields(resource.data)) &&
+        request.resource.data.get('status', '') is string &&
         (hasAdminCapability(request.auth.uid, 'operations') ||
          canManageBusinessSection(request.auth.uid, resource.data.businessId, 'parking'));
       allow delete: if request.auth != null &&
@@ -560,42 +575,57 @@ service cloud.firestore {
          canManageBusinessSection(request.auth.uid, resource.data.businessId, 'parking'));
     }
 
+    function parkedCarIsBusinessEntry(data) {
+      return data.get('source', '') == 'business' ||
+        data.get('enteredByBusiness', false) == true;
+    }
+
+    function parkedCarClientEditableFields(data) {
+      return parkedCarIsBusinessEntry(data) ?
+        ['status', 'updatedAt'] :
+        [
+          'status',
+          'updatedAt',
+          'ownerName',
+          'carMake',
+          'carModel',
+          'carYear',
+          'vinNumber',
+          'parkingDate',
+          'parkingEndDate',
+          'totalCost'
+        ];
+    }
+
     // Lot ledger collections (design_handoff_lot_ledger). Every write goes
     // through a callable (createLotActivity, upsertLotActivityType,
     // createLotExpenseEntry, ...) that runs as admin and so bypasses these
     // rules; the client only READS these to render the ledger. Reads are
-    // scoped to the business's own managers, mirroring parkedCars. Client
-    // writes are allowed for a ledger-section manager as a safety net, but the
-    // console never writes these documents directly.
+    // scoped to the business's own managers, mirroring parkedCars. Neither the
+    // console nor the app writes these documents directly (both only
+    // subscribe), and a raw client write would skip the callables' audit log,
+    // amount validation, and instalment bookkeeping — so client writes are
+    // refused outright.
     function lotLedgerRead(businessId) {
       return request.auth != null &&
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, businessId));
     }
-    function lotLedgerWrite(businessId) {
-      return request.auth != null &&
-        (hasAdminCapability(request.auth.uid, 'operations') ||
-         canManageBusinessSection(request.auth.uid, businessId, 'ledger'));
-    }
     match /lotActivityTypes/{typeId} {
       allow read: if lotLedgerRead(resource.data.businessId);
-      allow create: if lotLedgerWrite(request.resource.data.businessId);
-      allow update, delete: if lotLedgerWrite(resource.data.businessId);
+      allow write: if false;
     }
     match /lotActivities/{activityId} {
       allow read: if lotLedgerRead(resource.data.businessId);
-      allow create: if lotLedgerWrite(request.resource.data.businessId);
-      allow update, delete: if lotLedgerWrite(resource.data.businessId);
+      allow write: if false;
     }
     match /lotExpenseLines/{lineId} {
       allow read: if lotLedgerRead(resource.data.businessId);
-      allow create: if lotLedgerWrite(request.resource.data.businessId);
-      allow update, delete: if lotLedgerWrite(resource.data.businessId);
+      allow write: if false;
     }
     match /lotExpenseEntries/{entryId} {
       allow read: if lotLedgerRead(resource.data.businessId);
-      allow create: if lotLedgerWrite(request.resource.data.businessId);
-      allow update, delete: if lotLedgerWrite(resource.data.businessId);
+      allow write: if false;
     }
     // The lot's customer memory (name, contact, cars seen), written only by
     // the callables when an activity or walk-up is recorded. Managers of the
@@ -672,8 +702,15 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // billingConfig/settings.autoChargeEnabled decides whether the scheduled
+    // job charges businesses' saved cards. Any admin may read it, but flipping
+    // it is a money switch: only a super admin or an admin holding the
+    // 'finance' capability (hasAdminCapability already admits super admins)
+    // may write it. No app or console screen writes it today.
     match /billingConfig/{docId} {
-      allow read, write: if request.auth != null && isAdmin(request.auth.uid);
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow write: if request.auth != null &&
+        hasAdminCapability(request.auth.uid, 'finance');
     }
 
     // A load that is "in transit" is inside a container, and the customer's
@@ -1297,19 +1334,25 @@ service cloud.firestore {
       // with the Admin SDK, which bypasses these rules).
       allow update: if request.auth != null &&
         hasAdminCapability(request.auth.uid, 'operations');
-      // A business may only nudge status/notes on a NON-finalized record, and may
-      // never alter buyer, money, payment, hold, or extension fields, nor delete
-      // the record. This stops deposit/payment tampering and history erasure;
-      // forfeits/refunds/sales must go through the guarded callables.
+      // A business may only edit its own notes on a NON-finalized record, and
+      // may never alter buyer, money, payment, hold, or extension fields, nor
+      // delete the record. purchaseStatus is server-owned for business staff:
+      // every legitimate transition already runs through a guarded callable —
+      // completed/cancelled via businessFinalizeCarPurchase, sold/no-show via
+      // markPaidHoldSold/markPaidHoldNoShow, viewing moves via actOnCarViewing,
+      // reserved/hold_review_required via payment reconciliation — and neither
+      // the app nor the console writes a status directly. Allowing an unchecked
+      // NEW status let a business stamp a terminal outcome ('completed',
+      // 'refunded', 'forfeited', …) without the state machine, the car update,
+      // or the refund queue. The allowed status transition set is therefore
+      // empty: purchaseStatus must be unchanged on a business write.
       allow update: if request.auth != null &&
         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'purchases') &&
         !(resource.data.purchaseStatus in ['completed', 'no_show', 'cancelled', 'refunded', 'forfeited']) &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['purchaseStatus', 'staffNotes', 'updatedAt']) &&
-        request.resource.data.businessId == resource.data.businessId &&
-        request.resource.data.buyerUid == resource.data.buyerUid &&
-        request.resource.data.depositAmount == resource.data.depositAmount &&
-        request.resource.data.paymentStatus == resource.data.paymentStatus;
+          .hasOnly(['staffNotes', 'updatedAt']) &&
+        request.resource.data.get('staffNotes', '') is string &&
+        request.resource.data.get('staffNotes', '').size() <= 4000;
       allow delete: if request.auth != null &&
         hasAdminCapability(request.auth.uid, 'operations');
     }

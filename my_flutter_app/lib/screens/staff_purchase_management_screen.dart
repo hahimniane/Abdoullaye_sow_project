@@ -125,7 +125,7 @@ class _StaffPurchaseManagementScreenState
       message: l10n.updatePurchaseStatusMessage(purchase.carTitle, status),
       confirmLabel: l10n.updateStatus,
       icon: Icons.receipt_long_outlined,
-      destructive: status == 'cancelled' || status == 'refunded',
+      destructive: status == 'cancelled',
     );
     if (!confirmed || !context.mounted) return;
     if (purchase.purchaseStatus == 'forfeited' && status == 'completed') {
@@ -137,49 +137,17 @@ class _StaffPurchaseManagementScreenState
       return;
     }
 
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final batch = firestore.batch();
-      final purchaseRef = firestore.collection('carPurchases').doc(purchase.id);
-      batch.update(purchaseRef, {
-        'purchaseStatus': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      if (status == 'completed' && !purchase.isViewingReservation) {
-        batch.update(firestore.collection('cars').doc(purchase.carId), {
-          'status': 'sold',
-          'soldInfo': {
-            'customerName': purchase.buyerName,
-            'customerPhone': purchase.buyerPhone,
-            'customerEmail': purchase.buyerEmail,
-            'amount': purchase.depositAmount,
-            'soldDate': FieldValue.serverTimestamp(),
-            'notes': 'Payment completed through app',
-          },
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else if (purchase.isViewingReservation && status == 'completed') {
-        batch.update(firestore.collection('cars').doc(purchase.carId), {
-          'status': 'active',
-          'reservedPurchaseId': FieldValue.delete(),
-          'reservationType': FieldValue.delete(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else if (status == 'cancelled' || status == 'refunded') {
-        batch.update(firestore.collection('cars').doc(purchase.carId), {
-          'status': 'active',
-          'reservedPurchaseId': FieldValue.delete(),
-          'reservationType': FieldValue.delete(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-      await batch.commit();
-      if (!context.mounted) return;
-      showSuccessSnackBar(context, l10n.purchaseUpdated);
-    } catch (e) {
-      if (!context.mounted) return;
-      showErrorSnackBar(context, l10n.operationFailed('$e'));
-    }
+    // Completed / cancelled are terminal: they move the car, may queue a
+    // deposit refund, and close the record for good. Firestore rules refuse
+    // them as a raw client write, so they go through the same guarded callable
+    // the business console uses (`businessFinalizeCarPurchase`), which
+    // re-checks the state machine and payment inside a transaction. A cancel
+    // of a paid deposit queues the refund there, so there is no separate
+    // "refunded" write from the app.
+    await _callPurchaseAction(context, 'businessFinalizeCarPurchase', {
+      'purchaseId': purchase.id,
+      'outcome': status,
+    });
   }
 
   @override
@@ -462,10 +430,6 @@ class _StaffPurchaseCard extends StatelessWidget {
                   OutlinedButton(
                     onPressed: () => onStatus('cancelled'),
                     child: Text(l10n.cancelled),
-                  ),
-                  OutlinedButton(
-                    onPressed: () => onStatus('refunded'),
-                    child: Text(l10n.refunded),
                   ),
                 ],
                 if (purchase.extensionRequestStatus == 'pending') ...[

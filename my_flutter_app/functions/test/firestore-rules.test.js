@@ -1063,10 +1063,18 @@ describe("business dashboard Firestore rules", () => {
         await assertSucceeds(
             firestoreFor("owner-a").doc("parkedCars/park_walkup_staff").get(),
         );
-        await assertSucceeds(
+        // Payment state is server-owned: "Mark payment received" and the
+        // Stripe webhook write it through callables. The lot may still move
+        // the car's status directly.
+        await assertFails(
             firestoreFor("staff-parking-a")
                 .doc("parkedCars/park_walkup_staff")
                 .set({paymentStatus: "paid"}, {merge: true}),
+        );
+        await assertSucceeds(
+            firestoreFor("staff-parking-a")
+                .doc("parkedCars/park_walkup_staff")
+                .set({status: "completed"}, {merge: true}),
         );
 
         // Still scoped: another business, staff without the parking
@@ -1539,7 +1547,7 @@ describe("business dashboard Firestore rules", () => {
           status: "sold",
         }, {merge: true}));
         await assertSucceeds(ownerDb.doc("parkedCars/park_a").set({
-          parkingStatus: "completed",
+          status: "completed",
         }, {merge: true}));
       });
 
@@ -2149,7 +2157,7 @@ describe("server-authoritative and granular admin Firestore rules", () => {
         const legacyAdminDb = firestoreFor("platform-admin");
 
         await assertSucceeds(operationsDb.doc("parkedCars/park_a").set({
-          parkingStatus: "completed",
+          status: "completed",
         }, {merge: true}));
         await assertSucceeds(operationsDb.doc("cars/car_a_1").set({
           status: "sold",
@@ -2878,17 +2886,6 @@ describe("support attachment Storage rules", () => {
             {contentType: "text/plain"},
         ),
     );
-    // Regression: uploads whose content type is missing/generic must not be
-    // rejected by the storage rule (the callable validates the real type).
-    await assertSucceeds(
-        putSupportAttachment(
-            storageFor("customer-support"),
-            "case_a",
-            "customer-support",
-            "clip.bin",
-            {contentType: "application/octet-stream"},
-        ),
-    );
   });
 
   it("allows an administrator with a dynamic support permission", async () => {
@@ -2936,5 +2933,363 @@ describe("support attachment Storage rules", () => {
                 },
             ),
         );
+      });
+});
+
+// ---------------------------------------------------------------------------
+// Security audit regressions (2026-10). Each block failed before its fix.
+// ---------------------------------------------------------------------------
+describe("car purchase status is server-owned for businesses", () => {
+  it("lets a purchases manager edit notes but never the status", async () => {
+    const ownerDb = firestoreFor("owner-a");
+
+    await assertSucceeds(ownerDb.doc("carPurchases/purchase_a").update({
+      staffNotes: "Called the buyer back",
+    }));
+    // Terminal outcomes must go through businessFinalizeCarPurchase /
+    // markPaidHoldSold / markPaidHoldNoShow, which move the car and queue
+    // refunds. Before the fix every one of these succeeded.
+    for (const purchaseStatus of [
+      "completed",
+      "no_show",
+      "cancelled",
+      "refunded",
+      "forfeited",
+    ]) {
+      await assertFails(ownerDb.doc("carPurchases/purchase_a").update({
+        purchaseStatus,
+      }));
+    }
+    // Non-terminal states are payment- or negotiation-driven too
+    // (reconciliation, actOnCarViewing); no client writes them directly.
+    for (const purchaseStatus of [
+      "reserved",
+      "hold_review_required",
+      "viewing_scheduled",
+      "made_up_status",
+    ]) {
+      await assertFails(ownerDb.doc("carPurchases/purchase_a").update({
+        purchaseStatus,
+      }));
+    }
+    await assertFails(ownerDb.doc("carPurchases/purchase_a").update({
+      staffNotes: 42,
+    }));
+    await assertFails(ownerDb.doc("carPurchases/purchase_a").update({
+      paymentStatus: "succeeded",
+    }));
+    // Staff without the purchases section stay out entirely.
+    await assertFails(
+        firestoreFor("staff-listings-a").doc("carPurchases/purchase_a").update({
+          staffNotes: "not mine",
+        }),
+    );
+  });
+
+  it("keeps the operations admin override", async () => {
+    await assertSucceeds(
+        firestoreFor("operations-admin").doc("carPurchases/purchase_a").update({
+          purchaseStatus: "cancelled",
+        }),
+    );
+  });
+});
+
+describe("billingConfig is a finance-only switch", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("billingConfig/settings").set({
+        autoChargeEnabled: false,
+      });
+    });
+  });
+
+  it("lets super admins and finance admins write it", async () => {
+    await assertSucceeds(
+        firestoreFor("super-admin").doc("billingConfig/settings").set({
+          autoChargeEnabled: true,
+        }, {merge: true}),
+    );
+    await assertSucceeds(
+        firestoreFor("finance-admin").doc("billingConfig/settings").set({
+          autoChargeEnabled: false,
+        }, {merge: true}),
+    );
+  });
+
+  it("denies every other admin and every non-admin", async () => {
+    for (const uid of [
+      "operations-admin",
+      "support-admin",
+      "content-admin",
+      "platform-admin",
+      "owner-a",
+      "customer-owner",
+    ]) {
+      await assertFails(
+          firestoreFor(uid).doc("billingConfig/settings").set({
+            autoChargeEnabled: true,
+          }, {merge: true}),
+      );
+    }
+    // Reading the switch stays open to admins.
+    await assertSucceeds(
+        firestoreFor("operations-admin").doc("billingConfig/settings").get(),
+    );
+    await assertFails(
+        firestoreFor("owner-a").doc("billingConfig/settings").get(),
+    );
+  });
+});
+
+describe("parkedCars direct updates are limited to client fields", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("parkedCars/park_entry_a").set({
+        businessId: "biz_a",
+        source: "business",
+        trackingCode: "PK-ENTRY1",
+        status: "reserved",
+        paymentMethod: "payment_link",
+        paymentStatus: "awaiting_payment",
+        totalCost: 120,
+        amountPaidCents: 0,
+      });
+    });
+  });
+
+  it("allows what the app and console write", async () => {
+    const ownerDb = firestoreFor("owner-a");
+    const staffDb = firestoreFor("staff-parking-a");
+
+    // Console updateParkingStatus: merge with the unchanged businessId.
+    await assertSucceeds(staffDb.doc("parkedCars/park_a").set({
+      businessId: "biz_a",
+      status: "completed",
+      updatedAt: new Date(),
+    }, {merge: true}));
+    // App legacy edit form on a staff-keyed record.
+    await assertSucceeds(ownerDb.doc("parkedCars/park_a").update({
+      ownerName: "Customer A",
+      carMake: "Toyota",
+      carModel: "Camry",
+      carYear: "2019",
+      vinNumber: "1HGCM82633A004352",
+      parkingDate: new Date("2026-10-01T00:00:00Z"),
+      parkingEndDate: new Date("2026-10-08T00:00:00Z"),
+      totalCost: 70,
+      status: "active",
+    }));
+    // A business-entered record still takes a status move.
+    await assertSucceeds(staffDb.doc("parkedCars/park_entry_a").update({
+      status: "cancelled",
+      updatedAt: new Date(),
+    }));
+  });
+
+  it("denies server-owned payment and identity fields", async () => {
+    const ownerDb = firestoreFor("owner-a");
+    for (const forged of [
+      {amountPaidCents: 12000},
+      {paymentStatus: "paid"},
+      {parkingPayments: [{amountCents: 12000}]},
+      {billingHistory: []},
+      {recordedByStaffId: "owner-a"},
+      {stripePaymentIntentId: "pi_forged"},
+      {checkoutSessionId: "cs_forged"},
+      {paymentLinkToken: "forged"},
+      {customerUid: "customer-owner"},
+      {businessId: "biz_b"},
+    ]) {
+      await assertFails(ownerDb.doc("parkedCars/park_entry_a").update(forged));
+      await assertFails(ownerDb.doc("parkedCars/park_a").update(forged));
+    }
+    // An operations admin is held to the same list.
+    await assertFails(
+        firestoreFor("operations-admin").doc("parkedCars/park_a").update({
+          amountPaidCents: 1,
+        }),
+    );
+  });
+
+  it("keeps a server-priced entry's dates and amount callable-only",
+      async () => {
+        const ownerDb = firestoreFor("owner-a");
+        await assertFails(ownerDb.doc("parkedCars/park_entry_a").update({
+          totalCost: 1,
+        }));
+        await assertFails(ownerDb.doc("parkedCars/park_entry_a").update({
+          parkingEndDate: new Date("2027-01-01T00:00:00Z"),
+        }));
+      });
+});
+
+describe("lot ledger collections are callable-only", () => {
+  it("denies every client write, even to ledger managers", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      for (const name of [
+        "lotActivityTypes",
+        "lotActivities",
+        "lotExpenseLines",
+        "lotExpenseEntries",
+      ]) {
+        await db.doc(`${name}/seed_a`).set({businessId: "biz_a", amount: 1});
+      }
+    });
+
+    for (const uid of ["owner-a", "operations-admin", "super-admin"]) {
+      const db = firestoreFor(uid);
+      for (const name of [
+        "lotActivityTypes",
+        "lotActivities",
+        "lotExpenseLines",
+        "lotExpenseEntries",
+      ]) {
+        await assertFails(db.doc(`${name}/forged_${uid}`).set({
+          businessId: "biz_a",
+          amount: 1,
+        }));
+        await assertFails(db.doc(`${name}/seed_a`).update({amount: 999}));
+        await assertFails(db.doc(`${name}/seed_a`).delete());
+      }
+    }
+    // Reads are unchanged.
+    await assertSucceeds(firestoreFor("owner-a").doc("lotActivities/seed_a")
+        .get());
+    await assertFails(firestoreFor("owner-b").doc("lotActivities/seed_a")
+        .get());
+  });
+});
+
+describe("user folder Storage rules", () => {
+  function putUserFile(storage, uid, fileName, options = {}) {
+    return storage.ref(`users/${uid}/profile/${fileName}`).put(
+        imageBytes(options.size),
+        {contentType: options.contentType || "image/jpeg"},
+    );
+  }
+
+  it("lets the owner upload an image and read it back", async () => {
+    await assertSucceeds(
+        putUserFile(storageFor("customer-owner"), "customer-owner", "me.jpg"),
+    );
+    await assertSucceeds(
+        storageFor("customer-owner")
+            .ref("users/customer-owner/profile/me.jpg").getMetadata(),
+    );
+    await assertSucceeds(
+        storageFor("super-admin")
+            .ref("users/customer-owner/profile/me.jpg").getMetadata(),
+    );
+  });
+
+  it("denies other users, non-images, and oversized files", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await putUserFile(context.storage(), "customer-owner", "saved.jpg");
+    });
+    // Before the fix any signed-in user could read every user's folder.
+    await assertFails(
+        storageFor("customer-stranger")
+            .ref("users/customer-owner/profile/saved.jpg").getMetadata(),
+    );
+    await assertFails(
+        storageFor(null)
+            .ref("users/customer-owner/profile/saved.jpg").getMetadata(),
+    );
+    await assertFails(
+        putUserFile(storageFor("customer-stranger"), "customer-owner", "x.jpg"),
+    );
+    await assertFails(
+        putUserFile(storageFor("customer-owner"), "customer-owner", "x.html", {
+          contentType: "text/html",
+        }),
+    );
+    await assertFails(
+        putUserFile(storageFor("customer-owner"), "customer-owner", "big.jpg", {
+          size: 11 * 1024 * 1024,
+        }),
+    );
+  });
+});
+
+describe("support attachment type allow-list", () => {
+  it("refuses types and sizes the callable would refuse", async () => {
+    for (const [fileName, contentType, size] of [
+      ["clip.bin", "application/octet-stream", 16],
+      ["page.html", "text/html", 16],
+      ["tool.exe", "application/x-msdownload", 16],
+      ["huge-photo.jpg", "image/jpeg", 10 * 1024 * 1024],
+      ["huge-voice.m4a", "audio/mp4", 10 * 1024 * 1024],
+      ["huge.pdf", "application/pdf", 25 * 1024 * 1024],
+    ]) {
+      await assertFails(
+          putSupportAttachment(
+              storageFor("customer-support"),
+              "case_a",
+              "customer-support",
+              fileName,
+              {contentType, size},
+          ),
+      );
+    }
+    for (const [fileName, contentType] of [
+      ["voice.m4a", "audio/mp4"],
+      ["letter.docx",
+        "application/vnd.openxmlformats-officedocument" +
+          ".wordprocessingml.document"],
+    ]) {
+      await assertSucceeds(
+          putSupportAttachment(
+              storageFor("customer-support"),
+              "case_a",
+              "customer-support",
+              fileName,
+              {contentType},
+          ),
+      );
+    }
+  });
+});
+
+describe("lot expense receipt Storage rules", () => {
+  function putReceipt(storage, businessId, fileName, options = {}) {
+    return storage.ref(`lotExpenseProofs/${businessId}/${fileName}`).put(
+        imageBytes(options.size),
+        {contentType: options.contentType || "image/jpeg"},
+    );
+  }
+
+  it("accepts a photo or a PDF from a ledger manager", async () => {
+    await assertSucceeds(putReceipt(storageFor("owner-a"), "biz_a", "r.jpg"));
+    await assertSucceeds(putReceipt(storageFor("owner-a"), "biz_a", "r.pdf", {
+      contentType: "application/pdf",
+    }));
+    await assertSucceeds(
+        putReceipt(storageFor("operations-admin"), "biz_a", "ops.png", {
+          contentType: "image/png",
+        }),
+    );
+  });
+
+  it("refuses other types, oversized files, and other businesses",
+      async () => {
+        for (const contentType of [
+          "text/html",
+          "video/mp4",
+          "application/octet-stream",
+          "application/zip",
+        ]) {
+          await assertFails(
+              putReceipt(storageFor("owner-a"), "biz_a", "bad", {contentType}),
+          );
+        }
+        await assertFails(
+            putReceipt(storageFor("owner-a"), "biz_a", "huge.pdf", {
+              contentType: "application/pdf",
+              size: 20 * 1024 * 1024,
+            }),
+        );
+        await assertFails(putReceipt(storageFor("owner-b"), "biz_a", "x.jpg"));
       });
 });
