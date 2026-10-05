@@ -5,6 +5,7 @@
  * totals, so the page never shows a number the server would not.
  */
 
+import { parseMoneyCents } from "./money-input.ts";
 import { localDateKey } from "./local-date.ts";
 import type { QueryFilterSpec } from "./paged-query.ts";
 
@@ -195,11 +196,10 @@ export function invoiceLineDraftFromRow(row: Row): InvoiceLineDraft {
   };
 }
 
+/** Typed dollars to cents, NaN when unusable (see money-input.ts). */
 export function dollarsToCents(value: string): number {
-  const cleaned = String(value ?? "").replace(/[$,\s]/g, "");
-  if (!cleaned) return NaN;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? Math.round(n * 100) : NaN;
+  const cents = parseMoneyCents(value);
+  return cents === null ? NaN : cents;
 }
 
 export function centsToInput(value: unknown): string {

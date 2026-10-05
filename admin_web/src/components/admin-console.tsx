@@ -1,5 +1,6 @@
 "use client";
 
+import { moneyDollars } from "@/lib/money-input";
 import { useConsoleDocumentTitle } from "@/lib/document-title";
 
 import {
@@ -11086,8 +11087,8 @@ function MarketplaceView({
   const filteredCars = useMemo(() => {
     const needle = listingSearch.trim().toLowerCase();
     const locationNeedle = listingLocation.trim().toLowerCase();
-    const min = minPrice.trim() ? Number(minPrice) : null;
-    const max = maxPrice.trim() ? Number(maxPrice) : null;
+    const min = minPrice.trim() ? moneyDollars(minPrice) : null;
+    const max = maxPrice.trim() ? moneyDollars(maxPrice) : null;
     const selectedBusiness = businesses.find((business) => {
       return text(business.id, "") === listingBusinessId;
     });
@@ -11655,9 +11656,9 @@ function DestinationCoverageRow({
   }, [destination]);
 
   async function save() {
-    const nextPrice = Number(price);
-    const nextAirPrice = Number(freightAirPrice);
-    const nextSeaPrice = Number(freightSeaPrice);
+    const nextPrice = moneyDollars(price, 0);
+    const nextAirPrice = moneyDollars(freightAirPrice, 0);
+    const nextSeaPrice = moneyDollars(freightSeaPrice, 0);
     const canonicalAvailability =
       canonicalDestinationServiceAvailability(enabledServices, availability);
     const rates = {

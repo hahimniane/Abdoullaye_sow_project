@@ -1,5 +1,6 @@
 "use client";
 
+import { moneyDollars } from "@/lib/money-input";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   collection,
@@ -748,9 +749,9 @@ export function DestinationsPanel({
       destinationCountryById(draft.countryId) ??
       destinationCountryOptionForRow(editingRow ?? { id: draft.countryId });
     if (!country) throw new Error("Select a supported country.");
-    const price = Number(draft.price);
-    const freightAirPrice = Number(draft.freightAirPrice || 0);
-    const freightSeaPrice = Number(draft.freightSeaPrice || 0);
+    const price = moneyDollars(draft.price, 0);
+    const freightAirPrice = moneyDollars(draft.freightAirPrice, 0);
+    const freightSeaPrice = moneyDollars(draft.freightSeaPrice, 0);
     const availability = canonicalDestinationServiceAvailability(
       enabledServices,
       destinationDraftAvailability(draft),
@@ -789,7 +790,7 @@ export function DestinationsPanel({
     // publish one however the form was left before the switches moved.
     const carriesFreight = availability.freightAir || availability.freightSea;
     const deliveryAvailable = carriesFreight && draft.destinationDelivery;
-    const deliveryFee = Number(draft.destinationDeliveryFee || 0);
+    const deliveryFee = moneyDollars(draft.destinationDeliveryFee, 0);
     const deliveryError = deliverySettingsError({
       available: deliveryAvailable,
       areas: draft.destinationDeliveryAreas,
@@ -891,7 +892,7 @@ export function DestinationsPanel({
   const deliveryFeeError = deliverySettingsError({
     available: draftCarriesFreight && draft.destinationDelivery,
     areas: draft.destinationDeliveryAreas,
-    fee: Number(draft.destinationDeliveryFee || 0),
+    fee: moneyDollars(draft.destinationDeliveryFee, 0),
   });
   const listedDeliveryAreas = draft.destinationDeliveryAreas.length;
 
@@ -1943,7 +1944,7 @@ export function ListingsPanel({
 
   async function saveListing() {
     if (!businessId) throw new Error("Business ID is required.");
-    const price = Number(draft.price);
+    const price = moneyDollars(draft.price, 0);
     if (!draft.title.trim() && (!draft.make.trim() || !draft.model.trim())) {
       throw new Error("Enter a title or make and model.");
     }
@@ -3712,7 +3713,7 @@ export function FreightPanel({
   // the customer had to ask.
   async function sendQuote(request: FirestoreRow) {
     const draft = quoteDrafts[request.id] ?? emptyFreightQuoteDraft();
-    const price = Number(draft.price);
+    const price = moneyDollars(draft.price);
     const validated = validateFreightQuote({
       amountCents: Number.isFinite(price) ? Math.round(price * 100) : Number.NaN,
       coversLoss: draft.coversLoss,
@@ -4411,7 +4412,7 @@ export function TransportPanel({
 
   async function saveQuote() {
     if (!draft.requestId || busyId) return;
-    const amount = Number(draft.amount);
+    const amount = moneyDollars(draft.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setMessage("Enter a valid quote amount.");
       return;

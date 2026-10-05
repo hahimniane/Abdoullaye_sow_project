@@ -11,6 +11,7 @@
  * without a browser. Copy that shape from `business-parking-entry.ts`.
  */
 
+import { parseMoneyCents } from "./money-input.ts";
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "./business-parking-entry.ts";
 import type { QueryFilterSpec } from "./paged-query.ts";
 
@@ -52,13 +53,9 @@ export const DEFAULT_EXPENSE_PROOF_THRESHOLD_CENTS = 7500;
 // ---------------------------------------------------------------------------
 
 /** Parse a dollar string ("50", "50.5", "$1,200.00") to whole cents, or null. */
+/** Typed dollars to cents, null when unusable (see money-input.ts). */
 export function dollarsToCents(value: unknown): number | null {
-  const raw = String(value ?? "").trim().replace(/[$,\s]/g, "");
-  if (raw === "") return null;
-  if (!/^-?\d*(\.\d{0,2})?$/.test(raw)) return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return null;
-  return Math.round(n * 100);
+  return parseMoneyCents(value);
 }
 
 /** `$1,234.00`. Negative renders as `−$1,234.00` (true minus, sign outside). */
