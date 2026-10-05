@@ -123,6 +123,13 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
     _listen();
   }
 
+  /// An error handler for a listener the ledger can live without. Unhandled,
+  /// a stream error (the rules refusing `users` to staff without the people
+  /// permission, a dropped connection) was reported as a fatal crash. Keep
+  /// what is already on screen; the next snapshot replaces it.
+  void Function(Object) _keepWhatIsShown(String what) =>
+      (Object error) => debugPrint('Lot ledger: $what unavailable ($error)');
+
   void _listen() {
     final id = widget.businessId;
     Query<Map<String, dynamic>> scoped(String path) =>
@@ -137,7 +144,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
         _allTypes = list;
         _types = list.where((t) => t.active).toList();
       });
-    }));
+    }, onError: _keepWhatIsShown('lotActivityTypes')));
 
     _subs.add(scoped('lotActivities')
         .orderBy('activityDate', descending: true)
@@ -161,14 +168,14 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
         for (final d in snap.docs) LotExpenseLine.fromMap(d.id, d.data()),
       ]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       setState(() => _lines = list.where((l) => l.active).toList());
-    }));
+    }, onError: _keepWhatIsShown('lotExpenseLines')));
 
     _subs.add(scoped('lotExpenseEntries').limit(2000).snapshots().listen((snap) {
       if (!mounted) return;
       setState(() => _entries = [
             for (final d in snap.docs) LotExpenseEntry.fromMap(d.id, d.data()),
           ]);
-    }));
+    }, onError: _keepWhatIsShown('lotExpenseEntries')));
 
     _subs.add(_db
         .collection('users')
@@ -187,7 +194,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
                     .toString(),
               ),
           ]);
-    }));
+    }, onError: _keepWhatIsShown('users')));
 
     _subs.add(scoped('parkedCars').limit(500).snapshots().listen((snap) {
       if (!mounted) return;
@@ -229,7 +236,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
             : lotDefaultProofThresholdCents;
         _parkingSpaces = spaces is num ? spaces.toInt() : 0;
       });
-    }));
+    }, onError: _keepWhatIsShown('businesses')));
 
     // The lot's customer memory is a one-shot read: it seeds the customer
     // picker, and a new customer written by a record refreshes it.
