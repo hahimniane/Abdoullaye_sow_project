@@ -4556,5 +4556,6 @@
   "authErrorInvalidOwnerPhone": "Saisissez un numéro de téléphone du propriétaire valide avec l’indicatif pays.",
   "authErrorInvalidBusinessPhone": "Saisissez un numéro de téléphone de l’entreprise valide avec l’indicatif pays.",
   "authErrorUnknown": "Une erreur s’est produite. Veuillez réessayer.",
-  "supportLoadEarlierMessages": "Charger les messages précédents"
+  "supportLoadEarlierMessages": "Charger les messages précédents",
+  "recordSavedReceiptUnavailable": "Enregistré. Numéro de suivi : {trackingCode}. Le reçu n’a pas pu être imprimé, mais la fiche est enregistrée - ne l’enregistrez pas une seconde fois."
 }

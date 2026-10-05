@@ -22,6 +22,7 @@ import '../services/vin_decoder_service.dart';
 import '../services/business_parking_entry.dart';
 import '../services/parking_rates.dart';
 import '../services/parking_service.dart';
+import '../services/payment_flow_safety.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../data/car_catalog.dart';
@@ -753,11 +754,17 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       _isLoading = true;
     });
 
+    final l10n = AppLocalizations.of(context)!;
+    ParkedCar savedRecord;
     try {
       final auth = context.read<AuthProvider>();
+      final businessId = auth.isAdmin
+          ? BusinessProfile.defaultBusinessId
+          : auth.businessId ?? BusinessProfile.defaultBusinessId;
       final trackingCode = await TrackingCodeGenerator.generateUniqueCode(
         prefix: 'PC',
         collectionPath: 'parkedCars',
+        businessId: businessId,
       );
 
       final newRecord = ParkedCar(
@@ -775,41 +782,36 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
           .collection('parkedCars')
           .add({
             ...newRecord.toFirestore(),
-            'businessId': auth.isAdmin
-                ? BusinessProfile.defaultBusinessId
-                : auth.businessId ?? BusinessProfile.defaultBusinessId,
+            'businessId': businessId,
             'businessName': auth.isAdmin
                 ? BusinessProfile.defaultBusinessName
                 : auth.businessName ?? BusinessProfile.defaultBusinessName,
           });
 
-      final savedRecord = newRecord.copyWith(id: docRef.id);
-
-      await _generateAndPrintReceipt(savedRecord);
-
-      if (mounted) {
-        showSuccessSnackBar(
-          context,
-          AppLocalizations.of(
-            context,
-          )!.parkingSavedWithTracking(savedRecord.trackingCode),
-        );
-        Navigator.of(context).pop();
-      }
+      savedRecord = newRecord.copyWith(id: docRef.id);
     } catch (e) {
       if (mounted) {
-        showErrorSnackBar(
-          context,
-          AppLocalizations.of(context)!.errorGeneratingReceipt(e.toString()),
-        );
+        showErrorSnackBar(context, l10n.errorGeneratingReceipt(e.toString()));
+        setState(() => _isLoading = false);
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      return;
     }
+
+    // The car is saved. Printing is best effort from here on: a printer
+    // failure used to land in the same catch as a failed save, so staff saw
+    // an error, tried again, and recorded the car twice.
+    final printed = await runBestEffortPostPaymentAction(
+      () => _generateAndPrintReceipt(savedRecord),
+    );
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    showSuccessSnackBar(
+      context,
+      printed
+          ? l10n.parkingSavedWithTracking(savedRecord.trackingCode)
+          : l10n.recordSavedReceiptUnavailable(savedRecord.trackingCode),
+    );
+    Navigator.of(context).pop();
   }
 
   Future<void> _generateAndPrintReceipt(ParkedCar record) async {

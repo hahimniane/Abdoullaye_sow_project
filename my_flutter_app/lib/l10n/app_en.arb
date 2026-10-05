@@ -4556,5 +4556,13 @@
   "authErrorInvalidOwnerPhone": "Enter a valid owner phone number with country code.",
   "authErrorInvalidBusinessPhone": "Enter a valid business phone number with country code.",
   "authErrorUnknown": "Something went wrong. Please try again.",
-  "supportLoadEarlierMessages": "Load earlier messages"
+  "supportLoadEarlierMessages": "Load earlier messages",
+  "recordSavedReceiptUnavailable": "Saved. Tracking number: {trackingCode}. The receipt could not be printed, but the record is saved - do not save it again.",
+  "@recordSavedReceiptUnavailable": {
+    "placeholders": {
+      "trackingCode": {
+        "type": "String"
+      }
+    }
+  }
 }

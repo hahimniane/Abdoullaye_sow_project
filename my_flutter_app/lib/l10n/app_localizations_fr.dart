@@ -10224,4 +10224,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get supportLoadEarlierMessages => 'Charger les messages précédents';
+
+  @override
+  String recordSavedReceiptUnavailable(String trackingCode) {
+    return 'Enregistré. Numéro de suivi : $trackingCode. Le reçu n’a pas pu être imprimé, mais la fiche est enregistrée - ne l’enregistrez pas une seconde fois.';
+  }
 }

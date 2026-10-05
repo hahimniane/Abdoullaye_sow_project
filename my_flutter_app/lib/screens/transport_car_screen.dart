@@ -11,6 +11,7 @@ import '../models/transport_request.dart';
 import '../providers/auth_provider.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/action_confirmation.dart';
+import '../services/payment_flow_safety.dart';
 import '../utils/money_input.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
@@ -121,11 +122,16 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
 
     setState(() => _isSubmitting = true);
 
+    TransportRequest savedRequest;
     try {
       final auth = context.read<AuthProvider>();
+      final businessId = auth.isAdmin
+          ? BusinessProfile.defaultBusinessId
+          : auth.businessId ?? BusinessProfile.defaultBusinessId;
       final trackingCode = await TrackingCodeGenerator.generateUniqueCode(
         prefix: 'TR',
         collectionPath: 'transportRequests',
+        businessId: businessId,
       );
 
       final request = TransportRequest(
@@ -150,31 +156,34 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
           .collection('transportRequests')
           .add({
             ...request.toFirestore(),
-            'businessId': auth.isAdmin
-                ? BusinessProfile.defaultBusinessId
-                : auth.businessId ?? BusinessProfile.defaultBusinessId,
+            'businessId': businessId,
             'businessName': auth.isAdmin
                 ? BusinessProfile.defaultBusinessName
                 : auth.businessName ?? BusinessProfile.defaultBusinessName,
           });
 
-      final savedRequest = request.copyWith(id: docRef.id);
-      await generateTransportReceipt(request: savedRequest);
-
-      if (!mounted) return;
-      showSuccessSnackBar(
-        context,
-        l10n.transportRequestSavedWithTracking(savedRequest.trackingCode),
-      );
-      Navigator.of(context).pop();
+      savedRequest = request.copyWith(id: docRef.id);
     } catch (e) {
       if (!mounted) return;
       showErrorSnackBar(context, l10n.failedToSaveTransport(e.toString()));
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      setState(() => _isSubmitting = false);
+      return;
     }
+
+    // Saved. The receipt is best effort: a print failure must not read as a
+    // failed save and invite a second, duplicate request.
+    final printed = await runBestEffortPostPaymentAction(
+      () => generateTransportReceipt(request: savedRequest),
+    );
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    showSuccessSnackBar(
+      context,
+      printed
+          ? l10n.transportRequestSavedWithTracking(savedRequest.trackingCode)
+          : l10n.recordSavedReceiptUnavailable(savedRequest.trackingCode),
+    );
+    Navigator.of(context).pop();
   }
 
   @override

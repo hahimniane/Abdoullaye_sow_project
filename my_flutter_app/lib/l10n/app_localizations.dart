@@ -17777,6 +17777,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Load earlier messages'**
   String get supportLoadEarlierMessages;
+
+  /// No description provided for @recordSavedReceiptUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved. Tracking number: {trackingCode}. The receipt could not be printed, but the record is saved - do not save it again.'**
+  String recordSavedReceiptUnavailable(String trackingCode);
 }
 
 class _AppLocalizationsDelegate

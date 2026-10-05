@@ -10073,4 +10073,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get supportLoadEarlierMessages => 'Load earlier messages';
+
+  @override
+  String recordSavedReceiptUnavailable(String trackingCode) {
+    return 'Saved. Tracking number: $trackingCode. The receipt could not be printed, but the record is saved - do not save it again.';
+  }
 }
