@@ -469,7 +469,9 @@ void main() {
       );
       expect(
         home,
-        contains('if (auth.hasBusinessPermission(BusinessPermission.parking))'),
+        contains(
+          'if (hasBusiness && auth.hasBusinessPermission(BusinessPermission.parking))',
+        ),
       );
       // One render site, and it sits inside the guard - a user without the
       // permission has no path to the screen from this page.

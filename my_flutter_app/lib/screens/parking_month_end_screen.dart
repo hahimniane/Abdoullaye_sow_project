@@ -8,8 +8,10 @@ import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/parked_car.dart';
+import '../services/business_activity_queries.dart';
 import '../services/business_parking_entry.dart'
     show businessParkingReceivedViaValues;
+import '../services/firestore_query_spec.dart';
 import '../services/parking_month_statement.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -54,6 +56,24 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   /// unpaid, go on the same bills as the cars.
   List<Map<String, dynamic>> _activities = const [];
 
+  /// The month's reads, replaced when the month changes. Exactly what the
+  /// server's month-end job reads (`notifyParkingMonthEndFor`): the stays
+  /// that end on or after the month starts, the activities dated in it, the
+  /// older unsettled ones, and the rare undated ones. This screen used to
+  /// listen to every parked car and every activity the lot ever had to bill
+  /// one month.
+  final List<StreamSubscription<Object?>> _monthSubs = [];
+  String _subscribedMonth = '';
+  List<Map<String, dynamic>> _inMonth = const [];
+  List<Map<String, dynamic>> _unsettled = const [];
+  List<Map<String, dynamic>> _undated = const [];
+  Timer? _loadingSafety;
+
+  /// The statement, worked out once per change of the rows or the month -
+  /// not on every rebuild (a busy flag flipping used to re-run it).
+  Object? _summaryKey;
+  ParkingMonthSummary? _summaryCache;
+
   /// The team, for "Received by" when a whole bill is marked paid.
   List<({String id, String name})> _staff = const [];
   Map<String, dynamic> _business = const {};
@@ -64,24 +84,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   @override
   void initState() {
     super.initState();
-    _subs.add(
-      _db
-          .collection('parkedCars')
-          .where('businessId', isEqualTo: widget.businessId)
-          .snapshots()
-          .listen(
-            (snap) {
-              if (!mounted) return;
-              setState(() {
-                _docs = snap.docs;
-                _loading = false;
-              });
-            },
-            onError: (_) {
-              if (mounted) setState(() => _loading = false);
-            },
-          ),
-    );
+    _subscribeMonth();
     _subs.add(
       _db
           .collection('users')
@@ -106,20 +109,6 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
           }, onError: (_) {}),
     );
     _subs.add(
-      _db
-          .collection('lotActivities')
-          .where('businessId', isEqualTo: widget.businessId)
-          .snapshots()
-          .listen((snap) {
-            if (!mounted) return;
-            setState(
-              () => _activities = [
-                for (final d in snap.docs) {...d.data(), 'id': d.id},
-              ],
-            );
-          }, onError: (_) {}),
-    );
-    _subs.add(
       _db.collection('businesses').doc(widget.businessId).snapshots().listen((
         doc,
       ) {
@@ -128,11 +117,118 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     );
   }
 
+  /// (Re)reads the month on screen. A no-op when it is already the one read.
+  void _subscribeMonth() {
+    final monthKey = _monthKey;
+    if (monthKey == _subscribedMonth) return;
+    _subscribedMonth = monthKey;
+    for (final s in _monthSubs) {
+      s.cancel();
+    }
+    _monthSubs.clear();
+    final days = parkingMonthDays(monthKey);
+    if (days == null) {
+      _docs = const [];
+      _inMonth = _unsettled = _undated = const [];
+      _activities = const [];
+      _loading = false;
+      return;
+    }
+    const dayMs = 24 * 60 * 60 * 1000;
+    final startMs = days.first * dayMs;
+    final endMs = (days.last + 1) * dayMs;
+    final id = widget.businessId;
+    _loading = true;
+    _loadingSafety?.cancel();
+    // The spinner always resolves, even if a read never answers.
+    _loadingSafety = Timer(const Duration(seconds: 20), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
+    List<Map<String, dynamic>> rows(QuerySnapshot<Map<String, dynamic>> snap) =>
+        [for (final d in snap.docs) {...d.data(), 'id': d.id}];
+    void mergeActivities() {
+      _activities = mergeById<Map<String, dynamic>>(
+        [_inMonth, _unsettled, _undated],
+        (row) => '${row['id'] ?? ''}',
+      );
+    }
+
+    _monthSubs.add(
+      parkedCarsEndingFromSpec(id, startMs).build(_db).snapshots().listen(
+        (snap) {
+          if (!mounted) return;
+          setState(() {
+            _docs = snap.docs;
+            _loading = false;
+          });
+        },
+        onError: (_) {
+          if (mounted) setState(() => _loading = false);
+        },
+      ),
+    );
+    _monthSubs.add(
+      lotActivitiesBetweenSpec(
+        id,
+        Timestamp.fromMillisecondsSinceEpoch(startMs),
+        Timestamp.fromMillisecondsSinceEpoch(endMs),
+      ).build(_db).snapshots().listen((snap) {
+        if (!mounted) return;
+        setState(() {
+          _inMonth = rows(snap);
+          mergeActivities();
+        });
+      }, onError: (_) {}),
+    );
+    _monthSubs.add(
+      lotActivitiesUnsettledSpec(id).build(_db).snapshots().listen((snap) {
+        if (!mounted) return;
+        setState(() {
+          _unsettled = rows(snap);
+          mergeActivities();
+        });
+      }, onError: (_) {}),
+    );
+    _monthSubs.add(
+      lotActivitiesUndatedSpec(id).build(_db).snapshots().listen((snap) {
+        if (!mounted) return;
+        setState(() {
+          _undated = rows(snap);
+          mergeActivities();
+        });
+      }, onError: (_) {}),
+    );
+  }
+
+  void _showMonth(String monthKey) {
+    setState(() => _monthKey = monthKey);
+    _subscribeMonth();
+  }
+
+  ParkingMonthSummary _summary() {
+    final key = (_docs, _activities, _monthKey);
+    final cached = _summaryCache;
+    if (cached != null && key == _summaryKey) return cached;
+    _summaryKey = key;
+    return _summaryCache = parkingMonthSummary(
+      [
+        for (final d in _docs) {...?d.data(), 'id': d.id},
+      ],
+      _monthKey,
+      null,
+      _activities,
+    );
+  }
+
   @override
   void dispose() {
     for (final s in _subs) {
       s.cancel();
     }
+    for (final s in _monthSubs) {
+      s.cancel();
+    }
+    _loadingSafety?.cancel();
     super.dispose();
   }
 
@@ -305,14 +401,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).toLanguageTag();
-    final summary = parkingMonthSummary(
-      [
-        for (final d in _docs) {...?d.data(), 'id': d.id},
-      ],
-      _monthKey,
-      null,
-      _activities,
-    );
+    final summary = _summary();
     final thisMonth = shiftParkingMonthKey(previousParkingMonthKey(), 1);
     // One card per customer (grouped by phone), their cars underneath.
     final listed = _showAll ? summary.customers : summary.customersOwing;
@@ -382,9 +471,8 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                         IconButton(
                           key: const Key('month-end-previous'),
                           tooltip: l10n.pmePreviousMonth,
-                          onPressed: () => setState(
-                            () =>
-                                _monthKey = shiftParkingMonthKey(_monthKey, -1),
+                          onPressed: () => _showMonth(
+                            shiftParkingMonthKey(_monthKey, -1),
                           ),
                           icon: const Icon(Icons.chevron_left),
                         ),
@@ -405,11 +493,8 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                           tooltip: l10n.pmeNextMonth,
                           onPressed: _monthKey.compareTo(thisMonth) >= 0
                               ? null
-                              : () => setState(
-                                  () => _monthKey = shiftParkingMonthKey(
-                                    _monthKey,
-                                    1,
-                                  ),
+                              : () => _showMonth(
+                                  shiftParkingMonthKey(_monthKey, 1),
                                 ),
                           icon: const Icon(Icons.chevron_right),
                         ),

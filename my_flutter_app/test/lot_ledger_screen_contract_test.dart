@@ -31,12 +31,19 @@ void main() {
     for (final collection in [
       'lotActivityTypes',
       'lotExpenseLines',
-      'lotActivities',
-      'lotExpenseEntries',
-      'parkedCars',
     ]) {
       expect(screen, contains("'$collection'"),
           reason: '$collection is the business own data');
+    }
+    // The money collections are read for the period on screen, through the
+    // business-scoped query specs (see firestore_query_scope_test.dart).
+    for (final spec in [
+      'lotActivitiesBetweenSpec(',
+      'lotExpenseEntriesForMonthsSpec(',
+      'parkedCarsEndingFromSpec(',
+      'parkedCarsUnsettledSpec(id)',
+    ]) {
+      expect(screen, contains(spec));
     }
     // Every query is scoped to the business, which is also what the security
     // rules authorize on.
@@ -71,8 +78,10 @@ void main() {
     expect(screen, contains('lotFindKnownCar('));
     expect(screen, contains('NhtsaVinDecoderService()'));
     expect(screen, contains('VinScannerScreen()'));
-    expect(screen, contains("'parkedCars'"),
+    expect(screen, contains('LotKnownCar.fromMap(row)'),
         reason: 'a parked car is the first place a VIN should be found');
+    expect(screen, contains('KnownCarLookup.forBusiness('),
+        reason: 'an older VIN is looked up exactly, not by reading history');
   });
 
   test('the home menu gates the tile on the ledger permission', () {

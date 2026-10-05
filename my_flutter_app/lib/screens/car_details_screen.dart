@@ -19,6 +19,7 @@ import '../widgets/language_toggle.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/car_option_localization.dart';
+import '../utils/listing_image.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 
@@ -1737,7 +1738,7 @@ class _ImageGallery extends StatelessWidget {
                 ),
               );
             }
-            return Image.network(
+            return ListingNetworkImage(
               imageUrl,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {

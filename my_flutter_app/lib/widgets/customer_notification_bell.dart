@@ -81,7 +81,7 @@ class CustomerNotificationBell extends StatelessWidget {
   }
 }
 
-class _SignedInBell extends StatelessWidget {
+class _SignedInBell extends StatefulWidget {
   const _SignedInBell({
     required this.uid,
     required this.firestore,
@@ -92,16 +92,38 @@ class _SignedInBell extends StatelessWidget {
   final FirebaseFirestore firestore;
   final Color? iconColor;
 
-  Stream<List<CustomerNotification>> get _stream {
-    return firestore
+  @override
+  State<_SignedInBell> createState() => _SignedInBellState();
+}
+
+class _SignedInBellState extends State<_SignedInBell> {
+  /// One listener per signed-in user. The bell sits in headers that rebuild
+  /// on every AuthProvider change; built as a getter it re-subscribed (and
+  /// re-read thirty notifications) on each of those rebuilds.
+  late Stream<List<CustomerNotification>> _stream = _streamFor(widget);
+
+  static Stream<List<CustomerNotification>> _streamFor(_SignedInBell bell) {
+    return bell.firestore
         .collection('users')
-        .doc(uid)
+        .doc(bell.uid)
         .collection('notifications')
         .orderBy('createdAt', descending: true)
         .limit(30)
         .snapshots()
         .map((snapshot) => snapshot.docs.map(CustomerNotification.fromDoc).toList());
   }
+
+  @override
+  void didUpdateWidget(covariant _SignedInBell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uid != widget.uid || oldWidget.firestore != widget.firestore) {
+      _stream = _streamFor(widget);
+    }
+  }
+
+  String get uid => widget.uid;
+  FirebaseFirestore get firestore => widget.firestore;
+  Color? get iconColor => widget.iconColor;
 
   @override
   Widget build(BuildContext context) {

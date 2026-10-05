@@ -12,10 +12,12 @@ import '../models/business_service.dart';
 import '../providers/auth_provider.dart';
 import '../services/car_purchase_service.dart';
 import '../services/car_viewing_service.dart';
+import '../services/business_activity_queries.dart';
 import '../services/favorite_cars_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/car_option_localization.dart';
+import '../utils/listing_image.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/car_viewing_negotiation.dart';
@@ -40,9 +42,28 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
   List<Car> _allCars = <Car>[];
   List<Car> _filteredCars = <Car>[];
 
+  /// Every listing loaded this session, by id, so the filter sheet keeps
+  /// offering every make it has seen even after a make filter narrows the
+  /// query to one.
+  final Map<String, Car> _seenCars = <String, Car>{};
+
+  /// How many pages of the marketplace are loaded. The listener reads the
+  /// newest `marketplacePageSize * _pages` listings; "Load more" adds a page.
+  /// It used to read every active car on the platform on open.
+  int _pages = 1;
+  bool _hasMore = false;
+  bool _isLoadingMore = false;
+
   bool _isLoading = true;
   bool _isFilterSheetOpen = false;
   String? _errorMessage;
+
+  /// The signed-in buyer's favourites and viewings, made once per user. They
+  /// were built inside `build`, nested, and so re-subscribed on every
+  /// keystroke in the search field.
+  String? _buyerStreamsUid;
+  Stream<Set<String>>? _favoriteIds;
+  Stream<List<CarPurchase>>? _reservations;
 
   @override
   void initState() {
@@ -51,10 +72,31 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
     _subscribeToCars();
   }
 
+  void _ensureBuyerStreams(String uid) {
+    if (_buyerStreamsUid == uid && _favoriteIds != null) return;
+    _buyerStreamsUid = uid;
+    _favoriteIds = FavoriteCarsService().favoriteIdsStream();
+    _reservations = CarPurchaseService().activeViewingReservationsForUser(uid);
+  }
+
+  void _loadMore() {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() {
+      _isLoadingMore = true;
+      _pages += 1;
+    });
+    _subscribeToCars();
+  }
+
   void _subscribeToCars() {
-    _subscription = FirebaseFirestore.instance
-        .collection('cars')
-        .where('status', isEqualTo: 'active')
+    _subscription?.cancel();
+    final spec = marketplaceCarsSpec(
+      pages: _pages,
+      make: _filters.make,
+      model: _filters.model,
+    );
+    _subscription = spec
+        .build(FirebaseFirestore.instance)
         .snapshots()
         .listen(
           (snapshot) {
@@ -76,8 +118,14 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
             if (!mounted) return;
             setState(() {
               _allCars = cars;
+              for (final car in cars) {
+                _seenCars[car.id] = car;
+              }
               _filteredCars = _applyFilter(_searchController.text, cars);
+              // A full page back means there may be more behind it.
+              _hasMore = snapshot.docs.length >= (spec.limit ?? 0);
               _isLoading = false;
+              _isLoadingMore = false;
               _errorMessage = null;
             });
           },
@@ -86,6 +134,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
             setState(() {
               _errorMessage = error.toString();
               _isLoading = false;
+              _isLoadingMore = false;
             });
           },
         );
@@ -189,10 +238,19 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
   }
 
   void _updateFilters(_CarFilters filters) {
+    // Make and model narrow the query itself; everything else narrows what is
+    // loaded. A new make starts again from the first page.
+    final requery =
+        filters.make != _filters.make || filters.model != _filters.model;
     setState(() {
       _filters = filters;
       _filteredCars = _applyFilter(_searchController.text, _allCars);
+      if (requery) {
+        _pages = 1;
+        _isLoading = true;
+      }
     });
+    if (requery) _subscribeToCars();
   }
 
   Future<void> _openFilters() async {
@@ -309,7 +367,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
 
   List<String> _valuesFor(String Function(Car car) selector) {
     final values =
-        _allCars
+        _seenCars.values
             .map(selector)
             .where((value) => value.trim().isNotEmpty)
             .toSet()
@@ -319,7 +377,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
   }
 
   List<String> _listValuesFor(Iterable<String> Function(Car car) selector) {
-    return canonicalCarFeatureOptions(_allCars.expand(selector));
+    return canonicalCarFeatureOptions(_seenCars.values.expand(selector));
   }
 
   @override
@@ -334,6 +392,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
               l10n: l10n,
               totalCars: _allCars.length,
               visibleCars: _filteredCars.length,
+              hasMore: _hasMore,
               showBackButton: widget.showBackButton,
             ),
             Padding(
@@ -389,10 +448,29 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
       );
     }
 
-    if (_filteredCars.isEmpty) {
+    final loadMore = _hasMore
+        ? _LoadMoreCars(
+            label: l10n.marketplaceLoadMoreCars,
+            isLoading: _isLoadingMore,
+            onTap: _loadMore,
+          )
+        : null;
+
+    if (_filteredCars.isEmpty && loadMore == null) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
         child: _EmptyState(l10n: l10n, filtered: _filters.isActive),
+      );
+    }
+    if (_filteredCars.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        children: [
+          _EmptyState(l10n: l10n, filtered: _filters.isActive),
+          // Nothing matched in what is loaded - but older listings may.
+          const SizedBox(height: 14),
+          loadMore!,
+        ],
       );
     }
 
@@ -405,17 +483,17 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
         reservationsByCarId: const <String, CarPurchase>{},
         favoriteIds: const <String>{},
         onFavoriteToggle: (car, value) => _toggleFavorite(context, car, value),
+        footer: loadMore,
       );
     }
 
+    _ensureBuyerStreams(user.uid);
     return StreamBuilder<Set<String>>(
-      stream: FavoriteCarsService().favoriteIdsStream(),
+      stream: _favoriteIds,
       builder: (context, snapshot) {
         final favoriteIds = snapshot.data ?? const <String>{};
         return StreamBuilder<List<CarPurchase>>(
-          stream: CarPurchaseService().activeViewingReservationsForUser(
-            user.uid,
-          ),
+          stream: _reservations,
           builder: (context, snapshot) {
             final reservationsByCarId = <String, CarPurchase>{};
             for (final reservation in snapshot.data ?? const <CarPurchase>[]) {
@@ -432,6 +510,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
               favoriteIds: favoriteIds,
               onFavoriteToggle: (car, value) =>
                   _toggleFavorite(context, car, value),
+              footer: loadMore,
             );
           },
         );
@@ -448,6 +527,7 @@ class _CarList extends StatelessWidget {
     required this.reservationsByCarId,
     required this.favoriteIds,
     required this.onFavoriteToggle,
+    this.footer,
   });
 
   final List<Car> cars;
@@ -457,13 +537,18 @@ class _CarList extends StatelessWidget {
   final Set<String> favoriteIds;
   final void Function(Car car, bool value) onFavoriteToggle;
 
+  /// "Load more" after the last car, when more listings exist.
+  final Widget? footer;
+
   @override
   Widget build(BuildContext context) {
+    final footer = this.footer;
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 24),
-      itemCount: cars.length,
+      itemCount: cars.length + (footer == null ? 0 : 1),
       separatorBuilder: (_, _) => const SizedBox(height: 14),
       itemBuilder: (context, index) {
+        if (index == cars.length) return footer!;
         final car = cars[index];
         return _CarListTile(
           car: car,
@@ -481,6 +566,38 @@ class _CarList extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+/// The marketplace's "Load more": disabled with a spinner while the next page
+/// is on its way, so a second tap cannot ask for two.
+class _LoadMoreCars extends StatelessWidget {
+  const _LoadMoreCars({
+    required this.label,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: OutlinedButton.icon(
+        key: const Key('marketplace-load-more'),
+        onPressed: isLoading ? null : onTap,
+        icon: isLoading
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.expand_more),
+        label: Text(label),
+      ),
     );
   }
 }
@@ -1701,12 +1818,16 @@ class _BrowseHeader extends StatelessWidget {
     required this.totalCars,
     required this.visibleCars,
     required this.showBackButton,
+    this.hasMore = false,
   });
 
   final AppLocalizations l10n;
   final int totalCars;
   final int visibleCars;
   final bool showBackButton;
+
+  /// More listings exist than are loaded, so the total reads "30+".
+  final bool hasMore;
 
   @override
   Widget build(BuildContext context) {
@@ -1762,6 +1883,7 @@ class _BrowseHeader extends StatelessWidget {
                   _HeaderCountBadge(
                     visibleCars: visibleCars,
                     totalCars: totalCars,
+                    hasMore: hasMore,
                     label: l10n.cars,
                   ),
                 ],
@@ -1781,17 +1903,20 @@ class _HeaderCountBadge extends StatelessWidget {
     required this.visibleCars,
     required this.totalCars,
     required this.label,
+    this.hasMore = false,
   });
 
   final int visibleCars;
   final int totalCars;
   final String label;
+  final bool hasMore;
 
   @override
   Widget build(BuildContext context) {
+    final total = hasMore ? '$totalCars+' : '$totalCars';
     final countText = visibleCars == totalCars
-        ? '$totalCars'
-        : '$visibleCars/$totalCars';
+        ? total
+        : '$visibleCars/$total';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
@@ -1963,7 +2088,7 @@ class _CarListTile extends StatelessWidget {
               Stack(
                 children: [
                   imageUrl != null
-                      ? Image.network(
+                      ? ListingNetworkImage(
                           imageUrl,
                           width: double.infinity,
                           height: 176,

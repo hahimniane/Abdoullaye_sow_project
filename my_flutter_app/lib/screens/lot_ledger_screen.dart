@@ -11,8 +11,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/business_parking_entry.dart';
+import '../services/business_activity_queries.dart';
 import '../services/container_manifest.dart';
 import '../services/lot_customers.dart';
+import '../services/firestore_query_spec.dart';
+import '../services/known_car_lookup.dart';
 import '../services/lot_ledger.dart';
 import '../services/vin_decoder_service.dart';
 import '../utils/action_confirmation.dart';
@@ -66,8 +69,28 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   List<LotKnownCar> _parkedCars = const [];
   // The raw parkedCars documents, kept alongside the VIN-lookup list above so
   // the ledger can total parked-car money the same way the Parking screen does.
+  // Two narrow reads, merged: the stays that touch the report year (they
+  // carry the year's parking money) and every stay still owed for. This was
+  // an unordered `limit(500)` over the lot's whole history - a random subset
+  // once the lot passed 500 cars.
+  Map<String, Map<String, dynamic>> _parkedInWindow = const {};
+  Map<String, Map<String, dynamic>> _parkedUnsettled = const {};
   List<Map<String, dynamic>> _parkedCarRows = const [];
   int _parkingSpaces = 0;
+
+  /// The months whose activities, expenses and stays are loaded. Totals for a
+  /// month or a year are only right if every record of it is read, so the
+  /// reads follow the period on screen (the report year, widened to the
+  /// activity tab's range) instead of reading "the newest 500" - which made
+  /// every total past the 500th activity wrong - or everything.
+  ({String start, String end})? _window;
+  final List<StreamSubscription<Object?>> _windowSubs = [];
+  Timer? _windowSafety;
+
+  /// Older vehicles for the VIN memory: recent cars, then an exact lookup.
+  late final KnownCarLookup _carLookup = KnownCarLookup.forBusiness(
+    widget.businessId,
+  );
 
   /// VIN → where the car is as far as the containers know, so an activity
   /// row can say "In MSKU1234567 · sailed 3 Oct" beside the car it names.
@@ -105,6 +128,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   /// recognises should never leave staff re-typing the car.
   List<LotKnownCar> get _knownCars => [
         ..._parkedCars,
+        ..._carLookup.recent,
         for (final a in _activities)
           LotKnownCar(
             vin: a.vinNumber,
@@ -138,35 +162,12 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       });
     }));
 
-    _subs.add(scoped('lotActivities')
-        .orderBy('activityDate', descending: true)
-        .limit(500)
-        .snapshots()
-        .listen((snap) {
-      if (!mounted) return;
-      setState(() {
-        _activities = [
-          for (final d in snap.docs) LotActivity.fromMap(d.id, d.data()),
-        ];
-        _loading = false;
-      });
-    }, onError: (_) {
-      if (mounted) setState(() => _loading = false);
-    }));
-
     _subs.add(scoped('lotExpenseLines').snapshots().listen((snap) {
       if (!mounted) return;
       final list = [
         for (final d in snap.docs) LotExpenseLine.fromMap(d.id, d.data()),
       ]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       setState(() => _lines = list.where((l) => l.active).toList());
-    }));
-
-    _subs.add(scoped('lotExpenseEntries').limit(2000).snapshots().listen((snap) {
-      if (!mounted) return;
-      setState(() => _entries = [
-            for (final d in snap.docs) LotExpenseEntry.fromMap(d.id, d.data()),
-          ]);
     }));
 
     _subs.add(_db
@@ -188,17 +189,14 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
           ]);
     }));
 
-    _subs.add(scoped('parkedCars').limit(500).snapshots().listen((snap) {
+    _subs.add(parkedCarsUnsettledSpec(id).build(_db).snapshots().listen((snap) {
       if (!mounted) return;
-      setState(() {
-        _parkedCars = [
-          for (final d in snap.docs) LotKnownCar.fromMap(d.data()),
-        ];
-        _parkedCarRows = [for (final d in snap.docs) d.data()];
-      });
+      _parkedUnsettled = {for (final d in snap.docs) d.id: d.data()};
+      _mergeParkedRows();
     }, onError: (_) {}));
 
-    _subs.add(scoped('containers').snapshots().listen((snap) {
+    // Only the open boxes: an arrived container makes no link.
+    _subs.add(openContainersSpec(id).build(_db).snapshots().listen((snap) {
       if (!mounted) return;
       _containers = [
         for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
@@ -207,7 +205,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
           _containerLinks = containerVinLinks(_containerLines, _containers));
     }, onError: (_) {}));
 
-    _subs.add(scoped('containerLines').snapshots().listen((snap) {
+    _subs.add(openContainerLinesSpec(id).build(_db).snapshots().listen((snap) {
       if (!mounted) return;
       _containerLines = [
         for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
@@ -233,6 +231,113 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
     // The lot's customer memory is a one-shot read: it seeds the customer
     // picker, and a new customer written by a record refreshes it.
     _loadCustomers();
+    unawaited(_carLookup.loadRecent().then((_) {
+      if (mounted) setState(() {});
+    }));
+    _syncWindow();
+  }
+
+  void _mergeParkedRows() {
+    final rows = mergeById<MapEntry<String, Map<String, dynamic>>>([
+      _parkedInWindow.entries,
+      _parkedUnsettled.entries,
+    ], (entry) => entry.key);
+    setState(() {
+      _parkedCarRows = [for (final entry in rows) entry.value];
+      _parkedCars = [for (final row in _parkedCarRows) LotKnownCar.fromMap(row)];
+    });
+  }
+
+  /// The activity tab's range as inclusive "yyyy-MM" bounds - month keys
+  /// sort chronologically as strings.
+  ({String start, String end}) _activityRange() {
+    final nowMk = lotMonthKey(DateTime.now());
+    if (_actRange == '3m') {
+      return (start: lotShiftMonth(nowMk, -2), end: nowMk);
+    }
+    if (_actRange == 'custom') {
+      final inOrder = _actFrom.compareTo(_actTo) <= 0;
+      return (
+        start: inOrder ? _actFrom : _actTo,
+        end: inOrder ? _actTo : _actFrom,
+      );
+    }
+    return (start: nowMk, end: nowMk);
+  }
+
+  /// A change of month or range: apply it, then make sure its records are
+  /// the ones loaded.
+  void _setPeriod(VoidCallback change) {
+    setState(change);
+    _syncWindow();
+  }
+
+  /// Re-reads the period-scoped collections when the period on screen needs
+  /// months that are not loaded. Moving within the loaded year reads nothing.
+  void _syncWindow() {
+    final range = _activityRange();
+    final needed = lotLedgerWindow(
+      month: _month,
+      activityStart: range.start,
+      activityEnd: range.end,
+    );
+    if (needed == _window) return;
+    _window = needed;
+    for (final sub in _windowSubs) {
+      sub.cancel();
+    }
+    _windowSubs.clear();
+    final id = widget.businessId;
+    final first = lotMonthStart(needed.start);
+    final last = lotMonthStart(needed.end);
+    // A day of margin each side: dates are stored at midday and the month
+    // filter in code (activityDateMonth) is what decides, so the read only
+    // has to be a superset.
+    final from = first.subtract(const Duration(days: 1));
+    final to = DateTime(last.year, last.month + 1, 2);
+    var activitiesLoaded = false;
+    setState(() => _loading = true);
+    _windowSafety?.cancel();
+    // The spinner always resolves, even if the read never answers.
+    _windowSafety = Timer(const Duration(seconds: 20), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
+    _windowSubs.add(lotActivitiesBetweenSpec(
+      id,
+      Timestamp.fromDate(from),
+      Timestamp.fromDate(to),
+    ).build(_db).snapshots().listen((snap) {
+      if (!mounted) return;
+      activitiesLoaded = true;
+      setState(() {
+        _activities = [
+          for (final d in snap.docs) LotActivity.fromMap(d.id, d.data()),
+        ];
+        _loading = false;
+      });
+    }, onError: (_) {
+      if (mounted && !activitiesLoaded) setState(() => _loading = false);
+    }));
+    _windowSubs.add(lotExpenseEntriesForMonthsSpec(
+      id,
+      needed.start,
+      needed.end,
+    ).build(_db).snapshots().listen((snap) {
+      if (!mounted) return;
+      setState(() => _entries = [
+            for (final d in snap.docs) LotExpenseEntry.fromMap(d.id, d.data()),
+          ]);
+    }, onError: (_) {}));
+    // Stays that end on or after the window opens: every stay that can carry
+    // money into it (open-ended ones included).
+    _windowSubs.add(parkedCarsEndingFromSpec(
+      id,
+      from.millisecondsSinceEpoch,
+    ).build(_db).snapshots().listen((snap) {
+      if (!mounted) return;
+      _parkedInWindow = {for (final d in snap.docs) d.id: d.data()};
+      _mergeParkedRows();
+    }, onError: (_) {}));
   }
 
   Future<void> _loadCustomers() async {
@@ -258,6 +363,10 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
     for (final s in _subs) {
       s.cancel();
     }
+    for (final s in _windowSubs) {
+      s.cancel();
+    }
+    _windowSafety?.cancel();
     super.dispose();
   }
 
@@ -272,7 +381,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
 
   void _shiftMonth(int delta) {
     AppHaptics.selection();
-    setState(() {
+    _setPeriod(() {
       _direction = delta;
       _month = lotShiftMonth(_month, delta);
     });
@@ -325,7 +434,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       helpText: AppLocalizations.of(context)!.lotRangeTo,
     );
     if (to == null || !mounted) return;
-    setState(() {
+    _setPeriod(() {
       _actFrom = lotMonthKey(from);
       _actTo = lotMonthKey(to);
       _actRange = 'custom';
@@ -405,19 +514,9 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
 
     // The activity range as inclusive "yyyy-MM" bounds — month keys sort
     // chronologically as strings.
-    final nowMk = lotMonthKey(DateTime.now());
-    final String actStart;
-    final String actEnd;
-    if (_actRange == '3m') {
-      actStart = lotShiftMonth(nowMk, -2);
-      actEnd = nowMk;
-    } else if (_actRange == 'custom') {
-      actStart = _actFrom.compareTo(_actTo) <= 0 ? _actFrom : _actTo;
-      actEnd = _actFrom.compareTo(_actTo) <= 0 ? _actTo : _actFrom;
-    } else {
-      actStart = nowMk;
-      actEnd = nowMk;
-    }
+    final actRange = _activityRange();
+    final actStart = actRange.start;
+    final actEnd = actRange.end;
 
     // Summary cards for the selected range: total billed, collected, still
     // owed, and how many jobs. Cancelled and voided jobs never billed, so
@@ -494,7 +593,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
           month: _month,
           onPickMonth: (m) {
             AppHaptics.selection();
-            setState(() => _month = m);
+            _setPeriod(() => _month = m);
           },
           monthLabel: _monthLabel,
           parkingTotals: parkingTotals,
@@ -516,7 +615,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
           rangeLabel: _rangeLabel(actStart, actEnd),
           range: _actRange,
           payFilter: _payFilter,
-          onRange: (v) => setState(() => _actRange = v),
+          onRange: (v) => _setPeriod(() => _actRange = v),
           onPayFilter: (v) => setState(() => _payFilter = v),
           onPickCustomRange: _pickCustomRange,
           loading: _loading,
@@ -1284,105 +1383,114 @@ class _ActivityPanel extends StatelessWidget {
       query: search,
     );
 
+    // The controls above the list, built as they are; the activity rows below
+    // are built lazily, only as they scroll into view - a busy range is
+    // hundreds of cards, and a ListView of children built all of them.
+    final header = <Widget>[
+      // Summary cards for the selected range: total billed, collected,
+      // still owed, and how many jobs.
+      _LotStatBoard(
+        stats: [
+          (
+            label: l10n.lotActivityGenerated,
+            value: formatLotCents(activityGeneratedCents),
+            alert: false,
+          ),
+          (
+            label: l10n.lotActivityCollected,
+            value: formatLotCents(activityCollectedCents),
+            alert: false,
+          ),
+          (
+            label: l10n.lotActivityOwed,
+            value: formatLotCents(activityOwedCents),
+            alert: activityOwedCents > 0,
+          ),
+          (
+            label: l10n.lotActivityJobs,
+            value: '$activityJobs',
+            alert: false,
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.md),
+      // Date range, then the owed/collected money filter.
+      _ActivityRangeBar(
+        range: range,
+        rangeLabel: rangeLabel,
+        onRange: onRange,
+        onPickCustomRange: onPickCustomRange,
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      _ActivityPayFilter(selected: payFilter, onChanged: onPayFilter),
+      const SizedBox(height: AppSpacing.md),
+      _SearchField(value: search, onChanged: onSearch),
+      const SizedBox(height: AppSpacing.md),
+      _FilterChips(
+        types: types,
+        selected: typeFilter,
+        onChanged: onTypeFilter,
+      ),
+      const SizedBox(height: AppSpacing.md),
+      if (loading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (rows.isEmpty)
+        LotEmptyState(
+          icon: search.trim().isEmpty
+              ? Icons.receipt_long_outlined
+              : Icons.search_off,
+          title: search.trim().isEmpty
+              ? l10n.lotNoActivityForMonth(rangeLabel)
+              : l10n.lotNoSearchMatch,
+          hint: search.trim().isEmpty ? l10n.lotNoActivityHint : null,
+        )
+      else ...[
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: AppSpacing.sm),
+          child: Text(
+            l10n.lotEntriesCount(rows.length),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+              color: AppColors.muted,
+            ),
+          ),
+        ),
+      ],
+    ];
+    final listed = loading ? const <LotActivity>[] : rows;
+
     return Stack(
       children: [
-        ListView(
+        ListView.builder(
           padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 120),
-          children: [
-            // Summary cards for the selected range: total billed, collected,
-            // still owed, and how many jobs.
-            _LotStatBoard(
-              stats: [
-                (
-                  label: l10n.lotActivityGenerated,
-                  value: formatLotCents(activityGeneratedCents),
-                  alert: false,
-                ),
-                (
-                  label: l10n.lotActivityCollected,
-                  value: formatLotCents(activityCollectedCents),
-                  alert: false,
-                ),
-                (
-                  label: l10n.lotActivityOwed,
-                  value: formatLotCents(activityOwedCents),
-                  alert: activityOwedCents > 0,
-                ),
-                (
-                  label: l10n.lotActivityJobs,
-                  value: '$activityJobs',
-                  alert: false,
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            // Date range, then the owed/collected money filter.
-            _ActivityRangeBar(
-              range: range,
-              rangeLabel: rangeLabel,
-              onRange: onRange,
-              onPickCustomRange: onPickCustomRange,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _ActivityPayFilter(selected: payFilter, onChanged: onPayFilter),
-            const SizedBox(height: AppSpacing.md),
-            _SearchField(value: search, onChanged: onSearch),
-            const SizedBox(height: AppSpacing.md),
-            _FilterChips(
-              types: types,
-              selected: typeFilter,
-              onChanged: onTypeFilter,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            if (loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 48),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (rows.isEmpty)
-              LotEmptyState(
-                icon: search.trim().isEmpty
-                    ? Icons.receipt_long_outlined
-                    : Icons.search_off,
-                title: search.trim().isEmpty
-                    ? l10n.lotNoActivityForMonth(rangeLabel)
-                    : l10n.lotNoSearchMatch,
-                hint: search.trim().isEmpty ? l10n.lotNoActivityHint : null,
-              )
-            else ...[
-              Padding(
-                padding: const EdgeInsets.only(left: 2, bottom: AppSpacing.sm),
-                child: Text(
-                  l10n.lotEntriesCount(rows.length),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.3,
-                    color: AppColors.muted,
-                  ),
-                ),
-              ),
-              for (final row in rows)
-                _ActivityCard(
+          itemCount: header.length + listed.length,
+          itemBuilder: (context, index) {
+            if (index < header.length) return header[index];
+            final row = listed[index - header.length];
+            return _ActivityCard(
+              activity: row,
+              staff: staff,
+              containerLink: containerLinks[row.vinNumber],
+              onTap: () => showLotSheet(
+                context,
+                _ActivityDetailSheet(
                   activity: row,
                   staff: staff,
-                  containerLink: containerLinks[row.vinNumber],
-                  onTap: () => showLotSheet(
-                    context,
-                    _ActivityDetailSheet(
-                      activity: row,
-                      staff: staff,
-                      types: types,
-                      customers: customers,
-                      knownCars: knownCars,
-                      businessId: businessId,
-                      onChanged: onRecorded,
-                    ),
-                  ),
+                  types: types,
+                  customers: customers,
+                  knownCars: knownCars,
+                  businessId: businessId,
+                  onChanged: onRecorded,
                 ),
-            ],
-          ],
+              ),
+            );
+          },
         ),
         Positioned(
           left: 0,
@@ -1919,25 +2027,29 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
 
     final known = lotFindKnownCar(clean, widget.knownCars);
     if (known != null && known.hasVehicle) {
-      setState(() {
-        if (known.make.isNotEmpty) _make.text = known.make;
-        if (known.model.isNotEmpty) _model.text = known.model;
-        if (known.year.isNotEmpty) _year.text = known.year;
-        // The car is certain; the customer is a suggestion, so it never
-        // overwrites a name already typed.
-        if (_customer.text.trim().isEmpty && known.customerName.isNotEmpty) {
-          _customer.text = known.customerName;
-        }
-        if (_phone.text.trim().isEmpty && known.customerPhone.isNotEmpty) {
-          _phone.text = known.customerPhone;
-        }
-        _vinHint = l10n.lotVinMatchedExisting;
-      });
+      _applyKnownCar(known, l10n);
       return;
     }
 
     if (_vinHint.isNotEmpty) setState(() => _vinHint = '');
     if (isValidVin(clean) && clean != _decodedVin) _decodeVin(clean);
+  }
+
+  void _applyKnownCar(LotKnownCar known, AppLocalizations l10n) {
+    setState(() {
+      if (known.make.isNotEmpty) _make.text = known.make;
+      if (known.model.isNotEmpty) _model.text = known.model;
+      if (known.year.isNotEmpty) _year.text = known.year;
+      // The car is certain; the customer is a suggestion, so it never
+      // overwrites a name already typed.
+      if (_customer.text.trim().isEmpty && known.customerName.isNotEmpty) {
+        _customer.text = known.customerName;
+      }
+      if (_phone.text.trim().isEmpty && known.customerPhone.isNotEmpty) {
+        _phone.text = known.customerPhone;
+      }
+      _vinHint = l10n.lotVinMatchedExisting;
+    });
   }
 
   Future<void> _decodeVin(String vin) async {
@@ -1947,6 +2059,16 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       _decodedVin = vin;
     });
     try {
+      // Older than the cars kept in memory? Ask the business's own records
+      // for this exact VIN before the decoder - they also know whose it is.
+      final known = await KnownCarLookup.forBusiness(
+        widget.businessId,
+      ).findExact(vin);
+      if (!mounted) return;
+      if (known != null && known.hasVehicle) {
+        if (_vin.text == vin) _applyKnownCar(known, l10n);
+        return;
+      }
       final decoded = await _vinDecoder.decode(vin);
       if (!mounted) return;
       setState(() {
@@ -2905,12 +3027,12 @@ class _PaymentHistory extends StatelessWidget {
     // Scoped by business as well as activity: the rule authorizes by business,
     // and Firestore refuses a query it cannot prove stays inside that scope.
     // Ordering is done here rather than in the query so two equality filters
-    // are all the index has to serve.
+    // are all the index has to serve. No limit: one activity's payments are a
+    // handful, and an unordered limit would keep an arbitrary subset of them.
     final query = FirebaseFirestore.instance
         .collection('lotActivityPayments')
         .where('businessId', isEqualTo: businessId)
         .where('activityId', isEqualTo: activityId)
-        .limit(50)
         .get();
 
     return Column(

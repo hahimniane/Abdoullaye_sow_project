@@ -657,13 +657,23 @@ void main() {
     });
 
     test('the home screen subscribes to the opportunity collection', () {
-      expect(home, contains("collection('transportOpportunities')"));
+      final queries = File(
+        'lib/services/business_activity_queries.dart',
+      ).readAsStringSync();
+      // Only the requests still open for a bid are read - the tile counts
+      // exactly those, so the business's whole bidding history is not.
+      expect(home, contains('transportOpportunitiesOpenSpec(businessId)'));
+      expect(queries, contains("collection: 'transportOpportunities'"));
+      expect(
+        queries,
+        contains("const QueryFilterSpec('status', QueryFilterOp.equal, 'open')"),
+      );
       expect(home, contains('transportOpportunityStatuses:'));
       expect(home, contains("Key('open-transport-jobs')"));
-      // Five feeds now, five before the grid needed them: the count is derived
-      // from a subscription the business needs anyway, not bought for a badge.
-      expect('FirebaseFirestore.instance.collection('.allMatches(home).length, 5);
-      expect('.snapshots().listen('.allMatches(home).length, 5);
+      // The counts come from open-work subscriptions the business needs
+      // anyway, not reads bought for a badge, and none is a raw collection
+      // listener (see firestore_query_scope_test.dart).
+      expect(home, isNot(contains("collection('transportOpportunities')")));
     });
 
     test('money never becomes a double on its way to the server', () {

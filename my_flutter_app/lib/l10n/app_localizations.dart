@@ -1598,6 +1598,42 @@ abstract class AppLocalizations {
   /// **'No records yet. Start logging activities to see them here.'**
   String get noRecordsYet;
 
+  /// No description provided for @noOpenRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing open right now. Completed and older records are below.'**
+  String get noOpenRecords;
+
+  /// No description provided for @activityShowHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Show completed and older records'**
+  String get activityShowHistory;
+
+  /// No description provided for @activityLoadMoreHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Load older records'**
+  String get activityLoadMoreHistory;
+
+  /// No description provided for @activityHistoryEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'No older records.'**
+  String get activityHistoryEnd;
+
+  /// No description provided for @activityHistoryLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load older records. Try again.'**
+  String get activityHistoryLoadFailed;
+
+  /// No description provided for @marketplaceLoadMoreCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more cars'**
+  String get marketplaceLoadMoreCars;
+
   /// No description provided for @recordReference.
   ///
   /// In en, this message translates to:

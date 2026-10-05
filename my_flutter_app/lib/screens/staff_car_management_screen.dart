@@ -18,6 +18,7 @@ import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/car_option_localization.dart';
+import '../utils/listing_image.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/vin_utils.dart';
 import '../widgets/app_back_button.dart';
@@ -308,19 +309,39 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final auth = context.watch<AuthProvider>();
-    final stream = auth.isAdmin
+  /// The listings listener, made once per (role, business) rather than on
+  /// every build: AuthProvider notifies on any profile change, and a stream
+  /// built in `build` dropped and re-read every listing each time.
+  ///
+  /// The business query stays uncapped on purpose - a business must see all
+  /// of its own listings (see flutter-architecture-agent.md).
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _carsStream;
+  (bool, String?)? _carsStreamKey;
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _carsStreamFor({
+    required bool isAdmin,
+    required String? businessId,
+  }) {
+    final key = (isAdmin, businessId);
+    final existing = _carsStream;
+    if (existing != null && _carsStreamKey == key) return existing;
+    _carsStreamKey = key;
+    return _carsStream = isAdmin
         ? _firestore
               .collection('cars')
               .orderBy('createdAt', descending: true)
               .snapshots()
         : _firestore
               .collection('cars')
-              .where('businessId', isEqualTo: auth.businessId)
+              .where('businessId', isEqualTo: businessId)
               .snapshots();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final auth = context.watch<AuthProvider>();
+    final stream = _carsStreamFor(isAdmin: auth.isAdmin, businessId: auth.businessId);
     return Scaffold(
       body: Stack(
         children: [
@@ -665,7 +686,7 @@ class _CarCard extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: imageUrl != null
-                        ? Image.network(
+                        ? ListingNetworkImage(
                             imageUrl,
                             width: 90,
                             height: 90,
@@ -1179,7 +1200,14 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     if (_isPickingImages || _images.length >= _maxImages) return;
     setState(() => _isPickingImages = true);
     try {
-      final files = await _picker.pickMultiImage();
+      // Downscaled on the phone before upload: a listing photo is shown at
+      // card and gallery size, and a 12-megapixel original cost every buyer
+      // its full download and decode.
+      final files = await _picker.pickMultiImage(
+        maxWidth: listingPhotoMaxDimension,
+        maxHeight: listingPhotoMaxDimension,
+        imageQuality: listingPhotoQuality,
+      );
       if (files.isEmpty) return;
       final slots = _maxImages - _images.length;
       final additions = <_EditableCarImage>[];
@@ -2911,9 +2939,22 @@ class _ImagePreviewTile extends StatelessWidget {
             width: 100,
             height: 100,
             child: image.url != null
-                ? Image.network(image.url!, fit: BoxFit.cover)
+                ? ListingNetworkImage(
+                    image.url!,
+                    width: 100,
+                    height: 100,
+                  )
                 : image.bytes != null
-                ? Image.memory(image.bytes!, fit: BoxFit.cover)
+                ? Image.memory(
+                    image.bytes!,
+                    fit: BoxFit.cover,
+                    cacheWidth: listingImageDecodeWidth(
+                      width: 100,
+                      height: 100,
+                      devicePixelRatio:
+                          MediaQuery.maybeDevicePixelRatioOf(context) ?? 1,
+                    ),
+                  )
                 : Container(
                     color: Colors.grey.shade300,
                     alignment: Alignment.center,

@@ -8,6 +8,7 @@ import '../models/business_profile.dart';
 import '../models/business_service.dart';
 import '../models/destination_country.dart';
 import '../utils/callable_data.dart';
+import '../utils/shared_latest_stream.dart';
 
 class BusinessService {
   BusinessService({FirebaseFirestore? firestore, FirebaseFunctions? functions})
@@ -29,7 +30,37 @@ class BusinessService {
         );
   }
 
-  Stream<List<BusinessDestinationOption>> activeDestinationOptions() async* {
+  /// One catalog upstream per Firestore instance, shared by every screen
+  /// and widget that asks. The catalog is a Cloud Function call plus a
+  /// listener on `publicCatalog/services`; before this each caller ran its
+  /// own copy, and callers that asked from `build` ran a new one per
+  /// keystroke. The upstream stays up briefly after the last listener leaves
+  /// so moving between the booking screens does not re-run the function.
+  static final Map<
+    FirebaseFirestore,
+    SharedLatestStream<List<BusinessDestinationOption>>
+  >
+  _sharedDestinationOptions = {};
+
+  /// How long the shared catalog outlives its last listener.
+  static const Duration destinationOptionsLinger = Duration(seconds: 30);
+
+  /// The live catalog of bookable destinations. Every call returns a view of
+  /// the same shared upstream - cheap to call, but hold the stream in State
+  /// rather than calling this from `build`.
+  Stream<List<BusinessDestinationOption>> activeDestinationOptions() {
+    final shared = _sharedDestinationOptions.putIfAbsent(
+      _firestore,
+      () => SharedLatestStream<List<BusinessDestinationOption>>(
+        _activeDestinationOptionsUpstream,
+        linger: destinationOptionsLinger,
+      ),
+    );
+    return shared.stream;
+  }
+
+  Stream<List<BusinessDestinationOption>>
+  _activeDestinationOptionsUpstream() async* {
     try {
       yield await _destinationOptionsFromFunction();
       // The callable answers once, so an open screen would keep showing a

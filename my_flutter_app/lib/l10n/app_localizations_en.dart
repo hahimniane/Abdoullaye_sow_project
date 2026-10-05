@@ -808,6 +808,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'No records yet. Start logging activities to see them here.';
 
   @override
+  String get noOpenRecords =>
+      'Nothing open right now. Completed and older records are below.';
+
+  @override
+  String get activityShowHistory => 'Show completed and older records';
+
+  @override
+  String get activityLoadMoreHistory => 'Load older records';
+
+  @override
+  String get activityHistoryEnd => 'No older records.';
+
+  @override
+  String get activityHistoryLoadFailed =>
+      'Couldn\'t load older records. Try again.';
+
+  @override
+  String get marketplaceLoadMoreCars => 'Load more cars';
+
+  @override
   String get recordReference => 'Reference';
 
   @override

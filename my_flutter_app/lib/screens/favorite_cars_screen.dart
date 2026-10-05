@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../models/car.dart';
 import '../services/favorite_cars_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/listing_image.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import 'car_details_screen.dart';
@@ -206,8 +207,10 @@ class _FavoriteCarTile extends StatelessWidget {
                   height: 70,
                   child: favorite.imageUrl.isEmpty
                       ? const _CarThumbPlaceholder()
-                      : Image.network(
+                      : ListingNetworkImage(
                           favorite.imageUrl,
+                          width: 82,
+                          height: 70,
                           fit: BoxFit.cover,
                           // A listing whose photo has since been removed or
                           // whose URL expired must not render as a broken

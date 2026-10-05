@@ -214,10 +214,13 @@ void main() {
     final picker = read('lib/services/container_lot_cars.dart');
     // One subscription on the list screen feeds both the VIN memory and the
     // picker; the raw rows travel down by constructor, and nothing on the
-    // detail screen or the sheet opens a second `parkedCars` stream.
-    expect(screen, contains("scoped('parkedCars').limit(500).snapshots()"));
-    expect("scoped('parkedCars')".allMatches(screen).length, 1,
+    // detail screen or the sheet opens a second `parkedCars` stream. It reads
+    // the stays that still hold a space - exactly what the picker offers -
+    // not an unordered `limit(500)` of the lot's history.
+    expect(screen, contains('parkedCarsOnLotSpec(id, DateTime.now())'));
+    expect('parkedCarsOnLotSpec('.allMatches(screen).length, 1,
         reason: 'exactly one parkedCars subscription on the containers screens');
+    expect(screen, isNot(contains("scoped('parkedCars')")));
     expect(screen, contains('parkedCarRows: _parkedCarRows'));
     expect(screen, contains('parkedCarRows: widget.parkedCarRows'));
     expect(screen, contains('lotCarChoices(\n        widget.parkedCarRows,'));

@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart';
+import '../services/known_car_lookup.dart';
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart'
     show LotKnownCar, LotStaff, lotFindKnownCar;
@@ -51,11 +52,15 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   List<LotStaff> _staff = const [];
   List<LotCustomer> _customers = const [];
 
-  /// Every vehicle this business has on file - parked cars and past ledger
-  /// jobs - so typing a VIN it recognises never means re-typing the car.
-  List<LotKnownCar> _parkedCars = const [];
-  List<LotKnownCar> _activityCars = const [];
-  List<LotKnownCar> get _knownCars => [..._parkedCars, ..._activityCars];
+  /// The vehicles this business has on file, so typing a VIN it recognises
+  /// never means re-typing the car: the newest parked cars and ledger jobs,
+  /// shared with the other lot screens, and an exact lookup for any older
+  /// VIN (see [KnownCarLookup]). This screen used to listen to every parked
+  /// car and every ledger job the business ever had for this.
+  late final KnownCarLookup _carLookup = KnownCarLookup.forBusiness(
+    widget.businessId,
+  );
+  List<LotKnownCar> get _knownCars => _carLookup.recent;
   Map<String, dynamic> _business = const {};
   String _filter = invoiceFilterOpen;
   String _search = '';
@@ -92,20 +97,9 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
         });
       }
     }));
-    _subs.add(scoped('parkedCars').snapshots().listen((snap) {
-      if (!mounted) return;
-      setState(() => _parkedCars = [
-            for (final d in snap.docs) LotKnownCar.fromMap(d.data()),
-          ]);
-    }, onError: (_) {}));
-    _subs.add(scoped('lotActivities').snapshots().listen((snap) {
-      if (!mounted) return;
-      setState(() => _activityCars = [
-            for (final d in snap.docs)
-              if ((d.data()['vinNumber'] ?? '').toString().isNotEmpty)
-                LotKnownCar.fromMap(d.data()),
-          ]);
-    }, onError: (_) {}));
+    unawaited(_carLookup.loadRecent().then((_) {
+      if (mounted) setState(() {});
+    }));
     // The list reads the totals stamped on each invoice; only the detail
     // screen subscribes to lines and payments, and only for its own invoice.
     _subs.add(_db
@@ -1927,6 +1921,23 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       _decodedVin = vin;
     });
     try {
+      // Older than the cars kept in memory? Ask the business's own records
+      // for this exact VIN before the decoder.
+      final known = await KnownCarLookup.forBusiness(
+        widget.businessId,
+      ).findExact(vin);
+      if (!mounted) return;
+      if (known != null && known.hasVehicle) {
+        if (_vin.text != vin) return;
+        setState(() {
+          final car = [known.year, known.make, known.model]
+              .where((p) => p.isNotEmpty)
+              .join(' ');
+          if (_description.text.trim().isEmpty) _description.text = car;
+          _vinHint = l10n.lotVinMatchedExisting;
+        });
+        return;
+      }
       final decoded = await _vinDecoder.decode(vin);
       if (!mounted) return;
       setState(() {

@@ -431,3 +431,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   mirror the callable that later accepts the file, so a type the callable
   refuses is refused at upload too. Rules regressions live at the end of
   `functions/test/firestore-rules.test.js`.
+- App-side scaling contracts: business screens read records through
+  `lib/services/business_activity_queries.dart` specs (business-scoped,
+  bounded by open status / date window / ordered page, never `limit`
+  without `orderBy`). `test/firestore_query_scope_test.dart` checks each
+  spec's scope, bound and composite index against `firestore.indexes.json`,
+  and replays the narrow queries in memory against the whole history (tile
+  counts, a month's parking bills) - add every new query shape there.
+  `test/scaling_source_contract_test.dart` forbids raw record-collection
+  listeners and streams built inside `build` in the audited widgets.

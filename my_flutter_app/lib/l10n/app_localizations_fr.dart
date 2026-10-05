@@ -822,6 +822,27 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucun enregistrement pour le moment. Commencez à enregistrer vos activités ici.';
 
   @override
+  String get noOpenRecords =>
+      'Rien en cours pour le moment. Les dossiers terminés et plus anciens sont plus bas.';
+
+  @override
+  String get activityShowHistory =>
+      'Afficher les dossiers terminés et plus anciens';
+
+  @override
+  String get activityLoadMoreHistory => 'Charger des dossiers plus anciens';
+
+  @override
+  String get activityHistoryEnd => 'Aucun dossier plus ancien.';
+
+  @override
+  String get activityHistoryLoadFailed =>
+      'Impossible de charger les dossiers plus anciens. Réessayez.';
+
+  @override
+  String get marketplaceLoadMoreCars => 'Charger plus de voitures';
+
+  @override
   String get recordReference => 'Référence';
 
   @override

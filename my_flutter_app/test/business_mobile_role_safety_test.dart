@@ -29,7 +29,11 @@ void main() {
       'lib/screens/staff_home_screen.dart',
     ).readAsStringSync();
 
-    expect(source, contains("'freightShipments'"));
+    expect(source, contains('freightShipmentsOpenSpec(businessId)'));
+    expect(
+      File('lib/services/business_activity_queries.dart').readAsStringSync(),
+      contains("collection: 'freightShipments'"),
+    );
     expect(source, contains('_freightShipmentsSubscription'));
     expect(source, contains('ServiceCategory.freight'));
     expect(source, contains('l10n.businessOperationsWebNote'));

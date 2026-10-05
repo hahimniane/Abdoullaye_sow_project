@@ -213,8 +213,12 @@ class MyApp extends StatelessWidget {
               : AppGateProvider(),
         ),
       ],
-      child: Consumer2<LanguageProvider, AuthProvider>(
-        builder: (context, languageProvider, authProvider, child) {
+      // Only the locale changes the app shell. Listening to AuthProvider here
+      // rebuilt the whole MaterialApp - theme, route table, every delegate -
+      // on each auth/profile notification; screens that care about auth
+      // listen to it themselves, and the route builders read it on demand.
+      child: Consumer<LanguageProvider>(
+        builder: (context, languageProvider, child) {
           return MaterialApp(
             title: 'Laawol Digital',
             navigatorKey: rootNavigatorKey,

@@ -277,20 +277,23 @@ void main() {
       expect(home, contains('barrelStatuses: _barrelShipments.map('));
       expect(home, contains('freightStatuses: _freightStatuses'));
       expect(home, contains('transportStatuses: _transportRequests.map('));
-      // Five feeds, and every one of them is a list the business needs anyway.
-      // Four of them predate the grid; the fifth is `transportOpportunities`,
-      // which is not a read bought for a badge - it is the collection that says
-      // which requests this business may bid on, and nothing in the app
-      // subscribed to it before, which is why a business could not quote from
-      // the phone at all.
       expect(home, contains('transportOpportunityStatuses:'));
-      expect(
-        'FirebaseFirestore.instance.collection('.allMatches(home).length,
-        5,
-      );
-      expect('.snapshots().listen('.allMatches(home).length, 5);
+      // The lists are OPEN work only: each tile counts open records (parking:
+      // money still owed), and the queries read exactly those - so a count is
+      // exact without reading the business's history. Six open-work feeds
+      // (parking is two: on the lot, and still owed) plus the freight one.
+      for (final spec in [
+        'parkedCarsOnLotSpec(businessId, DateTime.now())',
+        'parkedCarsUnsettledSpec(businessId)',
+        'barrelShipmentsOpenSpec(businessId)',
+        'freightShipmentsOpenSpec(businessId)',
+        'transportRequestsOpenSpec(businessId)',
+        'transportOpportunitiesOpenSpec(businessId)',
+      ]) {
+        expect(home, contains(spec));
+      }
       // The freight status comes out of the snapshot the feed already reads.
-      expect(home, contains('_freightStatuses\n            ..clear()'));
+      expect(home, contains('_freightStatuses\n                ..clear()'));
     });
 
     test('the duplicate filter chips are gone', () {

@@ -1199,6 +1199,20 @@ class _BusinessOptionSelectorState extends State<_BusinessOptionSelector> {
   // down, because it changes what the customer is looking at and nothing else.
   ServiceSort _sort = kDefaultServiceSort;
 
+  /// Held here and replaced only when the country changes. Built in `build`
+  /// it re-subscribed - and re-ran the catalog's Cloud Function - on every
+  /// keystroke anywhere in the form.
+  late Stream<List<BusinessDestinationOption>> _options =
+      BusinessService().optionsForCountry(widget.countryId);
+
+  @override
+  void didUpdateWidget(covariant _BusinessOptionSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.countryId != widget.countryId) {
+      _options = BusinessService().optionsForCountry(widget.countryId);
+    }
+  }
+
   String get countryId => widget.countryId;
   BusinessDestinationOption? get value => widget.value;
   ValueChanged<BusinessDestinationOption?> get onChanged => widget.onChanged;
@@ -1216,7 +1230,7 @@ class _BusinessOptionSelectorState extends State<_BusinessOptionSelector> {
     final currency = NumberFormat.simpleCurrency();
 
     return StreamBuilder<List<BusinessDestinationOption>>(
-      stream: BusinessService().optionsForCountry(countryId),
+      stream: _options,
       builder: (context, snapshot) {
         final l10n = AppLocalizations.of(context)!;
         if (snapshot.hasError) {

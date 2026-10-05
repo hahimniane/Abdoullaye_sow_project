@@ -150,20 +150,40 @@ class _StaffPurchaseManagementScreenState
     });
   }
 
+  /// Made once per (role, business), not per build. Switching the
+  /// purchases/viewings segment is a setState, and a stream built in `build`
+  /// dropped the listener and re-read every purchase on each tap.
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _purchasesStream;
+  (bool, String?)? _purchasesStreamKey;
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _purchasesStreamFor({
+    required bool isAdmin,
+    required String? businessId,
+  }) {
+    final key = (isAdmin, businessId);
+    final existing = _purchasesStream;
+    if (existing != null && _purchasesStreamKey == key) return existing;
+    _purchasesStreamKey = key;
+    final query = FirebaseFirestore.instance.collection('carPurchases');
+    return _purchasesStream = isAdmin
+        ? query.snapshots()
+        : query.where('businessId', isEqualTo: businessId).snapshots();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final auth = context.watch<AuthProvider>();
-    final query = FirebaseFirestore.instance.collection('carPurchases');
-    final stream = auth.isAdmin
-        ? query.snapshots()
-        : query.where('businessId', isEqualTo: auth.businessId).snapshots();
+    final stream = _purchasesStreamFor(
+      isAdmin: auth.isAdmin,
+      businessId: auth.businessId,
+    );
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.purchaseReservations),
         actions: const [LanguageToggle()],
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: stream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {

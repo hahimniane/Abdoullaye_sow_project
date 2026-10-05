@@ -17,9 +17,11 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
+import '../services/business_activity_queries.dart';
 import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
 import '../services/container_manifest.dart';
+import '../services/firestore_query_spec.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
 import '../utils/date_display.dart';
@@ -121,9 +123,29 @@ class ActivityRecord {
   final Object? payload;
 }
 
+/// One history list (completed and older records of one collection), read a
+/// page at a time on request. Not live: history is what has already
+/// happened, and the open work above it is.
+class _HistoryPager {
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
+  bool hasMore = true;
+}
+
 class _HomeMenuState extends State<HomeMenu> {
   final List<ActivityRecord> _records = [];
+
+  /// The live, OPEN work of each service - the only thing this screen
+  /// listens to. It used to listen to every record the business ever had
+  /// (and, for an admin, every business's), and paid a read per document on
+  /// every open. Completed and older records arrive a page at a time through
+  /// [_history] when someone asks for them.
+  ///
+  /// The tile counts read these lists, and they are exact: each tile counts
+  /// open records (or, for parking, money still owed), and these queries are
+  /// precisely the open records.
   final List<ParkedCar> _parkedCars = [];
+  final Map<String, ParkedCar> _parkedOnLot = {};
+  final Map<String, ParkedCar> _parkedUnsettled = {};
   final List<BarrelShipment> _barrelShipments = [];
   final List<ActivityRecord> _freightRecords = [];
 
@@ -135,11 +157,25 @@ class _HomeMenuState extends State<HomeMenu> {
   final List<TransportRequest> _transportRequests = [];
 
   /// The statuses of the `transportOpportunities` this business was invited to
-  /// price. A won job lives in `transportRequests`; a request nobody has quoted
-  /// yet lives ONLY here, which is why the transport tile could not have meant
-  /// anything operational before this subscription existed.
+  /// price and has not yet. A won job lives in `transportRequests`; a request
+  /// nobody has quoted yet lives ONLY here.
   final List<String> _transportOpportunityStatuses = [];
+
+  /// Completed and older records, per collection, loaded on request.
+  final Map<BusinessHistoryCollection, _HistoryPager> _history = {};
+  bool _historyLoading = false;
+
+  /// Bumped whenever the records change, so the filtered feed and the tile
+  /// counts are computed once per change rather than once per build.
+  int _recordsVersion = 0;
+  Object? _filteredKey;
+  List<ActivityRecord> _filteredCache = const [];
+  BusinessParkingTotals? _parkingTotalsCache;
+  Object? _tilesKey;
+  List<BusinessServiceTile> _tilesCache = const [];
+
   bool _isLoading = true;
+  Timer? _loadingSafety;
   ServiceCategory _selectedCategory = ServiceCategory.all;
 
   /// Two composable facets - which status kinds and which payment classes to
@@ -169,19 +205,15 @@ class _HomeMenuState extends State<HomeMenu> {
   /// and independent. Reset with the payment filter when the category changes.
   DateTime? _parkedFrom;
   DateTime? _parkedTo;
-  StreamSubscription<QuerySnapshot>? _parkedCarsSubscription;
-  StreamSubscription<QuerySnapshot>? _barrelShipmentsSubscription;
+  final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _subs =
+      [];
   StreamSubscription<QuerySnapshot>? _freightShipmentsSubscription;
-  StreamSubscription<QuerySnapshot>? _transportRequestsSubscription;
-  StreamSubscription<QuerySnapshot>? _transportOpportunitiesSubscription;
-  StreamSubscription<QuerySnapshot>? _containersSubscription;
-  StreamSubscription<QuerySnapshot>? _containerLinesSubscription;
-  bool _parkedLoaded = false;
+  bool _parkedOnLotLoaded = false;
+  bool _parkedUnsettledLoaded = false;
 
   /// VIN → where the car is as far as the containers know (loading in a box,
-  /// or sailed on one). Built once per snapshot from the two container
-  /// collections this screen already streams, so a parked-car row costs one
-  /// map lookup and never a query of its own.
+  /// or sailed on one). Built once per snapshot from the OPEN boxes and their
+  /// lines - an arrived box makes no link, so its history is never read.
   List<ShippingContainer> _containers = const [];
   List<ContainerLine> _containerLines = const [];
   Map<String, ContainerVinLink> _containerLinks = const {};
@@ -195,6 +227,11 @@ class _HomeMenuState extends State<HomeMenu> {
   bool _transportLoaded = false;
   bool _transportOpportunitiesLoaded = false;
 
+  /// The business being viewed. Every query is confined to it - an admin who
+  /// opens this screen sees the business they are acting for, never the
+  /// whole platform's records.
+  String _businessId = '';
+
   @override
   void initState() {
     super.initState();
@@ -204,196 +241,184 @@ class _HomeMenuState extends State<HomeMenu> {
     _subscribeToRecords();
   }
 
+  /// Listens to one open-work query, reporting every snapshot (or failure)
+  /// to [onDocs]. A failure counts as loaded-and-empty so the spinner always
+  /// resolves.
+  void _listenOpen(
+    FirestoreQuerySpec spec,
+    void Function(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) onDocs,
+  ) {
+    _subs.add(
+      spec
+          .build(FirebaseFirestore.instance)
+          .snapshots()
+          .listen(
+            (snapshot) => onDocs(snapshot.docs),
+            onError: (Object error) {
+              debugPrint('Business home query failed ($spec): $error');
+              onDocs(const []);
+            },
+          ),
+    );
+  }
+
+  static List<ParkedCar> _parseParkedCars(
+    Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final parkedCars = <ParkedCar>[];
+    for (final doc in docs) {
+      try {
+        parkedCars.add(ParkedCar.fromFirestore(doc));
+      } catch (error) {
+        debugPrint('Skipping malformed parkedCars/${doc.id}: $error');
+      }
+    }
+    return parkedCars;
+  }
+
+  static ActivityRecord _freightRecord(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final createdAt = data['createdAt'];
+    return ActivityRecord(
+      category: ServiceCategory.freight,
+      title: '${data['receiverName'] ?? ''} • ${data['trackingCode'] ?? doc.id}',
+      subtitle: '${data['senderName'] ?? ''}',
+      date: createdAt is Timestamp
+          ? createdAt.toDate()
+          : DateTime.fromMillisecondsSinceEpoch(0),
+      payload: doc.id,
+    );
+  }
+
   void _subscribeToRecords() {
     setState(() {
       _isLoading = true;
     });
 
     final auth = context.read<AuthProvider>();
-    Query<Map<String, dynamic>> scope(
-      CollectionReference<Map<String, dynamic>> collection,
-      String orderBy,
-    ) {
-      if (auth.isAdmin) return collection.orderBy(orderBy, descending: true);
-      return collection.where('businessId', isEqualTo: auth.businessId);
-    }
+    // Every query names the business being viewed - for an admin too. With
+    // no business there is nothing of its own to show, so nothing is read.
+    _businessId = (auth.businessId ?? '').trim();
+    final businessId = _businessId;
+    final hasBusiness = businessId.isNotEmpty;
 
-    if (auth.hasBusinessPermission(BusinessPermission.parking)) {
-      _loadParkingSpaces(auth.businessId);
-      _loadStaffNames(auth.businessId);
-      _parkedCarsSubscription =
-          scope(
-            FirebaseFirestore.instance.collection('parkedCars'),
-            'parkingDate',
-          ).snapshots().listen(
-            (snapshot) {
-              final parkedCars = <ParkedCar>[];
-              for (final doc in snapshot.docs) {
-                try {
-                  parkedCars.add(ParkedCar.fromFirestore(doc));
-                } catch (error) {
-                  debugPrint('Skipping malformed parkedCars/${doc.id}: $error');
-                }
-              }
-              _parkedCars
-                ..clear()
-                ..addAll(parkedCars);
-              _parkedLoaded = true;
-              _rebuildActivityRecords();
-            },
-            onError: (_) {
-              _parkedLoaded = true;
-              _rebuildActivityRecords();
-            },
-          );
+    if (hasBusiness && auth.hasBusinessPermission(BusinessPermission.parking)) {
+      _loadParkingSpaces(businessId);
+      _loadStaffNames(businessId);
+      // Two narrow reads make "the lot's open work": the stays holding a
+      // space today or later, and the stays still owed for however old.
+      _listenOpen(parkedCarsOnLotSpec(businessId, DateTime.now()), (docs) {
+        _parkedOnLot
+          ..clear()
+          ..addEntries(_parseParkedCars(docs).map((c) => MapEntry(c.id, c)));
+        _parkedOnLotLoaded = true;
+        _rebuildActivityRecords();
+      });
+      _listenOpen(parkedCarsUnsettledSpec(businessId), (docs) {
+        _parkedUnsettled
+          ..clear()
+          ..addEntries(_parseParkedCars(docs).map((c) => MapEntry(c.id, c)));
+        _parkedUnsettledLoaded = true;
+        _rebuildActivityRecords();
+      });
     } else {
-      _parkedLoaded = true;
+      _parkedOnLotLoaded = true;
+      _parkedUnsettledLoaded = true;
     }
 
     // The containers permission is what lets a business read its own boxes;
     // without it the rules refuse the query and the rows simply carry no link.
-    final containersBusinessId = auth.businessId ?? '';
-    if (auth.hasBusinessPermission(BusinessPermission.containers) &&
-        containersBusinessId.isNotEmpty) {
-      _containersSubscription = FirebaseFirestore.instance
-          .collection('containers')
-          .where('businessId', isEqualTo: containersBusinessId)
-          .snapshots()
-          .listen((snapshot) {
+    if (hasBusiness &&
+        auth.hasBusinessPermission(BusinessPermission.containers)) {
+      _listenOpen(openContainersSpec(businessId), (docs) {
         _containers = [
-          for (final d in snapshot.docs) ShippingContainer.fromMap(d.id, d.data()),
+          for (final d in docs) ShippingContainer.fromMap(d.id, d.data()),
         ];
         _rebuildContainerLinks();
-      }, onError: (_) {});
-      _containerLinesSubscription = FirebaseFirestore.instance
-          .collection('containerLines')
-          .where('businessId', isEqualTo: containersBusinessId)
-          .snapshots()
-          .listen((snapshot) {
+      });
+      _listenOpen(openContainerLinesSpec(businessId), (docs) {
         _containerLines = [
-          for (final d in snapshot.docs) ContainerLine.fromMap(d.id, d.data()),
+          for (final d in docs) ContainerLine.fromMap(d.id, d.data()),
         ];
         _rebuildContainerLinks();
-      }, onError: (_) {});
+      });
     }
 
-    if (auth.hasBusinessPermission(BusinessPermission.barrels)) {
-      _barrelShipmentsSubscription =
-          scope(
-            FirebaseFirestore.instance.collection('barrelShipments'),
-            'createdAt',
-          ).snapshots().listen(
-            (snapshot) {
-              final shipments = snapshot.docs
-                  .map((doc) => BarrelShipment.fromFirestore(doc))
-                  .toList();
-              _barrelShipments
-                ..clear()
-                ..addAll(shipments);
-              _barrelsLoaded = true;
-              _rebuildActivityRecords();
-            },
-            onError: (_) {
-              _barrelsLoaded = true;
-              _rebuildActivityRecords();
-            },
-          );
+    if (hasBusiness && auth.hasBusinessPermission(BusinessPermission.barrels)) {
+      _listenOpen(barrelShipmentsOpenSpec(businessId), (docs) {
+        _barrelShipments
+          ..clear()
+          ..addAll(docs.map((doc) => BarrelShipment.fromFirestore(doc)));
+        _barrelsLoaded = true;
+        _rebuildActivityRecords();
+      });
     } else {
       _barrelsLoaded = true;
     }
 
-    if (auth.hasBusinessPermission(BusinessPermission.freight)) {
-      final freightCollection = FirebaseFirestore.instance.collection(
-        'freightShipments',
-      );
-      final freightQuery = auth.isAdmin
-          ? freightCollection
-          : freightCollection.where('businessId', isEqualTo: auth.businessId);
-      _freightShipmentsSubscription = freightQuery.snapshots().listen(
-        (snapshot) {
-          _freightStatuses
-            ..clear()
-            ..addAll(
-              snapshot.docs.map((doc) => '${doc.data()['status'] ?? ''}'),
-            );
-          _freightRecords
-            ..clear()
-            ..addAll(
-              snapshot.docs.map((doc) {
-                final data = doc.data();
-                final createdAt = data['createdAt'];
-                return ActivityRecord(
-                  category: ServiceCategory.freight,
-                  title:
-                      '${data['receiverName'] ?? ''} • ${data['trackingCode'] ?? doc.id}',
-                  subtitle: '${data['senderName'] ?? ''}',
-                  date: createdAt is Timestamp
-                      ? createdAt.toDate()
-                      : DateTime.fromMillisecondsSinceEpoch(0),
-                  payload: doc.id,
-                );
-              }),
-            );
-          _freightLoaded = true;
-          _rebuildActivityRecords();
-        },
-        onError: (_) {
-          _freightLoaded = true;
-          _rebuildActivityRecords();
-        },
-      );
-    } else {
-      _freightLoaded = true;
-    }
-
-    if (auth.hasBusinessPermission(BusinessPermission.transport)) {
-      _transportRequestsSubscription =
-          scope(
-            FirebaseFirestore.instance.collection('transportRequests'),
-            'createdAt',
-          ).snapshots().listen(
+    if (hasBusiness && auth.hasBusinessPermission(BusinessPermission.freight)) {
+      _freightShipmentsSubscription = freightShipmentsOpenSpec(businessId)
+          .build(FirebaseFirestore.instance)
+          .snapshots()
+          .listen(
             (snapshot) {
-              final requests = snapshot.docs
-                  .map((doc) => TransportRequest.fromFirestore(doc))
-                  .toList();
-              _transportRequests
-                ..clear()
-                ..addAll(requests);
-              _transportLoaded = true;
-              _rebuildActivityRecords();
-            },
-            onError: (_) {
-              _transportLoaded = true;
-              _rebuildActivityRecords();
-            },
-          );
-      // The requests this business may BID on. A separate collection, and the
-      // only one that knows about work nobody has priced yet - the transport
-      // tile counted delivered-or-not on won jobs alone before this, which told
-      // a carrier nothing about the deadline running down on an open request.
-      _transportOpportunitiesSubscription =
-          scope(
-            FirebaseFirestore.instance.collection('transportOpportunities'),
-            'createdAt',
-          ).snapshots().listen(
-            (snapshot) {
-              _transportOpportunityStatuses
+              _freightStatuses
                 ..clear()
                 ..addAll(
                   snapshot.docs.map((doc) => '${doc.data()['status'] ?? ''}'),
                 );
-              _transportOpportunitiesLoaded = true;
+              _freightRecords
+                ..clear()
+                ..addAll(snapshot.docs.map(_freightRecord));
+              _freightLoaded = true;
               _rebuildActivityRecords();
             },
             onError: (_) {
-              _transportOpportunitiesLoaded = true;
+              _freightLoaded = true;
               _rebuildActivityRecords();
             },
           );
     } else {
+      _freightLoaded = true;
+    }
+
+    if (hasBusiness &&
+        auth.hasBusinessPermission(BusinessPermission.transport)) {
+      _listenOpen(transportRequestsOpenSpec(businessId), (docs) {
+        _transportRequests
+          ..clear()
+          ..addAll(docs.map((doc) => TransportRequest.fromFirestore(doc)));
+        _transportLoaded = true;
+        _rebuildActivityRecords();
+      });
+      // The requests this business may still BID on. A separate collection,
+      // and the only one that knows about work nobody has priced yet.
+      _listenOpen(transportOpportunitiesOpenSpec(businessId), (docs) {
+        _transportOpportunityStatuses
+          ..clear()
+          ..addAll(docs.map((doc) => '${doc.data()['status'] ?? ''}'));
+        _transportOpportunitiesLoaded = true;
+        _rebuildActivityRecords();
+      });
+    } else {
       _transportLoaded = true;
       _transportOpportunitiesLoaded = true;
     }
+
+    // The spinner always resolves: a listener that never answers (offline
+    // with an empty cache) must not hold the whole screen hostage.
+    _loadingSafety = Timer(const Duration(seconds: 20), () {
+      if (!mounted || !_isLoading) return;
+      _parkedOnLotLoaded = true;
+      _parkedUnsettledLoaded = true;
+      _barrelsLoaded = true;
+      _freightLoaded = true;
+      _transportLoaded = true;
+      _transportOpportunitiesLoaded = true;
+      _rebuildActivityRecords();
+    });
     _rebuildActivityRecords();
   }
 
@@ -410,7 +435,6 @@ class _HomeMenuState extends State<HomeMenu> {
       final snap = await FirebaseFirestore.instance
           .collection('users')
           .where('businessId', isEqualTo: id)
-          .limit(200)
           .get();
       if (!mounted) return;
       final names = <String, String>{};
@@ -444,22 +468,6 @@ class _HomeMenuState extends State<HomeMenu> {
     }
   }
 
-  /// The scoreboard over the parked cars currently in view, or null when
-  /// parking is not the selected service or there is nothing to total. It
-  /// reads the SAME filtered records the feed shows, so a filter re-totals the
-  /// numbers - mirroring the console.
-  BusinessParkingTotals? get _parkingTotals {
-    if (_selectedCategory != ServiceCategory.parking) return null;
-    final rows = <Map<String, dynamic>>[
-      for (final record in _filteredRecords)
-        if (record.category == ServiceCategory.parking &&
-            record.payload is ParkedCar)
-          (record.payload as ParkedCar).paymentFields,
-    ];
-    if (rows.isEmpty) return null;
-    return businessParkingTotals(rows, spacesTotal: _parkingTotalSpaces);
-  }
-
   void _rebuildContainerLinks() {
     if (!mounted) return;
     setState(() {
@@ -467,11 +475,98 @@ class _HomeMenuState extends State<HomeMenu> {
     });
   }
 
+  /// Which history lists the current view would page through: the selected
+  /// service's, or every enabled service's under "all".
+  List<BusinessHistoryCollection> _historyCollectionsInView() {
+    return businessHistoryCollectionsFor(
+      selected: _selectedCategory,
+      enabled: _enabledActivityCategories(),
+    );
+  }
+
+  bool get _historyHasMore => _historyCollectionsInView().any(
+    (c) => _history[c]?.hasMore ?? true,
+  );
+
+  bool get _historyStarted =>
+      _historyCollectionsInView().any((c) => _history[c] != null);
+
+  /// One more page of completed and older records, for each service in view.
+  Future<void> _loadHistoryPage() async {
+    if (_historyLoading || _businessId.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
+    final collections = [
+      for (final c in _historyCollectionsInView())
+        if (_history[c]?.hasMore ?? true) c,
+    ];
+    if (collections.isEmpty) return;
+    setState(() => _historyLoading = true);
+    try {
+      await Future.wait(
+        collections.map((collection) async {
+          final pager = _history.putIfAbsent(collection, _HistoryPager.new);
+          var query = businessHistoryPageSpec(
+            collection,
+            _businessId,
+          ).build(FirebaseFirestore.instance);
+          if (pager.docs.isNotEmpty) {
+            query = query.startAfterDocument(pager.docs.last);
+          }
+          final snapshot = await query.get();
+          pager.docs.addAll(snapshot.docs);
+          pager.hasMore =
+              snapshot.docs.length >= businessActivityHistoryPageSize;
+        }),
+      ).timeout(const Duration(seconds: 30));
+    } catch (error) {
+      debugPrint('Business home history page failed: $error');
+      if (mounted) showErrorSnackBar(context, l10n.activityHistoryLoadFailed);
+    } finally {
+      if (mounted) {
+        _historyLoading = false;
+        _rebuildActivityRecords();
+      }
+    }
+  }
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _historyDocs(
+    BusinessHistoryCollection collection,
+  ) => _history[collection]?.docs ?? const [];
+
   void _rebuildActivityRecords() {
     if (!mounted) return;
+    // Open work first, so a record that is both live and on a history page
+    // shows its live state; each document once.
+    final liveParked = mergeById<ParkedCar>([
+      _parkedOnLot.values,
+      _parkedUnsettled.values,
+    ], (car) => car.id);
+    final parked = mergeById<ParkedCar>([
+      liveParked,
+      _parseParkedCars(_historyDocs(BusinessHistoryCollection.parkedCars)),
+    ], (car) => car.id);
+    final barrels = mergeById<BarrelShipment>([
+      _barrelShipments,
+      _historyDocs(
+        BusinessHistoryCollection.barrelShipments,
+      ).map((doc) => BarrelShipment.fromFirestore(doc)),
+    ], (shipment) => shipment.id);
+    final freight = mergeById<ActivityRecord>([
+      _freightRecords,
+      _historyDocs(
+        BusinessHistoryCollection.freightShipments,
+      ).map(_freightRecord),
+    ], (record) => '${record.payload ?? ''}');
+    final transport = mergeById<TransportRequest>([
+      _transportRequests,
+      _historyDocs(
+        BusinessHistoryCollection.transportRequests,
+      ).map((doc) => TransportRequest.fromFirestore(doc)),
+    ], (request) => request.id);
+
     final combined = <ActivityRecord>[];
 
-    for (final car in _parkedCars) {
+    for (final car in parked) {
       combined.add(
         ActivityRecord(
           category: ServiceCategory.parking,
@@ -483,7 +578,7 @@ class _HomeMenuState extends State<HomeMenu> {
       );
     }
 
-    for (final shipment in _barrelShipments) {
+    for (final shipment in barrels) {
       combined.add(
         ActivityRecord(
           category: ServiceCategory.barrels,
@@ -495,9 +590,9 @@ class _HomeMenuState extends State<HomeMenu> {
       );
     }
 
-    combined.addAll(_freightRecords);
+    combined.addAll(freight);
 
-    for (final request in _transportRequests) {
+    for (final request in transport) {
       combined.add(
         ActivityRecord(
           category: ServiceCategory.transport,
@@ -513,15 +608,24 @@ class _HomeMenuState extends State<HomeMenu> {
     combined.sort((a, b) => b.date.compareTo(a.date));
 
     setState(() {
+      _parkedCars
+        ..clear()
+        ..addAll(liveParked);
       _records
         ..clear()
         ..addAll(combined);
+      _recordsVersion += 1;
       _isLoading =
-          !(_parkedLoaded &&
+          !(_parkedOnLotLoaded &&
+              _parkedUnsettledLoaded &&
               _barrelsLoaded &&
               _freightLoaded &&
               _transportLoaded &&
               _transportOpportunitiesLoaded);
+      if (!_isLoading) {
+        _loadingSafety?.cancel();
+        _loadingSafety = null;
+      }
     });
   }
 
@@ -536,8 +640,24 @@ class _HomeMenuState extends State<HomeMenu> {
       _parkedFrom != null ||
       _parkedTo != null;
 
+  /// The feed as filtered right now. Computed once per change of the records
+  /// or of a filter - not once per build, and not once per caller: the
+  /// scoreboard and the list used to filter the same records separately, on
+  /// every rebuild.
   List<ActivityRecord> get _filteredRecords {
     final enabled = _enabledActivityCategories();
+    final key = (
+      _recordsVersion,
+      _selectedCategory,
+      _parkingFacets,
+      _parkingSearch,
+      _parkedFrom,
+      _parkedTo,
+      _parkingTotalSpaces,
+      (enabled.map((c) => c.index).toList()..sort()).join(','),
+    );
+    if (key == _filteredKey) return _filteredCache;
+    _filteredKey = key;
     final serviceRecords = _records
         .where((record) => enabled.contains(record.category))
         .toList();
@@ -546,31 +666,43 @@ class _HomeMenuState extends State<HomeMenu> {
         : serviceRecords
               .where((record) => record.category == _selectedCategory)
               .toList();
-    if (!_parkingListIsNarrowed) {
-      return categoryRecords;
-    }
-    // Only a parked car has a payment state or a stay to narrow on. Nothing
-    // else is touched, so a barrel cannot be hidden by a parking filter.
-    return categoryRecords.where((record) {
-      final car = record.payload;
-      if (record.category != ServiceCategory.parking || car is! ParkedCar) {
-        return true;
-      }
-      if (!businessParkingMatchesSearch(car.paymentFields, _parkingSearch)) {
-        return false;
-      }
-      // Status kind AND payment class, each an OR within itself.
-      if (!businessParkingMatchesFacets(car.paymentFields, _parkingFacets)) {
-        return false;
-      }
-      // Overlap, not containment: a car that arrived before the window and
-      // leaves after it was parked during that week and must still appear.
-      return businessParkingWithinRange(
-        car.paymentFields,
-        _parkedFrom,
-        _parkedTo,
-      );
-    }).toList();
+    _filteredCache = !_parkingListIsNarrowed
+        ? categoryRecords
+        // Only a parked car has a payment state or a stay to narrow on.
+        // Nothing else is touched, so a barrel cannot be hidden by a parking
+        // filter.
+        : categoryRecords.where((record) {
+            final car = record.payload;
+            if (record.category != ServiceCategory.parking || car is! ParkedCar) {
+              return true;
+            }
+            if (!businessParkingMatchesSearch(car.paymentFields, _parkingSearch)) {
+              return false;
+            }
+            // Status kind AND payment class, each an OR within itself.
+            if (!businessParkingMatchesFacets(car.paymentFields, _parkingFacets)) {
+              return false;
+            }
+            // Overlap, not containment: a car that arrived before the window
+            // and leaves after it was parked during that week and must still
+            // appear.
+            return businessParkingWithinRange(
+              car.paymentFields,
+              _parkedFrom,
+              _parkedTo,
+            );
+          }).toList();
+    final rows = <Map<String, dynamic>>[
+      if (_selectedCategory == ServiceCategory.parking)
+        for (final record in _filteredCache)
+          if (record.category == ServiceCategory.parking &&
+              record.payload is ParkedCar)
+            (record.payload as ParkedCar).paymentFields,
+    ];
+    _parkingTotalsCache = rows.isEmpty
+        ? null
+        : businessParkingTotals(rows, spacesTotal: _parkingTotalSpaces);
+    return _filteredCache;
   }
 
   Set<ServiceCategory> _enabledActivityCategories() {
@@ -581,12 +713,20 @@ class _HomeMenuState extends State<HomeMenu> {
     );
   }
 
-  /// The overview grid, built from the lists this screen has already
-  /// subscribed to. The tiles and the feed's own gate come from the same pure
-  /// decision, so a tile can never offer a service whose records are hidden.
+  /// The overview grid, built from the open-work lists this screen listens
+  /// to. The tiles and the feed's own gate come from the same pure decision,
+  /// so a tile can never offer a service whose records are hidden. Computed
+  /// once per change, not per build.
   List<BusinessServiceTile> _overviewTiles() {
     final auth = context.read<AuthProvider>();
-    return businessServiceOverviewTiles(
+    final enabled = _enabledActivityCategories();
+    final key = (
+      _recordsVersion,
+      (enabled.map((c) => c.index).toList()..sort()).join(','),
+    );
+    if (key == _tilesKey) return _tilesCache;
+    _tilesKey = key;
+    return _tilesCache = businessServiceOverviewTiles(
       services: auth.businessServices,
       hasPermission: auth.hasBusinessPermission,
       parkedCarFields: _parkedCars.map((car) => car.paymentFields),
@@ -615,13 +755,11 @@ class _HomeMenuState extends State<HomeMenu> {
   @override
   void dispose() {
     _parkingSearchController.dispose();
-    _parkedCarsSubscription?.cancel();
-    _barrelShipmentsSubscription?.cancel();
+    _loadingSafety?.cancel();
     _freightShipmentsSubscription?.cancel();
-    _transportRequestsSubscription?.cancel();
-    _transportOpportunitiesSubscription?.cancel();
-    _containersSubscription?.cancel();
-    _containerLinesSubscription?.cancel();
+    for (final sub in _subs) {
+      sub.cancel();
+    }
     super.dispose();
   }
 
@@ -629,99 +767,193 @@ class _HomeMenuState extends State<HomeMenu> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final width = MediaQuery.of(context).size.width;
+    final pad = width * 0.06;
+    final tiles = _overviewTiles();
+    final records = _filteredRecords;
+    final showRecords = !_isLoading && records.isNotEmpty;
 
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(color: AppColors.cream),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.all(width * 0.06),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    if (widget.showBackButton) const BackButton(),
-                    const Spacer(),
-                    // Same bell customers have: a business's notifications
-                    // (paid links, new opportunities, viewing requests) were
-                    // stored but reachable only from a push banner.
-                    const CustomerNotificationBell(),
-                    const SizedBox(width: 4),
-                    const LanguageToggle(),
-                  ],
+          // Slivers, so only the rows on screen are built: the feed used to be
+          // a Column of every record inside a SingleChildScrollView.
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(pad, pad, pad, 0),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (widget.showBackButton) const BackButton(),
+                          const Spacer(),
+                          // Same bell customers have: a business's
+                          // notifications (paid links, new opportunities,
+                          // viewing requests) were stored but reachable only
+                          // from a push banner.
+                          const CustomerNotificationBell(),
+                          const SizedBox(width: 4),
+                          const LanguageToggle(),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // "Services. / Choose a service to get started" is an
+                      // invitation to pick something. Once the service grid
+                      // is on screen it is a caption for the thing directly
+                      // under it. Customers, who get no grid, still need it.
+                      if (tiles.isEmpty) ...[
+                        _WelcomeSection(l10n: l10n, width: width),
+                        const SizedBox(height: 24),
+                      ],
+                      _ServicesSection(
+                        l10n: l10n,
+                        width: width,
+                        tiles: tiles,
+                        isLoading: _isLoading,
+                        selectedCategory: _selectedCategory,
+                        onCategoryTapped: (category) => _selectCategory(
+                          businessServiceOverviewSelection(
+                            _selectedCategory,
+                            category,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      _ActivitySection(
+                        l10n: l10n,
+                        hasRecords: records.isNotEmpty,
+                        historyLoaded: _historyStarted,
+                        isLoading: _isLoading,
+                        denseList: _parkingDenseList,
+                        onDenseListChanged: (dense) =>
+                            setState(() => _parkingDenseList = dense),
+                        selectedCategory: _selectedCategory,
+                        onCategoryChanged: _selectCategory,
+                        facets: _parkingFacets,
+                        onToggleKind: (kind) {
+                          setState(() {
+                            _parkingFacets = _parkingFacets.toggleKind(kind);
+                          });
+                        },
+                        onTogglePayment: (payment) {
+                          setState(() {
+                            _parkingFacets = _parkingFacets.togglePayment(
+                              payment,
+                            );
+                          });
+                        },
+                        onClearFacets: () {
+                          setState(() {
+                            _parkingFacets = const ParkingFacets();
+                          });
+                        },
+                        searchController: _parkingSearchController,
+                        onSearchChanged: (value) {
+                          setState(() {
+                            _parkingSearch = value;
+                          });
+                        },
+                        isNarrowed: _parkingListIsNarrowed,
+                        parkedFrom: _parkedFrom,
+                        parkedTo: _parkedTo,
+                        onParkedRangeChanged: (from, to) {
+                          setState(() {
+                            _parkedFrom = from;
+                            _parkedTo = to;
+                          });
+                        },
+                        // The scoreboard over the parked cars in view, from
+                        // the SAME filtered records the feed shows, so a
+                        // filter re-totals the numbers - as the console does.
+                        parkingTotals: _parkingTotalsCache,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                // "Services. / Choose a service to get started" is an
-                // invitation to pick something. Once the service grid is on
-                // screen it is a caption for the thing directly under it,
-                // costing a phone-height of space to say what the tiles
-                // already say. Customers, who get no grid, still need it.
-                if (_overviewTiles().isEmpty) ...[
-                  _WelcomeSection(l10n: l10n, width: width),
-                  const SizedBox(height: 24),
-                ],
-                _ServicesSection(
-                  l10n: l10n,
-                  width: width,
-                  tiles: _overviewTiles(),
-                  isLoading: _isLoading,
-                  selectedCategory: _selectedCategory,
-                  onCategoryTapped: (category) => _selectCategory(
-                    businessServiceOverviewSelection(
-                      _selectedCategory,
-                      category,
+              ),
+              if (showRecords)
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: pad),
+                  sliver: SliverList.builder(
+                    itemCount: records.length,
+                    itemBuilder: (context, index) => _ActivityRecordTile(
+                      l10n: l10n,
+                      record: records[index],
+                      denseList: _parkingDenseList,
+                      staffNames: _staffNames,
+                      containerLinks: _containerLinks,
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                _ActivitySection(
-                  l10n: l10n,
-                  records: _filteredRecords,
-                  isLoading: _isLoading,
-                  denseList: _parkingDenseList,
-                  onDenseListChanged: (dense) =>
-                      setState(() => _parkingDenseList = dense),
-                  staffNames: _staffNames,
-                  containerLinks: _containerLinks,
-                  selectedCategory: _selectedCategory,
-                  onCategoryChanged: _selectCategory,
-                  facets: _parkingFacets,
-                  onToggleKind: (kind) {
-                    setState(() {
-                      _parkingFacets = _parkingFacets.toggleKind(kind);
-                    });
-                  },
-                  onTogglePayment: (payment) {
-                    setState(() {
-                      _parkingFacets = _parkingFacets.togglePayment(payment);
-                    });
-                  },
-                  onClearFacets: () {
-                    setState(() {
-                      _parkingFacets = const ParkingFacets();
-                    });
-                  },
-                  searchController: _parkingSearchController,
-                  onSearchChanged: (value) {
-                    setState(() {
-                      _parkingSearch = value;
-                    });
-                  },
-                  isNarrowed: _parkingListIsNarrowed,
-                  parkedFrom: _parkedFrom,
-                  parkedTo: _parkedTo,
-                  onParkedRangeChanged: (from, to) {
-                    setState(() {
-                      _parkedFrom = from;
-                      _parkedTo = to;
-                    });
-                  },
-                  parkingTotals: _parkingTotals,
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(pad, 12, pad, pad),
+                sliver: SliverToBoxAdapter(
+                  child: _isLoading || _businessId.isEmpty
+                      ? const SizedBox.shrink()
+                      : _HistoryFooter(
+                          l10n: l10n,
+                          started: _historyStarted,
+                          hasMore: _historyHasMore,
+                          isLoading: _historyLoading,
+                          onLoad: _loadHistoryPage,
+                        ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Below the open work: the way into everything already done. Opens on
+/// request - completed records are what a lot looks up occasionally, and
+/// reading all of them on every open was most of this screen's cost.
+class _HistoryFooter extends StatelessWidget {
+  const _HistoryFooter({
+    required this.l10n,
+    required this.started,
+    required this.hasMore,
+    required this.isLoading,
+    required this.onLoad,
+  });
+
+  final AppLocalizations l10n;
+  final bool started;
+  final bool hasMore;
+  final bool isLoading;
+  final VoidCallback onLoad;
+
+  @override
+  Widget build(BuildContext context) {
+    if (started && !hasMore) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          l10n.activityHistoryEnd,
+          key: const Key('activity-history-end'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AppColors.muted, fontSize: 13),
+        ),
+      );
+    }
+    return Center(
+      child: OutlinedButton.icon(
+        key: const Key('activity-load-history'),
+        onPressed: isLoading ? null : onLoad,
+        icon: isLoading
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(started ? Icons.expand_more : Icons.history, size: 18),
+        label: Text(
+          started ? l10n.activityLoadMoreHistory : l10n.activityShowHistory,
         ),
       ),
     );
@@ -1324,15 +1556,17 @@ class _ServiceOverviewCard extends StatelessWidget {
   }
 }
 
+/// The feed's heading, its parking controls, and its loading or empty
+/// state. The rows themselves are a lazily built sliver list beside it (see
+/// [_ActivityRecordTile]), so a long history costs only what is on screen.
 class _ActivitySection extends StatelessWidget {
   const _ActivitySection({
     required this.l10n,
-    required this.records,
+    required this.hasRecords,
+    required this.historyLoaded,
     required this.isLoading,
     required this.denseList,
     required this.onDenseListChanged,
-    required this.staffNames,
-    required this.containerLinks,
     required this.selectedCategory,
     required this.onCategoryChanged,
     required this.facets,
@@ -1349,15 +1583,16 @@ class _ActivitySection extends StatelessWidget {
   });
 
   final AppLocalizations l10n;
-  final List<ActivityRecord> records;
+
+  /// Whether the filtered feed has anything to show.
+  final bool hasRecords;
+
+  /// Whether completed records have been asked for. Before that an empty
+  /// feed means "nothing open", not "nothing ever".
+  final bool historyLoaded;
   final bool isLoading;
   final bool denseList;
   final ValueChanged<bool> onDenseListChanged;
-  final Map<String, String> staffNames;
-
-  /// VIN → container link, for the parked-car rows. Empty when the business
-  /// holds no containers permission.
-  final Map<String, ContainerVinLink> containerLinks;
   final ServiceCategory selectedCategory;
   final ValueChanged<ServiceCategory> onCategoryChanged;
   final ParkingFacets facets;
@@ -1681,7 +1916,7 @@ class _ActivitySection extends StatelessWidget {
         const SizedBox(height: 16),
         if (isLoading)
           const Center(child: CircularProgressIndicator())
-        else if (records.isEmpty)
+        else if (!hasRecords)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
@@ -1690,12 +1925,15 @@ class _ActivitySection extends StatelessWidget {
               border: Border.all(color: AppColors.rule),
             ),
             child: Text(
-              // "You have nothing" and "nothing matches what you asked for"
-              // are different problems, and only the second is fixed by
-              // clearing a filter. The console says so; this used to not.
+              // "You have nothing", "nothing is open" and "nothing matches
+              // what you asked for" are different problems, and only the last
+              // is fixed by clearing a filter. The console says so; this used
+              // to not.
               isNarrowed && selectedCategory == ServiceCategory.parking
                   ? l10n.noParkingRecordsMatchFilter
-                  : l10n.noRecordsYet,
+                  : historyLoaded
+                  ? l10n.noRecordsYet
+                  : l10n.noOpenRecords,
               style: TextStyle(
                 fontSize: 15,
                 color: AppColors.muted,
@@ -1703,112 +1941,133 @@ class _ActivitySection extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-          )
-        else
-          ...records.map((record) {
-            final paymentNote =
-                record.category == ServiceCategory.parking &&
-                    record.payload is ParkedCar &&
-                    (record.payload as ParkedCar).isBusinessEntered
-                ? businessParkingPaymentStatusLabel(
-                    l10n,
-                    (record.payload as ParkedCar).paymentFields,
-                  )
-                : '';
-            if (record.category == ServiceCategory.parking &&
-                record.payload is ParkedCar &&
-                denseList) {
-              final car = record.payload as ParkedCar;
-              return _ParkingListRow(
-                l10n: l10n,
-                car: car,
-                staffNames: staffNames,
-                containerLink:
-                    containerLinks[car.vinNumber.trim().toUpperCase()],
-                onTap: () => Navigator.pushNamed(
-                  context,
-                  '/parked-car-details',
-                  arguments: car,
-                ),
-              );
-            }
-            final card = _RecordCard(
-              title: record.title,
-              containerLink:
-                  record.category == ServiceCategory.parking &&
-                      record.payload is ParkedCar
-                  ? containerLinks[(record.payload as ParkedCar)
-                      .vinNumber
-                      .trim()
-                      .toUpperCase()]
-                  : null,
-              subtitle: paymentNote.isEmpty
-                  ? record.subtitle
-                  : '${record.subtitle} • $paymentNote',
-              date: record.date,
-              categoryLabel: _categoryLabel(record.category, l10n),
-              categoryIcon: _categoryIcon(record.category),
-              // Only a parked car carries a payment badge; the widget itself
-              // returns nothing for a customer booking, a cancelled record or
-              // an entry with nothing to collect.
-              paymentFields:
-                  record.category == ServiceCategory.parking &&
-                      record.payload is ParkedCar
-                  ? (record.payload as ParkedCar).paymentFields
-                  : null,
-            );
-
-            void Function()? onTap;
-            if (record.category == ServiceCategory.parking &&
-                record.payload is ParkedCar) {
-              final car = record.payload as ParkedCar;
-              onTap = () {
-                Navigator.pushNamed(
-                  context,
-                  '/parked-car-details',
-                  arguments: car,
-                );
-              };
-            } else if (record.category == ServiceCategory.barrels &&
-                record.payload is BarrelShipment) {
-              final shipment = record.payload as BarrelShipment;
-              onTap = () {
-                Navigator.pushNamed(
-                  context,
-                  '/barrel-shipment-details',
-                  arguments: shipment,
-                );
-              };
-            } else if (record.category == ServiceCategory.transport &&
-                record.payload is TransportRequest) {
-              final request = record.payload as TransportRequest;
-              onTap = () {
-                Navigator.pushNamed(
-                  context,
-                  '/transport-request-details',
-                  arguments: request,
-                );
-              };
-            } else if (record.category == ServiceCategory.freight) {
-              onTap = () {
-                unawaited(
-                  launchUrl(
-                    Uri.parse('https://business.laawoldigital.com/'),
-                    mode: LaunchMode.externalApplication,
-                  ),
-                );
-              };
-            } else {
-              onTap = null;
-            }
-
-            if (onTap != null) {
-              return GestureDetector(onTap: onTap, child: card);
-            }
-            return card;
-          }),
+          ),
       ],
     );
+  }
+}
+
+/// One row of the feed, built only when it scrolls into view.
+class _ActivityRecordTile extends StatelessWidget {
+  const _ActivityRecordTile({
+    required this.l10n,
+    required this.record,
+    required this.denseList,
+    required this.staffNames,
+    required this.containerLinks,
+  });
+
+  final AppLocalizations l10n;
+  final ActivityRecord record;
+  final bool denseList;
+  final Map<String, String> staffNames;
+
+  /// VIN → container link, for the parked-car rows. Empty when the business
+  /// holds no containers permission.
+  final Map<String, ContainerVinLink> containerLinks;
+
+  @override
+  Widget build(BuildContext context) {
+    final paymentNote =
+        record.category == ServiceCategory.parking &&
+            record.payload is ParkedCar &&
+            (record.payload as ParkedCar).isBusinessEntered
+        ? businessParkingPaymentStatusLabel(
+            l10n,
+            (record.payload as ParkedCar).paymentFields,
+          )
+        : '';
+    if (record.category == ServiceCategory.parking &&
+        record.payload is ParkedCar &&
+        denseList) {
+      final car = record.payload as ParkedCar;
+      return _ParkingListRow(
+        l10n: l10n,
+        car: car,
+        staffNames: staffNames,
+        containerLink:
+            containerLinks[car.vinNumber.trim().toUpperCase()],
+        onTap: () => Navigator.pushNamed(
+          context,
+          '/parked-car-details',
+          arguments: car,
+        ),
+      );
+    }
+    final card = _RecordCard(
+      title: record.title,
+      containerLink:
+          record.category == ServiceCategory.parking &&
+              record.payload is ParkedCar
+          ? containerLinks[(record.payload as ParkedCar)
+              .vinNumber
+              .trim()
+              .toUpperCase()]
+          : null,
+      subtitle: paymentNote.isEmpty
+          ? record.subtitle
+          : '${record.subtitle} • $paymentNote',
+      date: record.date,
+      categoryLabel: _categoryLabel(record.category, l10n),
+      categoryIcon: _categoryIcon(record.category),
+      // Only a parked car carries a payment badge; the widget itself
+      // returns nothing for a customer booking, a cancelled record or
+      // an entry with nothing to collect.
+      paymentFields:
+          record.category == ServiceCategory.parking &&
+              record.payload is ParkedCar
+          ? (record.payload as ParkedCar).paymentFields
+          : null,
+    );
+
+    void Function()? onTap;
+    if (record.category == ServiceCategory.parking &&
+        record.payload is ParkedCar) {
+      final car = record.payload as ParkedCar;
+      onTap = () {
+        Navigator.pushNamed(
+          context,
+          '/parked-car-details',
+          arguments: car,
+        );
+      };
+    } else if (record.category == ServiceCategory.barrels &&
+        record.payload is BarrelShipment) {
+      final shipment = record.payload as BarrelShipment;
+      onTap = () {
+        Navigator.pushNamed(
+          context,
+          '/barrel-shipment-details',
+          arguments: shipment,
+        );
+      };
+    } else if (record.category == ServiceCategory.transport &&
+        record.payload is TransportRequest) {
+      final request = record.payload as TransportRequest;
+      onTap = () {
+        Navigator.pushNamed(
+          context,
+          '/transport-request-details',
+          arguments: request,
+        );
+      };
+    } else if (record.category == ServiceCategory.freight) {
+      onTap = () {
+        unawaited(
+          launchUrl(
+            Uri.parse('https://business.laawoldigital.com/'),
+            mode: LaunchMode.externalApplication,
+          ),
+        );
+      };
+    } else {
+      onTap = null;
+    }
+
+    if (onTap != null) {
+      return GestureDetector(onTap: onTap, child: card);
+    }
+    return card;
   }
 }
 

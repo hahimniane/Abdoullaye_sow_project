@@ -10,9 +10,11 @@ import '../data/calling_code_catalog.dart';
 import '../data/country_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
+import '../services/business_activity_queries.dart';
 import '../services/container_lot_cars.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
+import '../services/known_car_lookup.dart';
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/vin_decoder_service.dart';
@@ -42,6 +44,70 @@ import 'vin_scanner_screen.dart';
 /// `services/container_manifest.dart`, which mirrors the server module, so a
 /// refusal is shown at the field before the round trip and in the same words
 /// when the server refuses anyway.
+/// A business's containers and their lines, listened to ONCE and shared.
+///
+/// The list screen owns one, and every container detail opened from it reads
+/// the same feed - the detail used to open a second listener on both
+/// collections each time a box was tapped. A detail opened from anywhere
+/// else (a scanned package) makes and disposes its own.
+class ContainerFeed extends ChangeNotifier {
+  ContainerFeed(this.businessId, {FirebaseFirestore? db})
+    : _db = db ?? FirebaseFirestore.instance {
+    _listen();
+  }
+
+  final String businessId;
+  final FirebaseFirestore _db;
+  final List<StreamSubscription<Object?>> _subs = [];
+
+  List<ShippingContainer> containers = const [];
+  List<ContainerLine> lines = const [];
+  bool loaded = false;
+  bool failed = false;
+  bool _disposed = false;
+
+  void _listen() {
+    final id = businessId;
+    // No orderBy on either collection: sorted client-side so neither query
+    // needs a composite index.
+    Query<Map<String, dynamic>> scoped(String path) =>
+        _db.collection(path).where('businessId', isEqualTo: id);
+
+    _subs.add(scoped('containers').snapshots().listen((snap) {
+      containers = sortContainers([
+        for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
+      ]);
+      loaded = true;
+      failed = false;
+      _changed();
+    }, onError: (_) {
+      loaded = true;
+      failed = true;
+      _changed();
+    }));
+
+    _subs.add(scoped('containerLines').snapshots().listen((snap) {
+      lines = [
+        for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
+      ];
+      _changed();
+    }, onError: (_) {}));
+  }
+
+  void _changed() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    for (final s in _subs) {
+      s.cancel();
+    }
+    super.dispose();
+  }
+}
+
 class ContainersScreen extends StatefulWidget {
   const ContainersScreen({super.key, required this.businessId});
 
@@ -55,17 +121,32 @@ class _ContainersScreenState extends State<ContainersScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final List<StreamSubscription<Object?>> _subs = [];
 
-  List<ShippingContainer> _containers = const [];
-  List<ContainerLine> _lines = const [];
+  /// The containers and lines, shared with every detail opened from here.
+  late final ContainerFeed _feed;
+
+  void _onFeed() {
+    if (mounted) setState(() {});
+  }
+
+  List<ShippingContainer> get _containers => _feed.containers;
+  List<ContainerLine> get _lines => _feed.lines;
+  bool get _loading => !_feed.loaded;
+  bool get _loadFailed => _feed.failed;
   List<LotStaff> _staff = const [];
   List<LotCustomer> _customers = const [];
 
-  /// The business's `parkedCars` rows as stored, each with its `id`. One
-  /// subscription feeds two readers: the VIN memory below, and the "is this
-  /// car parked in your lot?" picker on the add-line sheet, which needs the
-  /// status and dates a bare known-car does not keep.
+  /// The business's `parkedCars` rows that still hold a space - in the lot,
+  /// booked, or open-ended - each with its `id`. That is exactly what the
+  /// "is this car parked in your lot?" picker on the add-line sheet offers,
+  /// so it is all that is read: this used to be an unordered `limit(500)`
+  /// over the lot's whole history, which dropped cars once it was full.
   List<Map<String, dynamic>> _parkedCarRows = const [];
-  List<LotKnownCar> _activityCars = const [];
+
+  /// Older vehicles come from the shared VIN memory (recent cars, then an
+  /// exact lookup), not from a listener on every ledger job.
+  late final KnownCarLookup _carLookup = KnownCarLookup.forBusiness(
+    widget.businessId,
+  );
 
   List<LotKnownCar> get _parkedCars => [
         for (final row in _parkedCarRows) LotKnownCar.fromMap(row),
@@ -80,15 +161,13 @@ class _ContainersScreenState extends State<ContainersScreen> {
 
   String _filter = containerStatusLoading;
   String _search = '';
-  bool _loading = true;
-  bool _loadFailed = false;
 
   /// Every vehicle this business has on file: parked cars first, then what
   /// a past activity recorded, then what an earlier container carried.
   /// Typing a VIN it recognises should never leave staff re-typing the car.
   List<LotKnownCar> get _knownCars => [
         ..._parkedCars,
-        ..._activityCars,
+        ..._carLookup.recent,
         for (final line in _lines)
           if (line.isCar)
             LotKnownCar(
@@ -109,35 +188,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
 
   void _listen() {
     final id = widget.businessId;
-    // No orderBy on either collection: sorted client-side so neither query
-    // needs a composite index.
-    Query<Map<String, dynamic>> scoped(String path) =>
-        _db.collection(path).where('businessId', isEqualTo: id);
-
-    _subs.add(scoped('containers').snapshots().listen((snap) {
-      if (!mounted) return;
-      setState(() {
-        _containers = sortContainers([
-          for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
-        ]);
-        _loading = false;
-        _loadFailed = false;
-      });
-    }, onError: (_) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _loadFailed = true;
-        });
-      }
-    }));
-
-    _subs.add(scoped('containerLines').snapshots().listen((snap) {
-      if (!mounted) return;
-      setState(() => _lines = [
-            for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
-          ]);
-    }, onError: (_) {}));
+    _feed = ContainerFeed(id)..addListener(_onFeed);
 
     _subs.add(_db
         .collection('users')
@@ -161,23 +212,19 @@ class _ContainersScreenState extends State<ContainersScreen> {
       // "added by" simply stays blank.
     }));
 
-    _subs.add(scoped('parkedCars').limit(500).snapshots().listen((snap) {
+    _subs.add(parkedCarsOnLotSpec(id, DateTime.now())
+        .build(_db)
+        .snapshots()
+        .listen((snap) {
       if (!mounted) return;
       setState(() => _parkedCarRows = [
             for (final d in snap.docs) {...d.data(), 'id': d.id},
           ]);
     }, onError: (_) {}));
 
-    _subs.add(scoped('lotActivities')
-        .orderBy('activityDate', descending: true)
-        .limit(500)
-        .snapshots()
-        .listen((snap) {
-      if (!mounted) return;
-      setState(() => _activityCars = [
-            for (final d in snap.docs) LotKnownCar.fromMap(d.data()),
-          ]);
-    }, onError: (_) {}));
+    unawaited(_carLookup.loadRecent().then((_) {
+      if (mounted) setState(() {});
+    }));
 
     _subs.add(_db.collection('businesses').doc(id).snapshots().listen((doc) {
       if (!mounted) return;
@@ -236,6 +283,9 @@ class _ContainersScreenState extends State<ContainersScreen> {
     for (final s in _subs) {
       s.cancel();
     }
+    _feed
+      ..removeListener(_onFeed)
+      ..dispose();
     super.dispose();
   }
 
@@ -245,6 +295,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
         builder: (_) => ContainerDetailScreen(
           businessId: widget.businessId,
           containerId: containerId,
+          feed: _feed,
           staff: _staff,
           customers: _customers,
           knownCars: _knownCars,
@@ -876,10 +927,15 @@ class ContainerDetailScreen extends StatefulWidget {
     required this.destinations,
     this.businessCountryCode = '',
     required this.onCustomerRecorded,
+    this.feed,
   });
 
   final String businessId;
   final String containerId;
+
+  /// The list screen's feed, when opened from it. Absent, the detail makes
+  /// its own (and disposes it).
+  final ContainerFeed? feed;
   final List<LotStaff> staff;
   final List<LotCustomer> customers;
   final List<LotKnownCar> knownCars;
@@ -898,12 +954,17 @@ class ContainerDetailScreen extends StatefulWidget {
 }
 
 class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final List<StreamSubscription<Object?>> _subs = [];
+  ContainerFeed? _ownFeed;
+  late final ContainerFeed _feed =
+      widget.feed ?? (_ownFeed = ContainerFeed(widget.businessId));
 
-  List<ShippingContainer> _containers = const [];
-  List<ContainerLine> _allLines = const [];
-  bool _loaded = false;
+  List<ShippingContainer> get _containers => _feed.containers;
+  List<ContainerLine> get _allLines => _feed.lines;
+  bool get _loaded => _feed.loaded;
+
+  void _onFeed() {
+    if (mounted) setState(() {});
+  }
 
   /// Which action is in flight, so every button disables together and the
   /// one pressed shows it is working.
@@ -931,33 +992,13 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final id = widget.businessId;
-    Query<Map<String, dynamic>> scoped(String path) =>
-        _db.collection(path).where('businessId', isEqualTo: id);
-    _subs.add(scoped('containers').snapshots().listen((snap) {
-      if (!mounted) return;
-      setState(() {
-        _containers = sortContainers([
-          for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
-        ]);
-        _loaded = true;
-      });
-    }, onError: (_) {
-      if (mounted) setState(() => _loaded = true);
-    }));
-    _subs.add(scoped('containerLines').snapshots().listen((snap) {
-      if (!mounted) return;
-      setState(() => _allLines = [
-            for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
-          ]);
-    }, onError: (_) {}));
+    _feed.addListener(_onFeed);
   }
 
   @override
   void dispose() {
-    for (final s in _subs) {
-      s.cancel();
-    }
+    _feed.removeListener(_onFeed);
+    _ownFeed?.dispose();
     super.dispose();
   }
 
@@ -2524,25 +2565,29 @@ class _LineFormSheetState extends State<_LineFormSheet> {
 
     final known = lotFindKnownCar(clean, widget.knownCars);
     if (known != null && known.hasVehicle) {
-      setState(() {
-        if (known.make.isNotEmpty) _make.text = known.make;
-        if (known.model.isNotEmpty) _model.text = known.model;
-        if (known.year.isNotEmpty) _year.text = known.year;
-        // The car is certain; the customer is a suggestion, so it never
-        // overwrites a name already typed.
-        if (_customer.text.trim().isEmpty && known.customerName.isNotEmpty) {
-          _customer.text = known.customerName;
-        }
-        if (_phone.text.trim().isEmpty && known.customerPhone.isNotEmpty) {
-          _phone.text = known.customerPhone;
-        }
-        _vinHint = l10n.lotVinMatchedExisting;
-      });
+      _applyKnownCar(known, l10n);
       return;
     }
 
     if (_vinHint.isNotEmpty) setState(() => _vinHint = '');
     if (isValidVin(clean) && clean != _decodedVin) _decodeVin(clean);
+  }
+
+  void _applyKnownCar(LotKnownCar known, AppLocalizations l10n) {
+    setState(() {
+      if (known.make.isNotEmpty) _make.text = known.make;
+      if (known.model.isNotEmpty) _model.text = known.model;
+      if (known.year.isNotEmpty) _year.text = known.year;
+      // The car is certain; the customer is a suggestion, so it never
+      // overwrites a name already typed.
+      if (_customer.text.trim().isEmpty && known.customerName.isNotEmpty) {
+        _customer.text = known.customerName;
+      }
+      if (_phone.text.trim().isEmpty && known.customerPhone.isNotEmpty) {
+        _phone.text = known.customerPhone;
+      }
+      _vinHint = l10n.lotVinMatchedExisting;
+    });
   }
 
   Future<void> _decodeVin(String vin) async {
@@ -2552,6 +2597,16 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       _decodedVin = vin;
     });
     try {
+      // Older than the cars kept in memory? Ask the business's own records
+      // for this exact VIN before the decoder - they also know whose it is.
+      final known = await KnownCarLookup.forBusiness(
+        widget.businessId,
+      ).findExact(vin);
+      if (!mounted) return;
+      if (known != null && known.hasVehicle) {
+        if (_vin.text == vin) _applyKnownCar(known, l10n);
+        return;
+      }
       final decoded = await _vinDecoder.decode(vin);
       if (!mounted) return;
       setState(() {

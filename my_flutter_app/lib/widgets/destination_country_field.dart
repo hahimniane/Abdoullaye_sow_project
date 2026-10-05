@@ -4,7 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/destination_country_service.dart';
 
-class DestinationCountryField extends StatelessWidget {
+class DestinationCountryField extends StatefulWidget {
   const DestinationCountryField({
     super.key,
     required this.value,
@@ -19,15 +19,31 @@ class DestinationCountryField extends StatelessWidget {
   final String requiredMessage;
 
   @override
+  State<DestinationCountryField> createState() =>
+      _DestinationCountryFieldState();
+}
+
+class _DestinationCountryFieldState extends State<DestinationCountryField> {
+  /// Created once per field, not per build: the form rebuilds on every
+  /// keystroke, and a stream made in `build` re-subscribed (and re-ran the
+  /// catalog's Cloud Function) each time.
+  late final Stream<List<DestinationCountry>> _countries =
+      DestinationCountryService().activeCountries();
+
+  @override
   Widget build(BuildContext context) {
+    final value = widget.value;
+    final onChanged = widget.onChanged;
+    final label = widget.label;
+    final requiredMessage = widget.requiredMessage;
     return StreamBuilder<List<DestinationCountry>>(
-      stream: DestinationCountryService().activeCountries(),
+      stream: _countries,
       builder: (context, snapshot) {
         final l10n = AppLocalizations.of(context)!;
         final countries = snapshot.data ?? <DestinationCountry>[];
         final currentValue =
-            value != null && countries.any((country) => country.id == value!.id)
-            ? value!.id
+            value != null && countries.any((country) => country.id == value.id)
+            ? value.id
             : null;
 
         if (snapshot.hasError) {
