@@ -166,8 +166,56 @@ function parseContainersFromIncluded(json) {
       .filter((container) => container.number && container.currentStatus);
 }
 
+// A shipment the carrier poll is finished with. Every poll used to re-read
+// every carrier-tracked shipment ever subscribed - delivered, cancelled and
+// failed ones included - so the 4-hourly job grew without bound. A finished
+// shipment is stamped `carrierTrackingDone: true` and the poll only queries
+// `carrierTrackingDone == false`.
+const CARRIER_TRACKING_TERMINAL_STATUSES = Object.freeze([
+  "completed",
+  "cancelled",
+  "canceled",
+  "delivered",
+  "refunded",
+]);
+
+const TERMINAL_STATUS_SET = new Set(CARRIER_TRACKING_TERMINAL_STATUSES);
+
+/**
+ * Whether the carrier poll has nothing more to learn about a shipment: its
+ * own status (or a transport job's fulfillmentStatus) is final, or
+ * Terminal49 failed the tracking request.
+ *
+ * @param {object} shipment The shipment document.
+ * @return {boolean} True when the poll should stop.
+ */
+function shipmentCarrierTrackingFinished(shipment) {
+  const row = shipment && typeof shipment === "object" ? shipment : {};
+  if (cleanText(row.trackingRequestStatus, 40) === "failed") return true;
+  return [row.status, row.fulfillmentStatus].some((value) =>
+    TERMINAL_STATUS_SET.has(cleanText(value, 60).toLowerCase()));
+}
+
+/**
+ * The `carrierTrackingDone` patch a carrier-tracked shipment needs, or null
+ * when the stored flag is already right. Shipments not on the carrier feed
+ * are never touched. Idempotent.
+ *
+ * @param {object} shipment The shipment document.
+ * @return {{carrierTrackingDone: boolean}|null} The patch.
+ */
+function carrierTrackingDonePatch(shipment) {
+  const row = shipment && typeof shipment === "object" ? shipment : {};
+  if (row.trackingProvider !== "carrier_api") return null;
+  const done = shipmentCarrierTrackingFinished(row);
+  return row.carrierTrackingDone === done ? null : {carrierTrackingDone: done};
+}
+
 module.exports = {
+  CARRIER_TRACKING_TERMINAL_STATUSES,
   TRACKING_SECTION_BY_COLLECTION,
+  carrierTrackingDonePatch,
+  shipmentCarrierTrackingFinished,
   cleanText,
   validateMilestoneSubmission,
   validateContainerNumber,

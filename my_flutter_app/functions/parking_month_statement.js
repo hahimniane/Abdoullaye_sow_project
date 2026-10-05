@@ -572,8 +572,42 @@ function monthBillPaymentPlan(customer) {
     totalCents: items.reduce((s, x) => s + x.amountCents, 0)};
 }
 
+/**
+ * The month as query bounds, in the UTC days the statement counts with:
+ * a stay belongs to the month only if it ends on or after `startMs`, and an
+ * activity is the month's when its date is in [startMs, endMs).
+ *
+ * @param {string} monthKey "YYYY-MM".
+ * @return {{startMs: number, endMs: number}|null} endMs is exclusive.
+ */
+function monthBoundsMs(monthKey) {
+  const month = monthDays(monthKey);
+  if (!month) return null;
+  return {startMs: month.first * DAY_MS, endMs: (month.last + 1) * DAY_MS};
+}
+
+/**
+ * Rows from several narrow queries as one list, each document once (an
+ * unpaid activity dated in the month comes back from both of its queries).
+ *
+ * @param {...Array<object>} lists Rows carrying an `id`.
+ * @return {Array<object>} First copy of each id, in first-seen order.
+ */
+function mergeRowsById(...lists) {
+  const seen = new Map();
+  for (const list of lists) {
+    for (const row of Array.isArray(list) ? list : []) {
+      const id = text(row?.id);
+      if (id && !seen.has(id)) seen.set(id, row);
+    }
+  }
+  return [...seen.values()];
+}
+
 module.exports = {
   MONTH_NAMES,
+  mergeRowsById,
+  monthBoundsMs,
   monthBillPaymentPlan,
   activityMonthItem,
   parkingCustomerKey,

@@ -308,7 +308,32 @@ function viewingHistoryEntry({actor, action, slots = [], atMs}) {
   };
 }
 
+/**
+ * The respondByAt a pending proposal with none should carry so the expiry
+ * sweep (which now queries by respondByAt) can find it.
+ *
+ * The sweep has always read a missing respondByAt as `null`, and
+ * isProposalExpired reads Number(null) as a deadline of 0 - so such a
+ * proposal is already overdue the first time the sweep sees it. Stamping
+ * "now" keeps exactly that: it expires on the next run, as it would have.
+ *
+ * @param {object} record {purchaseStatus, respondByAtMs}.
+ * @param {number} nowMs The backfill time.
+ * @return {number|null} Milliseconds, or null when nothing should be written
+ *   (not pending, or it already has a deadline).
+ */
+function legacyRespondByAtMs(record, nowMs) {
+  if (!PENDING_VIEWING_STATUSES.includes(record?.purchaseStatus)) return null;
+  const stored = record?.respondByAtMs;
+  if (stored !== null && stored !== undefined &&
+      Number.isFinite(Number(stored))) {
+    return null;
+  }
+  return nowMs;
+}
+
 module.exports = {
+  legacyRespondByAtMs,
   VIEWING_REQUESTED,
   VIEWING_COUNTERED,
   VIEWING_SCHEDULED,
