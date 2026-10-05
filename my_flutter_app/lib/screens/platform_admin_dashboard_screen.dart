@@ -16,8 +16,28 @@ import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import 'staff_car_management_screen.dart';
 
-class PlatformAdminDashboardScreen extends StatelessWidget {
+class PlatformAdminDashboardScreen extends StatefulWidget {
   const PlatformAdminDashboardScreen({super.key});
+
+  @override
+  State<PlatformAdminDashboardScreen> createState() =>
+      _PlatformAdminDashboardScreenState();
+}
+
+class _PlatformAdminDashboardScreenState
+    extends State<PlatformAdminDashboardScreen> {
+  Future<_AdminMetrics>? _metricsFuture;
+  PlatformAccess? _metricsAccess;
+
+  /// The seven count queries run once per access, not once per build. The
+  /// screen watches AuthProvider, so every notify used to re-run them all
+  /// and flash the grid back to loading.
+  Future<_AdminMetrics> _metricsFor(PlatformAccess access) {
+    final cached = _metricsFuture;
+    if (cached != null && identical(access, _metricsAccess)) return cached;
+    _metricsAccess = access;
+    return _metricsFuture = _metrics(access);
+  }
 
   Future<int> _count(String collection, {String? field, Object? value}) async {
     Query<Map<String, dynamic>> query = FirebaseFirestore.instance.collection(
@@ -94,7 +114,7 @@ class PlatformAdminDashboardScreen extends StatelessWidget {
                         child: Column(
                           children: [
                             FutureBuilder<_AdminMetrics>(
-                              future: _metrics(access),
+                              future: _metricsFor(access),
                               builder: (context, snapshot) {
                                 return _MetricsGrid(
                                   metrics:
@@ -1111,7 +1131,20 @@ class _OperationsPanel extends StatelessWidget {
   }
 }
 
-class _RecentCollectionRows extends StatelessWidget {
+/// The newest records of a collection, newest first.
+///
+/// Without an order, `limit(5)` returned whichever five documents Firestore
+/// reached first - by id, effectively random - under a "Recent operations"
+/// heading. A single-field descending order needs no composite index.
+Query<Map<String, dynamic>> recentOperationsQuery(
+  FirebaseFirestore firestore,
+  String collection,
+) => firestore
+    .collection(collection)
+    .orderBy('createdAt', descending: true)
+    .limit(5);
+
+class _RecentCollectionRows extends StatefulWidget {
   const _RecentCollectionRows({
     required this.collection,
     required this.titleField,
@@ -1125,12 +1158,33 @@ class _RecentCollectionRows extends StatelessWidget {
   final IconData icon;
 
   @override
+  State<_RecentCollectionRows> createState() => _RecentCollectionRowsState();
+}
+
+class _RecentCollectionRowsState extends State<_RecentCollectionRows> {
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _rows = _subscribe();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _subscribe() =>
+      recentOperationsQuery(
+        FirebaseFirestore.instance,
+        widget.collection,
+      ).snapshots();
+
+  @override
+  void didUpdateWidget(covariant _RecentCollectionRows oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.collection != widget.collection) _rows = _subscribe();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection(collection)
-          .limit(5)
-          .snapshots(),
+    final l10n = AppLocalizations.of(context)!;
+    final collection = widget.collection;
+    final titleField = widget.titleField;
+    final subtitleField = widget.subtitleField;
+    final icon = widget.icon;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _rows,
       builder: (context, snapshot) {
         final docs = snapshot.data?.docs ?? [];
         if (!snapshot.hasData) {
@@ -1144,11 +1198,11 @@ class _RecentCollectionRows extends StatelessWidget {
             for (final doc in docs)
               Builder(
                 builder: (context) {
-                  final data = doc.data() as Map<String, dynamic>;
+                  final data = doc.data();
                   return _ListRow(
                     icon: icon,
                     title: (data[titleField] ?? doc.id).toString(),
-                    subtitle: (data[subtitleField] ?? 'Unassigned business')
+                    subtitle: (data[subtitleField] ?? l10n.unassignedBusiness)
                         .toString(),
                     trailing: _StatusPill(
                       label:
