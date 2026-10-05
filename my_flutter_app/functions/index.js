@@ -9076,10 +9076,12 @@ async function reconcileStripePaymentEvent(event, connectedAccountId) {
   // A non-success transition was already written inside the claim
   // transaction, so it cannot overwrite a success that landed meanwhile.
   if (claim.action !== "update") {
+    // A check that found nothing new is not a change to the record:
+    // updatedAt stays put, so it keeps meaning "last changed" and the
+    // stale sweep's discovery watermark is not dragged forward.
     await ref.set({
       stripeReconciliationCheckedAt:
         FirestoreFieldValue.serverTimestamp(),
-      updatedAt: FirestoreFieldValue.serverTimestamp(),
     }, {merge: true});
   }
   return true;
