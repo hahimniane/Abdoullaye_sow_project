@@ -27,6 +27,7 @@ import { legalAcceptance } from "@/lib/disclosures";
 import { auth, db, functions } from "@/lib/firebase";
 import { useFrenchDomTranslation } from "@/lib/french-dom";
 import { isValidPhone } from "@/lib/phone";
+import { createSessionGate } from "@/lib/auth-session-gate";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
 // The three consoles are split out of the entry bundle. Each one is reachable
@@ -257,8 +258,6 @@ export function ConsoleRouter() {
   const [previewConsole, setPreviewConsole] = useState<"admin" | "business" | "customer">("admin");
   const [previewStripeState, setPreviewStripeState] = useState<PreviewStripeState>("none");
   const [profileRetry, setProfileRetry] = useState(0);
-  // Unsubscribe for the live profile follower; swapped on re-auth.
-  const profileFollowRef = useRef<(() => void) | null>(null);
   const [serviceIntent, setServiceIntent] = useState(
     null as ReturnType<typeof customerServiceFromSearch>,
   );
@@ -284,8 +283,13 @@ export function ConsoleRouter() {
       return undefined;
     }
     let active = true;
+    // Ties profile loads and the live profile follower to the auth session
+    // that started them: sign-out or an account switch ends both.
+    const gate = createSessionGate();
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!active) return;
+      // A new session: any load or listener from the previous one stops here.
+      const isCurrent = gate.begin();
       setFirebaseUser(user);
       setProfile(null);
       setProfileMissing(false);
@@ -313,7 +317,7 @@ export function ConsoleRouter() {
         // every session load so a stale token never causes storage/unauthorized.
         await user.getIdToken(true);
         const snap = await loadProfile(user.uid);
-        if (!active) return;
+        if (!active || !isCurrent()) return;
         if (!snap.exists()) {
           setProfileMissing(true);
           return;
@@ -326,23 +330,27 @@ export function ConsoleRouter() {
         // verified" - banner and badge contradicting each other on the same
         // screen - until a full reload. Keep following the document for the
         // rest of the session.
-        const follow = onSnapshot(doc(db, "users", user.uid), (live) => {
-          if (!active || !live.exists()) return;
-          setProfile({id: live.id, ...live.data()} as UserProfile);
-        });
-        profileFollowRef.current?.();
-        profileFollowRef.current = follow;
+        const follow = onSnapshot(
+          doc(db, "users", user.uid),
+          (live) => {
+            if (!active || !isCurrent() || !live.exists()) return;
+            setProfile({id: live.id, ...live.data()} as UserProfile);
+          },
+          // Losing read access (e.g. right after sign-out) just ends the
+          // follow; the one-time load already decided the console.
+          () => undefined,
+        );
+        gate.follow(isCurrent, follow);
       } catch {
-        if (!active) return;
+        if (!active || !isCurrent()) return;
         setAuthError("The connection is slow. We could not safely load your account role.");
       } finally {
-        if (active) setBooting(false);
+        if (active && isCurrent()) setBooting(false);
       }
     });
     return () => {
       active = false;
-      profileFollowRef.current?.();
-      profileFollowRef.current = null;
+      gate.close();
       unsubscribe();
     };
   }, [profileRetry]);

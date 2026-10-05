@@ -23,11 +23,31 @@ export function currentDeviceLanguages(): string[] {
   return navigator.language ? [navigator.language] : [];
 }
 
+/** The saved language choice, or null when there is none - or when storage
+ * is blocked (Safari private mode, a "block all site data" setting, a
+ * sandboxed iframe), where touching `localStorage` throws. A throw here used
+ * to escape into render and blank the whole console. */
+export function readStoredLanguage(): string | null {
+  try {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Save the language choice; false when storage is blocked. */
+export function storeLanguage(lang: SupportedLanguage): boolean {
+  try {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function currentWebLanguage(): SupportedLanguage {
-  const stored = typeof window !== "undefined"
-    ? window.localStorage.getItem(LANGUAGE_STORAGE_KEY)
-    : null;
-  return resolveLang(stored, currentDeviceLanguages());
+  return resolveLang(readStoredLanguage(), currentDeviceLanguages());
 }
 
 export function currentWebLocale() {
