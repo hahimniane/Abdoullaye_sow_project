@@ -1,6 +1,34 @@
 {
   "indexes": [
     {
+      "collectionGroup": "paymentHolds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "captureBeforeMs",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "businessBillingAccruals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "month",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "lotActivities",
       "queryScope": "COLLECTION",
       "fields": [

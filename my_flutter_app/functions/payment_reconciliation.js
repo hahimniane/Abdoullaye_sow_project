@@ -682,6 +682,68 @@ function buildReconciliationDecision({target, intent, document, event}) {
   };
 }
 
+/**
+ * How long a completion claim keeps other workers out. A completion handler
+ * that has not finished in this long has crashed; the next event or the stale
+ * sweep (every 10 minutes, for records untouched for 10) takes over.
+ */
+const COMPLETION_CLAIM_LEASE_MS = 10 * 60 * 1000;
+
+/**
+ * Decide, against the payment record as read INSIDE a transaction, what this
+ * reconciliation may do. This is the compare-and-set that stops a payment
+ * being completed twice.
+ *
+ * A settled payment reaches us up to three ways at once: one or more Stripe
+ * webhook events (each with its own id), the customer's return page
+ * (`evt_return_...`) and the stale sweep (`evt_reconcile_...`). The event
+ * ledger dedupes each id, not the payment, so before this every one of them
+ * read "pending" and ran the completion handler - two payouts, two receipts,
+ * two accruals.
+ *
+ * The record is NOT moved to succeeded here: the completion handler runs
+ * after the claim, and only a finished handler may write the succeeded
+ * marker (a crash mid-handler must leave the record replayable). Instead the
+ * winner stamps a short-lived claim, and every concurrent worker sees it.
+ *
+ * @param {object} params Inputs.
+ * @param {object} params.data The payment record, read in the transaction.
+ * @param {object} params.decision buildReconciliationDecision on that read.
+ * @param {string} params.claimId A fresh id for this worker's claim.
+ * @param {string} params.eventId The event being reconciled.
+ * @param {number} params.nowMs The current time.
+ * @return {{action: string, patch: ?object}} One of:
+ *   "complete" (claimed: run side effects, then finish),
+ *   "in_flight" (another worker holds a live claim: do nothing),
+ *   "already_succeeded" (nothing to run; refresh the event marker),
+ *   "update" (a non-success transition: write `patch` in the transaction),
+ *   "unchanged" (nothing to do).
+ */
+function paymentCompletionClaim({data, decision, claimId, eventId, nowMs}) {
+  const record = data || {};
+  if (decision.state !== PAYMENT_STATES.SUCCEEDED) {
+    return decision.changed ?
+      {action: "update", patch: decision.patch} :
+      {action: "unchanged", patch: null};
+  }
+  if (!decision.changed) return {action: "already_succeeded", patch: null};
+  const claimedAt = Number(record.stripeCompletionClaimedAtMs);
+  const now = Number(nowMs);
+  const heldByOther = clean(record.stripeCompletionClaimId) &&
+    clean(record.stripeCompletionClaimId) !== clean(claimId) &&
+    Number.isFinite(claimedAt) && Number.isFinite(now) &&
+    now - claimedAt < COMPLETION_CLAIM_LEASE_MS;
+  if (heldByOther) return {action: "in_flight", patch: null};
+  return {
+    action: "complete",
+    patch: {
+      stripeCompletionClaimId: required(claimId, "claimId"),
+      stripeCompletionClaimedAtMs: now,
+      stripeCompletionClaimEventId: required(eventId, "eventId"),
+    },
+  };
+}
+
 function assertStripeEventId(eventId) {
   const value = required(eventId, "eventId");
   if (!/^evt_[A-Za-z0-9_]+$/.test(value)) {
@@ -797,6 +859,7 @@ function selectStalePendingPage({rows, scan, cursor = null}) {
 }
 
 module.exports = {
+  COMPLETION_CLAIM_LEASE_MS,
   PAYMENT_ROUTES,
   PAYMENT_STATES,
   STALE_SCAN_DEFINITIONS,
@@ -807,6 +870,7 @@ module.exports = {
   buildReconciliationPatch,
   buildStalePendingScanPlan,
   buildStripeEventClaim,
+  paymentCompletionClaim,
   paymentIntentIdempotencyKey,
   paymentStateFromStripe,
   reconciliationMismatches,

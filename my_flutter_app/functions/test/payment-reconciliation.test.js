@@ -1,6 +1,9 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const {describe, it} = require("node:test");
 const {
+  COMPLETION_CLAIM_LEASE_MS,
   PAYMENT_STATES,
   PaymentReconciliationError,
   advanceReconciliationState,
@@ -8,6 +11,7 @@ const {
   buildReconciliationDecision,
   buildStalePendingScanPlan,
   buildStripeEventClaim,
+  paymentCompletionClaim,
   paymentIntentIdempotencyKey,
   paymentStateFromStripe,
   routePaymentIntentMetadata,
@@ -707,5 +711,142 @@ describe("stale pending scan pagination", () => {
     });
     assert.deepEqual(second.items.map((row) => row.id), ["c", "d"]);
     assert.equal(second.hasMore, false);
+  });
+});
+
+describe("a settled payment is completed exactly once", () => {
+  const testCase = CASES.find((row) => row.paymentType === "parking_deposit");
+  const intent = intentFor(testCase);
+  const target = routePaymentIntentMetadata(intent.metadata);
+
+  // What one worker's transaction does: re-read, re-decide, maybe claim.
+  function transact(data, {eventId, claimId, nowMs, type}) {
+    const decision = buildReconciliationDecision({
+      target,
+      intent,
+      document: {id: testCase.document.id, data},
+      event: {id: eventId, type: type || "payment_intent.succeeded",
+        created: 500},
+    });
+    const claim = paymentCompletionClaim({
+      data, decision, claimId, eventId, nowMs,
+    });
+    return {
+      claim,
+      data: claim.patch ? {...data, ...claim.patch} : data,
+    };
+  }
+
+  it("lets one of three racing workers run the completion", () => {
+    // Webhook, return page and stale sweep all see the same pending record.
+    // Before the fix each one read "pending" and ran the completion handler.
+    let data = {...testCase.document.data};
+    const now = 1000000;
+    const ran = [];
+    for (const [eventId, claimId] of [
+      ["evt_webhook_1", "claim_a"],
+      ["evt_return_abc", "claim_b"],
+      ["evt_reconcile_xyz", "claim_c"],
+    ]) {
+      const result = transact(data, {eventId, claimId, nowMs: now});
+      data = result.data;
+      if (result.claim.action === "complete") ran.push(eventId);
+      else assert.equal(result.claim.action, "in_flight");
+    }
+    assert.deepEqual(ran, ["evt_webhook_1"]);
+    assert.equal(data.stripeCompletionClaimId, "claim_a");
+    // The claim does NOT mark the record succeeded: a crash mid-handler must
+    // leave it replayable.
+    assert.notEqual(data.stripeReconciliationState, PAYMENT_STATES.SUCCEEDED);
+  });
+
+  it("says already-succeeded once the winner has finished", () => {
+    const finished = {
+      ...testCase.document.data,
+      paymentStatus: PAYMENT_STATES.SUCCEEDED,
+      stripeReconciliationState: PAYMENT_STATES.SUCCEEDED,
+      stripeLastEventCreated: 500,
+    };
+    const result = transact(finished, {
+      eventId: "evt_late", claimId: "claim_late", nowMs: 5,
+    });
+    assert.equal(result.claim.action, "already_succeeded");
+    assert.equal(result.claim.patch, null);
+  });
+
+  it("lets a new worker take over a claim whose holder died", () => {
+    const claimed = {
+      ...testCase.document.data,
+      stripeCompletionClaimId: "claim_dead",
+      stripeCompletionClaimedAtMs: 1000,
+      stripeCompletionClaimEventId: "evt_dead",
+    };
+    const live = transact(claimed, {
+      eventId: "evt_retry", claimId: "claim_new",
+      nowMs: 1000 + COMPLETION_CLAIM_LEASE_MS - 1,
+    });
+    assert.equal(live.claim.action, "in_flight");
+    const expired = transact(claimed, {
+      eventId: "evt_retry", claimId: "claim_new",
+      nowMs: 1000 + COMPLETION_CLAIM_LEASE_MS,
+    });
+    assert.equal(expired.claim.action, "complete");
+    assert.equal(expired.data.stripeCompletionClaimId, "claim_new");
+  });
+
+  it("applies a non-success transition inside the transaction", () => {
+    const result = transact({...testCase.document.data}, {
+      eventId: "evt_failed", claimId: "claim_f", nowMs: 1,
+      type: "payment_intent.payment_failed",
+    });
+    assert.equal(result.claim.action, "update");
+    assert.equal(result.claim.patch.paymentStatus, PAYMENT_STATES.FAILED);
+  });
+
+  describe("index.js wiring", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"), "utf8",
+    );
+    const fn = (name) => {
+      const start = source.indexOf(`async function ${name}(`);
+      assert.ok(start > 0, `${name} is defined`);
+      return source.slice(start, source.indexOf("\n}\n", start));
+    };
+
+    it("claims in a transaction before any side effect", () => {
+      const body = fn("reconcileStripePaymentEvent");
+      const claimAt = body.indexOf("await claimPaymentCompletion(");
+      const completeAt = body.indexOf("await runPaymentCompletion(target)");
+      const accrueAt = body.indexOf("await recordSubscriptionAccrual(");
+      assert.ok(claimAt > 0, "claims the completion");
+      assert.ok(claimAt < completeAt, "claim precedes completion");
+      assert.ok(completeAt < accrueAt, "completion precedes accrual");
+      // The old shape ran side effects off a plain, non-transactional read.
+      assert.doesNotMatch(body, /if \(decision\.changed\) \{\s*await run/);
+      const claim = fn("claimPaymentCompletion");
+      assert.match(claim, /runTransaction/);
+      assert.match(claim, /transaction\.get\(ref\)/);
+      assert.match(claim, /paymentCompletionClaim\(/);
+    });
+
+    it("keeps an in-flight completion out of the alarm path", () => {
+      // Webhook asks Stripe to retry, the return page says pending, the
+      // sweep skips without paging finance.
+      const uses =
+        source.match(/if \(isPaymentCompletionInFlight\(error\)\)/g) || [];
+      assert.equal(uses.length, 3);
+    });
+
+    it("accrues commission once per PaymentIntent", () => {
+      const body = fn("recordSubscriptionAccrual");
+      assert.match(body, /runTransaction/);
+      assert.match(body, /collection\("entries"\)\.doc\(plan\.entryId\)/);
+      assert.match(body, /if \(entry\.exists\) return;/);
+      assert.match(body, /transaction\.create\(entryRef/);
+      assert.match(
+          fn("reconcileStripePaymentEvent"),
+          /recordSubscriptionAccrual\(ref, String\(intent\.id/,
+      );
+    });
   });
 });

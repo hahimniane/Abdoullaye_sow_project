@@ -176,6 +176,17 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   accessibility label. Maestro should use multiline-safe selectors such as
   `(?s).*Browse cars.*` unless the node has an explicit standalone semantics
   label.
+- Money-moving side effects must be claimed before they run. Stripe event ids
+  dedupe an event, not a payment: webhook, `/pay/return` (`evt_return_`) and
+  the stale sweep (`evt_reconcile_`) can all settle one payment at once, so
+  `reconcileStripePaymentEvent` claims completion in a transaction
+  (`paymentCompletionClaim`) and accruals are keyed per PaymentIntent.
+  Stripe's Idempotency-Key only lasts 24h, so month-end billing claims its
+  invoice (`subscriptionInvoiceAction`) before charging. Regression-test the
+  race by replaying serialized transactions through the pure decision, plus
+  a source contract that the claim precedes the side effect. Scheduled jobs
+  over unbounded collections need an ordered, cursor-paged query, a deadline
+  under `timeoutSeconds`, and a resume path - never an unordered `limit(N)`.
 - Payment-sheet acceptance tests must distinguish presentation failure from
   post-charge confirmation failure. Only the former may call a cancellation
   endpoint; after the sheet succeeds, server/webhook reconciliation owns

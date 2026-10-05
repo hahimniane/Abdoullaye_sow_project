@@ -220,6 +220,7 @@ const {
   PAYMENT_STATES,
   buildReconciliationDecision,
   buildStripeEventClaim,
+  paymentCompletionClaim,
   paymentIntentIdempotencyKey,
   routePaymentIntentMetadata,
 } = require("./payment_reconciliation");
@@ -270,6 +271,9 @@ const {
   cancellationOutcome,
   newHoldRecord,
   captureDeadlineMs,
+  HOLD_SWEEP_PAGE_SIZE,
+  holdSweepHorizonMs,
+  backfillCaptureBeforeMs,
 } = require("./payment_hold");
 const {
   publicOpenBarrelOption,
@@ -376,9 +380,17 @@ const {parkingAvailability} = require("./parking_occupancy");
 const {lotCustomerKey, mergeLotCustomer} = require("./lot_customers");
 const {
   resolveBillingPlan,
-  subscriptionAccrualDelta,
   monthEndBillingAmount,
 } = require("./business_billing_plan");
+const {
+  SUBSCRIPTION_BILLING_PAGE_SIZE,
+  subscriptionInvoiceAction,
+  billingRunStart,
+  accrualPageBusinessIds,
+  summarizeBusinessAccruals,
+  subscriptionAccrualEntry,
+  subscriptionEventIsStale,
+} = require("./subscription_billing");
 const {
   sendFirebasePasswordSetupEmail,
 } = require("./firebase_auth_email");
@@ -5823,6 +5835,11 @@ function isInactiveSubscriptionStatus(status) {
   ].includes(String(status || ""));
 }
 
+// Stripe does not deliver events in order. Each applied event's `created` is
+// stored, and an older event arriving late is ignored - otherwise a delayed
+// `customer.subscription.updated` (say, from before a cancellation) put the
+// business straight back on a plan it had left. Read and write happen in
+// one transaction so two events racing cannot both pass the check.
 async function updateBusinessProEntitlement({
   businessId,
   status,
@@ -5830,13 +5847,16 @@ async function updateBusinessProEntitlement({
   stripeSubscriptionId,
   priceId,
   source,
+  eventId,
+  eventCreated,
 }) {
-  if (!businessId) return;
+  if (!businessId) return {applied: false, reason: "no_business"};
   const active = isActiveSubscriptionStatus(status);
   const inactive = isInactiveSubscriptionStatus(status);
   const plan = active ? "pro" : inactive ? "free" : undefined;
   const db = admin.firestore();
   const now = FirestoreFieldValue.serverTimestamp();
+  const created = Number(eventCreated);
   const subscription = {
     businessId,
     source,
@@ -5844,6 +5864,9 @@ async function updateBusinessProEntitlement({
     stripeCustomerId: stripeCustomerId || "",
     stripeSubscriptionId: stripeSubscriptionId || "",
     priceId: priceId || "",
+    stripeEventId: String(eventId || ""),
+    stripeEventCreated:
+      Number.isSafeInteger(created) && created > 0 ? created : 0,
     updatedAt: now,
   };
   const businessUpdate = {
@@ -5858,20 +5881,37 @@ async function updateBusinessProEntitlement({
       prioritySupport: active,
     };
   }
-  const batch = db.batch();
-  batch.set(db.collection("businesses").doc(businessId), businessUpdate, {
-    merge: true,
+  const subscriptionRef = db.collection("businessSubscriptions")
+      .doc(businessId);
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(subscriptionRef);
+    const stored = existing.exists ? existing.data() || {} : {};
+    if (subscriptionEventIsStale({
+      storedEventCreated: stored.stripeEventCreated,
+      eventCreated: subscription.stripeEventCreated,
+    })) {
+      logger.info("Ignoring out-of-order Stripe subscription event", {
+        businessId,
+        source,
+        eventId: subscription.stripeEventId,
+        eventCreated: subscription.stripeEventCreated,
+        appliedEventCreated: Number(stored.stripeEventCreated || 0),
+      });
+      return {applied: false, reason: "stale_event"};
+    }
+    transaction.set(db.collection("businesses").doc(businessId),
+        businessUpdate, {merge: true});
+    transaction.set(subscriptionRef, {
+      ...subscription,
+      plan: plan || "pending",
+      entitlements: {
+        aiAdvisor: active,
+        featuredPlacement: active,
+        prioritySupport: active,
+      },
+    }, {merge: true});
+    return {applied: true, reason: "applied"};
   });
-  batch.set(db.collection("businessSubscriptions").doc(businessId), {
-    ...subscription,
-    plan: plan || "pending",
-    entitlements: {
-      aiAdvisor: active,
-      featuredPlacement: active,
-      prioritySupport: active,
-    },
-  }, {merge: true});
-  await batch.commit();
 }
 
 function carTitle(car) {
@@ -8264,41 +8304,53 @@ async function bindCheckoutPaymentIntent(event) {
  * these totals for the "whichever is smaller" bill. Best-effort: a failure
  * here must never fail the payment reconciliation.
  *
+ * Idempotent per PaymentIntent: the increment and an
+ * `entries/{paymentIntentId}` ledger row are written in one transaction, and
+ * an existing row means this payment already accrued. Before this, every
+ * replayed completion added the commission again.
+ *
  * @param {object} ref The settled record's Firestore ref.
+ * @param {string} paymentIntentId The intent that settled the record.
  * @return {Promise<void>}
  */
-async function recordSubscriptionAccrual(ref) {
+async function recordSubscriptionAccrual(ref, paymentIntentId) {
   try {
-    const snap = await ref.get();
-    const record = snap.data() || {};
-    if (String(record.billingMode || "") !== "subscription") return;
-    const businessId = String(record.businessId || "").trim();
-    if (!businessId) return;
-    const delta = subscriptionAccrualDelta({
-      grossCents: Number(record.subscriptionGrossCents || 0),
-      platformFeePct: 0,
-    });
-    const commissionCents =
-      Math.max(0, Math.round(Number(record.subscriptionCommissionCents || 0)));
-    const scope = String(record.subscriptionScope || "business");
-    const monthlyFeeCents =
-      Math.max(0, Math.round(Number(record.subscriptionMonthlyFeeCents || 0)));
-    const month = new Date().toISOString().slice(0, 7);
     const db = admin.firestore();
-    await db.collection("businessBillingAccruals")
-        .doc(`${businessId}_${month}_${scope}`)
-        .set({
-          businessId,
-          month,
-          scope,
-          monthlyFeeCents,
-          accruedCommissionCents:
-            FirestoreFieldValue.increment(commissionCents),
-          accruedStripeFeeCents:
-            FirestoreFieldValue.increment(delta.stripeFeeCents),
-          transactionCount: FirestoreFieldValue.increment(1),
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        }, {merge: true});
+    await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const plan = subscriptionAccrualEntry(snap.data() || {}, {
+        paymentIntentId,
+        nowMs: Date.now(),
+      });
+      if (!plan) return;
+      const accrualRef = db.collection("businessBillingAccruals")
+          .doc(plan.accrualId);
+      const entryRef = accrualRef.collection("entries").doc(plan.entryId);
+      const entry = await transaction.get(entryRef);
+      if (entry.exists) return;
+      transaction.create(entryRef, {
+        businessId: plan.businessId,
+        month: plan.month,
+        scope: plan.scope,
+        paymentIntentId: plan.entryId,
+        recordPath: ref.path,
+        commissionCents: plan.commissionCents,
+        stripeFeeCents: plan.stripeFeeCents,
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      transaction.set(accrualRef, {
+        businessId: plan.businessId,
+        month: plan.month,
+        scope: plan.scope,
+        monthlyFeeCents: plan.monthlyFeeCents,
+        accruedCommissionCents:
+          FirestoreFieldValue.increment(plan.commissionCents),
+        accruedStripeFeeCents:
+          FirestoreFieldValue.increment(plan.stripeFeeCents),
+        transactionCount: FirestoreFieldValue.increment(1),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+    });
   } catch (error) {
     logger.warn("Subscription accrual not recorded", {
       path: ref?.path || "", error: String(error?.message || error),
@@ -8437,104 +8489,242 @@ async function chargeBusinessBillingCard(params) {
   });
 }
 
+// A run stops starting new businesses this long after it begins, leaving the
+// rest of the 540s function timeout to finish the one in hand and record
+// where it stopped. The next run continues from there.
+const SUBSCRIPTION_BILLING_RUN_BUDGET_MS = 8 * 60 * 1000;
+
+/**
+ * Bill one business for one month.
+ *
+ * Reads every one of the business's buckets (so a business is billed whole
+ * even when its buckets straddle two pages), then claims its invoice in a
+ * transaction BEFORE any Stripe call. A paid invoice, a pending charge or a
+ * live "charging" claim is left alone - that is what stops a re-run, an
+ * admin's second click or two overlapping runs from charging the business
+ * again. Stripe's Idempotency-Key alone only covered 24 hours.
+ *
+ * @param {object} db Firestore.
+ * @param {object} params businessId, month, autoCharge.
+ * @return {Promise<string>} "charged", "reported", "skipped", "failed",
+ *   "unknown" or "empty".
+ */
+async function billBusinessForMonth(db, {businessId, month, autoCharge}) {
+  const rows = await db.collection("businessBillingAccruals")
+      .where("businessId", "==", businessId)
+      .where("month", "==", month)
+      .get();
+  const summary = summarizeBusinessAccruals(
+      rows.docs.map((doc) => doc.data() || {}),
+      monthEndBillingAmount,
+  );
+  if (summary.amountCents <= 0) return "empty";
+  const businessDoc = await db.collection("businesses").doc(businessId).get();
+  const business = businessDoc.data() || {};
+  const customerId = String(business.stripeBillingCustomerId || "").trim();
+  const paymentMethodId =
+    String(business.stripeBillingPaymentMethodId || "").trim();
+  const invoiceRef = db.collection("businessBillingInvoices")
+      .doc(`${businessId}_${month}`);
+  const base = {
+    businessId,
+    month,
+    amountCents: summary.amountCents,
+    buckets: summary.buckets,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  };
+  const canCharge = Boolean(autoCharge && customerId && paymentMethodId &&
+    !SIMULATE_PAYMENTS);
+  const claimId = crypto.randomUUID();
+  const decision = await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(invoiceRef);
+    const existing = snapshot.exists ? snapshot.data() || {} : null;
+    const nowMs = Date.now();
+    const next = subscriptionInvoiceAction(existing, {nowMs, canCharge});
+    const created = existing ?
+      {} :
+      {createdAt: FirestoreFieldValue.serverTimestamp()};
+    if (next.action === "report") {
+      transaction.set(invoiceRef, {
+        ...base,
+        ...created,
+        status: autoCharge ? "awaiting_card" : "report_only",
+      }, {merge: true});
+    } else if (next.action === "charge") {
+      transaction.set(invoiceRef, {
+        ...base,
+        ...created,
+        status: "charging",
+        chargeClaimId: claimId,
+        chargeClaimedAtMs: nowMs,
+        chargeAttempts: FirestoreFieldValue.increment(1),
+      }, {merge: true});
+    }
+    return next;
+  });
+  if (decision.action === "skip") {
+    if (decision.reason === "needs_review") {
+      logger.error("Subscription bill needs review before any charge", {
+        businessId, month,
+      });
+    }
+    return "skipped";
+  }
+  if (decision.action === "report") return "reported";
+  const releaseClaim = {
+    chargeClaimId: FirestoreFieldValue.delete(),
+    chargeClaimedAtMs: FirestoreFieldValue.delete(),
+  };
+  try {
+    const intent = await chargeBusinessBillingCard({
+      customerId, paymentMethodId, amountCents: summary.amountCents,
+      businessId, month,
+    });
+    await invoiceRef.set({
+      ...base,
+      ...releaseClaim,
+      status: intent.status === "succeeded" ? "paid" : "pending",
+      stripePaymentIntentId: String(intent.id || ""),
+    }, {merge: true});
+    return "charged";
+  } catch (error) {
+    const detail = String(error?.message || error);
+    if (!(error instanceof HttpsError)) {
+      // No answer from Stripe (network, timeout): the charge may or may not
+      // exist. Keep the "charging" claim so nobody charges blind; a run
+      // inside Stripe's 24h idempotency window retries with the same key,
+      // and after that the invoice waits for a person.
+      logger.error("Subscription bill charge outcome unknown", {
+        businessId, month, error: detail,
+      });
+      return "unknown";
+    }
+    // Stripe answered with an error: nothing was charged, retrying is safe.
+    await invoiceRef.set({
+      ...base,
+      ...releaseClaim,
+      status: "failed",
+      failureReason: detail.slice(0, 300),
+    }, {merge: true});
+    logger.error("Subscription bill charge failed", {
+      businessId, month, error: detail,
+    });
+    return "failed";
+  }
+}
+
 /**
  * Compute (and, when enabled, charge) each business's month-end subscription
- * bill for the previous calendar month: the sum over its plan buckets of the
- * smaller of accrued cost and the flat fee. Writes one invoice document per
- * business either way; charges only when autoChargeEnabled is on and a card
- * is saved.
+ * bill: the sum over its plan buckets of the smaller of accrued cost and the
+ * flat fee. Writes one invoice document per business either way; charges
+ * only when autoChargeEnabled is on and a card is saved.
+ *
+ * Pages through the month's accruals by businessId and records its cursor in
+ * `businessBillingRuns/{month}` after every business, stopping at a deadline
+ * well inside the function timeout. An unfinished run is picked up by the
+ * next scheduled firing or by an admin's manual run - before this, a large
+ * month silently stopped wherever the default timeout cut it off.
  *
  * @param {string} month The yyyy-mm to bill.
+ * @param {object} [options] trigger ("scheduled" | "manual"), deadlineMs.
  * @return {Promise<object>} A summary.
  */
-async function runMonthlySubscriptionBilling(month) {
+async function runMonthlySubscriptionBilling(month, options = {}) {
+  const trigger = options.trigger === "manual" ? "manual" : "scheduled";
+  const deadlineMs = Number(options.deadlineMs) ||
+    Date.now() + SUBSCRIPTION_BILLING_RUN_BUDGET_MS;
   const db = admin.firestore();
+  const runRef = db.collection("businessBillingRuns").doc(month);
+  const runSnapshot = await runRef.get();
+  const start = billingRunStart(
+      runSnapshot.exists ? runSnapshot.data() || {} : null,
+      trigger,
+  );
+  if (start.skip) {
+    return {month, skipped: true, reason: start.reason, complete: true};
+  }
   const configDoc = await db.collection("billingConfig").doc("settings").get();
   const autoCharge = configDoc.exists &&
     configDoc.data()?.autoChargeEnabled === true;
-  const accruals = await db.collection("businessBillingAccruals")
-      .where("month", "==", month)
-      .get();
-  const byBusiness = new Map();
-  for (const doc of accruals.docs) {
-    const a = doc.data() || {};
-    const businessId = String(a.businessId || "");
-    if (!businessId) continue;
-    const bucket = monthEndBillingAmount({
-      accruedCommissionCents: a.accruedCommissionCents,
-      accruedStripeFeeCents: a.accruedStripeFeeCents,
-      monthlyFeeCents: a.monthlyFeeCents,
-    });
-    const prev = byBusiness.get(businessId) || {amountCents: 0, buckets: []};
-    prev.amountCents += bucket.amountCents;
-    prev.buckets.push({
-      scope: String(a.scope || "business"),
-      ...bucket,
-      transactionCount: Number(a.transactionCount || 0),
-    });
-    byBusiness.set(businessId, prev);
-  }
+  const counts = {
+    charged: 0, reported: 0, skipped: 0, failed: 0, unknown: 0, empty: 0,
+  };
+  await runRef.set({
+    month,
+    status: "in_progress",
+    trigger,
+    autoCharge,
+    lastRunAt: FirestoreFieldValue.serverTimestamp(),
+    ...(start.fresh && {
+      cursorBusinessId: null,
+      passStartedAt: FirestoreFieldValue.serverTimestamp(),
+      counts,
+    }),
+  }, {merge: true});
 
-  let charged = 0;
-  let reported = 0;
-  for (const [businessId, summary] of byBusiness.entries()) {
-    if (summary.amountCents <= 0) continue;
-    const businessDoc = await db.collection("businesses").doc(businessId).get();
-    const business = businessDoc.data() || {};
-    const customerId = String(business.stripeBillingCustomerId || "").trim();
-    const paymentMethodId =
-      String(business.stripeBillingPaymentMethodId || "").trim();
-    const invoiceRef = db.collection("businessBillingInvoices")
-        .doc(`${businessId}_${month}`);
-    const base = {
-      businessId,
-      month,
-      amountCents: summary.amountCents,
-      buckets: summary.buckets,
-      updatedAt: FirestoreFieldValue.serverTimestamp(),
-    };
-    const canCharge = autoCharge && customerId && paymentMethodId &&
-      !SIMULATE_PAYMENTS;
-    if (!canCharge) {
-      await invoiceRef.set({
-        ...base,
-        status: autoCharge ? "awaiting_card" : "report_only",
-        createdAt: FirestoreFieldValue.serverTimestamp(),
+  let cursor = start.cursorBusinessId;
+  let complete = false;
+  let businesses = 0;
+  pages:
+  while (Date.now() < deadlineMs) {
+    let query = db.collection("businessBillingAccruals")
+        .where("month", "==", month)
+        .orderBy("businessId")
+        .limit(SUBSCRIPTION_BILLING_PAGE_SIZE);
+    if (cursor !== null) query = query.startAfter(cursor);
+    const page = await query.get();
+    for (const businessId of accrualPageBusinessIds(
+        page.docs.map((doc) => doc.data() || {}),
+    )) {
+      if (Date.now() >= deadlineMs) break pages;
+      let outcome;
+      try {
+        outcome = await billBusinessForMonth(db, {
+          businessId, month, autoCharge,
+        });
+      } catch (error) {
+        // One business must not stop the month. Its invoice is untouched
+        // or still claimed, so a later run sees exactly where it stands.
+        outcome = "failed";
+        logger.error("Subscription billing failed for a business", {
+          businessId, month, error: String(error?.message || error),
+        });
+      }
+      counts[outcome] += 1;
+      businesses += 1;
+      cursor = businessId;
+      await runRef.set({
+        cursorBusinessId: cursor,
+        counts: {[outcome]: FirestoreFieldValue.increment(1)},
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       }, {merge: true});
-      reported += 1;
-      continue;
     }
-    try {
-      const intent = await chargeBusinessBillingCard({
-        customerId, paymentMethodId, amountCents: summary.amountCents,
-        businessId, month,
-      });
-      await invoiceRef.set({
-        ...base,
-        status: intent.status === "succeeded" ? "paid" : "pending",
-        stripePaymentIntentId: String(intent.id || ""),
-        createdAt: FirestoreFieldValue.serverTimestamp(),
-      }, {merge: true});
-      charged += 1;
-    } catch (error) {
-      await invoiceRef.set({
-        ...base,
-        status: "failed",
-        failureReason: String(error?.message || error).slice(0, 300),
-        createdAt: FirestoreFieldValue.serverTimestamp(),
-      }, {merge: true});
-      logger.error("Subscription bill charge failed", {
-        businessId, month, error: String(error?.message || error),
-      });
+    // Past every business on the page, including any blank ids the page
+    // skipped - otherwise a page of them would be re-read forever.
+    const last = page.docs[page.docs.length - 1];
+    if (last) cursor = String(last.data()?.businessId ?? "");
+    if (page.size < SUBSCRIPTION_BILLING_PAGE_SIZE) {
+      complete = true;
+      break;
     }
   }
-  return {month, businesses: byBusiness.size, charged, reported, autoCharge};
+  await runRef.set({
+    status: complete ? "complete" : "in_progress",
+    cursorBusinessId: complete ? null : cursor,
+    ...(complete && {completedAt: FirestoreFieldValue.serverTimestamp()}),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  return {month, businesses, ...counts, autoCharge, complete, trigger};
 }
 
 exports.chargeMonthlySubscriptions = onSchedule(
     {
-      schedule: "0 8 1 * *",
+      // Hourly through the 1st: the first firing does the work, and any
+      // later one resumes a run that hit its deadline. A finished month
+      // makes the rest a single read.
+      schedule: "0 8-23 1 * *",
       timeZone: "America/New_York",
+      timeoutSeconds: 540,
       secrets: [stripeSecretKey],
     },
     async () => {
@@ -8542,7 +8732,9 @@ exports.chargeMonthlySubscriptions = onSchedule(
       const prev = new Date(
           Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
       const month = prev.toISOString().slice(0, 7);
-      const summary = await runMonthlySubscriptionBilling(month);
+      const summary = await runMonthlySubscriptionBilling(month, {
+        trigger: "scheduled",
+      });
       logger.info("Monthly subscription billing run", summary);
     },
 );
@@ -8619,10 +8811,14 @@ exports.notifyParkingMonthEnd = onSchedule(
 );
 
 // A manual trigger so an admin can run (or dry-run) a month's billing on
-// demand — the same computation the scheduler uses.
+// demand — the same computation the scheduler uses. It resumes an unfinished
+// run, or makes a fresh pass over a finished month; either way an invoice
+// already paid or being charged is never charged again. `complete: false`
+// in the answer means "run it again to continue".
 exports.runSubscriptionBillingForMonth = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      timeoutSeconds: 540,
       secrets: [stripeSecretKey],
     },
     async (request) => {
@@ -8635,7 +8831,7 @@ exports.runSubscriptionBillingForMonth = onCall(
       if (!/^\d{4}-\d{2}$/.test(month)) {
         throw new HttpsError("invalid-argument", "Pass month as yyyy-mm.");
       }
-      return runMonthlySubscriptionBilling(month);
+      return runMonthlySubscriptionBilling(month, {trigger: "manual"});
     },
 );
 
@@ -8656,20 +8852,34 @@ async function reconcileStripePaymentEvent(event, connectedAccountId) {
     });
     return false;
   }
-  const {target, decision, superseded} = await loadAndValidatePaymentTarget({
+  const {target, superseded} = await loadAndValidatePaymentTarget({
     event,
     intent,
   });
   if (superseded) return false;
   const ref = admin.firestore().doc(target.path);
-  if (decision.state === PAYMENT_STATES.SUCCEEDED) {
-    if (decision.changed) {
+  // Decide and claim in ONE transaction, against the record as it is now -
+  // not the read above, which a concurrent event may already have acted on.
+  const claim = await claimPaymentCompletion({ref, target, intent, event});
+  if (claim.action === "in_flight") {
+    throw paymentCompletionInFlightError(target.path);
+  }
+  if (claim.action === "complete") {
+    try {
       await runPaymentCompletion(target);
-      // Count this charge toward the month's subscription accrual, once, on
-      // the first transition to succeeded.
-      await recordSubscriptionAccrual(ref);
+    } catch (error) {
+      await releasePaymentCompletionClaim(ref, claim.claimId).catch(() => {});
+      throw error;
     }
+    // Count this charge toward the month's subscription accrual - once per
+    // PaymentIntent, however many times completion runs.
+    await recordSubscriptionAccrual(ref, String(intent.id || ""));
+  }
+  if (claim.state === PAYMENT_STATES.SUCCEEDED) {
     await ref.set({
+      stripeCompletionClaimId: FirestoreFieldValue.delete(),
+      stripeCompletionClaimedAtMs: FirestoreFieldValue.delete(),
+      stripeCompletionClaimEventId: FirestoreFieldValue.delete(),
       stripeReconciliationState: PAYMENT_STATES.SUCCEEDED,
       stripeLastEventId: event.id,
       stripeLastEventCreated: Number(event.created || 0),
@@ -8689,13 +8899,9 @@ async function reconcileStripePaymentEvent(event, connectedAccountId) {
     }, {merge: true});
     return true;
   }
-  if (decision.changed) {
-    await ref.set({
-      ...decision.patch,
-      stripeReconciledAt: FirestoreFieldValue.serverTimestamp(),
-      updatedAt: FirestoreFieldValue.serverTimestamp(),
-    }, {merge: true});
-  } else {
+  // A non-success transition was already written inside the claim
+  // transaction, so it cannot overwrite a success that landed meanwhile.
+  if (claim.action !== "update") {
     await ref.set({
       stripeReconciliationCheckedAt:
         FirestoreFieldValue.serverTimestamp(),
@@ -8703,6 +8909,94 @@ async function reconcileStripePaymentEvent(event, connectedAccountId) {
     }, {merge: true});
   }
   return true;
+}
+
+/**
+ * The compare-and-set in front of every payment completion. Re-reads the
+ * record inside a transaction, re-decides against it, and either takes a
+ * short completion claim (only one worker may run the side effects), reports
+ * that another worker holds one, or applies a non-success transition.
+ *
+ * @param {object} params ref, target, intent, event.
+ * @return {Promise<object>} {action, state, claimId}.
+ */
+async function claimPaymentCompletion({ref, target, intent, event}) {
+  const claimId = crypto.randomUUID();
+  return admin.firestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) {
+      throw new Error(`Payment target not found: ${target.path}`);
+    }
+    const document = {id: snapshot.id, data: snapshot.data() || {}};
+    const decision = buildReconciliationDecision({
+      target,
+      intent,
+      document,
+      event,
+    });
+    const claim = paymentCompletionClaim({
+      data: document.data,
+      decision,
+      claimId,
+      eventId: event.id,
+      nowMs: Date.now(),
+    });
+    if (claim.action === "complete") {
+      transaction.set(ref, {
+        ...claim.patch,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+    } else if (claim.action === "update") {
+      transaction.set(ref, {
+        ...claim.patch,
+        stripeReconciledAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
+    return {action: claim.action, state: decision.state, claimId};
+  });
+}
+
+/**
+ * Give a completion claim back after the handler failed, so the next event
+ * or the sweep can retry at once instead of waiting out the lease. Only our
+ * own claim is released.
+ *
+ * @param {object} ref The payment record.
+ * @param {string} claimId The claim this worker took.
+ * @return {Promise<void>}
+ */
+async function releasePaymentCompletionClaim(ref, claimId) {
+  await admin.firestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (String(snapshot.data()?.stripeCompletionClaimId || "") !== claimId) {
+      return;
+    }
+    transaction.set(ref, {
+      stripeCompletionClaimId: FirestoreFieldValue.delete(),
+      stripeCompletionClaimedAtMs: FirestoreFieldValue.delete(),
+      stripeCompletionClaimEventId: FirestoreFieldValue.delete(),
+    }, {merge: true});
+  });
+}
+
+/**
+ * Another worker is completing this payment right now. Callers must neither
+ * treat the event as handled (a crash in that worker would then lose it) nor
+ * raise an alarm: the webhook asks Stripe to retry, the return page says
+ * "pending", and the sweep comes back in 10 minutes.
+ *
+ * @param {string} path The payment record.
+ * @return {Error} An error with code "payment-completion-in-flight".
+ */
+function paymentCompletionInFlightError(path) {
+  const error = new Error(`Payment completion already in progress: ${path}`);
+  error.code = "payment-completion-in-flight";
+  return error;
+}
+
+function isPaymentCompletionInFlight(error) {
+  return String(error?.code || "") === "payment-completion-in-flight";
 }
 
 // A guest has no workspace to find their booking in, so the confirmation
@@ -8878,6 +9172,11 @@ exports.confirmCustomerCheckoutSession = onCall(
           ),
           source: "customer_checkout_return",
         }).catch(() => {});
+        if (isPaymentCompletionInFlight(error)) {
+          // A webhook is completing this very payment. Not an error: the
+          // return page keeps polling and sees success when it lands.
+          return {state: "pending"};
+        }
         logger.error("Customer Checkout return recovery failed", {
           orderType,
           recordId,
@@ -8981,6 +9280,8 @@ exports.handleBusinessProStripeWebhook = onRequest(
             stripeSubscriptionId: object.subscription,
             priceId: object.metadata?.priceId || "",
             source: event.type,
+            eventId: event.id,
+            eventCreated: event.created,
           });
         } else if (
           event.type === "customer.subscription.created" ||
@@ -8996,6 +9297,8 @@ exports.handleBusinessProStripeWebhook = onRequest(
             stripeSubscriptionId: object.id,
             priceId,
             source: event.type,
+            eventId: event.id,
+            eventCreated: event.created,
           });
         } else if (event.type === "invoice.payment_failed") {
           const businessId = stripeSubscriptionBusinessId(object);
@@ -9006,6 +9309,8 @@ exports.handleBusinessProStripeWebhook = onRequest(
             stripeSubscriptionId: object.subscription,
             priceId: "",
             source: event.type,
+            eventId: event.id,
+            eventCreated: event.created,
           });
         }
         await finishStripeWebhookEvent(
@@ -9028,6 +9333,17 @@ exports.handleBusinessProStripeWebhook = onRequest(
                 500,
             ),
           }).catch(() => {});
+        }
+        if (isPaymentCompletionInFlight(error)) {
+          // Another delivery (or the return page, or the sweep) is
+          // completing this payment. Ask Stripe to redeliver later rather
+          // than acknowledging: if that worker dies, the retry finishes it.
+          logger.info("Payment completion in flight; Stripe will retry", {
+            type: event.type,
+            eventId: String(event.id || ""),
+          });
+          res.status(409).send("Payment completion in progress");
+          return;
         }
         logger.error("Business Pro webhook failed", {
           type: event.type,
@@ -9170,6 +9486,186 @@ function holdNoticePreferenceKey(paymentType) {
  * a car purchase un-sells a car - both deserve their own design rather than a
  * generic one that guesses.
  */
+/**
+ * One held payment, one decision: notify, capture, or escalate. Never throws
+ * - one broken hold must not stop the sweep, the rest still have deadlines.
+ *
+ * @param {object} db Firestore.
+ * @param {object} holdDoc The paymentHolds snapshot.
+ * @param {number} nowMs The sweep's clock.
+ * @return {Promise<void>}
+ */
+async function processPaymentHold(db, holdDoc, nowMs) {
+  const hold = holdDoc.data() || {};
+  const decision = holdAction({
+    captureBeforeMs: Number(hold.captureBeforeMs || 0),
+    nowMs,
+    noticeSent: hold.noticeSent === true,
+  });
+  if (decision.action === "wait") return;
+
+  try {
+    if (decision.action === "notify") {
+      const amount = (Number(hold.amountCents || 0) / 100).toFixed(2);
+      // A reminder, not an invitation to back out. The terms were on
+      // screen when they booked; leading with "cancel now and it is
+      // free" reads as the platform talking the customer out of an
+      // order they already agreed to.
+      await sendPreferenceNotification({
+        uid: hold.customerUid,
+        preferenceKey: holdNoticePreferenceKey(hold.orderType),
+        title: "Your card will be charged tomorrow",
+        body: `The $${amount} you reserved will be charged in about ` +
+          "24 hours.",
+        data: {
+          type: "payment_hold_capture_notice",
+          paymentIntentId: hold.paymentIntentId,
+          recordId: hold.recordId || "",
+          orderType: String(hold.orderType || ""),
+          ...relatedRecordFields(
+              hold.collection ||
+                collectionForHoldOrderType(hold.orderType),
+              hold.recordId || "",
+          ),
+        },
+      });
+      await holdDoc.ref.update({
+        noticeSent: true,
+        noticeSentAtMs: nowMs,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    if (decision.action === "overdue") {
+      // The network has released the funds; this payment is gone and a
+      // person has to decide what happens to the order. Loud on purpose.
+      logger.error("Payment hold expired uncaptured", {
+        paymentIntentId: hold.paymentIntentId,
+        orderType: hold.orderType,
+        amountCents: hold.amountCents,
+      });
+      await holdDoc.ref.update({
+        status: "expired",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    // decision.action === "capture". Re-read before acting: the intent
+    // may have been cancelled (free cancellation) or captured elsewhere
+    // since this hold was written.
+    const connectedAccountId = hold.connectedAccountId || undefined;
+    const fresh = await retrieveStripePaymentIntent(
+        hold.paymentIntentId, connectedAccountId,
+    );
+    if (fresh.status === "canceled") {
+      await holdDoc.ref.update({
+        status: "released",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return;
+    }
+    if (fresh.status === "requires_capture") {
+      await captureStripePaymentIntent(
+          hold.paymentIntentId, connectedAccountId,
+      );
+    }
+    const captured = await retrieveStripePaymentIntent(
+        hold.paymentIntentId, connectedAccountId,
+    );
+    if (captured.status !== "succeeded") {
+      // Capture did not land; leave the hold for the next run (the
+      // idempotency key makes the retry safe) and say why.
+      logger.error("Payment hold capture did not settle", {
+        paymentIntentId: hold.paymentIntentId,
+        status: captured.status,
+      });
+      return;
+    }
+
+    // Re-run the flow's own completion against the now-captured
+    // intent. Doc updates are idempotent and the deferred payout runs
+    // here, exactly as it would have on an immediate charge.
+    const target = routePaymentIntentMetadata(captured.metadata);
+    target.customerUid = hold.customerUid ||
+      String(captured.metadata?.customerUid || "");
+    await runPaymentCompletion(target);
+    await Promise.all([
+      holdDoc.ref.update({
+        status: "captured",
+        capturedAtMs: nowMs,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }),
+      db.doc(target.path).set({
+        paymentHoldStatus: "captured",
+        paymentCapturedAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true}),
+    ]);
+  } catch (error) {
+    // One broken hold must not stop the sweep - the rest of the queue
+    // still has deadlines.
+    logger.error("Payment hold processing failed", {
+      paymentIntentId: hold.paymentIntentId,
+      action: decision.action,
+      detail: error.message,
+    });
+  }
+}
+
+/**
+ * One-time repair: give every held payment a numeric captureBeforeMs, so the
+ * deadline-ordered sweep can see it (Firestore leaves a document out of a
+ * query ordered on a field it lacks). Idempotent and resumable - the cursor
+ * and a done flag live in paymentHoldMaintenance/captureBeforeMs, so once it
+ * has finished every later sweep pays a single read.
+ *
+ * @param {object} db Firestore.
+ * @param {number} nowMs The sweep's clock.
+ * @param {number} deadlineMs When to stop and leave the rest for next time.
+ * @return {Promise<number>} How many holds were repaired.
+ */
+async function backfillHoldCaptureDeadlines(db, nowMs, deadlineMs) {
+  const markerRef = db.collection("paymentHoldMaintenance")
+      .doc("captureBeforeMs");
+  const marker = await markerRef.get();
+  if (marker.exists && marker.data()?.done === true) return 0;
+  let cursor = String(marker.data()?.cursorHoldId || "") || null;
+  let total = 0;
+  while (Date.now() < deadlineMs) {
+    let repaired = 0;
+    let query = db.collection("paymentHolds")
+        .where("status", "==", "held")
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .limit(HOLD_SWEEP_PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const page = await query.get();
+    for (const holdDoc of page.docs) {
+      const captureBeforeMs = backfillCaptureBeforeMs(holdDoc.data(), nowMs);
+      if (captureBeforeMs === null) continue;
+      await holdDoc.ref.update({
+        captureBeforeMs,
+        captureBeforeBackfilled: true,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      repaired += 1;
+    }
+    const last = page.docs[page.docs.length - 1];
+    if (last) cursor = last.id;
+    const done = page.size < HOLD_SWEEP_PAGE_SIZE;
+    await markerRef.set({
+      done,
+      cursorHoldId: done ? null : cursor,
+      repaired: FirestoreFieldValue.increment(repaired),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+    total += repaired;
+    if (done) break;
+  }
+  return total;
+}
+
 exports.captureExpiringPaymentHolds = onSchedule(
     {
       schedule: "every 30 minutes",
@@ -9179,130 +9675,38 @@ exports.captureExpiringPaymentHolds = onSchedule(
     },
     async () => {
       const db = admin.firestore();
-      const holds = await db.collection("paymentHolds")
-          .where("status", "==", "held")
-          .limit(200)
-          .get();
-      if (holds.empty) return;
       const nowMs = Date.now();
-
-      for (const holdDoc of holds.docs) {
-        const hold = holdDoc.data() || {};
-        const decision = holdAction({
-          captureBeforeMs: Number(hold.captureBeforeMs || 0),
-          nowMs,
-          noticeSent: hold.noticeSent === true,
-        });
-        if (decision.action === "wait") continue;
-
-        try {
-          if (decision.action === "notify") {
-            const amount = (Number(hold.amountCents || 0) / 100).toFixed(2);
-            // A reminder, not an invitation to back out. The terms were on
-            // screen when they booked; leading with "cancel now and it is
-            // free" reads as the platform talking the customer out of an
-            // order they already agreed to.
-            await sendPreferenceNotification({
-              uid: hold.customerUid,
-              preferenceKey: holdNoticePreferenceKey(hold.orderType),
-              title: "Your card will be charged tomorrow",
-              body: `The $${amount} you reserved will be charged in about ` +
-                "24 hours.",
-              data: {
-                type: "payment_hold_capture_notice",
-                paymentIntentId: hold.paymentIntentId,
-                recordId: hold.recordId || "",
-                orderType: String(hold.orderType || ""),
-                ...relatedRecordFields(
-                    hold.collection ||
-                      collectionForHoldOrderType(hold.orderType),
-                    hold.recordId || "",
-                ),
-              },
-            });
-            await holdDoc.ref.update({
-              noticeSent: true,
-              noticeSentAtMs: nowMs,
-              updatedAt: FirestoreFieldValue.serverTimestamp(),
-            });
-            continue;
-          }
-
-          if (decision.action === "overdue") {
-            // The network has released the funds; this payment is gone and a
-            // person has to decide what happens to the order. Loud on purpose.
-            logger.error("Payment hold expired uncaptured", {
-              paymentIntentId: hold.paymentIntentId,
-              orderType: hold.orderType,
-              amountCents: hold.amountCents,
-            });
-            await holdDoc.ref.update({
-              status: "expired",
-              updatedAt: FirestoreFieldValue.serverTimestamp(),
-            });
-            continue;
-          }
-
-          // decision.action === "capture". Re-read before acting: the intent
-          // may have been cancelled (free cancellation) or captured elsewhere
-          // since this hold was written.
-          const connectedAccountId = hold.connectedAccountId || undefined;
-          const fresh = await retrieveStripePaymentIntent(
-              hold.paymentIntentId, connectedAccountId,
-          );
-          if (fresh.status === "canceled") {
-            await holdDoc.ref.update({
-              status: "released",
-              updatedAt: FirestoreFieldValue.serverTimestamp(),
-            });
-            continue;
-          }
-          if (fresh.status === "requires_capture") {
-            await captureStripePaymentIntent(
-                hold.paymentIntentId, connectedAccountId,
-            );
-          }
-          const captured = await retrieveStripePaymentIntent(
-              hold.paymentIntentId, connectedAccountId,
-          );
-          if (captured.status !== "succeeded") {
-            // Capture did not land; leave the hold for the next run (the
-            // idempotency key makes the retry safe) and say why.
-            logger.error("Payment hold capture did not settle", {
-              paymentIntentId: hold.paymentIntentId,
-              status: captured.status,
-            });
-            continue;
-          }
-
-          // Re-run the flow's own completion against the now-captured
-          // intent. Doc updates are idempotent and the deferred payout runs
-          // here, exactly as it would have on an immediate charge.
-          const target = routePaymentIntentMetadata(captured.metadata);
-          target.customerUid = hold.customerUid ||
-            String(captured.metadata?.customerUid || "");
-          await runPaymentCompletion(target);
-          await Promise.all([
-            holdDoc.ref.update({
-              status: "captured",
-              capturedAtMs: nowMs,
-              updatedAt: FirestoreFieldValue.serverTimestamp(),
-            }),
-            db.doc(target.path).set({
-              paymentHoldStatus: "captured",
-              paymentCapturedAt: FirestoreFieldValue.serverTimestamp(),
-              updatedAt: FirestoreFieldValue.serverTimestamp(),
-            }, {merge: true}),
-          ]);
-        } catch (error) {
-          // One broken hold must not stop the sweep - the rest of the queue
-          // still has deadlines.
-          logger.error("Payment hold processing failed", {
-            paymentIntentId: hold.paymentIntentId,
-            action: decision.action,
-            detail: error.message,
-          });
+      // Leave a minute of the 540s timeout to finish the hold in hand.
+      const deadlineMs = nowMs + 8 * 60 * 1000;
+      await backfillHoldCaptureDeadlines(db, nowMs, deadlineMs);
+      // Most urgent first, and nothing further out than the notice window:
+      // the old unordered limit(200) could leave a due capture behind 200
+      // far-off holds until the authorization died.
+      const horizonMs = holdSweepHorizonMs(nowMs);
+      let cursor = null;
+      let processed = 0;
+      sweep:
+      while (Date.now() < deadlineMs) {
+        let query = db.collection("paymentHolds")
+            .where("status", "==", "held")
+            .where("captureBeforeMs", "<=", horizonMs)
+            .orderBy("captureBeforeMs")
+            .limit(HOLD_SWEEP_PAGE_SIZE);
+        if (cursor) query = query.startAfter(cursor);
+        const holds = await query.get();
+        for (const holdDoc of holds.docs) {
+          if (Date.now() >= deadlineMs) break sweep;
+          await processPaymentHold(db, holdDoc, nowMs);
+          processed += 1;
         }
+        cursor = holds.docs[holds.docs.length - 1] || null;
+        if (holds.size < HOLD_SWEEP_PAGE_SIZE) break;
+      }
+      if (processed > 0) {
+        logger.info("Payment hold sweep finished", {
+          processed,
+          deadlineReached: Date.now() >= deadlineMs,
+        });
       }
     },
 );
@@ -9390,6 +9794,11 @@ exports.reconcileStaleStripePayments = onSchedule(
               };
               if (await reconcileStripePaymentEvent(event)) reconciled += 1;
             } catch (error) {
+              if (isPaymentCompletionInFlight(error)) {
+                // Being completed by another worker this minute - not a
+                // failure to page finance about. The next sweep re-checks.
+                continue;
+              }
               logger.error("Stale payment reconciliation failed", {
                 scanId: scan.id,
                 documentPath: snapshot.ref.path,

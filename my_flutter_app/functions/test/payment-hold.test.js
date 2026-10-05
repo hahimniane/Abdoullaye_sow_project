@@ -282,3 +282,104 @@ describe("which payments hold", () => {
     assert.equal(holdCaptureMethod("transport_job"), "manual");
   });
 });
+
+describe("the capture sweep reaches every due hold", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const {
+    HOLD_SWEEP_PAGE_SIZE,
+    holdSweepHorizonMs,
+    backfillCaptureBeforeMs,
+  } = require("../payment_hold");
+  const now = 100 * DAY;
+
+  it("looks exactly as far ahead as the notice window", () => {
+    // Anything later needs nothing this run; anything earlier must be read.
+    assert.equal(holdSweepHorizonMs(now), now + CAPTURE_NOTICE_MS);
+    const notify = holdAction({
+      captureBeforeMs: holdSweepHorizonMs(now) - 1, nowMs: now,
+    });
+    assert.equal(notify.action, "notify");
+    const later = holdAction({
+      captureBeforeMs: holdSweepHorizonMs(now) + 1, nowMs: now,
+    });
+    assert.equal(later.action, "wait");
+  });
+
+  it("leaves a hold with a real deadline alone", () => {
+    assert.equal(backfillCaptureBeforeMs({captureBeforeMs: now + DAY}, now),
+        null);
+  });
+
+  it("gives a deadline-less hold a capture attempt, not a write-off", () => {
+    for (const hold of [{}, {captureBeforeMs: 0}, {captureBeforeMs: null},
+      {captureBeforeMs: "soon"}, {createdAtMs: now - 30 * DAY}]) {
+      const deadline = backfillCaptureBeforeMs(hold, now);
+      assert.equal(typeof deadline, "number", JSON.stringify(hold));
+      assert.equal(
+          holdAction({captureBeforeMs: deadline, nowMs: now}).action,
+          "capture",
+          JSON.stringify(hold),
+      );
+    }
+  });
+
+  it("uses the five-day window from creation when it is still ahead", () => {
+    const createdAtMs = now - DAY;
+    assert.equal(
+        backfillCaptureBeforeMs({createdAtMs}, now),
+        captureDeadlineMs(null, createdAtMs),
+    );
+  });
+
+  it("fixes a deadline stored as text without moving it", () => {
+    assert.equal(
+        backfillCaptureBeforeMs({captureBeforeMs: String(now + DAY)}, now),
+        now + DAY,
+    );
+  });
+
+  describe("index.js wiring", () => {
+    const root = path.join(__dirname, "..");
+    const source = fs.readFileSync(path.join(root, "index.js"), "utf8");
+    const start = source.indexOf("exports.captureExpiringPaymentHolds");
+    const sweep = source.slice(start, source.indexOf("\n);\n", start));
+
+    it("orders by deadline and pages, not an unordered limit(200)", () => {
+      // The old query read the first 200 held docs in no particular order;
+      // hold 201 could sit there until its authorization died.
+      assert.doesNotMatch(sweep, /\.limit\(200\)/);
+      assert.match(sweep, /\.where\("status", "==", "held"\)/);
+      assert.match(sweep, /\.where\("captureBeforeMs", "<=", horizonMs\)/);
+      assert.match(sweep, /\.orderBy\("captureBeforeMs"\)/);
+      assert.match(sweep, /\.limit\(HOLD_SWEEP_PAGE_SIZE\)/);
+      assert.match(sweep, /startAfter\(cursor\)/);
+      assert.match(sweep, /Date\.now\(\) >= deadlineMs/);
+      assert.match(sweep, /timeoutSeconds: 540/);
+      assert.ok(HOLD_SWEEP_PAGE_SIZE > 0);
+    });
+
+    it("repairs missing deadlines before sweeping", () => {
+      const backfillAt = sweep.indexOf("await backfillHoldCaptureDeadlines(");
+      const queryAt = sweep.indexOf(".orderBy(\"captureBeforeMs\")");
+      assert.ok(backfillAt > 0 && backfillAt < queryAt);
+      const fnStart = source.indexOf(
+          "async function backfillHoldCaptureDeadlines(");
+      const fn = source.slice(fnStart, source.indexOf("\n}\n", fnStart));
+      assert.match(fn, /backfillCaptureBeforeMs\(/);
+      assert.match(fn, /done === true\) return 0/);
+    });
+
+    it("ships the composite index the sweep needs", () => {
+      const indexes = JSON.parse(fs.readFileSync(
+          path.join(root, "..", "firestore.indexes.json"), "utf8",
+      )).indexes;
+      const found = indexes.some((index) =>
+        index.collectionGroup === "paymentHolds" &&
+        JSON.stringify(index.fields.map((f) => [f.fieldPath, f.order])) ===
+          JSON.stringify([["status", "ASCENDING"],
+            ["captureBeforeMs", "ASCENDING"]]));
+      assert.ok(found, "paymentHolds(status, captureBeforeMs) index");
+    });
+  });
+});

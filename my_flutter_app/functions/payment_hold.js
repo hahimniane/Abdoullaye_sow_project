@@ -289,7 +289,70 @@ function captureDeadlineMs(charge, authorizedAtMs) {
   return base + 5 * 24 * 60 * 60 * 1000;
 }
 
+/** Holds read per page by the capture sweep. */
+const HOLD_SWEEP_PAGE_SIZE = 100;
+
+/**
+ * The latest deadline the capture sweep needs to look at right now.
+ *
+ * Nothing further out than the notice window can need a notice, a capture or
+ * an overdue escalation this run, so the sweep queries
+ * `status == "held" && captureBeforeMs <= horizon`, ordered by
+ * `captureBeforeMs` ascending: the most urgent hold is always read first, and
+ * the queue can never again hide a due capture behind 200 far-off holds (the
+ * old unordered `limit(200)` did exactly that).
+ *
+ * @param {number} nowMs The current time.
+ * @return {number} The horizon in epoch ms.
+ */
+function holdSweepHorizonMs(nowMs) {
+  return Number(nowMs) + CAPTURE_NOTICE_MS;
+}
+
+/**
+ * The `captureBeforeMs` a hold should carry, when the one it has is unusable.
+ *
+ * The sweep orders and filters on `captureBeforeMs`, and Firestore leaves a
+ * document out of such a query when the field is missing or not a number - a
+ * hold like that would never be captured. Every hold written by
+ * newHoldRecord carries a number, so this is a one-time repair for anything
+ * older or hand-written.
+ *
+ * Mirrors captureDeadlineMs's rule that capturing early is a non-event and
+ * capturing late is the whole payment: the deadline is the conservative
+ * five-day window from creation, but never earlier than "inside the capture
+ * window now" - a hold whose real deadline is unknown gets a capture attempt
+ * (re-read from Stripe first) rather than being written off as overdue.
+ *
+ * @param {object} hold The paymentHolds document.
+ * @param {number} nowMs The current time.
+ * @return {?number} The deadline to store, or null when the hold is fine.
+ */
+function backfillCaptureBeforeMs(hold, nowMs) {
+  const current = hold?.captureBeforeMs;
+  if (typeof current === "number" && Number.isFinite(current) && current > 0) {
+    return null;
+  }
+  const now = Number(nowMs);
+  if (!Number.isFinite(now)) return null;
+  const asNumber = Number(current);
+  if (current !== null && current !== undefined && current !== "" &&
+      Number.isFinite(asNumber) && asNumber > 0) {
+    // A deadline stored as a string: keep the value, fix the type.
+    return asNumber;
+  }
+  const createdAtMs = Number(hold?.createdAtMs);
+  const fallback = captureDeadlineMs(
+      null,
+      Number.isFinite(createdAtMs) && createdAtMs > 0 ? createdAtMs : 0,
+  );
+  return Math.max(fallback, now + CAPTURE_SAFETY_MS);
+}
+
 module.exports = {
+  HOLD_SWEEP_PAGE_SIZE,
+  holdSweepHorizonMs,
+  backfillCaptureBeforeMs,
   HOLD_PAYMENT_TYPES,
   holdCaptureMethod,
   SECURED_INTENT_STATUSES,
