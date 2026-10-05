@@ -342,8 +342,10 @@ void main() {
     expect(pubspec, contains('app_links:'));
     expect(links, contains('AppLinks().uriLinkStream'));
     expect(main, contains('PackageLinkService.instance.start()'));
-    // Parked until the splash has settled auth and navigated.
-    expect(splash, contains('PackageLinkService.instance.markAppReady()'));
+    // Parked until the splash has settled auth and navigated - the same gate
+    // the notification taps wait on.
+    expect(splash, contains('AppLaunchGate.instance.markReady()'));
+    expect(links, contains('AppLaunchGate.instance.whenReady(markAppReady)'));
     expect(links, contains('packageLinkDestination('));
     expect(links, contains('packageLinkStaffEligible('));
     expect(links, contains('GuestTrackingLookupPage('));

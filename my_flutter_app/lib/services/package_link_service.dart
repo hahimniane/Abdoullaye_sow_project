@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../navigation/app_launch_gate.dart';
 import '../navigation/app_navigator.dart';
 import '../providers/auth_provider.dart';
 import '../screens/package_result_screen.dart';
@@ -36,6 +37,8 @@ class PackageLinkService {
   /// that cold-started the app is not missed. [links] is for tests.
   void start({Stream<Uri>? links}) {
     if (_sub != null) return;
+    // The same readiness signal the notification taps wait on.
+    AppLaunchGate.instance.whenReady(markAppReady);
     try {
       _sub = (links ?? AppLinks().uriLinkStream).listen(
         handleLink,
@@ -59,8 +62,9 @@ class PackageLinkService {
     unawaited(_route(code));
   }
 
-  /// Called by the splash screen right after it navigates to the first real
-  /// screen: auth has settled, and a page pushed now lands on top of home.
+  /// Runs when [AppLaunchGate] opens - the splash screen has navigated to the
+  /// first real screen: auth has settled, and a page pushed now lands on top
+  /// of home.
   void markAppReady() {
     _appReady = true;
     final code = _pendingCode;

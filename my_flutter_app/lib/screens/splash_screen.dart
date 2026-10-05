@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../navigation/app_launch_gate.dart';
 import '../providers/auth_provider.dart';
-import '../services/package_link_service.dart';
-import '../services/push_notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
@@ -55,16 +54,11 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!mounted) return;
       final navigator = Navigator.of(context);
       navigator.pushReplacementNamed(targetRoute);
-      // A notification tap that cold-started the app was parked before any
-      // navigator existed. Open it now, on top of the real first screen, so
-      // Back lands on home rather than dropping the user out of the app.
-      final pending = PushNotificationService.instance.takePendingRoute();
-      if (pending != null) {
-        navigator.pushNamed(pending.name, arguments: pending.arguments);
-      }
-      // Same for a tracking link that opened the app: auth has settled, so
-      // it can tell staff from customers now.
-      PackageLinkService.instance.markAppReady();
+      // The notification tap or tracking link that cold-started the app was
+      // parked until now. Release it on top of the real first screen, so Back
+      // lands on home rather than dropping the user out of the app. Auth has
+      // settled, so it can tell staff from customers.
+      AppLaunchGate.instance.markReady();
     });
   }
 

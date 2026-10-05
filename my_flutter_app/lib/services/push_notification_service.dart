@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../navigation/app_launch_gate.dart';
 import '../navigation/app_navigator.dart';
 import 'notification_routing.dart';
 
@@ -48,10 +49,17 @@ class PushNotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications;
   bool _initialized = false;
 
-  /// Who the signed-in person is, for routing. AuthProvider sets this once
-  /// the profile is known; until then a tap routes as a customer would.
-  NotificationAudience Function() audienceResolver =
-      () => NotificationAudience.customer;
+  /// Who the signed-in person is, for routing; null while it is not known
+  /// yet (before the first auth event, or while a role lookup is running).
+  NotificationAudience? _audience;
+
+  /// Set by AuthProvider: null when a role lookup starts, the audience once
+  /// it has finished (customer when signed out or when the lookup failed). A
+  /// parked tap opens as soon as both this and the app are ready.
+  void setAudience(NotificationAudience? audience) {
+    _audience = audience;
+    _openPendingTap();
+  }
 
   /// Sets up local-notification display for foreground messages and
   /// tap-to-navigate handling for background/terminated messages. Safe to
@@ -61,6 +69,10 @@ class PushNotificationService {
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
+
+    // A tap parked before the first real screen opens when the splash says
+    // the app is ready.
+    AppLaunchGate.instance.whenReady(_openPendingTap);
 
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
@@ -111,6 +123,21 @@ class PushNotificationService {
     if (initialMessage != null) {
       _route(initialMessage.data);
     }
+
+    // Android: the app was killed after showing a foreground notification
+    // locally, and that local notification is what launched it.
+    try {
+      final launch = await _localNotifications
+          .getNotificationAppLaunchDetails();
+      final payload = launch?.notificationResponse?.payload;
+      if ((launch?.didNotificationLaunchApp ?? false) &&
+          payload != null &&
+          payload.isNotEmpty) {
+        _routeFromPayload(payload);
+      }
+    } catch (error) {
+      debugPrint('Notification launch details unavailable: $error');
+    }
   }
 
   Future<void> _showForegroundNotification(RemoteMessage message) async {
@@ -138,34 +165,47 @@ class PushNotificationService {
     _route(decodeNotificationPayload(payload));
   }
 
+  /// Every tap goes through here and is parked first. It opens only once the
+  /// app is ready (the splash has replaced itself with the first real screen
+  /// - [AppLaunchGate]) and the role is known ([setAudience]); the decision
+  /// itself is the pure [decideNotificationTap].
+  ///
+  /// The tap that launched the app used to be lost: initialize() is not
+  /// awaited before runApp, so getInitialMessage() could resolve after the
+  /// splash had looked for a parked tap but before it navigated - the page
+  /// was pushed on top of the splash and then replaced by home.
   void _route(Map<String, dynamic> data) {
-    final route = routeForNotificationData(data, audience: audienceResolver());
-    if (route == null) return;
-    final navigator = rootNavigatorKey.currentState;
-    if (navigator == null) {
-      // Cold start: initialize() runs one line before runApp(), so a tap that
-      // launched the app arrives before any widget tree exists. Park it -
-      // SplashScreen consumes it once it has navigated to the real first
-      // screen. Pushing here instead does not work: the splash finishes its
-      // auth check and calls pushReplacementNamed, which destroys anything
-      // pushed before that point.
-      _pendingRouteData = data;
-      return;
-    }
-    navigator.pushNamed(route.name, arguments: route.arguments);
+    _pendingRouteData = data;
+    _openPendingTap();
   }
 
   Map<String, dynamic>? _pendingRouteData;
 
-  /// Returns the route a cold-start notification tap was waiting on, clearing
-  /// it so it is only ever opened once. Called by SplashScreen immediately
-  /// after it replaces itself with the real first screen.
-  NotificationRoute? takePendingRoute() {
+  void _openPendingTap() {
     final data = _pendingRouteData;
-    _pendingRouteData = null;
-    if (data == null) return null;
-    return routeForNotificationData(data, audience: audienceResolver());
+    if (data == null) return;
+    final navigator = rootNavigatorKey.currentState;
+    final decision = decideNotificationTap(
+      data,
+      appReady: AppLaunchGate.instance.isReady && navigator != null,
+      audience: _audience,
+    );
+    switch (decision.action) {
+      case NotificationTapAction.wait:
+        return;
+      case NotificationTapAction.ignore:
+        _pendingRouteData = null;
+        return;
+      case NotificationTapAction.open:
+        _pendingRouteData = null;
+        final route = decision.route!;
+        navigator!.pushNamed(route.name, arguments: route.arguments);
+    }
   }
+
+  /// Whether a tap is parked, waiting for the app or the role.
+  @visibleForTesting
+  bool get hasPendingTap => _pendingRouteData != null;
 
   Future<NotificationSettings> requestPermissionAndRegister() async {
     final settings = await _messaging.requestPermission(
