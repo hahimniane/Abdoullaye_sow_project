@@ -90,6 +90,7 @@ import {
 } from "@/lib/destination-countries";
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
+import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
 import { CopyValue } from "@/components/copy-value";
@@ -304,12 +305,9 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
     return map;
   }, [lines.rows]);
 
-  const staffName = (id: string) => {
-    if (!id) return "";
-    const row = staff.rows.find((s) => String(s.id) === id);
-    if (!row) return "";
-    return text(row.fullName, "") || text(row.name, "") || text(row.email, "");
-  };
+  // Built once per staff list, read per row (never a find() per row).
+  const staffNames = useMemo(() => staffNameIndex(staff.rows), [staff.rows]);
+  const staffName = (id: string) => staffNameFrom(staffNames, id);
 
   // The business's own destination list, labelled in the reader's language,
   // offered first; then every other country. A container goes wherever the
@@ -342,11 +340,15 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
     return destinationOptions.all.filter((o) => used.has(o.id));
   }, [containers.rows, destinationOptions]);
 
+  const destinationLabels = useMemo(
+    () => new Map(destinationOptions.all.map((option) => [option.id, option.label])),
+    [destinationOptions],
+  );
   function destinationLabel(row: Row) {
     const id = text(row.destinationCountryId, "");
     if (!id) return "";
-    const known = destinationOptions.all.find((option) => option.id === id);
-    if (known) return known.label;
+    const known = destinationLabels.get(id);
+    if (known !== undefined) return known;
     const option = destinationCountryOptionForRow({ id, name: row.destinationCountryName });
     return option.id ? destinationCountryName(option.id, lang) : text(row.destinationCountryName, id);
   }

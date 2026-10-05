@@ -145,6 +145,7 @@ import { buildBusinessDirectory, buildUserDirectory } from "@/lib/admin-director
 import { FieldInfo } from "@/components/field-info";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import { UserText } from "@/components/user-text";
+import { ShowMoreButton, useShowMore } from "@/components/show-more";
 import {
   confirmImportantAction,
   type ActionConfirmationOptions,
@@ -12616,6 +12617,11 @@ function FinanceView({
     (sum, row) => sum + row.amount,
     0,
   );
+  // The ledger grows without bound; render 50 rows at a time.
+  const ledgerPage = useShowMore(
+    filteredLedgerRows,
+    `${ledgerSearch}|${businessFilter}|${sourceFilter}|${statusFilter}`,
+  );
   const businessOptions = businesses.filter(
     (business) => business._inferred !== true,
   );
@@ -12739,7 +12745,7 @@ function FinanceView({
           {formatMoney(ledgerAmountTotal)}
         </div>
         <div className="row-list finance-ledger-list">
-          {filteredLedgerRows.map((row) => (
+          {ledgerPage.shown.map((row) => (
             <FinanceLedgerRecordRow
               key={row.id}
               row={row}
@@ -12759,6 +12765,7 @@ function FinanceView({
             <EmptyState text="No finance rows match the current filters." />
           )}
         </div>
+        <ShowMoreButton remaining={ledgerPage.remaining} onClick={ledgerPage.showMore} />
       </Panel>
       <Panel title="Business support request" icon={<Send size={18} />}>
         {canSendSupport ? (

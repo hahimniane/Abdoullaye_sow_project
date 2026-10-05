@@ -30,6 +30,8 @@ import { confirmImportantAction } from "@/lib/action-confirmation";
 import { useBusinessCollection, useBusinessStaff } from "@/lib/business-data";
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, formatDayKey, text } from "@/lib/format";
+import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
+import { ShowMoreButton, useShowMore } from "@/components/show-more";
 import {
   INVOICE_MESSAGES,
   INVOICE_PAYMENT_METHODS,
@@ -178,12 +180,9 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
     return map;
   }, [payments.rows]);
 
-  const staffName = (id: string) => {
-    if (!id) return "";
-    const row = staff.rows.find((s) => String(s.id) === id);
-    if (!row) return "";
-    return text(row.fullName, "") || text(row.name, "") || text(row.email, "");
-  };
+  // Built once per staff list, read per row (never a find() per row).
+  const staffNames = useMemo(() => staffNameIndex(staff.rows), [staff.rows]);
+  const staffName = (id: string) => staffNameFrom(staffNames, id);
 
   const knownCustomers = useMemo(
     () =>
@@ -202,6 +201,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
 
   const sorted = useMemo(() => sortInvoices(invoices.rows), [invoices.rows]);
   const visible = useMemo(() => filterInvoices(sorted, filter, search), [sorted, filter, search]);
+  // 50 invoices at a time; a new filter or search starts from the top.
+  const invoicePage = useShowMore(visible, `${filter}|${search}`);
 
   // The scoreboard reads the rows, so it cannot disagree with the list.
   const board = useMemo(() => {
@@ -659,7 +660,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
             <div className="mini-table">
               <div className="ctn-table ctn-list-table inv-list-table">
                 <div className="mini-table-head"><span>Invoice</span><span>Customer</span><span>Balance</span><span>State</span></div>
-                {visible.map((row) => {
+                {invoicePage.shown.map((row) => {
                   const id = String(row.id);
                   return (
                     <div
@@ -682,6 +683,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                   );
                 })}
               </div>
+              <ShowMoreButton remaining={invoicePage.remaining} onClick={invoicePage.showMore} />
             </div>
           )}
         </article>

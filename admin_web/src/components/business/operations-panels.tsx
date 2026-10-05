@@ -253,6 +253,7 @@ import {
   transmissionOptions,
 } from "@/lib/vehicle-options";
 import { localDateKey, localDateKeyInDays } from "@/lib/local-date";
+import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 import {
   normalizeTransportContainerNumber,
   transportFulfillmentErrorMessage,
@@ -7665,13 +7666,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   // business may only read its own team, so someone who has since moved, or a
   // Laawol admin acting on the lot, is unnameable here. Callers decide what to
   // say instead; the change history holds who it actually was.
-  const staffName = (id: string) => {
-    if (!id) return "";
-    const row = staff.rows.find((s) => String((s as Record<string, unknown>).id) === id);
-    if (!row) return "";
-    const r = row as Record<string, unknown>;
-    return text(r.fullName, "") || text(r.name, "") || text(r.email, "");
-  };
+  const staffNames = useMemo(
+    () => staffNameIndex(staff.rows as Record<string, unknown>[]),
+    [staff.rows],
+  );
+  const staffName = (id: string) => staffNameFrom(staffNames, id);
 
 
   const orderedTypes = useMemo(

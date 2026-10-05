@@ -1682,6 +1682,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Parked vehicle": "Véhicule stationné",
   "Auction:": "Enchères :",
   "· by staff": "· par l’équipe",
+  "Show more": "Afficher plus",
   "Console Laawol Digital": "Console Laawol Digital",
   "Sign in to manage the platform or your business workspace.":
     "Connectez-vous pour gérer la plateforme ou l’espace de votre entreprise.",
