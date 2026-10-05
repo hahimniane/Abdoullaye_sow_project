@@ -40,6 +40,7 @@ import {
 } from "@/lib/service-ranking.ts";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
+import { localDateKey, localDateKeyInDays } from "@/lib/local-date";
 
 const ACTION_TIMEOUT_MS = 30_000;
 const SNAPSHOT_TIMEOUT_MS = 15_000;
@@ -177,10 +178,8 @@ function ParkingWorkspace({
   onAuthenticationRequired?: () => void;
   profile: UserProfile;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  const today = localDateKey();
+  const tomorrow = localDateKeyInDays(1);
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   // Every lot there is, loaded before the customer names anywhere. The state
@@ -1502,9 +1501,7 @@ function PoolRequestForm({
             <label className="customer-form-span">
               Join deadline
               <input
-                min={new Date(Date.now() + 24 * 60 * 60 * 1000)
-                  .toISOString()
-                  .slice(0, 10)}
+                min={localDateKeyInDays(1)}
                 onChange={(event) => setJoinDeadline(event.target.value)}
                 required
                 type="date"

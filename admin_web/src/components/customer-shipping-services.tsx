@@ -136,6 +136,7 @@ import {
 } from "@/lib/freight-payback";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
+import { localDateKey } from "@/lib/local-date";
 
 const CALL_TIMEOUT_MS = 30_000;
 
@@ -5335,7 +5336,7 @@ function TransportRequestForm({
                     <label>
                       Preferred pickup date (optional)
                       <input
-                        min={new Date().toISOString().slice(0, 10)}
+                        min={localDateKey()}
                         onChange={(event) => setPreferredDate(event.target.value)}
                         type="date"
                         value={preferredDate}

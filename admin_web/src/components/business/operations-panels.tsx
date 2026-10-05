@@ -252,6 +252,7 @@ import {
   optionLabel,
   transmissionOptions,
 } from "@/lib/vehicle-options";
+import { localDateKey, localDateKeyInDays } from "@/lib/local-date";
 import {
   normalizeTransportContainerNumber,
   transportFulfillmentErrorMessage,
@@ -572,8 +573,7 @@ const emptyTransportQuoteDraft: TransportQuoteDraft = {
 };
 
 function futureDateInput(days = 14) {
-  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-  return date.toISOString().slice(0, 10);
+  return localDateKeyInDays(days);
 }
 
 function defaultPoolDraft(destinationCountryId = ""): PoolDraft {
@@ -4695,10 +4695,10 @@ export function TransportPanel({
                   <small>Enter the complete customer price, including your known fees.</small>
                 </label>
                 <label className="lst-field"><span>Estimated pickup date</span>
-                  <input min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDraft((value) => ({ ...value, estimatedPickupDate: event.target.value }))} type="date" value={draft.estimatedPickupDate} />
+                  <input min={localDateKey()} onChange={(event) => setDraft((value) => ({ ...value, estimatedPickupDate: event.target.value }))} type="date" value={draft.estimatedPickupDate} />
                 </label>
                 <label className="lst-field"><span>Estimated delivery date</span>
-                  <input min={draft.estimatedPickupDate || new Date().toISOString().slice(0, 10)} onChange={(event) => setDraft((value) => ({ ...value, estimatedDeliveryDate: event.target.value }))} type="date" value={draft.estimatedDeliveryDate} />
+                  <input min={draft.estimatedPickupDate || localDateKey()} onChange={(event) => setDraft((value) => ({ ...value, estimatedDeliveryDate: event.target.value }))} type="date" value={draft.estimatedDeliveryDate} />
                 </label>
                 <label className="lst-field"><span>Transport method</span>
                   <select onChange={(event) => setDraft((value) => ({ ...value, transportMethod: event.target.value === "enclosed" ? "enclosed" : "open" }))} value={draft.transportMethod}>
@@ -7328,6 +7328,9 @@ function parkingTitle(row: FirestoreRow) {
   );
 }
 
+// Deliberately the UTC day: parking dates are stored as UTC midnight of the
+// day the form sent (the server parses "YYYY-MM-DD"), so this is a stored
+// day being read back, not "today". Use lib/local-date for today.
 function dateInputValue(value: unknown) {
   const millis = timestampMs(value);
   if (!millis) return "";
