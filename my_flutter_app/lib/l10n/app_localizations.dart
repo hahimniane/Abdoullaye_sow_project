@@ -3332,18 +3332,6 @@ abstract class AppLocalizations {
   /// **'Business'**
   String get business;
 
-  /// No description provided for @migrationComplete.
-  ///
-  /// In en, this message translates to:
-  /// **'Migration complete: {count} writes.'**
-  String migrationComplete(Object count);
-
-  /// No description provided for @migrationFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Migration failed: {error}'**
-  String migrationFailed(Object error);
-
   /// No description provided for @status.
   ///
   /// In en, this message translates to:
@@ -3373,12 +3361,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Save business'**
   String get saveBusiness;
-
-  /// No description provided for @migrateKerenData.
-  ///
-  /// In en, this message translates to:
-  /// **'Migrate Keren data'**
-  String get migrateKerenData;
 
   /// No description provided for @addBusiness.
   ///

@@ -191,13 +191,42 @@ service firebase.storage {
     }
 
     // Access control is enforced by the scoped path (support_cases/{caseId}/
-    // {uploaderUid}) + a size cap. It deliberately does NOT call
+    // {uploaderUid}) + a type/size allow-list. It deliberately does NOT call
     // canAccessSupportCase here (that needs a cross-service Firestore read
     // that fails in prod for non-admins) - the uploadSupportAttachmentMetadata
-    // callable validates the real content type and case membership, using
-    // the Admin SDK, before the file ever becomes a message.
+    // callable re-validates the type and case membership, using the Admin
+    // SDK, before the file ever becomes a message. The allow-list mirrors that
+    // callable exactly (both clients upload with the same contentType they
+    // send it), so anything refused here would have been refused there too:
+    // the old size-only cap let any signed-in user park 50MB of arbitrary
+    // bytes (HTML, executables, application/octet-stream) per request.
     function validSupportUpload() {
-      return request.resource.size < 50 * 1024 * 1024;
+      return request.resource.contentType is string &&
+        (
+          (request.resource.contentType.matches('image/.*') &&
+            request.resource.size < 10 * 1024 * 1024) ||
+          (request.resource.contentType.matches('audio/.*') &&
+            request.resource.size < 10 * 1024 * 1024) ||
+          (request.resource.contentType.matches('video/.*') &&
+            request.resource.size < 50 * 1024 * 1024) ||
+          (request.resource.contentType in [
+              'application/pdf',
+              'text/plain',
+              'application/msword',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            ] &&
+            request.resource.size < 25 * 1024 * 1024)
+        );
+    }
+
+    // A lot-ledger receipt is a photo or a PDF (console accepts
+    // "image/*,application/pdf"; the app uploads camera/gallery JPEGs).
+    function validReceiptUpload() {
+      return request.resource.size < 20 * 1024 * 1024 &&
+        (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/pdf'
+        );
     }
 
     match /cars/{businessId}/{carId}/{allPaths=**} {
@@ -213,8 +242,8 @@ service firebase.storage {
     }
 
     // Lot-ledger expense receipts. Written by a business's own ledger managers
-    // (or an operations admin); readable by the same. Image or PDF, any of the
-    // types validSupportUpload allows, under its 50MB cap.
+    // (or an operations admin); readable by the same. Image or PDF only, under
+    // 20MB (validReceiptUpload).
     function canManageBusinessLedger(businessId) {
       return hasAdminCapability('operations') ||
         (
@@ -230,7 +259,7 @@ service firebase.storage {
       allow read: if request.auth != null &&
         (hasAdminCapability('operations') || isLinkedToBusiness(businessId));
       allow write: if request.auth != null &&
-        validSupportUpload() &&
+        validReceiptUpload() &&
         canManageBusinessLedger(businessId);
     }
 
@@ -257,9 +286,19 @@ service firebase.storage {
         canManageBusinessVerificationDocuments(businessId);
     }
 
+    // Account profile photos (app: users/{uid}/profile/..., console:
+    // users/{uid}/admin_profile_...). Every screen that shows one renders the
+    // tokenized download URL saved on the profile, which does not go through
+    // these rules, so a path read is only needed by the uploader itself (to
+    // mint that URL) and by admins. Writes are the owner's own images only:
+    // previously any signed-in user could read every user's folder and the
+    // owner could store any type at any size.
     match /users/{userId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        validImageUpload();
     }
 
     // A user may only write under their own uid subfolder, and only if they can

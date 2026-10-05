@@ -1756,16 +1756,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get business => 'Business';
 
   @override
-  String migrationComplete(Object count) {
-    return 'Migration complete: $count writes.';
-  }
-
-  @override
-  String migrationFailed(Object error) {
-    return 'Migration failed: $error';
-  }
-
-  @override
   String get status => 'Status';
 
   @override
@@ -1779,9 +1769,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get saveBusiness => 'Save business';
-
-  @override
-  String get migrateKerenData => 'Migrate Keren data';
 
   @override
   String get addBusiness => 'Add business';

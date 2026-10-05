@@ -692,24 +692,11 @@
   "barrelPickupPricing": "Barrel pickup pricing",
   "searchCountriesCodesFlags": "Search countries, codes, or flags",
   "business": "Business",
-  "migrationComplete": "Migration complete: {count} writes.",
-  "@migrationComplete": {
-    "placeholders": {
-      "count": {}
-    }
-  },
-  "migrationFailed": "Migration failed: {error}",
-  "@migrationFailed": {
-    "placeholders": {
-      "error": {}
-    }
-  },
   "status": "Status",
   "pending": "Pending",
   "approved": "Approved",
   "suspended": "Suspended",
   "saveBusiness": "Save business",
-  "migrateKerenData": "Migrate Keren data",
   "addBusiness": "Add business",
   "updatePurchaseStatusQuestion": "Update purchase status?",
   "updatePurchaseStatusMessage": "This will mark {carTitle} as {status} and update the related car record.",

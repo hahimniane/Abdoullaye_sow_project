@@ -38,6 +38,11 @@ const {
   findGuestTrackingRecord,
   guestTrackingCandidates,
 } = require("./guest_tracking");
+const {
+  appCheckTokenFromHeaders,
+  clientAddressFromRequest,
+  rateLimitIdentity,
+} = require("./request_guard");
 /** Category setting refusals, in words a business owner can act on. */
 const FREIGHT_CATEGORY_ERRORS = {
   unknown_category: "That is not one of the standard categories",
@@ -711,12 +716,11 @@ async function recordMarketplaceDisclosure(request, userId, action) {
   return {id: ref.id, ...evidence};
 }
 
+// The address Google's front end saw, not the caller-supplied left-most
+// X-Forwarded-For entry (which let any script pick a fresh rate-limit bucket
+// per request). See request_guard.js for what Cloud Run sets and why.
 function callableClientAddress(request) {
-  const rawRequest = request.rawRequest;
-  const forwarded = String(rawRequest?.headers?.["x-forwarded-for"] || "")
-      .split(",")[0]
-      .trim();
-  return forwarded || String(rawRequest?.ip || "unknown");
+  return clientAddressFromRequest(request.rawRequest);
 }
 
 async function enforceRateLimitForIdentity(identity, {
@@ -757,7 +761,13 @@ async function enforceRateLimitForIdentity(identity, {
 
 async function enforceCallableRateLimit(request, options) {
   if (process.env.FUNCTIONS_EMULATOR === "true") return;
-  const identity = request.auth?.uid || callableClientAddress(request);
+  // Anonymous sessions are keyed on the caller's address: a fresh anonymous
+  // uid costs nothing, so a per-uid bucket would never fill.
+  const identity = rateLimitIdentity(
+      request.auth,
+      isAnonymousCaller(request.auth),
+      callableClientAddress(request),
+  );
   await enforceRateLimitForIdentity(identity, options);
 }
 
@@ -21662,133 +21672,6 @@ exports.updateDestinationCoverage = onCall(
     },
 );
 
-exports.migrateDefaultBusiness = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
-    async (request) => {
-      const callerUid = requireAuth(request);
-      const user = await getUserProfile(callerUid);
-      requireSuperAdmin(
-          user,
-          "Only super admins can run this migration",
-      );
-
-      const db = admin.firestore();
-      const now = FirestoreFieldValue.serverTimestamp();
-      const businessRef = db.collection("businesses").doc(DEFAULT_BUSINESS_ID);
-      const businessDoc = await businessRef.get();
-      const businessData = {
-        name: DEFAULT_BUSINESS_NAME,
-        status: "approved",
-        ownerUid: businessDoc.data()?.ownerUid || callerUid,
-        phone: businessDoc.data()?.phone || "",
-        email: businessDoc.data()?.email || "",
-        website: businessDoc.data()?.website || "",
-        profileImageUrl: businessDoc.data()?.profileImageUrl || "",
-        profileImagePath: businessDoc.data()?.profileImagePath || "",
-        enabledServices: normalizeBusinessServices(
-            businessDoc.data()?.enabledServices,
-        ),
-        serviceNote:
-          businessDoc.data()?.serviceNote ||
-          "Barrel shipping, vehicle sales, and customer support.",
-        createdAt: businessDoc.exists ?
-          businessDoc.data().createdAt || now :
-          now,
-        updatedAt: now,
-      };
-
-      const writes = [];
-      writes.push({
-        ref: businessRef,
-        data: businessData,
-        options: {merge: true},
-      });
-
-      const legacyCountries = await db.collection("destinationCountries").get();
-      legacyCountries.docs.forEach((doc) => {
-        const data = doc.data();
-        writes.push({
-          ref: businessRef.collection("destinationCountries").doc(doc.id),
-          data: {
-            ...data,
-            businessId: DEFAULT_BUSINESS_ID,
-            businessName: DEFAULT_BUSINESS_NAME,
-            businessPhone: businessData.phone,
-            businessEmail: businessData.email,
-            businessWebsite: businessData.website,
-            businessProfileImageUrl: businessData.profileImageUrl,
-            businessProfileImagePath: businessData.profileImagePath,
-            enabledServices: businessData.enabledServices,
-            serviceNote: businessData.serviceNote,
-            businessStatus: "approved",
-            updatedAt: now,
-          },
-          options: {merge: true},
-        });
-      });
-
-      const collections = [
-        "barrelShipments",
-        "cars",
-        "carPurchases",
-        "parkedCars",
-        "transportRequests",
-      ];
-      for (const collection of collections) {
-        const snapshot = await db.collection(collection).get();
-        snapshot.docs.forEach((doc) => {
-          const data = doc.data() || {};
-          if (cleanText(data.businessId, 120)) return;
-          writes.push({
-            ref: doc.ref,
-            data: {
-              businessId: DEFAULT_BUSINESS_ID,
-              businessName: DEFAULT_BUSINESS_NAME,
-              businessStatus: "approved",
-              enabledServices: businessData.enabledServices,
-              businessProfileImageUrl: businessData.profileImageUrl,
-              updatedAt: now,
-            },
-            options: {merge: true},
-          });
-        });
-      }
-
-      const users = await db.collection("users")
-          .where("role", "in", ["staff", "businessOwner"])
-          .get();
-      users.docs.forEach((doc) => {
-        writes.push({
-          ref: doc.ref,
-          data: {
-            businessId: DEFAULT_BUSINESS_ID,
-            businessName: DEFAULT_BUSINESS_NAME,
-            businessServices: businessData.enabledServices,
-            updatedAt: now,
-          },
-          options: {merge: true},
-        });
-      });
-
-      for (let index = 0; index < writes.length; index += 450) {
-        const batch = db.batch();
-        writes.slice(index, index + 450).forEach((write) => {
-          batch.set(write.ref, write.data, write.options);
-        });
-        await batch.commit();
-      }
-
-      return {
-        success: true,
-        businessId: DEFAULT_BUSINESS_ID,
-        writes: writes.length,
-      };
-    },
-);
-
 exports.backfillBusinessCarListings = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -34791,6 +34674,10 @@ exports.deleteSupportMessageForMe = onCall(
 // only that key is configured. When neither key is real the endpoint answers
 // 503 and the widget falls back to its built-in answers - the bubble never
 // breaks while keys are pending.
+// Per client address. A conversation is a handful of turns; this leaves room
+// for a long one while making the endpoint useless as a free LLM relay.
+const ASSISTANT_RATE_LIMIT = Object.freeze({limit: 30, windowSeconds: 60 * 60});
+
 const ASSISTANT_ALLOWED_ORIGINS = new Set([
   "https://laawoldigital.com",
   "https://www.laawoldigital.com",
@@ -34843,13 +34730,54 @@ exports.assistantChat = onRequest(
         res.set("Vary", "Origin");
       }
       res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-      res.set("Access-Control-Allow-Headers", "Content-Type");
+      res.set(
+          "Access-Control-Allow-Headers",
+          "Content-Type, X-Firebase-AppCheck",
+      );
       if (req.method === "OPTIONS") return res.status(204).send("");
       if (req.method !== "POST") {
         return res.status(405).json({error: "POST only"});
       }
       if (!ASSISTANT_ALLOWED_ORIGINS.has(origin)) {
         return res.status(403).json({error: "Origin not allowed"});
+      }
+
+      // The Origin header is only a browser courtesy - a script sets it to
+      // anything - so on its own it left a paid LLM proxy open to the world.
+      // Require a valid App Check token (the marketing widget mints one with
+      // the site's reCAPTCHA Enterprise key) wherever callables enforce App
+      // Check, then cap each address. Both refusals carry fallback: true so
+      // the widget quietly answers from its built-in knowledge instead.
+      if (ENFORCE_APP_CHECK) {
+        const appCheckToken = appCheckTokenFromHeaders(req.headers);
+        if (!appCheckToken) {
+          return res.status(401)
+              .json({fallback: true, error: "App Check token required"});
+        }
+        try {
+          await admin.appCheck().verifyToken(appCheckToken);
+        } catch (error) {
+          logger.warn("assistantChat App Check rejected", {
+            detail: error?.message,
+          });
+          return res.status(401)
+              .json({fallback: true, error: "App Check token invalid"});
+        }
+      }
+      if (process.env.FUNCTIONS_EMULATOR !== "true") {
+        try {
+          await enforceRateLimitForIdentity(clientAddressFromRequest(req), {
+            name: "assistantChat",
+            limit: ASSISTANT_RATE_LIMIT.limit,
+            windowSeconds: ASSISTANT_RATE_LIMIT.windowSeconds,
+          });
+        } catch (error) {
+          if (error?.code === "resource-exhausted") {
+            return res.status(429)
+                .json({fallback: true, error: "Too many requests"});
+          }
+          throw error;
+        }
       }
 
       // Keep the abuse surface small: short history, short messages.

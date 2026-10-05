@@ -413,3 +413,21 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   reach can be checked against an isolated emulator on non-default ports
   when 8080/9099 are taken. The emulator does not enforce composite indexes:
   every new query shape needs its entry in `firestore.indexes.json`.
+
+- Abuse limits must key on an address the caller cannot forge. On Cloud
+  Functions v2 / Cloud Run, Google's front end appends the real client to
+  `X-Forwarded-For`, so entry `[0]` is attacker-chosen; use
+  `functions/request_guard.js` (`clientAddressFromRequest`, right-most entry,
+  `TRUSTED_PROXY_HOPS` if a load balancer is added) and key anonymous sessions
+  on that address, never on their throwaway uid. Raw `onRequest` endpoints get
+  no automatic App Check: verify `X-Firebase-AppCheck` with
+  `admin.appCheck().verifyToken` under `ENFORCE_APP_CHECK` and make sure the
+  calling page actually sends it. Coverage:
+  `functions/test/security-audit-2026-10.test.js`.
+- Rules for records with server-owned money fields use an affected-keys
+  allow-list built from what the app and console really write (grep both),
+  not a deny-list. Status fields with terminal outcomes stay callable-only for
+  business clients (`carPurchases.purchaseStatus`). Storage upload allow-lists
+  mirror the callable that later accepts the file, so a type the callable
+  refuses is refused at upload too. Rules regressions live at the end of
+  `functions/test/firestore-rules.test.js`.

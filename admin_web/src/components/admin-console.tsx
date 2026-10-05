@@ -13009,23 +13009,6 @@ function ToolsView({
             className="secondary-button"
             onClick={() =>
               runAction(
-                "Default business migration complete",
-                () => httpsCallable(functions, "migrateDefaultBusiness")({}),
-                {
-                  confirm: "Run the default business migration now?",
-                  confirmFr:
-                    "Lancer maintenant la migration de l’entreprise par défaut ?",
-                },
-              )
-            }
-          >
-            <RefreshCw size={16} />
-            Migrate default business data
-          </button>
-          <button
-            className="secondary-button"
-            onClick={() =>
-              runAction(
                 "Destination country seed complete",
                 () =>
                   httpsCallable(

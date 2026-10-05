@@ -1800,16 +1800,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get business => 'Entreprise';
 
   @override
-  String migrationComplete(Object count) {
-    return 'Migration terminée : $count écritures.';
-  }
-
-  @override
-  String migrationFailed(Object error) {
-    return 'Échec de la migration : $error';
-  }
-
-  @override
   String get status => 'Statut';
 
   @override
@@ -1823,9 +1813,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get saveBusiness => 'Enregistrer l’entreprise';
-
-  @override
-  String get migrateKerenData => 'Migrer les données Keren';
 
   @override
   String get addBusiness => 'Ajouter une entreprise';
