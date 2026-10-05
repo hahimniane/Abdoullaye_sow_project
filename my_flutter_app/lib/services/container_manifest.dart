@@ -581,11 +581,16 @@ class ContainerLine {
     required this.addedByStaffId,
     required this.createdAt,
     required this.updatedAt,
+    this.lastCustomerUpdate,
   });
 
   final String id;
   final String businessId;
   final String containerId;
+
+  /// The latest WhatsApp update the server sent about this line, and who it
+  /// reached. Null until the container's first update goes out.
+  final ContainerLineUpdate? lastCustomerUpdate;
 
   /// Denormalised from the container so "is this car already on an open
   /// container" is one query on lines, not a read of every container.
@@ -646,6 +651,7 @@ class ContainerLine {
       addedByStaffId: _text(d['addedByStaffId'], containerMaxLabel),
       createdAt: lotDateOf(d['createdAt']),
       updatedAt: lotDateOf(d['updatedAt']),
+      lastCustomerUpdate: ContainerLineUpdate.fromMap(d['lastCustomerUpdate']),
     );
   }
 
@@ -680,6 +686,79 @@ class ContainerLine {
     final name =
         [carYear, carMake, carModel].where((p) => p.isNotEmpty).join(' ');
     return name.isNotEmpty ? name : vinNumber;
+  }
+}
+
+// The update moments and per-person outcomes the server writes to
+// `lastCustomerUpdate` (functions/index.js sendContainerCustomerUpdates).
+const containerUpdateShipped = 'shipped';
+const containerUpdateAtPort = 'at_port';
+const containerUpdateArrived = 'arrived';
+const containerUpdateRoleSender = 'sender';
+const containerUpdateRoleReceiver = 'receiver';
+const containerUpdateSent = 'sent';
+const containerUpdateFailed = 'failed';
+const containerUpdateSkipped = 'skipped';
+const containerUpdateWaiting = 'waiting_for_whatsapp';
+
+/// What happened for one person on one WhatsApp update.
+class ContainerLineUpdateResult {
+  const ContainerLineUpdateResult({
+    required this.role,
+    required this.status,
+    this.reason = '',
+  });
+
+  /// [containerUpdateRoleSender] (the customer) or
+  /// [containerUpdateRoleReceiver].
+  final String role;
+
+  /// sent, failed, skipped or waiting_for_whatsapp.
+  final String status;
+
+  /// Why a skipped person was skipped: no_phone, switched_off or
+  /// needs_country_code.
+  final String reason;
+}
+
+/// `containerLines/{id}.lastCustomerUpdate`: `{update, results, atMs}`.
+class ContainerLineUpdate {
+  const ContainerLineUpdate({
+    required this.update,
+    required this.results,
+    required this.at,
+  });
+
+  final String update;
+  final List<ContainerLineUpdateResult> results;
+  final DateTime? at;
+
+  /// Null for anything that is not a recorded update, so a malformed field
+  /// reads as "no update yet" rather than breaking the line.
+  static ContainerLineUpdate? fromMap(Object? value) {
+    if (value is! Map) return null;
+    final update = _text(value['update'], 40);
+    if (update.isEmpty) return null;
+    final results = <ContainerLineUpdateResult>[];
+    final raw = value['results'];
+    if (raw is Iterable) {
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final role = _text(item['role'], 20);
+        final status = _text(item['status'], 40);
+        if (role.isEmpty || status.isEmpty) continue;
+        results.add(ContainerLineUpdateResult(
+          role: role,
+          status: status,
+          reason: _text(item['reason'], 40),
+        ));
+      }
+    }
+    final atMs = value['atMs'];
+    final at = atMs is num && atMs > 0
+        ? DateTime.fromMillisecondsSinceEpoch(atMs.round())
+        : lotDateOf(value['at']);
+    return ContainerLineUpdate(update: update, results: results, at: at);
   }
 }
 

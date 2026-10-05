@@ -1,4 +1,4 @@
-"NSCameraUsageDescription" = "Laawol uses the camera to scan VIN numbers and capture photos for listings and service requests.";
+"NSCameraUsageDescription" = "Laawol uses the camera to scan VIN numbers and package labels and capture photos for listings and service requests.";
 "NSFaceIDUsageDescription" = "Use Face ID to unlock your saved Laawol session.";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "Laawol uses your location to help fill pickup and delivery addresses for your service requests.";
 "NSLocationWhenInUseUsageDescription" = "Laawol uses your location to help fill your pickup address.";

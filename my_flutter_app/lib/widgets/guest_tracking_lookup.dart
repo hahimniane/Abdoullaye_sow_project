@@ -15,6 +15,39 @@ import 'language_toggle.dart';
 
 enum _GuestLookupMessage { rateLimited, unavailable }
 
+/// The code lookup as a page of its own, for callers that push it: a signed-
+/// in customer following a booking made elsewhere, or a tapped tracking link
+/// that should open with its code already looked up.
+class GuestTrackingLookupPage extends StatelessWidget {
+  const GuestTrackingLookupPage({
+    super.key,
+    this.service,
+    this.initialCode,
+    this.onSignIn,
+  });
+
+  final GuestTrackingLookupService? service;
+  final String? initialCode;
+
+  /// Null when the person is already signed in.
+  final VoidCallback? onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.lightBg,
+      body: SafeArea(
+        child: GuestTrackingLookup(
+          service: service,
+          showBackButton: true,
+          initialCode: initialCode,
+          onSignIn: onSignIn,
+        ),
+      ),
+    );
+  }
+}
+
 class GuestTrackingLookup extends StatefulWidget {
   const GuestTrackingLookup({
     super.key,

@@ -17327,6 +17327,396 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} already paid'**
   String pmeAlreadyPaid(int count);
+
+  /// No description provided for @ctrPrintLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Print labels'**
+  String get ctrPrintLabels;
+
+  /// No description provided for @ctrPrintLineLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Print labels for this package'**
+  String get ctrPrintLineLabels;
+
+  /// No description provided for @ctrPrintLabelsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Labels for every package on {name}'**
+  String ctrPrintLabelsAll(String name);
+
+  /// No description provided for @ctrPrintLabelsOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Labels for {item} only'**
+  String ctrPrintLabelsOne(String item);
+
+  /// No description provided for @ctrLabelPaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper'**
+  String get ctrLabelPaper;
+
+  /// No description provided for @ctrLabelSheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Letter sheet'**
+  String get ctrLabelSheet;
+
+  /// No description provided for @ctrLabelSheetNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Avery 5524 or any 2 × 3 letter label sheet, six labels a page.'**
+  String get ctrLabelSheetNote;
+
+  /// No description provided for @ctrLabelThermal.
+  ///
+  /// In en, this message translates to:
+  /// **'4 × 6 thermal'**
+  String get ctrLabelThermal;
+
+  /// No description provided for @ctrLabelThermalNote.
+  ///
+  /// In en, this message translates to:
+  /// **'One label per 4 × 6 in. roll label, for Zebra, Rollo and similar printers.'**
+  String get ctrLabelThermalNote;
+
+  /// No description provided for @ctrLabelCopies.
+  ///
+  /// In en, this message translates to:
+  /// **'Labels per package'**
+  String get ctrLabelCopies;
+
+  /// No description provided for @ctrLabelTwo.
+  ///
+  /// In en, this message translates to:
+  /// **'Two'**
+  String get ctrLabelTwo;
+
+  /// No description provided for @ctrLabelTwoNote.
+  ///
+  /// In en, this message translates to:
+  /// **'One for each side, so the package can still be read if one gets torn.'**
+  String get ctrLabelTwoNote;
+
+  /// No description provided for @ctrLabelOne.
+  ///
+  /// In en, this message translates to:
+  /// **'One'**
+  String get ctrLabelOne;
+
+  /// No description provided for @ctrLabelOneNote.
+  ///
+  /// In en, this message translates to:
+  /// **'To replace a single torn or lost label.'**
+  String get ctrLabelOneNote;
+
+  /// No description provided for @ctrLabelPrintButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Open labels to print'**
+  String get ctrLabelPrintButton;
+
+  /// No description provided for @ctrLabelOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening…'**
+  String get ctrLabelOpening;
+
+  /// No description provided for @ctrLabelsCouldNotOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'The labels could not be opened. Try again in a moment.'**
+  String get ctrLabelsCouldNotOpen;
+
+  /// No description provided for @ctrLabelTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Labels open in your browser, ready to print. On barrels, weatherproof labels or clear tape over the label keep the code readable through rain.'**
+  String get ctrLabelTip;
+
+  /// No description provided for @pkgScanAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan package'**
+  String get pkgScanAction;
+
+  /// No description provided for @pkgScanTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find a package'**
+  String get pkgScanTitle;
+
+  /// No description provided for @pkgScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Point at the QR code on the package label'**
+  String get pkgScanHint;
+
+  /// No description provided for @pkgNotAPackageQr.
+  ///
+  /// In en, this message translates to:
+  /// **'That QR code is not a Laawol package label.'**
+  String get pkgNotAPackageQr;
+
+  /// No description provided for @pkgCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The camera is unavailable. Type the code printed on the label, or search by name or phone below.'**
+  String get pkgCameraUnavailable;
+
+  /// No description provided for @pkgTypeCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Type the code'**
+  String get pkgTypeCode;
+
+  /// No description provided for @pkgQueryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'CL-K7M4P2, a name or a phone'**
+  String get pkgQueryHint;
+
+  /// No description provided for @pkgQueryNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Label too damaged to scan? Type the code printed beside the QR, or search by the customer\'s or receiver\'s name or phone.'**
+  String get pkgQueryNote;
+
+  /// No description provided for @pkgClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get pkgClear;
+
+  /// No description provided for @pkgOpenCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {code}'**
+  String pkgOpenCode(String code);
+
+  /// No description provided for @pkgNoMatchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search covers customer and receiver names and phones, and VINs, on all your containers.'**
+  String get pkgNoMatchHint;
+
+  /// No description provided for @pkgTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Package'**
+  String get pkgTitle;
+
+  /// No description provided for @pkgCouldNotLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'This package could not be loaded. Check your connection and try again.'**
+  String get pkgCouldNotLoad;
+
+  /// No description provided for @pkgCouldNotOpenApp.
+  ///
+  /// In en, this message translates to:
+  /// **'That could not be opened on this phone.'**
+  String get pkgCouldNotOpenApp;
+
+  /// No description provided for @pkgNotFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{code} is not on any of your containers'**
+  String pkgNotFoundTitle(String code);
+
+  /// No description provided for @pkgNotFoundHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The code may be mistyped, or the package belongs to another business. Its public tracking page still shows where it is going.'**
+  String get pkgNotFoundHint;
+
+  /// No description provided for @pkgLineGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This package is no longer on any of your containers.'**
+  String get pkgLineGone;
+
+  /// No description provided for @pkgLookUpPublicly.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the public tracking page'**
+  String get pkgLookUpPublicly;
+
+  /// No description provided for @pkgWhatItIs.
+  ///
+  /// In en, this message translates to:
+  /// **'What it is'**
+  String get pkgWhatItIs;
+
+  /// No description provided for @pkgQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Quantity: {count}'**
+  String pkgQuantity(int count);
+
+  /// No description provided for @pkgVin.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN {vin}'**
+  String pkgVin(String vin);
+
+  /// No description provided for @pkgOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get pkgOwner;
+
+  /// No description provided for @pkgNoReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'No receiver recorded.'**
+  String get pkgNoReceiver;
+
+  /// No description provided for @pkgContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Container'**
+  String get pkgContainer;
+
+  /// No description provided for @pkgContainerUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Container not found.'**
+  String get pkgContainerUnknown;
+
+  /// No description provided for @pkgUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp updates'**
+  String get pkgUpdates;
+
+  /// No description provided for @pkgReprintLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Reprint labels'**
+  String get pkgReprintLabels;
+
+  /// No description provided for @pkgOpenContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Open container'**
+  String get pkgOpenContainer;
+
+  /// No description provided for @pkgNoCode.
+  ///
+  /// In en, this message translates to:
+  /// **'No tracking code yet'**
+  String get pkgNoCode;
+
+  /// No description provided for @pkgNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'No name'**
+  String get pkgNoName;
+
+  /// No description provided for @pkgNoPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'No phone'**
+  String get pkgNoPhone;
+
+  /// No description provided for @pkgCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Call'**
+  String get pkgCall;
+
+  /// No description provided for @pkgWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp'**
+  String get pkgWhatsApp;
+
+  /// No description provided for @pkgNoUpdateYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No update has been sent yet. The first goes out when the container sails.'**
+  String get pkgNoUpdateYet;
+
+  /// No description provided for @pkgLastUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Last update: {moment}'**
+  String pkgLastUpdate(String moment);
+
+  /// No description provided for @pkgLastUpdateAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Last update: {moment}, {when}'**
+  String pkgLastUpdateAt(String moment, String when);
+
+  /// No description provided for @pkgUpdateResult.
+  ///
+  /// In en, this message translates to:
+  /// **'{who}: {status}'**
+  String pkgUpdateResult(String who, String status);
+
+  /// No description provided for @pkgMomentShipped.
+  ///
+  /// In en, this message translates to:
+  /// **'left port'**
+  String get pkgMomentShipped;
+
+  /// No description provided for @pkgMomentAtPort.
+  ///
+  /// In en, this message translates to:
+  /// **'at the destination port'**
+  String get pkgMomentAtPort;
+
+  /// No description provided for @pkgMomentArrived.
+  ///
+  /// In en, this message translates to:
+  /// **'arrived'**
+  String get pkgMomentArrived;
+
+  /// No description provided for @pkgResultSent.
+  ///
+  /// In en, this message translates to:
+  /// **'sent'**
+  String get pkgResultSent;
+
+  /// No description provided for @pkgResultFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'failed to send'**
+  String get pkgResultFailed;
+
+  /// No description provided for @pkgResultWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'waiting for WhatsApp to be connected'**
+  String get pkgResultWaiting;
+
+  /// No description provided for @pkgResultNoPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'not sent, no phone'**
+  String get pkgResultNoPhone;
+
+  /// No description provided for @pkgResultSwitchedOff.
+  ///
+  /// In en, this message translates to:
+  /// **'not sent, updates switched off'**
+  String get pkgResultSwitchedOff;
+
+  /// No description provided for @pkgResultNeedsCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'not sent, the phone has no country code'**
+  String get pkgResultNeedsCountryCode;
+
+  /// No description provided for @pkgResultNotSent.
+  ///
+  /// In en, this message translates to:
+  /// **'not sent'**
+  String get pkgResultNotSent;
 }
 
 class _AppLocalizationsDelegate

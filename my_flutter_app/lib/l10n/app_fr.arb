@@ -4422,5 +4422,139 @@
         "type": "int"
       }
     }
-  }
+  },
+  "ctrPrintLabels": "Imprimer les étiquettes",
+  "ctrPrintLineLabels": "Imprimer les étiquettes de ce colis",
+  "ctrPrintLabelsAll": "Étiquettes pour chaque colis de {name}",
+  "@ctrPrintLabelsAll": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrPrintLabelsOne": "Étiquettes pour {item} uniquement",
+  "@ctrPrintLabelsOne": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLabelPaper": "Papier",
+  "ctrLabelSheet": "Feuille Letter",
+  "ctrLabelSheetNote": "Avery 5524 ou toute planche Letter de 2 × 3, six étiquettes par page.",
+  "ctrLabelThermal": "Thermique 4 × 6",
+  "ctrLabelThermalNote": "Une étiquette par étiquette 4 × 6 po en rouleau, pour les imprimantes Zebra, Rollo et similaires.",
+  "ctrLabelCopies": "Étiquettes par colis",
+  "ctrLabelTwo": "Deux",
+  "ctrLabelTwoNote": "Une de chaque côté, pour que le colis reste identifiable si l’une se déchire.",
+  "ctrLabelOne": "Une",
+  "ctrLabelOneNote": "Pour remplacer une seule étiquette déchirée ou perdue.",
+  "ctrLabelPrintButton": "Ouvrir les étiquettes à imprimer",
+  "ctrLabelOpening": "Ouverture…",
+  "ctrLabelsCouldNotOpen": "Les étiquettes n’ont pas pu être ouvertes. Réessayez dans un instant.",
+  "ctrLabelTip": "Les étiquettes s’ouvrent dans votre navigateur, prêtes à imprimer. Sur les fûts, des étiquettes résistantes à l’eau ou du ruban adhésif transparent gardent le code lisible sous la pluie.",
+  "pkgScanAction": "Scanner un colis",
+  "pkgScanTitle": "Trouver un colis",
+  "pkgScanHint": "Visez le code QR de l’étiquette du colis",
+  "pkgNotAPackageQr": "Ce code QR n’est pas une étiquette de colis Laawol.",
+  "pkgCameraUnavailable": "L’appareil photo n’est pas disponible. Saisissez le code imprimé sur l’étiquette, ou cherchez par nom ou téléphone ci-dessous.",
+  "pkgTypeCode": "Saisir le code",
+  "pkgQueryHint": "CL-K7M4P2, un nom ou un téléphone",
+  "pkgQueryNote": "Étiquette trop abîmée pour être scannée ? Saisissez le code imprimé à côté du QR, ou cherchez par le nom ou le téléphone du client ou du destinataire.",
+  "pkgClear": "Effacer",
+  "pkgOpenCode": "Ouvrir {code}",
+  "@pkgOpenCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgNoMatchHint": "La recherche porte sur les noms et téléphones des clients et des destinataires, et sur les VIN, dans tous vos conteneurs.",
+  "pkgTitle": "Colis",
+  "pkgCouldNotLoad": "Ce colis n’a pas pu être chargé. Vérifiez votre connexion et réessayez.",
+  "pkgCouldNotOpenApp": "Impossible d’ouvrir cela sur ce téléphone.",
+  "pkgNotFoundTitle": "{code} ne figure dans aucun de vos conteneurs",
+  "@pkgNotFoundTitle": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgNotFoundHint": "Le code est peut-être mal saisi, ou le colis appartient à une autre entreprise. Sa page de suivi publique indique toujours sa destination.",
+  "pkgLineGone": "Ce colis ne figure plus dans aucun de vos conteneurs.",
+  "pkgLookUpPublicly": "Ouvrir la page de suivi publique",
+  "pkgWhatItIs": "De quoi il s’agit",
+  "pkgQuantity": "Quantité : {count}",
+  "@pkgQuantity": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pkgVin": "VIN {vin}",
+  "@pkgVin": {
+    "placeholders": {
+      "vin": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgOwner": "Propriétaire",
+  "pkgNoReceiver": "Aucun destinataire enregistré.",
+  "pkgContainer": "Conteneur",
+  "pkgContainerUnknown": "Conteneur introuvable.",
+  "pkgUpdates": "Mises à jour WhatsApp",
+  "pkgReprintLabels": "Réimprimer les étiquettes",
+  "pkgOpenContainer": "Ouvrir le conteneur",
+  "pkgNoCode": "Pas encore de code de suivi",
+  "pkgNoName": "Sans nom",
+  "pkgNoPhone": "Pas de téléphone",
+  "pkgCall": "Appeler",
+  "pkgWhatsApp": "WhatsApp",
+  "pkgNoUpdateYet": "Aucune mise à jour envoyée pour l’instant. La première part quand le conteneur prend la mer.",
+  "pkgLastUpdate": "Dernière mise à jour : {moment}",
+  "@pkgLastUpdate": {
+    "placeholders": {
+      "moment": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgLastUpdateAt": "Dernière mise à jour : {moment}, {when}",
+  "@pkgLastUpdateAt": {
+    "placeholders": {
+      "moment": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgUpdateResult": "{who} : {status}",
+  "@pkgUpdateResult": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgMomentShipped": "parti du port",
+  "pkgMomentAtPort": "au port de destination",
+  "pkgMomentArrived": "arrivé",
+  "pkgResultSent": "envoyée",
+  "pkgResultFailed": "échec de l’envoi",
+  "pkgResultWaiting": "en attente de la connexion WhatsApp",
+  "pkgResultNoPhone": "non envoyée, pas de téléphone",
+  "pkgResultSwitchedOff": "non envoyée, mises à jour désactivées",
+  "pkgResultNeedsCountryCode": "non envoyée, le téléphone n’a pas d’indicatif pays",
+  "pkgResultNotSent": "non envoyée"
 }

@@ -9961,4 +9961,232 @@ class AppLocalizationsFr extends AppLocalizations {
   String pmeAlreadyPaid(int count) {
     return '$count déjà payés';
   }
+
+  @override
+  String get ctrPrintLabels => 'Imprimer les étiquettes';
+
+  @override
+  String get ctrPrintLineLabels => 'Imprimer les étiquettes de ce colis';
+
+  @override
+  String ctrPrintLabelsAll(String name) {
+    return 'Étiquettes pour chaque colis de $name';
+  }
+
+  @override
+  String ctrPrintLabelsOne(String item) {
+    return 'Étiquettes pour $item uniquement';
+  }
+
+  @override
+  String get ctrLabelPaper => 'Papier';
+
+  @override
+  String get ctrLabelSheet => 'Feuille Letter';
+
+  @override
+  String get ctrLabelSheetNote =>
+      'Avery 5524 ou toute planche Letter de 2 × 3, six étiquettes par page.';
+
+  @override
+  String get ctrLabelThermal => 'Thermique 4 × 6';
+
+  @override
+  String get ctrLabelThermalNote =>
+      'Une étiquette par étiquette 4 × 6 po en rouleau, pour les imprimantes Zebra, Rollo et similaires.';
+
+  @override
+  String get ctrLabelCopies => 'Étiquettes par colis';
+
+  @override
+  String get ctrLabelTwo => 'Deux';
+
+  @override
+  String get ctrLabelTwoNote =>
+      'Une de chaque côté, pour que le colis reste identifiable si l’une se déchire.';
+
+  @override
+  String get ctrLabelOne => 'Une';
+
+  @override
+  String get ctrLabelOneNote =>
+      'Pour remplacer une seule étiquette déchirée ou perdue.';
+
+  @override
+  String get ctrLabelPrintButton => 'Ouvrir les étiquettes à imprimer';
+
+  @override
+  String get ctrLabelOpening => 'Ouverture…';
+
+  @override
+  String get ctrLabelsCouldNotOpen =>
+      'Les étiquettes n’ont pas pu être ouvertes. Réessayez dans un instant.';
+
+  @override
+  String get ctrLabelTip =>
+      'Les étiquettes s’ouvrent dans votre navigateur, prêtes à imprimer. Sur les fûts, des étiquettes résistantes à l’eau ou du ruban adhésif transparent gardent le code lisible sous la pluie.';
+
+  @override
+  String get pkgScanAction => 'Scanner un colis';
+
+  @override
+  String get pkgScanTitle => 'Trouver un colis';
+
+  @override
+  String get pkgScanHint => 'Visez le code QR de l’étiquette du colis';
+
+  @override
+  String get pkgNotAPackageQr =>
+      'Ce code QR n’est pas une étiquette de colis Laawol.';
+
+  @override
+  String get pkgCameraUnavailable =>
+      'L’appareil photo n’est pas disponible. Saisissez le code imprimé sur l’étiquette, ou cherchez par nom ou téléphone ci-dessous.';
+
+  @override
+  String get pkgTypeCode => 'Saisir le code';
+
+  @override
+  String get pkgQueryHint => 'CL-K7M4P2, un nom ou un téléphone';
+
+  @override
+  String get pkgQueryNote =>
+      'Étiquette trop abîmée pour être scannée ? Saisissez le code imprimé à côté du QR, ou cherchez par le nom ou le téléphone du client ou du destinataire.';
+
+  @override
+  String get pkgClear => 'Effacer';
+
+  @override
+  String pkgOpenCode(String code) {
+    return 'Ouvrir $code';
+  }
+
+  @override
+  String get pkgNoMatchHint =>
+      'La recherche porte sur les noms et téléphones des clients et des destinataires, et sur les VIN, dans tous vos conteneurs.';
+
+  @override
+  String get pkgTitle => 'Colis';
+
+  @override
+  String get pkgCouldNotLoad =>
+      'Ce colis n’a pas pu être chargé. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get pkgCouldNotOpenApp => 'Impossible d’ouvrir cela sur ce téléphone.';
+
+  @override
+  String pkgNotFoundTitle(String code) {
+    return '$code ne figure dans aucun de vos conteneurs';
+  }
+
+  @override
+  String get pkgNotFoundHint =>
+      'Le code est peut-être mal saisi, ou le colis appartient à une autre entreprise. Sa page de suivi publique indique toujours sa destination.';
+
+  @override
+  String get pkgLineGone =>
+      'Ce colis ne figure plus dans aucun de vos conteneurs.';
+
+  @override
+  String get pkgLookUpPublicly => 'Ouvrir la page de suivi publique';
+
+  @override
+  String get pkgWhatItIs => 'De quoi il s’agit';
+
+  @override
+  String pkgQuantity(int count) {
+    return 'Quantité : $count';
+  }
+
+  @override
+  String pkgVin(String vin) {
+    return 'VIN $vin';
+  }
+
+  @override
+  String get pkgOwner => 'Propriétaire';
+
+  @override
+  String get pkgNoReceiver => 'Aucun destinataire enregistré.';
+
+  @override
+  String get pkgContainer => 'Conteneur';
+
+  @override
+  String get pkgContainerUnknown => 'Conteneur introuvable.';
+
+  @override
+  String get pkgUpdates => 'Mises à jour WhatsApp';
+
+  @override
+  String get pkgReprintLabels => 'Réimprimer les étiquettes';
+
+  @override
+  String get pkgOpenContainer => 'Ouvrir le conteneur';
+
+  @override
+  String get pkgNoCode => 'Pas encore de code de suivi';
+
+  @override
+  String get pkgNoName => 'Sans nom';
+
+  @override
+  String get pkgNoPhone => 'Pas de téléphone';
+
+  @override
+  String get pkgCall => 'Appeler';
+
+  @override
+  String get pkgWhatsApp => 'WhatsApp';
+
+  @override
+  String get pkgNoUpdateYet =>
+      'Aucune mise à jour envoyée pour l’instant. La première part quand le conteneur prend la mer.';
+
+  @override
+  String pkgLastUpdate(String moment) {
+    return 'Dernière mise à jour : $moment';
+  }
+
+  @override
+  String pkgLastUpdateAt(String moment, String when) {
+    return 'Dernière mise à jour : $moment, $when';
+  }
+
+  @override
+  String pkgUpdateResult(String who, String status) {
+    return '$who : $status';
+  }
+
+  @override
+  String get pkgMomentShipped => 'parti du port';
+
+  @override
+  String get pkgMomentAtPort => 'au port de destination';
+
+  @override
+  String get pkgMomentArrived => 'arrivé';
+
+  @override
+  String get pkgResultSent => 'envoyée';
+
+  @override
+  String get pkgResultFailed => 'échec de l’envoi';
+
+  @override
+  String get pkgResultWaiting => 'en attente de la connexion WhatsApp';
+
+  @override
+  String get pkgResultNoPhone => 'non envoyée, pas de téléphone';
+
+  @override
+  String get pkgResultSwitchedOff => 'non envoyée, mises à jour désactivées';
+
+  @override
+  String get pkgResultNeedsCountryCode =>
+      'non envoyée, le téléphone n’a pas d’indicatif pays';
+
+  @override
+  String get pkgResultNotSent => 'non envoyée';
 }

@@ -12,6 +12,7 @@ import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/container_lot_cars.dart';
 import '../services/container_manifest.dart';
+import '../services/container_packages.dart';
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/vin_decoder_service.dart';
@@ -23,7 +24,9 @@ import '../utils/vin_utils.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
+import '../widgets/label_print_sheet.dart';
 import '../widgets/lot_sheets.dart';
+import 'package_scan_screen.dart';
 import 'vin_scanner_screen.dart';
 
 /// Containers, yard-side.
@@ -254,6 +257,21 @@ class _ContainersScreenState extends State<ContainersScreen> {
     );
   }
 
+  /// Point the phone at a package label - or type its code, or a name or a
+  /// phone - and see whose it is and which box it is on.
+  void _openScan() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PackageScanScreen(
+          businessId: widget.businessId,
+          businessCountryCode: _businessCountryCode,
+          destinations: _destinations,
+          onOpenContainer: _openDetail,
+        ),
+      ),
+    );
+  }
+
   Future<void> _create() async {
     final created = await showLotSheet<String>(
       context,
@@ -282,6 +300,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
         children: [
           _ContainersHeader(
             businessName: _businessName,
+            onScan: _openScan,
             search: _search,
             onSearch: (v) => setState(() => _search = v),
             filter: _filter,
@@ -341,6 +360,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
 class _ContainersHeader extends StatelessWidget {
   const _ContainersHeader({
     required this.businessName,
+    required this.onScan,
     required this.search,
     required this.onSearch,
     required this.filter,
@@ -350,6 +370,7 @@ class _ContainersHeader extends StatelessWidget {
   });
 
   final String businessName;
+  final VoidCallback onScan;
   final String search;
   final ValueChanged<String> onSearch;
   final String filter;
@@ -403,6 +424,45 @@ class _ContainersHeader extends StatelessWidget {
                             ),
                           ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  // The yard's most frequent question - whose is this? - is
+                  // one tap from the top of the list.
+                  PressableScale(
+                    key: const Key('containers-scan-package'),
+                    scale: 0.96,
+                    onTap: () {
+                      AppHaptics.selection();
+                      onScan();
+                    },
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.mist,
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusSm),
+                        border: Border.all(
+                            color: AppColors.cobalt.withValues(alpha: 0.35)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.qr_code_scanner,
+                              size: 18, color: AppColors.cobaltDeep),
+                          const SizedBox(width: 6),
+                          Text(
+                            l10n.pkgScanAction,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.cobaltDeep,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -668,7 +728,7 @@ class _ContainerCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                _StatusPill(status: c.status),
+                ContainerStatusPill(status: c.status),
               ],
             ),
             if (second.isNotEmpty) ...[
@@ -776,7 +836,7 @@ class _SearchResults extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 3),
-                        _StatusPill(status: hit.container!.status),
+                        ContainerStatusPill(status: hit.container!.status),
                         if (hit.container!.sailedAt != null) ...[
                           const SizedBox(height: 3),
                           Text(
@@ -858,26 +918,15 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
   Map<String, ShippingContainer> get _byId =>
       {for (final c in _containers) c.id: c};
 
-  /// Where a customer's phone picker starts: the business's own country,
-  /// else the United States.
-  String get _customerCountryCode => widget.businessCountryCode.isNotEmpty
-      ? widget.businessCountryCode
-      : 'US';
+  String get _customerCountryCode =>
+      containerCustomerCountryCode(widget.businessCountryCode);
 
-  /// Where a receiver's phone picker starts: the country the box is going
-  /// to. The destination is stored as a catalogue or business destination
-  /// id, so it is resolved through the calling-code catalogue; the name is
-  /// the fallback for older boxes.
   String _receiverCountryCode(ShippingContainer container) =>
-      CallingCodeCatalog.countryCodeForReference(
-        container.destinationCountryId,
-        extra: widget.destinations,
-      ) ??
-      CallingCodeCatalog.countryCodeForReference(
-        container.destinationCountryName,
-        extra: widget.destinations,
-      ) ??
-      _customerCountryCode;
+      containerReceiverCountryCode(
+        container,
+        destinations: widget.destinations,
+        businessCountryCode: widget.businessCountryCode,
+      );
 
   @override
   void initState() {
@@ -1081,6 +1130,20 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     }, failure: l10n.lotDocumentCouldNotBeOpened);
   }
 
+  /// Labels for every package on the box, or one line's when [line] is
+  /// given - in every state: a label torn at the port needs reprinting
+  /// long after the box has sailed.
+  Future<void> _printLabels({ContainerLine? line}) async {
+    final container = _container;
+    if (container == null) return;
+    await showContainerLabelSheet(
+      context,
+      businessId: widget.businessId,
+      container: container,
+      line: line,
+    );
+  }
+
   void _history() {
     showLotSheet(
       context,
@@ -1112,19 +1175,19 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     if (action == 'contacts') {
       // Open in every state: a wrong number matters most once the box has
       // sailed, which is when the updates start going out.
-      final saved = await showLotSheet<bool>(
+      final saved = await editContainerLineContacts(
         context,
-        _LineContactsSheet(
-          businessId: widget.businessId,
-          line: line,
-          customerCountryCode: _customerCountryCode,
-          receiverCountryCode: _receiverCountryCode(container),
-        ),
+        businessId: widget.businessId,
+        line: line,
+        container: container,
+        businessCountryCode: widget.businessCountryCode,
+        destinations: widget.destinations,
       );
-      if (saved != true || !mounted) return;
-      AppHaptics.commit();
-      showSuccessSnackBar(context, l10n.ctrContactsSaved);
-      widget.onCustomerRecorded();
+      if (saved) widget.onCustomerRecorded();
+      return;
+    }
+    if (action == 'labels') {
+      await _printLabels(line: line);
       return;
     }
     if (action == 'move') {
@@ -1306,37 +1369,46 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: _ActionButton(
+                          child: ContainerActionButton(
                             key: const Key('container-document'),
-                            icon: Icons.print_outlined,
+                            icon: Icons.description_outlined,
                             label: l10n.ctrOpenDocument,
                             busy: _busy == 'document',
                             enabled: !busy,
                             onTap: _openDocument,
                           ),
                         ),
-                        if (!container.isArrived) ...[
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: _ActionButton(
-                              key: Key(container.isLoading
-                                  ? 'container-ship'
-                                  : 'container-arrive'),
-                              icon: container.isLoading
-                                  ? Icons.directions_boat_outlined
-                                  : Icons.flag_outlined,
-                              label: container.isLoading
-                                  ? l10n.ctrShip
-                                  : l10n.ctrArrive,
-                              busy: _busy == 'ship' || _busy == 'arrive',
-                              enabled: !busy,
-                              primary: true,
-                              onTap: container.isLoading ? _ship : _arrive,
-                            ),
+                        const SizedBox(width: AppSpacing.sm),
+                        // Every state: labels get reprinted at the port too.
+                        Expanded(
+                          child: ContainerActionButton(
+                            key: const Key('container-print-labels'),
+                            icon: Icons.qr_code_2,
+                            label: l10n.ctrPrintLabels,
+                            enabled: !busy && lines.isNotEmpty,
+                            onTap: _printLabels,
                           ),
-                        ],
+                        ),
                       ],
                     ),
+                    if (!container.isArrived) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      ContainerActionButton(
+                        key: Key(container.isLoading
+                            ? 'container-ship'
+                            : 'container-arrive'),
+                        icon: container.isLoading
+                            ? Icons.directions_boat_outlined
+                            : Icons.flag_outlined,
+                        label: container.isLoading
+                            ? l10n.ctrShip
+                            : l10n.ctrArrive,
+                        busy: _busy == 'ship' || _busy == 'arrive',
+                        enabled: !busy,
+                        primary: true,
+                        onTap: container.isLoading ? _ship : _arrive,
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.lg),
                     Padding(
                       padding: const EdgeInsets.only(left: 2, bottom: AppSpacing.sm),
@@ -1367,6 +1439,16 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                             line: lines[i],
                             staff: widget.staff,
                             onTap: busy ? null : () => _lineActions(lines[i]),
+                            trailing: IconButton(
+                              key: ValueKey('line-print-labels:${lines[i].id}'),
+                              onPressed: busy
+                                  ? null
+                                  : () => _printLabels(line: lines[i]),
+                              icon: const Icon(Icons.qr_code_2, size: 20),
+                              color: AppColors.cobaltDeep,
+                              tooltip: l10n.ctrPrintLineLabels,
+                              visualDensity: VisualDensity.compact,
+                            ),
                           ),
                         ),
                   ],
@@ -1425,7 +1507,7 @@ class _DetailFacts extends StatelessWidget {
         children: [
           Row(
             children: [
-              _StatusPill(status: c.status),
+              ContainerStatusPill(status: c.status),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
@@ -1532,8 +1614,10 @@ class _FactRow extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
+/// A full-width action on a container or package: quiet by default, solid
+/// when [primary], with its own spinner while [busy].
+class ContainerActionButton extends StatelessWidget {
+  const ContainerActionButton({
     super.key,
     required this.icon,
     required this.label,
@@ -1682,7 +1766,7 @@ class _LineCard extends StatelessWidget {
                 color: AppColors.mist,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
               ),
-              child: Icon(_kindIcon(line.kind), size: 18, color: AppColors.cobaltDeep),
+              child: Icon(containerKindIcon(line.kind), size: 18, color: AppColors.cobaltDeep),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -1690,7 +1774,7 @@ class _LineCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _lineTitle(l10n, line),
+                    containerLineTitle(l10n, line),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -1835,7 +1919,7 @@ class _LineActionsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return LotSheetShell(
-      title: _lineTitle(l10n, line),
+      title: containerLineTitle(l10n, line),
       subtitle: open ? null : l10n.ctrLockedNote,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1849,6 +1933,12 @@ class _LineActionsSheet extends StatelessWidget {
             icon: Icons.contact_phone_outlined,
             label: l10n.ctrEditContacts,
             onTap: () => Navigator.of(context).pop('contacts'),
+          ),
+          _SheetAction(
+            key: const Key('line-print-labels'),
+            icon: Icons.qr_code_2,
+            label: l10n.ctrPrintLineLabels,
+            onTap: () => Navigator.of(context).pop('labels'),
           ),
           if (open) ...[
             _SheetAction(
@@ -3205,7 +3295,7 @@ class _LineContactsSheetState extends State<_LineContactsSheet> {
 
     return LotSheetShell(
       title: l10n.ctrEditContacts,
-      subtitle: _lineTitle(l10n, widget.line),
+      subtitle: containerLineTitle(l10n, widget.line),
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -3606,7 +3696,7 @@ class _KindChips extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      _kindIcon(kind),
+                      containerKindIcon(kind),
                       size: 16,
                       color: kind == selected
                           ? AppColors.cobaltDeep
@@ -3615,7 +3705,7 @@ class _KindChips extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        _kindLabel(l10n, kind),
+                        containerKindLabel(l10n, kind),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -3683,8 +3773,10 @@ class _RefusalNote extends StatelessWidget {
 // Shared bits: the state pill, kinds, counts, and the refusal vocabulary.
 // ---------------------------------------------------------------------------
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
+/// A container's state as a small coloured pill: loading, shipped, arrived.
+/// Shared with the package view so a state reads the same everywhere.
+class ContainerStatusPill extends StatelessWidget {
+  const ContainerStatusPill({super.key, required this.status});
 
   final String status;
 
@@ -3722,19 +3814,22 @@ String _statusLabel(AppLocalizations l10n, String status) => switch (status) {
       _ => l10n.ctrStatusLoading,
     };
 
-IconData _kindIcon(String kind) => switch (kind) {
+/// The icon for a line's kind: car, barrels, or anything else.
+IconData containerKindIcon(String kind) => switch (kind) {
       containerLineKindCar => Icons.directions_car_outlined,
       containerLineKindBarrels => Icons.oil_barrel_outlined,
       _ => Icons.category_outlined,
     };
 
-String _kindLabel(AppLocalizations l10n, String kind) => switch (kind) {
+/// A line's kind in words: car, barrels, other.
+String containerKindLabel(AppLocalizations l10n, String kind) => switch (kind) {
       containerLineKindCar => l10n.ctrKindCar,
       containerLineKindBarrels => l10n.ctrKindBarrels,
       _ => l10n.ctrKindOther,
     };
 
-String _lineTitle(AppLocalizations l10n, ContainerLine line) {
+/// What a line is, in one phrase: "2019 Toyota Camry", "3 barrels".
+String containerLineTitle(AppLocalizations l10n, ContainerLine line) {
   if (line.isCar) return line.vehicleLabel;
   if (line.isBarrels) return l10n.ctrBarrelsQty(line.quantity);
   return line.quantity > 1
@@ -3801,6 +3896,94 @@ String _refusalText(
   return refusal.codes
       .map((c) => _containerErrorText(l10n, c, conflictName: conflict))
       .join(' ');
+}
+
+// ---------------------------------------------------------------------------
+// Shared with the package view: where phone pickers start, correcting a
+// line's contacts, and printing labels. One implementation, opened from the
+// container detail and from a scanned package alike.
+// ---------------------------------------------------------------------------
+
+/// Where a customer's phone picker starts: the business's own country,
+/// else the United States.
+String containerCustomerCountryCode(String businessCountryCode) =>
+    businessCountryCode.isNotEmpty ? businessCountryCode : 'US';
+
+/// Where a receiver's phone picker starts: the country the box is going
+/// to. The destination is stored as a catalogue or business destination
+/// id, so it is resolved through the calling-code catalogue; the name is
+/// the fallback for older boxes.
+String containerReceiverCountryCode(
+  ShippingContainer? container, {
+  List<DestinationCountry> destinations = const [],
+  String businessCountryCode = '',
+}) =>
+    (container == null
+        ? null
+        : CallingCodeCatalog.countryCodeForReference(
+              container.destinationCountryId,
+              extra: destinations,
+            ) ??
+            CallingCodeCatalog.countryCodeForReference(
+              container.destinationCountryName,
+              extra: destinations,
+            )) ??
+    containerCustomerCountryCode(businessCountryCode);
+
+/// Opens the contacts sheet for [line]; on a save, confirms it and returns
+/// true. Correctable in every container state.
+Future<bool> editContainerLineContacts(
+  BuildContext context, {
+  required String businessId,
+  required ContainerLine line,
+  ShippingContainer? container,
+  String businessCountryCode = '',
+  List<DestinationCountry> destinations = const [],
+}) async {
+  final l10n = AppLocalizations.of(context)!;
+  final saved = await showLotSheet<bool>(
+    context,
+    _LineContactsSheet(
+      businessId: businessId,
+      line: line,
+      customerCountryCode: containerCustomerCountryCode(businessCountryCode),
+      receiverCountryCode: containerReceiverCountryCode(
+        container,
+        destinations: destinations,
+        businessCountryCode: businessCountryCode,
+      ),
+    ),
+  );
+  if (saved != true || !context.mounted) return false;
+  AppHaptics.commit();
+  showSuccessSnackBar(context, l10n.ctrContactsSaved);
+  return true;
+}
+
+/// The print-labels sheet for every package on [container], or for [line]
+/// alone. [opener] fetches the page and opens it (a fake in tests).
+Future<void> showContainerLabelSheet(
+  BuildContext context, {
+  required String businessId,
+  required ShippingContainer container,
+  ContainerLine? line,
+  ContainerLabelOpener opener = openContainerLabels,
+}) {
+  final l10n = AppLocalizations.of(context)!;
+  return showLotSheet<bool>(
+    context,
+    LabelPrintSheet(
+      subtitle: line == null
+          ? l10n.ctrPrintLabelsAll(container.displayName)
+          : l10n.ctrPrintLabelsOne(containerLineTitle(l10n, line)),
+      onPrint: (choice) => opener(
+        businessId: businessId,
+        containerId: container.id,
+        choice: choice,
+        lineId: line?.id ?? '',
+      ),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------

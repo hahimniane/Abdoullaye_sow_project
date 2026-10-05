@@ -9813,4 +9813,230 @@ class AppLocalizationsEn extends AppLocalizations {
   String pmeAlreadyPaid(int count) {
     return '$count already paid';
   }
+
+  @override
+  String get ctrPrintLabels => 'Print labels';
+
+  @override
+  String get ctrPrintLineLabels => 'Print labels for this package';
+
+  @override
+  String ctrPrintLabelsAll(String name) {
+    return 'Labels for every package on $name';
+  }
+
+  @override
+  String ctrPrintLabelsOne(String item) {
+    return 'Labels for $item only';
+  }
+
+  @override
+  String get ctrLabelPaper => 'Paper';
+
+  @override
+  String get ctrLabelSheet => 'Letter sheet';
+
+  @override
+  String get ctrLabelSheetNote =>
+      'Avery 5524 or any 2 × 3 letter label sheet, six labels a page.';
+
+  @override
+  String get ctrLabelThermal => '4 × 6 thermal';
+
+  @override
+  String get ctrLabelThermalNote =>
+      'One label per 4 × 6 in. roll label, for Zebra, Rollo and similar printers.';
+
+  @override
+  String get ctrLabelCopies => 'Labels per package';
+
+  @override
+  String get ctrLabelTwo => 'Two';
+
+  @override
+  String get ctrLabelTwoNote =>
+      'One for each side, so the package can still be read if one gets torn.';
+
+  @override
+  String get ctrLabelOne => 'One';
+
+  @override
+  String get ctrLabelOneNote => 'To replace a single torn or lost label.';
+
+  @override
+  String get ctrLabelPrintButton => 'Open labels to print';
+
+  @override
+  String get ctrLabelOpening => 'Opening…';
+
+  @override
+  String get ctrLabelsCouldNotOpen =>
+      'The labels could not be opened. Try again in a moment.';
+
+  @override
+  String get ctrLabelTip =>
+      'Labels open in your browser, ready to print. On barrels, weatherproof labels or clear tape over the label keep the code readable through rain.';
+
+  @override
+  String get pkgScanAction => 'Scan package';
+
+  @override
+  String get pkgScanTitle => 'Find a package';
+
+  @override
+  String get pkgScanHint => 'Point at the QR code on the package label';
+
+  @override
+  String get pkgNotAPackageQr => 'That QR code is not a Laawol package label.';
+
+  @override
+  String get pkgCameraUnavailable =>
+      'The camera is unavailable. Type the code printed on the label, or search by name or phone below.';
+
+  @override
+  String get pkgTypeCode => 'Type the code';
+
+  @override
+  String get pkgQueryHint => 'CL-K7M4P2, a name or a phone';
+
+  @override
+  String get pkgQueryNote =>
+      'Label too damaged to scan? Type the code printed beside the QR, or search by the customer\'s or receiver\'s name or phone.';
+
+  @override
+  String get pkgClear => 'Clear';
+
+  @override
+  String pkgOpenCode(String code) {
+    return 'Open $code';
+  }
+
+  @override
+  String get pkgNoMatchHint =>
+      'Search covers customer and receiver names and phones, and VINs, on all your containers.';
+
+  @override
+  String get pkgTitle => 'Package';
+
+  @override
+  String get pkgCouldNotLoad =>
+      'This package could not be loaded. Check your connection and try again.';
+
+  @override
+  String get pkgCouldNotOpenApp => 'That could not be opened on this phone.';
+
+  @override
+  String pkgNotFoundTitle(String code) {
+    return '$code is not on any of your containers';
+  }
+
+  @override
+  String get pkgNotFoundHint =>
+      'The code may be mistyped, or the package belongs to another business. Its public tracking page still shows where it is going.';
+
+  @override
+  String get pkgLineGone =>
+      'This package is no longer on any of your containers.';
+
+  @override
+  String get pkgLookUpPublicly => 'Open the public tracking page';
+
+  @override
+  String get pkgWhatItIs => 'What it is';
+
+  @override
+  String pkgQuantity(int count) {
+    return 'Quantity: $count';
+  }
+
+  @override
+  String pkgVin(String vin) {
+    return 'VIN $vin';
+  }
+
+  @override
+  String get pkgOwner => 'Owner';
+
+  @override
+  String get pkgNoReceiver => 'No receiver recorded.';
+
+  @override
+  String get pkgContainer => 'Container';
+
+  @override
+  String get pkgContainerUnknown => 'Container not found.';
+
+  @override
+  String get pkgUpdates => 'WhatsApp updates';
+
+  @override
+  String get pkgReprintLabels => 'Reprint labels';
+
+  @override
+  String get pkgOpenContainer => 'Open container';
+
+  @override
+  String get pkgNoCode => 'No tracking code yet';
+
+  @override
+  String get pkgNoName => 'No name';
+
+  @override
+  String get pkgNoPhone => 'No phone';
+
+  @override
+  String get pkgCall => 'Call';
+
+  @override
+  String get pkgWhatsApp => 'WhatsApp';
+
+  @override
+  String get pkgNoUpdateYet =>
+      'No update has been sent yet. The first goes out when the container sails.';
+
+  @override
+  String pkgLastUpdate(String moment) {
+    return 'Last update: $moment';
+  }
+
+  @override
+  String pkgLastUpdateAt(String moment, String when) {
+    return 'Last update: $moment, $when';
+  }
+
+  @override
+  String pkgUpdateResult(String who, String status) {
+    return '$who: $status';
+  }
+
+  @override
+  String get pkgMomentShipped => 'left port';
+
+  @override
+  String get pkgMomentAtPort => 'at the destination port';
+
+  @override
+  String get pkgMomentArrived => 'arrived';
+
+  @override
+  String get pkgResultSent => 'sent';
+
+  @override
+  String get pkgResultFailed => 'failed to send';
+
+  @override
+  String get pkgResultWaiting => 'waiting for WhatsApp to be connected';
+
+  @override
+  String get pkgResultNoPhone => 'not sent, no phone';
+
+  @override
+  String get pkgResultSwitchedOff => 'not sent, updates switched off';
+
+  @override
+  String get pkgResultNeedsCountryCode =>
+      'not sent, the phone has no country code';
+
+  @override
+  String get pkgResultNotSent => 'not sent';
 }

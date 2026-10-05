@@ -29,6 +29,24 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Package tracking links open the app when it is installed.
+                 Verified against admin_web/public/.well-known/assetlinks.json;
+                 only /t/ is claimed, so payment and sign-in pages on the
+                 same host stay in the browser. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="customer.laawoldigital.com"
+                    android:pathPrefix="/t/"/>
+            </intent-filter>
+            <!-- The app_links plugin handles those links; Flutter's own deep
+                 linking would push the path as a named route. -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false"/>
         </activity>
         <!-- Matches the channel id created in
              push_notification_service.dart, so notifications land in a
@@ -52,6 +70,16 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- url_launcher: Call and WhatsApp on a scanned package, and the
+             printable label page in the browser. -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

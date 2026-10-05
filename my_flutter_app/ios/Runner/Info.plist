@@ -38,7 +38,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>We use the camera to scan VIN numbers and capture car photos.</string>
+	<string>Laawol uses the camera to scan VIN numbers and package labels and capture photos for listings and service requests.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock your saved Laawol session.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -49,6 +49,11 @@
 	<string>We add selected car images to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photo library to choose car images.</string>
+	<!-- Tracking links (customer.laawoldigital.com/t/...) are handled by the
+	     app_links plugin; Flutter's own deep linking would push the path as a
+	     named route that does not exist. -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIApplicationSceneManifest</key>

@@ -308,15 +308,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
   void _openCodeLookup() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: AppColors.lightBg,
-          body: SafeArea(
-            child: GuestTrackingLookup(
-              service: widget.guestTrackingService,
-              showBackButton: true,
-              onSignIn: null,
-            ),
-          ),
+        builder: (_) => GuestTrackingLookupPage(
+          service: widget.guestTrackingService,
         ),
       ),
     );

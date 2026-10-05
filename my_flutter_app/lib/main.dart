@@ -13,6 +13,7 @@ import 'navigation/app_navigator.dart';
 import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/app_gate_provider.dart';
+import 'services/package_link_service.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 import 'l10n/app_localizations.dart';
@@ -93,6 +94,10 @@ void main() async {
     _startupStep('push notifications',
         PushNotificationService.instance.initialize),
   );
+
+  // Before runApp, so the tracking link that launched the app is caught;
+  // it waits for the splash screen to settle auth before it opens.
+  PackageLinkService.instance.start();
 
   runApp(const MyApp());
 }

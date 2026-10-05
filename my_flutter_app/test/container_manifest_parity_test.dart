@@ -275,6 +275,132 @@ void main() {
     expect(screen, isNot(contains("collection('lotLedgerAudit')")));
   });
 
+  test('labels print from the container, from each line and from a scan',
+      () {
+    final packages = read('lib/services/container_packages.dart');
+    final codes = read('lib/services/package_codes.dart');
+    final result = read('lib/screens/package_result_screen.dart');
+    final sheet = read('lib/widgets/label_print_sheet.dart');
+    // The label page is the same callable with view: 'labels', a format,
+    // copies, and a line id for one package's reprint.
+    expect(packages, contains("httpsCallable('getContainerDocumentUrl')"));
+    expect(packages, contains('containerLabelsRequest('));
+    expect(codes, contains("'view': 'labels'"));
+    expect(codes, contains("'lineId': lineId.trim()"));
+    expect(codes, contains("'copies': choice.copies == 1 ? 1 : 2"));
+    // Whole container on the detail, one line on each tile and in its
+    // actions sheet - none of them gated on the container's state.
+    expect(screen, contains("Key('container-print-labels')"));
+    expect(screen, contains("ValueKey('line-print-labels:"));
+    expect(screen, contains("Key('line-print-labels')"));
+    expect(screen, contains('showContainerLabelSheet('));
+    expect(result, contains('showContainerLabelSheet('));
+    // Sheet vs 4x6 thermal, one or two per package, matching the server's
+    // labelFormat / labelCopies vocabulary.
+    final labels = read('functions/container_labels.js');
+    expect(labels, contains('=== "thermal" ? "thermal" : "sheet"'));
+    expect(codes, contains("const labelFormatThermal = 'thermal';"));
+    expect(codes, contains("const labelFormatSheet = 'sheet';"));
+    expect(sheet, contains("Key('labels-format-thermal')"));
+    expect(sheet, contains("Key('labels-copies-1')"));
+  });
+
+  test('a package is found by scan, typed code, name or phone', () {
+    final scan = read('lib/screens/package_scan_screen.dart');
+    final codes = read('lib/services/package_codes.dart');
+    final packages = read('lib/services/container_packages.dart');
+    final result = read('lib/screens/package_result_screen.dart');
+    // Reachable from the containers list for anyone who can open it.
+    expect(screen, contains("Key('containers-scan-package')"));
+    expect(screen, contains('PackageScanScreen('));
+    // The camera is mobile_scanner through the widget the VIN scanner uses.
+    expect(scan, contains('ScannerCameraView('));
+    expect(read('lib/screens/vin_scanner_screen.dart'),
+        contains('ScannerCameraView('));
+    expect(scan, contains('BarcodeFormat.qrCode'));
+    expect(scan, contains('packageCodeFromScan('));
+    expect(scan, contains('searchContainerLines('));
+    // The code alphabet is the server's.
+    final server = read('functions/tracking_code.js');
+    expect(server, contains('const TRACKING_ALPHABET = "23456789BCDFGHJKMNPQRSTVWXYZ";'));
+    expect(codes, contains("const packageTrackingAlphabet = '23456789BCDFGHJKMNPQRSTVWXYZ';"));
+    // Business-scoped equality queries only: no orderBy, no composite index.
+    expect(packages, contains(".where('businessId', isEqualTo: businessId)\n      .where('trackingCode', isEqualTo: code)"));
+    expect(packages, isNot(contains('.orderBy(')));
+    // The contacts sheet is the container screen's own, not a copy.
+    expect(result, contains('editContainerLineContacts('));
+    expect(result, isNot(contains("httpsCallable('updateContainerLineContacts')")));
+    expect(codes, contains("'https://wa.me/"));
+    expect(codes, contains("scheme: 'tel'"));
+  });
+
+  test('tracking links open the app, on both platforms', () {
+    final pubspec = read('pubspec.yaml');
+    final main = read('lib/main.dart');
+    final splash = read('lib/screens/splash_screen.dart');
+    final links = read('lib/services/package_link_service.dart');
+    expect(pubspec, contains('app_links:'));
+    expect(links, contains('AppLinks().uriLinkStream'));
+    expect(main, contains('PackageLinkService.instance.start()'));
+    // Parked until the splash has settled auth and navigated.
+    expect(splash, contains('PackageLinkService.instance.markAppReady()'));
+    expect(links, contains('packageLinkDestination('));
+    expect(links, contains('packageLinkStaffEligible('));
+    expect(links, contains('GuestTrackingLookupPage('));
+    expect(links, contains('PackageResultScreen('));
+    // iOS: the associated domain in both entitlements, Flutter's own deep
+    // linking off so the path is not pushed as a route.
+    for (final path in [
+      'ios/Runner/Runner.entitlements',
+      'ios/Runner/RunnerRelease.entitlements',
+    ]) {
+      final entitlements = read(path);
+      expect(entitlements, contains('com.apple.developer.associated-domains'),
+          reason: path);
+      expect(entitlements,
+          contains('<string>applinks:customer.laawoldigital.com</string>'),
+          reason: path);
+    }
+    final plist = read('ios/Runner/Info.plist');
+    expect(plist, contains('<key>FlutterDeepLinkingEnabled</key>\n\t<false/>'));
+    // Android: a verified https filter on /t/ only, on the main activity.
+    final manifest = read('android/app/src/main/AndroidManifest.xml');
+    final activity = manifest.substring(
+        manifest.indexOf('android:name=".MainActivity"'),
+        manifest.indexOf('</activity>'));
+    expect(activity, contains('android:autoVerify="true"'));
+    expect(activity, contains('android:scheme="https"'));
+    expect(activity, contains('android:host="customer.laawoldigital.com"'));
+    expect(activity, contains('android:pathPrefix="/t/"'));
+    expect(activity, contains('android.intent.category.BROWSABLE'));
+    expect(activity, contains('android:name="flutter_deeplinking_enabled"'));
+    // The hosted verification files name this app.
+    final aasa = read('../admin_web/public/.well-known/apple-app-site-association');
+    expect(aasa, contains('GRKB7BXVZK.com.laawoldigital.app'));
+    expect(aasa, contains('/t/*'));
+    expect(read('../admin_web/public/.well-known/assetlinks.json'),
+        contains('com.laawoldigital.app'));
+  });
+
+  test('every string on the package screens is in both catalogs', () {
+    final en = jsonDecode(read('lib/l10n/app_en.arb')) as Map<String, dynamic>;
+    final fr = jsonDecode(read('lib/l10n/app_fr.arb')) as Map<String, dynamic>;
+    final sources = [
+      read('lib/screens/package_scan_screen.dart'),
+      read('lib/screens/package_result_screen.dart'),
+      read('lib/widgets/label_print_sheet.dart'),
+    ].join('\n');
+    final used = RegExp(r'l10n\.([a-z][A-Za-z0-9]*)')
+        .allMatches(sources)
+        .map((m) => m.group(1)!)
+        .toSet();
+    expect(used.where((k) => k.startsWith('pkg')).length, greaterThan(30));
+    for (final key in used) {
+      expect(en.containsKey(key), isTrue, reason: '$key missing from English');
+      expect(fr.containsKey(key), isTrue, reason: '$key missing from French');
+    }
+  });
+
   test('every string on the screen is in both catalogs', () {
     final en = jsonDecode(read('lib/l10n/app_en.arb')) as Map<String, dynamic>;
     final fr = jsonDecode(read('lib/l10n/app_fr.arb')) as Map<String, dynamic>;

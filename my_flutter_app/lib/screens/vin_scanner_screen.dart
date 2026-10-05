@@ -4,8 +4,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/vin_text_recognition_service.dart';
-import '../theme/app_colors.dart';
 import '../utils/vin_utils.dart';
+import '../widgets/scanner_camera_view.dart';
 
 class VinScannerScreen extends StatefulWidget {
   const VinScannerScreen({super.key});
@@ -185,34 +185,11 @@ class _VinScannerScreenState extends State<VinScannerScreen> {
       ),
       body: Stack(
         children: [
-          MobileScanner(
-            controller: _scannerController,
-            onDetect: _handleBarcode,
-            errorBuilder: (context, error) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    l10n.vinCameraUnavailable,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-              );
-            },
-          ),
           Positioned.fill(
-            child: IgnorePointer(
-              child: Container(
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 160,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.brandRed, width: 3),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+            child: ScannerCameraView(
+              controller: _scannerController,
+              onDetect: _handleBarcode,
+              unavailableText: l10n.vinCameraUnavailable,
             ),
           ),
           Positioned(

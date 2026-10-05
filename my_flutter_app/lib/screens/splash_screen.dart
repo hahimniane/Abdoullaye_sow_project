@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../services/package_link_service.dart';
 import '../services/push_notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -61,6 +62,9 @@ class _SplashScreenState extends State<SplashScreen> {
       if (pending != null) {
         navigator.pushNamed(pending.name, arguments: pending.arguments);
       }
+      // Same for a tracking link that opened the app: auth has settled, so
+      // it can tell staff from customers now.
+      PackageLinkService.instance.markAppReady();
     });
   }
 

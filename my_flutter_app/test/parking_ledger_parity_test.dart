@@ -190,7 +190,11 @@ void main() {
     final panel =
         read('../admin_web/src/components/business/operations-panels.tsx');
     expect(panel, isNot(contains(r'`${key.slice(0, 6)}\u2026`')));
-    expect(panel, contains('if (!row) return "";'));
+    // The panel names people through the shared lookup, which answers ""
+    // for anyone it cannot name - never the raw key.
+    expect(panel, contains('staffNameFrom('));
+    final names = read('../admin_web/src/lib/staff-names.ts');
+    expect(names, contains('return key ? index.get(key) ?? "" : "";'));
     final car = read('lib/screens/parked_car_details_screen.dart');
     expect(car, contains("return _staffNames[key] ?? '';"));
   });

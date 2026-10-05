@@ -4422,5 +4422,139 @@
         "type": "int"
       }
     }
-  }
+  },
+  "ctrPrintLabels": "Print labels",
+  "ctrPrintLineLabels": "Print labels for this package",
+  "ctrPrintLabelsAll": "Labels for every package on {name}",
+  "@ctrPrintLabelsAll": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrPrintLabelsOne": "Labels for {item} only",
+  "@ctrPrintLabelsOne": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrLabelPaper": "Paper",
+  "ctrLabelSheet": "Letter sheet",
+  "ctrLabelSheetNote": "Avery 5524 or any 2 × 3 letter label sheet, six labels a page.",
+  "ctrLabelThermal": "4 × 6 thermal",
+  "ctrLabelThermalNote": "One label per 4 × 6 in. roll label, for Zebra, Rollo and similar printers.",
+  "ctrLabelCopies": "Labels per package",
+  "ctrLabelTwo": "Two",
+  "ctrLabelTwoNote": "One for each side, so the package can still be read if one gets torn.",
+  "ctrLabelOne": "One",
+  "ctrLabelOneNote": "To replace a single torn or lost label.",
+  "ctrLabelPrintButton": "Open labels to print",
+  "ctrLabelOpening": "Opening…",
+  "ctrLabelsCouldNotOpen": "The labels could not be opened. Try again in a moment.",
+  "ctrLabelTip": "Labels open in your browser, ready to print. On barrels, weatherproof labels or clear tape over the label keep the code readable through rain.",
+  "pkgScanAction": "Scan package",
+  "pkgScanTitle": "Find a package",
+  "pkgScanHint": "Point at the QR code on the package label",
+  "pkgNotAPackageQr": "That QR code is not a Laawol package label.",
+  "pkgCameraUnavailable": "The camera is unavailable. Type the code printed on the label, or search by name or phone below.",
+  "pkgTypeCode": "Type the code",
+  "pkgQueryHint": "CL-K7M4P2, a name or a phone",
+  "pkgQueryNote": "Label too damaged to scan? Type the code printed beside the QR, or search by the customer's or receiver's name or phone.",
+  "pkgClear": "Clear",
+  "pkgOpenCode": "Open {code}",
+  "@pkgOpenCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgNoMatchHint": "Search covers customer and receiver names and phones, and VINs, on all your containers.",
+  "pkgTitle": "Package",
+  "pkgCouldNotLoad": "This package could not be loaded. Check your connection and try again.",
+  "pkgCouldNotOpenApp": "That could not be opened on this phone.",
+  "pkgNotFoundTitle": "{code} is not on any of your containers",
+  "@pkgNotFoundTitle": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgNotFoundHint": "The code may be mistyped, or the package belongs to another business. Its public tracking page still shows where it is going.",
+  "pkgLineGone": "This package is no longer on any of your containers.",
+  "pkgLookUpPublicly": "Open the public tracking page",
+  "pkgWhatItIs": "What it is",
+  "pkgQuantity": "Quantity: {count}",
+  "@pkgQuantity": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pkgVin": "VIN {vin}",
+  "@pkgVin": {
+    "placeholders": {
+      "vin": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgOwner": "Owner",
+  "pkgNoReceiver": "No receiver recorded.",
+  "pkgContainer": "Container",
+  "pkgContainerUnknown": "Container not found.",
+  "pkgUpdates": "WhatsApp updates",
+  "pkgReprintLabels": "Reprint labels",
+  "pkgOpenContainer": "Open container",
+  "pkgNoCode": "No tracking code yet",
+  "pkgNoName": "No name",
+  "pkgNoPhone": "No phone",
+  "pkgCall": "Call",
+  "pkgWhatsApp": "WhatsApp",
+  "pkgNoUpdateYet": "No update has been sent yet. The first goes out when the container sails.",
+  "pkgLastUpdate": "Last update: {moment}",
+  "@pkgLastUpdate": {
+    "placeholders": {
+      "moment": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgLastUpdateAt": "Last update: {moment}, {when}",
+  "@pkgLastUpdateAt": {
+    "placeholders": {
+      "moment": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgUpdateResult": "{who}: {status}",
+  "@pkgUpdateResult": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgMomentShipped": "left port",
+  "pkgMomentAtPort": "at the destination port",
+  "pkgMomentArrived": "arrived",
+  "pkgResultSent": "sent",
+  "pkgResultFailed": "failed to send",
+  "pkgResultWaiting": "waiting for WhatsApp to be connected",
+  "pkgResultNoPhone": "not sent, no phone",
+  "pkgResultSwitchedOff": "not sent, updates switched off",
+  "pkgResultNeedsCountryCode": "not sent, the phone has no country code",
+  "pkgResultNotSent": "not sent"
 }
