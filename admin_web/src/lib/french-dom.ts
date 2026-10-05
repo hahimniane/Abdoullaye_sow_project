@@ -4945,6 +4945,23 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Open the labels page": "Ouvrir la page des étiquettes",
   "The labels are not ready yet. Try again in a moment.":
     "Les étiquettes ne sont pas encore prêtes. Réessayez dans un instant.",
+  // Paged lists and server-counted totals (paged-query, TotalsStatus).
+  "Load more": "Charger plus",
+  "This list is taking longer than usual to load. Check your connection and try again.":
+    "Cette liste met plus de temps que d’habitude à se charger. Vérifiez votre connexion et réessayez.",
+  "Counting the totals…": "Calcul des totaux…",
+  "Totals as of": "Totaux au",
+  "Some records are still being counted. Refresh in a moment.":
+    "Certains enregistrements sont encore en cours de décompte. Actualisez dans un instant.",
+  "Totals could not be loaded. Try again.": "Les totaux n’ont pas pu être chargés. Réessayez.",
+  "Totals are taking longer than usual. Try again in a moment.":
+    "Les totaux prennent plus de temps que d’habitude. Réessayez dans un instant.",
+  "These totals cover the records loaded so far. Load more to include older stays.":
+    "Ces totaux couvrent les enregistrements chargés jusqu’ici. Chargez-en plus pour inclure les séjours plus anciens.",
+  "Not every record is loaded yet. Load more to include the rest.":
+    "Tous les enregistrements ne sont pas encore chargés. Chargez-en plus pour inclure le reste.",
+  Other: "Autre",
+  "Other prices (optional)": "Autres prix (facultatif)",
 });
 
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

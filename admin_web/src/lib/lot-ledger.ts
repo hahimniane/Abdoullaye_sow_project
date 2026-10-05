@@ -12,6 +12,7 @@
  */
 
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "./business-parking-entry.ts";
+import type { QueryFilterSpec } from "./paged-query.ts";
 
 /** Same vocabulary as parking: a website link, or money taken off-platform. */
 export const LOT_ACTIVITY_PAYMENT_METHODS = ["payment_link", "direct"] as const;
@@ -1044,4 +1045,170 @@ export function lotActivityScoreboard(input: {
   }
 
   return { generatedCents, collectedCents, owedCents, jobs };
+}
+
+// ---------------------------------------------------------------------------
+// The ledger's totals, as one definition.
+//
+// LotLedgerPanel used to total whatever its listeners held - activities
+// capped at 1,000, payments and purchases at 2,000, with no order, so past
+// those caps the figures were a random subset. The server now runs this same
+// definition (`lotLedgerTotals` in my_flutter_app/functions/
+// console_summaries.js, held to this one by console-summaries-parity.test.ts)
+// over every record in the span, and the panel renders its answer.
+// ---------------------------------------------------------------------------
+
+/** The activity's own month, read the way the panel reads it. */
+export function lotActivityMonth(row: Row): string {
+  const explicit = String(row?.activityDateMonth ?? "").trim();
+  if (explicit) return explicit;
+  const date = rowDate(row?.activityDate);
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export type LotRevenueByType = Record<string, { cents: number; count: number }>;
+
+export type LotLedgerTotals = {
+  scoreboard: LotActivityScoreboard;
+  month: string;
+  monthRevenueCents: number;
+  monthRevenueByType: LotRevenueByType;
+  monthExpenseCents: number;
+  year: number;
+  months: string[];
+  yearRevenueByMonth: number[];
+  yearRevenueByType: Record<string, number>;
+  yearExpenseByMonth: number[];
+};
+
+export function lotYearMonthKeys(year: number): string[] {
+  return Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+}
+
+export function lotLedgerTotals(input: {
+  activities: readonly Row[];
+  payments: readonly Row[];
+  expenseLines: readonly Row[];
+  expenseEntries: readonly Row[];
+  /** Inclusive "yyyy-mm" bounds of the Activity tab's span. */
+  rangeStart: string;
+  rangeEnd: string;
+  /** The month the Expenses tab and the month report read. */
+  month: string;
+  /** The report year. */
+  year: number;
+  /** The viewer's current "yyyy-mm" (standing charges stop there). */
+  nowMonth: string;
+}): LotLedgerTotals {
+  const { activities, payments, expenseLines, expenseEntries, rangeStart, rangeEnd, month, year, nowMonth } = input;
+  const billable = (row: Row) => String(row?.paymentStatus) !== "cancelled" && row?.voided !== true;
+  const typeKey = (row: Row) =>
+    String(row?.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? "custom" : String(row?.activityTypeId);
+  const months = lotYearMonthKeys(year);
+  const monthIndex = new Map(months.map((m, i) => [m, i] as const));
+  const monthRevenueByType: LotRevenueByType = {};
+  const yearRevenueByType: Record<string, number> = {};
+  const yearRevenueByMonth = months.map(() => 0);
+  for (const row of activities) {
+    if (!billable(row)) continue;
+    const mk = lotActivityMonth(row);
+    const fee = Number(row?.feeCents) || 0;
+    if (mk === month) {
+      const prev = monthRevenueByType[typeKey(row)] ?? { cents: 0, count: 0 };
+      monthRevenueByType[typeKey(row)] = { cents: prev.cents + fee, count: prev.count + 1 };
+    }
+    if (mk.slice(0, 4) === String(year)) {
+      yearRevenueByType[typeKey(row)] = (yearRevenueByType[typeKey(row)] ?? 0) + fee;
+    }
+    const slot = monthIndex.get(mk);
+    if (slot !== undefined) yearRevenueByMonth[slot] += fee;
+  }
+  const monthRevenueCents = Object.values(monthRevenueByType).reduce((sum, v) => sum + v.cents, 0);
+  return {
+    scoreboard: lotActivityScoreboard({
+      activities,
+      payments,
+      activityMonth: lotActivityMonth,
+      inRange: (mk) => Boolean(mk) && mk >= rangeStart && mk <= rangeEnd,
+    }),
+    month,
+    monthRevenueCents,
+    monthRevenueByType,
+    monthExpenseCents: lotMonthExpenseCents(expenseLines, expenseEntries, month, nowMonth),
+    year,
+    months,
+    yearRevenueByMonth,
+    yearRevenueByType,
+    yearExpenseByMonth: months.map((m) => lotMonthExpenseCents(expenseLines, expenseEntries, m, nowMonth)),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// How the ledger's lists are read: ordered, and narrowed in the query.
+// ---------------------------------------------------------------------------
+
+/** [start, end) in UTC ms for inclusive "yyyy-mm" bounds (activityDate's month is UTC). */
+export function lotMonthSpanMs(fromMonth: string, throughMonth: string): { startMs: number; endMs: number } | null {
+  const parse = (mk: string) => /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(mk || ""));
+  const a = parse(fromMonth);
+  const b = parse(throughMonth);
+  if (!a || !b) return null;
+  const [from, through] = fromMonth <= throughMonth ? [a, b] : [b, a];
+  return {
+    startMs: Date.UTC(Number(from[1]), Number(from[2]) - 1, 1),
+    endMs: Date.UTC(Number(through[1]), Number(through[2]), 1),
+  };
+}
+
+export const LOT_OWED_STATUSES = ["awaiting_payment_link", "awaiting_direct_payment"] as const;
+export const LOT_PAID_STATUSES = ["succeeded", "paid"] as const;
+
+/**
+ * The Activity list's query: the jobs dated in the span, newest first, a page
+ * at a time, with the type and payment pickers applied in the query (a filter
+ * applied after a page hides every match beyond it). Voided jobs are still
+ * dropped by the panel, as before; search narrows the loaded pages.
+ */
+export function lotActivityListQuery(input: {
+  rangeStart: string;
+  rangeEnd: string;
+  typeFilter: string;
+  payFilter: "all" | "owed" | "paid";
+  pageSize?: number;
+}): {
+  pageSize: number;
+  orderBy: "activityDate";
+  direction: "desc";
+  where: QueryFilterSpec[];
+  sort: "query";
+} {
+  const span = lotMonthSpanMs(input.rangeStart, input.rangeEnd);
+  const where: QueryFilterSpec[] = [];
+  if (input.typeFilter === "custom") where.push(["activityTypeId", "==", LOT_CUSTOM_ACTIVITY_ID]);
+  else if (input.typeFilter && input.typeFilter !== "all") where.push(["activityTypeId", "==", input.typeFilter]);
+  if (input.payFilter === "owed") where.push(["paymentStatus", "in", [...LOT_OWED_STATUSES]]);
+  if (input.payFilter === "paid") where.push(["paymentStatus", "in", [...LOT_PAID_STATUSES]]);
+  if (span) {
+    where.push(["activityDate", ">=", new Date(span.startMs)]);
+    where.push(["activityDate", "<", new Date(span.endMs)]);
+  }
+  return { pageSize: input.pageSize ?? 50, orderBy: "activityDate", direction: "desc", where, sort: "query" };
+}
+
+/**
+ * The expense purchases the Expenses tab and the year report read: every
+ * entry billed to a month of the report year (the month on screen is always
+ * in it), plus the few logged without a bill month, which are dated by
+ * spentAt in code. Complete - a year bounds them - and the same reads the
+ * server's getLotLedgerTotals makes.
+ */
+export function lotExpenseEntryQueries(year: number): {
+  inYear: QueryFilterSpec[];
+  undated: QueryFilterSpec[];
+} {
+  return {
+    inYear: [["month", ">=", `${year}-01`], ["month", "<=", `${year}-12`]],
+    undated: [["month", "==", ""]],
+  };
 }

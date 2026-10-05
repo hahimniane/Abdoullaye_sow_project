@@ -14,7 +14,9 @@ const consoleSource = read("../components/business-console.tsx");
 
 test("the parking panel has a Month end button that opens the month's bills", () => {
   assert.match(panels, /<CalendarCheck size=\{16\} \/> Month end<\/button>/);
-  assert.match(panels, /<ParkingMonthEnd\s+rows=\{parkedCars\.rows\}/);
+  // The view reads its own month (useParkingMonthInputs), never the history.
+  assert.match(panels, /<ParkingMonthEnd\s+businessId=\{businessId\}/);
+  assert.match(view, /useParkingMonthInputs\(businessId, monthKey,/);
   assert.match(panels, /onOpenCar=\{\(row\) => editParking\(row\)\}/, "payments are recorded on the car, as always");
   assert.match(consoleSource, /<ParkingPanel[\s\S]*?focusView=\{notificationFocusView\}[\s\S]*?\/>/);
 });

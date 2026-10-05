@@ -4,6 +4,7 @@ import { useConsoleDocumentTitle } from "@/lib/document-title";
 
 import {
   FormEvent,
+  Fragment,
   ReactNode,
   useCallback,
   useEffect,
@@ -22,18 +23,15 @@ import {
   updatePhoneNumber,
 } from "firebase/auth";
 import {
-  collection,
-  collectionGroup,
   deleteField,
   doc,
   getDoc,
-  limit,
   onSnapshot,
-  query,
   serverTimestamp,
   setDoc,
   updateDoc,
-  where,
+  type DocumentData,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import {
@@ -120,7 +118,6 @@ import {
 } from "@/lib/format";
 import {
   centsToDollars,
-  summarizePlatformEarnings,
   type PlatformEarningsBusinessRow,
   type PlatformEarningsFocus,
   type PlatformEarningsSeries,
@@ -145,7 +142,26 @@ import { buildBusinessDirectory, buildUserDirectory } from "@/lib/admin-director
 import { FieldInfo } from "@/components/field-info";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import { UserText } from "@/components/user-text";
-import { ShowMoreButton, useShowMore } from "@/components/show-more";
+import {
+  LoadMoreButton,
+  ShowMoreButton,
+  useShowMore,
+} from "@/components/show-more";
+import { TotalsStatus } from "@/components/totals-status";
+import { type QueryFilterSpec } from "@/lib/paged-query";
+import { usePagedQuery, type PagedRows } from "@/lib/use-paged-query";
+import { useServerTotals } from "@/lib/use-server-totals";
+import {
+  TODAY_RECENT_LIMIT,
+  adminOverviewFromRows,
+  adminTodayMetrics,
+  emptyPlatformEarnings,
+  localPlatformEarnings,
+  platformEarningsPayload,
+  type AdminOverviewResponse,
+  type AdminTodayMetrics,
+  type PlatformEarningsResponse,
+} from "@/lib/admin-overview";
 import {
   confirmImportantAction,
   type ActionConfirmationOptions,
@@ -507,6 +523,7 @@ const businessServices = [
 ];
 
 const statusLabels = {
+  other: "Other",
   pending: "Pending",
   approved: "Approved",
   active: "Active",
@@ -1621,90 +1638,76 @@ function peopleActivityReferences(user: FirestoreRow) {
   return references;
 }
 
-function useAdminCollection(name: string, enabled: boolean, max = 150) {
-  const [rows, setRows] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+/** Order by document id: every document has one, so none is left out. */
+const DOCUMENT_ID = "__name__";
 
-  useEffect(() => {
-    if (!enabled) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-    setLoading(true);
-    const unsubscribe = onSnapshot(
-      query(collection(db, name), limit(max)),
-      (snapshot) => {
-        setRows(
-          snapshot.docs.map((item) => ({
-          id: item.id,
-          _path: item.ref.path,
-          ...item.data(),
-          })),
-        );
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        setError(snapshotError.message);
-        setLoading(false);
-      },
-    );
-    return unsubscribe;
-  }, [enabled, max, name]);
+type AdminCollectionOptions = {
+  /** Rows per page, or null for every document (only for collections
+   * bounded by nature). */
+  pageSize: number | null;
+  /** The field the pages walk, newest first unless `direction` says
+   * otherwise. A document without this field is not returned by an ordered
+   * query, so it must be one every writer stamps. Default "createdAt". */
+  orderBy?: string;
+  direction?: "asc" | "desc";
+  /** Narrow in the query, not after it. */
+  where?: readonly QueryFilterSpec[];
+};
 
-  return { rows, loading, error };
+/**
+ * A platform-wide collection, live. A capped read is always ordered (newest
+ * first) and walked with "Load more": the old `limit(N)` with no order was
+ * answered with the first N documents by id - a random subset - so past N,
+ * new records went missing and every figure counted from them was wrong.
+ */
+function useAdminCollection(
+  name: string,
+  enabled: boolean,
+  options: AdminCollectionOptions,
+): PagedRows {
+  const { pageSize, where: filters } = options;
+  const order =
+    pageSize != null || options.orderBy
+      ? {
+          field: options.orderBy ?? "createdAt",
+          direction: options.direction ?? "desc",
+        }
+      : null;
+  return usePagedQuery({
+    source: { path: [name] },
+    filters,
+    orderBy: order,
+    pageSize,
+    enabled,
+  });
 }
+
+/** Stamps a collection-group row with the document that holds it. */
+function parentRowExtra(snapshot: QueryDocumentSnapshot<DocumentData>) {
+  return {
+    _parentId: snapshot.ref.parent.parent?.id ?? "",
+    _parentPath: snapshot.ref.parent.parent?.path ?? "",
+  };
+}
+
+const FLAGGED_REVIEW_FILTERS: readonly QueryFilterSpec[] = [
+  ["moderationStatus", "==", "flagged"],
+];
 
 // A plain collectionGroup("reviews") listen is denied by firestore.rules: the
 // {path=**}/reviews rule that authorizes this collection-group query is only
 // provable when the query itself filters to moderationStatus == "flagged", so
 // that filter has to be baked into the query here rather than left to a
-// generic caller.
-function useFlaggedReviews(enabled: boolean, max = 300) {
-  const [rows, setRows] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!enabled) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-    setLoading(true);
-    const unsubscribe = onSnapshot(
-      query(
-        collectionGroup(db, "reviews"),
-        where("moderationStatus", "==", "flagged"),
-        limit(max),
-      ),
-      (snapshot) => {
-        setRows(
-          snapshot.docs.map((item) => ({
-            id: item.id,
-            _path: item.ref.path,
-            _parentId: item.ref.parent.parent?.id ?? "",
-            _parentPath: item.ref.parent.parent?.path ?? "",
-            ...item.data(),
-          })),
-        );
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        setRows([]);
-        setError(snapshotError.message);
-        setLoading(false);
-      },
-    );
-    return unsubscribe;
-  }, [enabled, max]);
-
-  return { rows, loading, error };
+// generic caller. Newest flags first, a page at a time.
+function useFlaggedReviews(enabled: boolean, pageSize = 50): PagedRows {
+  return usePagedQuery({
+    source: { group: "reviews" },
+    filters: FLAGGED_REVIEW_FILTERS,
+    orderBy: { field: "createdAt", direction: "desc" },
+    pageSize,
+    enabled,
+    rowExtra: parentRowExtra,
+  });
 }
 
 function useAdminAuthUsers(enabled: boolean) {
@@ -1856,55 +1859,38 @@ function useAdminAuthUsers(enabled: boolean) {
   };
 }
 
+function destinationRowExtra(snapshot: QueryDocumentSnapshot<DocumentData>) {
+  return { businessId: snapshot.ref.parent.parent?.id ?? "" };
+}
+
+function compareDestinationRows(a: FirestoreRow, b: FirestoreRow) {
+  const businessCompare = text(a.businessName, "").localeCompare(
+    text(b.businessName, ""),
+  );
+  if (businessCompare !== 0) return businessCompare;
+  return text(a.name, a.id).localeCompare(text(b.name, b.id));
+}
+
+// Every business's destination countries, complete: at most one document per
+// business per country, and coverage is judged across all of them, so a
+// capped page would silently drop whole businesses from the coverage view.
 function useAdminDestinationCoverage(enabled: boolean) {
-  const [rows, setRows] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!enabled) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-
-    setLoading(true);
-    const unsubscribe = onSnapshot(
-      query(collectionGroup(db, "destinationCountries"), limit(500)),
-      (snapshot) => {
-        const destinationRows: FirestoreRow[] = snapshot.docs.map((item) => ({
-          id: item.id,
-          _path: item.ref.path,
-          businessId: item.ref.parent.parent?.id ?? "",
-          ...item.data(),
-        }));
-        setRows(
-          destinationRows.sort((a, b) => {
-          const businessCompare = text(a.businessName, "").localeCompare(
-              text(b.businessName, ""),
-          );
-          if (businessCompare !== 0) return businessCompare;
-          return text(a.name, a.id).localeCompare(text(b.name, b.id));
-          }),
-        );
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        setRows([]);
-        setError(snapshotError.message);
-        setLoading(false);
-      },
-    );
-    return unsubscribe;
-  }, [enabled]);
-
-  const refresh = useCallback(() => {
-    setRows((value) => [...value]);
-  }, []);
-
-  return {rows, loading, error, refresh};
+  const coverage = usePagedQuery({
+    source: { group: "destinationCountries" },
+    pageSize: null,
+    enabled,
+    rowExtra: destinationRowExtra,
+  });
+  const rows = useMemo(
+    () => [...coverage.rows].sort(compareDestinationRows),
+    [coverage.rows],
+  );
+  return {
+    rows,
+    loading: coverage.loading,
+    error: coverage.error,
+    refresh: coverage.refresh,
+  };
 }
 
 function inviteErrorMessage(error: unknown) {
@@ -1995,95 +1981,173 @@ export function AdminConsole() {
 
   const tabNeeds = (...required: Tab[]) =>
     enabled && required.includes(activeTab);
+  // Today's figures are counted by the server over every record; the tab
+  // reads no collection to count. Its queue is the newest few open records
+  // per kind, read only while Today is open.
+  const onToday = enabled && activeTab === "today";
+  const overview = useServerTotals<AdminOverviewResponse>(
+    "getAdminOverview",
+    onToday ? {} : null,
+  );
+  const recentPending = (
+    field = "status",
+    orderBy = "createdAt",
+  ): AdminCollectionOptions => ({
+    pageSize: TODAY_RECENT_LIMIT,
+    orderBy,
+    where: [[field, "==", "pending"]],
+  });
+  const recentBusinesses = useAdminCollection(
+    "businesses",
+    onToday,
+    recentPending(),
+  );
+  // Applications carry submittedAt, never createdAt.
+  const recentApplications = useAdminCollection(
+    "businessApplications",
+    onToday,
+    recentPending("status", "submittedAt"),
+  );
+  const recentPurchases = useAdminCollection(
+    "carPurchases",
+    onToday,
+    recentPending("purchaseStatus"),
+  );
+  const recentShipments = useAdminCollection(
+    "barrelShipments",
+    onToday,
+    recentPending(),
+  );
+  const recentFreight = useAdminCollection(
+    "freightShipments",
+    onToday,
+    recentPending(),
+  );
+
+  // Each list below is a page of its collection, live, with "Load more"
+  // for the rest (see olderRecordLists). Newest first by createdAt where
+  // every writer stamps it. Where some writers do not, the list walks the
+  // document id instead: an ordered query leaves out every document missing
+  // its order field, and a missing record is worse than an unsorted one.
+  // users: guest profiles and some admin/staff creates have no createdAt.
   const userProfiles = useAdminCollection(
     "users",
-    tabNeeds("today", "businesses", "support"),
-    1000,
+    tabNeeds("businesses"),
+    { pageSize: 1000, orderBy: DOCUMENT_ID, direction: "asc" },
   );
   const businesses = useAdminCollection(
     "businesses",
     tabNeeds(
-      "today",
       "businesses",
       "marketplace",
       "operations",
       "finance",
-      "support",
       "website",
       "settings",
     ) ||
       (enabled && activeTab === "people" && adminEmailVerified),
-    500,
+    { pageSize: 500 },
   );
   const cars = useAdminCollection(
     "cars",
-    tabNeeds("today", "businesses", "marketplace", "operations"),
-    1000,
+    tabNeeds("businesses", "marketplace", "operations"),
+    { pageSize: 1000 },
   );
   const barrelShipments = useAdminCollection(
     "barrelShipments",
-    tabNeeds("today", "businesses", "operations", "finance", "support"),
-    1000,
+    tabNeeds("businesses", "operations", "finance"),
+    { pageSize: 1000 },
   );
   const freightShipments = useAdminCollection(
     "freightShipments",
-    tabNeeds("today", "businesses", "operations", "finance", "support"),
-    1000,
+    tabNeeds("businesses", "operations"),
+    { pageSize: 1000 },
   );
   const transportRequests = useAdminCollection(
     "transportRequests",
-    tabNeeds("today", "businesses", "operations", "support"),
-    1000,
+    tabNeeds("businesses", "operations"),
+    { pageSize: 1000 },
   );
+  // parkedCars: the app's "print receipt only" entry stamps no createdAt.
   const parkedCars = useAdminCollection(
     "parkedCars",
-    tabNeeds("today", "businesses", "operations", "support"),
-    1000,
+    tabNeeds("businesses", "operations"),
+    { pageSize: 1000, orderBy: DOCUMENT_ID, direction: "asc" },
   );
   const purchases = useAdminCollection(
     "carPurchases",
-    tabNeeds("today", "businesses", "operations", "finance", "support"),
-    1000,
+    tabNeeds("businesses", "operations", "finance"),
+    { pageSize: 1000 },
   );
   const barrelPoolBalances = useAdminCollection(
     "barrelPoolBalanceRequests",
-    tabNeeds("today", "finance", "support"),
-    500,
+    tabNeeds("finance"),
+    { pageSize: 500 },
   );
+  // Two fixed documents (barrelPickup, serviceFees): read complete.
   const pricing = useAdminCollection(
     "shipmentPricing",
     tabNeeds("marketplace", "settings"),
-    500,
+    { pageSize: null },
   );
   const destinations = useAdminDestinationCoverage(
     enabled && (activeTab === "businesses" || activeTab === "marketplace"),
   );
-  const flaggedReviews = useFlaggedReviews(tabNeeds("marketplace"), 300);
+  const flaggedReviews = useFlaggedReviews(tabNeeds("marketplace"));
   const applications = useAdminCollection(
     "businessApplications",
-    tabNeeds("today", "businesses"),
-    150,
+    tabNeeds("businesses"),
+    { pageSize: 150, orderBy: "submittedAt" },
   );
   const notifications = useAdminCollection(
     "platformNotifications",
-    tabNeeds("today", "businesses", "support", "website"),
-    150,
+    tabNeeds("businesses", "website"),
+    { pageSize: 150 },
   );
+  // Deliveries synced back from the mail/SMS provider carry only
+  // updatedAt, which every delivery has; newest activity first.
   const notificationDeliveries = useAdminCollection(
     "notificationDeliveries",
     enabled && perms.tabs.includes("settings"),
-    250,
+    { pageSize: 250, orderBy: "updatedAt" },
   );
   const supportRequests = useAdminCollection(
     "businessSupportRequests",
-    tabNeeds("today", "businesses", "support"),
-    500,
+    tabNeeds("businesses"),
+    { pageSize: 500 },
   );
+  // At most one per business, removed on unpublish: read complete.
   const featuredBusinesses = useAdminCollection(
     "featuredBusinesses",
     enabled && perms.tabs.includes("website"),
-    200,
+    { pageSize: null },
   );
+  // Lists with records not loaded yet. One "Load more" under the tab asks
+  // each of them for its next page.
+  // (Deliveries load on every tab for an admin who can open Settings, so
+  // they only offer more on Settings itself.)
+  const olderRecordLists = [
+    userProfiles,
+    businesses,
+    cars,
+    barrelShipments,
+    freightShipments,
+    transportRequests,
+    parkedCars,
+    purchases,
+    barrelPoolBalances,
+    applications,
+    notifications,
+    supportRequests,
+    ...(activeTab === "settings" ? [notificationDeliveries] : []),
+  ].filter((list) => list.hasMore || list.loadingMore);
+  const loadingOlderRecords = olderRecordLists.some(
+    (list) => list.loadingMore,
+  );
+  const loadOlderRecords = () =>
+    olderRecordLists.forEach((list) => {
+      if (list.hasMore) list.loadMore();
+    });
   const authUsers = useAdminAuthUsers(
     tabNeeds("people") && adminEmailVerified,
   );
@@ -2140,6 +2204,23 @@ export function AdminConsole() {
   const supportRequestRows = previewMode
     ? previewData.supportRequests
     : supportRequests.rows;
+  const todayMetrics = useMemo(
+    () =>
+      adminTodayMetrics(
+        previewMode
+          ? adminOverviewFromRows({
+              users: previewData.users,
+              businesses: previewBusinesses,
+              cars: previewData.cars,
+              barrelShipments: previewData.barrelShipments,
+              freightShipments: previewData.freightShipments,
+              purchases: previewData.purchases,
+              applications: previewData.applications,
+            })
+          : overview.data,
+      ),
+    [previewMode, previewBusinesses, overview.data],
+  );
   const featuredBusinessRows = previewMode
     ? previewData.featuredBusinesses
     : featuredBusinesses.rows;
@@ -2518,15 +2599,47 @@ export function AdminConsole() {
         <section className="content">
           {activeTab === "today" && (
             <Today
-              users={userRows}
-              businesses={businessRows}
-              cars={carRows}
-              barrelShipments={shipmentRows}
-              freightShipments={freightRows}
-              transportRequests={transportRows}
-              parkedCars={parkedRows}
-              purchases={purchaseRows}
-              applications={applicationRows}
+              metrics={todayMetrics}
+              totals={
+                previewMode
+                  ? null
+                  : {
+                      computedAtMs: overview.data?.computedAtMs ?? null,
+                      loading: overview.loading,
+                      error: overview.error,
+                      onRefresh: () => overview.refresh(true),
+                    }
+              }
+              businesses={
+                previewMode ? previewBusinesses : recentBusinesses.rows
+              }
+              barrelShipments={
+                previewMode
+                  ? previewData.barrelShipments
+                  : recentShipments.rows
+              }
+              freightShipments={
+                previewMode
+                  ? previewData.freightShipments
+                  : recentFreight.rows
+              }
+              purchases={
+                previewMode ? previewData.purchases : recentPurchases.rows
+              }
+              applications={
+                previewMode
+                  ? previewData.applications
+                  : recentApplications.rows
+              }
+              queueError={[
+                recentBusinesses.error,
+                recentApplications.error,
+                recentPurchases.error,
+                recentShipments.error,
+                recentFreight.error,
+              ]
+                .filter(Boolean)
+                .join(" ")}
               navigate={setActiveTab}
             />
           )}
@@ -2596,6 +2709,11 @@ export function AdminConsole() {
               pricing={pricingRows}
               destinations={destinationRows}
               flaggedReviews={flaggedReviewRows}
+              flaggedReviewsPaging={{
+                hasMore: !previewMode && flaggedReviews.hasMore,
+                loading: flaggedReviews.loadingMore,
+                onLoadMore: flaggedReviews.loadMore,
+              }}
               errors={[cars.error, pricing.error, destinations.error].filter(
                 Boolean,
               )}
@@ -2618,6 +2736,7 @@ export function AdminConsole() {
               runAction={runAction}
               canManage={perms.can("finance")}
               canSendSupport={perms.can("support")}
+              previewMode={previewMode}
             />
           )}
           {activeTab === "support" && (
@@ -2657,6 +2776,18 @@ export function AdminConsole() {
               previewMode={previewMode}
               runAction={runAction}
             />
+          )}
+          {olderRecordLists.length > 0 && (
+            <div className="info-band">
+              <span>
+                Not every record is loaded yet. Load more to include the rest.
+              </span>
+              <LoadMoreButton
+                hasMore
+                loading={loadingOlderRecords}
+                onLoadMore={loadOlderRecords}
+              />
+            </div>
           )}
         </section>
       </main>
@@ -2788,50 +2919,87 @@ function readableAuthError(error: unknown) {
   return "Sign in failed. Try again or contact support.";
 }
 
+/** Console copy inside a queue line - translated, unlike typed values. */
+type QueueCopy = { copy: string };
+
+function isQueueCopy(part: unknown): part is QueueCopy {
+  return (
+    typeof part === "object" &&
+    part !== null &&
+    typeof (part as QueueCopy).copy === "string"
+  );
+}
+
+/** The typed value, or console copy when there is none. */
+function orCopy(value: unknown, copy: string): unknown {
+  return text(value, "") ? value : { copy };
+}
+
+/**
+ * One line of a Today queue row: typed values (names, emails, tracking
+ * codes) render untranslated, console copy is translated as usual.
+ */
+function QueueLine({
+  parts,
+  empty = "",
+}: {
+  parts: unknown[];
+  empty?: string;
+}) {
+  const shown = parts.filter((part) =>
+    isQueueCopy(part) ? Boolean(part.copy) : Boolean(text(part, "")),
+  );
+  if (shown.length === 0) return <>{empty}</>;
+  return (
+    <>
+      {shown.map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 && " • "}
+          {isQueueCopy(part) ? (
+            part.copy
+          ) : (
+            <span data-no-translate>{text(part, "")}</span>
+          )}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 function Today(props: {
-  users: FirestoreRow[];
+  /** Counted by the server over every record (getAdminOverview). */
+  metrics: AdminTodayMetrics;
+  /** When the figures were counted, and a way to count again; null in
+   * preview mode, whose figures come from its own sample data. */
+  totals: {
+    computedAtMs: number | null;
+    loading: boolean;
+    error: string;
+    onRefresh: () => void;
+  } | null;
+  /** The newest open records of each kind - the queue, not the counts. */
   businesses: FirestoreRow[];
-  cars: FirestoreRow[];
   barrelShipments: FirestoreRow[];
   freightShipments: FirestoreRow[];
-  transportRequests: FirestoreRow[];
-  parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
   applications: FirestoreRow[];
+  queueError: string;
   navigate: (tab: Tab) => void;
 }) {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, []);
 
-  const pendingBusinesses = countWhere(
-    props.businesses,
-    (item) => rowStatus(item) === "pending",
-  );
-  const approvedBusinesses = countWhere(
-    props.businesses,
-    (item) => rowStatus(item) === "approved",
-  );
-  const missingProfiles = countWhere(
-    props.businesses,
-    (item) => item._inferred === true,
-  );
-  const activeListings = countWhere(
-    props.cars,
-    (item) => rowStatus(item) === "active",
-  );
-  const pendingShipments = countWhere(
-    props.barrelShipments,
-    (item) => rowStatus(item) === "pending",
-  );
-  const pendingFreight = countWhere(
-    props.freightShipments,
-    (item) => rowStatus(item) === "pending",
-  );
-  const pendingPurchases = countWhere(
-    props.purchases,
-    (item) => rowStatus(item, "purchaseStatus") === "pending",
-  );
+  const {
+    pendingBusinesses,
+    approvedBusinesses,
+    missingProfiles,
+    activeListings,
+    pendingShipments,
+    pendingFreight,
+    pendingPurchases,
+    roles,
+  } = props.metrics;
   const queue = [
     ...props.businesses
       .filter((item) => item.status === "pending")
@@ -2839,11 +3007,13 @@ function Today(props: {
         id: item.id,
         kind: "business" as const,
         target: "businesses" as Tab,
-        label: text(item.name, "Business application"),
-        meta:
-          [item.phone, item.email, item.ownerName]
-            .filter(Boolean)
-            .join(" • ") || "Awaiting partner approval",
+        label: <QueueLine parts={[orCopy(item.name, "Business application")]} />,
+        meta: (
+          <QueueLine
+            empty="Awaiting partner approval"
+            parts={[item.phone, item.email, item.ownerName]}
+          />
+        ),
         status: text(item.status, "pending"),
         cta: "Review business",
       })),
@@ -2853,10 +3023,18 @@ function Today(props: {
         id: item.id,
         kind: "business" as const,
         target: "businesses" as Tab,
-        label: text(item.businessName ?? item.name, "Business application"),
-        meta: [text(item.type, "application"), item.applicantEmail]
-          .filter(Boolean)
-          .join(" • "),
+        label: (
+          <QueueLine
+            parts={[
+              orCopy(item.businessName ?? item.name, "Business application"),
+            ]}
+          />
+        ),
+        meta: (
+          <QueueLine
+            parts={[orCopy(item.type, "application"), item.applicantEmail]}
+          />
+        ),
         status: text(item.status, "pending"),
         cta: "Open application",
       })),
@@ -2866,13 +3044,15 @@ function Today(props: {
         id: item.id,
         kind: "purchase" as const,
         target: "operations" as Tab,
-        label: text(item.carTitle, "Car purchase"),
-        meta: [
-          text(item.buyerName ?? item.buyerEmail, "Buyer"),
-          text(item.businessName, ""),
-        ]
-          .filter(Boolean)
-          .join(" • "),
+        label: <QueueLine parts={[orCopy(item.carTitle, "Car purchase")]} />,
+        meta: (
+          <QueueLine
+            parts={[
+              orCopy(item.buyerName ?? item.buyerEmail, "Buyer"),
+              item.businessName,
+            ]}
+          />
+        ),
         status: "pending",
         cta: "Open purchase",
       })),
@@ -2882,13 +3062,22 @@ function Today(props: {
         id: item.id,
         kind: "shipment" as const,
         target: "operations" as Tab,
-        label: `${text(item.trackingCode, item.id)} • ${text(item.receiverName, "Receiver")}`,
-        meta: [
-          text(item.businessName, "Business"),
-          text(item.destinationCountryName, ""),
-        ]
-          .filter(Boolean)
-          .join(" • "),
+        label: (
+          <QueueLine
+            parts={[
+              text(item.trackingCode, item.id),
+              orCopy(item.receiverName, "Receiver"),
+            ]}
+          />
+        ),
+        meta: (
+          <QueueLine
+            parts={[
+              orCopy(item.businessName, "Business"),
+              item.destinationCountryName,
+            ]}
+          />
+        ),
         status: "pending",
         cta: "Open shipment",
       })),
@@ -2898,36 +3087,41 @@ function Today(props: {
         id: item.id,
         kind: "shipment" as const,
         target: "operations" as Tab,
-        label: `${text(item.trackingCode, item.id)} • ${text(item.receiverName, "Receiver")}`,
-        meta: [
-          text(item.businessName, "Business"),
-          "Freight",
-          text(item.destinationCountryName, ""),
-        ]
-          .filter(Boolean)
-          .join(" • "),
+        label: (
+          <QueueLine
+            parts={[
+              text(item.trackingCode, item.id),
+              orCopy(item.receiverName, "Receiver"),
+            ]}
+          />
+        ),
+        meta: (
+          <QueueLine
+            parts={[
+              orCopy(item.businessName, "Business"),
+              { copy: "Freight" },
+              item.destinationCountryName,
+            ]}
+          />
+        ),
         status: "pending",
         cta: "Open shipment",
       })),
   ].sort((a, b) => urgencyRank(a) - urgencyRank(b));
 
-  const totalOpen = queue.length;
+  // The queue shows the newest few of each kind; the count is every open
+  // item the server found.
+  const totalOpen = Math.max(props.metrics.totalOpen, queue.length);
   const visibleQueue = queue.slice(0, 12);
 
-  const roleCounts = countBy(props.users, "role");
-  const carStatuses = countBy(props.cars, "status");
-  const shipmentStatuses = countBy(props.barrelShipments, "status");
-  const purchaseStatuses = countBy(props.purchases, "purchaseStatus");
-  const businessStatusCounts = countBy(props.businesses, "status");
-
-  const businessSegments = Object.entries(businessStatusCounts)
+  const businessSegments = Object.entries(props.metrics.businessStatuses)
     .sort((a, b) => b[1] - a[1])
     .map(([key, value]) => ({
       label: statusLabel(key),
       value,
       color: statusColor(key),
     }));
-  const listingSegments = Object.entries(carStatuses)
+  const listingSegments = Object.entries(props.metrics.carStatuses)
     .sort((a, b) => b[1] - a[1])
     .map(([key, value]) => ({
       label: statusLabel(key),
@@ -2935,50 +3129,45 @@ function Today(props: {
       color: statusColor(key),
     }));
   const accountBars = [
-    { label: "Admins", value: roleCounts.admin ?? 0, color: "#0d9488" },
-    {
-      label: "Owners",
-      value: roleCounts.businessowner ?? roleCounts.businessOwner ?? 0,
-      color: "#14b8a6",
-    },
-    { label: "Staff", value: roleCounts.staff ?? 0, color: "#f59e0b" },
-    { label: "Customers", value: roleCounts.customer ?? 0, color: "#2563eb" },
+    { label: "Admins", value: roles.admin, color: "#0d9488" },
+    { label: "Owners", value: roles.businessOwner, color: "#14b8a6" },
+    { label: "Staff", value: roles.staff, color: "#f59e0b" },
+    { label: "Customers", value: roles.customer, color: "#2563eb" },
   ];
 
+  const { listingTotal, shipmentTotal, freightTotal, purchaseTotal } =
+    props.metrics;
   const serviceLoads = [
     {
       label: "Marketplace",
       value: activeListings,
-      total: Math.max(props.cars.length, 1),
-      meta: `Active listings: ${activeListings} of ${props.cars.length}`,
+      total: Math.max(listingTotal, 1),
+      meta: `Active listings: ${activeListings} of ${listingTotal}`,
     },
     {
       label: "Barrel shipments",
       value: pendingShipments,
-      total: Math.max(props.barrelShipments.length, 1),
-      meta: `Open records: ${pendingShipments} of ${props.barrelShipments.length}`,
+      total: Math.max(shipmentTotal, 1),
+      meta: `Open records: ${pendingShipments} of ${shipmentTotal}`,
     },
     {
       label: "Freight shipments",
       value: pendingFreight,
-      total: Math.max(props.freightShipments.length, 1),
-      meta: `Open records: ${pendingFreight} of ${props.freightShipments.length}`,
+      total: Math.max(freightTotal, 1),
+      meta: `Open records: ${pendingFreight} of ${freightTotal}`,
     },
     {
       label: "Car purchases",
       value: pendingPurchases,
-      total: Math.max(props.purchases.length, 1),
-      meta: `Open records: ${pendingPurchases} of ${props.purchases.length}`,
+      total: Math.max(purchaseTotal, 1),
+      meta: `Open records: ${pendingPurchases} of ${purchaseTotal}`,
     },
   ];
 
   const kpis = [
     {
       label: "Needs review",
-      value:
-        pendingBusinesses +
-        props.applications.filter((item) => rowStatus(item) === "pending")
-          .length,
+      value: props.metrics.needsReview,
       tone: "attention" as const,
       meta: "Businesses & applications",
       target: "businesses" as Tab,
@@ -2987,14 +3176,14 @@ function Today(props: {
       label: "Open shipments",
       value: pendingShipments + pendingFreight,
       tone: "neutral" as const,
-      meta: `Barrel records: ${props.barrelShipments.length} · Freight records: ${props.freightShipments.length}`,
+      meta: `Barrel records: ${shipmentTotal} · Freight records: ${freightTotal}`,
       target: "operations" as Tab,
     },
     {
       label: "Pending purchases",
       value: pendingPurchases,
       tone: "neutral" as const,
-      meta: `Purchase records: ${props.purchases.length}`,
+      meta: `Purchase records: ${purchaseTotal}`,
       target: "operations" as Tab,
     },
   ];
@@ -3040,6 +3229,14 @@ function Today(props: {
           </button>
         ))}
       </section>
+      {props.totals && (
+        <TotalsStatus
+          computedAtMs={props.totals.computedAtMs}
+          error={props.totals.error}
+          loading={props.totals.loading}
+          onRefresh={props.totals.onRefresh}
+        />
+      )}
 
       <div className="today-layout">
         <div className="today-attention">
@@ -3080,21 +3277,19 @@ function Today(props: {
             ) : (
               <EmptyState text="No open approvals, shipments, or purchases are currently loaded." />
             )}
+            {props.queueError && (
+              <div className="info-band">{props.queueError}</div>
+            )}
           </Panel>
         </div>
 
         <div className="today-health">
           <Panel title="Network health" icon={<Users size={18} />}>
             <div className="insight-grid">
-              <Insight label="Admins" value={roleCounts.admin ?? 0} />
-              <Insight
-                label="Owners"
-                value={
-                  roleCounts.businessowner ?? roleCounts.businessOwner ?? 0
-                }
-              />
-              <Insight label="Staff" value={roleCounts.staff ?? 0} />
-              <Insight label="Customers" value={roleCounts.customer ?? 0} />
+              <Insight label="Admins" value={roles.admin} />
+              <Insight label="Owners" value={roles.businessOwner} />
+              <Insight label="Staff" value={roles.staff} />
+              <Insight label="Customers" value={roles.customer} />
             </div>
             <div className="status-strip">
               <span>
@@ -3104,7 +3299,7 @@ function Today(props: {
                 Approved <b>{approvedBusinesses}</b>
               </span>
               <span>
-                Applications <b>{props.applications.length}</b>
+                Applications <b>{props.metrics.applicationTotal}</b>
               </span>
             </div>
           </Panel>
@@ -3123,8 +3318,14 @@ function Today(props: {
         <div className="today-status">
           <Panel title="Open by status" icon={<DatabaseZap size={18} />}>
             <div className="distribution-grid">
-              <Distribution title="Shipments" counts={shipmentStatuses} />
-              <Distribution title="Purchases" counts={purchaseStatuses} />
+              <Distribution
+                title="Shipments"
+                counts={props.metrics.shipmentStatuses}
+              />
+              <Distribution
+                title="Purchases"
+                counts={props.metrics.purchaseStatuses}
+              />
             </div>
           </Panel>
         </div>
@@ -3133,13 +3334,13 @@ function Today(props: {
       <section className="chart-grid" aria-label="Analytics">
         <DonutChart
           title="Businesses"
-          total={props.businesses.length}
+          total={props.metrics.businessTotal}
           segments={businessSegments}
         />
         <BarChart title="Accounts by role" bars={accountBars} />
         <DonutChart
           title="Listings"
-          total={props.cars.length}
+          total={listingTotal}
           segments={listingSegments}
         />
       </section>
@@ -10720,13 +10921,23 @@ function listingImageUrl(item: FirestoreRow) {
   return "";
 }
 
+/** "Load more" state for a list paged from the server. */
+type ListPaging = {
+  hasMore: boolean;
+  loading: boolean;
+  onLoadMore: () => void;
+};
+
 function FlaggedReviewsPanel({
   reviews,
   businesses,
+  paging,
   runAction,
 }: {
   reviews: FirestoreRow[];
   businesses: FirestoreRow[];
+  /** The flags are read newest first, a page at a time. */
+  paging: ListPaging;
   runAction: ActionRunner;
 }) {
   const flagged = reviews.filter(
@@ -10792,10 +11003,15 @@ function FlaggedReviewsPanel({
                   />
                 ))}
               </div>
-              {text(row.comment) && <p>{text(row.comment)}</p>}
+              {text(row.comment) && (
+                <p data-no-translate>{text(row.comment)}</p>
+              )}
               <p style={{ color: "var(--muted)", fontSize: 13 }}>
-                {text(row.customerDisplayName, "Customer")} ·{" "}
-                {formatDate(row.createdAt)}
+                <UserText
+                  fallback="Customer"
+                  value={row.customerDisplayName}
+                />{" "}
+                · {formatDate(row.createdAt)}
               </p>
               <div className="pur-actions">
                 <button
@@ -10817,6 +11033,11 @@ function FlaggedReviewsPanel({
           );
         })}
       </div>
+      <LoadMoreButton
+        hasMore={paging.hasMore}
+        loading={paging.loading}
+        onLoadMore={paging.onLoadMore}
+      />
     </Panel>
   );
 }
@@ -10827,6 +11048,7 @@ function MarketplaceView({
   pricing,
   destinations,
   flaggedReviews,
+  flaggedReviewsPaging,
   errors,
   loading,
   refreshDestinations,
@@ -10837,6 +11059,7 @@ function MarketplaceView({
   pricing: FirestoreRow[];
   destinations: FirestoreRow[];
   flaggedReviews: FirestoreRow[];
+  flaggedReviewsPaging: ListPaging;
   errors: string[];
   loading: boolean;
   refreshDestinations: () => void;
@@ -10989,6 +11212,7 @@ function MarketplaceView({
       <FlaggedReviewsPanel
         reviews={flaggedReviews}
         businesses={businesses}
+        paging={flaggedReviewsPaging}
         runAction={runAction}
       />
       <Panel title="Business listings" icon={<Store size={18} />}>
@@ -12334,6 +12558,8 @@ function PlatformCommissionSummary({
   onFocusChange,
   focusLabel,
   hasRecords,
+  ready = true,
+  status = null,
 }: {
   summary: PlatformEarningsSummary;
   businessRows: PlatformEarningsBusinessRow[];
@@ -12342,13 +12568,18 @@ function PlatformCommissionSummary({
   onFocusChange: (next: PlatformEarningsFocus) => void;
   focusLabel: string;
   hasRecords: boolean;
+  /** False until the first answer arrives: say nothing rather than zero. */
+  ready?: boolean;
+  /** When the figures were worked out, and a way to ask again. */
+  status?: ReactNode;
 }) {
   const { totals, series } = summary;
   const focused = Boolean(focus.businessKey || focus.serviceId);
 
   return (
     <Panel title="Platform commission" icon={<TrendingUp size={18} />}>
-      {!hasRecords ? (
+      {status}
+      {!ready ? null : !hasRecords ? (
         <EmptyState text="No commission has been recorded yet. Once a business takes a paid order, what the platform earned appears here." />
       ) : (
         <div className="commission-summary">
@@ -12446,6 +12677,7 @@ function FinanceView({
   runAction,
   canManage,
   canSendSupport,
+  previewMode,
 }: {
   barrelPoolBalances: FirestoreRow[];
   businesses: FirestoreRow[];
@@ -12459,6 +12691,7 @@ function FinanceView({
   runAction: ActionRunner;
   canManage: boolean;
   canSendSupport: boolean;
+  previewMode: boolean;
 }) {
   const [commissionFocus, setCommissionFocus] = useState<PlatformEarningsFocus>(
     {},
@@ -12500,61 +12733,50 @@ function FinanceView({
     businesses,
     ],
   );
-  // The platform's own books, from the records this view already holds. No
-  // extra Firestore reads: the same arrays that build the ledger below.
-  const earningsRecords = useMemo(
-    () => ({
-      shipments,
-      freightShipments,
-      transports,
-      parkedCars,
-      purchases,
-      businesses,
-    }),
+  // The platform's own books, worked out by the server over every record
+  // (getPlatformEarnings): the lists on this page are paged, so a sum of
+  // the loaded rows would only cover the newest pages. The two breakdowns
+  // cross-filter each other - picking a service re-ranks the businesses by
+  // what they earned on it, picking a business re-ranks its services - and
+  // the server answers each focus the same way.
+  const earningsAnswer = useServerTotals<PlatformEarningsResponse>(
+    "getPlatformEarnings",
+    previewMode ? null : platformEarningsPayload(commissionFocus),
+  );
+  // Preview mode has no server; its sample records are few and complete.
+  const previewEarnings = useMemo(
+    () =>
+      previewMode
+        ? localPlatformEarnings(
+            {
+              shipments,
+              freightShipments,
+              transports,
+              parkedCars,
+              purchases,
+              businesses,
+            },
+            commissionFocus,
+          )
+        : null,
     [
+      previewMode,
       shipments,
       freightShipments,
       transports,
       parkedCars,
       purchases,
       businesses,
+      commissionFocus,
     ],
   );
-  const platformEarnings = useMemo(
-    () => summarizePlatformEarnings(earningsRecords),
-    [earningsRecords],
-  );
-  // The two breakdowns cross-filter each other, so each is summarized against
-  // the *other* axis only. Picking a service re-ranks the businesses by what
-  // they earned on that service, and picking a business re-ranks its services,
-  // while both lists stay complete enough to change your mind from.
-  const commissionFocused = useMemo(
-    () =>
-      commissionFocus.businessKey || commissionFocus.serviceId
-        ? summarizePlatformEarnings({ ...earningsRecords, focus: commissionFocus })
-        : platformEarnings,
-    [earningsRecords, platformEarnings, commissionFocus],
-  );
-  const commissionBusinessRows = useMemo(
-    () =>
-      commissionFocus.serviceId
-        ? summarizePlatformEarnings({
-            ...earningsRecords,
-            focus: { serviceId: commissionFocus.serviceId },
-          }).byBusiness
-        : platformEarnings.byBusiness,
-    [earningsRecords, platformEarnings, commissionFocus.serviceId],
-  );
-  const commissionServiceRows = useMemo(
-    () =>
-      commissionFocus.businessKey
-        ? summarizePlatformEarnings({
-            ...earningsRecords,
-            focus: { businessKey: commissionFocus.businessKey },
-          }).byService
-        : platformEarnings.byService,
-    [earningsRecords, platformEarnings, commissionFocus.businessKey],
-  );
+  const earnings =
+    previewEarnings ?? earningsAnswer.data ?? emptyPlatformEarnings();
+  const earningsReady = Boolean(previewEarnings ?? earningsAnswer.data);
+  const platformEarnings = earnings.summary;
+  const commissionFocused = earnings.focused;
+  const commissionBusinessRows = earnings.businessRows;
+  const commissionServiceRows = earnings.serviceRows;
   const commissionFocusLabel = useMemo(() => {
     const parts: string[] = [];
     if (commissionFocus.businessKey) {
@@ -12677,7 +12899,19 @@ function FinanceView({
         focusLabel={commissionFocusLabel}
         hasRecords={platformEarnings.totals.records > 0}
         onFocusChange={setCommissionFocus}
+        ready={earningsReady}
         serviceRows={commissionServiceRows}
+        status={
+          previewMode ? null : (
+            <TotalsStatus
+              complete={earningsAnswer.data?.complete !== false}
+              computedAtMs={earningsAnswer.data?.computedAtMs ?? null}
+              error={earningsAnswer.error}
+              loading={earningsAnswer.loading}
+              onRefresh={() => earningsAnswer.refresh(true)}
+            />
+          )
+        }
         summary={commissionFocused}
       />
       <Panel

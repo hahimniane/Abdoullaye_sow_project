@@ -6,6 +6,7 @@
  */
 
 import { localDateKey } from "./local-date.ts";
+import type { QueryFilterSpec } from "./paged-query.ts";
 
 export type InvoiceStatus = "open" | "paid";
 
@@ -325,6 +326,37 @@ export function invoiceIsOverdue(row: Row, today = todayKey()): boolean {
   return invoiceStatus(row) === "open" && Boolean(due) && due < today;
 }
 
+export type InvoiceBoard = {
+  open: number;
+  overdue: number;
+  owedCents: number;
+  collectedCents: number;
+  /** Every invoice the business has, open or paid. */
+  count: number;
+};
+
+/**
+ * The scoreboard above the invoice list. Its definition lives here; the
+ * numbers on the page come from the server (`getInvoiceBoardTotals`), which
+ * answers this same question with aggregation queries over every invoice -
+ * the list itself is paged, so totalling the rows on screen would only total
+ * the pages loaded so far.
+ */
+export function invoiceBoard(rows: readonly Row[], today = todayKey()): InvoiceBoard {
+  let open = 0;
+  let overdue = 0;
+  let owedCents = 0;
+  let collectedCents = 0;
+  rows.forEach((row) => {
+    collectedCents += Math.max(0, Number(row.paidCents) || 0);
+    if (invoiceStatus(row) !== "open") return;
+    open += 1;
+    owedCents += Math.max(0, Number(row.balanceCents) || 0);
+    if (invoiceIsOverdue(row, today)) overdue += 1;
+  });
+  return { open, overdue, owedCents, collectedCents, count: rows.length };
+}
+
 /** "Receipt" once settled, else "Invoice". */
 export function invoiceKind(row: Row): "Invoice" | "Receipt" {
   return invoiceStatus(row) === "paid" ? "Receipt" : "Invoice";
@@ -356,6 +388,36 @@ export function filterInvoices(rows: readonly Row[], filter: InvoiceFilter, sear
       .map((v) => text(v).toLowerCase()).join(" ");
     return hay.includes(q);
   });
+}
+
+/**
+ * How the invoice list is read for a filter: ordered and paged, with the
+ * state narrowed in the query itself (a filter applied to a page would hide
+ * every match beyond it). Overdue reads oldest due date first.
+ */
+export function invoiceListQuery(filter: InvoiceFilter, today = todayKey()): {
+  pageSize: number;
+  orderBy: string;
+  direction: "asc" | "desc";
+  where: QueryFilterSpec[];
+  sort: "query";
+} {
+  if (filter === "overdue") {
+    return {
+      pageSize: 50,
+      orderBy: "dueOn",
+      direction: "asc",
+      where: [["status", "==", "open"], ["dueOn", ">", ""], ["dueOn", "<", today]],
+      sort: "query",
+    };
+  }
+  return {
+    pageSize: 50,
+    orderBy: "issuedOn",
+    direction: "desc",
+    where: filter === "open" || filter === "paid" ? [["status", "==", filter]] : [],
+    sort: "query",
+  };
 }
 
 /** Newest invoice date first, then by number, so today's work is on top. */

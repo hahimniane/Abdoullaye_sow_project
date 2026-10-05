@@ -22,6 +22,36 @@ export function useShowMore<T>(rows: readonly T[], resetKey: string) {
   };
 }
 
+/**
+ * "Load more" for a list paged from the server (useBusinessCollection and
+ * friends): fetches the next page. Disabled with a visible label while the
+ * page is on its way, so a second click cannot ask twice.
+ */
+export function LoadMoreButton({
+  hasMore,
+  loading,
+  onLoadMore,
+}: {
+  hasMore: boolean;
+  loading: boolean;
+  onLoadMore: () => void;
+}) {
+  if (!hasMore && !loading) return null;
+  return (
+    <div className="show-more-row">
+      <button
+        aria-busy={loading}
+        className="secondary-button compact"
+        disabled={loading}
+        onClick={onLoadMore}
+        type="button"
+      >
+        {loading ? "Loading more..." : "Load more"}
+      </button>
+    </div>
+  );
+}
+
 export function ShowMoreButton({
   remaining,
   onClick,

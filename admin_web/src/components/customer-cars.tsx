@@ -40,6 +40,7 @@ import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { PaymentHoldNotice } from "@/components/payment-hold-notice";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { ServiceRequestForm } from "@/components/service-request-form";
+import { LoadMoreButton } from "@/components/show-more";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import { db, functions } from "@/lib/firebase";
 import { formatDateTime, formatMoney, text } from "@/lib/format";
@@ -57,6 +58,9 @@ type CustomerCarsProps = {
     rows: FirestoreRow[];
     loading: boolean;
     error: string;
+    hasMore?: boolean;
+    loadingMore?: boolean;
+    loadMore?: () => void;
   };
 };
 
@@ -613,6 +617,13 @@ export function CustomerCars({
           );
         })}
       </div>
+      {state.loadMore && (
+        <LoadMoreButton
+          hasMore={Boolean(state.hasMore)}
+          loading={Boolean(state.loadingMore)}
+          onLoadMore={state.loadMore}
+        />
+      )}
     </section>
   );
 }

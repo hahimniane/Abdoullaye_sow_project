@@ -3,11 +3,15 @@
 import { useMemo } from "react";
 import { RefreshCw, Star } from "lucide-react";
 
+import { LoadMoreButton } from "@/components/show-more";
 import { useBusinessReviews } from "@/lib/business-data";
 import { formatDate, text } from "@/lib/format";
 
 type ReviewsPanelProps = {
   businessId: string;
+  /** The business record: its stored review count and average cover every
+   * review, where the list below is paged. */
+  business?: Record<string, unknown> | null;
   previewMode?: boolean;
 };
 
@@ -40,19 +44,28 @@ function moderationLabel(status: string) {
   return "Published";
 }
 
-export function ReviewsPanel({ businessId, previewMode = false }: ReviewsPanelProps) {
-  const reviews = useBusinessReviews(businessId, Boolean(businessId && !previewMode), 200);
+export function ReviewsPanel({ businessId, business = null, previewMode = false }: ReviewsPanelProps) {
+  const reviews = useBusinessReviews(businessId, Boolean(businessId && !previewMode));
 
   const visibleRows = useMemo(
     () => reviews.rows.filter((row) => text(row.moderationStatus, "published") !== "removed"),
     [reviews.rows],
   );
 
+  // The server keeps the business's count and average over every published
+  // review; the list is paged, so averaging the loaded rows would only
+  // describe the newest page. Rows are the fallback for a record that
+  // predates the stored aggregate.
   const stats = useMemo(() => {
+    const storedCount = Number(business?.reviewCount);
+    const storedAverage = Number(business?.reviewAverage);
+    if (Number.isFinite(storedCount) && storedCount >= 0 && business?.reviewCount !== undefined) {
+      return { count: storedCount, average: Number.isFinite(storedAverage) ? storedAverage : 0 };
+    }
     const count = visibleRows.length;
     const sum = visibleRows.reduce((total, row) => total + (Number(row.rating) || 0), 0);
     return { count, average: count > 0 ? sum / count : 0 };
-  }, [visibleRows]);
+  }, [business?.reviewAverage, business?.reviewCount, visibleRows]);
 
   return (
     <section className="lst">
@@ -94,6 +107,7 @@ export function ReviewsPanel({ businessId, previewMode = false }: ReviewsPanelPr
           </article>
         ))}
       </div>
+      <LoadMoreButton hasMore={reviews.hasMore} loading={reviews.loadingMore} onLoadMore={reviews.loadMore} />
     </section>
   );
 }

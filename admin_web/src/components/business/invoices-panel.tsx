@@ -27,11 +27,14 @@ import {
 
 import { runPanelAction } from "@/components/business/operations-panels";
 import { confirmImportantAction } from "@/lib/action-confirmation";
-import { useBusinessCollection, useBusinessStaff } from "@/lib/business-data";
+import { useBusinessCollection, useBusinessStaff, useLiveDoc } from "@/lib/business-data";
+import { useServerTotals, viewerTimeZone } from "@/lib/use-server-totals";
+import { findBusinessVehicleRecord } from "@/lib/vin-records";
+import { TotalsStatus } from "@/components/totals-status";
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, formatDayKey, text } from "@/lib/format";
 import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
-import { ShowMoreButton, useShowMore } from "@/components/show-more";
+import { LoadMoreButton } from "@/components/show-more";
 import {
   INVOICE_MESSAGES,
   INVOICE_PAYMENT_METHODS,
@@ -45,6 +48,7 @@ import {
   invoiceDraftFromRow,
   invoiceIsOverdue,
   invoiceKind,
+  invoiceListQuery,
   invoiceLineDraftFromRow,
   invoiceLinePayload,
   invoiceMessage,
@@ -61,6 +65,7 @@ import {
   validateInvoiceDraft,
   validateInvoiceLineDraft,
   validateInvoicePaymentDraft,
+  type InvoiceBoard,
   type InvoiceDraft,
   type InvoiceFilter,
   type InvoiceLineDraft,
@@ -81,7 +86,6 @@ import {
   VIN_LOOKING_UP,
   VIN_SERVICE_UNREACHABLE,
   decodeVinWithCatalog,
-  findVehicleRecordByVin,
   vinDecodeHint,
 } from "@/lib/vin-lookup";
 import { CopyValue } from "@/components/copy-value";
@@ -117,20 +121,32 @@ function EmptyState({ text: message }: { text: string }) {
  */
 export function InvoicesPanel({ businessId, businessName = "", business = null, previewMode = false }: InvoicesPanelProps) {
   const enabled = Boolean(businessId && !previewMode);
-  const invoices = useBusinessCollection("invoices", businessId, enabled, 1000);
-  const lines = useBusinessCollection("invoiceLines", businessId, enabled, 5000);
-  const payments = useBusinessCollection("invoicePayments", businessId, enabled, 5000);
-  const staff = useBusinessStaff(businessId, enabled, 200);
-  // The lot's customer memory, offered back as staff type a name.
-  const lotCustomers = useBusinessCollection("lotCustomers", businessId, enabled, 500);
-  // The same records the ledger's form scans when a VIN is typed: a parked
-  // car or a past activity already says what the car is.
-  const parkedCars = useBusinessCollection("parkedCars", businessId, enabled, 500);
-  const activities = useBusinessCollection("lotActivities", businessId, enabled, 1000);
+  const staff = useBusinessStaff(businessId, enabled);
+  // The lot's customer memory, offered back as staff type a name: the people
+  // seen most recently first.
+  const lotCustomers = useBusinessCollection("lotCustomers", businessId, enabled, {
+    pageSize: 300,
+    orderBy: "lastSeenAt",
+    sort: "query",
+  });
 
   const [filter, setFilter] = useState<InvoiceFilter>("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
+
+  // Newest invoice date first, filtered by state in the query - a filter
+  // applied after a page would hide every match beyond it. Overdue walks
+  // the oldest due date first: the ones to chase.
+  const today = todayKey();
+  const invoiceQuery = useMemo(() => invoiceListQuery(filter, today), [filter, today]);
+  const invoices = useBusinessCollection("invoices", businessId, enabled, invoiceQuery);
+  // The open invoice is read on its own, so recording the payment that moves
+  // it out of the current filter does not close it under the person's hands.
+  const selectedDoc = useLiveDoc("invoices", selectedId, enabled);
+  // Lines and payments belong to one invoice: read that invoice's, whole.
+  const invoiceScope = { pageSize: null, where: [["invoiceId", "==", selectedId]] } as const;
+  const lines = useBusinessCollection("invoiceLines", businessId, enabled && Boolean(selectedId), invoiceScope);
+  const payments = useBusinessCollection("invoicePayments", businessId, enabled && Boolean(selectedId), invoiceScope);
 
   const [modal, setModal] = useState<InvoiceModal>("");
   const [busy, setBusy] = useState(false);
@@ -199,29 +215,30 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
     return matchLotCustomers(knownCustomers, typed);
   }, [knownCustomers, invoiceDraft.customerName, customerMenuOpen, customerPick]);
 
-  const sorted = useMemo(() => sortInvoices(invoices.rows), [invoices.rows]);
-  const visible = useMemo(() => filterInvoices(sorted, filter, search), [sorted, filter, search]);
-  // 50 invoices at a time; a new filter or search starts from the top.
-  const invoicePage = useShowMore(visible, `${filter}|${search}`);
+  const sorted = useMemo(
+    () => (filter === "overdue" ? invoices.rows : sortInvoices(invoices.rows)),
+    [filter, invoices.rows],
+  );
+  // Search narrows the pages loaded so far; "Load more" brings older ones in.
+  const visible = useMemo(() => filterInvoices(sorted, filter, search, today), [sorted, filter, search, today]);
 
-  // The scoreboard reads the rows, so it cannot disagree with the list.
-  const board = useMemo(() => {
-    const today = todayKey();
-    let open = 0;
-    let overdue = 0;
-    let owedCents = 0;
-    let collectedCents = 0;
-    invoices.rows.forEach((row) => {
-      collectedCents += Math.max(0, Number(row.paidCents) || 0);
-      if (invoiceStatus(row) !== "open") return;
-      open += 1;
-      owedCents += Math.max(0, Number(row.balanceCents) || 0);
-      if (invoiceIsOverdue(row, today)) overdue += 1;
-    });
-    return { open, overdue, owedCents, collectedCents };
-  }, [invoices.rows]);
+  // The scoreboard covers every invoice the business has, counted by the
+  // server; the list is paged, so totalling its rows would only total the
+  // pages loaded. It asks again whenever a loaded invoice's money moves.
+  const boardReload = useMemo(
+    () => invoices.rows.map((row) => `${row.id}:${String(row.status)}:${String(row.balanceCents)}:${String(row.paidCents)}`).join("|"),
+    [invoices.rows],
+  );
+  const boardTotals = useServerTotals<{ board: InvoiceBoard; computedAtMs?: number }>(
+    "getInvoiceBoardTotals",
+    enabled ? { businessId, today, timeZone: viewerTimeZone() } : null,
+    boardReload,
+  );
+  const board: InvoiceBoard = boardTotals.data?.board ?? { open: 0, overdue: 0, owedCents: 0, collectedCents: 0, count: 0 };
 
-  const selected = selectedId ? invoices.rows.find((row) => String(row.id) === selectedId) : undefined;
+  const selected = selectedId
+    ? selectedDoc ?? invoices.rows.find((row) => String(row.id) === selectedId)
+    : undefined;
   const selectedLines = selected ? linesByInvoice.get(selectedId) ?? [] : [];
   const selectedPayments = selected ? paymentsByInvoice.get(selectedId) ?? [] : [];
   const selectedTotals = invoiceTotals(selectedLines, selectedPayments);
@@ -363,21 +380,30 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
       lastVinRef.current = "";
       return;
     }
-    const match = findVehicleRecordByVin([...parkedCars.rows, ...activities.rows], clean);
-    if (match) {
+    // A full VIN only: the lot's own records first (one lookup each, not a
+    // scan of every car), then the decoder - once per distinct VIN.
+    setVinHint("");
+    if (clean.length === 17 && clean !== lastVinRef.current) {
       lastVinRef.current = clean;
+      void lookupLineVin(clean);
+    }
+  }
+
+  async function lookupLineVin(vin: string) {
+    setVinHint(VIN_LOOKING_UP);
+    const match = await findBusinessVehicleRecord(businessId, vin);
+    if (lastVinRef.current !== vin) return;
+    if (match) {
       const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")].filter(Boolean).join(" ");
       if (car) {
         setLineDraft((d) => ({ ...d, description: d.description.trim() ? d.description : car }));
         setVinHint(`Filled from an existing record: ${car}. You can change anything below.`);
+      } else {
+        setVinHint("");
       }
       return;
     }
-    setVinHint("");
-    if (clean.length === 17 && clean !== lastVinRef.current) {
-      lastVinRef.current = clean;
-      void decodeLineVin(clean);
-    }
+    await decodeLineVin(vin);
   }
 
   async function decodeLineVin(vin: string) {
@@ -508,7 +534,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
   // Render.
   // -------------------------------------------------------------------------
 
-  const loading = invoices.loading || lines.loading;
+  const loading = invoices.loading;
   const loadError = invoices.error || lines.error || payments.error;
   const selectedOpen = selected ? invoiceStatus(selected) === "open" : false;
 
@@ -629,7 +655,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
       ) : (
         <article className="panel">
           <div className="panel-header">
-            <div><Receipt size={18} /><h2>Invoices &amp; receipts</h2><span className="panel-count">{invoices.rows.length}</span></div>
+            <div><Receipt size={18} /><h2>Invoices &amp; receipts</h2><span className="panel-count">{board.count}</span></div>
             <span className="panel-action">
               <button className="lst-add" type="button" disabled={busy || !enabled} onClick={openNew}><Plus size={16} /> New invoice</button>
             </span>
@@ -639,6 +665,12 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
             <div className="pk-stat"><span>Owed to you</span><b className={board.owedCents > 0 ? "owed" : ""}>{moneyText(board.owedCents)}</b><small>across open invoices</small></div>
             <div className="pk-stat"><span>Collected</span><b>{moneyText(board.collectedCents)}</b><small>on all invoices</small></div>
           </div>
+          <TotalsStatus
+            computedAtMs={boardTotals.data?.computedAtMs ?? null}
+            error={boardTotals.error}
+            loading={boardTotals.loading}
+            onRefresh={() => boardTotals.refresh()}
+          />
           <div className="panel-tools">
             <select value={filter} onChange={(e) => setFilter(e.target.value as InvoiceFilter)} aria-label="Filter by state">
               <option value="">Every state</option>
@@ -652,7 +684,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
 
           {loading && invoices.rows.length === 0 ? (
             <div className="empty-state"><RefreshCw className="spin" size={16} /> Loading…</div>
-          ) : invoices.rows.length === 0 ? (
+          ) : invoices.rows.length === 0 && !filter ? (
             <EmptyState text="No invoices yet. Open one the next time you sell something." />
           ) : visible.length === 0 ? (
             <EmptyState text="No invoices match this filter." />
@@ -660,7 +692,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
             <div className="mini-table">
               <div className="ctn-table ctn-list-table inv-list-table">
                 <div className="mini-table-head"><span>Invoice</span><span>Customer</span><span>Balance</span><span>State</span></div>
-                {invoicePage.shown.map((row) => {
+                {visible.map((row) => {
                   const id = String(row.id);
                   return (
                     <div
@@ -683,7 +715,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                   );
                 })}
               </div>
-              <ShowMoreButton remaining={invoicePage.remaining} onClick={invoicePage.showMore} />
+              <LoadMoreButton hasMore={invoices.hasMore} loading={invoices.loadingMore} onLoadMore={invoices.loadMore} />
             </div>
           )}
         </article>

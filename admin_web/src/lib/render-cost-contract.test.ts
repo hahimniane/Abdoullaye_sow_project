@@ -66,6 +66,9 @@ test("the finance ledger and the invoice list render a page at a time", () => {
   assert.match(admin, /\{ledgerPage\.shown\.map\(\(row\) => \(\s*<FinanceLedgerRecordRow/);
   assert.match(admin, /<ShowMoreButton remaining=\{ledgerPage\.remaining\}/);
   const invoices = readFileSync("src/components/business/invoices-panel.tsx", "utf8");
-  assert.match(invoices, /\{invoicePage\.shown\.map\(\(row\) => \{/);
-  assert.match(invoices, /<ShowMoreButton remaining=\{invoicePage\.remaining\}/);
+  // The invoice list is paged from the server: newest first, filtered in
+  // the query, "Load more" for the next page.
+  assert.match(invoices, /\{visible\.map\(\(row\) => \{/);
+  assert.match(invoices, /<LoadMoreButton hasMore=\{invoices\.hasMore\} loading=\{invoices\.loadingMore\} onLoadMore=\{invoices\.loadMore\} \/>/);
+  assert.match(invoices, /useBusinessCollection\("invoices", businessId, enabled, invoiceQuery\)/);
 });

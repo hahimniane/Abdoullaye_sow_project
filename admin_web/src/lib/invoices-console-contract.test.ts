@@ -34,7 +34,7 @@ test("the console routes the tab to InvoicesPanel with the business identity", (
 
 test("the panel reads the three collections by business and writes only through callables", () => {
   for (const name of ["invoices", "invoiceLines", "invoicePayments"]) {
-    assert.match(panelSource, new RegExp(`useBusinessCollection\\("${name}", businessId, enabled, \\d+\\)`));
+    assert.match(panelSource, new RegExp(`useBusinessCollection\\("${name}", businessId, enabled`));
     assert.match(rulesSource, new RegExp(`match /${name}/\\{[a-zA-Z]+\\} \\{\\s*allow read: if lotLedgerRead\\(resource\\.data\\.businessId\\);\\s*allow write: if false;`),
       `${name} must be readable by the business and written only by callables`);
   }

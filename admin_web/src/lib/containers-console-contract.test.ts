@@ -16,6 +16,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const consoleSource = read("../components/business-console.tsx");
 const panelSource = read("../components/business/containers-panel.tsx");
 const operationsSource = read("../components/business/operations-panels.tsx");
+const businessDataSource = readFileSync("src/lib/business-data.ts", "utf8");
 const peopleSource = read("../components/business/profile-support-people.tsx");
 const sidebarSource = read("./business-sidebar.ts");
 const stylesSource = read("../app/globals.css");
@@ -41,9 +42,15 @@ test("the console routes the tab to ContainersPanel like every other panel", () 
 });
 
 test("the panel reads containers and lines by business and writes only through callables", () => {
-  assert.match(panelSource, /useBusinessCollection\("containers", businessId, enabled, \d+\)/);
-  assert.match(panelSource, /useBusinessCollection\("containerLines", businessId, enabled, \d+\)/);
-  assert.match(panelSource, /useBusinessDestinations\(businessId, enabled, \d+\)/, "destinations come from the business's own list");
+  // Open containers whole; arrived ones newest arrival first, paged; the
+  // lines only of the containers on screen (batched `in`), never the
+  // business's whole loading history.
+  assert.match(panelSource, /useBusinessCollection\("containers", businessId, enabled, \{\s*pageSize: null,\s*where: \[\["status", "in", \["loading", "shipped"\]\]\],/);
+  assert.match(panelSource, /useBusinessCollection\("containers", businessId, enabled, \{\s*pageSize: 25,\s*orderBy: "arrivedAt",\s*where: \[\["status", "==", "arrived"\]\],/);
+  assert.match(panelSource, /useDocsWhereIn\(\{\s*collection: "containerLines",\s*field: "containerId",\s*values: containerIds,/);
+  assert.doesNotMatch(panelSource, /useBusinessCollection\("containerLines"/);
+  assert.match(panelSource, /<LoadMoreButton\s*hasMore=\{arrivedContainers\.hasMore\}/);
+  assert.match(panelSource, /useBusinessDestinations\(businessId, enabled\)/, "destinations come from the business's own list");
   // The business's own destinations come first, but a container may go
   // anywhere: a business with no Services & coverage list still gets the
   // whole catalogue, never an empty picker.
@@ -95,10 +102,13 @@ test("the list filters by state and by destination", () => {
 
 test("the line form reuses the ledger's VIN prefill and customer memory rather than forking them", () => {
   // Same records the ledger scans, same shared helpers, same decode.
-  assert.match(panelSource, /findVehicleRecordByVin\(\[\.\.\.parkedCars\.rows, \.\.\.activities\.rows\], clean\)/);
+  // The cars in the lot first (already in memory), then a full VIN asks the
+  // lot's own records one document at a time - never a scan of every car.
+  assert.match(panelSource, /findVehicleRecordByVin\(parkedCars\.rows, clean\)/);
+  assert.match(panelSource, /await findBusinessVehicleRecord\(businessId, vin\)/);
   assert.match(panelSource, /await decodeVinWithCatalog\(vin\)/);
   assert.match(panelSource, /matchLotCustomers\(knownCustomers, typed\)/);
-  assert.match(panelSource, /useBusinessCollection\("lotCustomers", businessId, enabled, \d+\)/);
+  assert.match(panelSource, /useBusinessCollection\("lotCustomers", businessId, enabled, \{\s*pageSize: \d+,\s*orderBy: "lastSeenAt",/);
   // The ledger's record form now goes through the same helper.
   assert.match(operationsSource, /const match = findVehicleRecordByVin\(\[\.\.\.parkedCars\.rows, \.\.\.activities\.rows\], clean\);/);
   assert.match(operationsSource, /async function decodeActivityVin\(vin: string\) \{\s*setVinHint\(VIN_LOOKING_UP\);\s*try \{\s*const result = await decodeVinWithCatalog\(vin\);/);
@@ -128,7 +138,7 @@ test("a car line asks whether the car is in the lot before it shows a VIN field"
 });
 
 test("the pick list is the parked cars in the lot, from the subscription the VIN prefill already holds", () => {
-  const subscriptions = panelSource.match(/useBusinessCollection\("parkedCars", businessId, enabled, \d+\)/g) ?? [];
+  const subscriptions = panelSource.match(/useActiveParkedCars\(businessId, enabled\)/g) ?? [];
   assert.equal(subscriptions.length, 1, "one parkedCars subscription per panel, not one per modal");
   assert.match(panelSource, /parkedCarsInLot\(parkedCars\.rows\)\.map\(\(row\) => parkedCarPick\(row, vinPlacements\)\)/);
   assert.match(panelSource, /const vinPlacements = useMemo\(\s*\(\) => buildVinPlacementIndex\(lines\.rows, containers\.rows\),/);
@@ -159,17 +169,13 @@ test("picking a parked car fills the car and the owner through the shared helper
 });
 
 test("a parked-car row and a ledger activity say which container the car is on", () => {
-  // One index per render from rows the panel already holds — never a query per row.
-  const parkingHooks = operationsSource.match(/const parkingCustomers = useBusinessRows\("lotCustomers"[\s\S]*?const placementLang = /);
-  assert.ok(parkingHooks, "parking panel does not build the placement index");
-  assert.match(parkingHooks[0], /useBusinessRows\("containerLines", businessId, Boolean\(businessId && !previewMode\), \d+\)/);
-  assert.match(parkingHooks[0], /useBusinessRows\("containers", businessId, Boolean\(businessId && !previewMode\), \d+\)/);
-  assert.match(parkingHooks[0], /buildVinPlacementIndex\(containerLines\.rows, containerRows\.rows\)/);
-
-  const ledgerHooks = operationsSource.match(/const lotCustomers = useBusinessRows\("lotCustomers", businessId, enabled, 500\);[\s\S]*?const placementLang = /);
-  assert.ok(ledgerHooks, "ledger panel does not build the placement index");
-  assert.match(ledgerHooks[0], /useBusinessRows\("containerLines", businessId, enabled, \d+\)/);
-  assert.match(ledgerHooks[0], /buildVinPlacementIndex\(containerLines\.rows, containerRows\.rows\)/);
+  // One index per change, from the OPEN containers and their lines only
+  // (useOpenContainerPlacements) - never a query per row, and never the
+  // business's whole loading history (3,000 lines it used to subscribe to).
+  assert.match(operationsSource, /const \{ placements: vinPlacements \} = useOpenContainerPlacements\(businessId, parkingEnabled\);/);
+  assert.match(operationsSource, /const \{ placements: vinPlacements \} = useOpenContainerPlacements\(businessId, enabled\);/);
+  assert.doesNotMatch(operationsSource, /"containerLines"/, "the panels never read containerLines directly");
+  assert.match(businessDataSource, /export function useOpenContainerPlacements\([\s\S]*?where: \[\["status", "in", \[\.\.\.OPEN_CONTAINER_STATUSES\]\]\][\s\S]*?useDocsWhereIn\(\{\s*collection: "containerLines",\s*field: "containerId",[\s\S]*?buildVinPlacementIndex\(lines\.rows, open\.rows\)/);
 
   // Parking list row, parking card, and ledger activity row each render the line.
   const placements = operationsSource.match(/className="ctn-placement">\{vinPlacementText\(vinPlacements\.get\(/g) ?? [];

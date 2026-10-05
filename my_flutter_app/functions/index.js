@@ -410,6 +410,7 @@ const {
   ensureParkingOccupancyIndexed,
   isBenignRace,
 } = require("./scaling_backfills");
+const {createConsoleTotalsHandlers} = require("./console_totals");
 const {
   drainPages,
   mapWithConcurrency,
@@ -34857,3 +34858,42 @@ exports.assistantChat = onRequest(
       }
     },
 );
+
+// ---- Console totals (console_totals.js) ----------------------------------
+// The consoles page their lists; every total they show comes from here, over
+// every record. Handlers and math live in console_totals.js and
+// console_summaries.js; these lines only bind them to the permission helpers
+// above and export them.
+const CONSOLE_TOTALS_CALLABLE_OPTIONS = Object.freeze({
+  enforceAppCheck: ENFORCE_APP_CHECK,
+  cors: true,
+  invoker: "public",
+  memory: "1GiB",
+  timeoutSeconds: 120,
+});
+const consoleTotals = createConsoleTotalsHandlers({
+  admin,
+  HttpsError,
+  logger,
+  requireAuth,
+  requireBusinessManager,
+  requireBusinessPermission,
+  hasBusinessPermission,
+  getUserProfile,
+  hasAdminCapability,
+  hasAdminSectionAccess,
+  normalizeBusinessServices,
+  ensureParkingOccupancyIndexed,
+});
+exports.getBusinessOverview = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
+    consoleTotals.getBusinessOverview);
+exports.getInvoiceBoardTotals = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
+    consoleTotals.getInvoiceBoardTotals);
+exports.getLotLedgerTotals = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
+    consoleTotals.getLotLedgerTotals);
+exports.getParkingTotals = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
+    consoleTotals.getParkingTotals);
+exports.getAdminOverview = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
+    consoleTotals.getAdminOverview);
+exports.getPlatformEarnings = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
+    consoleTotals.getPlatformEarnings);

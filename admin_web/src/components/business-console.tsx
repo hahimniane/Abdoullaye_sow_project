@@ -59,7 +59,19 @@ import {
   mergeNotificationPreferences,
   notificationPreferenceFields,
 } from "@/lib/notification-preferences";
-import { useBusinessCollection, useBusinessStaff } from "@/lib/business-data";
+import {
+  useBusinessCollection,
+  useBusinessHasRecords,
+  useBusinessStaff,
+} from "@/lib/business-data";
+import {
+  emptyBusinessOverview,
+  isOpenStatus,
+  purchaseStatus,
+  type BusinessOverview,
+} from "@/lib/business-overview";
+import { useServerTotals } from "@/lib/use-server-totals";
+import { TotalsStatus } from "@/components/totals-status";
 import {
   buildBusinessSidebarGroups,
   businessSidebarTabs,
@@ -67,7 +79,6 @@ import {
   type BusinessSidebarTab,
   type BusinessTab,
 } from "@/lib/business-sidebar";
-import { summarizeBusinessEarnings } from "@/lib/business-earnings";
 import { buildBusinessVerificationChecklist } from "@/lib/business-verification";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
@@ -81,6 +92,16 @@ import {
   type BusinessPanelView,
 } from "@/lib/notification-routing";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
+
+/** The newest records per service that "Needs attention" looks through. */
+const ATTENTION_SAMPLE = 25;
+
+type BusinessOverviewResponse = {
+  overview: BusinessOverview;
+  complete?: boolean;
+  computedAtMs?: number;
+  cached?: boolean;
+};
 
 type BusinessConsoleProps = {
   firebaseUser: User;
@@ -240,24 +261,27 @@ export function BusinessConsole({
   }, [business?.enabledServices, profile.businessServices]);
 
   const canManageListings = hasBusinessPermission(profile, "listings");
-  const cars = useBusinessCollection(
+  // A business that no longer offers car sales keeps its Listings tab while
+  // it still has listings. That only needs to know whether one exists: a
+  // one-document probe, asked only when the service is off.
+  const listingsProbe = useBusinessHasRecords(
     "cars",
     businessId,
-    enabled && canManageListings,
-    null,
+    enabled && canManageListings && !services.has("carSales"),
   );
+  const hasListings = listingsProbe.hasRecords;
 
   const visibleTabs = useMemo(() => {
     return businessSidebarTabs.filter((tab) => {
       const serviceAllowed =
         !tab.service ||
         services.has(tab.service) ||
-        (tab.id === "listings" && cars.rows.length > 0);
+        (tab.id === "listings" && hasListings);
       const permissionAllowed =
         !tab.permission || hasBusinessPermission(profile, tab.permission);
       return serviceAllowed && permissionAllowed;
     });
-  }, [cars.rows.length, profile, services]);
+  }, [hasListings, profile, services]);
 
   useEffect(() => {
     setPinnedTabs((current) => {
@@ -299,54 +323,69 @@ export function BusinessConsole({
     setActiveTab("destinations");
   }, []);
 
+  // Today's figures come from the server, over every record: the tab used to
+  // total five listeners capped at 500 rows with no order, so past 500 a
+  // business saw a random subset of its own numbers.
+  const onToday = enabled && activeTab === "today";
+  const overview = useServerTotals<BusinessOverviewResponse>(
+    "getBusinessOverview",
+    onToday ? { businessId } : null,
+  );
+  // "Needs attention" is a short live list: the newest records per service,
+  // ordered, of which the open ones are shown. A handful of documents each,
+  // only while Today is open.
+  const recentOptions = { pageSize: ATTENTION_SAMPLE, sort: "query" } as const;
   const purchases = useBusinessCollection(
     "carPurchases",
     businessId,
-    enabled && services.has("carSales"),
-    500,
+    onToday && services.has("carSales"),
+    recentOptions,
   );
   const shipments = useBusinessCollection(
     "barrelShipments",
     businessId,
-    enabled && services.has("barrelShipping"),
-    500,
+    onToday && services.has("barrelShipping"),
+    recentOptions,
   );
   const freightShipments = useBusinessCollection(
     "freightShipments",
     businessId,
-    enabled && services.has("freight"),
-    500,
+    onToday && services.has("freight"),
+    recentOptions,
   );
   const transports = useBusinessCollection(
     "transportRequests",
     businessId,
-    enabled && services.has("carTransport"),
-    500,
+    onToday && services.has("carTransport"),
+    recentOptions,
   );
+  // Stays recorded in the app carry no createdAt; every stay has its
+  // parkingDate, so the newest stays are read by that.
   const parkedCars = useBusinessCollection(
     "parkedCars",
     businessId,
-    enabled && services.has("carParking"),
-    500,
+    onToday && services.has("carParking"),
+    { ...recentOptions, orderBy: "parkingDate" },
   );
-  const supportCases = useBusinessCollection(
-    "supportCases",
-    businessId,
-    enabled,
-    300,
-  );
+  // Growth shows the three newest insights; that is all it reads.
   const insights = useBusinessCollection(
     "businessInsights",
     businessId,
-    enabled,
-    50,
+    enabled && activeTab === "growth",
+    { pageSize: 3, sort: "query" },
   );
-  const staff = useBusinessStaff(businessId, enabled, 200);
+  const staff = useBusinessStaff(businessId, enabled && activeTab === "people");
+  // Unacknowledged ledger changes, newest first: the six Today shows.
   const ledgerEvents = useBusinessCollection(
     "lotLedgerAudit",
     businessId,
-    enabled && services.has("carParking"),
-    50,
+    onToday && services.has("carParking"),
+    {
+      pageSize: 6,
+      orderBy: "at",
+      where: [["acknowledged", "==", false]],
+      sort: "query",
+    },
   );
 
   const businessName = text(business?.name ?? profile.businessName, "Business");
@@ -538,13 +577,14 @@ export function BusinessConsole({
               attentionRows={attentionRows}
               ledgerEvents={ledgerEvents.rows}
               onOpenTab={setActiveTab}
-              cars={cars.rows}
-              purchases={purchases.rows}
-              shipments={shipments.rows}
-              freightShipments={freightShipments.rows}
-              transports={transports.rows}
-              parkedCars={parkedCars.rows}
-              support={supportCases.rows}
+              overview={overview.data?.overview ?? null}
+              overviewState={{
+                computedAtMs: overview.data?.computedAtMs ?? null,
+                complete: overview.data?.complete !== false,
+                loading: overview.loading,
+                error: overview.error,
+                refresh: () => overview.refresh(true),
+              }}
               services={services}
               previewMode={previewMode}
               onOpenSupport={() => setActiveTab("cases")}
@@ -685,7 +725,7 @@ export function BusinessConsole({
             />
           )}
           {activeTab === "reviews" && (
-            <ReviewsPanel businessId={businessId} previewMode={previewMode} />
+            <ReviewsPanel businessId={businessId} business={business} previewMode={previewMode} />
           )}
           {activeTab === "cases" && (
             <SupportCasesPanel
@@ -890,13 +930,8 @@ function TodayView({
   attentionRows,
   ledgerEvents,
   onOpenTab,
-  cars,
-  purchases,
-  shipments,
-  freightShipments,
-  transports,
-  parkedCars,
-  support,
+  overview: serverOverview,
+  overviewState,
   services,
   previewMode,
   onOpenSupport,
@@ -907,18 +942,24 @@ function TodayView({
   attentionRows: AttentionRow[];
   ledgerEvents: FirestoreRow[];
   onOpenTab: (tab: BusinessTab) => void;
-  cars: FirestoreRow[];
-  purchases: FirestoreRow[];
-  shipments: FirestoreRow[];
-  freightShipments: FirestoreRow[];
-  transports: FirestoreRow[];
-  parkedCars: FirestoreRow[];
-  support: FirestoreRow[];
+  /** Worked out by the server over every record (getBusinessOverview). */
+  overview: BusinessOverview | null;
+  overviewState: {
+    computedAtMs: number | null;
+    complete: boolean;
+    loading: boolean;
+    error: string;
+    refresh: () => void;
+  };
   services: Set<string>;
   previewMode: boolean;
   onOpenSupport: () => void;
   canOpenSupport: boolean;
 }) {
+  const overview = useMemo(
+    () => serverOverview ?? emptyBusinessOverview(),
+    [serverOverview],
+  );
   const eventMs = (r: FirestoreRow) => {
     const a = r.at as { toMillis?: () => number; seconds?: number } | undefined;
     if (a?.toMillis) return a.toMillis();
@@ -943,25 +984,22 @@ function TodayView({
   const metrics = [
     {
       label: "Active listings",
-      value: cars.filter((row) => row.status === "active").length,
+      value: overview.metrics.activeListings,
       tone: "good",
     },
     {
       label: "Open shipments",
-      value: [...shipments, ...freightShipments].filter((row) =>
-        isOpenStatus(row.status),
-      ).length,
+      value: overview.metrics.openShipments,
       tone: "attention",
     },
     {
       label: "Pending purchases",
-      value: purchases.filter((row) => isOpenStatus(purchaseStatus(row)))
-        .length,
+      value: overview.metrics.pendingPurchases,
       tone: "attention",
     },
     {
       label: "Support requests",
-      value: support.filter((row) => isOpenStatus(row.status)).length,
+      value: overview.metrics.openSupport,
       tone: "neutral",
     },
   ];
@@ -975,15 +1013,16 @@ function TodayView({
           </article>
         ))}
       </div>
-      <AnalyticsView
-        cars={cars}
-        purchases={purchases}
-        shipments={shipments}
-        freightShipments={freightShipments}
-        transports={transports}
-        parkedCars={parkedCars}
-        services={services}
-      />
+      {!previewMode && (
+        <TotalsStatus
+          computedAtMs={overviewState.computedAtMs}
+          complete={overviewState.complete}
+          error={overviewState.error}
+          loading={overviewState.loading}
+          onRefresh={overviewState.refresh}
+        />
+      )}
+      <AnalyticsView overview={overview} services={services} />
       <PayoutsPanel
         businessId={businessId}
         business={business}
@@ -1036,15 +1075,15 @@ function TodayView({
           </div>
         </Panel>
       </div>
-      {(transports.length > 0 || parkedCars.length > 0) && (
+      {(overview.metrics.transports > 0 || overview.metrics.parkedCars > 0) && (
         <div className="metric-grid">
           <article className="metric neutral">
             <span>Transport requests</span>
-            <strong>{transports.length}</strong>
+            <strong>{overview.metrics.transports}</strong>
           </article>
           <article className="metric neutral">
             <span>Parked cars</span>
-            <strong>{parkedCars.length}</strong>
+            <strong>{overview.metrics.parkedCars}</strong>
           </article>
         </div>
       )}
@@ -1337,52 +1376,25 @@ function PayoutsPanel({
 }
 
 function AnalyticsView({
-  cars,
-  purchases,
-  shipments,
-  freightShipments,
-  transports,
-  parkedCars,
+  overview,
   services,
 }: {
-  cars: FirestoreRow[];
-  purchases: FirestoreRow[];
-  shipments: FirestoreRow[];
-  freightShipments: FirestoreRow[];
-  transports: FirestoreRow[];
-  parkedCars: FirestoreRow[];
+  overview: BusinessOverview;
   services: Set<string>;
 }) {
-  const listingBreakdown = topStatuses(cars, "status");
-  const operationBreakdown = topStatuses(
-    [...shipments, ...freightShipments, ...transports, ...parkedCars],
-    "status",
-  );
-  const purchaseBreakdown = topStatuses(purchases, "purchaseStatus");
-  const earnings = useMemo(
-    () =>
-      summarizeBusinessEarnings({
-    purchases,
-    shipments,
-        freightShipments,
-    transports,
-    parkedCars,
-      }),
-    [freightShipments, parkedCars, purchases, shipments, transports],
-  );
+  const {
+    listingBreakdown,
+    operationBreakdown,
+    purchaseBreakdown,
+    earnings,
+    activeInventoryValue,
+    paidHoldValue,
+  } = overview;
   const visibleServiceRows = earnings.services.filter(
     (service) =>
       services.has(service.serviceId) ||
       service.paidTransactions > 0 ||
       service.pendingTransactions > 0,
-  );
-  const activeInventoryValue = cars
-    .filter((row) => text(row.status, "") === "active")
-    .reduce((sum, row) => sum + numericValue(row.price), 0);
-  const paidHoldValue = purchases.reduce(
-    (sum, row) =>
-      sum + numericValue(row.depositAmount ?? row.holdDepositAmount),
-    0,
   );
 
   return (
@@ -1645,41 +1657,6 @@ function tabIcon(tab: BusinessTab) {
     growth: <Sparkles {...props} />,
   };
   return icons[tab];
-}
-
-function isOpenStatus(value: unknown) {
-  const status = text(value, "").toLowerCase();
-  return ![
-    "",
-    "completed",
-    "cancelled",
-    "sold",
-    "inactive",
-    "refunded",
-    "rejected",
-    "resolved",
-    "closed",
-  ].includes(status);
-}
-
-function purchaseStatus(row: FirestoreRow) {
-  return text(row.purchaseStatus ?? row.status, "pending");
-}
-
-function topStatuses(rows: FirestoreRow[], field: string) {
-  const counts = new Map<string, number>();
-  rows.forEach((row) => {
-    const value = text(row[field], "unknown").toLowerCase();
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  });
-  return Array.from(counts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-}
-
-function numericValue(value: unknown) {
-  const amount = Number(value ?? 0);
-  return Number.isFinite(amount) ? amount : 0;
 }
 
 function hasBusinessPermission(profile: UserProfile, permission: string) {

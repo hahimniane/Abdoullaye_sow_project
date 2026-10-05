@@ -121,6 +121,10 @@ import { withGuestContact } from "@/lib/guest-checkout";
 import { ensureGuestOrAccount } from "@/lib/guest-session";
 import { formatDate, formatDayKey, formatMoney, text } from "@/lib/format";
 import { currentWebLanguage } from "@/lib/language";
+import {
+  catalogRefetchDelayMs,
+  createCatalogBumpScheduler,
+} from "@/lib/catalog-refetch";
 import { isValidPhone } from "@/lib/phone";
 import {
   receiverPhoneIsDifferentCountry,
@@ -530,28 +534,6 @@ export function CustomerShippingServices({
   const [transportOptionsError, setTransportOptionsError] = useState("");
   const [optionsReloadKey, setOptionsReloadKey] = useState(0);
 
-  // The catalogs come from callables that answer once, so a business turning
-  // a service or pickup off could not reach an open page (backlog item 2).
-  // The server bumps publicCatalog/services on every such change; skipping
-  // the snapshot that merely delivers the current value, each later bump
-  // re-asks the callables.
-  useEffect(() => {
-    let first = true;
-    return onSnapshot(
-      doc(db, "publicCatalog", "services"),
-      () => {
-        if (first) {
-          first = false;
-          return;
-        }
-        setOptionsReloadKey((current) => current + 1);
-      },
-      () => {
-        // A read failure only costs live freshness; the page still works.
-      },
-    );
-  }, []);
-
   useEffect(() => {
     let active = true;
 
@@ -611,24 +593,30 @@ export function CustomerShippingServices({
   // reloaded the page (docs/PLAN-2026-08-backlog.md #2). The server bumps
   // publicCatalog/services on every such change; re-ask whenever it does.
   // The document carries no business data, only a revision counter.
+  // One listener (there used to be two, so every bump re-fetched twice), and
+  // each bump waits a random 0-30 s before re-fetching so every open tab
+  // does not hit the backend in the same second. The scheduler skips the
+  // first snapshot (the initial load above covers it), joins a bump that
+  // arrives while a re-fetch is pending, and cancels it on unmount. The old
+  // options stay on screen while the timer waits, so no loading state is
+  // held open by it.
   useEffect(() => {
-    let first = true;
-    return onSnapshot(
+    const scheduler = createCatalogBumpScheduler({
+      refetch: () => setOptionsReloadKey((current) => current + 1),
+      delayMs: () => catalogRefetchDelayMs(),
+    });
+    const unsubscribe = onSnapshot(
       doc(db, "publicCatalog", "services"),
-      () => {
-        // The listener fires immediately with the current value; the initial
-        // load above already covers that, so only later bumps matter.
-        if (first) {
-          first = false;
-          return;
-        }
-        setOptionsReloadKey((current) => current + 1);
-      },
+      () => scheduler.onSignal(),
       () => {
         // A customer who cannot read the signal simply keeps the behaviour
         // they have today rather than seeing an error for a freshness hint.
       },
     );
+    return () => {
+      unsubscribe();
+      scheduler.dispose();
+    };
   }, []);
 
   const barrelOptions = useMemo(

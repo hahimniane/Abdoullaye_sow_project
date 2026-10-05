@@ -405,6 +405,51 @@ export function parkingMonthSummary(
   };
 }
 
+/**
+ * [start, end) of a "yyyy-mm" month in UTC milliseconds, or null. Mirrors
+ * `monthBoundsMs` in my_flutter_app/functions/parking_month_statement.js.
+ */
+export function parkingMonthBoundsMs(monthKey: string): { startMs: number; endMs: number } | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(monthKey || ""));
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return { startMs: Date.UTC(year, month - 1, 1), endMs: Date.UTC(year, month, 1) };
+}
+
+/**
+ * The narrow reads a month's bills need - the same four the month-end notice
+ * makes on the server (notifyParkingMonthEndFor), never the lot's history:
+ *  - stays that end on or after the month starts (`occupancyEndMs`; the
+ *    statement drops the ones that start after it);
+ *  - activities dated in the month;
+ *  - older activities not yet settled (they come along as "unpaid from
+ *    before"; a settled one never appears);
+ *  - the rare undated activities the statement dates by createdAt.
+ * Each is complete (no cap): the month bounds it. Pure, so the replay test
+ * can prove the narrow reads give the whole-history summary.
+ */
+export function parkingMonthQueryPlan(monthKey: string): {
+  cars: { where: [string, ">=", number][] };
+  inMonth: { where: [string, ">=" | "<", Date][]; orderBy: "activityDate"; direction: "desc" };
+  unsettled: { where: [string, "!=", string][] };
+  undated: { where: [string, "==", null][] };
+} | null {
+  const bounds = parkingMonthBoundsMs(monthKey);
+  if (!bounds) return null;
+  return {
+    cars: { where: [["occupancyEndMs", ">=", bounds.startMs]] },
+    inMonth: {
+      where: [["activityDate", ">=", new Date(bounds.startMs)], ["activityDate", "<", new Date(bounds.endMs)]],
+      orderBy: "activityDate",
+      direction: "desc",
+    },
+    unsettled: { where: [["paymentStatus", "!=", "succeeded"]] },
+    undated: { where: [["activityDate", "==", null]] },
+  };
+}
+
 export function moneyText(cents: number): string {
   const n = Math.round(Number(cents) || 0);
   const whole = Math.trunc(Math.abs(n) / 100);

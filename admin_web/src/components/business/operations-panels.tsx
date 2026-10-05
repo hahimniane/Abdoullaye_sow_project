@@ -13,9 +13,6 @@ import {
   serverTimestamp,
   setDoc,
   where,
-  type DocumentData,
-  type QueryConstraint,
-  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
@@ -69,7 +66,29 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
-import { useBusinessStaff } from "@/lib/business-data";
+import {
+  useActiveParkedCars,
+  useBusinessCollection,
+  useBusinessCountsByValue,
+  useBusinessDestinations,
+  useBusinessOfficeLocations,
+  useBusinessStaff,
+  useLiveDoc,
+  useOpenContainerPlacements,
+  useParkedCarHistory,
+} from "@/lib/business-data";
+import { useDocsWhereIn, usePagedQuery } from "@/lib/use-paged-query";
+import { loadedCountLabel, mergePages, statusFilterSpec, withFocusedRow } from "@/lib/paged-query";
+import { useServerTotals, viewerTimeZone } from "@/lib/use-server-totals";
+import { findBusinessVehicleRecord } from "@/lib/vin-records";
+import { LoadMoreButton } from "@/components/show-more";
+import { TotalsStatus } from "@/components/totals-status";
+import {
+  parkingTotalsReloadKey,
+  totalsReloadKey,
+  type ServerLedgerTotals,
+  type ServerParkingSummary,
+} from "@/lib/console-totals";
 import {
   formatCents as lotFormatCents,
   LOT_CUSTOM_ACTIVITY_ID,
@@ -95,13 +114,13 @@ import {
   lotActivityMessage,
   expenseProofRequired,
   expenseProofMessage,
-  lotMonthExpenseCents,
+  lotActivityListQuery,
+  lotExpenseEntryQueries,
   lotExpenseByLine,
   lotActivityPaidCents,
   lotActivityRemainingCents,
   lotActivityPaymentBadge,
   lotActivityBalanceText,
-  lotActivityScoreboard,
   lotActivityPaymentPlan,
   dollarsToCents as lotDollarsToCents,
   emptyLotInstalmentDraft,
@@ -120,7 +139,7 @@ import {
   matchLotCustomers,
   type LotCustomer,
 } from "@/lib/lot-customers";
-import { buildVinPlacementIndex, vinPlacementText } from "@/lib/container-manifest";
+import { vinPlacementText } from "@/lib/container-manifest";
 import {
   VIN_LOOKING_UP,
   VIN_SERVICE_UNREACHABLE,
@@ -161,7 +180,6 @@ import {
   businessParkingEndLabel,
   businessParkingStayDays,
   businessParkingTotals,
-  businessParkingOverdue,
   businessParkingAmountPaid,
   businessParkingIsPartlyPaid,
   businessParkingBalance,
@@ -186,7 +204,6 @@ import {
   type BusinessParkingEntryError,
   type BusinessParkingEntryResult,
   type BusinessParkingPaymentMethod,
-  businessParkingCollectedByMonth,
 } from "@/lib/business-parking-entry";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import {
@@ -619,12 +636,7 @@ export function DestinationsPanel({
   onManageServices,
   openNewToken = 0,
 }: PanelProps) {
-  const destinations = useBusinessSubcollectionRows(
-    "destinationCountries",
-    businessId,
-    Boolean(businessId && !previewMode),
-    countries.length,
-  );
+  const destinations = useBusinessDestinations(businessId, Boolean(businessId && !previewMode));
   const [draft, setDraft] = useState<DestinationDraft>(emptyDestinationDraft);
   const [editingId, setEditingId] = useState("");
   const [search, setSearch] = useState("");
@@ -1428,12 +1440,7 @@ export function OfficeLocationsPanel({
   businessId,
   previewMode = false,
 }: PanelProps) {
-  const locations = useBusinessSubcollectionRows(
-    "officeLocations",
-    businessId,
-    Boolean(businessId && !previewMode),
-    50,
-  );
+  const locations = useBusinessOfficeLocations(businessId, Boolean(businessId && !previewMode));
   const [draft, setDraft] = useState<OfficeLocationDraft>(
     emptyOfficeLocationDraft,
   );
@@ -1727,7 +1734,9 @@ export function ListingsPanel({
 }: PanelProps) {
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   const catalogReady = useCarCatalog();
-  const listings = useBusinessRows("cars", businessId, Boolean(businessId && !previewMode), null);
+  // Every car the business lists, whole and live: owners must see all their
+  // listings, never a capped subset (design memory).
+  const listings = useBusinessCollection("cars", businessId, Boolean(businessId && !previewMode), { pageSize: null });
   const [draft, setDraft] = useState<ListingDraft>(emptyListingDraft);
   const [editingId, setEditingId] = useState("");
   const [images, setImages] = useState<EditImage[]>([]);
@@ -2453,14 +2462,35 @@ export function BarrelsPanel({
 }: PanelProps) {
   const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const enabled = Boolean(businessId && !previewMode);
-  const shipments = useBusinessRows("barrelShipments", businessId, enabled, 500);
-  const pools = useBusinessRows("barrelPools", businessId, enabled, 500);
-  const balanceRequests = useBusinessRows("barrelPoolBalanceRequests", businessId, enabled, 500);
-  const destinations = useBusinessSubcollectionRows("destinationCountries", businessId, enabled, 100);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
-  const focusedCardRef = useRef<HTMLElement | null>(null);
   const [poolFilter, setPoolFilter] = useState("all");
+  // Newest bookings first, a page at a time, the status picked narrowing the
+  // query itself (a filter applied after a page hides every match beyond it).
+  // The record a notification points at is read on its own so it is on
+  // screen even when it is older than the loaded pages.
+  const shipmentPages = useBusinessCollection("barrelShipments", businessId, enabled, {
+    where: statusFilterSpec("status", filter),
+    sort: "query",
+  });
+  const focusedShipment = useLiveDoc("barrelShipments", focusRecordId, enabled);
+  const shipmentRows = useMemo(
+    () => withFocusedRow(shipmentPages.rows, focusedShipment),
+    [shipmentPages.rows, focusedShipment],
+  );
+  const shipments = { ...shipmentPages, rows: shipmentRows };
+  const pools = useBusinessCollection("barrelPools", businessId, enabled, {
+    orderBy: "updatedAt",
+    where: statusFilterSpec("status", poolFilter),
+    sort: "query",
+  });
+  // Only the balance requests still waiting, which is all a pool card shows.
+  const balanceRequests = useBusinessCollection("barrelPoolBalanceRequests", businessId, enabled, {
+    pageSize: null,
+    where: [["status", "==", "pending"]],
+  });
+  const destinations = useBusinessDestinations(businessId, enabled);
+  const focusedCardRef = useRef<HTMLElement | null>(null);
   const [poolFormOpen, setPoolFormOpen] = useState(false);
   const [poolDraft, setPoolDraft] = useState<PoolDraft>(() => defaultPoolDraft());
   const [poolFormError, setPoolFormError] = useState("");
@@ -2847,8 +2877,8 @@ export function BarrelsPanel({
           <p>{shipments.rows.length === 0
             ? "Barrels customers send through your business appear here."
             : currentLanguage() === "fr"
-              ? `${shipments.rows.length} expédition${shipments.rows.length === 1 ? "" : "s"}`
-              : `${shipments.rows.length} shipment${shipments.rows.length === 1 ? "" : "s"}`}</p>
+              ? `${loadedCountLabel(shipments.rows.length, shipments.hasMore)} expédition${shipments.rows.length === 1 && !shipments.hasMore ? "" : "s"}`
+              : `${loadedCountLabel(shipments.rows.length, shipments.hasMore)} shipment${shipments.rows.length === 1 && !shipments.hasMore ? "" : "s"}`}</p>
         </div>
         <div className="lst-head-actions"><StatusText busy={Boolean(busyId)} message={message} tone={messageTone} /></div>
       </header>
@@ -2880,8 +2910,8 @@ export function BarrelsPanel({
             <p>{pools.rows.length === 0
               ? "Open pooled barrels, approve joiners, and seal full barrels into tracked shipments."
               : currentLanguage() === "fr"
-                ? `${pools.rows.length} baril partagé${pools.rows.length === 1 ? "" : "s"}`
-                : `${pools.rows.length} pool${pools.rows.length === 1 ? "" : "s"}`}</p>
+                ? `${loadedCountLabel(pools.rows.length, pools.hasMore)} baril${pools.rows.length === 1 && !pools.hasMore ? "" : "s"} partagé${pools.rows.length === 1 && !pools.hasMore ? "" : "s"}`
+                : `${loadedCountLabel(pools.rows.length, pools.hasMore)} pool${pools.rows.length === 1 && !pools.hasMore ? "" : "s"}`}</p>
           </div>
           <div className="pool-head-actions">
             <button className="lst-add" type="button" disabled={activeDestinations.length === 0 || Boolean(busyId)} onClick={openPoolForm}>
@@ -2907,14 +2937,14 @@ export function BarrelsPanel({
           </div>
         )}
         {pools.loading && <LoadingState />}
-        {!pools.loading && pools.rows.length === 0 && (
+        {!pools.loading && pools.rows.length === 0 && poolFilter === "all" && (
           <div className="lst-empty compact">
             <div className="lst-empty-icon"><Package size={26} /></div>
             <h3>No shared barrel pools yet</h3>
             <p>Customer-posted, drop-off, and business-held consolidation pools will appear here.</p>
           </div>
         )}
-        {!pools.loading && pools.rows.length > 0 && filteredPools.length === 0 && (
+        {!pools.loading && (pools.rows.length > 0 || poolFilter !== "all") && filteredPools.length === 0 && (
           <EmptyState text="No shared barrel pools match this filter." />
         )}
         <div className="pur-grid">
@@ -3092,6 +3122,7 @@ export function BarrelsPanel({
             );
           })}
         </div>
+        <LoadMoreButton hasMore={pools.hasMore} loading={pools.loadingMore} onLoadMore={pools.loadMore} />
       </div>
 
       {adjustingPool && (
@@ -3339,14 +3370,14 @@ export function BarrelsPanel({
       )}
 
       {shipments.loading && <LoadingState />}
-      {!shipments.loading && shipments.rows.length === 0 && (
+      {!shipments.loading && shipments.rows.length === 0 && filter === "all" && (
         <div className="lst-empty">
           <div className="lst-empty-icon"><Package size={30} /></div>
           <h3>No barrel shipments yet</h3>
           <p>When customers book barrels to your destinations, they show up here to manage.</p>
         </div>
       )}
-      {!shipments.loading && shipments.rows.length > 0 && filteredRows.length === 0 && (
+      {!shipments.loading && (shipments.rows.length > 0 || filter !== "all") && filteredRows.length === 0 && (
         <EmptyState text="No shipments match this filter." />
       )}
 
@@ -3480,6 +3511,7 @@ export function BarrelsPanel({
           );
         })}
       </div>
+      <LoadMoreButton hasMore={shipmentPages.hasMore} loading={shipmentPages.loadingMore} onLoadMore={shipmentPages.loadMore} />
     </section>
   );
 }
@@ -3491,13 +3523,23 @@ export function FreightPanel({
   focusView = "",
 }: PanelProps) {
   const enabled = Boolean(businessId && !previewMode);
-  const freight = useBusinessRows("freightShipments", businessId, enabled, 500);
-  const priceRequests = useFreightQuoteRequests(businessId, enabled);
-  const quoteLens = useBusinessQuoteLens(businessId, enabled);
-  const ownQuotes = useBusinessRows("freightQuotes", businessId, enabled, 500);
   const [view, setView] = useState<"shipments" | "requests">("shipments");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  // Newest bookings first, a page at a time, the status narrowing the query.
+  const freightPages = useBusinessCollection("freightShipments", businessId, enabled, {
+    where: statusFilterSpec("status", filter),
+    sort: "query",
+  });
+  const focusedShipment = useLiveDoc("freightShipments", focusView === "requests" ? "" : focusRecordId, enabled);
+  const freightRows = useMemo(
+    () => withFocusedRow(freightPages.rows, focusedShipment),
+    [freightPages.rows, focusedShipment],
+  );
+  const freight = { ...freightPages, rows: freightRows };
+  const priceRequests = useFreightQuoteRequests(businessId, enabled);
+  const focusedRequest = useLiveDoc("freightQuoteRequests", focusView === "requests" ? focusRecordId : "", enabled);
+  const quoteLens = useBusinessQuoteLens(businessId, enabled);
   const focusedCardRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -3516,16 +3558,23 @@ export function FreightPanel({
   // Only the requests still taking prices. A request whose customer has
   // chosen is finished business, and leaving it in the feed would invite a
   // price the callable refuses.
+  // The query already asks only for these (quoteStatus == collecting); the
+  // one a notification points at is kept even once it has closed.
   const openPriceRequests = useMemo(
-    () =>
-      priceRequests.rows.filter(
-        (row) =>
-          text(row.quoteStatus, "collecting") === "collecting" ||
-          (Boolean(focusRecordId) && row.id === focusRecordId),
-      ),
-    [priceRequests.rows, focusRecordId],
+    () => withFocusedRow(priceRequests.rows, focusedRequest),
+    [priceRequests.rows, focusedRequest],
   );
 
+  // This business's own price on each request on screen - looked up by the
+  // requests' ids, never by reading every quote it ever sent.
+  const openRequestIds = useMemo(() => openPriceRequests.map((row) => String(row.id)), [openPriceRequests]);
+  const ownQuotes = useDocsWhereIn({
+    collection: "freightQuotes",
+    field: "requestId",
+    values: openRequestIds,
+    filters: [["businessId", "==", businessId.trim()]],
+    enabled,
+  });
   const quoteByRequestId = useMemo(
     () =>
       new Map(ownQuotes.rows.map((quote) => [text(quote.requestId, ""), quote])),
@@ -3706,8 +3755,8 @@ export function FreightPanel({
           <p>{freight.rows.length === 0
             ? "Paid parcel shipments will appear here for fulfillment."
             : currentLanguage() === "fr"
-              ? `${freight.rows.length} expédition${freight.rows.length === 1 ? "" : "s"}`
-              : `${freight.rows.length} shipment${freight.rows.length === 1 ? "" : "s"}`}</p>
+              ? `${loadedCountLabel(freight.rows.length, freight.hasMore)} expédition${freight.rows.length === 1 && !freight.hasMore ? "" : "s"}`
+              : `${loadedCountLabel(freight.rows.length, freight.hasMore)} shipment${freight.rows.length === 1 && !freight.hasMore ? "" : "s"}`}</p>
         </div>
         <StatusText busy={Boolean(busyId)} message={message} />
       </header>
@@ -3720,7 +3769,7 @@ export function FreightPanel({
           type="button"
         >
           Booked shipments
-          <span>{freight.rows.length}</span>
+          <span>{loadedCountLabel(freight.rows.length, freight.hasMore)}</span>
         </button>
         <button
           aria-selected={view === "requests"}
@@ -3772,10 +3821,10 @@ export function FreightPanel({
         <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("freight-shipments.csv", filteredRows, ["trackingCode", "senderName", "receiverName", "receiverPhone", "destinationCountryName", "freightMode", "estimatedWeightKg", "verifiedWeightKg", "pricePerKg", "estimatedTotal", "finalTotal", "priceSettlementStatus", "paymentStatus", "status", "updatedAt"])}><Download size={15} /> Export CSV</button>
       </div>
       {freight.loading && <LoadingState />}
-      {!freight.loading && freight.rows.length === 0 && (
+      {!freight.loading && freight.rows.length === 0 && filter === "all" && (
         <div className="lst-empty"><div className="lst-empty-icon"><Package size={30} /></div><h3>No freight shipments yet</h3><p>Configure air or sea rates under Destinations so customers can book freight.</p></div>
       )}
-      {!freight.loading && freight.rows.length > 0 && filteredRows.length === 0 && <EmptyState text="No freight shipments match this filter." />}
+      {!freight.loading && (freight.rows.length > 0 || filter !== "all") && filteredRows.length === 0 && <EmptyState text="No freight shipments match this filter." />}
       <div className="pur-grid">
         {filteredRows.map((row) => {
           const status = text(row.status, "pending");
@@ -3856,6 +3905,7 @@ export function FreightPanel({
           );
         })}
       </div>
+      <LoadMoreButton hasMore={freightPages.hasMore} loading={freightPages.loadingMore} onLoadMore={freightPages.loadMore} />
       </>)}
     </section>
   );
@@ -4105,6 +4155,22 @@ function transportTone(status: string) {
   }
 }
 
+/** Opportunity states a quote can still act on (TransportPanel's query). */
+const TRANSPORT_OPEN_OPPORTUNITY_STATUSES = ["open", "quoted", "withdrawn"] as const;
+
+/** Statuses seen so far plus new ones, deduplicated and sorted (stable when nothing is new). */
+function mergeSeenStatuses(current: readonly string[], next: readonly string[]): string[] {
+  const all = new Set(current);
+  let grew = false;
+  for (const status of next) {
+    if (status && !all.has(status)) {
+      all.add(status);
+      grew = true;
+    }
+  }
+  return grew ? Array.from(all).sort() : (current as string[]);
+}
+
 export function TransportPanel({
   businessId,
   previewMode = false,
@@ -4112,12 +4178,58 @@ export function TransportPanel({
   focusView = "",
 }: PanelProps) {
   const enabled = Boolean(businessId && !previewMode);
-  const opportunities = useBusinessRows("transportOpportunities", businessId, enabled, 500);
-  const businessQuotes = useBusinessRows("transportQuotes", businessId, enabled, 500);
-  const transports = useBusinessRows("transportRequests", businessId, enabled, 500);
   const [view, setView] = useState<"opportunities" | "jobs">("opportunities");
   const [search, setSearch] = useState("");
   const [jobStatus, setJobStatus] = useState("all");
+  // Opportunities a quote can still win, filtered in the query: open, already
+  // quoted (revisable), or withdrawn by the request. A won, closed or
+  // cancelled one is finished business. Few at a time (they expire), so whole.
+  const opportunityRows = useBusinessCollection("transportOpportunities", businessId, enabled, {
+    pageSize: null,
+    where: [["status", "in", [...TRANSPORT_OPEN_OPPORTUNITY_STATUSES]]],
+  });
+  const focusedOpportunity = useLiveDoc(
+    "transportOpportunities",
+    // One opportunity per request and business (transportMarketplaceDocumentId).
+    focusView === "jobs" ? "" : focusRequestId && businessId.trim() ? `${focusRequestId}__${businessId.trim()}` : "",
+    enabled,
+  );
+  const opportunities = {
+    ...opportunityRows,
+    rows: useMemo(
+      () => withFocusedRow(opportunityRows.rows, focusedOpportunity),
+      [opportunityRows.rows, focusedOpportunity],
+    ),
+  };
+  // This business's quotes on the opportunities on screen, by request id.
+  const opportunityRequestIds = useMemo(
+    () => opportunities.rows.map((row) => text(row.requestId, row.id)),
+    [opportunities.rows],
+  );
+  const businessQuotes = useDocsWhereIn({
+    collection: "transportQuotes",
+    field: "requestId",
+    values: opportunityRequestIds,
+    filters: [["businessId", "==", businessId.trim()]],
+    enabled,
+  });
+  // Accepted jobs: newest first, a page at a time, the status picked
+  // narrowing the query; the job a notification points at read on its own.
+  const transportPages = useBusinessCollection("transportRequests", businessId, enabled, {
+    where: statusFilterSpec("status", jobStatus),
+    sort: "query",
+  });
+  const focusedJob = useLiveDoc("transportRequests", focusView === "jobs" ? focusRequestId : "", enabled);
+  const transports = {
+    ...transportPages,
+    rows: useMemo(
+      () => withFocusedRow(transportPages.rows, focusedJob),
+      [transportPages.rows, focusedJob],
+    ),
+  };
+  // Every status a job has been seen in, so picking one (which narrows the
+  // query to it) never takes the others off the picker.
+  const [seenJobStatuses, setSeenJobStatuses] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
   const [draft, setDraft] = useState<TransportQuoteDraft>(emptyTransportQuoteDraft);
@@ -4177,9 +4289,12 @@ export function TransportPanel({
 
   // The statuses actually present on this business's jobs — a filter offering
   // states no job is in reads as broken, so the options come from the data.
+  useEffect(() => {
+    setSeenJobStatuses((current) => mergeSeenStatuses(current, transports.rows.map((row) => text(row.status, ""))));
+  }, [transports.rows]);
   const jobStatuses = useMemo(
-    () => Array.from(new Set(transports.rows.map((row) => text(row.status, "")).filter(Boolean))).sort(),
-    [transports.rows],
+    () => mergeSeenStatuses(seenJobStatuses, jobStatus === "all" ? [] : [jobStatus]),
+    [seenJobStatuses, jobStatus],
   );
   const filteredJobs = useMemo(
     () => {
@@ -4400,7 +4515,7 @@ export function TransportPanel({
           type="button"
         >
           Accepted jobs
-          <span>{transports.rows.length}</span>
+          <span>{loadedCountLabel(transports.rows.length, transports.hasMore)}</span>
         </button>
       </div>
 
@@ -4543,7 +4658,7 @@ export function TransportPanel({
       {view === "jobs" && (
         <>
           {transports.loading && <LoadingState />}
-          {!transports.loading && transports.rows.length === 0 && (
+          {!transports.loading && transports.rows.length === 0 && jobStatus === "all" && (
             <div className="lst-empty">
               <div className="lst-empty-icon"><Truck size={30} /></div>
               <h3>No accepted transport jobs yet</h3>
@@ -4551,7 +4666,7 @@ export function TransportPanel({
             </div>
           )}
           {!transports.loading &&
-            transports.rows.length > 0 &&
+            (transports.rows.length > 0 || jobStatus !== "all") &&
             filteredJobs.length === 0 && (
               <EmptyState text="No accepted jobs match this search." />
             )}
@@ -4677,6 +4792,7 @@ export function TransportPanel({
               );
             })}
           </div>
+          <LoadMoreButton hasMore={transportPages.hasMore} loading={transportPages.loadingMore} onLoadMore={transportPages.loadMore} />
         </>
       )}
 
@@ -4787,23 +4903,45 @@ export function ParkingPanel({
 }: PanelProps) {
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   useCarCatalog();
-  const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
-  const parkingStaff = useBusinessStaff(businessId, Boolean(businessId && !previewMode), 200);
+  const parkingEnabled = Boolean(businessId && !previewMode);
+  // Every stay still running, whole and live (bounded by the lot), then the
+  // stays that have ended - history that only grows - most recently ended
+  // first, a page at a time. The record a notification points at is read on
+  // its own so it is on screen even when it is older than the loaded pages.
+  const activeStays = useActiveParkedCars(businessId, parkingEnabled);
+  const pastStays = useParkedCarHistory(businessId, parkingEnabled);
+  const focusedStay = useLiveDoc("parkedCars", focusRecordId, parkingEnabled);
+  const parkedRows = useMemo(
+    () => withFocusedRow(mergePages([activeStays.rows, pastStays.rows]), focusedStay),
+    [activeStays.rows, pastStays.rows, focusedStay],
+  );
+  const parkedCars = {
+    rows: parkedRows,
+    loading: activeStays.loading || pastStays.loading,
+    error: activeStays.error || pastStays.error,
+  };
+  const parkingStaff = useBusinessStaff(businessId, parkingEnabled);
   // The lot already remembers everyone it has taken a car from - walk-ups
   // write to lotCustomers through createBusinessParkingEntry. A regular is
-  // therefore someone to pick, not someone to re-type.
-  const parkingCustomers = useBusinessRows("lotCustomers", businessId, Boolean(businessId && !previewMode), 500);
-  // Which box a parked car went into, if it was loaded: an in-memory join of
-  // the rows this panel already holds against the business's loading lists.
-  // One index per render, never a query per row.
-  const containerLines = useBusinessRows("containerLines", businessId, Boolean(businessId && !previewMode), 3000);
-  const containerRows = useBusinessRows("containers", businessId, Boolean(businessId && !previewMode), 500);
-  // Ledger activities join the month-end bills (dated in the month, or older
-  // and still unpaid), so the month-end view needs them alongside the cars.
-  const monthEndActivities = useBusinessRows("lotActivities", businessId, Boolean(businessId && !previewMode), 1000);
-  const vinPlacements = useMemo(
-    () => buildVinPlacementIndex(containerLines.rows, containerRows.rows),
-    [containerLines.rows, containerRows.rows],
+  // therefore someone to pick, not someone to re-type. Most recently seen
+  // first.
+  const parkingCustomers = useBusinessCollection("lotCustomers", businessId, parkingEnabled, {
+    pageSize: 300,
+    orderBy: "lastSeenAt",
+    sort: "query",
+  });
+  // Which open box a parked car went into, if it was loaded: the open
+  // containers and their lines only (useOpenContainerPlacements), joined in
+  // memory once per change - never a query per row, never the whole history.
+  const { placements: vinPlacements } = useOpenContainerPlacements(businessId, parkingEnabled);
+  // The lot's figures over every stay, from the server (getParkingTotals):
+  // the history above is paged, so totalling its rows would only total the
+  // pages loaded.
+  const parkingYear = new Date().getFullYear();
+  const serverParking = useServerTotals<{ parking: ServerParkingSummary; computedAtMs?: number }>(
+    "getParkingTotals",
+    parkingEnabled ? { businessId, year: parkingYear, timeZone: viewerTimeZone() } : null,
+    parkingTotalsReloadKey(activeStays.rows),
   );
   const placementLang = currentLanguage() === "fr" ? "fr" : "en";
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
@@ -4977,16 +5115,25 @@ export function ParkingPanel({
   // Counting status === "active" always returned zero: no parking record has
   // ever had that status. What the header should say is how many cars are
   // actually on the lot - not cancelled, and not yet departed.
-  // The scoreboard reads the rows in view, so a filter re-totals to what the
-  // owner is looking at. Spaces come from the business record, not the rows.
-  const parkingTotals = useMemo(
+  // Unfiltered, the scoreboard is the server's count over every stay. A
+  // filter re-totals to the rows in view - every running stay is loaded, so a
+  // filter on those is exact; history is paged, so a filter reaching into it
+  // says the figures cover the records loaded so far.
+  const parkingFiltered = Boolean(search.trim() || rangeFrom || rangeTo ||
+    facets.kinds.length > 0 || facets.payments.length > 0);
+  const filteredTotals = useMemo(
     () => businessParkingTotals(
       filteredRows as Parameters<typeof businessParkingTotals>[0],
       Number((business as Record<string, unknown> | null)?.parkingTotalSpaces) || 0,
     ),
     [filteredRows, business],
   );
-  const inLotCount = parkedCars.rows.filter(
+  const parkingTotals = !parkingFiltered && serverParking.data?.parking?.totals
+    ? serverParking.data.parking.totals
+    : filteredTotals;
+  const parkingTotalsPartial = parkingFiltered && pastStays.hasMore;
+  // Running stays are read whole, so this count is exact.
+  const inLotCount = activeStays.rows.filter(
     (row) => text(row.status, "reserved") !== "cancelled" &&
       businessParkingEndLabel(row) !== "Ended",
   ).length;
@@ -5535,7 +5682,7 @@ export function ParkingPanel({
       <header className="lst-head">
         <div className="lst-head-text">
           <h2>Parked cars</h2>
-          <p>{parkedCars.rows.length === 0 ? "Log cars you're storing and issue receipts to owners." : `${parkedCars.rows.length} record${parkedCars.rows.length === 1 ? "" : "s"} · ${inLotCount} in the lot`}</p>
+          <p>{parkedCars.rows.length === 0 ? "Log cars you're storing and issue receipts to owners." : `${loadedCountLabel(parkedCars.rows.length, pastStays.hasMore)} record${parkedCars.rows.length === 1 && !pastStays.hasMore ? "" : "s"} · ${inLotCount} in the lot`}</p>
         </div>
         <div className="lst-head-actions">
           <StatusText busy={busy} message={message} />
@@ -5553,8 +5700,7 @@ export function ParkingPanel({
 
       {monthEndKey && (
         <ParkingMonthEnd
-          rows={parkedCars.rows}
-          activities={monthEndActivities.rows}
+          businessId={businessId}
           staff={parkingStaff.rows}
           business={business}
           businessName={businessName}
@@ -5653,6 +5799,21 @@ export function ParkingPanel({
             <div className="pk-stat"><span>Spaces</span><b>{parkingTotals.spacesUsed} / {parkingTotals.spacesTotal}</b></div>
           )}
         </div>
+      )}
+      {!parkedCars.loading && parkedCars.rows.length > 0 && (
+        parkingFiltered ? (
+          parkingTotalsPartial && (
+            <p className="lst-hint">These totals cover the records loaded so far. Load more to include older stays.</p>
+          )
+        ) : (
+          <TotalsStatus
+            computedAtMs={serverParking.data?.computedAtMs ?? null}
+            complete={serverParking.data?.parking?.complete !== false}
+            error={serverParking.error}
+            loading={serverParking.loading}
+            onRefresh={() => serverParking.refresh(true)}
+          />
+        )
       )}
       {!parkedCars.loading && parkedCars.rows.length > 0 && filteredRows.length === 0 && (
         <EmptyState text="No parking records match this filter." />
@@ -5919,6 +6080,8 @@ export function ParkingPanel({
         })}
       </div>
       )}
+      {/* Running stays are all here; ended ones come a page at a time. */}
+      <LoadMoreButton hasMore={pastStays.hasMore} loading={pastStays.loadingMore} onLoadMore={pastStays.loadMore} />
       </div>
 
       {historyId && (
@@ -6564,6 +6727,9 @@ function ViewingNegotiation({
   );
 }
 
+/** Purchase filters worked out in the panel rather than by a status field. */
+const PURCHASE_DERIVED_FILTERS = new Set(["all", "needs_action", "holds", "viewings"]);
+
 export function PurchasesPanel({
   businessId,
   previewMode = false,
@@ -6571,15 +6737,40 @@ export function PurchasesPanel({
   focusRecordId = "",
 }: PanelProps & {scope?: "purchases" | "viewings"}) {
   const enabled = Boolean(businessId && !previewMode);
-  const purchases = useBusinessRows("carPurchases", businessId, enabled, 250);
-  // Read for one field: a viewing on a listing that is no longer active can
-  // only be cancelled, and the purchase record does not carry the listing's
-  // status. Knowing it here is what lets the panel say so instead of letting
-  // the callable's refusal be how an operator finds out.
-  const cars = useBusinessRows("cars", businessId, enabled, 250);
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  // Newest first, a page at a time. A raw purchase status narrows the query
+  // itself; the derived queues (needs action, holds, viewings) are worked out
+  // from the loaded pages, and "Load more" brings older ones in.
+  const purchasePages = useBusinessCollection("carPurchases", businessId, enabled, {
+    where: PURCHASE_DERIVED_FILTERS.has(filter) ? [] : statusFilterSpec("purchaseStatus", filter),
+    sort: "query",
+  });
+  const focusedPurchase = useLiveDoc("carPurchases", focusRecordId, enabled);
+  const purchases = {
+    ...purchasePages,
+    rows: useMemo(
+      () => withFocusedRow(purchasePages.rows, focusedPurchase),
+      [purchasePages.rows, focusedPurchase],
+    ),
+  };
+  // Read for one field: a viewing on a listing that is no longer active can
+  // only be cancelled, and the purchase record does not carry the listing's
+  // status. Knowing it here is what lets the panel say so instead of letting
+  // the callable's refusal be how an operator finds out. Only the cars of the
+  // purchases on screen, by id.
+  const purchaseCarIds = useMemo(
+    () => purchases.rows.map((row) => text(row.carId, "")).filter(Boolean),
+    [purchases.rows],
+  );
+  const cars = useDocsWhereIn({
+    collection: "cars",
+    field: "__name__",
+    values: purchaseCarIds,
+    filters: [["businessId", "==", businessId.trim()]],
+    enabled,
+  });
   const focusedCardRef = useRef<HTMLElement | null>(null);
   // A filter picked on one queue must not survive into the other, where it
   // would match nothing and read as an empty queue rather than a stale filter.
@@ -6700,7 +6891,7 @@ export function PurchasesPanel({
       <header className="lst-head">
         <div className="lst-head-text">
           <h2>Customer purchases</h2>
-          <p>{purchases.rows.length === 0 ? "Holds, viewings, and buyers appear here as customers reserve your cars." : `${purchases.rows.length} record${purchases.rows.length === 1 ? "" : "s"}${actionCount ? ` · ${actionCount} need${actionCount === 1 ? "s" : ""} action` : ""}`}</p>
+          <p>{purchases.rows.length === 0 ? "Holds, viewings, and buyers appear here as customers reserve your cars." : `${loadedCountLabel(purchases.rows.length, purchases.hasMore)} record${purchases.rows.length === 1 && !purchases.hasMore ? "" : "s"}${actionCount ? ` · ${actionCount} need${actionCount === 1 ? "s" : ""} action` : ""}`}</p>
         </div>
         <div className="lst-head-actions">
           <StatusText busy={Boolean(busyId)} message={message} />
@@ -6726,14 +6917,14 @@ export function PurchasesPanel({
       </div>
 
       {purchases.loading && <LoadingState />}
-      {!purchases.loading && purchases.rows.length === 0 && (
+      {!purchases.loading && purchases.rows.length === 0 && PURCHASE_DERIVED_FILTERS.has(filter) && (
         <div className="lst-empty">
           <div className="lst-empty-icon"><ClipboardList size={30} /></div>
           <h3>No purchases yet</h3>
           <p>When customers reserve a viewing or pay a hold deposit, they show up here.</p>
         </div>
       )}
-      {!purchases.loading && purchases.rows.length > 0 && filteredRows.length === 0 && (
+      {!purchases.loading && (purchases.rows.length > 0 || !PURCHASE_DERIVED_FILTERS.has(filter)) && filteredRows.length === 0 && (
         <EmptyState text="No purchases match this filter." />
       )}
 
@@ -6924,63 +7115,11 @@ export function PurchasesPanel({
           );
         })}
       </div>
+      <LoadMoreButton hasMore={purchasePages.hasMore} loading={purchasePages.loadingMore} onLoadMore={purchasePages.loadMore} />
     </section>
   );
 }
 
-function useBusinessRows(
-  collectionName: string,
-  businessId: string,
-  enabled: boolean,
-  maxRows: number | null,
-) {
-  const [rows, setRows] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const scopedBusinessId = businessId.trim();
-    if (!enabled || !scopedBusinessId) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-
-    const constraints: QueryConstraint[] = [
-      where("businessId", "==", scopedBusinessId),
-    ];
-    if (maxRows != null) {
-      constraints.push(limit(maxRows));
-    }
-
-    setLoading(true);
-    return onSnapshot(
-      query(collection(db, collectionName), ...constraints),
-      (snapshot) => {
-        setRows(sortByUpdated(snapshot.docs.map((item) => rowFromSnapshot(item))));
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        setRows([]);
-        setLoading(false);
-        setError(snapshotError.message);
-      },
-    );
-  }, [businessId, collectionName, enabled, maxRows]);
-
-  return { rows, loading, error };
-}
-
-/**
- * The price requests this business was asked to answer.
- *
- * Only the fan-out field is queried; whether a request is still taking prices
- * is decided in the panel. Pairing the two in one query would demand a
- * composite index for a list this small, and an index a deploy forgot is an
- * empty feed nobody can explain.
- */
 /**
  * This business's own price list and routes, for reading a request through
  * its lens. The request stores facts; the card multiplies THEIR numbers.
@@ -7020,90 +7159,27 @@ function useBusinessQuoteLens(businessId: string, enabled: boolean) {
   return {table, routes, multiplierFor};
 }
 
+/**
+ * The price requests this business was asked to answer and can still price:
+ * the fan-out field AND `quoteStatus == "collecting"` in the query. Filtering
+ * after a cap hid every open request beyond it behind closed ones. The pair
+ * needs a composite index (eligibleBusinessIds CONTAINS, quoteStatus), which
+ * firestore.indexes.json carries and console-query-indexes.test.ts checks.
+ * Open requests expire within days, so the list is read whole.
+ */
 function useFreightQuoteRequests(businessId: string, enabled: boolean) {
-  const [rows, setRows] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const scopedBusinessId = businessId.trim();
-    if (!enabled || !scopedBusinessId) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-    setLoading(true);
-    return onSnapshot(
-      query(
-        collection(db, "freightQuoteRequests"),
-        where("eligibleBusinessIds", "array-contains", scopedBusinessId),
-        limit(200),
-      ),
-      (snapshot) => {
-        setRows(sortByUpdated(snapshot.docs.map((item) => rowFromSnapshot(item))));
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        setRows([]);
-        setLoading(false);
-        setError(snapshotError.message);
-      },
-    );
-  }, [businessId, enabled]);
-
-  return { rows, loading, error };
-}
-
-function useBusinessSubcollectionRows(
-  collectionName: string,
-  businessId: string,
-  enabled: boolean,
-  maxRows: number,
-) {
-  const [rows, setRows] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const scopedBusinessId = businessId.trim();
-    if (!enabled || !scopedBusinessId) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-
-    setLoading(true);
-    return onSnapshot(
-      query(collection(db, "businesses", scopedBusinessId, collectionName), limit(maxRows)),
-      (snapshot) => {
-        setRows(sortByUpdated(snapshot.docs.map((item) => rowFromSnapshot(item, { businessId: scopedBusinessId }))));
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        setRows([]);
-        setLoading(false);
-        setError(snapshotError.message);
-      },
-    );
-  }, [businessId, collectionName, enabled, maxRows]);
-
-  return { rows, loading, error };
-}
-
-function rowFromSnapshot(
-  snapshot: QueryDocumentSnapshot<DocumentData>,
-  extra: Record<string, unknown> = {},
-): FirestoreRow {
-  return {
-    id: snapshot.id,
-    _path: snapshot.ref.path,
-    ...extra,
-    ...snapshot.data(),
-  };
+  const scopedBusinessId = businessId.trim();
+  const result = usePagedQuery({
+    source: scopedBusinessId ? { path: ["freightQuoteRequests"] } : null,
+    filters: [
+      ["eligibleBusinessIds", "array-contains", scopedBusinessId],
+      ["quoteStatus", "==", "collecting"],
+    ],
+    pageSize: null,
+    enabled: enabled && Boolean(scopedBusinessId),
+  });
+  const rows = useMemo(() => sortByUpdated(result.rows), [result.rows]);
+  return { rows, loading: result.loading, error: result.error };
 }
 
 function sortByUpdated(rows: FirestoreRow[]) {
@@ -7535,13 +7611,6 @@ function lotMonthKey(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function lotRowMonth(row: Record<string, unknown>, field: string): string {
-  const explicit = text((row as Record<string, unknown>)[`${field}Month`], "");
-  if (explicit) return explicit;
-  const date = asDate((row as Record<string, unknown>)[field]);
-  return date ? lotMonthKey(date) : "";
-}
-
 function lotMonthOptions(year: number): { value: string; label: string }[] {
   const names = [
     "January", "February", "March", "April", "May", "June",
@@ -7585,32 +7654,25 @@ const LOT_TAG_TINTS = ["#0d9488", "#f59e0b", "#6366f1", "#db2777", "#0891b2"];
 
 export function LotLedgerPanel({ businessId, business, previewMode = false }: PanelProps) {
   const enabled = Boolean(businessId && !previewMode);
-  const activityTypes = useBusinessRows("lotActivityTypes", businessId, enabled, 200);
-  const activities = useBusinessRows("lotActivities", businessId, enabled, 1000);
-  // Every instalment taken against an activity, on either rail. The scoreboard
-  // reads these rather than deriving what was collected from the activity rows,
-  // because a payment counts in the month it ARRIVED, not the month of the job
-  // it settles. If this collection is unreadable the hook yields an empty list
-  // and the scoreboard falls back to the money recorded on the rows themselves.
-  const activityPayments = useBusinessRows("lotActivityPayments", businessId, enabled, 2000);
-  const expenseLines = useBusinessRows("lotExpenseLines", businessId, enabled, 200);
-  const expenseEntries = useBusinessRows("lotExpenseEntries", businessId, enabled, 2000);
-  const staff = useBusinessStaff(businessId, enabled, 200);
-  // Parked cars are read so a VIN typed into the activity form can pull the
-  // car and customer it already belongs to (reusing existing records rather
-  // than re-typing) — the same reuse the handoff called for.
-  const parkedCars = useBusinessRows("parkedCars", businessId, enabled, 500);
+  // What the lot charges for and what it spends on: short lists, read whole.
+  const activityTypes = useBusinessCollection("lotActivityTypes", businessId, enabled, { pageSize: null });
+  const expenseLines = useBusinessCollection("lotExpenseLines", businessId, enabled, { pageSize: null });
+  const staff = useBusinessStaff(businessId, enabled);
+  // The cars in the lot now, so a VIN typed into the activity form can pull
+  // the car and customer it already belongs to; a full VIN not among them is
+  // looked up in the lot's records one document at a time.
+  const parkedCars = useActiveParkedCars(businessId, enabled);
   // The lot's customer memory: everyone recorded on an activity or a walk-up,
-  // with the cars seen against them, offered back as staff type.
-  const lotCustomers = useBusinessRows("lotCustomers", businessId, enabled, 500);
-  // Which box a car went into, if it was loaded: the same in-memory join the
-  // parking list does, against rows this panel already holds.
-  const containerLines = useBusinessRows("containerLines", businessId, enabled, 3000);
-  const containerRows = useBusinessRows("containers", businessId, enabled, 500);
-  const vinPlacements = useMemo(
-    () => buildVinPlacementIndex(containerLines.rows, containerRows.rows),
-    [containerLines.rows, containerRows.rows],
-  );
+  // with the cars seen against them, offered back as staff type. Most
+  // recently seen first.
+  const lotCustomers = useBusinessCollection("lotCustomers", businessId, enabled, {
+    pageSize: 300,
+    orderBy: "lastSeenAt",
+    sort: "query",
+  });
+  // Which open box a car went into, if it was loaded: the same join the
+  // parking list does, over the open containers and their lines only.
+  const { placements: vinPlacements } = useOpenContainerPlacements(businessId, enabled);
   const placementLang = currentLanguage() === "fr" ? "fr" : "en";
 
   const [segment, setSegment] = useState<LotSegment>("activity");
@@ -7722,15 +7784,69 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     return [nowMonthKey, nowMonthKey];
   }, [actRange, actFrom, actTo, nowMonthKey]);
 
-  // Activities within the range, before the type/payment/search narrowing —
-  // the set the summary cards total.
-  const rangeActivities = useMemo(
-    () => activities.rows.filter((row) => {
-      const mk = lotRowMonth(row, "activityDate");
-      return mk >= actStart && mk <= actEnd;
-    }),
-    [activities.rows, actStart, actEnd],
+  // The Activity list: jobs dated in the span, newest first, a page at a
+  // time, the type and payment pickers applied in the query.
+  const activityQuery = useMemo(
+    () => lotActivityListQuery({ rangeStart: actStart, rangeEnd: actEnd, typeFilter, payFilter }),
+    [actStart, actEnd, typeFilter, payFilter],
   );
+  const activities = useBusinessCollection("lotActivities", businessId, enabled, activityQuery);
+  // The row a modal is open on stays readable even after the payment that
+  // moves it out of the current filter.
+  const openActivityId = editId || chaseId;
+  const openActivity = useLiveDoc("lotActivities", openActivityId, enabled);
+  const activityById = (id: string) =>
+    (openActivity && String(openActivity.id) === id
+      ? openActivity
+      : activities.rows.find((r) => String(r.id) === id)) as Record<string, unknown> | undefined;
+  // The year's expense purchases (and the few undated ones), for the
+  // Expenses list and the year's spend by line.
+  const expenseQueries = lotExpenseEntryQueries(year);
+  const expenseInYear = useBusinessCollection("lotExpenseEntries", businessId, enabled, {
+    pageSize: null,
+    where: expenseQueries.inYear,
+  });
+  const expenseUndated = useBusinessCollection("lotExpenseEntries", businessId, enabled, {
+    pageSize: null,
+    where: expenseQueries.undated,
+  });
+  const expenseEntries = {
+    rows: useMemo(
+      () => mergePages([expenseInYear.rows, expenseUndated.rows]),
+      [expenseInYear.rows, expenseUndated.rows],
+    ),
+    error: expenseInYear.error || expenseUndated.error,
+  };
+  // Every figure on the ledger - the Activity scoreboard over the span, the
+  // month and year revenue, expenses and parking - from the server over
+  // every record (getLotLedgerTotals). It asks again when a loaded job, an
+  // expense or a type changes.
+  const ledgerReload = useMemo(
+    () => [totalsReloadKey(activities.rows), totalsReloadKey(expenseEntries.rows, ["amountCents", "voided", "month", "updatedAt"]), totalsReloadKey(expenseLines.rows, ["amountCents", "kind", "active", "updatedAt"])].join("#"),
+    [activities.rows, expenseEntries.rows, expenseLines.rows],
+  );
+  const ledgerTotals = useServerTotals<ServerLedgerTotals>(
+    "getLotLedgerTotals",
+    enabled
+      ? { businessId, rangeStart: actStart, rangeEnd: actEnd, month, year, nowMonth: lotMonthKey(new Date()), timeZone: viewerTimeZone() }
+      : null,
+    ledgerReload,
+  );
+  const serverLedger = ledgerTotals.data?.ledger ?? null;
+  const serverParking = ledgerTotals.data?.parking ?? null;
+
+  // How many recorded jobs use each activity type, counted (not read) while
+  // the "Activities & rates" window is open.
+  const typeUses = useBusinessCountsByValue(
+    "lotActivities",
+    businessId,
+    "activityTypeId",
+    useMemo(() => activityTypes.rows.map((t) => String(t.id)), [activityTypes.rows]),
+    enabled && modal === "types",
+  );
+
+  // The loaded jobs, before the search narrowing.
+  const rangeActivities = activities.rows;
 
   const scopedActivities = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -7753,119 +7869,40 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     });
   }, [rangeActivities, search, typeFilter, payFilter]);
 
-  const monthActivities = useMemo(
-    () => activities.rows.filter((row) => lotRowMonth(row, "activityDate") === month),
-    [activities.rows, month],
-  );
-
-  const revenueByType = useMemo(() => {
-    const totals = new Map<string, { cents: number; count: number }>();
-    for (const row of monthActivities) {
-      const r = row as Record<string, unknown>;
-      if (String(r.paymentStatus) === "cancelled" || r.voided === true) continue;
-      const key = String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? "custom" : String(r.activityTypeId);
-      const prev = totals.get(key) ?? { cents: 0, count: 0 };
-      totals.set(key, { cents: prev.cents + (Number(r.feeCents) || 0), count: prev.count + 1 });
-    }
-    return totals;
-  }, [monthActivities]);
-
-  const monthRevenueCents = useMemo(() => {
-    let s = 0;
-    for (const v of revenueByType.values()) s += v.cents;
-    return s;
-  }, [revenueByType]);
-
-  // Every purchase counts in exactly one month (lotExpenseEntryMonth); a fixed
-  // line's standing amount is replaced - not added to - when a live purchase
-  // was logged against it that month, and is only owed for the months the line
-  // has actually existed for. The rules live in lot-ledger.ts, tested there.
+  // The month's revenue and expenses, and the year's series, as the server
+  // counted them over every record. Zero until it answers.
+  const monthRevenueCents = serverLedger?.monthRevenueCents ?? 0;
   const nowMonth = lotMonthKey(new Date());
-  const monthExpenseFor = (m: string) =>
-    lotMonthExpenseCents(expenseLines.rows, expenseEntries.rows, m, nowMonth);
-
-  const monthExpenseCents = useMemo(() => monthExpenseFor(month), [expenseEntries.rows, expenseLines.rows, month]);
+  const monthExpenseCents = serverLedger?.monthExpenseCents ?? 0;
   const netCents = monthRevenueCents - monthExpenseCents;
 
-  // Parked-car money, read from the same parkedCars the panel already loads.
-  // The ledger is where a lot looks for "what has this made" — activities and
-  // expenses were only ever half that picture; parking is the other half.
-  // Figures are the live standing (to date), not month-sliced: a stay accrues
-  // and is paid across months, so a running balance is the honest number.
-  const parkingTotals = useMemo(
-    () => businessParkingTotals(
-      parkedCars.rows as Parameters<typeof businessParkingTotals>[0],
-      Number((business as Record<string, unknown> | null)?.parkingTotalSpaces) || 0,
-    ),
-    [parkedCars.rows, business],
-  );
-  const parkingOverdue = useMemo(
-    () => businessParkingOverdue(parkedCars.rows as Parameters<typeof businessParkingOverdue>[0]),
-    [parkedCars.rows],
-  );
+  // Parked-car money: the ledger is where a lot looks for "what has this
+  // made", and parking is the other half of it. Live standing (to date), not
+  // month-sliced: a stay accrues and is paid across months.
+  const parkingTotals = serverParking?.totals ?? { inLot: 0, reserved: 0, left: 0, collected: 0, owed: 0, spacesTotal: 0, spacesUsed: 0 };
+  const parkingOverdue = serverParking?.overdue ?? { count: 0, amount: 0 };
   // What the lot's parking has generated so far, in dollars: everything
   // collected plus everything still owed on cars that have run it up.
   const parkingGenerated = Math.round((parkingTotals.collected + parkingTotals.owed) * 100) / 100;
-  // The same money, month by month, for the reports. A stay has no natural
-  // month, so parked-car income only ever showed as a standing total and was
-  // left off the chart; what it does have is payment dates, and money counts
-  // in the month it arrived - the rule the activity scoreboard already uses.
+  // The same money, month by month (cents), by the month it arrived.
   const yearMonthKeys = lotMonthOptions(year).map((o) => o.value);
-  const yearParkingByMonth = useMemo(
-    () => businessParkingCollectedByMonth(
-      parkedCars.rows as Parameters<typeof businessParkingCollectedByMonth>[0],
-      yearMonthKeys,
-    ),
-    // yearMonthKeys is derived from year alone.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parkedCars.rows, year],
-  );
+  const yearParkingByMonth = serverParking?.collectedByMonth?.length === 12
+    ? serverParking.collectedByMonth
+    : yearMonthKeys.map(() => 0);
   const yearParking = yearParkingByMonth.reduce((a, b) => a + b, 0);
 
-  // The summary cards above the Activity list, totalled over the selected
-  // range: generated (billed), collected (money that arrived), owed (the
-  // balance still outstanding on those jobs), and the job count. Cancelled and
-  // voided jobs never billed, so they are left out.
-  //
-  // The arithmetic lives in lot-ledger.ts, where it is unit-tested. Two things
-  // it does that the old inline loop could not:
-  //   - a part-paid job contributes its REMAINING balance to Owed, not its
-  //     whole fee (which read as though nothing had been collected);
-  //   - Collected is read from the instalment documents, each carrying the
-  //     month it arrived in, so a September job paid in November counts as
-  //     November's income. Every activity is passed in, not only the ones in
-  //     the range, because a payment inside the range can belong to a job
-  //     billed outside it.
-  const activityMoney = useMemo(
-    () => lotActivityScoreboard({
-      activities: activities.rows as Record<string, unknown>[],
-      payments: activityPayments.rows as Record<string, unknown>[],
-      activityMonth: (row) => lotRowMonth(row, "activityDate"),
-      inRange: (mk) => Boolean(mk) && mk >= actStart && mk <= actEnd,
-    }),
-    [activities.rows, activityPayments.rows, actStart, actEnd],
-  );
+  // The summary cards above the Activity list, over the selected span:
+  // generated (billed), collected (money that arrived - a September job paid
+  // in November is November's), owed (the remaining balance on those jobs),
+  // and the job count. The arithmetic is lotActivityScoreboard
+  // (lot-ledger.ts), run by the server over every job and payment.
+  const activityMoney = serverLedger?.scoreboard ?? { generatedCents: 0, collectedCents: 0, owedCents: 0, jobs: 0 };
 
   // Revenue by source for the report year: one figure per activity type, plus
-  // car parking, so the owner sees where the year's money came from — titles,
-  // parking and the rest — not one lumped "revenue" bar.
-  const yearRevenueByType = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const row of activities.rows) {
-      const r = row as Record<string, unknown>;
-      if (String(r.paymentStatus) === "cancelled" || r.voided === true) continue;
-      if (lotRowMonth(row, "activityDate").slice(0, 4) !== String(year)) continue;
-      const key = String(r.activityTypeId) === LOT_CUSTOM_ACTIVITY_ID ? "custom" : String(r.activityTypeId);
-      totals.set(key, (totals.get(key) ?? 0) + (Number(r.feeCents) || 0));
-    }
-    return totals;
-  }, [activities.rows, year]);
-
-  // The breakdown rows: every activity type that billed this year, plus a car
-  // parking line (generated to date). Sorted biggest first, "Other" last.
+  // car parking, so the owner sees where the year's money came from.
   const revenueBreakdown = useMemo(() => {
     const rows: { key: string; label: string; cents: number }[] = [];
-    for (const [key, cents] of yearRevenueByType.entries()) {
+    for (const [key, cents] of Object.entries(serverLedger?.yearRevenueByType ?? {})) {
       if (cents <= 0) continue;
       rows.push({
         key,
@@ -7878,26 +7915,21 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     if (yearParking > 0) rows.push({ key: "__parking", label: "Car parking", cents: yearParking });
     rows.sort((a, b) => b.cents - a.cents);
     return rows;
-  }, [yearRevenueByType, typeById, yearParking]);
+  }, [serverLedger, typeById, yearParking]);
   const revenueBreakdownTotal = revenueBreakdown.reduce((s, r) => s + r.cents, 0);
 
   // Year series for the reports charts.
   const yearMonths = lotMonthOptions(year).map((o) => o.value);
-  const yearRevenueByMonth = yearMonths.map((m) => {
-    let s = 0;
-    for (const row of activities.rows) {
-      const r = row as Record<string, unknown>;
-      if (String(r.paymentStatus) === "cancelled" || r.voided === true) continue;
-      if (lotRowMonth(row, "activityDate") === m) s += Number(r.feeCents) || 0;
-    }
-    return s;
-  });
-  const yearExpenseByMonth = yearMonths.map((m) => monthExpenseFor(m));
+  const yearRevenueByMonth = serverLedger?.yearRevenueByMonth?.length === 12
+    ? serverLedger.yearRevenueByMonth
+    : yearMonths.map(() => 0);
+  const yearExpenseByMonth = serverLedger?.yearExpenseByMonth?.length === 12
+    ? serverLedger.yearExpenseByMonth
+    : yearMonths.map(() => 0);
   const yearRevenue = yearRevenueByMonth.reduce((a, b) => a + b, 0);
   const yearExpense = yearExpenseByMonth.reduce((a, b) => a + b, 0);
   // Net is against everything that came in: the activities the year billed
-  // and the parked-car money it collected. Leaving parking out made the
-  // chart's running-net line and the Net tile disagree with each other.
+  // and the parked-car money it collected.
   const yearIncome = yearRevenue + yearParking;
   const yearNet = yearIncome - yearExpense;
 
@@ -7955,7 +7987,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   }
 
   const selectedType = typeById.get(activityDraft.activityTypeId);
-  const editRow = editId ? (activities.rows.find((r) => String(r.id) === editId) as Record<string, unknown> | undefined) : undefined;
+  const editRow = editId ? activityById(editId) : undefined;
   // Absent means yes — the server's reading — so a type saved before the flag
   // existed, and a one-off with no type at all, still records a car.
   //
@@ -8015,36 +8047,52 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       return;
     }
     // First the lot's own records — a parked car or a past activity — because
-    // those also carry who owns it.
+    // those also carry who owns it. The rows already on screen answer without
+    // a read; a full VIN not among them is looked up below.
     const match = findVehicleRecordByVin([...parkedCars.rows, ...activities.rows], clean);
     if (match) {
       lastActivityVinRef.current = clean;
-      setActivityDraft((d) => ({
-        ...d,
-        carMake: text(match.carMake, d.carMake),
-        carModel: text(match.carModel, d.carModel),
-        carYear: text(match.carYear, d.carYear),
-        customerName: d.customerName || text(match.customerName ?? match.ownerName, ""),
-        customerPhone: d.customerPhone || text(match.customerPhone, ""),
-        customerEmail: d.customerEmail || text(match.customerEmail, ""),
-      }));
-      const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")]
-        .filter(Boolean)
-        .join(" ");
-      const who = text(match.customerName ?? match.ownerName, "");
-      setVinHint(
-        `Filled from an existing record${car ? `: ${car}` : ""}` +
-          `${who ? ` for ${who}` : ""}. You can change anything below.`,
-      );
+      fillActivityFromRecord(match);
       return;
     }
-    // The yard has never seen this VIN: decode it. Only on a full VIN, and once
-    // per distinct one so it does not re-fire on every keystroke.
+    // Not on screen: a full VIN asks the lot's records (one lookup each),
+    // then the public decoder - once per distinct VIN.
     setVinHint("");
     if (clean.length === 17 && clean !== lastActivityVinRef.current) {
       lastActivityVinRef.current = clean;
-      void decodeActivityVin(clean);
+      void lookupActivityVin(clean);
     }
+  }
+
+  async function lookupActivityVin(vin: string) {
+    setVinHint(VIN_LOOKING_UP);
+    const record = await findBusinessVehicleRecord(businessId, vin);
+    if (lastActivityVinRef.current !== vin) return;
+    if (record) {
+      fillActivityFromRecord(record);
+      return;
+    }
+    await decodeActivityVin(vin);
+  }
+
+  function fillActivityFromRecord(match: Record<string, unknown>) {
+    setActivityDraft((d) => ({
+      ...d,
+      carMake: text(match.carMake, d.carMake),
+      carModel: text(match.carModel, d.carModel),
+      carYear: text(match.carYear, d.carYear),
+      customerName: d.customerName || text(match.customerName ?? match.ownerName, ""),
+      customerPhone: d.customerPhone || text(match.customerPhone, ""),
+      customerEmail: d.customerEmail || text(match.customerEmail, ""),
+    }));
+    const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")]
+      .filter(Boolean)
+      .join(" ");
+    const who = text(match.customerName ?? match.ownerName, "");
+    setVinHint(
+      `Filled from an existing record${car ? `: ${car}` : ""}` +
+        `${who ? ` for ${who}` : ""}. You can change anything below.`,
+    );
   }
 
   // Fill make/model/year from a full VIN via the public NHTSA database, matched
@@ -8137,7 +8185,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     // part-paid job the remaining $650 would go on reading as owed under a
     // "Paid" badge — the exact failure the parking ledger hit. The instalment
     // path applies the rest of the balance and settles the row in one write.
-    const row = activities.rows.find((r) => String(r.id) === activityId) as Record<string, unknown> | undefined;
+    const row = activityById(activityId);
     if (row && lotActivityPaidCents(row) > 0 && lotActivityRemainingCents(row) > 0) {
       await chaseRecordInstalment(activityId, lotActivityRemainingCents(row));
       return;
@@ -8160,7 +8208,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
    * what is still owed before it is sent — the same call the server makes.
    */
   async function chaseRecordInstalment(activityId: string, amountCentsOverride?: number) {
-    const row = activities.rows.find((r) => String(r.id) === activityId) as Record<string, unknown> | undefined;
+    const row = activityById(activityId);
     if (!row) {
       setDraftError("This entry is no longer on screen. Close this and open it again.");
       return;
@@ -8447,6 +8495,15 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
           <div className={`metric ${netCents < 0 ? "attention" : "good"}`}><span>Net</span><b>{lotFormatCents(netCents)}</b></div>
         </div>
       </div>
+      {/* Every figure on this page is counted by the server over every record;
+          the lists below are paged. */}
+      <TotalsStatus
+        computedAtMs={ledgerTotals.data?.computedAtMs ?? null}
+        complete={ledgerTotals.data?.complete !== false}
+        error={ledgerTotals.error}
+        loading={ledgerTotals.loading}
+        onRefresh={() => ledgerTotals.refresh(true)}
+      />
 
       {flash && <div className="lst-form-error" role="status" style={{ background: "var(--mist)", color: "var(--brand-strong)" }}>{flash} <button className="ghost-button" type="button" onClick={() => setFlash("")}>Dismiss</button></div>}
 
@@ -8473,7 +8530,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
           </div>
 
           <div className="panel">
-            <div className="panel-header"><h3>Activity log</h3><span className="panel-count">{scopedActivities.length}</span></div>
+            <div className="panel-header"><h3>Activity log</h3><span className="panel-count">{loadedCountLabel(scopedActivities.length, activities.hasMore)}</span></div>
             <div className="panel-tools">
               <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by activity">
                 <option value="all">All activities</option>
@@ -8503,7 +8560,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
               <button className="primary-button" type="button" onClick={openRecord}>Record activity</button>
             </div>
             <p className="panel-lede">Showing {lotRangeLabel(actStart, actEnd)}{payFilter === "owed" ? " · owed only" : payFilter === "paid" ? " · collected only" : ""}. The cards above cover the same range.</p>
-            {scopedActivities.length === 0 ? (
+            {activities.error ? (
+              <div className="error-box">{activities.error}</div>
+            ) : activities.loading && activities.rows.length === 0 ? (
+              <LoadingState />
+            ) : scopedActivities.length === 0 ? (
               <EmptyState text="No activity recorded for this scope yet." />
             ) : (
               <div className="mini-table">
@@ -8583,6 +8644,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                 </div>
               </div>
             )}
+            <LoadMoreButton hasMore={activities.hasMore} loading={activities.loadingMore} onLoadMore={activities.loadMore} />
           </div>
         </>
       )}
@@ -8847,7 +8909,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
               {orderedTypes.map((t) => {
                 const tr = t as Record<string, unknown>;
-                const uses = activities.rows.filter((a) => String((a as Record<string, unknown>).activityTypeId) === String(tr.id)).length;
+                const uses = typeUses.get(String(tr.id)) ?? null;
                 return (<LotTypeRow key={String(tr.id)} row={tr} uses={uses} busy={busy} onSave={(d) => saveType(d, String(tr.id))} onRemove={() => removeType(String(tr.id))} />);
               })}
               <div style={{ borderTop: "2px solid var(--rule)", marginTop: 12, paddingTop: 12 }}>
@@ -8870,7 +8932,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       {modal === "chase" && (() => {
         // A direct activity logged as owed has no link to re-send - it can
         // only be marked received. A link row offers both.
-        const chaseRow = activities.rows.find((r) => String(r.id) === chaseId) as Record<string, unknown> | undefined;
+        const chaseRow = activityById(chaseId);
         const chaseDirectOnly = chaseRow ? lotActivityAwaitsDirect(chaseRow) : false;
         // The balance drives what this modal offers: money already collected
         // against the job, and what is left to take.
@@ -9001,7 +9063,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   );
 }
 
-function LotTypeRow({ row, uses, busy, onSave, onRemove }: { row: Record<string, unknown>; uses: number; busy: boolean; onSave: (d: LotActivityTypeDraft) => void; onRemove: () => void }) {
+function LotTypeRow({ row, uses, busy, onSave, onRemove }: { row: Record<string, unknown>; uses: number | null; busy: boolean; onSave: (d: LotActivityTypeDraft) => void; onRemove: () => void }) {
   const [label, setLabel] = useState(text(row.label, ""));
   const [fee, setFee] = useState(String((Number(row.defaultFeeCents) || 0) / 100));
   const [needsAuction, setNeedsAuction] = useState(Boolean(row.needsAuctionHouse));
@@ -9014,7 +9076,7 @@ function LotTypeRow({ row, uses, busy, onSave, onRemove }: { row: Record<string,
       <label className="lst-field"><span>Fee</span><input inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} /></label>
       <label className="lst-field"><span>Auction field</span><input type="checkbox" checked={needsAuction} onChange={(e) => setNeedsAuction(e.target.checked)} /></label>
       <label className="lst-field"><span>Records a vehicle</span><input type="checkbox" checked={needsVehicle} onChange={(e) => setNeedsVehicle(e.target.checked)} /></label>
-      <div><small className="lst-hint">{uses > 0 ? `${uses} ${uses === 1 ? "entry uses" : "entries use"} this` : "Not used yet"}</small></div>
+      <div><small className="lst-hint">{uses === null ? "\u2026" : uses > 0 ? `${uses} ${uses === 1 ? "entry uses" : "entries use"} this` : "Not used yet"}</small></div>
       <div style={{ display: "flex", gap: 6 }}>
         <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => onSave({ label, defaultFee: fee, needsAuctionHouse: needsAuction, needsVehicle })}>Save</button>
         <button className="ghost-button" type="button" disabled={busy} onClick={onRemove}>Remove</button>

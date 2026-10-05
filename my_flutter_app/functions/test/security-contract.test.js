@@ -39,6 +39,14 @@ test("deployed callables enforce App Check", () => {
         /onCall\(\s*GUEST_TRACKING_CALLABLE_OPTIONS,/g,
     ) || []
   ).length;
+  // The console totals callables share one options object
+  // (CONSOLE_TOTALS_CALLABLE_OPTIONS), which itself enforces App Check.
+  const sharedConsoleTotalsUses = (
+    indexSource.match(/onCall\(\s*CONSOLE_TOTALS_CALLABLE_OPTIONS,/g) || []
+  ).length;
+  assert.match(indexSource, new RegExp(
+      "const CONSOLE_TOTALS_CALLABLE_OPTIONS[\\s\\S]*?" +
+      "enforceAppCheck:\\s*ENFORCE_APP_CHECK"));
   const sharedPeopleOptionsPattern =
     /const MARKETPLACE_PEOPLE_CALLABLE_OPTIONS[\s\S]*?enforceAppCheck:\s*/;
   assert.match(
@@ -48,7 +56,8 @@ test("deployed callables enforce App Check", () => {
       ),
   );
   assert.equal(
-      appCheckCount - 2 + sharedPeopleOptionUses + sharedGuestOptionUses,
+      appCheckCount - 3 + sharedPeopleOptionUses + sharedGuestOptionUses +
+        sharedConsoleTotalsUses,
       callableCount,
   );
 });
