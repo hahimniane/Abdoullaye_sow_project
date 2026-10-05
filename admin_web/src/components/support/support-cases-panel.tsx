@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   limit,
+  limitToLast,
   onSnapshot,
   orderBy,
   query,
@@ -170,8 +171,11 @@ function useSupportMessages(
     const unsubscribe = onSnapshot(
       query(
         collection(db, "supportCases", caseId, "messages"),
+        // Oldest-first for reading, but the window is the NEWEST 200: with
+        // limit() a long thread froze at its first 200 messages and every
+        // new reply was invisible to whoever opened it.
         orderBy("createdAt", "asc"),
-        limit(200),
+        limitToLast(200),
       ),
       (snapshot) => {
         const next = snapshot.docs.map(rowFromSnapshot).filter((row) => {
