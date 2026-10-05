@@ -5,6 +5,8 @@
  * totals, so the page never shows a number the server would not.
  */
 
+import { localDateKey } from "./local-date.ts";
+
 export type InvoiceStatus = "open" | "paid";
 
 export const INVOICE_PAYMENT_METHODS = [
@@ -91,11 +93,9 @@ export function invoiceDayLabel(value: unknown): string {
   return `${month} ${Number(key.slice(8, 10))}, ${key.slice(0, 4)}`;
 }
 
+/** Today in the viewer's time zone (see lib/local-date.ts). */
 export function todayKey(): string {
-  const now = new Date();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${m}-${d}`;
+  return localDateKey();
 }
 
 export function invoiceMessage(codes: readonly string[]): string {

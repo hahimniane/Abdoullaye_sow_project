@@ -26,7 +26,7 @@ import {
   type PaymentReturnState,
 } from "@/lib/customer-checkout";
 import { SUPPORT_URL } from "@/lib/legal-links";
-import { useFrenchDomTranslation } from "@/lib/french-dom";
+import { useFrenchDomTranslation } from "@/lib/french-dom-runtime";
 
 const PAYMENT_RETURN_TIMEOUT_MS = 60_000;
 

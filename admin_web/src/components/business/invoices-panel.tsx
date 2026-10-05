@@ -30,6 +30,8 @@ import { confirmImportantAction } from "@/lib/action-confirmation";
 import { useBusinessCollection, useBusinessStaff } from "@/lib/business-data";
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, formatDayKey, text } from "@/lib/format";
+import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
+import { ShowMoreButton, useShowMore } from "@/components/show-more";
 import {
   INVOICE_MESSAGES,
   INVOICE_PAYMENT_METHODS,
@@ -178,12 +180,9 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
     return map;
   }, [payments.rows]);
 
-  const staffName = (id: string) => {
-    if (!id) return "";
-    const row = staff.rows.find((s) => String(s.id) === id);
-    if (!row) return "";
-    return text(row.fullName, "") || text(row.name, "") || text(row.email, "");
-  };
+  // Built once per staff list, read per row (never a find() per row).
+  const staffNames = useMemo(() => staffNameIndex(staff.rows), [staff.rows]);
+  const staffName = (id: string) => staffNameFrom(staffNames, id);
 
   const knownCustomers = useMemo(
     () =>
@@ -202,6 +201,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
 
   const sorted = useMemo(() => sortInvoices(invoices.rows), [invoices.rows]);
   const visible = useMemo(() => filterInvoices(sorted, filter, search), [sorted, filter, search]);
+  // 50 invoices at a time; a new filter or search starts from the top.
+  const invoicePage = useShowMore(visible, `${filter}|${search}`);
 
   // The scoreboard reads the rows, so it cannot disagree with the list.
   const board = useMemo(() => {
@@ -531,10 +532,10 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
           <div className="ctn-detail">
             <div className="ctn-detail-head">
               <div>
-                <h2>{invoiceTitle(selected)}</h2>
+                <h2 data-no-translate>{invoiceTitle(selected)}</h2>
                 <p className="panel-lede">
-                  {invoiceKind(selected)} for <strong>{text(selected.customerName, "")}</strong>
-                  {text(selected.customerPhone, "") && <> · {text(selected.customerPhone, "")}<CopyValue value={text(selected.customerPhone, "")} label="Copy phone" /></>}
+                  {invoiceKind(selected)} for <strong data-no-translate>{text(selected.customerName, "")}</strong>
+                  {text(selected.customerPhone, "") && <> · <span data-no-translate>{text(selected.customerPhone, "")}</span><CopyValue value={text(selected.customerPhone, "")} label="Copy phone" /></>}
                   {" · "}{formatDayKey(invoiceDayKey(selected.issuedOn))}
                   {invoiceDayKey(selected.dueOn) && selectedOpen && <> · due {formatDayKey(invoiceDayKey(selected.dueOn))}</>}
                 </p>
@@ -562,7 +563,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                 <small>{selectedTotals.status === "paid" ? `Paid in full${invoiceDayKey(selected.paidOn) ? ` on ${formatDayKey(invoiceDayKey(selected.paidOn))}` : ""}` : invoiceDayKey(selected.dueOn) ? `Due ${formatDayKey(invoiceDayKey(selected.dueOn))}` : "No due date"}</small>
               </div>
             </div>
-            {text(selected.notes, "") && <p className="ctn-notes">{text(selected.notes, "")}</p>}
+            {text(selected.notes, "") && <p className="ctn-notes" data-no-translate>{text(selected.notes, "")}</p>}
           </div>
 
           <div className="panel-header">
@@ -582,8 +583,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                   const qty = Math.max(1, Math.trunc(Number(row.quantity) || 1));
                   return (
                     <div className="mini-table-row" key={String(row.id)}>
-                      <span><strong>{text(row.description, "")}</strong>{vin && <small>VIN {vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}</span>
-                      <span><strong>{qty} × {moneyText(row.unitPriceCents)}</strong><small>{staffName(text(row.addedByStaffId, ""))}</small></span>
+                      <span><strong data-no-translate>{text(row.description, "")}</strong>{vin && <small>VIN <span data-no-translate>{vin}</span></small>}{vin && <CopyValue value={vin} label="Copy VIN" />}</span>
+                      <span><strong>{qty} × {moneyText(row.unitPriceCents)}</strong><small data-no-translate>{staffName(text(row.addedByStaffId, ""))}</small></span>
                       <span><strong>{moneyText(row.amountCents)}</strong></span>
                       <span className="ctn-row-actions">
                         <button className="ghost-button" type="button" disabled={busy} onClick={() => openEditLine(row)} title="Edit line"><Pencil size={14} /></button>
@@ -610,8 +611,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                   const method = INVOICE_PAYMENT_METHOD_LABELS[text(row.method, "") as InvoicePaymentMethod] ?? text(row.method, "");
                   return (
                     <div className={`mini-table-row${reverted ? " inv-reverted" : ""}`} key={String(row.id)}>
-                      <span><strong>{formatDayKey(invoiceDayKey(row.paidOn))}</strong><small>{staffName(text(row.receivedByStaffId, ""))}</small></span>
-                      <span><strong>{method}</strong>{text(row.forDescription, "") && <small>for {text(row.forDescription, "")}</small>}{text(row.note, "") && <small>{text(row.note, "")}</small>}{reverted && <small>Reverted</small>}</span>
+                      <span><strong>{formatDayKey(invoiceDayKey(row.paidOn))}</strong><small data-no-translate>{staffName(text(row.receivedByStaffId, ""))}</small></span>
+                      <span><strong>{method}</strong>{text(row.forDescription, "") && <small>for <span data-no-translate>{text(row.forDescription, "")}</span></small>}{text(row.note, "") && <small data-no-translate>{text(row.note, "")}</small>}{reverted && <small>Reverted</small>}</span>
                       <span><strong>{moneyText(row.amountCents)}</strong></span>
                       <span className="ctn-row-actions">
                         {!reverted && (
@@ -659,7 +660,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
             <div className="mini-table">
               <div className="ctn-table ctn-list-table inv-list-table">
                 <div className="mini-table-head"><span>Invoice</span><span>Customer</span><span>Balance</span><span>State</span></div>
-                {visible.map((row) => {
+                {invoicePage.shown.map((row) => {
                   const id = String(row.id);
                   return (
                     <div
@@ -670,8 +671,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                       onClick={() => setSelectedId(id)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(id); } }}
                     >
-                      <span><strong>{invoiceTitle(row)}</strong><small>{formatDayKey(invoiceDayKey(row.issuedOn))}</small></span>
-                      <span><strong>{text(row.customerName, "")}</strong>{text(row.customerPhone, "") && <small>{text(row.customerPhone, "")}</small>}</span>
+                      <span><strong data-no-translate>{invoiceTitle(row)}</strong><small>{formatDayKey(invoiceDayKey(row.issuedOn))}</small></span>
+                      <span><strong data-no-translate>{text(row.customerName, "")}</strong>{text(row.customerPhone, "") && <small data-no-translate>{text(row.customerPhone, "")}</small>}</span>
                       <span><strong>{moneyText(row.balanceCents)}</strong><small>of {moneyText(row.totalCents)}</small></span>
                       <span>
                         <StatusBadge row={row} />
@@ -682,6 +683,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                   );
                 })}
               </div>
+              <ShowMoreButton remaining={invoicePage.remaining} onClick={invoicePage.showMore} />
             </div>
           )}
         </article>
@@ -733,7 +735,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head">
-              <div><h3>{editingLineId ? "Edit line" : "Add a line"}</h3><p>{invoiceTitle(selected)} — anything you sold: a car, barrels, tyres, a service.</p></div>
+              <div><h3>{editingLineId ? "Edit line" : "Add a line"}</h3><p><span data-no-translate>{invoiceTitle(selected)}</span> — anything you sold: a car, barrels, tyres, a service.</p></div>
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
@@ -763,7 +765,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head">
-              <div><h3>Record a payment</h3><p>{invoiceTitle(selected)} — {moneyText(selectedTotals.balanceCents)} still owed.</p></div>
+              <div><h3>Record a payment</h3><p><span data-no-translate>{invoiceTitle(selected)}</span> — {moneyText(selectedTotals.balanceCents)} still owed.</p></div>
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
@@ -831,7 +833,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                       <span><strong>{auditActionLabel(text(h.action, ""))}</strong> · {who}</span>
                       <small style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{formatDate(h.at)}</small>
                     </div>
-                    {text(h.summary, "") && <div style={{ marginTop: 2 }}><small>{text(h.summary, "")}</small></div>}
+                    {text(h.summary, "") && <div style={{ marginTop: 2 }}><small data-audit-summary>{text(h.summary, "")}</small></div>}
                   </div>
                 );
               })}

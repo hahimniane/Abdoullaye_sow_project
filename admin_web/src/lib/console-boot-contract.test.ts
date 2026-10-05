@@ -53,6 +53,32 @@ test("the consoles stay out of the entry bundle", () => {
   }
 });
 
+// The guest service entry carries the shipping forms and, through them, the
+// car catalog. A sign-in visit never renders it, so it must not be in the
+// entry bundle either.
+test("the guest service entry is fetched only for a service link", () => {
+  assert.doesNotMatch(source, /import \{[^}]*\bCustomerServiceEntry\b[^}]*\} from/);
+  assert.match(source, /const CustomerServiceEntry = dynamic\(/);
+  assert.match(source, /import\("@\/components\/customer-service-entry"\)/);
+});
+
+// The make/model/year catalog is ~200 KB of JSON; it is fetched when a picker
+// mounts, never bundled with whatever imports the getters.
+test("the car catalog loads on demand", () => {
+  const catalog = readFileSync("src/lib/car-catalog.ts", "utf8");
+  assert.doesNotMatch(catalog, /^import [^;]*car-models-data\.json/m);
+  assert.match(catalog, /import\("\.\/car-models-data\.json"\)/);
+  for (const file of [
+    "src/components/customer-console.tsx",
+    "src/components/customer-shipping-services.tsx",
+    "src/components/business/containers-panel.tsx",
+    "src/components/business/operations-panels.tsx",
+  ]) {
+    assert.match(readFileSync(file, "utf8"), /useCarCatalog\(\)/, `${file} renders pickers without loading the catalog`);
+  }
+  assert.match(readFileSync("src/lib/vin-lookup.ts", "utf8"), /await loadCarCatalog\(\);\s*return matchDecodedVehicle/);
+});
+
 // Same trap one level down: the guest entry renders one service panel, chosen
 // before render, but a static import shipped all of them. Shipping is the
 // exception - it is what most links point at, so it stays eager.

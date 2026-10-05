@@ -252,6 +252,8 @@ import {
   optionLabel,
   transmissionOptions,
 } from "@/lib/vehicle-options";
+import { localDateKey, localDateKeyInDays } from "@/lib/local-date";
+import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 import {
   normalizeTransportContainerNumber,
   transportFulfillmentErrorMessage,
@@ -262,7 +264,8 @@ import {
   transportJobCurrentStatus,
   validateTransportFulfillmentChange,
 } from "@/lib/transport-fulfillment";
-import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/lib/car-catalog";
+import { canonicalMake, canonicalModel, getMakes, getModels, getYears, loadCarCatalog } from "@/lib/car-catalog";
+import { useCarCatalog } from "@/lib/use-car-catalog";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
@@ -572,8 +575,7 @@ const emptyTransportQuoteDraft: TransportQuoteDraft = {
 };
 
 function futureDateInput(days = 14) {
-  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-  return date.toISOString().slice(0, 10);
+  return localDateKeyInDays(days);
 }
 
 function defaultPoolDraft(destinationCountryId = ""): PoolDraft {
@@ -1047,7 +1049,7 @@ export function DestinationsPanel({
                 {availability.carTransport && (
                   <span className="destination-service-chip"><Truck size={14} /> Car transport <b>Quotes</b></span>
                 )}
-                {Boolean(text(row.destinationNote, "")) && <small>{text(row.destinationNote, "")}</small>}
+                {Boolean(text(row.destinationNote, "")) && <small data-no-translate>{text(row.destinationNote, "")}</small>}
               </div>
               <div className="destination-delivery-cell">
                 {availability.barrelShipping && (
@@ -1539,7 +1541,7 @@ export function OfficeLocationsPanel({
             <article className="data-row" key={row.id}>
               <div>
                 <strong>{text(row.label, "Office")}</strong>
-                <small>{text(row.address, "") || "No address on file"}</small>
+                <small>{text(row.address, "") ? <span data-no-translate>{text(row.address, "")}</span> : "No address on file"}</small>
               </div>
               <span className={`status-pill compact ${row.isActive === true ? "" : "warning"}`}>
                 {row.isActive === true ? "Active" : "Paused"}
@@ -1723,6 +1725,8 @@ export function ListingsPanel({
   businessProfileImageUrl = "",
   enabledServices = ["carSales"],
 }: PanelProps) {
+  // Loads the make/model/year catalog on demand; re-renders when it is in.
+  const catalogReady = useCarCatalog();
   const listings = useBusinessRows("cars", businessId, Boolean(businessId && !previewMode), null);
   const [draft, setDraft] = useState<ListingDraft>(emptyListingDraft);
   const [editingId, setEditingId] = useState("");
@@ -1742,14 +1746,14 @@ export function ListingsPanel({
     () => withSelected(citiesForState(draft.locationState), draft.locationCity),
     [draft.locationCity, draft.locationState],
   );
-  const makeOptions = useMemo(() => withSelected(getMakes(), draft.make), [draft.make]);
+  const makeOptions = useMemo(() => withSelected(getMakes(), draft.make), [draft.make, catalogReady]);
   const modelOptions = useMemo(
     () => (draft.make ? withSelected(getModels(draft.make), draft.model) : []),
-    [draft.make, draft.model],
+    [draft.make, draft.model, catalogReady],
   );
   const yearOptions = useMemo(
     () => (draft.make && draft.model ? withSelected(getYears(draft.make, draft.model), draft.year) : []),
-    [draft.make, draft.model, draft.year],
+    [draft.make, draft.model, draft.year, catalogReady],
   );
   function toggleFeature(feature: string) {
     setDraft((value) => ({
@@ -1780,6 +1784,7 @@ export function ListingsPanel({
       const dMake = text(r.Make, "");
       const dModel = text(r.Model, "");
       const dYear = text(r.ModelYear, "");
+      await loadCarCatalog();
       const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
       let model = "";
       let year = "";
@@ -3368,9 +3373,9 @@ export function BarrelsPanel({
               </div>
 
               <div className="pur-info">
-                <div><span>Sender</span><b>{text(row.senderName, "—")}</b></div>
-                <div><span>Receiver</span><b>{text(row.receiverName, "—")}</b></div>
-                <div><span>Receiver phone</span><b>{text(row.receiverPhone, "—")}</b></div>
+                <div><span>Sender</span><b data-no-translate>{text(row.senderName, "—")}</b></div>
+                <div><span>Receiver</span><b data-no-translate>{text(row.receiverName, "—")}</b></div>
+                <div><span>Receiver phone</span><b data-no-translate>{text(row.receiverPhone, "—")}</b></div>
                 <div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
                 <div><span>Payment</span><b>{statusLabel(text(row.paymentStatus, "not_required"))}</b></div>
                 <div><span>Total</span><b>{formatMoney(row.price)}</b></div>
@@ -3797,10 +3802,10 @@ export function FreightPanel({
               key={row.id}
               ref={focusRecordId === row.id ? focusedCardRef : undefined}
             >
-              <div className="pur-head"><div className="pur-title"><strong>{text(row.trackingCode, row.id)}</strong><span className="pur-kind">{statusLabel(text(row.mode ?? row.freightMode, "freight"))}</span></div><span className={`lst-badge ${barrelTone(status)}`}>{statusLabel(status)}</span></div>
+              <div className="pur-head"><div className="pur-title"><strong data-no-translate>{text(row.trackingCode, row.id)}</strong><span className="pur-kind">{statusLabel(text(row.mode ?? row.freightMode, "freight"))}</span></div><span className={`lst-badge ${barrelTone(status)}`}>{statusLabel(status)}</span></div>
               <div className="pur-info">
-                <div><span>Sender</span><b>{text(row.senderName, "—")}</b></div><div><span>Receiver</span><b>{text(row.receiverName, "—")}</b></div>
-                <div><span>Receiver phone</span><b>{text(row.receiverPhone, "—")}</b></div><div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
+                <div><span>Sender</span><b data-no-translate>{text(row.senderName, "—")}</b></div><div><span>Receiver</span><b data-no-translate>{text(row.receiverName, "—")}</b></div>
+                <div><span>Receiver phone</span><b data-no-translate>{text(row.receiverPhone, "—")}</b></div><div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
                 {weighs
                   ? (<><div><span>Estimated weight</span><b>{estimatedWeight.toLocaleString()} kg</b></div><div><span>Verified weight</span><b>{verifiedWeight > 0 ? `${verifiedWeight.toLocaleString()} kg` : "—"}</b></div></>)
                   : (<><div><span>Pricing</span><b>Set price</b></div><div><span>Set price</span><b>{formatMoney(row.itemFlatPrice)}</b></div></>)}
@@ -3814,7 +3819,7 @@ export function FreightPanel({
               {/* The customer paid for delivery at booking, so where it goes
                   is part of fulfillment, not a note buried in the total. */}
               {row.destinationDelivery === true && (
-                <div className="pur-notice"><Truck size={15} /> <span>Deliver to the receiver</span> · {text(row.receiverAddress, "Address not provided")} · {formatMoney(row.destinationDeliveryFee)} <span>collected at booking</span></div>
+                <div className="pur-notice"><Truck size={15} /> <span>Deliver to the receiver</span> · {text(row.receiverAddress, "") ? <span data-no-translate>{text(row.receiverAddress, "")}</span> : "Address not provided"} · {formatMoney(row.destinationDeliveryFee)} <span>collected at booking</span></div>
               )}
               {!paymentReady && <div className="pur-notice warn"><AlertTriangle size={15} /> Fulfillment is locked until payment succeeds.</div>}
               {paymentReady && !settlementReady && <div className="pur-notice warn"><AlertTriangle size={15} /> {settlementStatus === "balance_due" || settlementStatus === "balance_payment_pending" ? "Waiting for customer payment. Fulfillment remains locked." : settlementStatus === "needs_attention" ? "Settlement needs attention. Contact support before fulfillment." : weighs ? "Confirm the parcel weight before fulfillment." : "This shipment has a set price. Fulfillment unlocks once payment settles."}</div>}
@@ -4596,9 +4601,9 @@ export function TransportPanel({
                     </span>
                   </div>
                   <div className="pur-info">
-                    <div><span>Owner</span><b>{text(row.ownerName ?? row.customerName, "—")}</b></div>
-                    <div><span>Contact phone</span><b>{text(row.customerPhone, "—")}</b></div>
-                    <div><span>Pickup</span><b>{text(row.pickupAddress, "—")}</b></div>
+                    <div><span>Owner</span><b data-no-translate>{text(row.ownerName ?? row.customerName, "—")}</b></div>
+                    <div><span>Contact phone</span><b data-no-translate>{text(row.customerPhone, "—")}</b></div>
+                    <div><span>Pickup</span><b data-no-translate>{text(row.pickupAddress, "—")}</b></div>
                     <div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
                     <div><span>Accepted quote</span><b>{selectedAmountCents > 0 ? formatMoney(selectedAmountCents / 100) : formatMoney(row.price)}</b></div>
                     <div><span>Transport date</span><b>{formatDate(row.transportDate ?? row.estimatedPickupDate ?? row.createdAt)}</b></div>
@@ -4695,10 +4700,10 @@ export function TransportPanel({
                   <small>Enter the complete customer price, including your known fees.</small>
                 </label>
                 <label className="lst-field"><span>Estimated pickup date</span>
-                  <input min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDraft((value) => ({ ...value, estimatedPickupDate: event.target.value }))} type="date" value={draft.estimatedPickupDate} />
+                  <input min={localDateKey()} onChange={(event) => setDraft((value) => ({ ...value, estimatedPickupDate: event.target.value }))} type="date" value={draft.estimatedPickupDate} />
                 </label>
                 <label className="lst-field"><span>Estimated delivery date</span>
-                  <input min={draft.estimatedPickupDate || new Date().toISOString().slice(0, 10)} onChange={(event) => setDraft((value) => ({ ...value, estimatedDeliveryDate: event.target.value }))} type="date" value={draft.estimatedDeliveryDate} />
+                  <input min={draft.estimatedPickupDate || localDateKey()} onChange={(event) => setDraft((value) => ({ ...value, estimatedDeliveryDate: event.target.value }))} type="date" value={draft.estimatedDeliveryDate} />
                 </label>
                 <label className="lst-field"><span>Transport method</span>
                   <select onChange={(event) => setDraft((value) => ({ ...value, transportMethod: event.target.value === "enclosed" ? "enclosed" : "open" }))} value={draft.transportMethod}>
@@ -4780,6 +4785,8 @@ export function ParkingPanel({
   focusRecordId = "",
   focusView = "",
 }: PanelProps) {
+  // Loads the make/model/year catalog on demand; re-renders when it is in.
+  useCarCatalog();
   const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
   const parkingStaff = useBusinessStaff(businessId, Boolean(businessId && !previewMode), 200);
   // The lot already remembers everyone it has taken a car from - walk-ups
@@ -5202,6 +5209,7 @@ export function ParkingPanel({
       const dMake = text(r.Make, "");
       const dModel = text(r.Model, "");
       const dYear = text(r.ModelYear, "");
+      await loadCarCatalog();
       const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
       let model = "";
       let year = "";
@@ -5254,6 +5262,7 @@ export function ParkingPanel({
       const dMake = text(r.Make, "");
       const dModel = text(r.Model, "");
       const dYear = text(r.ModelYear, "");
+      await loadCarCatalog();
       const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
       let model = "";
       let year = "";
@@ -5686,12 +5695,12 @@ export function ParkingPanel({
                 <div className="pk-row" key={String(row.id)} role="row">
                   <span>
                     <b>{vehicle}<CopyValue value={text(row.vinNumber, "")} label="Copy VIN" /></b>
-                    <small>{text(row.vinNumber, "") || text(row.trackingCode, "")}</small>
+                    <small data-no-translate>{text(row.vinNumber, "") || text(row.trackingCode, "")}</small>
                     {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
                       <small className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</small>
                     )}
                   </span>
-                  <span><b>{text(row.customerName ?? row.ownerName, "—")}<CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b><small>{text(row.customerPhone, "")}</small></span>
+                  <span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b><small data-no-translate>{text(row.customerPhone, "")}</small></span>
                   <span>{formatDate(row.parkingDate) || "—"}</span>
                   <span className={openEnded ? "muted" : undefined}>{openEnded ? "Open" : formatDate(row.parkingEndDate)}</span>
                   <span className="num">{businessParkingStayDays(row)}</span>
@@ -5767,8 +5776,8 @@ export function ParkingPanel({
                 </span>
               </div>
               <div className="pur-info">
-                <div><span>Owner</span><b>{text(row.customerName ?? row.ownerName, "—")}<CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b></div>
-                <div><span>VIN</span><b>{text(row.vinNumber, "—")}<CopyValue value={text(row.vinNumber, "")} label="Copy VIN" /></b></div>
+                <div><span>Owner</span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b></div>
+                <div><span>VIN</span><b><span data-no-translate>{text(row.vinNumber, "—")}</span><CopyValue value={text(row.vinNumber, "")} label="Copy VIN" /></b></div>
                 {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
                   <div><span>Container</span><b className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</b></div>
                 )}
@@ -5927,10 +5936,10 @@ export function ParkingPanel({
                 return (
                   <div key={String(hr.id)} style={{ padding: "10px 0", borderBottom: "1px solid var(--rule)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span><strong>{text(hr.summary, "") || text(hr.action, "Change")}</strong></span>
+                      <span>{text(hr.summary, "") ? <strong data-audit-summary>{text(hr.summary, "")}</strong> : <strong>{text(hr.action, "Change")}</strong>}</span>
                       <small style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{formatDate(hr.at)}</small>
                     </div>
-                    <small style={{ color: "var(--muted)" }}>{who}</small>
+                    <small style={{ color: "var(--muted)" }}>{staffNameById.get(text(hr.byStaffId, "")) ? <span data-no-translate>{who}</span> : who}</small>
                   </div>
                 );
               })}
@@ -6756,9 +6765,9 @@ export function PurchasesPanel({
               </div>
 
               <div className="pur-info">
-                <div><span>Buyer</span><b>{text(row.buyerName ?? row.customerName, "—")}</b></div>
-                <div><span>Phone</span><b>{text(row.buyerPhone, "—")}</b></div>
-                <div><span>Email</span><b>{text(row.buyerEmail, "—")}</b></div>
+                <div><span>Buyer</span><b data-no-translate>{text(row.buyerName ?? row.customerName, "—")}</b></div>
+                <div><span>Phone</span><b data-no-translate>{text(row.buyerPhone, "—")}</b></div>
+                <div><span>Email</span><b data-no-translate>{text(row.buyerEmail, "—")}</b></div>
                 {text(row.destinationCountryName, "") && <div><span>Destination</span><b>{text(row.destinationCountryName, "")}</b></div>}
                 <div><span>Deposit</span><b>{formatMoney(row.depositAmount)} · {statusLabel(text(row.paymentStatus, "—"))}</b></div>
                 {Boolean(row.appointmentStart) && <div><span>Viewing</span><b>{text(row.appointmentLabel, "") || formatDate(row.appointmentStart)}</b></div>}
@@ -7167,7 +7176,7 @@ export async function runPanelAction(
     setMessage(successMessage);
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "L’action a échoué.";
+      error instanceof Error ? error.message : "Action failed.";
     setMessage(message);
     onError?.(message);
   } finally {
@@ -7230,7 +7239,7 @@ function StatusText({
 function LoadingState() {
   return (
     <div className="empty-state">
-      <RefreshCw className="spin" size={16} /> Chargement...
+      <RefreshCw className="spin" size={16} /> Loading...
     </div>
   );
 }
@@ -7324,10 +7333,13 @@ function parkingTitle(row: FirestoreRow) {
     row.vehicleTitle ??
       row.carTitle ??
       [row.carYear, row.carMake, row.carModel].filter(Boolean).join(" "),
-    "Véhicule stationné",
+    "Parked vehicle",
   );
 }
 
+// Deliberately the UTC day: parking dates are stored as UTC midnight of the
+// day the form sent (the server parses "YYYY-MM-DD"), so this is a stored
+// day being read back, not "today". Use lib/local-date for today.
 function dateInputValue(value: unknown) {
   const millis = timestampMs(value);
   if (!millis) return "";
@@ -7662,13 +7674,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   // business may only read its own team, so someone who has since moved, or a
   // Laawol admin acting on the lot, is unnameable here. Callers decide what to
   // say instead; the change history holds who it actually was.
-  const staffName = (id: string) => {
-    if (!id) return "";
-    const row = staff.rows.find((s) => String((s as Record<string, unknown>).id) === id);
-    if (!row) return "";
-    const r = row as Record<string, unknown>;
-    return text(r.fullName, "") || text(r.name, "") || text(r.email, "");
-  };
+  const staffNames = useMemo(
+    () => staffNameIndex(staff.rows as Record<string, unknown>[]),
+    [staff.rows],
+  );
+  const staffName = (id: string) => staffNameFrom(staffNames, id);
 
 
   const orderedTypes = useMemo(
@@ -8530,8 +8540,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                           )}
                           {voided && <span className="status-pill danger compact">Voided</span>}
                         </span>
-                        <span><strong>{text(r.customerName, "")}</strong><small>{text(r.customerPhone, "")}</small></span>
-                        <span><strong style={{ color: tintForType(String(r.activityTypeId)) }}>{label}</strong><small>{text(r.auctionHouse, "") ? `Auction: ${text(r.auctionHouse, "")}` : r.feeOverridden ? "Priced for this job" : "Standard rate"}</small></span>
+                        <span><strong data-no-translate>{text(r.customerName, "")}</strong><small data-no-translate>{text(r.customerPhone, "")}</small></span>
+                        <span><strong style={{ color: tintForType(String(r.activityTypeId)) }}>{label}</strong><small>{text(r.auctionHouse, "") ? <>Auction: <span data-no-translate>{text(r.auctionHouse, "")}</span></> : r.feeOverridden ? "Priced for this job" : "Standard rate"}</small></span>
                         <span>
                           <strong>{formatDate(r.activityDate)}</strong>
                           {/* Who entered it. A parked car has carried this
@@ -8539,7 +8549,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                               an activity is the other half of the same ledger:
                               when a figure looks wrong, the first question is
                               who put it there. */}
-                          {staffName(text(r.recordedByStaffId, "")) && <small>By {staffName(text(r.recordedByStaffId, ""))}</small>}
+                          {staffName(text(r.recordedByStaffId, "")) && <small>By <span data-no-translate>{staffName(text(r.recordedByStaffId, ""))}</span></small>}
                           {text(r.editedByStaffId, "") && <small>Edited</small>}
                         </span>
                         <span className="lot-col-fee">
@@ -8554,7 +8564,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                             : <span className="status-pill compact">{lotActivityPaymentLabel(r)}</span>}
                           {badge && <small>{lotActivityPaymentLabel(r)}</small>}
                           {partlyPaid && <small>{lotActivityBalanceText(r)}</small>}
-                          {!voided && String(r.paymentMethod) === "direct" && staffName(text(r.receivedByStaffId, "")) && <small>by {staffName(text(r.receivedByStaffId, ""))}</small>}
+                          {!voided && String(r.paymentMethod) === "direct" && staffName(text(r.receivedByStaffId, "")) && <small>by <span data-no-translate>{staffName(text(r.receivedByStaffId, ""))}</span></small>}
                           {canChaseLotActivity(r) && (<button className="ghost-button" type="button" onClick={() => { setChaseId(String(r.id)); setChaseStaff(""); setChaseVia("cash"); setChaseAmountMode("full"); setInstalment(emptyLotInstalmentDraft); setDraftError(""); setModal("chase"); }}><Send size={13} /> Chase</button>)}
                           {/* Money marked received off-platform can be set back
                               to not-received if it never actually came in; the
@@ -8978,7 +8988,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                       <span><strong>{action}</strong> · {who}</span>
                       <small style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{formatDate(hr.at)}</small>
                     </div>
-                    {text(hr.summary, "") && <div style={{ marginTop: 2 }}><small>{text(hr.summary, "")}</small></div>}
+                    {text(hr.summary, "") && <div style={{ marginTop: 2 }}><small data-audit-summary>{text(hr.summary, "")}</small></div>}
                   </div>
                 );
               })}

@@ -1016,7 +1016,7 @@ function TodayView({
               <article className="data-row" key={String(ev.id)} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div className="clickable" style={{ flex: 1, cursor: "pointer" }} role="button" tabIndex={0} onClick={() => onOpenTab("ledger")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenTab("ledger"); } }}>
                   <strong>{text(ev.action, "") === "voided" ? "Ledger entry voided" : text(ev.action, "") === "paid" ? "Ledger payment received" : "Ledger entry edited"}</strong>
-                  <div><small>{text(ev.summary, "")}{text(ev.byStaffId, "") ? " · by staff" : ""} · {formatDate(ev.at)}</small></div>
+                  <div><small><span data-audit-summary>{text(ev.summary, "")}</span>{text(ev.byStaffId, "") ? " · by staff" : ""} · {formatDate(ev.at)}</small></div>
                 </div>
                 <button className="ghost-button" type="button" onClick={() => dismissLedgerEvent(String(ev.id))}>Dismiss</button>
               </article>

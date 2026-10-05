@@ -1,8 +1,9 @@
-"use client";
+// The French dictionary and the DOM translation engine. This module is large,
+// so nothing imports it statically: `french-dom-runtime.ts` (the hook every
+// console mounts) loads it only when the page is in French.
 
-import { useEffect } from "react";
-
-import { LANGUAGE_STORAGE_KEY, currentWebLanguage } from "./language.ts";
+import { translateAuditSummary } from "./audit-summaries.ts";
+import { currentWebLanguage } from "./language.ts";
 
 export { resolveLang } from "./language.ts";
 
@@ -1678,6 +1679,10 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Obligatoire. Les acheteurs verront cette information.",
   Unknown: "Inconnu",
   "Opening console...": "Ouverture de la console...",
+  "Parked vehicle": "Véhicule stationné",
+  "Auction:": "Enchères :",
+  "· by staff": "· par l’équipe",
+  "Show more": "Afficher plus",
   "Console Laawol Digital": "Console Laawol Digital",
   "Sign in to manage the platform or your business workspace.":
     "Connectez-vous pour gérer la plateforme ou l’espace de votre entreprise.",
@@ -4944,7 +4949,7 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Les étiquettes ne sont pas encore prêtes. Réessayez dans un instant.",
 });
 
-const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
+export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "17 characters": "17 caractères",
   "VIN, owner, make": "VIN, propriétaire, marque",
   "Filter parked cars": "Filtrer les voitures garées",
@@ -5015,21 +5020,118 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Remove line": "Retirer la ligne",
 };
 
-const frToEn = Object.entries(TEXT_TRANSLATIONS).reduce<Record<string, string>>(
-  (result, [english, french]) => {
-    result[french] = english;
-    return result;
-  },
-  {},
-);
-const attrFrToEn = Object.entries(ATTRIBUTE_TRANSLATIONS).reduce<
-  Record<string, string>
->((result, [english, french]) => {
-    result[french] = english;
-    return result;
-}, {});
+// Several English strings share one French translation ("Annulé" is the
+// French for both "Cancelled" and "Reverted"). The reverse map used to be a
+// plain reduce, so whichever entry happened to be defined LAST won, and a
+// cancelled order read "Reverted" in English. Every French value with more
+// than one English source must name its English here; french-dom.test.ts fails
+// on any new ambiguous pair that is not resolved in this table.
+export const REVERSE_PREFERENCES: Record<string, string> = {
+  "Suspendu": "Suspended",
+  "Ajouter une destination": "Add destination",
+  "Adresse exacte de collecte (facultatif)": "Exact pickup address (optional)",
+  "Code postal": "Postal code",
+  "Sélectionnez un État": "Select a state",
+  "Sélectionnez un pays": "Select a country",
+  "Collecte": "Pickup",
+  "Prix convenu": "Agreed price",
+  "Pays de destination": "Destination country",
+  "Modifier": "Edit",
+  "Mode d’expédition": "Shipping method",
+  "Marque": "Make",
+  "Modèle": "Model",
+  "Année": "Year",
+  "Rue, ville, État, code postal": "Street, city, state, postal code",
+  "Envoi de la demande...": "Sending request...",
+  "Entreprise approuvée": "Approved business",
+  "Envoi en cours...": "Sending...",
+  "Non vérifié": "Not verified",
+  "Vérifier": "Verify",
+  "Paiement annulé": "Payment cancelled",
+  "En attente du paiement du solde": "Awaiting balance payment",
+  "Annuler et rembourser": "Cancel & refund",
+  "Annuler ce baril partagé ?": "Cancel this shared barrel?",
+  "Choisir une entreprise": "Choose a business",
+  "Modifications demandées": "Changes requested",
+  "Terminé": "Completed",
+  "Générer les recommandations": "Generate recommendations",
+  "Titre": "Title",
+  "Action requise": "Action required",
+  "Voitures stationnées": "Parked cars",
+  "Équipe": "Team",
+  "État": "State",
+  "Poids confirmé": "Weight confirmed",
+  "Non renseigné": "Not provided",
+  "Console Laawol Digital": "Laawol Digital Console",
+  "Baril partagé": "Shared barrel",
+  "Barils partagés": "Shared barrels",
+  "Envoyé": "Sent",
+  "Modifications requises": "Needs changes",
+  "Ouvrir le document": "Open document",
+  "Réservé": "Reserved",
+  "Annulé": "Cancelled",
+  "Fermer les paramètres du compte": "Close account settings",
+  "Supprimé": "Deleted",
+  "avis": "reviews",
+  "En cours": "In progress",
+  "Destinataire": "Receiver",
+  "Partiellement rempli": "Partially filled",
+  "Administrateur de plateforme": "Platform admin",
+  "Nom du destinataire": "Receiver name",
+  "Téléphone du destinataire": "Receiver's phone",
+  "Frais plateforme": "Platform fee",
+  "Ajouter une note": "Add a note",
+  "Inviter une personne": "Invite a person",
+  "Reçu par": "Received by",
+  "Mode de paiement": "Payment method",
+  "Encaissé": "Collected",
+  "Ajouter un achat": "Add a purchase",
+  "Facturé": "Billed",
+  "Dû": "Due",
+  "Indiquez le montant reçu.": "Enter the amount received.",
+  "pour le mois": "for the month",
+};
+
+/** French values with more than one distinct English source, and those
+ * sources in definition order. */
+export function ambiguousReverseTranslations(
+  ...dictionaries: Record<string, string>[]
+): Array<[string, string[]]> {
+  const sources = new Map<string, string[]>();
+  for (const dictionary of dictionaries) {
+    for (const [english, french] of Object.entries(dictionary)) {
+      const list = sources.get(french) ?? [];
+      if (!list.includes(english)) list.push(english);
+      sources.set(french, list);
+    }
+  }
+  return [...sources].filter(([, list]) => list.length > 1);
+}
+
+/** French -> English. An ambiguous French value takes its REVERSE_PREFERENCES
+ * entry; anything else keeps its first definition, so the result never depends
+ * on which block of this file was appended last. */
+export function buildReverseDictionary(
+  dictionaries: Record<string, string>[],
+  preferences: Record<string, string> = REVERSE_PREFERENCES,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const dictionary of dictionaries) {
+    for (const [english, french] of Object.entries(dictionary)) {
+      if (!(french in result)) result[french] = english;
+    }
+  }
+  for (const [french, english] of Object.entries(preferences)) {
+    if (french in result) result[french] = english;
+  }
+  return result;
+}
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
-const frenchDictionary = { ...frToEn, ...attrFrToEn };
+const frenchDictionary = buildReverseDictionary([
+  TEXT_TRANSLATIONS,
+  ATTRIBUTE_TRANSLATIONS,
+]);
 const englishTextKeys = Object.keys(englishDictionary).sort(
   (a, b) => b.length - a.length,
 );
@@ -5061,10 +5163,6 @@ function isInsideIdentifier(value: string, offset: number, match: string) {
   );
 }
 
-function currentLang() {
-  return currentWebLanguage();
-}
-
 export function translateValue(value: string, lang: string) {
   const sourceDict = lang === "en" ? frenchDictionary : englishDictionary;
   const exact = sourceDict[value];
@@ -5086,103 +5184,197 @@ export function translateValue(value: string, lang: string) {
   });
 }
 
-function translateTextNode(node: Node) {
+/** A server-written History sentence (see audit-summaries.ts). Its typed
+ * parts are never run through the dictionary: an unknown shape is left as
+ * written unless the whole sentence is a dictionary entry. */
+export function translateAuditValue(value: string, lang: string) {
+  if (lang !== "fr") return value;
+  return (
+    translateAuditSummary(value, (english) => TEXT_TRANSLATIONS[english]) ??
+    TEXT_TRANSLATIONS[value] ??
+    value
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DOM engine
+//
+// User data is not copy. A customer called "Pickup", a note that says
+// "Cancelled", a business named "Atlantic Shipping & Storage" must reach the
+// screen exactly as typed. Any element marked `data-no-translate` (or, below
+// <html>, `translate="no"`) is skipped together with everything inside it -
+// text, attributes, and later mutations. Scripts, styles and form text areas
+// are never touched. Elements marked `data-audit-summary` hold a sentence the
+// server wrote in English around typed values; those use the audit table
+// instead of the dictionary.
+//
+// The walk is written against the small slice of the DOM it needs (nodeType,
+// childNodes, parentElement, attributes, textContent) so the test suite can
+// drive it with plain objects.
+// ---------------------------------------------------------------------------
+
+export const NO_TRANSLATE_ATTRIBUTE = "data-no-translate";
+export const AUDIT_SUMMARY_ATTRIBUTE = "data-audit-summary";
+
+const ELEMENT_NODE = 1;
+const TEXT_NODE = 3;
+const SKIPPED_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "TEXTAREA"]);
+const TRANSLATED_ATTRIBUTES = ["placeholder", "title", "aria-label", "alt", "label"];
+
+export type DomNode = {
+  nodeType: number;
+  textContent: string | null;
+  parentElement: DomElement | null;
+  childNodes?: ArrayLike<DomNode>;
+};
+export type DomElement = DomNode & {
+  tagName: string;
+  getAttribute(name: string): string | null;
+  hasAttribute(name: string): boolean;
+  setAttribute(name: string, value: string): void;
+};
+
+export function isOptOutElement(element: DomElement) {
+  if (SKIPPED_TAGS.has(element.tagName.toUpperCase())) return true;
+  if (element.hasAttribute(NO_TRANSLATE_ATTRIBUTE)) return true;
+  // <html translate="no"> keeps browser auto-translation off for the whole
+  // console; it is not an opt-out from our own translation.
+  return (
+    element.getAttribute("translate") === "no" &&
+    element.tagName.toUpperCase() !== "HTML"
+  );
+}
+
+/** True when `node` or any ancestor opts out. O(depth), so it is called once
+ * per mutation root, never per node of a walk. */
+export function isInsideOptOut(node: DomNode) {
+  let element: DomElement | null =
+    node.nodeType === ELEMENT_NODE ? (node as DomElement) : node.parentElement;
+  while (element) {
+    if (isOptOutElement(element)) return true;
+    element = element.parentElement;
+  }
+  return false;
+}
+
+function translateTextNode(node: DomNode, lang: string) {
   const value = node.textContent;
   if (!value) return;
   const trimmed = value.trim();
-  const translated = translateValue(trimmed, currentLang());
+  if (!trimmed) return;
+  const translated = node.parentElement?.hasAttribute(AUDIT_SUMMARY_ATTRIBUTE)
+    ? translateAuditValue(trimmed, lang)
+    : translateValue(trimmed, lang);
   if (translated === trimmed) return;
-  node.textContent = value.replace(trimmed, translated);
+  // A function replacer: a translation containing "$&" or "$'" must not be
+  // read as a replacement pattern.
+  node.textContent = value.replace(trimmed, () => translated);
 }
 
-function translateAttributes(element: Element) {
+function translateAttributes(element: DomElement, lang: string) {
   // `label` is how an <optgroup> names a group of options — text the user
   // reads that lives nowhere in the DOM as a text node.
-  ["placeholder", "title", "aria-label", "alt", "label"].forEach((name) => {
+  for (const name of TRANSLATED_ATTRIBUTES) {
     const value = element.getAttribute(name);
-    if (!value) return;
-    const translated = translateValue(value, currentLang());
+    if (!value) continue;
+    const translated = translateValue(value, lang);
     if (translated !== value) element.setAttribute(name, translated);
-  });
-}
-
-function translateTree(root: ParentNode) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let current = walker.nextNode();
-  while (current) {
-    translateTextNode(current);
-    current = walker.nextNode();
   }
-  if (root instanceof Element) translateAttributes(root);
-  root.querySelectorAll?.("*").forEach(translateAttributes);
-  document.documentElement.lang = currentLang();
-  document.title = translateValue(document.title, currentLang());
 }
 
-function installToggle() {
-  if (document.querySelector("[data-console-lang-toggle]")) return;
-  const button = document.createElement("button");
-  const nextLang = currentLang() === "en" ? "fr" : "en";
-  button.type = "button";
-  button.className = "secondary-button compact console-lang-toggle";
-  button.dataset.consoleLangToggle = "true";
-  button.textContent = nextLang.toUpperCase();
-  button.title =
-    nextLang === "fr"
-      ? "Switch language to French"
-      : "Passer la langue en anglais";
-  button.setAttribute("aria-label", button.title);
-  button.addEventListener("click", () => {
-    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLang);
-    window.location.reload();
-  });
-  document.body.appendChild(button);
+/** Translate `root` and everything under it, skipping opted-out subtrees.
+ * One pass over the subtree: text and attributes together. */
+export function translateSubtree(root: DomNode, lang: string) {
+  if (isInsideOptOut(root)) return;
+  const stack: DomNode[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop() as DomNode;
+    if (node.nodeType === TEXT_NODE) {
+      translateTextNode(node, lang);
+      continue;
+    }
+    if (node.nodeType !== ELEMENT_NODE) continue;
+    const element = node as DomElement;
+    if (node !== root && isOptOutElement(element)) continue;
+    translateAttributes(element, lang);
+    const children = element.childNodes;
+    if (!children) continue;
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      stack.push(children[index]);
+    }
+  }
 }
 
-export function useFrenchDomTranslation() {
-  useEffect(() => {
-    installToggle();
+export type MutationLike = {
+  type: string;
+  target: DomNode;
+  addedNodes: ArrayLike<DomNode>;
+};
 
-    let observer: MutationObserver | null = null;
-    // Guard against the observer reacting to its own DOM writes. Writing
-    // `textContent`/attributes triggers more mutations; without this the
-    // observer feeds itself in an endless loop and freezes the console.
-    let translating = false;
-    const runGuarded = (work: () => void) => {
-      if (translating) return;
-      translating = true;
-      try {
-        work();
-      } finally {
-        // Discard the mutation records our own writes just generated so they
-        // are not reprocessed when the next callback fires.
-        observer?.takeRecords();
-        translating = false;
+/** Apply one MutationObserver batch. The caller reads the language once per
+ * batch, never per node. */
+export function translateMutations(mutations: ArrayLike<MutationLike>, lang: string) {
+  for (let index = 0; index < mutations.length; index += 1) {
+    const mutation = mutations[index];
+    for (let child = 0; child < mutation.addedNodes.length; child += 1) {
+      const node = mutation.addedNodes[child];
+      if (node.nodeType === TEXT_NODE) {
+        if (!isInsideOptOut(node)) translateTextNode(node, lang);
+      } else if (node.nodeType === ELEMENT_NODE) {
+        translateSubtree(node, lang);
       }
-    };
+    }
+    if (mutation.type === "characterData" && !isInsideOptOut(mutation.target)) {
+      translateTextNode(mutation.target, lang);
+    }
+  }
+}
 
-    runGuarded(() => translateTree(document.body));
+/**
+ * Translate the page now and keep translating what React renders next.
+ * Returns the function that stops it.
+ */
+export function startDomTranslation(): () => void {
+  let observer: MutationObserver | null = null;
+  // Guard against the observer reacting to its own DOM writes. Writing
+  // `textContent`/attributes triggers more mutations; without this the
+  // observer feeds itself in an endless loop and freezes the console.
+  let translating = false;
+  const runGuarded = (work: (lang: string) => void) => {
+    if (translating) return;
+    translating = true;
+    try {
+      const lang = currentWebLanguage();
+      work(lang);
+      document.title = translateValue(document.title, lang);
+    } finally {
+      // Discard the mutation records our own writes just generated so they
+      // are not reprocessed when the next callback fires.
+      observer?.takeRecords();
+      translating = false;
+    }
+  };
 
-    observer = new MutationObserver((mutations) => {
-      runGuarded(() => {
-        for (const mutation of mutations) {
-          mutation.addedNodes.forEach((node) => {
-            if (node.nodeType === Node.TEXT_NODE) {
-              translateTextNode(node);
-            } else if (node instanceof Element) {
-              translateTree(node);
-            }
-          });
-          if (mutation.type === "characterData")
-            translateTextNode(mutation.target);
-        }
-      });
-    });
-    observer.observe(document.body, {
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
-    return () => observer?.disconnect();
-  }, []);
+  runGuarded((lang) => translateSubtree(document.body as unknown as DomNode, lang));
+
+  observer = new MutationObserver((mutations) => {
+    runGuarded((lang) =>
+      translateMutations(mutations as unknown as ArrayLike<MutationLike>, lang),
+    );
+  });
+  observer.observe(document.body, {
+    childList: true,
+    characterData: true,
+    subtree: true,
+  });
+  // The tab title too: consoles set it in an effect and again on the next
+  // frame (lib/document-title.ts), often after the last body mutation, which
+  // left French tabs titled in English.
+  // <head> rather than <title>: hydration may replace the element itself.
+  observer.observe(document.head, {
+    childList: true,
+    characterData: true,
+    subtree: true,
+  });
+  return () => observer?.disconnect();
 }

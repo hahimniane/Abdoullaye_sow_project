@@ -14,7 +14,7 @@
  * form reuses it rather than forking the fetch.
  */
 
-import { canonicalModel, getMakes, getModels, getYears } from "./car-catalog.ts";
+import { canonicalModel, getMakes, getModels, getYears, loadCarCatalog } from "./car-catalog.ts";
 
 type Row = Record<string, unknown>;
 
@@ -54,6 +54,7 @@ export async function decodeVinWithCatalog(
 ): Promise<VinDecodeResult> {
   const res = await fetchImpl(`${NHTSA_DECODE}${encodeURIComponent(vin)}?format=json`);
   const data = (await res.json()) as { Results?: Row[] };
+  await loadCarCatalog();
   return matchDecodedVehicle(data?.Results?.[0] ?? {});
 }
 

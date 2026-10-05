@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 
 const layoutSource = readFileSync("src/app/layout.tsx", "utf8");
-const frenchDomSource = readFileSync("src/lib/french-dom.ts", "utf8");
+const frenchDomRuntimeSource = readFileSync("src/lib/french-dom-runtime.ts", "utf8");
 
 test("web consoles opt out of browser auto-translation", () => {
   assert.match(layoutSource, /google:\s*"notranslate"/);
@@ -13,9 +13,11 @@ test("web consoles opt out of browser auto-translation", () => {
 
 test("web consoles still expose their selected language to the browser", () => {
   assert.match(layoutSource, /<html[^>]*lang="en"/);
+  // The runtime sets it for every visitor; the dictionary module only loads
+  // for French ones.
   assert.match(
-    frenchDomSource,
-    /document\.documentElement\.lang\s*=\s*currentLang\(\)/,
+    frenchDomRuntimeSource,
+    /const lang = currentWebLanguage\(\);\s*document\.documentElement\.lang = lang;/,
   );
 });
 

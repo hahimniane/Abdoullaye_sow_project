@@ -46,6 +46,7 @@ import { formatDateTime, formatMoney, text } from "@/lib/format";
 import { isValidPhone } from "@/lib/phone";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
+import { localDateKey, localDateTimeKey } from "@/lib/local-date";
 
 type CustomerCarsProps = {
   firebaseUser?: User | null;
@@ -986,7 +987,7 @@ function CarActionForm({
           <label>
             Appointment time
             <input
-              min={new Date().toISOString().slice(0, 16)}
+              min={localDateTimeKey()}
               onChange={(event) => setAppointmentStart(event.target.value)}
               required
               type="datetime-local"
@@ -998,7 +999,7 @@ function CarActionForm({
           <label>
             Hold until
             <input
-              min={new Date().toISOString().slice(0, 10)}
+              min={localDateKey()}
               onChange={(event) => setHoldUntilDate(event.target.value)}
               required
               type="date"

@@ -39,6 +39,7 @@ import {
   type SupportPriority,
 } from "@/lib/phase5-customer-actions";
 import type { FirestoreRow } from "@/types/admin";
+import { UserText } from "@/components/user-text";
 
 const LOADING_TIMEOUT_MS = 15_000;
 const ACTION_TIMEOUT_MS = 30_000;
@@ -563,8 +564,8 @@ function SupportThread({
                 fileUrl={fileUrl}
                 isImage={isImage}
               />
-              {isImage && Boolean(caption) && <p>{caption}</p>}
-              {!fileUrl && <p>{text(message.content, "Message")}</p>}
+              {isImage && Boolean(caption) && <p data-no-translate>{caption}</p>}
+              {!fileUrl && <p><UserText value={message.content} fallback="Message" /></p>}
             </article>
           );
         })}

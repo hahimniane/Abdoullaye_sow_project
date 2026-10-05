@@ -141,8 +141,11 @@ import {
   type AdminCapability,
 } from "@/lib/admin-areas";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
+import { buildBusinessDirectory, buildUserDirectory } from "@/lib/admin-directory";
 import { FieldInfo } from "@/components/field-info";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
+import { UserText } from "@/components/user-text";
+import { ShowMoreButton, useShowMore } from "@/components/show-more";
 import {
   confirmImportantAction,
   type ActionConfirmationOptions,
@@ -1116,15 +1119,6 @@ const previewData = {
   ],
 } satisfies Record<string, FirestoreRow[]>;
 
-function slugify(value: string) {
-  const slug = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return slug || `business_${Date.now()}`;
-}
-
 function numberValue(value: unknown) {
   const parsed = typeof value === "number" ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -1294,157 +1288,6 @@ function urgencyRank(item: { kind: string; status: string }) {
   if (item.kind === "shipment") return 3;
   if (item.status === "pending") return 4;
   return 5;
-}
-
-function businessKey(id: unknown, name: unknown) {
-  return text(id ?? name, "")
-    .trim()
-    .toLowerCase();
-}
-
-function businessDirectory(
-  businesses: FirestoreRow[],
-  sources: FirestoreRow[][],
-) {
-  const known = new Map<string, FirestoreRow>();
-  for (const business of businesses) {
-    known.set(businessKey(business.id, business.name), business);
-    const nameKey = businessKey(null, business.name);
-    if (nameKey) known.set(nameKey, business);
-  }
-
-  const inferred = new Map<string, FirestoreRow>();
-  for (const rows of sources) {
-    for (const row of rows) {
-      const name = text(row.businessName, "");
-      if (!name) continue;
-      const id = text(row.businessId, slugify(name));
-      const idKey = businessKey(id, name);
-      const nameKey = businessKey(null, name);
-      if (
-        known.has(idKey) ||
-        known.has(nameKey) ||
-        inferred.has(idKey) ||
-        inferred.has(nameKey)
-      ) {
-        const existing = inferred.get(idKey) ?? inferred.get(nameKey);
-        if (existing)
-          existing._sourceCount = numberValue(existing._sourceCount) + 1;
-        continue;
-      }
-      const business = {
-        id,
-        name,
-        status: "missing_profile",
-        businessStatus: row.businessStatus,
-        phone: row.businessPhone ?? row.contactPhone,
-        email: row.businessEmail ?? row.contactEmail,
-        serviceNote: "Inferred from operational records",
-        _inferred: true,
-        _sourceCount: 1,
-      };
-      inferred.set(idKey, business);
-      inferred.set(nameKey, business);
-    }
-  }
-
-  return [...businesses, ...Array.from(new Set(inferred.values()))].sort(
-    (a, b) => {
-    const aMissing = a._inferred === true ? 1 : 0;
-    const bMissing = b._inferred === true ? 1 : 0;
-    if (aMissing !== bMissing) return bMissing - aMissing;
-    return text(a.name, a.id).localeCompare(text(b.name, b.id));
-    },
-  );
-}
-
-function userKeys(user: FirestoreRow) {
-  const uid = text(user.uid ?? user.id, "");
-  const email = text(user.email, "").toLowerCase();
-  const phone = text(user.phone, "");
-  const name = text(user.fullName, "");
-  return [
-    uid ? `uid:${uid}` : "",
-    email ? `email:${email}` : "",
-    phone ? `phone:${phone}` : "",
-    name ? `name:${slugify(name)}` : "",
-  ].filter(Boolean);
-}
-
-function mergeUserDirectoryRow(target: FirestoreRow, source: FirestoreRow) {
-  Object.entries(source).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === "") return;
-    if (
-      target[key] === undefined ||
-      target[key] === null ||
-      target[key] === ""
-    ) {
-      target[key] = value;
-    }
-  });
-  // Only ever upgrade these flags to true — never coerce an unknown
-  // (undefined) value down to false, which would wrongly hide real accounts
-  // that also appear in operational records.
-  if (source.hasAuth === true) target.hasAuth = true;
-  if (source.hasProfile === true) target.hasProfile = true;
-  target._inferred = target._inferred === true && source.hasProfile !== true;
-}
-
-function userContactsFromRow(row: FirestoreRow) {
-  const candidates = [
-    {
-      id: row.customerUid ?? row.userId,
-      uid: row.customerUid ?? row.userId,
-      fullName: row.customerName,
-      email: row.customerEmail,
-      phone: row.customerPhone,
-    },
-    {
-      id: row.buyerUid,
-      uid: row.buyerUid,
-      fullName: row.buyerName,
-      email: row.buyerEmail,
-      phone: row.buyerPhone,
-    },
-    {
-      id: row.ownerUid,
-      uid: row.ownerUid,
-      fullName: row.ownerName,
-      email: row.ownerEmail,
-      phone: row.ownerPhone,
-    },
-    {
-      id: row.receiverUid,
-      uid: row.receiverUid,
-      fullName: row.receiverName,
-      email: row.receiverEmail,
-      phone: row.receiverPhone,
-    },
-  ];
-
-  return candidates.flatMap((candidate) => {
-    const email = text(candidate.email, "");
-    const phone = text(candidate.phone, "");
-    const fullName = text(candidate.fullName, "");
-    const uid = text(candidate.uid, "");
-    if (!email && !phone && !fullName && !uid) return [];
-    return [
-      {
-      id: uid || email || phone || slugify(fullName),
-      uid,
-      fullName,
-      email,
-      phone,
-      role: "missing_profile",
-      businessId: row.businessId,
-      businessName: row.businessName,
-      hasProfile: false,
-      _inferred: true,
-      _sourceId: row.id,
-      _sourceCode: row.trackingCode ?? row.purchaseCode ?? row.id,
-      },
-    ];
-  });
 }
 
 function isBusinessMember(user: FirestoreRow) {
@@ -1776,61 +1619,6 @@ function peopleActivityReferences(user: FirestoreRow) {
     });
   }
   return references;
-}
-
-function userDirectory(
-  profiles: FirestoreRow[],
-  authUsers: FirestoreRow[],
-  contactSources: FirestoreRow[][],
-) {
-  const directory = new Map<string, FirestoreRow>();
-  const ordered: FirestoreRow[] = [];
-
-  function upsert(row: FirestoreRow, preferred = false) {
-    const keys = userKeys(row);
-    if (keys.length === 0) return;
-    const existing = keys.map((key) => directory.get(key)).find(Boolean);
-    if (existing) {
-      if (preferred) {
-        Object.assign(existing, row);
-        existing.hasProfile = true;
-        existing._inferred = false;
-      } else {
-        mergeUserDirectoryRow(existing, row);
-      }
-      keys.forEach((key) => directory.set(key, existing));
-      return;
-    }
-
-    const next = {...row};
-    ordered.push(next);
-    keys.forEach((key) => directory.set(key, next));
-  }
-
-  authUsers.forEach((user) => upsert(user));
-  profiles.forEach((profile) =>
-    upsert(
-      {
-    ...profile,
-    uid: profile.uid ?? profile.id,
-    hasProfile: true,
-    _inferred: false,
-      },
-      true,
-    ),
-  );
-  contactSources
-      .flatMap((rows) => rows.flatMap(userContactsFromRow))
-      .forEach((user) => upsert(user));
-
-  return ordered.sort((a, b) => {
-    const aMissing = a.hasProfile === false || a._inferred === true ? 1 : 0;
-    const bMissing = b.hasProfile === false || b._inferred === true ? 1 : 0;
-    if (aMissing !== bMissing) return bMissing - aMissing;
-    return text(a.fullName ?? a.email, a.id).localeCompare(
-        text(b.fullName ?? b.email, b.id),
-    );
-  });
 }
 
 function useAdminCollection(name: string, enabled: boolean, max = 150) {
@@ -2373,34 +2161,82 @@ export function AdminConsole() {
       {...profile, uid: profile.id, hasProfile: true, _inferred: false},
     ];
   }, [profile, userProfiles.rows]);
-  const userRows = previewMode
-    ? previewData.users
-    : userDirectory(profileRows, authUsers.rows, [
-        shipmentRows,
-        transportRows,
-        parkedRows,
-        purchaseRows,
-        supportRequestRows,
-      ]);
-  const businessRows = previewMode
-    ? previewBusinesses
-    : businessDirectory(businesses.rows, [
-        carRows,
-        shipmentRows,
-        transportRows,
-        parkedRows,
-        purchaseRows,
-        pricingRows,
-        destinationRows,
-        applicationRows,
-        notificationRows,
-        supportRequestRows,
-      ]);
+  // Both directories walk every operational collection, so they are rebuilt
+  // only when one of those collections changes - not on every keystroke.
+  const authUserRows = authUsers.rows;
+  const userRows = useMemo(
+    () =>
+      previewMode
+        ? previewData.users
+        : buildUserDirectory(profileRows, authUserRows, [
+            shipmentRows,
+            transportRows,
+            parkedRows,
+            purchaseRows,
+            supportRequestRows,
+          ]),
+    [
+      previewMode,
+      profileRows,
+      authUserRows,
+      shipmentRows,
+      transportRows,
+      parkedRows,
+      purchaseRows,
+      supportRequestRows,
+    ],
+  );
+  const businessSourceRows = businesses.rows;
+  const businessRows = useMemo(
+    () =>
+      previewMode
+        ? previewBusinesses
+        : buildBusinessDirectory(businessSourceRows, [
+            carRows,
+            shipmentRows,
+            transportRows,
+            parkedRows,
+            purchaseRows,
+            pricingRows,
+            destinationRows,
+            applicationRows,
+            notificationRows,
+            supportRequestRows,
+          ]),
+    [
+      previewMode,
+      previewBusinesses,
+      businessSourceRows,
+      carRows,
+      shipmentRows,
+      transportRows,
+      parkedRows,
+      purchaseRows,
+      pricingRows,
+      destinationRows,
+      applicationRows,
+      notificationRows,
+      supportRequestRows,
+    ],
+  );
 
+  // One timer for the one toast: a second notify() replaces the first toast,
+  // and must not be cleared early by the first toast's leftover timer.
+  const toastTimerRef = useRef<number | null>(null);
   const notify = useCallback((type: Toast["type"], message: string) => {
     setToast({ type, message });
-    window.setTimeout(() => setToast(null), 4200);
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      toastTimerRef.current = null;
+      setToast(null);
+    }, 4200);
   }, []);
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -4021,8 +3857,8 @@ function UsersView({
                     {peopleInitials(userDisplayName(user))}
                   </span>
                   <span className="people-list-copy">
-                    <strong>{userDisplayName(user)}</strong>
-                    <span>{text(user.email ?? user.phone, "No contact information")}</span>
+                    <strong data-no-translate>{userDisplayName(user)}</strong>
+                    <span><UserText value={user.email ?? user.phone} fallback="No contact information" /></span>
                     <small>{peoplePersonKindLabel(user)}</small>
                   </span>
                   <span
@@ -4164,12 +4000,12 @@ function PersonDetailWorkspace({
           </span>
           <div>
             <div className="people-detail-title">
-              <h3>{userDisplayName(user)}</h3>
+              <h3 data-no-translate>{userDisplayName(user)}</h3>
               {isCurrentUser && (
                 <span className="status-pill compact">Signed in</span>
               )}
             </div>
-            <p>{text(user.email ?? user.phone, "No contact information")}</p>
+            <p><UserText value={user.email ?? user.phone} fallback="No contact information" /></p>
             <div className="people-detail-badges">
               <span className="status-pill compact">
                 {peoplePersonKindLabel(user)}
@@ -4261,11 +4097,11 @@ function PersonDetailWorkspace({
           <dl className="people-facts">
             <div>
               <dt>Email</dt>
-              <dd>{text(user.email, "Not provided")}</dd>
+              <dd><UserText value={user.email} fallback="Not provided" /></dd>
             </div>
             <div>
               <dt>Phone</dt>
-              <dd>{text(user.phone, "Not provided")}</dd>
+              <dd><UserText value={user.phone} fallback="Not provided" /></dd>
             </div>
             <div>
               <dt>Email verification</dt>
@@ -7396,7 +7232,7 @@ function WebsiteView({
               return (
                 <article className="website-request-row" key={business.id}>
                   <div>
-                    <strong>{text(business.name, business.id)}</strong>
+                    <strong data-no-translate>{text(business.name, business.id)}</strong>
                     <small>
                       {missing.length
                         ? `Missing: ${missing.join(", ")}`
@@ -8777,7 +8613,7 @@ function BusinessesView({
                     {businessInitials(text(business.name, business.id))}
                   </span>
                   <span className="master-row-main">
-                    <strong>{text(business.name, business.id)}</strong>
+                    <strong data-no-translate>{text(business.name, business.id)}</strong>
                     <small>{businessStatusLabel(business)}</small>
                   </span>
                   {open > 0 && <span className="master-badge">{open}</span>}
@@ -9767,7 +9603,7 @@ function BusinessWorkspace({
             {businessInitials(text(business.name, business.id))}
           </span>
           <div>
-            <h2>{text(business.name, business.id)}</h2>
+            <h2 data-no-translate>{text(business.name, business.id)}</h2>
             <p>
               {[
                 text(business.phone, "No phone"),
@@ -10022,7 +9858,7 @@ function BusinessWorkspace({
                     {members.map((user) => (
                       <div className="membership-row" key={user.id}>
                         <div>
-                          <strong>{userDisplayName(user)}</strong>
+                          <strong data-no-translate>{userDisplayName(user)}</strong>
                           <small>{userMeta(user)}</small>
                         </div>
                         <select
@@ -10061,7 +9897,7 @@ function BusinessWorkspace({
                     <div className="row-list compact">
                       {contactReferences.map((contact) => (
                         <div className="support-contact-row" key={contact.id}>
-                          <strong>{userDisplayName(contact)}</strong>
+                          <strong data-no-translate>{userDisplayName(contact)}</strong>
                           <span>{userMeta(contact)}</span>
                         </div>
                       ))}
@@ -10231,7 +10067,7 @@ function BusinessWorkspace({
                     <div className="row-list compact">
                       {contactReferences.map((contact) => (
                         <div className="support-contact-row" key={contact.id}>
-                          <strong>{userDisplayName(contact)}</strong>
+                          <strong data-no-translate>{userDisplayName(contact)}</strong>
                           <span>{userMeta(contact)}</span>
                         </div>
                       ))}
@@ -11368,7 +11204,7 @@ function MarketplaceBusinessCard({
     <section className="marketplace-business-card">
       <div className="marketplace-business-head">
         <div>
-          <strong>{text(business.name, business.id)}</strong>
+          <strong data-no-translate>{text(business.name, business.id)}</strong>
           <small>
             {[
               statusLabel(business.status),
@@ -12781,6 +12617,11 @@ function FinanceView({
     (sum, row) => sum + row.amount,
     0,
   );
+  // The ledger grows without bound; render 50 rows at a time.
+  const ledgerPage = useShowMore(
+    filteredLedgerRows,
+    `${ledgerSearch}|${businessFilter}|${sourceFilter}|${statusFilter}`,
+  );
   const businessOptions = businesses.filter(
     (business) => business._inferred !== true,
   );
@@ -12904,7 +12745,7 @@ function FinanceView({
           {formatMoney(ledgerAmountTotal)}
         </div>
         <div className="row-list finance-ledger-list">
-          {filteredLedgerRows.map((row) => (
+          {ledgerPage.shown.map((row) => (
             <FinanceLedgerRecordRow
               key={row.id}
               row={row}
@@ -12924,6 +12765,7 @@ function FinanceView({
             <EmptyState text="No finance rows match the current filters." />
           )}
         </div>
+        <ShowMoreButton remaining={ledgerPage.remaining} onClick={ledgerPage.showMore} />
       </Panel>
       <Panel title="Business support request" icon={<Send size={18} />}>
         {canSendSupport ? (

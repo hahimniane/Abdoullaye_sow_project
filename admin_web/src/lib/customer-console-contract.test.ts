@@ -136,8 +136,9 @@ test("the profile follows its Firestore document for the whole session", () => {
   // console kept saying "Not verified" - a success banner and a stale badge
   // contradicting each other on the same screen - until a full reload.
   const router = readFileSync("src/components/console-router.tsx", "utf8");
-  assert.match(router, /onSnapshot\(doc\(db, "users", user\.uid\)/);
+  assert.match(router, /onSnapshot\(\s*doc\(db, "users", user\.uid\)/);
   // The follower must die with the session, or a sign-out leaks a listener
-  // that resurrects the previous user's profile.
-  assert.match(router, /profileFollowRef\.current\?\.\(\);/);
+  // that resurrects the previous user's profile (lib/auth-session-gate.ts).
+  assert.match(router, /gate\.follow\(isCurrent, follow\);/);
+  assert.match(router, /gate\.close\(\);/);
 });

@@ -47,6 +47,7 @@ import {
   getModels,
   getYears,
 } from "@/lib/car-catalog";
+import { useCarCatalog } from "@/lib/use-car-catalog";
 import {
   EMPTY_STRUCTURED_ADDRESS,
   composeAddressLine,
@@ -136,6 +137,7 @@ import {
 } from "@/lib/freight-payback";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
+import { localDateKey } from "@/lib/local-date";
 
 const CALL_TIMEOUT_MS = 30_000;
 
@@ -4961,6 +4963,8 @@ function TransportRequestForm({
   options: DestinationOption[];
   profile: UserProfile;
 }) {
+  // Loads the make/model/year catalog on demand; re-renders when it is in.
+  useCarCatalog();
   const [ownerName, setOwnerName] = useState(text(profile.fullName, ""));
   const [customerPhone, setCustomerPhone] = useState(text(profile.phone, ""));
   const [pickupArea, setPickupArea] = useState("");
@@ -5335,7 +5339,7 @@ function TransportRequestForm({
                     <label>
                       Preferred pickup date (optional)
                       <input
-                        min={new Date().toISOString().slice(0, 10)}
+                        min={localDateKey()}
                         onChange={(event) => setPreferredDate(event.target.value)}
                         type="date"
                         value={preferredDate}

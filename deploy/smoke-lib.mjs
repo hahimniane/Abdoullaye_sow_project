@@ -92,6 +92,20 @@ export async function requestPinned({
   };
 }
 
+/**
+ * Every /_next/ script and stylesheet a console's index.html names - script
+ * tags, preloads, and the chunk lists inside the inline RSC payload (which
+ * escapes its quotes). A deploy that uploads index.html but drops one chunk
+ * leaves a page that loads and then fails to hydrate; checking only the first
+ * asset missed exactly that.
+ */
+export function nextAssetPaths(html) {
+  const found = new Set();
+  const pattern = /\/_next\/static\/[A-Za-z0-9_.~\/-]+?\.(?:js|css)(?![A-Za-z0-9_])/g;
+  for (const match of String(html || "").matchAll(pattern)) found.add(match[0]);
+  return [...found].sort();
+}
+
 export function remoteStaticSmokeScript({marketingHost, consoleHosts}) {
   const hosts = [marketingHost, ...(consoleHosts || [])];
   if (hosts.some((hostname) =>
@@ -102,12 +116,16 @@ export function remoteStaticSmokeScript({marketingHost, consoleHosts}) {
   const consoleChecks = consoleHosts.map((hostname) => `
 html=$(curl -fsSL --connect-timeout 5 --max-time 20 \\
   --resolve "${hostname}:443:127.0.0.1" "https://${hostname}/")
-asset=$(printf '%s' "$html" | grep -o '/_next/[^\"]*\\.js' | head -n 1)
-test -n "$asset"
-curl -fsSL --connect-timeout 5 --max-time 20 \\
-  --resolve "${hostname}:443:127.0.0.1" \\
-  -o /dev/null "https://${hostname}$asset"
-printf 'OK ${hostname} and runtime asset - HTTP 200/200\\n'
+assets=$(printf '%s' "$html" | grep -oE '/_next/static/[A-Za-z0-9_./~-]+\\.(js|css)' | sort -u)
+test -n "$assets"
+count=0
+for asset in $assets; do
+  curl -fsSL --connect-timeout 5 --max-time 20 \\
+    --resolve "${hostname}:443:127.0.0.1" \\
+    -o /dev/null "https://${hostname}$asset"
+  count=$((count + 1))
+done
+printf 'OK ${hostname} and all %s /_next assets - HTTP 200\\n' "$count"
 `).join("");
 
   return `set -eu

@@ -375,7 +375,7 @@ test("the activity row's own copy is translated, prepositions included", () => {
   const panel = readFileSync(
     "src/components/business/operations-panels.tsx", "utf8");
   // The row renders both, beside the date and under the fee.
-  assert.match(panel, /"By ",?\s*|\{"By "\}|By \{/);
+  assert.match(panel, /"By ",?\s*|\{"By "\}|By \{|By <span data-no-translate>\{/);
   assert.match(panel, /staffName\(text\(r\.recordedByStaffId, ""\)\)/);
   for (const label of ["By", "by", "Edited", "Mark not received",
     "Set back to not received"]) {
