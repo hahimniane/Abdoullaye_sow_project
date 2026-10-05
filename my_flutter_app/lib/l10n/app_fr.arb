@@ -4544,5 +4544,16 @@
   "pkgResultSwitchedOff": "non envoyée, mises à jour désactivées",
   "pkgResultNeedsCountryCode": "non envoyée, le téléphone n’a pas d’indicatif pays",
   "pkgResultNotSent": "non envoyée",
-  "moneyAmountInvalid": "Saisissez un montant comme 12,50 ou 1 200,50."
+  "moneyAmountInvalid": "Saisissez un montant comme 12,50 ou 1 200,50.",
+  "authErrorUserDisabled": "Ce compte a été désactivé. Contactez l’assistance si vous pensez qu’il s’agit d’une erreur.",
+  "authErrorTooManyRequests": "Trop de tentatives. Patientez quelques minutes et réessayez.",
+  "authErrorNetwork": "Pas de connexion. Vérifiez votre accès à Internet et réessayez.",
+  "authErrorWeakPassword": "Choisissez un mot de passe plus robuste - au moins 6 caractères.",
+  "authErrorEmailInUse": "Un compte existe déjà avec cet e-mail.",
+  "authErrorNoAccountForEmail": "Aucun compte n’utilise cet e-mail.",
+  "authErrorSignInUnavailable": "La connexion par e-mail n’est pas disponible pour le moment. Contactez l’assistance.",
+  "authErrorSignInRequired": "Connectez-vous d’abord.",
+  "authErrorInvalidOwnerPhone": "Saisissez un numéro de téléphone du propriétaire valide avec l’indicatif pays.",
+  "authErrorInvalidBusinessPhone": "Saisissez un numéro de téléphone de l’entreprise valide avec l’indicatif pays.",
+  "authErrorUnknown": "Une erreur s’est produite. Veuillez réessayer."
 }

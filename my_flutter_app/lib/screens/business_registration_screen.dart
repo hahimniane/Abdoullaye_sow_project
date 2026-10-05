@@ -13,6 +13,7 @@ import '../models/marketplace_disclosure_acceptance.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/auth_error_text.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/legal_links.dart';
 import '../widgets/app_back_button.dart';
@@ -196,7 +197,7 @@ class _BusinessRegistrationScreenState
       );
     } catch (error) {
       if (!mounted) return;
-      showErrorSnackBar(context, '$error');
+      showErrorSnackBar(context, authFailureMessage(l10n, error));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

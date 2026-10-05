@@ -17705,6 +17705,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter an amount like 12.50 or 1,200.50.'**
   String get moneyAmountInvalid;
+
+  /// No description provided for @authErrorUserDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'This account has been disabled. Contact support if you think this is a mistake.'**
+  String get authErrorUserDisabled;
+
+  /// No description provided for @authErrorTooManyRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Wait a few minutes and try again.'**
+  String get authErrorTooManyRequests;
+
+  /// No description provided for @authErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check your internet and try again.'**
+  String get authErrorNetwork;
+
+  /// No description provided for @authErrorWeakPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a stronger password - at least 6 characters.'**
+  String get authErrorWeakPassword;
+
+  /// No description provided for @authErrorEmailInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'An account already exists with this email.'**
+  String get authErrorEmailInUse;
+
+  /// No description provided for @authErrorNoAccountForEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'No account uses this email.'**
+  String get authErrorNoAccountForEmail;
+
+  /// No description provided for @authErrorSignInUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing in with email is not available right now. Contact support.'**
+  String get authErrorSignInUnavailable;
+
+  /// No description provided for @authErrorSignInRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in first.'**
+  String get authErrorSignInRequired;
+
+  /// No description provided for @authErrorInvalidOwnerPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid owner phone number with country code.'**
+  String get authErrorInvalidOwnerPhone;
+
+  /// No description provided for @authErrorInvalidBusinessPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid business phone number with country code.'**
+  String get authErrorInvalidBusinessPhone;
+
+  /// No description provided for @authErrorUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get authErrorUnknown;
 }
 
 class _AppLocalizationsDelegate

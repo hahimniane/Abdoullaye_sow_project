@@ -19,6 +19,7 @@ import '../providers/auth_provider.dart';
 import '../services/office_location_service.dart';
 import '../theme/app_colors.dart';
 import 'office_locations_screen.dart';
+import '../utils/auth_error_text.dart';
 import '../utils/business_profile_validation.dart';
 import '../utils/money_input.dart';
 import '../utils/phone_number_validator.dart';
@@ -647,7 +648,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       showSuccessSnackBar(context, l10n.businessProfileSaved);
     } catch (error) {
       if (!mounted) return;
-      showErrorSnackBar(context, '$error');
+      showErrorSnackBar(context, authFailureMessage(l10n, error));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

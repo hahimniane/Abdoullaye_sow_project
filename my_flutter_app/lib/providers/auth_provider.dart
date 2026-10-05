@@ -12,7 +12,10 @@ import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/business_permissions.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
+import 'auth_failure.dart';
 import 'auth_lookup_guard.dart';
+
+export 'auth_failure.dart';
 
 enum AuthInitializationIssue { profileUnavailable, profileMissing }
 
@@ -53,6 +56,21 @@ SignUpFailureKind classifySignUpFunctionsFailure({
     'unavailable' ||
     'deadline-exceeded' ||
     'internal' => SignUpFailureKind.serviceUnavailable,
+    _ => SignUpFailureKind.unknown,
+  };
+}
+
+/// The sign-up failure for a FirebaseAuthException raised while signing the
+/// new account in. The screen localizes the kind; it never shows Firebase's
+/// English message.
+SignUpFailureKind classifySignUpAuthFailure(String code) {
+  return switch (authErrorCodeFor(code)) {
+    AuthErrorCode.emailInUse => SignUpFailureKind.emailAlreadyInUse,
+    AuthErrorCode.invalidEmail ||
+    AuthErrorCode.weakPassword => SignUpFailureKind.invalidInput,
+    AuthErrorCode.tooManyRequests => SignUpFailureKind.rateLimited,
+    AuthErrorCode.network ||
+    AuthErrorCode.signInUnavailable => SignUpFailureKind.serviceUnavailable,
     _ => SignUpFailureKind.unknown,
   };
 }
@@ -492,35 +510,13 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
       _isLoading = false;
       notifyListeners();
-
-      String errorMessage;
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = 'No user found with this email.';
-          break;
-        case 'wrong-password':
-          errorMessage = 'Wrong password provided.';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Invalid email address.';
-          break;
-        case 'user-disabled':
-          errorMessage = 'This user account has been disabled.';
-          break;
-        case 'too-many-requests':
-          errorMessage = 'Too many failed attempts. Please try again later.';
-          break;
-        default:
-          errorMessage = 'Authentication failed: ${e.message}';
-      }
-
-      debugPrint('🚨 Throwing error: $errorMessage');
-      throw errorMessage;
+      // A code, not a sentence: the screen localizes it.
+      throw AuthFailure(authErrorCodeFor(e.code));
     } catch (e) {
       debugPrint('💥 Unexpected error during authentication: $e');
       _isLoading = false;
       notifyListeners();
-      throw 'An unexpected error occurred: $e';
+      throw const AuthFailure(AuthErrorCode.unknown);
     }
   }
 
@@ -551,7 +547,7 @@ class AuthProvider extends ChangeNotifier {
     final trimmed = phone.trim();
     if (_user == null || trimmed.isEmpty) return;
     if (!PhoneNumberValidator.isValid(trimmed)) {
-      throw 'Please enter a valid phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidPhone);
     }
     await updateAccountProfile(
       fullName: _customerName ?? buyerName,
@@ -570,7 +566,7 @@ class AuthProvider extends ChangeNotifier {
     final trimmedPhone = phone.trim();
     if (_user == null) return;
     if (!PhoneNumberValidator.isValid(trimmedPhone)) {
-      throw 'Please enter a valid phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidPhone);
     }
     final prefs = notificationPreferences ?? _notificationPreferences;
     final callable = _functions.httpsCallable('updateCustomerProfile');
@@ -718,14 +714,14 @@ class AuthProvider extends ChangeNotifier {
     required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     if (_user == null) {
-      throw 'Please create an account or sign in first.';
+      throw const AuthFailure(AuthErrorCode.signInRequired);
     }
     if (!PhoneNumberValidator.isValid(ownerPhone)) {
-      throw 'Please enter a valid owner phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidOwnerPhone);
     }
     if (businessPhone.trim().isNotEmpty &&
         !PhoneNumberValidator.isValid(businessPhone)) {
-      throw 'Please enter a valid business phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidBusinessPhone);
     }
 
     final callable = _functions.httpsCallable('submitBusinessApplication');
@@ -804,10 +800,10 @@ class AuthProvider extends ChangeNotifier {
     Map<String, dynamic>? pickupPlan,
   }) async {
     if (_user == null) {
-      throw 'Please sign in first.';
+      throw const AuthFailure(AuthErrorCode.signInRequired);
     }
     if (phone.trim().isNotEmpty && !PhoneNumberValidator.isValid(phone)) {
-      throw 'Please enter a valid business phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidBusinessPhone);
     }
     final callable = _functions.httpsCallable('updateBusinessProfile');
     await callable.call({
@@ -874,7 +870,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       if (!PhoneNumberValidator.isValid(phone)) {
-        throw 'Please enter a valid phone number.';
+        throw const SignUpFailure(SignUpFailureKind.invalidInput);
       }
 
       debugPrint('📡 Creating new user through Cloud Functions...');
@@ -918,38 +914,16 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
       _isLoading = false;
       notifyListeners();
-
-      String errorMessage;
-      switch (e.code) {
-        case 'weak-password':
-          errorMessage = 'The password provided is too weak.';
-          break;
-        case 'email-already-in-use':
-          errorMessage = 'An account already exists with this email.';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Invalid email address.';
-          break;
-        case 'operation-not-allowed':
-          errorMessage =
-              'Email/password accounts are not enabled. Please contact support.';
-          break;
-        case 'network-request-failed':
-          errorMessage =
-              'Network error. Please check your internet connection.';
-          break;
-        default:
-          errorMessage = 'Sign up failed: ${e.message}';
-      }
-
-      debugPrint('🚨 Throwing error: $errorMessage');
-      throw errorMessage;
+      throw SignUpFailure(classifySignUpAuthFailure(e.code));
+    } on SignUpFailure {
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
     } catch (e) {
       debugPrint('💥 Unexpected error during sign up: $e');
       _isLoading = false;
       notifyListeners();
-
-      throw 'An unexpected error occurred: $e';
+      throw const SignUpFailure(SignUpFailureKind.unknown);
     }
   }
 
@@ -957,18 +931,12 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _auth.sendPasswordResetEmail(email: email);
     } on FirebaseAuthException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = 'No user found with this email.';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Invalid email address.';
-          break;
-        default:
-          errorMessage = 'Password reset failed: ${e.message}';
-      }
-      throw errorMessage;
+      final code = authErrorCodeFor(e.code);
+      // At sign-in "no such account" folds into invalid credentials; asking
+      // for a reset is the one place it says so.
+      throw AuthFailure(
+        e.code == 'user-not-found' ? AuthErrorCode.noAccountForEmail : code,
+      );
     }
   }
 
