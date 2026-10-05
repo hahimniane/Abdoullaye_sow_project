@@ -3,6 +3,7 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -33,6 +34,15 @@ import {
   revisionCapacity,
   safeDeployBatchSize,
 } from "./cloud-run-capacity-lib.mjs";
+import {
+  debugTokenValues,
+  devFirebaseBuildSettings,
+  loadNextBuildEnv,
+  readBuildFiles,
+  scanStaticBuild,
+  sourcePrefixesForScope,
+  workingTreeState,
+} from "./static-build-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -122,21 +132,30 @@ console.log(
 );
 
 // Gate every deploy on a committed working tree. What we ship must be in
-// version control so it is reviewable and revertable. Untracked files do not
-// block (new docs, local notes); modified/staged tracked files do. Emergency
-// override: ALLOW_DIRTY_DEPLOY=1.
+// version control so it is reviewable and revertable. Modified/staged tracked
+// files block, and so do untracked files under the source a deploy builds or
+// ships (admin_web/, public_site/, the functions): a new component that was
+// never `git add`ed is imported by the build and ships uncommitted. Untracked
+// files elsewhere (new docs, local notes) do not block. Emergency override:
+// ALLOW_DIRTY_DEPLOY=1.
 {
-  const dirty = run("git", ["status", "--porcelain", "--untracked-files=no"]);
-  const isClean = dirty.ok && dirty.stdout.trim() === "";
+  const status = run("git", ["status", "--porcelain", "--untracked-files=all"]);
+  const tree = workingTreeState(status.stdout, sourcePrefixesForScope(SCOPE));
+  const isClean = status.ok && tree.clean;
   const overridden = process.env.ALLOW_DIRTY_DEPLOY === "1";
+  const problem = !status.ok ? "git status failed" :
+    tree.untrackedSource.length > 0 ?
+      `untracked source would ship: ${tree.untrackedSource.slice(0, 5).join(", ")}` +
+        (tree.untrackedSource.length > 5 ? ` (+${tree.untrackedSource.length - 5} more)` : "") :
+      `${tree.modified.length} uncommitted change(s)`;
   addCheck(
       "Clean git tree (deploy only committed code)",
       isClean || overridden,
       isClean ?
         "working tree matches HEAD" :
         overridden ?
-          "OVERRIDDEN via ALLOW_DIRTY_DEPLOY=1 — uncommitted changes will ship" :
-          "commit or stash your changes, or set ALLOW_DIRTY_DEPLOY=1 to override",
+          `OVERRIDDEN via ALLOW_DIRTY_DEPLOY=1 — ${problem}` :
+          `${problem}; commit (or remove) it, or set ALLOW_DIRTY_DEPLOY=1 to override`,
   );
 }
 
@@ -193,12 +212,45 @@ if (checksStatic) {
     addCheck(`Static DNS for ${hostname}`, dns.ok, dns.detail);
   }
 
+  // Judge the env `next build` will actually see: exported variables over
+  // admin_web's .env files, loaded by Next's own loader. Reading process.env
+  // alone passed a deploy whose .env.local carried a debug token or the
+  // emulator switch into the bundle, and failed one whose key lived there.
+  const adminDirForEnv = path.join(ROOT, "admin_web");
+  let buildEnv = {...process.env};
+  let buildEnvFiles = [];
+  let buildEnvLoaded = false;
+  try {
+    const nextEnv = createRequire(path.join(adminDirForEnv, "package.json"))("@next/env");
+    ({env: buildEnv, files: buildEnvFiles} = loadNextBuildEnv({adminDir: adminDirForEnv, nextEnv}));
+    buildEnvLoaded = true;
+  } catch (error) {
+    buildEnvLoaded = false;
+    buildEnv = {...process.env};
+    console.error(`Could not load admin_web env files: ${error.message}`);
+  }
+  addCheck(
+      "Admin/business build environment loaded like Next",
+      buildEnvLoaded,
+      buildEnvLoaded ?
+        (buildEnvFiles.length ? `exported env over ${buildEnvFiles.join(", ")}` : "no admin_web .env files") :
+        "run npm ci in admin_web so @next/env is available",
+  );
+
   const appCheck = appCheckWebConfig({
-    siteKey: process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY,
-    debugToken: process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN,
+    siteKey: buildEnv.NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY,
+    debugToken: buildEnv.NEXT_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN,
     production: resolvedDeploymentMode.mode === "production",
   });
   addCheck("Admin/business App Check configuration", appCheck.ok, appCheck.detail);
+
+  const devSettings = devFirebaseBuildSettings(buildEnv);
+  addCheck(
+      "Admin/business build has no dev-only Firebase settings",
+      devSettings.ok,
+      devSettings.ok ? "no emulator switch, emulator host, or debug token" :
+        devSettings.problems.join("; "),
+  );
 
   if (STATIC_TRANSPORT === "ssh") {
     addCheck(
@@ -232,7 +284,7 @@ if (checksStatic) {
   // Build from source so the deployed bundle always matches the committed
   // source — never a stale or hand-edited admin_web/out. `next build` also runs
   // the TypeScript compiler, so a type error fails the deploy here.
-  const adminBuildOk = adminTestsOk && appCheck.ok &&
+  const adminBuildOk = adminTestsOk && appCheck.ok && devSettings.ok &&
     runInherit("npm", ["--prefix", adminDir, "run", "build"]);
   addCheck("Admin/business build from source", adminBuildOk);
 
@@ -243,6 +295,23 @@ if (checksStatic) {
       fs.existsSync(adminOut) ? "admin_web/out/index.html present" :
         "build did not produce admin_web/out/index.html",
   );
+
+  // What actually shipped, not just what the env said: no App Check debug
+  // token and no emulator connection anywhere in admin_web/out.
+  if (fs.existsSync(adminOut)) {
+    const envFileTexts = fs.readdirSync(adminDir)
+        .filter((name) => name.startsWith(".env") && name !== ".env.example")
+        .map((name) => fs.readFileSync(path.join(adminDir, name), "utf8"));
+    const findings = scanStaticBuild(readBuildFiles(path.join(adminDir, "out")), {
+      debugTokens: debugTokenValues({env: buildEnv, envFileTexts}),
+    });
+    addCheck(
+        "Admin/business bundle has no debug token or emulator host",
+        findings.length === 0,
+        findings.length === 0 ? "admin_web/out scanned" :
+          findings.slice(0, 5).join("; "),
+    );
+  }
 }
 
 if (checksBackend) {

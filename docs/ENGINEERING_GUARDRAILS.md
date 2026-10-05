@@ -66,10 +66,16 @@ function you changed, then confirm the behaviour in the product.
 
 ### The App Check site key — required for any static console deploy
 
-`NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY` must be **exported** in the
-deploy command's environment; preflight reads `process.env` directly and
-`admin_web/.env.local` is never consulted. Missing it fails two checks that
-look unrelated (see §2 and the deploy runbook). Recover the deployed value:
+`NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY` must reach `next build`:
+export it in the deploy command's environment, or keep it in an `admin_web`
+env file. Preflight loads the build environment the way Next does
+(`@next/env`: exported variables over `.env.production.local`, `.env.local`,
+`.env.production`, `.env`), so what it checks is what the build sees — and it
+refuses a build env that carries `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true`, an
+emulator host, or an App Check debug token, then scans `admin_web/out` for a
+debug token or a compiled-in emulator connection. Missing the key fails two
+checks that look unrelated (see §2 and the deploy runbook). Recover the
+deployed value:
 
 ```bash
 curl -s https://business.laawoldigital.com/ \
@@ -144,9 +150,11 @@ lsof -ti :8080 :9099    # empty means no emulator is running
 
 Production deploys go through the preflight, which now enforces:
 
-1. **Clean git tree** — we ship only committed, reviewable code. Override only
-   in a genuine emergency with `ALLOW_DIRTY_DEPLOY=1`, and commit immediately
-   after.
+1. **Clean git tree** — we ship only committed, reviewable code. Untracked
+   files under what a deploy builds or ships (`admin_web/`, `public_site/`,
+   the functions and rules) block too: an un-added component is imported by
+   the build and ships uncommitted. Override only in a genuine emergency with
+   `ALLOW_DIRTY_DEPLOY=1`, and commit immediately after.
 2. **Unit tests pass** (`admin_web` regression suite).
 3. **Build from source** — the deployed bundle is always rebuilt from the
    committed source. Never hand-edit or deploy a stale `admin_web/out/`.
@@ -345,7 +353,7 @@ Rules:
 | **US states + cities** (complete) | `lib/data/us_locations.dart` → `usStateNames` | `src/lib/us-locations.ts` → `US_STATE_NAMES` | All states; cities per state. |
 | **Barrel destination countries** (CURATED) | Firestore `destinationCountries` / `country_catalog.dart` filtered | `operations-panels.tsx` `countries` | Deliberately limited (West Africa). Not for addresses. |
 | **Car attributes** (condition, body, fuel, …) | `staff_car_management_screen.dart` | `operations-panels.tsx` option lists | Keep both sides in sync. |
-| **Car make/model/year** (complete, cascading) | `lib/data/car_catalog.dart` → `CarCatalog.instance` (backed by `assets/data/car_models_flutter.json`) | `src/lib/car-catalog.ts` → `getMakes()`/`getModels()`/`getYears()` (backed by `src/lib/car-models-data.json`, a verbatim copy) | 88 makes, 2,739 make/model/year rows. Do not accept free-text make/model — use the cascading pickers so listing data stays searchable/filterable. |
+| **Car make/model/year** (complete, cascading) | `lib/data/car_catalog.dart` → `CarCatalog.instance` (backed by `assets/data/car_models_flutter.json`) | `src/lib/car-catalog.ts` → `getMakes()`/`getModels()`/`getYears()` (backed by `src/lib/car-models-data.json`, a verbatim copy, fetched on demand: call `useCarCatalog()` in the picker, `await loadCarCatalog()` in async code) | 88 makes, 2,739 make/model/year rows. Do not accept free-text make/model — use the cascading pickers so listing data stays searchable/filterable. |
 | **Console translations** | n/a (app uses ARB l10n) | `src/lib/french-dom.ts` | See the translation guardrails in §3. |
 
 If the thing you need is not in this table and is reference data or a reusable

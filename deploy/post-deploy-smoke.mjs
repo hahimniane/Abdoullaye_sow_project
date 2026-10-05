@@ -5,7 +5,7 @@ import {
   HOSTINGER_PRODUCTION_IPV4,
   PRODUCTION_STATIC_HOSTS,
 } from "./preflight-lib.mjs";
-import {remoteStaticSmokeScript, requestPinned} from "./smoke-lib.mjs";
+import {nextAssetPaths, remoteStaticSmokeScript, requestPinned} from "./smoke-lib.mjs";
 import {
   assessPaymentFunctionDeployment,
   discoverStripeBoundFunctionNames,
@@ -74,16 +74,26 @@ async function requireConsolePage(label, url) {
       return false;
     }
     const html = await response.text();
-    const assetPath = html.match(/["'](\/_next\/[^"']+\.js)["']/)?.[1];
-    if (!assetPath) {
+    // Every chunk index.html names, not just the first: one missing chunk
+    // loads the page and then fails to hydrate it.
+    const assetPaths = nextAssetPaths(html);
+    if (assetPaths.length === 0) {
       console.error(`FAIL ${label} - no Next.js runtime asset found`);
       return false;
     }
-    const asset = await fetchStaticWithTimeout(new URL(assetPath, url));
-    const ok = asset.status === 200;
+    const failures = [];
+    for (const assetPath of assetPaths) {
+      try {
+        const asset = await fetchStaticWithTimeout(new URL(assetPath, url));
+        if (asset.status !== 200) failures.push(`${assetPath} HTTP ${asset.status}`);
+      } catch (error) {
+        failures.push(`${assetPath} ${error.message}`);
+      }
+    }
+    const ok = failures.length === 0;
     console.log(
-        `${ok ? "OK" : "FAIL"} ${label} and runtime asset - ` +
-        `HTTP 200/${asset.status}`,
+        `${ok ? "OK" : "FAIL"} ${label} and ${assetPaths.length} /_next assets` +
+        (ok ? " - HTTP 200" : ` - ${failures.slice(0, 3).join("; ")}`),
     );
     return ok;
   } catch (error) {
@@ -157,6 +167,10 @@ if (scope === "static" || scope === "all") {
     ok = await requireConsolePage(
         "Business console",
         process.env.BUSINESS_SITE_URL || "https://business.laawoldigital.com/",
+    ) && ok;
+    ok = await requireConsolePage(
+        "Customer console",
+        process.env.CUSTOMER_SITE_URL || "https://customer.laawoldigital.com/",
     ) && ok;
   }
 }
