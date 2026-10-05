@@ -398,3 +398,18 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `none` + failed probe = offline). Do not switch Stripe mode or pass
   `pk_live`. Maestro `localEmulator()` is not coverage for the real
   AppGate path.
+- Cloud Functions scaling contracts live in
+  `functions/test/scaling-contract.test.js`: parking availability reads by
+  `parkedCars.occupancyEndMs` (never "newest N rows" - that dropped old
+  open-ended stays and over-booked), scheduled sweeps filter and order in the
+  query and page under a deadline (`scheduled_sweep.js`), and the project-wide
+  reserved-CPU budget (sum of maxInstances over every export) stays under
+  1,000. Raise maxInstances per hot function, never globally. Any new server
+  path that writes parking dates stamps `occupancyEndMs` in the same write;
+  the `syncParkedCarOccupancy` trigger covers client writes.
+- A test that replaces a broad read with narrow queries should replay those
+  queries in memory and require the SAME result as the broad read (see
+  `parking-month-scope.test.js`), and query shapes the emulator suite does not
+  reach can be checked against an isolated emulator on non-default ports
+  when 8080/9099 are taken. The emulator does not enforce composite indexes:
+  every new query shape needs its entry in `firestore.indexes.json`.

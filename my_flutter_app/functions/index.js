@@ -393,7 +393,38 @@ const {
   containerLabelsModel,
   renderContainerLabels,
 } = require("./container_labels");
-const {parkingAvailability} = require("./parking_occupancy");
+const {
+  occupancyEndMs,
+  occupancyPatch,
+  occupancyWindowStartMs,
+  parkingAvailability,
+} = require("./parking_occupancy");
+const {
+  backfillCarrierTrackingDone,
+  backfillViewingRespondBy,
+  ensureParkingOccupancyIndexed,
+  isBenignRace,
+} = require("./scaling_backfills");
+const {
+  drainPages,
+  mapWithConcurrency,
+  sweepDeadline,
+} = require("./scheduled_sweep");
+const {
+  needsFreshSchedule: needsFreshReconcileSchedule,
+  planNextReconcileCheck,
+  reconcileTrackingKey,
+  rotateForRun,
+  roundRobinPages,
+} = require("./payment_sweep_schedule");
+const {
+  carrierTrackingDonePatch,
+  shipmentCarrierTrackingFinished,
+} = require("./shipment_tracking");
+const {
+  mergeRowsById: mergeParkingMonthRows,
+  monthBoundsMs: parkingMonthBoundsMs,
+} = require("./parking_month_statement");
 const {lotCustomerKey, mergeLotCustomer} = require("./lot_customers");
 const {
   resolveBillingPlan,
@@ -471,7 +502,19 @@ admin.initializeApp();
 // instances still absorb far more traffic than any of these endpoints see.
 // Anything that genuinely needs more headroom raises maxInstances for itself -
 // see the Stripe webhook, where a dropped request is a lost payment.
+//
+// Why the default is NOT simply raised (scaling audit, 2026-10): with ~236
+// exports, a global 20 would reserve ~4,700 CPUs - over twice the ~1,800
+// that already failed a deploy. The reservation is cpu x maxInstances x
+// functions, so headroom is spent per function, where traffic actually is:
+// the customer booking/search path gets CUSTOMER_PATH_MAX_INSTANCES, and
+// test/function-instance-budget.test.js fails if the project-wide total
+// creeps past its budget.
 setGlobalOptions({maxInstances: 3});
+
+// The customer-facing search/booking callables: a burst of shoppers must not
+// queue behind three instances. Each step up costs (value - 3) CPUs of quota.
+const CUSTOMER_PATH_MAX_INSTANCES = 20;
 
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const businessProPriceId = defineSecret("BUSINESS_PRO_PRICE_ID");
@@ -499,6 +542,7 @@ const whatsappAccessToken = defineSecret("WHATSAPP_ACCESS_TOKEN");
 const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
 const WHATSAPP_GRAPH_URL = "https://graph.facebook.com/v21.0";
 const TERMINAL49_BASE_URL = "https://api.terminal49.com/v2";
+const TERMINAL49_TIMEOUT_MS = 15 * 1000;
 const DEPOSIT_CURRENCY = "usd";
 const DEFAULT_HOLD_MAX_DAYS = 14;
 const PURCHASE_CURRENCY = "usd";
@@ -2324,13 +2368,15 @@ async function terminal49Request(path, {method = "GET", body} = {}) {
     );
   }
   const response = await fetch(`${TERMINAL49_BASE_URL}${path}`, {
+    // A hung carrier API must not hold a scheduled poll (or a staff member's
+    // request) until the function's own timeout kills it.
+    signal: AbortSignal.timeout(TERMINAL49_TIMEOUT_MS),
     method,
     headers: {
       "Content-Type": "application/vnd.api+json",
       "Authorization": `Token ${apiKey}`,
     },
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(20000),
   });
   const data = await response.json().catch(() => ({}));
   return {ok: response.ok, status: response.status, data};
@@ -2460,6 +2506,8 @@ exports.subscribeToContainerTracking = onCall(
         carrierScac: scac,
         externalTrackingId: parsed.id,
         trackingRequestStatus: parsed.status || "pending",
+        // The poll only reads shipments still being followed.
+        carrierTrackingDone: false,
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       };
       if (parsed.trackedObjectType === "shipment" && parsed.trackedObjectId) {
@@ -2494,6 +2542,7 @@ exports.pollContainerTracking = onSchedule(
     },
     async () => {
       const db = admin.firestore();
+      const startMs = Date.now();
       // A business's own containers follow the same feed. They go first:
       // each one can message every customer on the box, and a slow or
       // failing shipment below must not use up the run before they are
@@ -2511,26 +2560,89 @@ exports.pollContainerTracking = onSchedule(
           });
         }
       }
-      for (const relatedCollection of Object.keys(
-          TRACKING_SECTION_BY_COLLECTION,
-      )) {
-        const snapshot = await db.collection(relatedCollection)
-            .where("trackingProvider", "==", "carrier_api")
-            .get();
-        for (const doc of snapshot.docs) {
-          await pollOneCarrierTrackedShipment(
-              db, relatedCollection, doc.id, doc.data() || {},
-          );
-        }
-      }
+      // Then the shipments, page by page, inside what is left of the run.
+      // A failure there (a query error) is logged, never thrown.
+      await pollCarrierTrackedShipments(db, sweepDeadline({
+        startMs, timeoutSeconds: 480, fraction: 0.9,
+      })).catch((error) => {
+        logger.error("Shipment carrier poll aborted", {error: String(error)});
+      });
     },
 );
+
+const CARRIER_POLL_PAGE_SIZE = 50;
+
+/**
+ * Polls the barrel/freight/transport shipments still on the carrier feed,
+ * page by page, until they run out or the deadline passes. Each shipment is
+ * isolated: one that throws (a carrier timeout, a bad document) is logged
+ * and the rest still poll. Finished shipments are stamped
+ * carrierTrackingDone and never read again.
+ *
+ * @param {object} db Firestore.
+ * @param {number} deadlineMs Stop starting pages at or after this.
+ * @return {Promise<object>} Per-collection page stats.
+ */
+async function pollCarrierTrackedShipments(db, deadlineMs) {
+  const collections = Object.keys(TRACKING_SECTION_BY_COLLECTION);
+  // Shipments subscribed before carrierTrackingDone existed lack the field
+  // and so are invisible to the query below. Stamp them once (a marker
+  // records it); until that finishes, polling waits for the next run.
+  const backfill = await backfillCarrierTrackingDone(db, collections, {
+    deadlineMs,
+  }).catch((error) => {
+    logger.error("Carrier tracking backfill failed", {error: String(error)});
+    return {complete: false};
+  });
+  if (!backfill.complete) {
+    logger.warn("Carrier tracking backfill unfinished; resumes next run");
+    return {backfillComplete: false};
+  }
+  const results = {};
+  for (const relatedCollection of collections) {
+    if (Date.now() >= deadlineMs) break;
+    results[relatedCollection] = await drainPages({
+      pageSize: CARRIER_POLL_PAGE_SIZE,
+      deadlineMs,
+      fetchPage: async (cursor) => {
+        let query = db.collection(relatedCollection)
+            .where("trackingProvider", "==", "carrier_api")
+            .where("carrierTrackingDone", "==", false)
+            .orderBy(admin.firestore.FieldPath.documentId())
+            .limit(CARRIER_POLL_PAGE_SIZE);
+        if (cursor) query = query.startAfter(cursor);
+        return (await query.get()).docs;
+      },
+      processPage: async (docs) => {
+        for (const doc of docs) {
+          if (Date.now() >= deadlineMs) return;
+          try {
+            await pollOneCarrierTrackedShipment(
+                db, relatedCollection, doc.id, doc.data() || {},
+            );
+          } catch (error) {
+            logger.error("Shipment carrier poll failed", {
+              relatedCollection, relatedId: doc.id, error: String(error),
+            });
+          }
+        }
+      },
+    });
+  }
+  logger.info("Shipment carrier poll finished", {results});
+  return results;
+}
 
 async function pollOneCarrierTrackedShipment(
     db, relatedCollection, relatedId, shipment,
 ) {
-  if (["completed", "cancelled"].includes(shipment.status)) return;
   const shipmentRef = db.collection(relatedCollection).doc(relatedId);
+  // Finished elsewhere (staff completed or cancelled it): stop following.
+  const donePatch = carrierTrackingDonePatch(shipment);
+  if (donePatch?.carrierTrackingDone === true) {
+    await shipmentRef.update(donePatch);
+    return;
+  }
 
   let terminal49ShipmentId = shipment.terminal49ShipmentId || "";
   if (!terminal49ShipmentId) {
@@ -2544,6 +2656,8 @@ async function pollOneCarrierTrackedShipment(
     if (parsed.status === "failed") {
       await shipmentRef.update({
         trackingRequestStatus: "failed",
+        // A failed request never resolves; stop asking about it.
+        carrierTrackingDone: true,
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       return;
@@ -2607,6 +2721,9 @@ async function pollOneCarrierTrackedShipment(
       ...(relatedCollection === "transportRequests" ?
         {fulfillmentStatus: latestShipmentStatus} :
         {}),
+      // Delivered/completed is the carrier's last word on it.
+      ...(shipmentCarrierTrackingFinished({status: latestShipmentStatus}) &&
+        {carrierTrackingDone: true}),
       statusUpdatedAt: FirestoreFieldValue.serverTimestamp(),
       updatedAt: FirestoreFieldValue.serverTimestamp(),
     });
@@ -8767,15 +8884,39 @@ exports.chargeMonthlySubscriptions = onSchedule(
 // (parking_month_statement.js); nothing is stored here.
 async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
   const businessId = businessDoc.id;
-  const [cars, activities] = await Promise.all([
-    db.collection("parkedCars").where("businessId", "==", businessId).get(),
-    db.collection("lotActivities").where("businessId", "==", businessId)
+  const bounds = parkingMonthBoundsMs(monthKey);
+  if (!bounds) return {businessId, notified: 0};
+  // Only what can land on this month's bills, not the lot's whole history:
+  //  - stays that end on or after the month starts (occupancyEndMs; the
+  //    statement drops the ones that start after it);
+  //  - activities dated in the month;
+  //  - older activities not yet settled (they come along as "unpaid from
+  //    before"; a settled one never appears), and the rare undated ones the
+  //    statement dates by createdAt.
+  await ensureParkingOccupancyIndexed(db, businessId);
+  const rows = (snapshot) =>
+    snapshot.docs.map((d) => ({id: d.id, ...d.data()}));
+  const activities = db.collection("lotActivities")
+      .where("businessId", "==", businessId);
+  const [cars, inMonth, unsettled, undated] = await Promise.all([
+    db.collection("parkedCars")
+        .where("businessId", "==", businessId)
+        .where("occupancyEndMs", ">=", bounds.startMs)
         .get(),
+    activities
+        .where("activityDate", ">=",
+            FirestoreTimestamp.fromMillis(bounds.startMs))
+        .where("activityDate", "<",
+            FirestoreTimestamp.fromMillis(bounds.endMs))
+        .orderBy("activityDate", "desc")
+        .get(),
+    activities.where("paymentStatus", "!=", "succeeded").get(),
+    activities.where("activityDate", "==", null).get(),
   ]);
   // Cars and the ledger's activities go on the same month bills.
   const summary = parkingMonthSummary(
-      cars.docs.map((d) => ({id: d.id, ...d.data()})), monthKey, now,
-      activities.docs.map((d) => ({id: d.id, ...d.data()})));
+      rows(cars), monthKey, now,
+      mergeParkingMonthRows(rows(inMonth), rows(unsettled), rows(undated)));
   const owing = summary.customersOwing.length;
   if (owing === 0) return {businessId, notified: 0};
   const recipients = new Set();
@@ -8808,25 +8949,37 @@ async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
 }
 
 exports.notifyParkingMonthEnd = onSchedule(
-    {schedule: "0 9 1 * *", timeZone: "America/New_York"},
+    {
+      schedule: "0 9 1 * *",
+      timeZone: "America/New_York",
+      // The default 60s is one slow lot away from cutting the run short and
+      // leaving the remaining lots unnotified until next month.
+      timeoutSeconds: 540,
+    },
     async () => {
       const db = admin.firestore();
       const now = new Date();
       const monthKey = previousParkingMonthKey(now);
       const lots = await db.collection("businesses")
           .where("enabledServices", "array-contains", "carParking").get();
+      // A few lots at a time; each is isolated, so one lot's failure is
+      // logged and every other lot still hears about its month.
+      const settled = await mapWithConcurrency(lots.docs, 4, (doc) =>
+        notifyParkingMonthEndFor(db, doc, monthKey, now));
       const results = [];
-      for (const doc of lots.docs) {
-        try {
-          results.push(await notifyParkingMonthEndFor(db, doc, monthKey, now));
-        } catch (error) {
-          logger.warn("Parking month-end notice failed", {
-            businessId: doc.id, error: String(error?.message || error),
-          });
+      settled.forEach((outcome, index) => {
+        if (outcome.status === "fulfilled") {
+          results.push(outcome.value);
+          return;
         }
-      }
+        logger.warn("Parking month-end notice failed", {
+          businessId: lots.docs[index].id,
+          error: String(outcome.reason?.message || outcome.reason),
+        });
+      });
       logger.info("Parking month-end notices", {monthKey,
         lots: results.length,
+        failed: settled.length - results.length,
         notified: results.filter((r) => r.notified > 0).length});
     },
 );
@@ -9732,6 +9885,269 @@ exports.captureExpiringPaymentHolds = onSchedule(
     },
 );
 
+// Scheduling for the stale-payment sweep lives in payment_sweep_schedule.js
+// (backoff, abandonment, round-robin). Each scan feeds two page sources:
+//  - discovery: pending records whose updatedAt moved past this scan's
+//    stored watermark (a new payment, or a new attempt on an old record);
+//    each is checked once and given a schedule;
+//  - due: records whose reconcileSchedule.<scanId>.nextCheckAt has come.
+// Records are never re-selected just because they are old, and checking one
+// never needs to touch updatedAt.
+const RECONCILE_SWEEP_STATE = "paymentReconciliationSweeps";
+const RECONCILE_PAGE_SIZE = 50;
+const RECONCILE_PENDING_STATUSES = ["pending", "processing"];
+const RECONCILE_DISCOVERY_OVERLAP_MS = 60 * 60 * 1000;
+
+function stalePaymentSource(db, scan) {
+  return scan.collectionGroup ?
+    db.collectionGroup(scan.collectionGroup) :
+    db.collection(scan.collection);
+}
+
+function reconcileScheduleOf(scan, data) {
+  const all = data?.reconcileSchedule;
+  return all && typeof all === "object" ? all[scan.id] : undefined;
+}
+
+function stalePaymentTrackingKey(scan, data) {
+  return reconcileTrackingKey(
+      stalePaymentIntentId(scan, data),
+      scan.session ? data[scan.session] : "",
+  );
+}
+
+function timestampMs(value) {
+  return typeof value?.toMillis === "function" ? value.toMillis() : NaN;
+}
+
+/**
+ * Asks Stripe about one stale record and reconciles it. The decision itself
+ * is reconcileStripePaymentEvent's; this only finds the intent to ask about.
+ *
+ * @param {object} scan A STALE_PAYMENT_SCANS entry.
+ * @param {object} snapshot The record.
+ * @param {object} staleData Its data.
+ * @return {Promise<object>} {reconciled, abandonReason?}.
+ */
+async function checkStalePaymentRecord(scan, snapshot, staleData) {
+  let intentId = stalePaymentIntentId(scan, staleData);
+  if (!intentId && scan.session) {
+    // A hosted-checkout entry only knows its session until the payment
+    // binds an intent to it. Without this the sweep skips it forever and the
+    // record stays "payment link sent" even though the customer paid.
+    const sessionId = String(staleData[scan.session] || "").trim();
+    if (!sessionId) return {reconciled: false};
+    try {
+      const session = await retrieveStripeCheckoutSession(
+          sessionId,
+          stalePaymentConnectedAccountId(scan, staleData),
+      );
+      // Secured, not "paid": a held session completes with payment_status
+      // "unpaid" (see payment_hold.js), and the sweep exists precisely to
+      // rescue records like it.
+      if (!checkoutSessionSecured(session)) return {reconciled: false};
+      intentId = typeof session.payment_intent === "string" ?
+        session.payment_intent :
+        String(session.payment_intent?.id || "");
+    } catch (error) {
+      logger.error("Checkout session lookup failed", {
+        scanId: scan.id,
+        documentPath: snapshot.ref.path,
+        detail: error.message,
+      });
+      return {reconciled: false};
+    }
+  }
+  if (!intentId) return {reconciled: false};
+  // Stripe has never heard of a simulated intent; asking again is pointless.
+  if (intentId.startsWith("simulated_")) {
+    return {reconciled: false, abandonReason: "simulated"};
+  }
+  try {
+    const intent = await retrieveStripePaymentIntent(
+        intentId,
+        stalePaymentConnectedAccountId(scan, staleData),
+    );
+    const event = {
+      id: `evt_reconcile_${crypto.createHash("sha256")
+          .update(`${intent.id}:${intent.status}`)
+          .digest("hex").slice(0, 32)}`,
+      type: `payment_intent.${intent.status}`,
+      created: Math.floor(Date.now() / 1000),
+      data: {object: intent},
+    };
+    return {reconciled: await reconcileStripePaymentEvent(event)};
+  } catch (error) {
+    if (isPaymentCompletionInFlight(error)) {
+      // Being completed by another worker this minute - not a failure to
+      // page finance about. The next check picks it up.
+      return {reconciled: false};
+    }
+    logger.error("Stale payment reconciliation failed", {
+      scanId: scan.id,
+      documentPath: snapshot.ref.path,
+      detail: error.message,
+    });
+    await recordPaymentReconciliationFailure(scan, snapshot, error);
+    return {reconciled: false};
+  }
+}
+
+/**
+ * Checks one record and ALWAYS moves its next check forward - including the
+ * records that have nothing to ask Stripe yet - so nothing is re-selected on
+ * every run.
+ *
+ * @param {object} scan The scan.
+ * @param {object} snapshot The record.
+ * @param {number} nowMs Run time.
+ * @return {Promise<object>} {reconciled, abandoned, scheduled}.
+ */
+async function sweepStalePaymentRecord(scan, snapshot, nowMs) {
+  const staleData = snapshot.data() || {};
+  const key = stalePaymentTrackingKey(scan, staleData);
+  let outcome = {reconciled: false};
+  try {
+    outcome = await checkStalePaymentRecord(scan, snapshot, staleData);
+  } catch (error) {
+    logger.error("Stale payment check threw", {
+      scanId: scan.id, documentPath: snapshot.ref.path, detail: error.message,
+    });
+  }
+  const created = timestampMs(staleData.createdAt);
+  const plan = planNextReconcileCheck({
+    previous: reconcileScheduleOf(scan, staleData),
+    key,
+    nowMs,
+    recordStartedAtMs: Number.isFinite(created) ?
+      created : timestampMs(staleData.updatedAt),
+    abandonReason: outcome.abandonReason,
+  });
+  const entry = {
+    key: plan.key,
+    attempts: plan.attempts,
+    startedAtMs: plan.startedAtMs,
+    lastCheckedAtMs: plan.lastCheckedAtMs,
+    ...(plan.abandoned ?
+      {abandonedAtMs: nowMs, abandonReason: plan.abandonReason} :
+      {nextCheckAt: FirestoreTimestamp.fromMillis(plan.nextCheckAtMs)}),
+  };
+  let scheduled = true;
+  try {
+    // Only this scan's entry is replaced; updatedAt is deliberately left
+    // alone so a check is not mistaken for a change to the record.
+    await snapshot.ref.update({[`reconcileSchedule.${scan.id}`]: entry});
+  } catch (error) {
+    if (!isBenignRace(error)) {
+      scheduled = false;
+      logger.error("Could not schedule stale payment check", {
+        scanId: scan.id, documentPath: snapshot.ref.path,
+        detail: error.message,
+      });
+    }
+  }
+  if (plan.abandoned) {
+    logger.warn("Stale payment check abandoned", {
+      scanId: scan.id, documentPath: snapshot.ref.path,
+      reason: plan.abandonReason, attempts: plan.attempts,
+    });
+  }
+  return {reconciled: outcome.reconciled === true,
+    abandoned: plan.abandoned, scheduled};
+}
+
+/**
+ * The two page sources for one scan, as round-robin participants.
+ *
+ * @param {object} args {db, scan, nowMs, cutoff, stats}.
+ * @return {Array<object>} [{id, nextPage}].
+ */
+function stalePaymentSources({db, scan, nowMs, cutoff, stats}) {
+  const statusField = scan.statusField || "paymentStatus";
+  const stateRef = db.collection(RECONCILE_SWEEP_STATE).doc(scan.id);
+  let watermark;
+  let discoveryCursor = null;
+  const discovery = {
+    id: `${scan.id}:discovery`,
+    nextPage: async () => {
+      if (watermark === undefined) {
+        const state = (await stateRef.get()).data() || {};
+        watermark = timestampMs(state.discoveryUpdatedAt);
+      }
+      let query = stalePaymentSource(db, scan)
+          .where(statusField, "in", RECONCILE_PENDING_STATUSES)
+          .where("updatedAt", "<=", cutoff);
+      if (Number.isFinite(watermark)) {
+        // Re-read a short overlap behind the watermark: a client that
+        // stamps updatedAt from a slow device clock can land just behind
+        // it. Records already scheduled cost one read and are skipped.
+        query = query.where("updatedAt", ">=", FirestoreTimestamp.fromMillis(
+            watermark - RECONCILE_DISCOVERY_OVERLAP_MS));
+      }
+      query = query.orderBy("updatedAt")
+          .orderBy(admin.firestore.FieldPath.documentId())
+          .limit(RECONCILE_PAGE_SIZE);
+      if (discoveryCursor) query = query.startAfter(discoveryCursor);
+      const page = await query.get();
+      let pageScheduled = true;
+      for (const snapshot of page.docs) {
+        const data = snapshot.data() || {};
+        if (!needsFreshReconcileSchedule(
+            reconcileScheduleOf(scan, data),
+            stalePaymentTrackingKey(scan, data))) {
+          // Already on its schedule (or abandoned) for this attempt.
+          stats.skipped += 1;
+          continue;
+        }
+        stats.checked += 1;
+        const result = await sweepStalePaymentRecord(scan, snapshot, nowMs);
+        if (result.reconciled) stats.reconciled += 1;
+        if (result.abandoned) stats.abandoned += 1;
+        if (!result.scheduled) pageScheduled = false;
+      }
+      const last = page.docs[page.docs.length - 1];
+      // The watermark only moves past records that now have a schedule; a
+      // failed schedule write leaves it so the next run finds them again.
+      if (last && pageScheduled) {
+        discoveryCursor = last;
+        const lastMs = timestampMs(last.get("updatedAt"));
+        if (Number.isFinite(lastMs) &&
+            !(Number.isFinite(watermark) && lastMs <= watermark)) {
+          await stateRef.set({
+            discoveryUpdatedAt: last.get("updatedAt"),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true});
+        }
+      }
+      return pageScheduled && page.size === RECONCILE_PAGE_SIZE;
+    },
+  };
+  const nextCheckField = `reconcileSchedule.${scan.id}.nextCheckAt`;
+  let dueCursor = null;
+  const due = {
+    id: `${scan.id}:due`,
+    nextPage: async () => {
+      let query = stalePaymentSource(db, scan)
+          .where(statusField, "in", RECONCILE_PENDING_STATUSES)
+          .where(nextCheckField, "<=", FirestoreTimestamp.fromMillis(nowMs))
+          .orderBy(nextCheckField)
+          .orderBy(admin.firestore.FieldPath.documentId())
+          .limit(RECONCILE_PAGE_SIZE);
+      if (dueCursor) query = query.startAfter(dueCursor);
+      const page = await query.get();
+      for (const snapshot of page.docs) {
+        stats.checked += 1;
+        const result = await sweepStalePaymentRecord(scan, snapshot, nowMs);
+        if (result.reconciled) stats.reconciled += 1;
+        if (result.abandoned) stats.abandoned += 1;
+      }
+      dueCursor = page.docs[page.docs.length - 1] || dueCursor;
+      return page.size === RECONCILE_PAGE_SIZE;
+    },
+  };
+  return [discovery, due];
+}
+
 exports.reconcileStaleStripePayments = onSchedule(
     {
       schedule: "every 10 minutes",
@@ -9746,101 +10162,33 @@ exports.reconcileStaleStripePayments = onSchedule(
     },
     async () => {
       const db = admin.firestore();
-      const cutoff = FirestoreTimestamp.fromMillis(
-          Date.now() - 10 * 60 * 1000,
-      );
-      const deadline = Date.now() + 8 * 60 * 1000;
-      let checked = 0;
-      let reconciled = 0;
-      for (const scan of STALE_PAYMENT_SCANS) {
-        let cursor = null;
-        do {
-          const source = scan.collectionGroup ?
-            db.collectionGroup(scan.collectionGroup) :
-            db.collection(scan.collection);
-          const statusField = scan.statusField || "paymentStatus";
-          let query = source
-              .where(statusField, "in", ["pending", "processing"])
-              .where("updatedAt", "<=", cutoff)
-              .orderBy("updatedAt")
-              .orderBy(admin.firestore.FieldPath.documentId())
-              .limit(100);
-          if (cursor) query = query.startAfter(cursor);
-          const page = await query.get();
-          for (const snapshot of page.docs) {
-            checked += 1;
-            const staleData = snapshot.data() || {};
-            let intentId = stalePaymentIntentId(scan, staleData);
-            if (!intentId && scan.session) {
-              // A hosted-checkout entry only knows its session until the
-              // payment binds an intent to it. Without this the sweep skips
-              // it forever and the record stays "payment link sent" even
-              // though the customer paid.
-              const sessionId = String(staleData[scan.session] || "").trim();
-              if (!sessionId) continue;
-              try {
-                const session = await retrieveStripeCheckoutSession(
-                    sessionId,
-                    stalePaymentConnectedAccountId(scan, staleData),
-                );
-                // Secured, not "paid": a held session completes with
-                // payment_status "unpaid" (see payment_hold.js), and the
-                // sweep exists precisely to rescue records like it.
-                if (!checkoutSessionSecured(session)) continue;
-                intentId = typeof session.payment_intent === "string" ?
-                  session.payment_intent :
-                  String(session.payment_intent?.id || "");
-              } catch (error) {
-                logger.error("Checkout session lookup failed", {
-                  scanId: scan.id,
-                  documentPath: snapshot.ref.path,
-                  detail: error.message,
-                });
-                continue;
-              }
-            }
-            if (!intentId || intentId.startsWith("simulated_")) continue;
-            try {
-              const intent = await retrieveStripePaymentIntent(
-                  intentId,
-                  stalePaymentConnectedAccountId(scan, staleData),
-              );
-              const event = {
-                id: `evt_reconcile_${crypto.createHash("sha256")
-                    .update(`${intent.id}:${intent.status}`)
-                    .digest("hex").slice(0, 32)}`,
-                type: `payment_intent.${intent.status}`,
-                created: Math.floor(Date.now() / 1000),
-                data: {object: intent},
-              };
-              if (await reconcileStripePaymentEvent(event)) reconciled += 1;
-            } catch (error) {
-              if (isPaymentCompletionInFlight(error)) {
-                // Being completed by another worker this minute - not a
-                // failure to page finance about. The next sweep re-checks.
-                continue;
-              }
-              logger.error("Stale payment reconciliation failed", {
-                scanId: scan.id,
-                documentPath: snapshot.ref.path,
-                detail: error.message,
+      const nowMs = Date.now();
+      const cutoff = FirestoreTimestamp.fromMillis(nowMs - 10 * 60 * 1000);
+      const deadlineMs = sweepDeadline({
+        startMs: nowMs, timeoutSeconds: 540, reserveMs: 60 * 1000,
+      });
+      const stats = {checked: 0, reconciled: 0, abandoned: 0, skipped: 0};
+      // Round-robin, one page per source per round, starting at a different
+      // scan each run: a big backlog in one scan cannot starve the others.
+      const sources = rotateForRun(STALE_PAYMENT_SCANS, nowMs)
+          .flatMap((scan) =>
+            stalePaymentSources({db, scan, nowMs, cutoff, stats}))
+          .map((source) => ({
+            id: source.id,
+            nextPage: () => source.nextPage().catch((error) => {
+              // One scan's broken query (a missing index during rollout)
+              // must not stop the other scans.
+              logger.error("Stale payment source failed", {
+                source: source.id, detail: error.message,
               });
-              await recordPaymentReconciliationFailure(
-                  scan,
-                  snapshot,
-                  error,
-              );
-            }
-          }
-          cursor = page.docs[page.docs.length - 1] || null;
-          if (page.size < 100) break;
-        } while (Date.now() < deadline);
-        if (Date.now() >= deadline) break;
-      }
+              return false;
+            }),
+          }));
+      const run = await roundRobinPages({sources, deadlineMs});
       logger.info("Stale Stripe payment reconciliation finished", {
-        checked,
-        reconciled,
-        deadlineReached: Date.now() >= deadline,
+        ...stats,
+        rounds: run.rounds,
+        deadlineReached: run.deadlineReached,
       });
     },
 );
@@ -11714,21 +12062,95 @@ function parkingEstimateCents({business, start, end, pickupRequested}) {
 }
 
 /**
- * The parkedCars rows that can still hold a space for a business. Newest
- * arrivals first, so the bound covers the cars that could be on the lot; an
- * unordered limit could drop an active car behind old history and report a
- * space that is taken.
+ * The parkedCars rows that can overlap [start, end] for a lot: only stays
+ * that end on or after the window starts (`occupancyEndMs`, see
+ * parking_occupancy.js). Open-ended stays carry a far-future sentinel, so a
+ * car parked years ago that never left is always read; the start side and
+ * status are filtered in code by parkingAvailability.
+ *
+ * This replaced "the newest 1000 rows by arrival", which dropped old
+ * open-ended stays (over-booking) and cost 1000 reads per lot per search.
+ * Unbounded on purpose: a limit here would undercount and over-book; the set
+ * is naturally small (current and future stays only).
  *
  * @param {object} db Firestore.
  * @param {string} businessId The lot.
+ * @param {*} start Window start.
+ * @param {*} end Window end (may be empty for an open-ended window).
  * @return {object} A query to get() or transaction.get().
  */
-function parkedCarsForAvailability(db, businessId) {
+function parkedCarsForAvailability(db, businessId, start, end) {
+  return db.collection("parkedCars")
+      .where("businessId", "==", businessId)
+      .where("occupancyEndMs", ">=", occupancyWindowStartMs(start, end));
+}
+
+/**
+ * The read availability used before occupancyEndMs existed. Only used for a
+ * lot whose one-time backfill could not finish inside this request, so the
+ * answer is never worse than it was; the next request resumes the backfill.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The lot.
+ * @return {object} A query.
+ */
+function legacyParkedCarsForAvailability(db, businessId) {
   return db.collection("parkedCars")
       .where("businessId", "==", businessId)
       .orderBy("parkingDate", "desc")
       .limit(1000);
 }
+
+/**
+ * The availability query for a lot, backfilling the lot's occupancy index
+ * first if it never has been. Call OUTSIDE a transaction (the backfill
+ * writes), then pass the query to transaction.get().
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The lot.
+ * @param {*} start Window start.
+ * @param {*} end Window end.
+ * @return {Promise<object>} A query.
+ */
+async function availabilityQueryFor(db, businessId, start, end) {
+  try {
+    await ensureParkingOccupancyIndexed(db, businessId, {
+      deadlineMs: Date.now() + 20 * 1000,
+    });
+    return parkedCarsForAvailability(db, businessId, start, end);
+  } catch (error) {
+    if (error?.code !== "occupancy-backfill-incomplete") throw error;
+    logger.warn("Parking occupancy backfill still running; legacy read", {
+      businessId, stats: error.stats,
+    });
+    return legacyParkedCarsForAvailability(db, businessId);
+  }
+}
+
+// Keeps occupancyEndMs right on every parkedCars write the callables above do
+// not stamp themselves - the apps and consoles write parking rows directly,
+// and any status/date change elsewhere lands here too. Converges: its own
+// write re-fires it, finds nothing to change, and stops. The updateTime guard
+// means a stale event can never overwrite a newer row.
+exports.syncParkedCarOccupancy = onDocumentWritten(
+    "parkedCars/{parkedCarId}",
+    async (event) => {
+      const after = event.data?.after;
+      if (!after?.exists) return;
+      const patch = occupancyPatch(after.data() || {});
+      if (!patch) return;
+      try {
+        await after.ref.update(patch, {lastUpdateTime: after.updateTime});
+      } catch (error) {
+        if (!isBenignRace(error)) throw error;
+      }
+    },
+);
+
+// How many lots one parking search prices at once. Each lot is one small
+// query; a cap keeps a search for "everything" from opening one query per lot
+// all at the same moment.
+const PARKING_SEARCH_CONCURRENCY = 6;
 
 function distanceMiles(latA, lonA, latB, lonB) {
   const values = [latA, lonA, latB, lonB].map(Number);
@@ -11855,13 +12277,15 @@ async function parkingOptionsForRequest(data) {
   }
 
   const db = admin.firestore();
+  // Only lots that take parking at all; businessOffersParking still checks
+  // approval, spaces and a rate. (Reading every approved business of every
+  // kind was wasted reads on each search.)
   const businesses = await db.collection("businesses")
-      .where("status", "==", "approved")
+      .where("enabledServices", "array-contains", "carParking")
       .get();
-  const options = [];
-  for (const doc of businesses.docs) {
+  const lots = businesses.docs.filter((doc) => {
     const business = doc.data() || {};
-    if (!businessOffersParking(business)) continue;
+    if (!businessOffersParking(business)) return false;
     const businessCity = String(
         business.parkingCity || business.city || "",
     ).trim().toLowerCase();
@@ -11869,10 +12293,30 @@ async function parkingOptionsForRequest(data) {
         business.parkingState || business.state || "",
     ).trim().toLowerCase();
     // Each filter only bites when the customer set it.
-    if (normalizedCity && businessCity !== normalizedCity) continue;
-    if (normalizedState && businessState !== normalizedState) continue;
-    const reservations = await parkedCarsForAvailability(db, doc.id)
-        .get();
+    if (normalizedCity && businessCity !== normalizedCity) return false;
+    if (normalizedState && businessState !== normalizedState) return false;
+    return true;
+  });
+  const options = [];
+  // Lots are priced in parallel (capped), not one after another: a search
+  // that matched every lot used to wait on each lot's read in turn.
+  const priced = await mapWithConcurrency(
+      lots, PARKING_SEARCH_CONCURRENCY, async (doc) => {
+        const business = doc.data() || {};
+        const query = await availabilityQueryFor(db, doc.id, start, end);
+        const reservations = await query.get();
+        return {doc, business, reservations};
+      });
+  for (const outcome of priced) {
+    if (outcome.status !== "fulfilled") {
+      // One lot that cannot be read drops out of this search rather than
+      // failing it for every other lot.
+      logger.warn("Parking search skipped a lot", {
+        error: String(outcome.reason?.message || outcome.reason),
+      });
+      continue;
+    }
+    const {doc, business, reservations} = outcome.value;
     const option = parkingOptionFromBusiness({
       businessId: doc.id,
       business,
@@ -11915,9 +12359,15 @@ exports.listParkingOptions = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      maxInstances: CUSTOMER_PATH_MAX_INSTANCES,
     },
     async (request) => {
       requireAuth(request);
+      await enforceCallableRateLimit(request, {
+        name: "listParkingOptions",
+        limit: 60,
+        windowSeconds: 60,
+      });
       return {options: await parkingOptionsForRequest(request.data)};
     },
 );
@@ -11926,8 +12376,16 @@ exports.listPublicParkingOptions = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      maxInstances: CUSTOMER_PATH_MAX_INSTANCES,
     },
     async (request) => {
+      // Public and unauthenticated: every call fans out to one query per
+      // matching lot, so it is metered per caller address.
+      await enforceCallableRateLimit(request, {
+        name: "listPublicParkingOptions",
+        limit: 30,
+        windowSeconds: 60,
+      });
       const options = await parkingOptionsForRequest(request.data);
       return {
         options: options.map(publicParkingOption),
@@ -11940,6 +12398,7 @@ exports.createParkingReservation = onCall(
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
+      maxInstances: CUSTOMER_PATH_MAX_INSTANCES,
     },
     async (request) => {
       const customerUid = requireAuth(request);
@@ -11994,6 +12453,8 @@ exports.createParkingReservation = onCall(
       const businessRef = db.collection("businesses").doc(cleanBusinessId);
       const reservationRef = db.collection("parkedCars").doc();
       const trackingCode = await generateTrackingCode("PK", "parkedCars");
+      const availabilityQuery =
+          await availabilityQueryFor(db, cleanBusinessId, start, end);
       let paymentCents = 0;
       let totalCents = 0;
       let option;
@@ -12021,9 +12482,7 @@ exports.createParkingReservation = onCall(
                 "reservations. Contact the lot to arrange parking.",
           );
         }
-        const reservations = await transaction.get(
-            parkedCarsForAvailability(db, cleanBusinessId),
-        );
+        const reservations = await transaction.get(availabilityQuery);
         option = parkingOptionFromBusiness({
           businessId: cleanBusinessId,
           business,
@@ -12077,6 +12536,11 @@ exports.createParkingReservation = onCall(
           parkingAddress: option.address,
           parkingDate: FirestoreTimestamp.fromDate(start),
           parkingEndDate: FirestoreTimestamp.fromDate(end),
+          // Stamped in the same write, so the next booking's occupancy
+          // query sees this stay at once (the trigger would lag).
+          occupancyEndMs: occupancyEndMs({
+            parkingDate: start, parkingEndDate: end,
+          }),
           status: paymentCents > 0 && !SIMULATE_PAYMENTS ?
             "pending_payment" :
             "reserved",
@@ -12553,6 +13017,8 @@ exports.createBusinessParkingEntry = onCall(
       const businessRef = db.collection("businesses").doc(input.businessId);
       const entryRef = db.collection("parkedCars").doc();
       const trackingCode = await generateTrackingCode("PK", "parkedCars");
+      const availabilityQuery = await availabilityQueryFor(
+          db, input.businessId, input.startDate, input.endDate);
       let plan;
       let payoutFields;
       let entryBusinessName = "";
@@ -12583,9 +13049,7 @@ exports.createBusinessParkingEntry = onCall(
           );
         }
         entryRate = selection.rate;
-        const reservations = await transaction.get(
-            parkedCarsForAvailability(db, input.businessId),
-        );
+        const reservations = await transaction.get(availabilityQuery);
         // Same option/pricing path the customer gets - parkingEstimateCents
         // runs inside parkingOptionFromBusiness, so a walk-up is never
         // quoted off a second, drifting price model.
@@ -12658,6 +13122,9 @@ exports.createBusinessParkingEntry = onCall(
           // stay, and it is billed day by day through "bill through today".
           parkingEndDate: input.endDate ?
             FirestoreTimestamp.fromDate(input.endDate) : null,
+          occupancyEndMs: occupancyEndMs({
+            parkingDate: input.startDate, parkingEndDate: input.endDate,
+          }),
           enteredByUid: uid,
           ...payoutFields,
           createdAt: now,
@@ -13413,6 +13880,8 @@ exports.updateBusinessParkingEntry = onCall(
       }
 
       const businessRef = db.collection("businesses").doc(businessId);
+      const availabilityQuery = await availabilityQueryFor(
+          db, businessId, input.startDate, input.endDate);
       let pricing = null;
       let payoutFields = null;
       await db.runTransaction(async (transaction) => {
@@ -13421,9 +13890,7 @@ exports.updateBusinessParkingEntry = onCall(
           throw new HttpsError("not-found", "Business not found");
         }
         const business = businessDoc.data() || {};
-        const reservations = await transaction.get(
-            parkedCarsForAvailability(db, businessId),
-        );
+        const reservations = await transaction.get(availabilityQuery);
         // This record must not count against its own availability, or moving
         // a car's dates by a day would report the lot as full.
         const others = reservations.docs
@@ -13492,6 +13959,9 @@ exports.updateBusinessParkingEntry = onCall(
           vinNumber: input.vinNumber,
           parkingDate: input.startDate,
           parkingEndDate: input.endDate,
+          occupancyEndMs: occupancyEndMs({
+            parkingDate: input.startDate, parkingEndDate: input.endDate,
+          }),
           paymentMethod: input.paymentMethod,
           paymentStatus: pricing.paymentStatus,
           status: pricing.status,
@@ -18108,6 +18578,9 @@ exports.closeParkingStay = onCall(
       // Does not touch the money: an unpaid balance survives the car leaving.
       await ref.update({
         parkingEndDate: FirestoreTimestamp.fromDate(end),
+        occupancyEndMs: occupancyEndMs({
+          parkingDate: car.parkingDate, parkingEndDate: end,
+        }),
         closedByStaffId: uid,
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
@@ -25010,92 +25483,133 @@ exports.markBarrelPoolBalanceCollected = onCall(
 );
 
 exports.expireBarrelPools = onSchedule(
-    "every 24 hours",
+    {schedule: "every 24 hours", timeoutSeconds: 540},
     async () => {
       const db = admin.firestore();
-      const snapshot = await db.collection("barrelPools")
-          .where("status", "in", ["open", "partially_filled"])
-          .where("joinDeadline", "<=", FirestoreTimestamp.now())
-          .limit(100)
-          .get();
-      await Promise.all(snapshot.docs.map(async (doc) => {
-        const poolRef = doc.ref;
-        await db.runTransaction(async (transaction) => {
-          const [poolDoc, participants] = await Promise.all([
-            transaction.get(poolRef),
-            transaction.get(poolRef.collection("participants")
-                .where("joinStatus", "in", ["requested", "accepted"])),
-          ]);
-          if (!poolDoc.exists) return;
-          const pool = poolDoc.data() || {};
-          if (!["open", "partially_filled"].includes(String(pool.status))) {
-            return;
-          }
-          const now = FirestoreFieldValue.serverTimestamp();
-          const nextPool = {
-            ...pool,
-            status: "expired",
-          };
-          transaction.update(poolRef, {
-            status: "expired",
-            expiredAt: now,
-            updatedAt: now,
-          });
-          participants.docs.forEach((participantDoc) => {
-            const participant = participantDoc.data() || {};
-            const participantUid = participantDoc.id;
-            let refundNotice = null;
-            if (participant.paymentStatus === "succeeded") {
-              refundNotice = queuePoolParticipantRefundNotice({
-                transaction,
-                participant: {...participant, uid: participantUid},
-                pool,
-                poolId: poolRef.id,
-                reason: "barrel_pool_expired",
-              });
-            }
-            transaction.update(participantDoc.ref, {
-              joinStatus: "cancelled",
-              paymentStatus: participant.paymentStatus === "succeeded" ?
-                "refund_pending" :
-                participant.paymentStatus || "not_required",
-              refundableAmountCents: 0,
-              refundableAmount: 0,
-              refundNoticeId:
-                participant.paymentStatus === "succeeded" ?
-                refundNotice?.notificationId || "" :
-                FirestoreFieldValue.delete(),
-              refundRequestedAt: participant.paymentStatus === "succeeded" ?
-                now :
-                FirestoreFieldValue.delete(),
-              updatedAt: now,
-            });
-            transaction.update(poolRef, {
-              [`publicParticipants.${participantUid}.joinStatus`]:
-                "cancelled",
-              [`publicParticipants.${participantUid}.paymentStatus`]:
-                participant.paymentStatus === "succeeded" ?
-                  "refund_pending" :
-                  participant.paymentStatus || "not_required",
-              [`publicParticipants.${participantUid}.updatedAt`]: now,
-            });
-            setUserBarrelPoolMembership({
-              transaction,
-              uid: participantUid,
-              poolId: poolRef.id,
-              pool: nextPool,
-              participant: {
-                ...participant,
-                joinStatus: "cancelled",
-              },
-              now,
+      // Every pool past its join deadline, oldest deadline first, paged
+      // until done. Before: 100 a day, so a backlog of 101+ left the rest
+      // open (and their participants' money held) for another day each.
+      const nowTs = FirestoreTimestamp.now();
+      const pageSize = 100;
+      let expired = 0;
+      let failed = 0;
+      const run = await drainPages({
+        pageSize,
+        deadlineMs: sweepDeadline({startMs: Date.now(), timeoutSeconds: 540}),
+        fetchPage: async (cursor) => {
+          let query = db.collection("barrelPools")
+              .where("status", "in", ["open", "partially_filled"])
+              .where("joinDeadline", "<=", nowTs)
+              .orderBy("joinDeadline")
+              .orderBy(admin.firestore.FieldPath.documentId())
+              .limit(pageSize);
+          if (cursor) query = query.startAfter(cursor);
+          return (await query.get()).docs;
+        },
+        processPage: async (docs) => {
+          const results = await mapWithConcurrency(docs, 10, (doc) =>
+            expireBarrelPool(db, doc.ref));
+          expired += results.filter((r) => r.status === "fulfilled").length;
+          results.forEach((r, index) => {
+            if (r.status === "fulfilled") return;
+            failed += 1;
+            logger.error("Could not expire shared barrel pool", {
+              poolId: docs[index].id,
+              detail: String(r.reason?.message || r.reason),
             });
           });
-        });
-      }));
-      logger.info("Expired shared barrel pools", {count: snapshot.size});
+        },
+      });
+      logger.info("Expired shared barrel pools", {
+        count: expired, failed, deadlineReached: run.deadlineReached,
+      });
     },
 );
+
+/**
+ * Closes one pool past its join deadline: the pool and every live
+ * participant are cancelled in one transaction, and paid participants are
+ * queued for a refund notice. Re-reads the pool, so a pool that filled or
+ * closed since the query is left alone.
+ *
+ * @param {object} db Firestore.
+ * @param {object} poolRef The pool.
+ * @return {Promise<void>}
+ */
+async function expireBarrelPool(db, poolRef) {
+  await db.runTransaction(async (transaction) => {
+    const [poolDoc, participants] = await Promise.all([
+      transaction.get(poolRef),
+      transaction.get(poolRef.collection("participants")
+          .where("joinStatus", "in", ["requested", "accepted"])),
+    ]);
+    if (!poolDoc.exists) return;
+    const pool = poolDoc.data() || {};
+    if (!["open", "partially_filled"].includes(String(pool.status))) {
+      return;
+    }
+    const now = FirestoreFieldValue.serverTimestamp();
+    const nextPool = {
+      ...pool,
+      status: "expired",
+    };
+    transaction.update(poolRef, {
+      status: "expired",
+      expiredAt: now,
+      updatedAt: now,
+    });
+    participants.docs.forEach((participantDoc) => {
+      const participant = participantDoc.data() || {};
+      const participantUid = participantDoc.id;
+      let refundNotice = null;
+      if (participant.paymentStatus === "succeeded") {
+        refundNotice = queuePoolParticipantRefundNotice({
+          transaction,
+          participant: {...participant, uid: participantUid},
+          pool,
+          poolId: poolRef.id,
+          reason: "barrel_pool_expired",
+        });
+      }
+      transaction.update(participantDoc.ref, {
+        joinStatus: "cancelled",
+        paymentStatus: participant.paymentStatus === "succeeded" ?
+          "refund_pending" :
+          participant.paymentStatus || "not_required",
+        refundableAmountCents: 0,
+        refundableAmount: 0,
+        refundNoticeId:
+          participant.paymentStatus === "succeeded" ?
+          refundNotice?.notificationId || "" :
+          FirestoreFieldValue.delete(),
+        refundRequestedAt: participant.paymentStatus === "succeeded" ?
+          now :
+          FirestoreFieldValue.delete(),
+        updatedAt: now,
+      });
+      transaction.update(poolRef, {
+        [`publicParticipants.${participantUid}.joinStatus`]:
+          "cancelled",
+        [`publicParticipants.${participantUid}.paymentStatus`]:
+          participant.paymentStatus === "succeeded" ?
+            "refund_pending" :
+            participant.paymentStatus || "not_required",
+        [`publicParticipants.${participantUid}.updatedAt`]: now,
+      });
+      setUserBarrelPoolMembership({
+        transaction,
+        uid: participantUid,
+        poolId: poolRef.id,
+        pool: nextPool,
+        participant: {
+          ...participant,
+          joinStatus: "cancelled",
+        },
+        now,
+      });
+    });
+  });
+}
 
 exports.listOpenBarrelPoolOptions = onCall(
     {
@@ -29872,24 +30386,47 @@ exports.retryFreightSettlementRefunds = onSchedule(
     },
     async () => {
       const db = admin.firestore();
-      const snapshot = await db.collection("freightSettlements")
-          .where("priceSettlementStatus", "in", [
-            FreightSettlementStatus.REFUND_PROCESSING,
-            FreightSettlementStatus.NEEDS_ATTENTION,
-          ])
-          .limit(50)
-          .get();
-      const results = await Promise.allSettled(snapshot.docs
-          .filter((doc) => Number(doc.get("refundDueCents") || 0) > 0)
-          .map((doc) => processFreightSettlementRefund({
-            settlementRef: doc.ref,
-            shipmentRef: db.collection("freightShipments")
-                .doc(doc.get("shipmentId")),
-          })));
-      const failed = results.filter((result) => result.status === "rejected");
+      // The refund-due filter is in the query, not applied after a limit of
+      // 50: before, 50 settlements with nothing to refund could fill the page
+      // and hide every one that did. Paged with a cursor until done or the
+      // deadline, a few refunds at a time.
+      const deadlineMs = sweepDeadline({
+        startMs: Date.now(), timeoutSeconds: 480,
+      });
+      let checked = 0;
+      let failed = 0;
+      const pageSize = 50;
+      const run = await drainPages({
+        pageSize,
+        deadlineMs,
+        fetchPage: async (cursor) => {
+          let query = db.collection("freightSettlements")
+              .where("priceSettlementStatus", "in", [
+                FreightSettlementStatus.REFUND_PROCESSING,
+                FreightSettlementStatus.NEEDS_ATTENTION,
+              ])
+              .where("refundDueCents", ">", 0)
+              .orderBy("refundDueCents")
+              .orderBy(admin.firestore.FieldPath.documentId())
+              .limit(pageSize);
+          if (cursor) query = query.startAfter(cursor);
+          return (await query.get()).docs;
+        },
+        processPage: async (docs) => {
+          const results = await mapWithConcurrency(docs, 10, (doc) =>
+            processFreightSettlementRefund({
+              settlementRef: doc.ref,
+              shipmentRef: db.collection("freightShipments")
+                  .doc(doc.get("shipmentId")),
+            }));
+          checked += results.length;
+          failed += results.filter((r) => r.status === "rejected").length;
+        },
+      });
       logger.info("Freight refund retry completed", {
-        checked: results.length,
-        failed: failed.length,
+        checked,
+        failed,
+        deadlineReached: run.deadlineReached,
       });
     },
 );
@@ -31340,65 +31877,105 @@ exports.expireStaleCarViewings = onSchedule(
     async () => {
       const db = admin.firestore();
       const nowMs = Date.now();
-      const snapshot = await db.collection("carPurchases")
-          .where("purchaseStatus", "in", PENDING_VIEWING_STATUSES)
-          .limit(300)
-          .get();
+      const deadlineMs = sweepDeadline({startMs: nowMs, timeoutSeconds: 300});
+      // Proposals from before respondByAt existed get the deadline they
+      // implicitly had, once, so the query below can find them.
+      await backfillViewingRespondBy(db, {deadlineMs}).catch((error) => {
+        logger.warn("Viewing deadline backfill failed", {
+          detail: error?.message || String(error),
+        });
+      });
 
+      // Only proposals whose deadline has passed, oldest deadline first,
+      // paged until done. Before: the first 300 pending proposals in no
+      // order, most not yet due, so a due one past the 300th waited forever.
+      let scanned = 0;
       let expired = 0;
-      for (const doc of snapshot.docs) {
-        const purchase = doc.data() || {};
-        const record = {
-          purchaseStatus: purchase.purchaseStatus,
-          proposedSlots: purchase.proposedSlots || [],
-          respondByAtMs: purchase.respondByAt?.toMillis?.() ?? null,
-        };
-        if (!isProposalExpired(record, nowMs)) continue;
-        try {
-          await doc.ref.update({
-            purchaseStatus: VIEWING_EXPIRED,
-            respondByAt: FirestoreFieldValue.delete(),
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          });
-          expired += 1;
-          // Both sides are told: the customer so they know to propose again,
-          // the business because a missed request is worth seeing.
-          const data = {
-            type: "car_viewing_status",
-            purchaseId: doc.id,
-            carId: String(purchase.carId || ""),
-            status: VIEWING_EXPIRED,
-            ...relatedRecordFields("carPurchases", doc.id),
-          };
-          const carName = String(purchase.carTitle || "a car");
-          await Promise.all([
-            safeSendPreferenceNotification({
-              uid: String(purchase.buyerUid || ""),
-              preferenceKey: "carActivity",
-              title: "Viewing request expired",
-              body: `No reply about ${carName}. Propose another time.`,
-              data,
-            }),
-            notifyBusinessOfPaidOrder({
-              businessId: String(purchase.businessId || ""),
-              title: "Viewing request expired",
-              body: `A request to view ${carName} went unanswered.`,
-              data,
-            }),
-          ]);
-        } catch (error) {
-          logger.warn("Could not expire viewing", {
-            purchaseId: doc.id,
-            detail: error?.message || String(error),
-          });
-        }
-      }
+      const pageSize = 100;
+      const run = await drainPages({
+        pageSize,
+        deadlineMs,
+        fetchPage: async (cursor) => {
+          let query = db.collection("carPurchases")
+              .where("purchaseStatus", "in", PENDING_VIEWING_STATUSES)
+              .where("respondByAt", "<=", FirestoreTimestamp.fromMillis(nowMs))
+              .orderBy("respondByAt")
+              .orderBy(admin.firestore.FieldPath.documentId())
+              .limit(pageSize);
+          if (cursor) query = query.startAfter(cursor);
+          return (await query.get()).docs;
+        },
+        processPage: async (docs) => {
+          scanned += docs.length;
+          expired += await expireViewingPage(docs, nowMs);
+        },
+      });
       logger.info("Viewing expiry sweep finished", {
-        scanned: snapshot.size,
+        scanned,
         expired,
+        deadlineReached: run.deadlineReached,
       });
     },
 );
+
+/**
+ * Expires the due proposals in one page and tells both sides.
+ *
+ * @param {Array<object>} docs carPurchases snapshots.
+ * @param {number} nowMs Run time.
+ * @return {Promise<number>} How many were expired.
+ */
+async function expireViewingPage(docs, nowMs) {
+  let expired = 0;
+  for (const doc of docs) {
+    const purchase = doc.data() || {};
+    const record = {
+      purchaseStatus: purchase.purchaseStatus,
+      proposedSlots: purchase.proposedSlots || [],
+      respondByAtMs: purchase.respondByAt?.toMillis?.() ?? null,
+    };
+    if (!isProposalExpired(record, nowMs)) continue;
+    try {
+      await doc.ref.update({
+        purchaseStatus: VIEWING_EXPIRED,
+        respondByAt: FirestoreFieldValue.delete(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      expired += 1;
+      // Both sides are told: the customer so they know to propose again,
+      // the business because a missed request is worth seeing.
+      const data = {
+        type: "car_viewing_status",
+        purchaseId: doc.id,
+        carId: String(purchase.carId || ""),
+        status: VIEWING_EXPIRED,
+        ...relatedRecordFields("carPurchases", doc.id),
+      };
+      const carName = String(purchase.carTitle || "a car");
+      await Promise.all([
+        safeSendPreferenceNotification({
+          uid: String(purchase.buyerUid || ""),
+          preferenceKey: "carActivity",
+          title: "Viewing request expired",
+          body: `No reply about ${carName}. Propose another time.`,
+          data,
+        }),
+        notifyBusinessOfPaidOrder({
+          businessId: String(purchase.businessId || ""),
+          title: "Viewing request expired",
+          body: `A request to view ${carName} went unanswered.`,
+          data,
+        }),
+      ]);
+    } catch (error) {
+      logger.warn("Could not expire viewing", {
+        purchaseId: doc.id,
+        detail: error?.message || String(error),
+      });
+    }
+  }
+  return expired;
+}
 
 exports.updateCarViewingReservation = onCall(
     {
