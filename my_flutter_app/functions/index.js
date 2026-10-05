@@ -38,6 +38,11 @@ const {
   findGuestTrackingRecord,
   guestTrackingCandidates,
 } = require("./guest_tracking");
+const {
+  appCheckTokenFromHeaders,
+  clientAddressFromRequest,
+  rateLimitIdentity,
+} = require("./request_guard");
 /** Category setting refusals, in words a business owner can act on. */
 const FREIGHT_CATEGORY_ERRORS = {
   unknown_category: "That is not one of the standard categories",
@@ -638,12 +643,11 @@ async function recordMarketplaceDisclosure(request, userId, action) {
   return {id: ref.id, ...evidence};
 }
 
+// The address Google's front end saw, not the caller-supplied left-most
+// X-Forwarded-For entry (which let any script pick a fresh rate-limit bucket
+// per request). See request_guard.js for what Cloud Run sets and why.
 function callableClientAddress(request) {
-  const rawRequest = request.rawRequest;
-  const forwarded = String(rawRequest?.headers?.["x-forwarded-for"] || "")
-      .split(",")[0]
-      .trim();
-  return forwarded || String(rawRequest?.ip || "unknown");
+  return clientAddressFromRequest(request.rawRequest);
 }
 
 async function enforceRateLimitForIdentity(identity, {
@@ -684,7 +688,13 @@ async function enforceRateLimitForIdentity(identity, {
 
 async function enforceCallableRateLimit(request, options) {
   if (process.env.FUNCTIONS_EMULATOR === "true") return;
-  const identity = request.auth?.uid || callableClientAddress(request);
+  // Anonymous sessions are keyed on the caller's address: a fresh anonymous
+  // uid costs nothing, so a per-uid bucket would never fill.
+  const identity = rateLimitIdentity(
+      request.auth,
+      isAnonymousCaller(request.auth),
+      callableClientAddress(request),
+  );
   await enforceRateLimitForIdentity(identity, options);
 }
 
@@ -33133,6 +33143,10 @@ exports.deleteSupportMessageForMe = onCall(
 // only that key is configured. When neither key is real the endpoint answers
 // 503 and the widget falls back to its built-in answers - the bubble never
 // breaks while keys are pending.
+// Per client address. A conversation is a handful of turns; this leaves room
+// for a long one while making the endpoint useless as a free LLM relay.
+const ASSISTANT_RATE_LIMIT = Object.freeze({limit: 30, windowSeconds: 60 * 60});
+
 const ASSISTANT_ALLOWED_ORIGINS = new Set([
   "https://laawoldigital.com",
   "https://www.laawoldigital.com",
@@ -33185,13 +33199,54 @@ exports.assistantChat = onRequest(
         res.set("Vary", "Origin");
       }
       res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-      res.set("Access-Control-Allow-Headers", "Content-Type");
+      res.set(
+          "Access-Control-Allow-Headers",
+          "Content-Type, X-Firebase-AppCheck",
+      );
       if (req.method === "OPTIONS") return res.status(204).send("");
       if (req.method !== "POST") {
         return res.status(405).json({error: "POST only"});
       }
       if (!ASSISTANT_ALLOWED_ORIGINS.has(origin)) {
         return res.status(403).json({error: "Origin not allowed"});
+      }
+
+      // The Origin header is only a browser courtesy - a script sets it to
+      // anything - so on its own it left a paid LLM proxy open to the world.
+      // Require a valid App Check token (the marketing widget mints one with
+      // the site's reCAPTCHA Enterprise key) wherever callables enforce App
+      // Check, then cap each address. Both refusals carry fallback: true so
+      // the widget quietly answers from its built-in knowledge instead.
+      if (ENFORCE_APP_CHECK) {
+        const appCheckToken = appCheckTokenFromHeaders(req.headers);
+        if (!appCheckToken) {
+          return res.status(401)
+              .json({fallback: true, error: "App Check token required"});
+        }
+        try {
+          await admin.appCheck().verifyToken(appCheckToken);
+        } catch (error) {
+          logger.warn("assistantChat App Check rejected", {
+            detail: error?.message,
+          });
+          return res.status(401)
+              .json({fallback: true, error: "App Check token invalid"});
+        }
+      }
+      if (process.env.FUNCTIONS_EMULATOR !== "true") {
+        try {
+          await enforceRateLimitForIdentity(clientAddressFromRequest(req), {
+            name: "assistantChat",
+            limit: ASSISTANT_RATE_LIMIT.limit,
+            windowSeconds: ASSISTANT_RATE_LIMIT.windowSeconds,
+          });
+        } catch (error) {
+          if (error?.code === "resource-exhausted") {
+            return res.status(429)
+                .json({fallback: true, error: "Too many requests"});
+          }
+          throw error;
+        }
       }
 
       // Keep the abuse surface small: short history, short messages.

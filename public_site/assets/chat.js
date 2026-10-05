@@ -209,6 +209,59 @@
   var API = "https://us-central1-car-selling-flutter-app.cloudfunctions.net/assistantChat";
   var history = []; // rolling {role, content} turns sent to the backend
 
+  // assistantChat refuses a call without a valid App Check token (otherwise
+  // anyone could use it as a free AI relay by faking the Origin header). The
+  // token comes from the same Firebase web app and reCAPTCHA Enterprise key
+  // partner.html already uses on this domain; the SDK is loaded only when a
+  // visitor actually asks something. If it cannot load (blocked, offline),
+  // the request goes without the header, the server says fallback, and the
+  // built-in answers take over - the bubble never breaks.
+  var FIREBASE_SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyBrRDTd5w2iWxTIfvsn7ra0xjW7M-iuPN8",
+    authDomain: "car-selling-flutter-app.firebaseapp.com",
+    projectId: "car-selling-flutter-app",
+    storageBucket: "car-selling-flutter-app.firebasestorage.app",
+    messagingSenderId: "577373430777",
+    appId: "1:577373430777:web:5af70db59c5d49a8125328",
+  };
+  var APP_CHECK_SITE_KEY = "6Lcs5FUtAAAAAA_XmvDg0rDqUE4noHLjFCLqofHX";
+  var appCheckReady = null;
+
+  function appCheckInstance() {
+    if (!appCheckReady) {
+      appCheckReady = Promise.all([
+        import(FIREBASE_SDK + "firebase-app.js"),
+        import(FIREBASE_SDK + "firebase-app-check.js"),
+      ]).then(function (mods) {
+        var appMod = mods[0], checkMod = mods[1];
+        var apps = appMod.getApps();
+        var app = apps.length ? apps[0] : appMod.initializeApp(FIREBASE_CONFIG);
+        // partner.html may have initialized App Check already; the SDK hands
+        // back that instance when the provider (same site key) matches.
+        var appCheck = checkMod.initializeAppCheck(app, {
+          provider: new checkMod.ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
+          isTokenAutoRefreshEnabled: true,
+        });
+        return {appCheck: appCheck, getToken: checkMod.getToken};
+      });
+      appCheckReady.catch(function () { appCheckReady = null; });
+    }
+    return appCheckReady;
+  }
+
+  function requestHeaders() {
+    var base = {"Content-Type": "application/json"};
+    return appCheckInstance().then(function (ctx) {
+      return ctx.getToken(ctx.appCheck, false);
+    }).then(function (result) {
+      if (result && result.token) base["X-Firebase-AppCheck"] = result.token;
+      return base;
+    }).catch(function () {
+      return base;
+    });
+  }
+
   var root, panel, log, input, open = false;
 
   function pushBubble(kind, html) {
@@ -287,11 +340,14 @@
       if (controller) controller.abort();
     }, 15000);
 
-    fetch(API, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({messages: history, lang: lang()}),
-      signal: controller && controller.signal,
+    var body = JSON.stringify({messages: history, lang: lang()});
+    requestHeaders().then(function (headers) {
+      return fetch(API, {
+        method: "POST",
+        headers: headers,
+        body: body,
+        signal: controller && controller.signal,
+      });
     }).then(function (r) {
       return r.json().then(function (data) {
         return {ok: r.ok, data: data};
