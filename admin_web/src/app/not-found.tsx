@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { useFrenchDomTranslation } from "@/lib/french-dom";
+import { useFrenchDomTranslation } from "@/lib/french-dom-runtime";
 
 export default function NotFound() {
   useFrenchDomTranslation();
@@ -10,11 +10,11 @@ export default function NotFound() {
   return (
     <main className="app-shell">
       <section className="center-panel">
-        <p className="eyebrow">Console Laawol Digital</p>
-        <h1>Page introuvable</h1>
-        <p>Cette page n’existe pas ou a été déplacée.</p>
+        <p className="eyebrow">Laawol Digital Console</p>
+        <h1>Page not found</h1>
+        <p>This page does not exist or has moved.</p>
         <Link className="primary-button" href="/">
-          Retour à la console
+          Back to console
         </Link>
       </section>
     </main>

@@ -174,7 +174,7 @@ test("a parked-car row and a ledger activity say which container the car is on",
   // Parking list row, parking card, and ledger activity row each render the line.
   const placements = operationsSource.match(/className="ctn-placement">\{vinPlacementText\(vinPlacements\.get\(/g) ?? [];
   assert.equal(placements.length, 3, "expected the cross-link on the parking row, the parking card and the activity row");
-  assert.match(operationsSource, /<small>\{text\(row\.vinNumber, ""\) \|\| text\(row\.trackingCode, ""\)\}<\/small>\s*\{vinPlacements\.has\(text\(row\.vinNumber, ""\)\.toUpperCase\(\)\) && \(/);
+  assert.match(operationsSource, /<small(?: data-no-translate)?>\{text\(row\.vinNumber, ""\) \|\| text\(row\.trackingCode, ""\)\}<\/small>\s*\{vinPlacements\.has\(text\(row\.vinNumber, ""\)\.toUpperCase\(\)\) && \(/);
   assert.match(operationsSource, /<div><span>Container<\/span><b className="ctn-placement">/);
   assert.match(operationsSource, /\{vin && vinPlacements\.has\(vin\.toUpperCase\(\)\) && \(/);
   assert.match(stylesSource, /\.ctn-placement \{/);
@@ -275,7 +275,7 @@ test("each phone carries its WhatsApp switch, off without a number, and warns wi
 test("every line shows its tracking code and who gets updates, in the list and in search", () => {
   assert.equal((panelSource.match(/<LineTrackingCode code=\{text\((row|hit\.line)\.trackingCode, ""\)\} \/>/g) ?? []).length, 2);
   assert.equal((panelSource.match(/<LineWhatsApp line=\{(row|hit\.line)\} \/>/g) ?? []).length, 2);
-  assert.match(panelSource, /<code className="ctn-code">\{code\}<\/code>/);
+  assert.match(panelSource, /<code className="ctn-code"(?: data-no-translate)?>\{code\}<\/code>/);
   assert.match(stylesSource, /\.ctn-code \{/);
 });
 

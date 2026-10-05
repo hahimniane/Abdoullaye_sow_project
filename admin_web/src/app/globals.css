@@ -2293,6 +2293,12 @@ button[data-loading="true"]::before {
   color: var(--brand-strong);
 }
 
+/* A French page stays hidden until its translation has run (the boot script
+   in app/layout.tsx sets this; french-dom-runtime.ts always removes it). */
+html[data-lang-pending] body {
+  visibility: hidden;
+}
+
 .console-lang-toggle {
   bottom: 16px;
   min-width: 46px;

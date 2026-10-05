@@ -206,7 +206,7 @@ function LineTrackingCode({ code }: { code: string }) {
   if (!code) return null;
   return (
     <small className="ctn-code-row">
-      <code className="ctn-code">{code}</code>
+      <code className="ctn-code" data-no-translate>{code}</code>
       <CopyValue value={code} label="Copy tracking code" />
     </small>
   );
@@ -886,8 +886,8 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
           <div className="ctn-detail">
             <div className="ctn-detail-head">
               <div>
-                <h2>{containerTitle(selected)}</h2>
-                {text(selected.containerNumber, "") && text(selected.label, "") && <p className="panel-lede">{text(selected.label, "")}</p>}
+                <h2 data-no-translate>{containerTitle(selected)}</h2>
+                {text(selected.containerNumber, "") && text(selected.label, "") && <p className="panel-lede" data-no-translate>{text(selected.label, "")}</p>}
               </div>
               <div className="ctn-detail-actions">
                 <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => openEdit(selected)}>
@@ -912,8 +912,8 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
               </div>
             </div>
             <div className="pur-info ctn-info">
-              <div><span>Container number</span><b>{text(selected.containerNumber, "—")}</b></div>
-              <div><span>Booking / BL reference</span><b>{text(selected.bookingReference, "—")}</b></div>
+              <div><span>Container number</span><b data-no-translate>{text(selected.containerNumber, "—")}</b></div>
+              <div><span>Booking / BL reference</span><b data-no-translate>{text(selected.bookingReference, "—")}</b></div>
               <div><span>Destination</span><b>{destinationLabel(selected) || "—"}</b></div>
               <div><span>Started</span><b>{formatDate(selected.createdAt) || "—"}</b></div>
               {Boolean(selected.sailedAt) && <div><span>Sailed</span><b>{formatDate(selected.sailedAt)}</b></div>}
@@ -922,7 +922,7 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                 <div><span>On board</span><b>{selectedCounts.carCount} · {selectedCounts.barrelCount} · {selectedCounts.otherCount}</b><small>cars · barrels · other</small></div>
               )}
             </div>
-            {text(selected.notes, "") && <p className="ctn-notes">{text(selected.notes, "")}</p>}
+            {text(selected.notes, "") && <p className="ctn-notes" data-no-translate>{text(selected.notes, "")}</p>}
           </div>
 
           <div className="panel-header">
@@ -946,14 +946,14 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                   const by = staffName(text(row.addedByStaffId, ""));
                   return (
                     <div className="mini-table-row" key={String(row.id)}>
-                      <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /></span>
+                      <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /></span>
                       <span>
-                        {stock ? <strong>Business stock</strong> : <strong>{text(row.customerName, "")}</strong>}
-                        {!stock && <small>{text(row.customerPhone, "")}</small>}
-                        {text(row.receiverName, "") && <small>→ {text(row.receiverName, "")}{text(row.receiverPhone, "") ? ` · ${text(row.receiverPhone, "")}` : ""}</small>}
+                        {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(row.customerName, "")}</strong>}
+                        {!stock && <small data-no-translate>{text(row.customerPhone, "")}</small>}
+                        {text(row.receiverName, "") && <small data-no-translate>→ {text(row.receiverName, "")}{text(row.receiverPhone, "") ? ` · ${text(row.receiverPhone, "")}` : ""}</small>}
                         <LineWhatsApp line={row} />
                       </span>
-                      <span><strong>{formatDate(row.createdAt)}</strong>{by && <small>{by}</small>}</span>
+                      <span><strong>{formatDate(row.createdAt)}</strong>{by && <small data-no-translate>{by}</small>}</span>
                       <span className="ctn-row-actions">
                         <button className="ghost-button" type="button" disabled={busy} onClick={() => openLabels(selectedId, row)} title="Print labels" aria-label="Print labels"><Tag size={14} /></button>
                         <button className="ghost-button" type="button" disabled={busy} onClick={() => openContacts(row)} title="Edit contacts" aria-label="Edit contacts"><Phone size={14} /></button>
@@ -1015,13 +1015,13 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                         onClick={() => { if (containerId) { setSelectedId(containerId); } }}
                         onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && containerId) { e.preventDefault(); setSelectedId(containerId); } }}
                       >
-                        <span><strong>{title}</strong>{vin && vin !== title && <small>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(hit.line.trackingCode, "")} /></span>
+                        <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(hit.line.trackingCode, "")} /></span>
                         <span>
-                          {stock ? <strong>Business stock</strong> : <strong>{text(hit.line.customerName, "")}</strong>}
-                          {!stock && <small>{text(hit.line.customerPhone, "")}</small>}
+                          {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(hit.line.customerName, "")}</strong>}
+                          {!stock && <small data-no-translate>{text(hit.line.customerPhone, "")}</small>}
                           <LineWhatsApp line={hit.line} />
                         </span>
-                        <span><strong>{hit.container ? containerTitle(hit.container) : "—"}</strong>{hit.container && <small>{destinationLabel(hit.container)}</small>}</span>
+                        <span><strong data-no-translate>{hit.container ? containerTitle(hit.container) : "—"}</strong>{hit.container && <small>{destinationLabel(hit.container)}</small>}</span>
                         <span className="ctn-hit-state">
                           <span><StatusBadge status={hit.status} />{Boolean(hit.sailedAt) && <small>{formatDate(hit.sailedAt)}</small>}</span>
                           {containerId && (
@@ -1069,8 +1069,8 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                       onClick={() => setSelectedId(id)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(id); } }}
                     >
-                      <span><strong>{containerTitle(row)}</strong>{number && <small>{text(row.label, "")}</small>}</span>
-                      <span><strong>{destinationLabel(row) || "—"}</strong>{text(row.bookingReference, "") && <small>{text(row.bookingReference, "")}</small>}</span>
+                      <span><strong data-no-translate>{containerTitle(row)}</strong>{number && <small data-no-translate>{text(row.label, "")}</small>}</span>
+                      <span><strong>{destinationLabel(row) || "—"}</strong>{text(row.bookingReference, "") && <small data-no-translate>{text(row.bookingReference, "")}</small>}</span>
                       <span><strong>{counts.carCount} · {counts.barrelCount} · {counts.otherCount}</strong><small>cars · barrels · other</small></span>
                       <span>
                         <StatusBadge status={status} />
@@ -1258,7 +1258,7 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
               </fieldset>
               )}
               {addedThisSitting.length > 0 && (
-                <p className="lst-hint" role="status">Added so far: {addedThisSitting.join("; ")}.</p>
+                <p className="lst-hint" role="status">Added so far: <span data-no-translate>{addedThisSitting.join("; ")}</span>.</p>
               )}
               {ownerVisible && lineDraft.ownerKind === "customer" && (
                 <div className="lst-form-grid">
@@ -1461,7 +1461,7 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                       <span><strong>{auditActionLabel(text(h.action, ""))}</strong> · {who}</span>
                       <small style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{formatDate(h.at)}</small>
                     </div>
-                    {text(h.summary, "") && <div style={{ marginTop: 2 }}><small>{text(h.summary, "")}</small></div>}
+                    {text(h.summary, "") && <div style={{ marginTop: 2 }}><small data-audit-summary>{text(h.summary, "")}</small></div>}
                   </div>
                 );
               })}

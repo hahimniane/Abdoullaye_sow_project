@@ -25,7 +25,7 @@ import { resolveConsoleKind } from "@/lib/console-routing";
 import { customerServiceFromSearch } from "@/lib/customer-service-intent";
 import { legalAcceptance } from "@/lib/disclosures";
 import { auth, db, functions } from "@/lib/firebase";
-import { useFrenchDomTranslation } from "@/lib/french-dom";
+import { useFrenchDomTranslation } from "@/lib/french-dom-runtime";
 import { isValidPhone } from "@/lib/phone";
 import { createSessionGate } from "@/lib/auth-session-gate";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
@@ -47,7 +47,7 @@ const consoleLoading = () => (
   <div className="app-shell">
     <div className="center-panel">
       <RefreshCw className="spin" size={28} />
-      <p>Ouverture de la console...</p>
+      <p>Opening console...</p>
     </div>
   </div>
 );
@@ -414,7 +414,7 @@ export function ConsoleRouter() {
       <div className="app-shell">
         <div className="center-panel">
           <RefreshCw className="spin" size={28} />
-          <p>Ouverture de la console...</p>
+          <p>Opening console...</p>
         </div>
       </div>
     );

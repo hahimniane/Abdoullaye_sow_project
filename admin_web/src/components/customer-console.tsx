@@ -78,6 +78,7 @@ import { FreightCustomerPay } from "@/components/freight-customer-pay";
 import { isValidE164, isValidPhone, normalizePhone } from "@/lib/phone";
 import { phoneVerificationErrorMessage } from "@/lib/phone-verification";
 import { currentWebLanguage } from "@/lib/language";
+import { UserText } from "@/components/user-text";
 import {
   customerOrdersInnerTab,
   customerTargetForNotification,
@@ -272,7 +273,7 @@ export function CustomerConsole({
           <div className="admin-chip" title="Signed-in account">
             <UserRound size={18} />
             <span className="admin-chip-name">
-              {text(profile.fullName ?? firebaseUser.email, "Customer")}
+              <UserText value={profile.fullName ?? firebaseUser.email} fallback="Customer" />
             </span>
             <span className="admin-role-tag">Customer</span>
           </div>
@@ -879,7 +880,7 @@ function OrderPanel({
                 <Icon size={20} />
                 <div>
                   <strong>{label}</strong>
-                  <small>{text(row.trackingCode ?? row.trackingNumber ?? row.id)}</small>
+                  <small data-no-translate>{text(row.trackingCode ?? row.trackingNumber ?? row.id)}</small>
                 </div>
                 <div>
                   <span className="status-pill compact">{orderStatusLabel(order)}</span>

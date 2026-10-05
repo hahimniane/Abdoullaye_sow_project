@@ -476,6 +476,21 @@ Definition of Done, checked on **every** implementation.
 - Keep the dictionary **convergent**: a translated value must not contain a
   source key that would re-translate it (the `french-dom.test.ts` convergence
   test enforces this — run `npm test`).
+- **User data is not copy.** Anything someone typed — names, phones, notes,
+  descriptions, addresses, message text, codes, VINs, business names — renders
+  inside an element marked `data-no-translate`, or through `<UserText>`
+  (`src/components/user-text.tsx`) when the empty case falls back to console
+  copy. Unmarked, the dictionary rewrites a customer called "Pickup" or a note
+  reading "Cancelled".
+- Sentences the **server** writes in English around typed values (History /
+  audit `summary` fields) render in an element marked `data-audit-summary`;
+  add every new sentence shape to `src/lib/audit-summaries.ts` with a test.
+- When two English strings share one French value, name the English it should
+  read back as in `REVERSE_PREFERENCES` (`french-dom-engine.test.ts` fails on
+  any unresolved pair).
+- The dictionary loads only for French pages (`french-dom-runtime.ts`). Never
+  import `french-dom.ts` statically, and render English in the markup — an
+  English page no longer runs the dictionary at all.
 
 **Verify both languages.** Toggle French and confirm the new copy is translated
 and fits (no overflow/clipping) — English text is often shorter than French.

@@ -144,6 +144,7 @@ import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
 import { buildBusinessDirectory, buildUserDirectory } from "@/lib/admin-directory";
 import { FieldInfo } from "@/components/field-info";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
+import { UserText } from "@/components/user-text";
 import {
   confirmImportantAction,
   type ActionConfirmationOptions,
@@ -3855,8 +3856,8 @@ function UsersView({
                     {peopleInitials(userDisplayName(user))}
                   </span>
                   <span className="people-list-copy">
-                    <strong>{userDisplayName(user)}</strong>
-                    <span>{text(user.email ?? user.phone, "No contact information")}</span>
+                    <strong data-no-translate>{userDisplayName(user)}</strong>
+                    <span><UserText value={user.email ?? user.phone} fallback="No contact information" /></span>
                     <small>{peoplePersonKindLabel(user)}</small>
                   </span>
                   <span
@@ -3998,12 +3999,12 @@ function PersonDetailWorkspace({
           </span>
           <div>
             <div className="people-detail-title">
-              <h3>{userDisplayName(user)}</h3>
+              <h3 data-no-translate>{userDisplayName(user)}</h3>
               {isCurrentUser && (
                 <span className="status-pill compact">Signed in</span>
               )}
             </div>
-            <p>{text(user.email ?? user.phone, "No contact information")}</p>
+            <p><UserText value={user.email ?? user.phone} fallback="No contact information" /></p>
             <div className="people-detail-badges">
               <span className="status-pill compact">
                 {peoplePersonKindLabel(user)}
@@ -4095,11 +4096,11 @@ function PersonDetailWorkspace({
           <dl className="people-facts">
             <div>
               <dt>Email</dt>
-              <dd>{text(user.email, "Not provided")}</dd>
+              <dd><UserText value={user.email} fallback="Not provided" /></dd>
             </div>
             <div>
               <dt>Phone</dt>
-              <dd>{text(user.phone, "Not provided")}</dd>
+              <dd><UserText value={user.phone} fallback="Not provided" /></dd>
             </div>
             <div>
               <dt>Email verification</dt>
@@ -7230,7 +7231,7 @@ function WebsiteView({
               return (
                 <article className="website-request-row" key={business.id}>
                   <div>
-                    <strong>{text(business.name, business.id)}</strong>
+                    <strong data-no-translate>{text(business.name, business.id)}</strong>
                     <small>
                       {missing.length
                         ? `Missing: ${missing.join(", ")}`
@@ -8611,7 +8612,7 @@ function BusinessesView({
                     {businessInitials(text(business.name, business.id))}
                   </span>
                   <span className="master-row-main">
-                    <strong>{text(business.name, business.id)}</strong>
+                    <strong data-no-translate>{text(business.name, business.id)}</strong>
                     <small>{businessStatusLabel(business)}</small>
                   </span>
                   {open > 0 && <span className="master-badge">{open}</span>}
@@ -9601,7 +9602,7 @@ function BusinessWorkspace({
             {businessInitials(text(business.name, business.id))}
           </span>
           <div>
-            <h2>{text(business.name, business.id)}</h2>
+            <h2 data-no-translate>{text(business.name, business.id)}</h2>
             <p>
               {[
                 text(business.phone, "No phone"),
@@ -9856,7 +9857,7 @@ function BusinessWorkspace({
                     {members.map((user) => (
                       <div className="membership-row" key={user.id}>
                         <div>
-                          <strong>{userDisplayName(user)}</strong>
+                          <strong data-no-translate>{userDisplayName(user)}</strong>
                           <small>{userMeta(user)}</small>
                         </div>
                         <select
@@ -9895,7 +9896,7 @@ function BusinessWorkspace({
                     <div className="row-list compact">
                       {contactReferences.map((contact) => (
                         <div className="support-contact-row" key={contact.id}>
-                          <strong>{userDisplayName(contact)}</strong>
+                          <strong data-no-translate>{userDisplayName(contact)}</strong>
                           <span>{userMeta(contact)}</span>
                         </div>
                       ))}
@@ -10065,7 +10066,7 @@ function BusinessWorkspace({
                     <div className="row-list compact">
                       {contactReferences.map((contact) => (
                         <div className="support-contact-row" key={contact.id}>
-                          <strong>{userDisplayName(contact)}</strong>
+                          <strong data-no-translate>{userDisplayName(contact)}</strong>
                           <span>{userMeta(contact)}</span>
                         </div>
                       ))}
@@ -11202,7 +11203,7 @@ function MarketplaceBusinessCard({
     <section className="marketplace-business-card">
       <div className="marketplace-business-head">
         <div>
-          <strong>{text(business.name, business.id)}</strong>
+          <strong data-no-translate>{text(business.name, business.id)}</strong>
           <small>
             {[
               statusLabel(business.status),

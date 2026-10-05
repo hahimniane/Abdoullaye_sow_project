@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 
 import { AttachmentPreview } from "@/components/support/attachment-preview";
+import { UserText } from "@/components/user-text";
 import { db, functions } from "@/lib/firebase";
 import { asDate, currentLocale, formatDate, formatMoney, text } from "@/lib/format";
 import { uploadSupportAttachmentFile } from "@/lib/support-attachments";
@@ -521,16 +522,16 @@ export function SupportCasesPanel({
                   onClick={() => setSelectedId(row.id)}
                 >
                   <div className="sup-inbox-top">
-                    <strong>{text(row.subject ?? row.relatedLabel, "Support case")}</strong>
+                    <strong>{text(row.subject, "") ? <UserText value={row.subject} /> : text(row.relatedLabel, "Support case")}</strong>
                     <span className={`status-pill compact ${unresolved ? "warning" : ""}`}>
                       {statusLabel(row.status)}
                     </span>
                   </div>
                   <span className="sup-inbox-sub">
-                    {caseAudienceLabel(row)}
-                    {scope === "admin" ? ` · ${text(row.businessName, "Business")}` : ""}
+                    <CaseAudience row={row} />
+                    {scope === "admin" ? <> · <UserText value={row.businessName} fallback="Business" /></> : ""}
                   </span>
-                  <span className="sup-inbox-preview">{text(row.lastMessage, "No messages yet")}</span>
+                  <span className="sup-inbox-preview"><UserText value={row.lastMessage} fallback="No messages yet" /></span>
                   <span className="sup-inbox-foot">
                     <span className="sup-inbox-time">{formatDateTime(row.lastMessageAt ?? row.updatedAt)}</span>
                     {scope === "admin" && text(row.assignedAdminUid, "") && (
@@ -637,9 +638,10 @@ function isBusinessPlatformCase(row: FirestoreRow): boolean {
   return text(row.caseType, "") === "business_platform";
 }
 
-function caseAudienceLabel(row: FirestoreRow): string {
-  if (isBusinessPlatformCase(row)) return "Admin help";
-  return text(row.customerName ?? row.customerEmail, "Customer");
+/** Who the case is with; a customer's own name is kept as typed. */
+function CaseAudience({ row }: { row: FirestoreRow }) {
+  if (isBusinessPlatformCase(row)) return <>Admin help</>;
+  return <UserText value={row.customerName ?? row.customerEmail} fallback="Customer" />;
 }
 
 function SupportThread({
@@ -840,14 +842,14 @@ function SupportThread({
     <div className="sup-thread">
       <header className="sup-thread-head">
         <div>
-          <strong>{text(supportCase.subject ?? supportCase.relatedLabel, "Support case")}</strong>
+          <strong>{text(supportCase.subject, "") ? <UserText value={supportCase.subject} /> : text(supportCase.relatedLabel, "Support case")}</strong>
           <span className="sup-thread-meta">
-            {caseAudienceLabel(supportCase)}
+            <CaseAudience row={supportCase} />
             {" · "}
             {isBusinessPlatformCase(supportCase)
               ? "Admin help"
               : text(supportCase.relatedLabel, text(supportCase.caseType, "Order"))}
-            {scope === "admin" ? ` · ${text(supportCase.businessName, "Business")}` : ""}
+            {scope === "admin" ? <> · <UserText value={supportCase.businessName} fallback="Business" /></> : ""}
           </span>
         </div>
         <div className="sup-thread-tags">
@@ -1072,7 +1074,7 @@ function OrderContext({
         <button className="sup-order-toggle" type="button">
           <Package size={14} /> Business context
           <span className="sup-order-label">
-            {text(supportCase.businessName ?? supportCase.relatedLabel, "Business")}
+            <UserText value={supportCase.businessName ?? supportCase.relatedLabel} fallback="Business" />
           </span>
         </button>
         <div className="sup-order-body">
@@ -1083,7 +1085,7 @@ function OrderContext({
             </div>
             <div className="sup-order-field">
               <span>Business</span>
-              <strong>{text(supportCase.businessName, "Business")}</strong>
+              <strong><UserText value={supportCase.businessName} fallback="Business" /></strong>
             </div>
           </div>
           <span className="sup-order-ref">business admin support</span>
@@ -1191,14 +1193,14 @@ function MessageBubble({
   return (
     <div className={`bubble ${mine ? "mine" : ""}`}>
       <div className="bubble-meta">
-        <span>{senderDisplay}</span>
+        <span>{text(message.senderName, "") && !(role === "admin" && scope === "business") ? <UserText value={senderDisplay} /> : senderDisplay}</span>
         <span className={`role-tag role-${role}`}>{roleLabel(role)}</span>
       </div>
       <AttachmentPreview fileName={fileName} fileUrl={fileUrl} isImage={isImage} />
       {Boolean(text(message.content, "")) && type !== "image" && (
-        <span className="bubble-text">{text(message.content, "")}</span>
+        <span className="bubble-text" data-no-translate>{text(message.content, "")}</span>
       )}
-      {isImage && Boolean(caption) && <span className="bubble-text">{caption}</span>}
+      {isImage && Boolean(caption) && <span className="bubble-text" data-no-translate>{caption}</span>}
       <span className="bubble-time">
         {formatDateTime(message.createdAt)}
         {message.editedAt ? " · edited" : ""}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import { ActionConfirmationHost } from "@/components/action-confirmation-dialog";
+import { LANGUAGE_BOOT_SCRIPT } from "@/lib/language";
 
 export const metadata: Metadata = {
   // Deliberately no `title` here. The App Router writes a metadata <title>
@@ -26,8 +27,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html className="notranslate" lang="en" translate="no">
+    // suppressHydrationWarning: the boot script below sets `lang` (and, for a
+    // French page, data-lang-pending) on this element before React hydrates.
+    <html className="notranslate" lang="en" translate="no" suppressHydrationWarning>
       <head>
+        {/* Before first paint: pick the language and, when it is French, keep
+            the page hidden until french-dom-runtime has translated it. */}
+        <script dangerouslySetInnerHTML={{ __html: LANGUAGE_BOOT_SCRIPT }} />
         {/* Pre-hydration fallback only. Written as a plain tag rather than
             metadata.title so React does not re-assert it over the runtime
             title each console sets for itself. */}
