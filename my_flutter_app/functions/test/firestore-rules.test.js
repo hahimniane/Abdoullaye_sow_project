@@ -1026,6 +1026,31 @@ describe("business dashboard Firestore rules", () => {
         {businessId: "biz_a", containerId: "box_a", kind: "car"}));
   });
 
+  // The VIN lock is how two quick adds of one car are serialised. A client
+  // that could write it could block a car from every container, or delete
+  // the lock and load it twice; one that could read it learns nothing it
+  // needs. Server-only, even for the business that owns it.
+  it("keeps the container VIN locks server-only", async () => {
+    const {doc, setDoc, getDoc, deleteDoc, getDocs, collection, query,
+      where} = require("firebase/firestore");
+    const lockId = "biz_a_1HGCM82633A004352";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `containerVinLocks/${lockId}`),
+          {businessId: "biz_a", vinNumber: "1HGCM82633A004352",
+            containerId: "box_a", lineId: "line_a"});
+    });
+    const owner = firestoreFor("owner-a");
+    await assertFails(getDoc(doc(owner, `containerVinLocks/${lockId}`)));
+    await assertFails(getDocs(query(collection(owner, "containerVinLocks"),
+        where("businessId", "==", "biz_a"))));
+    await assertFails(setDoc(doc(owner, "containerVinLocks/biz_a_FORGED1"),
+        {businessId: "biz_a", vinNumber: "FORGED1", containerId: "box_a",
+          lineId: "x"}));
+    await assertFails(deleteDoc(doc(owner, `containerVinLocks/${lockId}`)));
+    await assertFails(getDoc(doc(firestoreFor("owner-b"),
+        `containerVinLocks/${lockId}`)));
+  });
+
   it("lets a business owner read their own private records only", async () => {
     const ownerDb = firestoreFor("owner-a");
 

@@ -19,16 +19,76 @@ business can see who *would* have been told.
      itself as soon as the container has a real ISO number
      (`startContainerCarrierTracking`).
 2. Moments customers care about carry `customerUpdate` (`shipped`,
-   `at_port`, `arrived`). `sendContainerCustomerUpdates` sends one message
-   per person per line.
-3. Each message is one `containerUpdates/{lineId}_{role}_{update}` document.
-   Staff tapping Shipped and the carrier reporting `on_ship` are the same
-   update, so whoever comes first sends and the other finds it already done.
-4. A person is skipped (and the line says why) when they have no phone,
+   `at_port`, `arrived`). `sendContainerCustomerUpdates` **queues** one
+   message per person per line; it sends nothing itself.
+3. Each message is one `containerUpdates/{lineId}_{role}_{update}` document,
+   created only if it does not exist yet. Staff tapping Shipped and the
+   carrier reporting `on_ship` are the same update, so whoever comes first
+   queues it and the other finds it already there.
+4. `deliverContainerCustomerUpdate` sends each row on its own, as soon as the
+   row becomes `queued` (see *The send queue* below).
+5. A person is skipped (and the line says why) when they have no phone,
    staff switched them off, or the number has no country code.
 
+Each line carries `lastCustomerUpdate` — the latest update and, per person,
+`queued`, `sent`, `retrying`, `failed`, `waiting_for_whatsapp` or `skipped`
+(with the reason). The queue and the sender both update it, in the same
+transaction as the row.
+
 Rules live in `my_flutter_app/functions/container_updates.js` and are tested
-in `test/container-updates.test.js`.
+in `test/container-updates.test.js` (pure rules and wiring) and
+`test/container-callables.test.js` (against the Firestore emulator:
+`npm run test:containers`).
+
+## The send queue
+
+A `containerUpdates` row moves through:
+
+| Status | Meaning |
+| --- | --- |
+| `waiting_for_whatsapp` | Recorded while WhatsApp was not connected. Never sent by itself. |
+| `queued` | Waiting for the sender. Writing this status is what triggers a send. |
+| `sending` | Claimed by one sender, with a lease (`leaseUntilMs`, 5 minutes). |
+| `retrying` | The last try hit the network, a timeout, 429 or a 5xx; the platform delivers the event again with backoff. |
+| `sent` | WhatsApp accepted it; `whatsappMessageId` is set. Never sent again. |
+| `failed` | Meta refused it (any other 4xx; Meta's text is in `error`), or 5 tries were used up, or the event was more than 6 hours old. |
+
+- The sender claims a row in a transaction (`queued`/`retrying` → `sending`),
+  so two deliveries of the same event never both send.
+- A sender that dies mid-send leaves `sending` behind. Once its lease has run
+  out the row can be claimed again (by the platform's retry, or by
+  `sendContainerCurrentStatus` below). The worst case is one duplicate
+  message, never a row stuck for good.
+- Each WhatsApp request gives up after 15 seconds, so a hung connection
+  becomes a retry instead of holding the lease.
+- `attempts` counts sends; after 5 the row is `failed`.
+
+## Updates sent before WhatsApp was connected
+
+They stay `waiting_for_whatsapp` and are **not sent automatically**. A
+message about a container that sailed weeks ago is usually noise, so
+customers start hearing from the next moment after connection onward.
+
+When a business does want to catch everyone up on a container, the callable
+`sendContainerCurrentStatus({businessId, containerId})` sends each person
+the container's **current** update — the furthest one along its timeline
+(`arrived` beats `at_port` beats `shipped`), not every update it missed:
+
+- It refuses (`failed-precondition`, `reason: whatsapp_not_configured`)
+  until WhatsApp is connected, and (`reason: no_customer_update`) when the
+  container has no customer news yet.
+- For each person on each line: a `sent` row is left alone (nobody hears
+  the same news twice); a `waiting_for_whatsapp` or `failed` row, or a
+  `sending` row whose lease ran out, is queued again; a person with no row
+  (a number added after the update) gets one; a row already `queued`,
+  `retrying` or live `sending` is left to finish. Rows are refreshed with
+  the line's current name and number.
+- It returns `{update, queued, alreadySent, inFlight, skipped, waiting}`
+  and writes a `customer_update_sent` entry to the container's history.
+- Permission: the business's **containers** section (owners, and staff
+  with that permission), like every other container callable.
+
+There is no button for it in the console or the app yet.
 
 ## One-time setup (platform admin)
 
@@ -84,8 +144,11 @@ token** and the **Phone number ID**, then run (each prompts for the value):
 ```bash
 firebase functions:secrets:set WHATSAPP_ACCESS_TOKEN --project car-selling-flutter-app
 firebase functions:secrets:set WHATSAPP_PHONE_NUMBER_ID --project car-selling-flutter-app
-firebase deploy --only functions:sendContainerCustomerUpdates --project car-selling-flutter-app
+firebase deploy --only functions:sendContainerCustomerUpdates,functions:deliverContainerCustomerUpdate,functions:sendContainerCurrentStatus --project car-selling-flutter-app
 ```
+
+All three read the secrets, so all three must be redeployed after the
+secrets change (a running function keeps the value it started with).
 
 Before Meta approval both secrets hold the placeholder `unset`. The functions
 deploy needs them to exist, and the code treats `unset` as "not connected".
@@ -96,10 +159,9 @@ Ship a test container with your own number as the receiver. The line should
 show "sent", and `containerUpdates` should hold a document with
 `status: "sent"` and a `whatsappMessageId`. A `failed` row carries Meta's
 error text in `error`. The usual causes are a template name or language that
-doesn't match, or a template still pending review.
+doesn't match, or a template still pending review. A row stuck in
+`retrying` means Meta or the network kept failing; the function logs of
+`deliverContainerCustomerUpdate` carry each attempt's error.
 
-## Updates sent before WhatsApp was connected
-
-They stay `waiting_for_whatsapp` and are not sent later. A message about a
-container that sailed weeks ago is noise. Customers start hearing from the
-next moment after connection onward.
+Containers that shipped before this step still have their rows waiting;
+see *Updates sent before WhatsApp was connected* above.

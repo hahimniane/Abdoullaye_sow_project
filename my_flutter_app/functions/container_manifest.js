@@ -375,6 +375,129 @@ function containerCounts(lines) {
   return out;
 }
 
+/**
+ * What one line adds to (sign 1) or takes from (sign -1) its container's
+ * tallies, so adding, removing or moving a line is an increment rather than a
+ * re-read of every line on the box. Only the non-zero keys are returned.
+ *
+ * @param {object} line The line.
+ * @param {number} sign 1 or -1.
+ * @return {object} e.g. {lineCount: 1, barrelCount: 3}.
+ */
+function containerCountsDelta(line, sign = 1) {
+  const step = sign < 0 ? -1 : 1;
+  const out = {};
+  for (const [key, value] of Object.entries(containerCounts([line]))) {
+    if (value) out[key] = value * step;
+  }
+  return out;
+}
+
+// -------------------------------------------------------------------------
+// Server-side bookkeeping: the VIN lock, first-write-wins fields, and the
+// repair of a status change that only half landed. Not mirrored on the
+// clients - they never write these.
+// -------------------------------------------------------------------------
+
+/**
+ * The one document every add of a VIN must take inside its transaction, so
+ * two quick adds of the same car cannot both pass a "not loaded yet" query.
+ *
+ * @param {string} businessId The business.
+ * @param {string} vin The VIN as typed.
+ * @return {string} A Firestore document id, or "" when either is empty.
+ */
+function containerVinLockId(businessId, vin) {
+  const business = text(businessId, MAX_LABEL).replace(/[^A-Za-z0-9_-]/g, "");
+  const car = text(vin, MAX_VIN).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return business && car ? `${business}_${car}` : "";
+}
+
+/**
+ * Whether a VIN lock still holds, judged by the line it names rather than by
+ * the lock alone: a lock whose line was removed, re-used for another VIN, or
+ * whose container arrived is stale and may be taken over. So a release that
+ * never happened (a crash, a line removed before locks existed) can never
+ * block a car for good.
+ *
+ * @param {object|null} lock The containerVinLocks document.
+ * @param {object|null} line The line the lock names, or null if gone.
+ * @return {string} The container holding the car, or "" when free.
+ */
+function vinLockHolder(lock, line) {
+  if (!lock || typeof lock !== "object") return "";
+  if (!line || typeof line !== "object") return "";
+  const lockVin = text(lock.vinNumber, MAX_VIN).toUpperCase();
+  if (text(line.vinNumber, MAX_VIN).toUpperCase() !== lockVin) return "";
+  if (text(line.businessId, MAX_LABEL) !== text(lock.businessId, MAX_LABEL)) {
+    return "";
+  }
+  return openContainerHoldingVin([line]);
+}
+
+/**
+ * First write wins: a value already stored is kept and returned; only an
+ * empty field takes the candidate. Read inside a transaction, this is what
+ * stops two callers giving one line two tracking codes, or one container two
+ * document tokens.
+ *
+ * @param {*} current The stored value.
+ * @param {string} candidate The value to store if nothing is.
+ * @return {{value: string, write: boolean}} The value to use, and whether it
+ *   must be written.
+ */
+function keepExisting(current, candidate) {
+  const stored = text(current, 200);
+  if (stored) return {value: stored, write: false};
+  return {value: text(candidate, 200), write: true};
+}
+
+/**
+ * Asking for the status a container already has is a repair, not a mistake:
+ * an earlier attempt may have moved the container and failed before its
+ * lines, its codes, or its timeline moment were written.
+ *
+ * @param {object} current The stored container.
+ * @param {string} nextStatus The requested status.
+ * @return {boolean} True when the request repeats a status already reached.
+ */
+function containerStatusIsRepeat(current, nextStatus) {
+  const from = text(current?.status, 20) || CONTAINER_STATUS.LOADING;
+  const to = text(nextStatus, 20);
+  return from === to && to !== CONTAINER_STATUS.LOADING &&
+    CONTAINER_STATUSES.includes(to);
+}
+
+/**
+ * @param {object[]} lines The container's lines.
+ * @param {string} status The container's status.
+ * @return {boolean} Whether any line has not caught up: a different status,
+ *   or no tracking code.
+ */
+function linesLagStatus(lines, status) {
+  return (Array.isArray(lines) ? lines : []).some((line) => {
+    const row = line && typeof line === "object" ? line : {};
+    return text(row.containerStatus, 20) !== text(status, 20) ||
+      !text(row.trackingCode, 40);
+  });
+}
+
+/**
+ * Splits a list into groups, for batches (500 writes at most) and for a few
+ * lines worked on at once instead of one after another.
+ *
+ * @param {Array} items The list.
+ * @param {number} size The most per group.
+ * @return {Array[]} The groups, in order.
+ */
+function inGroups(items, size) {
+  const list = Array.isArray(items) ? items : [];
+  const step = Math.max(1, Math.floor(Number(size) || 1));
+  const out = [];
+  for (let i = 0; i < list.length; i += step) out.push(list.slice(i, i + step));
+  return out;
+}
+
 const CONTAINER_MESSAGES = Object.freeze({
   container_label_required:
     "Give the container a working name, or its container or booking number.",
@@ -429,4 +552,11 @@ module.exports = {
   isInternationalPhone,
   openContainerHoldingVin,
   containerCounts,
+  containerCountsDelta,
+  containerVinLockId,
+  vinLockHolder,
+  keepExisting,
+  containerStatusIsRepeat,
+  linesLagStatus,
+  inGroups,
 };
