@@ -4557,5 +4557,12 @@
   "authErrorInvalidBusinessPhone": "Saisissez un numéro de téléphone de l’entreprise valide avec l’indicatif pays.",
   "authErrorUnknown": "Une erreur s’est produite. Veuillez réessayer.",
   "supportLoadEarlierMessages": "Charger les messages précédents",
-  "recordSavedReceiptUnavailable": "Enregistré. Numéro de suivi : {trackingCode}. Le reçu n’a pas pu être imprimé, mais la fiche est enregistrée - ne l’enregistrez pas une seconde fois."
+  "recordSavedReceiptUnavailable": "Enregistré. Numéro de suivi : {trackingCode}. Le reçu n’a pas pu être imprimé, mais la fiche est enregistrée - ne l’enregistrez pas une seconde fois.",
+  "@recordSavedReceiptUnavailable": {
+    "placeholders": {
+      "trackingCode": {
+        "type": "String"
+      }
+    }
+  }
 }
