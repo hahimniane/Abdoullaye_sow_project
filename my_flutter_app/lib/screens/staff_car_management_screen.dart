@@ -18,6 +18,7 @@ import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/car_option_localization.dart';
+import '../utils/date_display.dart';
 import '../utils/money_input.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/vin_utils.dart';
@@ -637,7 +638,7 @@ class _CarCard extends StatelessWidget {
     final hasSoldInfo = car.soldInfo?.hasData ?? false;
     final soldInfo = car.soldInfo;
     final soldDateString = soldInfo?.soldDate != null
-        ? DateFormat.yMMMd().format(soldInfo!.soldDate!)
+        ? displayDate(soldInfo!.soldDate!, dateLocaleOf(context))
         : null;
 
     return Stack(
@@ -2854,7 +2855,7 @@ class _MarkAsSoldSheetState extends State<_MarkAsSoldSheet> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(l10n.saleDate),
-                      subtitle: Text(DateFormat.yMMMd().format(_saleDate)),
+                      subtitle: Text(displayDate(_saleDate, dateLocaleOf(context))),
                       trailing: const Icon(Icons.calendar_month),
                       onTap: _pickSaleDate,
                     ),

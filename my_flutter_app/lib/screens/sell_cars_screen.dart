@@ -16,6 +16,7 @@ import '../services/favorite_cars_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/car_option_localization.dart';
+import '../utils/date_display.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/car_viewing_negotiation.dart';
@@ -2226,7 +2227,7 @@ class _ActiveViewingBanner extends StatelessWidget {
             state.appointmentStart != null
         ? (state.appointmentLabel.isNotEmpty
               ? state.appointmentLabel
-              : DateFormat.yMMMd().add_jm().format(state.appointmentStart!))
+              : displayDateTime(state.appointmentStart!, l10n.localeName))
         : viewingAwaitingLabel(l10n, state, ViewingParty.customer) ??
               l10n.viewingClosedNotice;
     return Container(

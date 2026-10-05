@@ -1190,7 +1190,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       subtitle: Text(
         _parkingEndDate == null
             ? l10n.parkingOpenEnded
-            : DateFormat.yMMMd().format(_parkingEndDate!),
+            : displayDate(_parkingEndDate!, dateLocaleOf(context)),
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
       trailing: Icon(
@@ -1419,7 +1419,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             contentPadding: EdgeInsets.zero,
             title: Text(l10n.parkingStartDate),
             subtitle: Text(
-              DateFormat.yMMMd().format(_parkingStartDate),
+              displayDate(_parkingStartDate, dateLocaleOf(context)),
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             trailing: Icon(
@@ -1913,7 +1913,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                         final at = rawAt is Timestamp ? rawAt.toDate() : null;
                         final when = at == null
                             ? ''
-                            : DateFormat.yMMMd().add_jm().format(at);
+                            : displayDateTime(at, dateLocaleOf(context));
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

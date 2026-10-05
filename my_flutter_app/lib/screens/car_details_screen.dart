@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/car.dart';
 import '../models/car_purchase.dart';
 import '../providers/auth_provider.dart';
@@ -503,7 +504,7 @@ class CarDetailsScreen extends StatelessWidget {
     final profilePhone = authProvider.customerPhone?.trim() ?? '';
     final buyerPhoneController = TextEditingController(text: profilePhone);
     final needsPhone = profilePhone.isEmpty;
-    final slots = viewingSlotChoices();
+    final slots = viewingSlotChoices(locale: dateLocaleOf(context));
     ViewingSlot? selectedSlot;
     var isSubmitting = false;
     final formKey = GlobalKey<FormState>();
@@ -588,7 +589,9 @@ class CarDetailsScreen extends StatelessWidget {
                                   ? Colors.white
                                   : AppColors.brandRed,
                             ),
-                            label: Text(viewingSlotLabel(slot)),
+                            label: Text(
+                              viewingSlotLabel(slot, dateLocaleOf(context)),
+                            ),
                             selectedColor: AppColors.brandRed,
                             labelStyle: TextStyle(
                               color: isSelected
@@ -901,7 +904,7 @@ class CarDetailsScreen extends StatelessWidget {
                         icon: Icons.event_busy_outlined,
                         title: l10n.holdUntil,
                         message:
-                            '${DateFormat.yMMMd().format(selectedHoldUntil)}\n'
+                            '${displayDate(selectedHoldUntil, dateLocaleOf(context))}\n'
                             '${holdQuote.description}',
                       ),
                       const SizedBox(height: 10),
@@ -1420,7 +1423,10 @@ class _ReservationActionArea extends StatelessWidget {
               state.appointmentStart != null
         ? (state.appointmentLabel.isNotEmpty
               ? state.appointmentLabel
-              : DateFormat.yMMMd().add_jm().format(state.appointmentStart!))
+              : displayDateTime(
+                  state.appointmentStart!,
+                  dateLocaleOf(context),
+                ))
         : viewingAwaitingLabel(l10n, state, ViewingParty.customer) ??
               l10n.viewingClosedNotice;
     return Column(

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../data/country_catalog.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/barrel_pool.dart';
 import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
@@ -359,15 +360,19 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
       return;
     }
     if (action == BarrelPoolPrimaryAction.payBalance) {
-      final acceptance = await confirmMarketplaceTransaction(
-        context,
-        providerNames: pool.businessName,
-        transactionSummary: AppLocalizations.of(
-          context,
-        )!.marketplaceBalancePaymentSummary,
-      );
-      if (acceptance == null || !mounted) return;
+      // Busy from the first tap until the payment settles, the confirmation
+      // included: a second tap used to start a second charge.
+      if (_busyPoolIds.contains(pool.id)) return;
+      setState(() => _busyPoolIds.add(pool.id));
       try {
+        final acceptance = await confirmMarketplaceTransaction(
+          context,
+          providerNames: pool.businessName,
+          transactionSummary: AppLocalizations.of(
+            context,
+          )!.marketplaceBalancePaymentSummary,
+        );
+        if (acceptance == null || !mounted) return;
         await _service.payBalance(pool, marketplaceAcceptance: acceptance);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -377,6 +382,8 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
         debugPrint('Shared barrel balance payment failed: $error');
         if (!mounted) return;
         showErrorSnackBar(context, l10n.couldNotPayBalance);
+      } finally {
+        if (mounted) setState(() => _busyPoolIds.remove(pool.id));
       }
       return;
     }
@@ -1490,7 +1497,7 @@ class _PickupSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final pickupDateLabel = pickupDateTime == null
         ? copy('Choose pickup time', 'Choisir l’heure de collecte')
-        : DateFormat.yMMMd().add_jm().format(pickupDateTime!);
+        : displayDateTime(pickupDateTime!, dateLocaleOf(context));
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: DecoratedBox(
@@ -1667,7 +1674,7 @@ class _PoolList extends StatelessWidget {
           deposit: currency.format(pool.depositPerShare),
           deadline: pool.joinDeadline == null
               ? ''
-              : DateFormat.yMMMd().format(pool.joinDeadline!),
+              : displayDate(pool.joinDeadline!, dateLocaleOf(context)),
           actionLabel: actionLabelFor?.call(pool) ?? actionLabel ?? '',
           actionIcon: actionIconFor?.call(pool) ?? actionIcon,
           actionEnabled: actionEnabled?.call(pool) ?? true,

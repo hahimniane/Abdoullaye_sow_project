@@ -1,10 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../data/car_catalog.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/business_destination_option.dart';
 import '../models/destination_country.dart';
 import '../providers/auth_provider.dart';
@@ -210,7 +210,7 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
 
     final dateLabel = _preferredDate == null
         ? l10n.pickPreferredDateOptional
-        : DateFormat.yMMMMd().format(_preferredDate!);
+        : displayLongDate(_preferredDate!, dateLocaleOf(context));
 
     return Form(
       key: _formKey,

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/customer_order.dart';
 import '../providers/auth_provider.dart';
 import '../services/business_review_service.dart';
@@ -216,14 +217,17 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
   Future<void> _payFreightBalance(CustomerTrackingShipment shipment) async {
     final l10n = AppLocalizations.of(context)!;
-    final marketplaceAcceptance = await confirmMarketplaceTransaction(
-      context,
-      providerNames: shipment.businessName,
-      transactionSummary: l10n.marketplaceBalancePaymentSummary,
-    );
-    if (marketplaceAcceptance == null || !mounted) return;
+    // Busy from the first tap, before the confirmation opens: a quick second
+    // tap used to open a second confirmation and start a second charge.
+    if (_balancePayments.contains(shipment.id)) return;
     setState(() => _balancePayments.add(shipment.id));
     try {
+      final marketplaceAcceptance = await confirmMarketplaceTransaction(
+        context,
+        providerNames: shipment.businessName,
+        transactionSummary: l10n.marketplaceBalancePaymentSummary,
+      );
+      if (marketplaceAcceptance == null || !mounted) return;
       final service = _freightService ??= FreightShipmentService();
       await service.payFreightBalance(
         shipmentId: shipment.id,
@@ -1090,11 +1094,12 @@ class _ShipmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final currency = NumberFormat.simpleCurrency();
     final l10n = AppLocalizations.of(context)!;
-    final createdAt = DateFormat.yMMMd().add_jm().format(shipment.createdAt);
+    final locale = dateLocaleOf(context);
+    final createdAt = displayDateTime(shipment.createdAt, locale);
     final barrel = shipment.barrelShipment;
     final pickupDate = barrel?.pickupDateTime == null
         ? null
-        : DateFormat.MMMd().add_jm().format(barrel!.pickupDateTime!);
+        : displayMonthDayTime(barrel!.pickupDateTime!, locale);
     final freightMode = shipment.mode == 'air'
         ? l10n.airFreight
         : shipment.mode == 'sea'

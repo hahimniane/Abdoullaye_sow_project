@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../data/car_catalog.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/business_profile.dart';
 import '../models/destination_country.dart';
 import '../models/transport_request.dart';
@@ -396,8 +396,9 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                               const SizedBox(height: 16),
                               _DatePickerTile(
                                 label: l10n.transportDate,
-                                value: DateFormat.yMMMd().format(
+                                value: displayDate(
                                   _transportDate,
+                                  dateLocaleOf(context),
                                 ),
                                 onTap: _pickTransportDate,
                               ),

@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../data/car_catalog.dart';
 import '../models/destination_country.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/transport_request.dart';
 import '../models/transport_quote.dart';
 import '../providers/auth_provider.dart';
@@ -492,7 +493,10 @@ class _TransportRequestDetailsScreenState
                           const SizedBox(height: 16),
                           _DatePickerTile(
                             label: l10n.transportDate,
-                            value: DateFormat.yMMMd().format(_transportDate),
+                            value: displayDate(
+                              _transportDate,
+                              dateLocaleOf(context),
+                            ),
                             onTap: canEdit ? _pickTransportDate : null,
                             enabled: canEdit,
                           ),

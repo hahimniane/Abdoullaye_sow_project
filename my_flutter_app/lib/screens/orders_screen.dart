@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/customer_order.dart';
 import '../providers/auth_provider.dart';
 import '../services/business_review_service.dart';
@@ -637,7 +638,7 @@ class _OrderCard extends StatelessWidget {
     final currency = NumberFormat.simpleCurrency(
       name: order.currency.toUpperCase(),
     );
-    final date = DateFormat.yMMMd().format(order.createdAt);
+    final date = displayDate(order.createdAt, dateLocaleOf(context));
     final tappable = order.hasDetail || order.trackable;
 
     return Material(

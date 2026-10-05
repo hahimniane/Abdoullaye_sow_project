@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../models/shipment_tracking_event.dart';
 import '../services/shipment_tracking_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/date_display.dart';
 import '../utils/transport_journey_stages.dart';
 
 /// The four-beat journey bar for a transport job - the same answer to
@@ -139,7 +139,7 @@ class _TimelineRow extends StatelessWidget {
       event.location,
       event.description,
     ].where((value) => value.trim().isNotEmpty).join(' · ');
-    final when = DateFormat.MMMd().add_jm().format(event.timestamp);
+    final when = displayMonthDayTime(event.timestamp, dateLocaleOf(context));
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -1411,7 +1411,7 @@ class _ActivitySection extends StatelessWidget {
 
   String _boundLabel(String prefix, DateTime? value) => value == null
       ? '$prefix: ${l10n.anyDate}'
-      : '$prefix: ${DateFormat.yMMMd().format(value)}';
+      : '$prefix: ${displayDate(value, l10n.localeName)}';
 
   String _kindLabel(AppLocalizations l10n, ParkingKind kind) {
     switch (kind) {

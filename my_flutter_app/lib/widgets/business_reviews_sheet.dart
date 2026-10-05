@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/business_review.dart';
 import '../services/business_review_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/date_display.dart';
 
 Future<void> showBusinessReviewsSheet(
   BuildContext context, {
@@ -178,7 +178,7 @@ class _ReviewRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final date = DateFormat.yMMMd().format(review.createdAt);
+    final date = displayDate(review.createdAt, dateLocaleOf(context));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

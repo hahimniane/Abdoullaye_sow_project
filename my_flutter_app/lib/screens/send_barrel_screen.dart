@@ -19,6 +19,7 @@ import '../services/service_ranking.dart';
 import '../services/payment_flow_safety.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/date_display.dart';
 import '../utils/nyc_borough.dart';
 import '../utils/receiver_phone_rules.dart';
 import '../widgets/business_reviews_sheet.dart';
@@ -249,7 +250,22 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     _scheduleSharedPickupQuote();
   }
 
+  /// Held from the first tap: _isSubmitting only rises after the account
+  /// check and both confirmations, so a second tap in that window could
+  /// start a second order and payment.
+  bool _submitInFlight = false;
+
   Future<void> _submit() async {
+    if (_submitInFlight || _isSubmitting) return;
+    _submitInFlight = true;
+    try {
+      await _submitOnce();
+    } finally {
+      _submitInFlight = false;
+    }
+  }
+
+  Future<void> _submitOnce() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -1723,7 +1739,7 @@ class _PickupDateTimeTile extends FormField<DateTime> {
            final l10n = AppLocalizations.of(state.context)!;
            final formatted = value == null
                ? l10n.choosePickupDateAndTime
-               : DateFormat('EEE, MMM d, yyyy • h:mm a').format(value);
+               : displayWeekdayDateTime(value, dateLocaleOf(state.context));
            return Column(
              crossAxisAlignment: CrossAxisAlignment.start,
              children: [
@@ -1979,7 +1995,7 @@ class _PickupSummaryChip extends StatelessWidget {
         ? [
             line.pickupBorough,
             if (line.pickupDateTime != null)
-              DateFormat.MMMd().add_jm().format(line.pickupDateTime!),
+              displayMonthDayTime(line.pickupDateTime!, dateLocaleOf(context)),
           ].where((item) => item.trim().isNotEmpty).join(' • ')
         : 'Office drop-off';
     return Container(

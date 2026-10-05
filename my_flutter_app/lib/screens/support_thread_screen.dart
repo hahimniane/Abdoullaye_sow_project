@@ -6,11 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/support_case.dart';
 import '../models/support_message.dart';
 import '../providers/auth_provider.dart';
@@ -1646,7 +1646,7 @@ class _SupportBubble extends StatelessWidget {
               Text(
                 [
                   if (message.createdAt != null)
-                    DateFormat.jm().format(message.createdAt!),
+                    displayTime(message.createdAt!, dateLocaleOf(context)),
                   if (message.isEdited) l10n.supportEdited,
                 ].join(' · '),
                 style: TextStyle(

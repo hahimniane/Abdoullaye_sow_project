@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/support_case.dart';
 import '../providers/auth_provider.dart';
 import '../services/support_service.dart';
@@ -317,7 +317,7 @@ class _SupportCaseCard extends StatelessWidget {
                         ),
                         if (time != null)
                           Text(
-                            DateFormat.MMMd().format(time),
+                            displayMonthDay(time, dateLocaleOf(context)),
                             style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(color: AppColors.muted),
                           ),

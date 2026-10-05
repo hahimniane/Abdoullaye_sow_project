@@ -1,12 +1,12 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/car_purchase.dart';
 import '../services/car_viewing_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/date_display.dart';
 import 'app_snackbars.dart';
 import 'async_action_button.dart';
 
@@ -37,23 +37,27 @@ String viewingStatusLabel(AppLocalizations l10n, String status) =>
 
 /// The words on a slot: what was offered, or a formatted instant when the
 /// record carries no label.
-String viewingSlotLabel(ViewingSlot slot) => slot.label.isNotEmpty
+String viewingSlotLabel(ViewingSlot slot, [String locale = 'en']) =>
+    slot.label.isNotEmpty
     ? slot.label
-    : DateFormat.yMMMEd().add_jm().format(slot.startAt);
+    : displayWeekdayDateTime(slot.startAt, locale);
 
 /// The times a picker offers, with the words the other party will read.
 ///
 /// The label travels with the slot because it is what the other side sees, and
 /// because the two parties may be reading in different languages - the times
 /// are agreed as a sentence, not only as an instant.
-List<ViewingSlot> viewingSlotChoices({DateTime? now}) {
-  final dateFormat = DateFormat('EEE, MMM d');
-  final timeFormat = DateFormat.jm();
+///
+/// The words are written in [locale], the proposer's language - month first
+/// and 12-hour in English.
+List<ViewingSlot> viewingSlotChoices({DateTime? now, String locale = 'en'}) {
   return suggestedViewingStarts(now: now)
       .map(
         (start) => ViewingSlot(
           startAt: start,
-          label: '${dateFormat.format(start)} - ${timeFormat.format(start)}',
+          label:
+              '${displayWeekdayMonthDay(start, locale)} - '
+              '${displayTime(start, locale)}',
         ),
       )
       .toList(growable: false);
@@ -114,7 +118,7 @@ String viewingHistoryLine(
   return l10n.viewingHistoryEntryLine(
     actor,
     action,
-    DateFormat.yMMMd().add_jm().format(entry.at),
+    displayDateTime(entry.at, l10n.localeName),
   );
 }
 
@@ -201,7 +205,9 @@ class _CarViewingNegotiationPanelState
     final l10n = AppLocalizations.of(context)!;
     await _run(
       () => _service.accept(purchaseId: widget.purchase.id, slot: slot),
-      (_) => l10n.viewingConfirmedMessage(viewingSlotLabel(slot)),
+      (_) => l10n.viewingConfirmedMessage(
+        viewingSlotLabel(slot, l10n.localeName),
+      ),
     );
   }
 
@@ -310,7 +316,7 @@ class _CarViewingNegotiationPanelState
               l10n.viewingConfirmedFor(
                 state.appointmentLabel.isNotEmpty
                     ? state.appointmentLabel
-                    : DateFormat.yMMMEd().add_jm().format(appointment),
+                    : displayWeekdayDateTime(appointment, dateLocaleOf(context)),
               ),
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
@@ -319,7 +325,7 @@ class _CarViewingNegotiationPanelState
             const SizedBox(height: 4),
             Text(
               l10n.viewingRespondBy(
-                DateFormat.yMMMd().add_jm().format(state.respondByAt!),
+                displayDateTime(state.respondByAt!, dateLocaleOf(context)),
               ),
               style: const TextStyle(
                 color: AppColors.lightMuted,
@@ -349,7 +355,7 @@ class _CarViewingNegotiationPanelState
                     slot.isAgreeableAt(DateTime.now());
                 return ChoiceChip(
                   selected: canChoose && slot == acceptable,
-                  label: Text(viewingSlotLabel(slot)),
+                  label: Text(viewingSlotLabel(slot, dateLocaleOf(context))),
                   selectedColor: AppColors.brandRed,
                   labelStyle: TextStyle(
                     color: canChoose && slot == acceptable
@@ -514,7 +520,7 @@ Future<List<ViewingSlot>?> showViewingProposalSheet(
 }) {
   final l10n = AppLocalizations.of(context)!;
   final maxSlots = maxViewingSlotsFor(party);
-  final choices = viewingSlotChoices();
+  final choices = viewingSlotChoices(locale: dateLocaleOf(context));
   final chosen = <ViewingSlot>[];
 
   return showModalBottomSheet<List<ViewingSlot>>(
@@ -584,7 +590,7 @@ Future<List<ViewingSlot>?> showViewingProposalSheet(
                           size: 18,
                           color: isSelected ? Colors.white : AppColors.brandRed,
                         ),
-                        label: Text(viewingSlotLabel(slot)),
+                        label: Text(viewingSlotLabel(slot, dateLocaleOf(context))),
                         selectedColor: AppColors.brandRed,
                         labelStyle: TextStyle(
                           color: isSelected

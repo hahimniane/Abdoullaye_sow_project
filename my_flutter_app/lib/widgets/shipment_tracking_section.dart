@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/shipment_tracking_event.dart';
 import '../services/shipment_tracking_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/date_display.dart';
 import 'async_action_button.dart';
 
 /// Staff-facing milestone timeline for one shipment, shown on both the
@@ -140,7 +140,7 @@ class _TrackingEventRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = DateFormat.yMMMd().add_jm().format(event.timestamp);
+    final date = displayDateTime(event.timestamp, dateLocaleOf(context));
     final detail = [
       event.location,
       event.description,
