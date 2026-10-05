@@ -18,7 +18,6 @@ import {
   type ConsoleHost,
   consoleHostKind,
 } from "@/lib/console-host";
-import { CustomerServiceEntry } from "@/components/customer-service-entry";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { resolveConsoleKind } from "@/lib/console-routing";
@@ -62,6 +61,13 @@ const BusinessConsole = dynamic(
 );
 const CustomerConsole = dynamic(
   () => import("@/components/customer-console").then((m) => m.CustomerConsole),
+  { ssr: false, loading: consoleLoading },
+);
+// A booking link's service entry (and the 6,000-line shipping forms behind
+// it) is fetched only when the URL asks for a service. A plain sign-in visit
+// never downloads it.
+const CustomerServiceEntry = dynamic(
+  () => import("@/components/customer-service-entry").then((m) => m.CustomerServiceEntry),
   { ssr: false, loading: consoleLoading },
 );
 

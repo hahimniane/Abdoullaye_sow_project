@@ -47,6 +47,7 @@ import {
   getModels,
   getYears,
 } from "@/lib/car-catalog";
+import { useCarCatalog } from "@/lib/use-car-catalog";
 import {
   EMPTY_STRUCTURED_ADDRESS,
   composeAddressLine,
@@ -4962,6 +4963,8 @@ function TransportRequestForm({
   options: DestinationOption[];
   profile: UserProfile;
 }) {
+  // Loads the make/model/year catalog on demand; re-renders when it is in.
+  useCarCatalog();
   const [ownerName, setOwnerName] = useState(text(profile.fullName, ""));
   const [customerPhone, setCustomerPhone] = useState(text(profile.phone, ""));
   const [pickupArea, setPickupArea] = useState("");

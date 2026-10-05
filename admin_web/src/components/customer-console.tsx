@@ -30,6 +30,7 @@ import {
   getModels,
   getYears,
 } from "@/lib/car-catalog";
+import { useCarCatalog } from "@/lib/use-car-catalog";
 import { DESTINATION_COUNTRIES } from "@/lib/destination-countries";
 import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, ReceiptText, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
 
@@ -1705,6 +1706,8 @@ function TransportEditDrawer({
   open: boolean;
   row: Record<string, unknown>;
 }) {
+  // Loads the make/model/year catalog on demand; re-renders when it is in.
+  useCarCatalog();
   const [form, setForm] = useState(() => ({
     customerPhone: text(row.customerPhone, ""),
     pickupAddress: text(row.pickupAddress, ""),

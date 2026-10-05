@@ -34,6 +34,7 @@ import {
   useBusinessStaff,
 } from "@/lib/business-data";
 import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/lib/car-catalog";
+import { useCarCatalog } from "@/lib/use-car-catalog";
 import {
   CONTAINER_MESSAGES,
   buildVinPlacementIndex,
@@ -232,6 +233,8 @@ function LineWhatsApp({ line }: { line: Row }) {
  * see this; it is the yard's record of what it declared.
  */
 export function ContainersPanel({ businessId, business = null, previewMode = false }: ContainersPanelProps) {
+  // Loads the make/model/year catalog on demand; re-renders when it is in.
+  useCarCatalog();
   const enabled = Boolean(businessId && !previewMode);
   const containers = useBusinessCollection("containers", businessId, enabled, 500);
   const lines = useBusinessCollection("containerLines", businessId, enabled, 3000);

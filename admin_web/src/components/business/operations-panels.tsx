@@ -264,7 +264,8 @@ import {
   transportJobCurrentStatus,
   validateTransportFulfillmentChange,
 } from "@/lib/transport-fulfillment";
-import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/lib/car-catalog";
+import { canonicalMake, canonicalModel, getMakes, getModels, getYears, loadCarCatalog } from "@/lib/car-catalog";
+import { useCarCatalog } from "@/lib/use-car-catalog";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
@@ -1724,6 +1725,8 @@ export function ListingsPanel({
   businessProfileImageUrl = "",
   enabledServices = ["carSales"],
 }: PanelProps) {
+  // Loads the make/model/year catalog on demand; re-renders when it is in.
+  const catalogReady = useCarCatalog();
   const listings = useBusinessRows("cars", businessId, Boolean(businessId && !previewMode), null);
   const [draft, setDraft] = useState<ListingDraft>(emptyListingDraft);
   const [editingId, setEditingId] = useState("");
@@ -1743,14 +1746,14 @@ export function ListingsPanel({
     () => withSelected(citiesForState(draft.locationState), draft.locationCity),
     [draft.locationCity, draft.locationState],
   );
-  const makeOptions = useMemo(() => withSelected(getMakes(), draft.make), [draft.make]);
+  const makeOptions = useMemo(() => withSelected(getMakes(), draft.make), [draft.make, catalogReady]);
   const modelOptions = useMemo(
     () => (draft.make ? withSelected(getModels(draft.make), draft.model) : []),
-    [draft.make, draft.model],
+    [draft.make, draft.model, catalogReady],
   );
   const yearOptions = useMemo(
     () => (draft.make && draft.model ? withSelected(getYears(draft.make, draft.model), draft.year) : []),
-    [draft.make, draft.model, draft.year],
+    [draft.make, draft.model, draft.year, catalogReady],
   );
   function toggleFeature(feature: string) {
     setDraft((value) => ({
@@ -1781,6 +1784,7 @@ export function ListingsPanel({
       const dMake = text(r.Make, "");
       const dModel = text(r.Model, "");
       const dYear = text(r.ModelYear, "");
+      await loadCarCatalog();
       const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
       let model = "";
       let year = "";
@@ -4781,6 +4785,8 @@ export function ParkingPanel({
   focusRecordId = "",
   focusView = "",
 }: PanelProps) {
+  // Loads the make/model/year catalog on demand; re-renders when it is in.
+  useCarCatalog();
   const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
   const parkingStaff = useBusinessStaff(businessId, Boolean(businessId && !previewMode), 200);
   // The lot already remembers everyone it has taken a car from - walk-ups
@@ -5203,6 +5209,7 @@ export function ParkingPanel({
       const dMake = text(r.Make, "");
       const dModel = text(r.Model, "");
       const dYear = text(r.ModelYear, "");
+      await loadCarCatalog();
       const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
       let model = "";
       let year = "";
@@ -5255,6 +5262,7 @@ export function ParkingPanel({
       const dMake = text(r.Make, "");
       const dModel = text(r.Model, "");
       const dYear = text(r.ModelYear, "");
+      await loadCarCatalog();
       const make = getMakes().find((m) => m.toLowerCase() === dMake.toLowerCase()) ?? "";
       let model = "";
       let year = "";
