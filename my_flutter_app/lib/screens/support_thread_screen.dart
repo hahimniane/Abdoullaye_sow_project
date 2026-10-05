@@ -61,11 +61,56 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   Timer? _typingTimer;
   bool _typing = false;
 
+  // The case and message subscriptions live here, keyed by case (and viewer
+  // and window for messages). They used to be created in build, so every
+  // keystroke in the composer and every typing-indicator rebuild tore them
+  // down, re-subscribed, and swapped the conversation for a spinner.
+  late Stream<SupportCase?> _caseStream;
+  Stream<SupportMessageWindow>? _messagesStream;
+  String? _messagesKey;
+  int _messageLimit = supportMessagePageSize;
+  SupportMessageWindow? _lastWindow;
+  bool _loadingEarlier = false;
+
   @override
   void initState() {
     super.initState();
     _supportService = widget.supportRepository ?? SupportService();
+    _caseStream = _supportService.watchCase(widget.caseId);
     unawaited(_supportService.markRead(widget.caseId));
+  }
+
+  @override
+  void didUpdateWidget(covariant SupportThreadScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.caseId != widget.caseId) {
+      _caseStream = _supportService.watchCase(widget.caseId);
+      _messageLimit = supportMessagePageSize;
+      _lastWindow = null;
+      _loadingEarlier = false;
+      unawaited(_supportService.markRead(widget.caseId));
+    }
+  }
+
+  Stream<SupportMessageWindow> _messagesFor(String uid) {
+    final key = supportStreamKey([widget.caseId, uid, _messageLimit]);
+    if (_messagesStream == null || key != _messagesKey) {
+      _messagesKey = key;
+      _messagesStream = _supportService.watchMessages(
+        widget.caseId,
+        uid,
+        limit: _messageLimit,
+      );
+    }
+    return _messagesStream!;
+  }
+
+  void _loadEarlier() {
+    if (_loadingEarlier) return;
+    setState(() {
+      _loadingEarlier = true;
+      _messageLimit = nextSupportMessageLimit(_messageLimit);
+    });
   }
 
   @override
@@ -476,7 +521,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: StreamBuilder<SupportCase?>(
-          stream: _supportService.watchCase(widget.caseId),
+          stream: _caseStream,
           builder: (context, caseSnapshot) {
             final supportCase = caseSnapshot.data;
             if (supportCase == null) {
@@ -486,11 +531,26 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
               children: [
                 _ThreadHeader(supportCase: supportCase),
                 Expanded(
-                  child: StreamBuilder<List<SupportMessage>>(
-                    stream: _supportService.watchMessages(widget.caseId, uid),
+                  child: StreamBuilder<SupportMessageWindow>(
+                    stream: _messagesFor(uid),
                     builder: (context, snapshot) {
+                      // While a wider window subscribes, the conversation
+                      // already on screen stays; only the first load spins.
+                      final window = snapshot.data ?? _lastWindow;
+                      if (snapshot.hasData) _lastWindow = snapshot.data;
+                      if (_loadingEarlier &&
+                          (snapshot.connectionState ==
+                                  ConnectionState.active ||
+                              snapshot.hasError)) {
+                        _loadingEarlier = false;
+                      }
+                      if (window == null &&
+                          snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
                       final messages =
-                          snapshot.data ?? const <SupportMessage>[];
+                          window?.messages ?? const <SupportMessage>[];
+                      final showLoadEarlier = window?.reachedLimit ?? false;
                       final messagesById = {
                         for (final message in messages) message.id: message,
                       };
@@ -499,15 +559,25 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                           : (uid == supportCase.customerUid
                                 ? 'customer'
                                 : 'business');
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
+                      // Reverse list, newest at the bottom: the messages,
+                      // then (above the oldest) "Load earlier messages",
+                      // then the case actions and context card on top.
+                      final earlierSlots = showLoadEarlier ? 1 : 0;
                       return ListView.builder(
                         controller: _scrollController,
                         reverse: true,
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        itemCount: messages.length + 2,
-                        itemBuilder: (context, index) {
+                        itemCount: messages.length + earlierSlots + 2,
+                        itemBuilder: (context, rawIndex) {
+                          if (showLoadEarlier && rawIndex == messages.length) {
+                            return _LoadEarlierMessages(
+                              loading: _loadingEarlier,
+                              onPressed: _loadEarlier,
+                            );
+                          }
+                          final index = rawIndex > messages.length
+                              ? rawIndex - earlierSlots
+                              : rawIndex;
                           if (index == messages.length + 1) {
                             return _SupportContextCard(
                               supportCase: supportCase,
@@ -1132,6 +1202,36 @@ class _ThreadHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Above the oldest loaded message when the thread has more history than one
+/// page: asks for the next page back, and shows progress until it arrives.
+class _LoadEarlierMessages extends StatelessWidget {
+  const _LoadEarlierMessages({required this.loading, required this.onPressed});
+
+  final bool loading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: TextButton.icon(
+          onPressed: loading ? null : onPressed,
+          icon: loading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.history, size: 18),
+          label: Text(l10n.supportLoadEarlierMessages),
+        ),
       ),
     );
   }

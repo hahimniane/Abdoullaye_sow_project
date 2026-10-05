@@ -10070,4 +10070,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authErrorUnknown => 'Something went wrong. Please try again.';
+
+  @override
+  String get supportLoadEarlierMessages => 'Load earlier messages';
 }

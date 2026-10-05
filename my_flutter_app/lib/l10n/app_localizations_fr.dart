@@ -10221,4 +10221,7 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get authErrorUnknown =>
       'Une erreur s’est produite. Veuillez réessayer.';
+
+  @override
+  String get supportLoadEarlierMessages => 'Charger les messages précédents';
 }

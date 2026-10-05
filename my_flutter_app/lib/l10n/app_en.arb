@@ -4555,5 +4555,6 @@
   "authErrorSignInRequired": "Sign in first.",
   "authErrorInvalidOwnerPhone": "Enter a valid owner phone number with country code.",
   "authErrorInvalidBusinessPhone": "Enter a valid business phone number with country code.",
-  "authErrorUnknown": "Something went wrong. Please try again."
+  "authErrorUnknown": "Something went wrong. Please try again.",
+  "supportLoadEarlierMessages": "Load earlier messages"
 }

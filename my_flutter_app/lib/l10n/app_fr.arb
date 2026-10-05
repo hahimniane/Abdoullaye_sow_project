@@ -4555,5 +4555,6 @@
   "authErrorSignInRequired": "Connectez-vous d’abord.",
   "authErrorInvalidOwnerPhone": "Saisissez un numéro de téléphone du propriétaire valide avec l’indicatif pays.",
   "authErrorInvalidBusinessPhone": "Saisissez un numéro de téléphone de l’entreprise valide avec l’indicatif pays.",
-  "authErrorUnknown": "Une erreur s’est produite. Veuillez réessayer."
+  "authErrorUnknown": "Une erreur s’est produite. Veuillez réessayer.",
+  "supportLoadEarlierMessages": "Charger les messages précédents"
 }

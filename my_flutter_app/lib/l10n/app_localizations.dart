@@ -17771,6 +17771,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Something went wrong. Please try again.'**
   String get authErrorUnknown;
+
+  /// No description provided for @supportLoadEarlierMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Load earlier messages'**
+  String get supportLoadEarlierMessages;
 }
 
 class _AppLocalizationsDelegate

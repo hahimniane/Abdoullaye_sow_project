@@ -43,13 +43,32 @@ class _FakeSupportRepository implements SupportRepository {
   bool resolved = false;
   bool reopened = false;
 
-  @override
-  Stream<SupportCase?> watchCase(String caseId) => Stream.value(supportCase);
+  int watchCaseCount = 0;
+  final List<int> watchMessagesLimits = <int>[];
+
+  /// How many messages the "server" holds; the window shows the newest
+  /// [watchMessages] limit of them, like the Firestore query does.
+  int? totalMessages;
 
   @override
-  Stream<List<SupportMessage>> watchMessages(String caseId, String uid) {
+  Stream<SupportCase?> watchCase(String caseId) {
+    watchCaseCount += 1;
+    return Stream.value(supportCase);
+  }
+
+  @override
+  Stream<SupportMessageWindow> watchMessages(
+    String caseId,
+    String uid, {
+    int limit = supportMessagePageSize,
+  }) {
+    watchMessagesLimits.add(limit);
+    final window = messages.take(limit).toList();
     return Stream.value(
-      messages.where((message) => !message.deletedFor(uid)).toList(),
+      SupportMessageWindow(
+        messages: window.where((message) => !message.deletedFor(uid)).toList(),
+        reachedLimit: (totalMessages ?? messages.length) >= limit,
+      ),
     );
   }
 
@@ -845,5 +864,91 @@ void main() {
 
     expect(repository.escalationReason, 'unresolved');
     expect(repository.escalationNote, 'Customer needs platform review.');
+  });
+
+  testWidgets('typing never re-subscribes the case or its messages', (
+    tester,
+  ) async {
+    // The regression: both streams were created in build, so every keystroke
+    // and typing-indicator rebuild re-subscribed and flashed a spinner.
+    final repository = _FakeSupportRepository(
+      supportCase: _supportCase(),
+      messages: [
+        _message(
+          id: 'm1',
+          senderId: 'staff-1',
+          senderName: 'Business Staff',
+          senderRole: 'business',
+          content: 'We are on it.',
+        ),
+      ],
+    );
+    await _pumpThread(tester, repository);
+    for (final text in ['H', 'He', 'Hel', 'Hello']) {
+      await tester.enterText(find.byType(TextField), text);
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+
+    expect(repository.watchCaseCount, 1);
+    expect(repository.watchMessagesLimits, [supportMessagePageSize]);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('We are on it.'), findsOneWidget);
+  });
+
+  testWidgets('a long thread can load earlier messages, in both languages', (
+    tester,
+  ) async {
+    final repository = _FakeSupportRepository(
+      supportCase: _supportCase(),
+      messages: [
+        _message(
+          id: 'm1',
+          senderId: 'customer-1',
+          senderName: 'Aissatou',
+          content: 'Newest message.',
+        ),
+      ],
+    )..totalMessages = supportMessagePageSize + 5;
+
+    await _pumpThread(tester, repository, locale: const Locale('fr'));
+    expect(find.text('Charger les messages précédents'), findsOneWidget);
+
+    await _pumpThread(tester, repository);
+    expect(find.text('Load earlier messages'), findsOneWidget);
+    await tester.tap(find.text('Load earlier messages'));
+    await tester.pumpAndSettle();
+
+    expect(repository.watchMessagesLimits.last, supportMessagePageSize * 2);
+    // The conversation stayed on screen; the window now holds everything.
+    expect(find.text('Newest message.'), findsOneWidget);
+    expect(find.text('Load earlier messages'), findsNothing);
+  });
+
+  testWidgets('a short thread offers nothing earlier', (tester) async {
+    final repository = _FakeSupportRepository(
+      supportCase: _supportCase(),
+      messages: [
+        _message(
+          id: 'm1',
+          senderId: 'customer-1',
+          senderName: 'Aissatou',
+          content: 'Only message.',
+        ),
+      ],
+    );
+    await _pumpThread(tester, repository);
+    expect(find.text('Load earlier messages'), findsNothing);
+  });
+
+  test('the window grows one page at a time', () {
+    expect(
+      nextSupportMessageLimit(supportMessagePageSize),
+      supportMessagePageSize * 2,
+    );
+    expect(
+      supportStreamKey(['case-1', 'uid', 120]),
+      isNot(supportStreamKey(['case-1', 'uid', 240])),
+    );
   });
 }
