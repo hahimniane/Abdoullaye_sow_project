@@ -337,8 +337,25 @@ const {
   containerLineContactsUpdate,
   openContainerHoldingVin,
   containerCounts,
+  containerCountsDelta,
+  containerVinLockId,
+  vinLockHolder,
+  keepExisting,
+  containerStatusIsRepeat,
+  linesLagStatus,
+  inGroups,
 } = require("./container_manifest");
 const {
+  UPDATE_STATUS: CONTAINER_UPDATE_STATUS,
+  WHATSAPP_SEND_LEASE_MS,
+  WHATSAPP_TIMEOUT_MS,
+  shouldSendQueuedRow,
+  claimContainerUpdate,
+  whatsappSendOutcome,
+  statusAfterAttempt,
+  requeueDecision,
+  latestCustomerUpdate,
+  mergeLastCustomerUpdate,
   updateForContainerStatus,
   updateForCarrierStatus,
   containerStatusFromCarrier,
@@ -2313,6 +2330,7 @@ async function terminal49Request(path, {method = "GET", body} = {}) {
       "Authorization": `Token ${apiKey}`,
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(20000),
   });
   const data = await response.json().catch(() => ({}));
   return {ok: response.ok, status: response.status, data};
@@ -2476,19 +2494,10 @@ exports.pollContainerTracking = onSchedule(
     },
     async () => {
       const db = admin.firestore();
-      for (const relatedCollection of Object.keys(
-          TRACKING_SECTION_BY_COLLECTION,
-      )) {
-        const snapshot = await db.collection(relatedCollection)
-            .where("trackingProvider", "==", "carrier_api")
-            .get();
-        for (const doc of snapshot.docs) {
-          await pollOneCarrierTrackedShipment(
-              db, relatedCollection, doc.id, doc.data() || {},
-          );
-        }
-      }
-      // A business's own containers follow the same feed.
+      // A business's own containers follow the same feed. They go first:
+      // each one can message every customer on the box, and a slow or
+      // failing shipment below must not use up the run before they are
+      // reached. Each is isolated, and every request has a timeout.
       const containers = await db.collection("containers")
           .where("trackingProvider", "==", "carrier_api")
           .where("carrierTrackingDone", "==", false)
@@ -2500,6 +2509,18 @@ exports.pollContainerTracking = onSchedule(
           logger.error("Container carrier poll failed", {
             containerId: doc.id, error: String(error),
           });
+        }
+      }
+      for (const relatedCollection of Object.keys(
+          TRACKING_SECTION_BY_COLLECTION,
+      )) {
+        const snapshot = await db.collection(relatedCollection)
+            .where("trackingProvider", "==", "carrier_api")
+            .get();
+        for (const doc of snapshot.docs) {
+          await pollOneCarrierTrackedShipment(
+              db, relatedCollection, doc.id, doc.data() || {},
+          );
         }
       }
     },
@@ -16073,7 +16094,11 @@ async function loadContainerFor(db, uid, businessId, containerId) {
 
 /**
  * The summary a container carries, recomputed from its lines so a list of
- * containers can be scanned without loading every line.
+ * containers can be scanned without loading every line. Adding, removing and
+ * moving a line keep the tallies with increments (containerCountsIncrement);
+ * this full recount runs once a status change has closed the box to those,
+ * and repairs any drift. Never call it on a loading box: its absolute write
+ * could overwrite an increment landing at the same moment.
  *
  * @param {object} db Firestore.
  * @param {object} ref The container document.
@@ -16086,6 +16111,70 @@ async function refreshContainerCounts(db, ref) {
   await ref.set({...counts, updatedAt: FirestoreFieldValue.serverTimestamp()},
       {merge: true});
   return counts.lineCount;
+}
+
+/**
+ * One line's share of its container's tallies, as Firestore increments.
+ *
+ * @param {object} line The line.
+ * @param {number} sign 1 to add it, -1 to take it away.
+ * @return {object} Fields for a merge write on the container.
+ */
+function containerCountsIncrement(line, sign) {
+  const out = {};
+  for (const [key, value] of Object.entries(containerCountsDelta(line, sign))) {
+    out[key] = FirestoreFieldValue.increment(value);
+  }
+  return out;
+}
+
+/**
+ * The lock document that serialises adds of one VIN within a business.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} vin The VIN.
+ * @return {object|null} The reference, or null without a business or VIN.
+ */
+function containerVinLockRef(db, businessId, vin) {
+  const id = containerVinLockId(businessId, vin);
+  return id ? db.collection("containerVinLocks").doc(id) : null;
+}
+
+/**
+ * Lets go of the VIN locks a container's cars hold once it has arrived. Only
+ * tidying: a lock whose line has arrived is already treated as free
+ * (vinLockHolder), so a failure here is logged, never thrown.
+ *
+ * @param {object} db Firestore.
+ * @param {object[]} lineDocs The container's line snapshots.
+ * @return {Promise<void>}
+ */
+async function releaseContainerVinLocks(db, lineDocs) {
+  try {
+    const held = lineDocs
+        .map((d) => ({id: d.id, line: d.data() || {}}))
+        .filter(({line}) => line.kind === "car")
+        .map(({id, line}) => ({id, lockRef: containerVinLockRef(
+            db, String(line.businessId || ""), String(line.vinNumber || ""))}))
+        .filter(({lockRef}) => lockRef);
+    for (const group of inGroups(held, 100)) {
+      const locks = await db.getAll(...group.map(({lockRef}) => lockRef));
+      const batch = db.batch();
+      let writes = 0;
+      locks.forEach((lock, i) => {
+        if (lock.exists && String(lock.data()?.lineId || "") === group[i].id) {
+          batch.delete(lock.ref);
+          writes += 1;
+        }
+      });
+      if (writes > 0) await batch.commit();
+    }
+  } catch (error) {
+    logger.warn("Container VIN locks were not released", {
+      error: String(error),
+    });
+  }
 }
 
 const CONTAINER_LINE_CODE_PREFIX = "CL";
@@ -16129,18 +16218,40 @@ function terminal49Configured() {
  * existed get one the first time the container moves, so a customer can be
  * told how to follow their goods the moment they sail.
  *
+ * Each code is written in its own transaction that only fills an empty
+ * field, so two callers at once (labels printed while the box ships) agree
+ * on one code: the loser reads the winner's and returns it. A line removed
+ * in the meantime is skipped, never re-created.
+ *
  * @param {object} db Firestore.
  * @param {object[]} lineDocs The container's line snapshots.
- * @return {Promise<Map<string, string>>} New codes by line id.
+ * @return {Promise<Map<string, string>>} The stored code of every line that
+ *   still exists, by line id.
  */
 async function assignMissingLineCodes(db, lineDocs) {
-  const assigned = new Map();
+  const codes = new Map();
   for (const d of lineDocs) {
-    if (String(d.data()?.trackingCode || "")) continue;
-    assigned.set(d.id, await generateTrackingCode(
-        CONTAINER_LINE_CODE_PREFIX, "containerLines"));
+    const known = String(d.data()?.trackingCode || "");
+    if (known) {
+      codes.set(d.id, known);
+      continue;
+    }
+    const candidate = await generateTrackingCode(
+        CONTAINER_LINE_CODE_PREFIX, "containerLines");
+    const stored = await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(d.ref);
+      if (!fresh.exists) return "";
+      const {value, write} =
+        keepExisting(fresh.data()?.trackingCode, candidate);
+      if (write) {
+        tx.update(d.ref, {trackingCode: value,
+          updatedAt: FirestoreFieldValue.serverTimestamp()});
+      }
+      return value;
+    });
+    if (stored) codes.set(d.id, stored);
   }
-  return assigned;
+  return codes;
 }
 
 function containerAudit(businessId, containerId, action, uid, summary) {
@@ -16231,13 +16342,22 @@ exports.deleteContainer = onCall(
       const db = admin.firestore();
       const {ref, data: current} =
         await loadContainerFor(db, uid, businessId, data.containerId);
-      const lineCount = await refreshContainerCounts(db, ref);
-      const refusal = containerDeleteRefusal(current, lineCount);
-      if (refusal) {
-        throw new HttpsError(
-            "failed-precondition", CONTAINER_MESSAGES[refusal]);
-      }
-      await ref.delete();
+      // Counted and deleted in one transaction: an add re-reads the
+      // container in its own, so a line can never land on a deleted box.
+      // (Counting here never writes the tallies, which adds keep with
+      // increments; an absolute write could drop one in flight.)
+      await db.runTransaction(async (tx) => {
+        const box = await tx.get(ref);
+        const lines = await tx.get(db.collection("containerLines")
+            .where("containerId", "==", ref.id));
+        const refusal = containerDeleteRefusal(
+            box.exists ? box.data() : current, lines.size);
+        if (refusal) {
+          throw new HttpsError(
+              "failed-precondition", CONTAINER_MESSAGES[refusal]);
+        }
+        tx.delete(ref);
+      });
       await containerAudit(businessId, ref.id, "deleted", uid,
           `Deleted ${String(current.label || "")}`);
       return {success: true, containerId: ref.id};
@@ -16268,36 +16388,82 @@ exports.addContainerLine = onCall(
         containerStatus: String(current.status || CONTAINER_STATUS.LOADING),
         addedByStaffId: uid,
       });
+      const lineRef = db.collection("containerLines").doc();
+      // What the customer types to follow it and what the package label
+      // carries - the same short code every other service uses. Minted
+      // before the transaction: finding a free code reads other lines.
+      const trackingCode = await generateTrackingCode(
+          CONTAINER_LINE_CODE_PREFIX, "containerLines");
+      const lockRef = record.kind === "car" ?
+        containerVinLockRef(db, businessId, record.vinNumber) : null;
       // A car on two open containers is a mistake every time - and so is the
       // same car twice on one list. Refuse either, and say which container
       // has it. (Only a move is allowed to find the car on its own source
-      // container; an add never is.)
-      if (record.kind === "car") {
-        const sameVin = await db.collection("containerLines")
-            .where("businessId", "==", businessId)
-            .where("vinNumber", "==", record.vinNumber)
-            .get();
-        const conflict = openContainerHoldingVin(
-            sameVin.docs.map((d) => d.data() || {}));
-        if (conflict) {
+      // container; an add never is.) The check and the write share one
+      // transaction around the VIN's lock document, so two quick adds of the
+      // same car cannot both pass: the second reads the first's lock.
+      const addLine = () => db.runTransaction(async (tx) => {
+        const box = await tx.get(ref);
+        if (!box.exists || !containerIsOpen(box.data())) {
           throw new HttpsError(
-              "failed-precondition",
-              CONTAINER_MESSAGES.vin_already_loaded,
-              {reason: "vin_already_loaded", conflictContainerId: conflict});
+              "failed-precondition", CONTAINER_MESSAGES.container_locked);
         }
-      }
-      const lineRef = db.collection("containerLines").doc();
-      await lineRef.set({
-        businessId,
-        ...record,
-        // What the customer types to follow it and what the package label
-        // carries - the same short code every other service uses.
-        trackingCode: await generateTrackingCode(
-            CONTAINER_LINE_CODE_PREFIX, "containerLines"),
-        createdAt: FirestoreFieldValue.serverTimestamp(),
-        updatedAt: FirestoreFieldValue.serverTimestamp(),
+        let lockDoc = null;
+        if (lockRef) {
+          lockDoc = await tx.get(lockRef);
+          const lock = lockDoc.exists ? lockDoc.data() || {} : null;
+          const heldBy = String(lock?.lineId || "");
+          const heldLine = heldBy ? await tx.get(
+              db.collection("containerLines").doc(heldBy)) : null;
+          let conflict = vinLockHolder(lock,
+              heldLine?.exists ? heldLine.data() || {} : null);
+          if (!conflict) {
+            // Lines loaded before the lock existed hold their car too.
+            const sameVin = await tx.get(db.collection("containerLines")
+                .where("businessId", "==", businessId)
+                .where("vinNumber", "==", record.vinNumber));
+            conflict = openContainerHoldingVin(
+                sameVin.docs.map((d) => d.data() || {}));
+          }
+          if (conflict) {
+            throw new HttpsError(
+                "failed-precondition",
+                CONTAINER_MESSAGES.vin_already_loaded,
+                {reason: "vin_already_loaded", conflictContainerId: conflict});
+          }
+        }
+        if (lockRef) {
+          const lockBody = {
+            businessId, vinNumber: record.vinNumber,
+            containerId: ref.id, lineId: lineRef.id,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          };
+          // A stale lock (its line gone or arrived) is taken over; a new
+          // one is created, which fails outright if another add got there
+          // between our read and our commit.
+          if (lockDoc.exists) tx.set(lockRef, lockBody);
+          else tx.create(lockRef, lockBody);
+        }
+        tx.set(lineRef, {
+          businessId,
+          ...record,
+          trackingCode,
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        tx.set(ref, {
+          ...containerCountsIncrement(record, 1),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
       });
-      await refreshContainerCounts(db, ref);
+      try {
+        await addLine();
+      } catch (error) {
+        // Lost the race to create the lock: run again, and this time read
+        // the winner's lock and refuse with its container.
+        if (error.code !== 6 && error.code !== "already-exists") throw error;
+        await addLine();
+      }
       // The lot's customer memory learns from every line that names one, the
       // way it learns from a parked car or a ledger job.
       if (record.ownerKind === "customer") {
@@ -16334,15 +16500,38 @@ exports.removeContainerLine = onCall(
         throw new HttpsError(
             "failed-precondition", CONTAINER_MESSAGES.container_locked);
       }
-      const lineRef = db.collection("containerLines")
-          .doc(String(data.lineId || ""));
-      const lineDoc = data.lineId ? await lineRef.get() : null;
-      const line = lineDoc && lineDoc.exists ? lineDoc.data() || {} : null;
-      if (!line || String(line.containerId) !== ref.id) {
+      const lineId = String(data.lineId || "").trim();
+      if (!lineId) {
         throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
       }
-      await lineRef.delete();
-      await refreshContainerCounts(db, ref);
+      const lineRef = db.collection("containerLines").doc(lineId);
+      // The line, its share of the tallies, and its car's VIN lock go
+      // together, re-checked inside the transaction so a box that shipped a
+      // moment ago keeps its line.
+      const line = await db.runTransaction(async (tx) => {
+        const box = await tx.get(ref);
+        const lineDoc = await tx.get(lineRef);
+        const row = lineDoc.exists ? lineDoc.data() || {} : null;
+        if (!row || String(row.containerId) !== ref.id) {
+          throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+        }
+        if (!box.exists || !containerIsOpen(box.data())) {
+          throw new HttpsError(
+              "failed-precondition", CONTAINER_MESSAGES.container_locked);
+        }
+        const lockRef = row.kind === "car" ?
+          containerVinLockRef(db, businessId, row.vinNumber) : null;
+        const lock = lockRef ? await tx.get(lockRef) : null;
+        tx.delete(lineRef);
+        tx.set(ref, {
+          ...containerCountsIncrement(row, -1),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        if (lock?.exists && String(lock.data()?.lineId || "") === lineId) {
+          tx.delete(lockRef);
+        }
+        return row;
+      });
       await containerAudit(businessId, ref.id, "line_removed", uid,
           `Removed ${line.kind === "car" ? `car ${line.vinNumber}` :
             (line.kind === "barrels" ? barrelsLabel(line.quantity) :
@@ -16379,13 +16568,45 @@ exports.moveContainerLine = onCall(
             "failed-precondition", CONTAINER_MESSAGES.move_target_not_loading);
       }
       if (from.ref.id === to.ref.id) return {success: true};
-      await lineRef.set({
-        containerId: to.ref.id,
-        containerStatus: String(to.data.status || CONTAINER_STATUS.LOADING),
-        updatedAt: FirestoreFieldValue.serverTimestamp(),
-      }, {merge: true});
-      await refreshContainerCounts(db, from.ref);
-      await refreshContainerCounts(db, to.ref);
+      // The line, both boxes' tallies and the car's lock move together;
+      // both boxes are re-read so neither can have shipped in between.
+      await db.runTransaction(async (tx) => {
+        const [fromBox, toBox, fresh] = await Promise.all([
+          tx.get(from.ref), tx.get(to.ref), tx.get(lineRef)]);
+        const row = fresh.exists ? fresh.data() || {} : null;
+        if (!row || String(row.containerId) !== from.ref.id) {
+          throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+        }
+        if (!fromBox.exists || !containerIsOpen(fromBox.data())) {
+          throw new HttpsError(
+              "failed-precondition", CONTAINER_MESSAGES.container_locked);
+        }
+        if (!toBox.exists || !containerIsOpen(toBox.data())) {
+          throw new HttpsError("failed-precondition",
+              CONTAINER_MESSAGES.move_target_not_loading);
+        }
+        const lockRef = row.kind === "car" ?
+          containerVinLockRef(db, businessId, row.vinNumber) : null;
+        const lock = lockRef ? await tx.get(lockRef) : null;
+        tx.update(lineRef, {
+          containerId: to.ref.id,
+          containerStatus:
+            String(toBox.data()?.status || CONTAINER_STATUS.LOADING),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        tx.set(from.ref, {
+          ...containerCountsIncrement(row, -1),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        tx.set(to.ref, {
+          ...containerCountsIncrement(row, 1),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        if (lock?.exists && String(lock.data()?.lineId || "") === lineRef.id) {
+          tx.update(lockRef, {containerId: to.ref.id,
+            updatedAt: FirestoreFieldValue.serverTimestamp()});
+        }
+      });
       const what = line.kind === "car" ? `car ${line.vinNumber}` :
         (line.kind === "barrels" ? barrelsLabel(line.quantity) :
           String(line.description || "a line"));
@@ -16453,14 +16674,31 @@ exports.updateContainerLineContacts = onCall(
  * carries the state (so "is this car on an open container" is one query),
  * and every line has its tracking code before anyone is told it sailed.
  *
+ * Lines first, container last. If anything fails part way, the container
+ * still has its old status, so the same request is simply allowed again and
+ * finishes the job; nothing is left "shipped" with lines still "loading".
+ * Every step is idempotent (codes only fill empty fields, lines already at
+ * the status are left alone), so running it twice is harmless.
+ *
  * @param {object} db Firestore.
  * @param {object} ref The container document.
  * @param {string} next The new status.
  * @param {object} by {staffId} for a person, {source: "carrier"} for the
- *   carrier feed.
+ *   carrier feed; {lineDocs} when the caller has already read the lines;
+ *   {repair: true} when the container already has this status and only its
+ *   lines are catching up (its sailedAt and who-shipped stay as they were).
  * @return {Promise<void>}
  */
 async function applyContainerStatus(db, ref, next, by = {}) {
+  const lineQuery = db.collection("containerLines")
+      .where("containerId", "==", ref.id);
+  const lineDocs = by.lineDocs || (await lineQuery.get()).docs;
+  await bringLinesToStatus(db, lineDocs, next);
+  if (by.repair) {
+    await ref.set({updatedAt: FirestoreFieldValue.serverTimestamp()},
+        {merge: true});
+    return;
+  }
   const update = {
     status: next,
     statusSource: by.source || "staff",
@@ -16474,16 +16712,42 @@ async function applyContainerStatus(db, ref, next, by = {}) {
     update.arrivedByStaffId = by.staffId || "";
   }
   await ref.set(update, {merge: true});
-  const lines = await db.collection("containerLines")
-      .where("containerId", "==", ref.id).get();
-  const codes = await assignMissingLineCodes(db, lines.docs);
-  const batch = db.batch();
-  lines.docs.forEach((d) => batch.set(d.ref, {
-    containerStatus: next,
-    ...(codes.has(d.id) ? {trackingCode: codes.get(d.id)} : {}),
-    updatedAt: FirestoreFieldValue.serverTimestamp(),
-  }, {merge: true}));
-  await batch.commit();
+  // A line added while the lines above were being written (the box was
+  // still loading then) would be left behind. Adds re-read the container
+  // in their transaction, so none can land after the write above; one more
+  // pass catches any that landed before it.
+  const late = (await lineQuery.get()).docs.filter((d) =>
+    !lineDocs.some((seen) => seen.id === d.id));
+  if (late.length > 0) await bringLinesToStatus(db, late, next);
+}
+
+/**
+ * Gives lines their codes and the container's status - idempotently, so a
+ * second run after a failure only does what the first did not.
+ *
+ * @param {object} db Firestore.
+ * @param {object[]} lineDocs Line snapshots.
+ * @param {string} next The status.
+ * @return {Promise<void>}
+ */
+async function bringLinesToStatus(db, lineDocs, next) {
+  await assignMissingLineCodes(db, lineDocs);
+  const behind = lineDocs.filter((d) =>
+    String(d.data()?.containerStatus || "") !== next);
+  for (const group of inGroups(behind, 400)) {
+    const batch = db.batch();
+    // update, not a merge: a line removed meanwhile fails the batch (and
+    // the request, which may then be retried) instead of being re-created
+    // as a ghost holding only a status.
+    group.forEach((d) => batch.update(d.ref, {
+      containerStatus: next,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }));
+    await batch.commit();
+  }
+  if (next === CONTAINER_STATUS.ARRIVED) {
+    await releaseContainerVinLocks(db, lineDocs);
+  }
 }
 
 /**
@@ -16527,18 +16791,34 @@ exports.setContainerStatus = onCall(
       const db = admin.firestore();
       const {ref, data: current} =
         await loadContainerFor(db, uid, businessId, data.containerId);
-      const lineCount = await refreshContainerCounts(db, ref);
+      const lines = await db.collection("containerLines")
+          .where("containerId", "==", ref.id).get();
+      const lineCount = lines.size;
       const next = String(data.status || "").trim();
-      const refusal = containerTransitionRefusal(current, next, lineCount);
-      if (refusal) {
-        throw new HttpsError(
-            "failed-precondition", CONTAINER_MESSAGES[refusal]);
+      // Asking again for the status the box already has finishes what an
+      // earlier attempt started (its lines, their codes, the moment on the
+      // timeline) instead of being refused - otherwise a half-applied ship
+      // could never be completed.
+      const repeat = containerStatusIsRepeat(current, next);
+      if (!repeat) {
+        const refusal = containerTransitionRefusal(current, next, lineCount);
+        if (refusal) {
+          throw new HttpsError(
+              "failed-precondition", CONTAINER_MESSAGES[refusal]);
+        }
       }
-      await applyContainerStatus(db, ref, next, {staffId: uid});
-      await containerAudit(businessId, ref.id, next, uid,
-          next === CONTAINER_STATUS.SHIPPED ?
-            `Shipped with ${lineCount} line${lineCount === 1 ? "" : "s"}` :
-            "Marked arrived");
+      const lagging = linesLagStatus(
+          lines.docs.map((d) => d.data() || {}), next);
+      if (!repeat || lagging) {
+        await applyContainerStatus(db, ref, next,
+            {staffId: uid, lineDocs: lines.docs, repair: repeat});
+      }
+      // A full recount, now that the box is closed to adds, removes and
+      // moves (so no increment can be in flight to be overwritten): the
+      // tallies those keep are repaired here if they ever drifted.
+      await refreshContainerCounts(db, ref);
+      // The moment tells customers, so it is written before the audit and
+      // on the repair path too; its fixed id makes a repeat write nothing.
       await recordContainerEvent(ref, `staff_${next}`, {
         label: next === CONTAINER_STATUS.SHIPPED ?
           "Container shipped" : "Container arrived",
@@ -16546,7 +16826,18 @@ exports.setContainerStatus = onCall(
         createdBy: uid,
         customerUpdate: updateForContainerStatus(next),
       });
-      return {success: true, containerId: ref.id, status: next};
+      if (!repeat) {
+        await containerAudit(businessId, ref.id, next, uid,
+            next === CONTAINER_STATUS.SHIPPED ?
+              `Shipped with ${lineCount} line${lineCount === 1 ? "" : "s"}` :
+              "Marked arrived");
+      } else if (lagging) {
+        await containerAudit(businessId, ref.id, next, uid,
+            `Finished marking ${lineCount} line${lineCount === 1 ? "" : "s"} ` +
+            `${next}`);
+      }
+      return {success: true, containerId: ref.id, status: next,
+        repaired: repeat};
     },
 );
 
@@ -16560,7 +16851,8 @@ exports.setContainerStatus = onCall(
  * Sends one WhatsApp template message.
  *
  * @param {object} body The /messages request body.
- * @return {Promise<{ok: boolean, messageId: string, error: string}>}
+ * @return {Promise<{ok: boolean, httpStatus: number, messageId: string,
+ *   error: string}>} httpStatus is 0 when no answer came (network, timeout).
  */
 async function sendWhatsAppMessage(body) {
   const token = safeSecretValue(whatsappAccessToken).trim();
@@ -16574,18 +16866,136 @@ async function sendWhatsAppMessage(body) {
             "Authorization": `Bearer ${token}`,
           },
           body: JSON.stringify(body),
+          // A hung connection must not hold the row's lease to the end of
+          // the function; it is a transient failure and is retried.
+          signal: AbortSignal.timeout(WHATSAPP_TIMEOUT_MS),
         });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      return {ok: false, messageId: "",
+      return {ok: false, httpStatus: response.status, messageId: "",
         error: String(data?.error?.message || `HTTP ${response.status}`)
             .slice(0, 300)};
     }
-    return {ok: true, messageId: String(data?.messages?.[0]?.id || ""),
-      error: ""};
+    return {ok: true, httpStatus: response.status,
+      messageId: String(data?.messages?.[0]?.id || ""), error: ""};
   } catch (error) {
-    return {ok: false, messageId: "", error: String(error).slice(0, 300)};
+    return {ok: false, httpStatus: 0, messageId: "",
+      error: String(error).slice(0, 300)};
   }
+}
+
+/**
+ * Whether WhatsApp's secrets are real values yet.
+ *
+ * @return {boolean} True once the business account is connected.
+ */
+function containerWhatsAppConfigured() {
+  return whatsappConfigured({
+    accessToken: safeSecretValue(whatsappAccessToken),
+    phoneNumberId: safeSecretValue(whatsappPhoneNumberId),
+  });
+}
+
+/**
+ * Writes one line's `containerUpdates` rows for one update - one per person
+ * who should hear - and the line's `lastCustomerUpdate`, in one transaction
+ * so the sender trigger (which also writes the line) never loses an entry.
+ *
+ * Recording (`requeue: false`): a row that already exists is left as it is;
+ * whichever source reported the moment first queued it. Sending the current
+ * status by hand (`requeue: true`): a row that waited for WhatsApp, failed,
+ * or whose sender died is queued again, and one that was never written (a
+ * number added later) is created; a sent row is never sent twice.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {lineRef, businessId, containerId, businessName,
+ *   update, status (for new rows), requeue, staffId}.
+ * @return {Promise<{queued: number, alreadySent: number, inFlight: number,
+ *   skipped: number, waiting: number}>} What happened to this line's people.
+ */
+async function queueContainerLineUpdate(db, args) {
+  const {lineRef, businessId, containerId, businessName, update} = args;
+  return db.runTransaction(async (tx) => {
+    const tally = {queued: 0, alreadySent: 0, inFlight: 0, skipped: 0,
+      waiting: 0};
+    const lineDoc = await tx.get(lineRef);
+    if (!lineDoc.exists) return tally;
+    const line = lineDoc.data() || {};
+    const trackingCode = String(line.trackingCode || "");
+    const {send, skipped} = recipientsForLine(line);
+    const rowRefs = send.map((who) => db.collection("containerUpdates")
+        .doc(containerUpdateMessageId(lineRef.id, who.role, update)));
+    const rows = rowRefs.length > 0 ? await tx.getAll(...rowRefs) : [];
+    const entries = skipped.map((who) =>
+      ({role: who.role, status: "skipped", reason: who.reason}));
+    tally.skipped = skipped.length;
+    const nowMs = Date.now();
+    send.forEach((who, i) => {
+      const row = rows[i].exists ? rows[i].data() || {} : null;
+      const fields = {
+        businessId, containerId, lineId: lineRef.id, update,
+        role: who.role, name: who.name, phone: who.phone, trackingCode,
+        businessName,
+      };
+      const decision = args.requeue ?
+        requeueDecision(row, nowMs) : (row ? "in_flight" : "create");
+      if (decision === "create") {
+        tx.create(rowRefs[i], {
+          ...fields,
+          status: args.status,
+          attempts: 0,
+          ...(args.staffId ? {requeuedByStaffId: args.staffId} : {}),
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      } else if (decision === "requeue") {
+        tx.update(rowRefs[i], {
+          ...fields,
+          status: CONTAINER_UPDATE_STATUS.QUEUED,
+          attempts: 0,
+          leaseUntilMs: 0,
+          error: "",
+          requeuedByStaffId: args.staffId || "",
+          requeuedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      }
+      const status = decision === "create" ? args.status :
+        (decision === "requeue" ? CONTAINER_UPDATE_STATUS.QUEUED :
+          String(row?.status || ""));
+      if (decision === "already_sent") tally.alreadySent += 1;
+      else if (status === CONTAINER_UPDATE_STATUS.WAITING) tally.waiting += 1;
+      else if (decision === "create" || decision === "requeue") {
+        tally.queued += 1;
+      } else tally.inFlight += 1;
+      entries.push({role: who.role, status});
+    });
+    // What the business sees on the line: who was told the latest news, and
+    // why anyone was not.
+    const merged = mergeLastCustomerUpdate(
+        line.lastCustomerUpdate, update, entries, nowMs);
+    if (merged) tx.update(lineRef, {lastCustomerUpdate: merged});
+    return tally;
+  });
+}
+
+/**
+ * Queues one update for every line on a container, a few lines at a time.
+ *
+ * @param {object} db Firestore.
+ * @param {object[]} lineDocs The container's lines.
+ * @param {object} args As queueContainerLineUpdate, without lineRef.
+ * @return {Promise<object>} The tallies summed over the lines.
+ */
+async function queueContainerUpdate(db, lineDocs, args) {
+  const total = {queued: 0, alreadySent: 0, inFlight: 0, skipped: 0,
+    waiting: 0};
+  for (const group of inGroups(lineDocs, 10)) {
+    const tallies = await Promise.all(group.map((lineDoc) =>
+      queueContainerLineUpdate(db, {...args, lineRef: lineDoc.ref})));
+    for (const tally of tallies) {
+      for (const key of Object.keys(total)) total[key] += tally[key] || 0;
+    }
+  }
+  return total;
 }
 
 exports.sendContainerCustomerUpdates = onDocumentCreated(
@@ -16608,64 +17018,192 @@ exports.sendContainerCustomerUpdates = onDocumentCreated(
       const businessDoc = businessId ?
         await db.collection("businesses").doc(businessId).get() : null;
       const businessName = String(businessDoc?.data()?.name || "");
-      const configured = whatsappConfigured({
-        accessToken: safeSecretValue(whatsappAccessToken),
-        phoneNumberId: safeSecretValue(whatsappPhoneNumberId),
-      });
+      // Only queued here; deliverContainerCustomerUpdate sends each row on
+      // its own. Until WhatsApp is connected rows wait, and are not sent
+      // later by themselves (see sendContainerCurrentStatus).
+      const configured = containerWhatsAppConfigured();
       const lines = await db.collection("containerLines")
           .where("containerId", "==", containerId).get();
-      for (const lineDoc of lines.docs) {
-        const line = lineDoc.data() || {};
-        const trackingCode = String(line.trackingCode || "");
-        const {send, skipped} = recipientsForLine(line);
-        const results = skipped.map((who) =>
-          ({role: who.role, status: "skipped", reason: who.reason}));
-        for (const who of send) {
-          const messageRef = db.collection("containerUpdates")
-              .doc(containerUpdateMessageId(lineDoc.id, who.role, update));
-          try {
-            await messageRef.create({
-              businessId, containerId, lineId: lineDoc.id, update,
-              role: who.role, phone: who.phone, trackingCode,
-              status: configured ? "sending" : "waiting_for_whatsapp",
-              createdAt: FirestoreFieldValue.serverTimestamp(),
-            });
-          } catch (error) {
-            // Already told about this, by whichever source came first.
-            if (error.code === 6 || error.code === "already-exists") continue;
-            throw error;
-          }
-          if (!configured) {
-            results.push({role: who.role, status: "waiting_for_whatsapp"});
-            continue;
-          }
-          const sent = await sendWhatsAppMessage(whatsappUpdateMessage({
-            phone: who.phone, name: who.name, businessName, line, update,
-            trackingCode,
-          }));
-          await messageRef.set({
-            status: sent.ok ? "sent" : "failed",
-            whatsappMessageId: sent.messageId,
-            error: sent.error,
-            sentAt: FirestoreFieldValue.serverTimestamp(),
-          }, {merge: true});
-          if (!sent.ok) {
-            logger.warn("WhatsApp container update failed", {
-              containerId, lineId: lineDoc.id, role: who.role,
-              error: sent.error,
-            });
-          }
-          results.push({role: who.role, status: sent.ok ? "sent" : "failed"});
+      await queueContainerUpdate(db, lines.docs, {
+        businessId, containerId, businessName, update,
+        status: configured ? CONTAINER_UPDATE_STATUS.QUEUED :
+          "waiting_for_whatsapp",
+        requeue: false,
+      });
+    },
+);
+
+/**
+ * Records one send attempt's result on the row and on the line's
+ * lastCustomerUpdate, together.
+ *
+ * @param {object} db Firestore.
+ * @param {object} rowRef The containerUpdates row.
+ * @param {object} row The row as claimed.
+ * @param {object} fields What to write on the row (status included).
+ * @return {Promise<void>}
+ */
+async function recordContainerUpdateAttempt(db, rowRef, row, fields) {
+  const lineRef = db.collection("containerLines")
+      .doc(String(row.lineId || "-"));
+  await db.runTransaction(async (tx) => {
+    const lineDoc = await tx.get(lineRef);
+    tx.update(rowRef, {...fields,
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+    if (!lineDoc.exists) return;
+    const merged = mergeLastCustomerUpdate(
+        lineDoc.data()?.lastCustomerUpdate, String(row.update || ""),
+        [{role: String(row.role || ""), status: fields.status}], Date.now());
+    if (merged) tx.update(lineRef, {lastCustomerUpdate: merged});
+  });
+}
+
+// Sends one queued WhatsApp update. Fires when a row becomes `queued`
+// (created by sendContainerCustomerUpdates, or re-queued by
+// sendContainerCurrentStatus); the row is claimed in a transaction with a
+// lease, so two deliveries of the same event never both send. A transient
+// failure (network, timeout, 429, 5xx) marks the row `retrying` and throws,
+// and the platform delivers the event again with backoff, up to
+// WHATSAPP_MAX_ATTEMPTS sends; Meta refusing the message is final.
+exports.deliverContainerCustomerUpdate = onDocumentWritten(
+    {
+      document: "containerUpdates/{messageId}",
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+      retry: true,
+      timeoutSeconds: 60,
+    },
+    async (event) => {
+      const before = event.data?.before?.data() || null;
+      const after = event.data?.after?.data() || null;
+      if (!shouldSendQueuedRow(before, after)) return;
+      const db = admin.firestore();
+      const rowRef = event.data.after.ref;
+      const sentAtMs = Date.parse(String(event.time || ""));
+      const eventAgeMs = Number.isFinite(sentAtMs) ?
+        Math.max(0, Date.now() - sentAtMs) : 0;
+      const configured = containerWhatsAppConfigured();
+      const claim = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(rowRef);
+        const row = fresh.exists ? fresh.data() || {} : null;
+        const nowMs = Date.now();
+        const decision = claimContainerUpdate(row, nowMs, {eventAgeMs});
+        if (decision.action === "claim" && !configured) {
+          // Disconnected since it was queued: back to waiting.
+          tx.update(rowRef, {status: "waiting_for_whatsapp", leaseUntilMs: 0,
+            updatedAt: FirestoreFieldValue.serverTimestamp()});
+          return {action: "waiting", row};
         }
-        if (results.length > 0) {
-          // What the business sees on the line: who was told the latest
-          // news, and why anyone was not.
-          await lineDoc.ref.set({
-            lastCustomerUpdate: {update, results,
-              atMs: Date.now()},
-          }, {merge: true});
+        if (decision.action === "claim") {
+          tx.update(rowRef, {
+            status: CONTAINER_UPDATE_STATUS.SENDING,
+            attempts: decision.attempts,
+            leaseUntilMs: nowMs + WHATSAPP_SEND_LEASE_MS,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
         }
+        return {...decision, row};
+      });
+      const row = claim.row || {};
+      if (claim.action === "busy") {
+        // Another delivery holds a live lease. Come back later: it will
+        // have finished, or its lease will have run out.
+        throw new Error(
+            `WhatsApp update ${rowRef.id} is being sent by another attempt`);
       }
+      if (claim.action === "give_up") {
+        await recordContainerUpdateAttempt(db, rowRef, row, {
+          status: CONTAINER_UPDATE_STATUS.FAILED,
+          leaseUntilMs: 0,
+          error: String(row.error || row.lastError ||
+            "Gave up after repeated failures").slice(0, 300),
+        });
+        return;
+      }
+      if (claim.action !== "claim") return;
+      const lineDoc = await db.collection("containerLines")
+          .doc(String(row.lineId || "-")).get();
+      if (!lineDoc.exists) {
+        await recordContainerUpdateAttempt(db, rowRef, row, {
+          status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
+          error: "The line is no longer on the container."});
+        return;
+      }
+      const line = lineDoc.data() || {};
+      const sent = await sendWhatsAppMessage(whatsappUpdateMessage({
+        phone: row.phone, name: row.name, businessName: row.businessName,
+        line, update: row.update,
+        trackingCode: String(row.trackingCode || line.trackingCode || ""),
+      }));
+      const status = statusAfterAttempt(
+          whatsappSendOutcome(sent), claim.attempts);
+      await recordContainerUpdateAttempt(db, rowRef, row, {
+        status,
+        leaseUntilMs: 0,
+        whatsappMessageId: sent.messageId,
+        error: status === CONTAINER_UPDATE_STATUS.SENT ? "" : sent.error,
+        ...(status === CONTAINER_UPDATE_STATUS.SENT ?
+          {sentAt: FirestoreFieldValue.serverTimestamp()} : {}),
+      });
+      if (status === CONTAINER_UPDATE_STATUS.RETRYING) {
+        throw new Error(`WhatsApp update ${rowRef.id} will be retried: ` +
+          sent.error);
+      }
+      if (status === CONTAINER_UPDATE_STATUS.FAILED) {
+        logger.warn("WhatsApp container update failed", {
+          messageId: rowRef.id, containerId: row.containerId,
+          lineId: row.lineId, role: row.role, error: sent.error,
+        });
+      }
+    },
+);
+
+// Sends everyone on a container its CURRENT news - the furthest update on
+// its timeline - when they have not had it yet. For a container whose
+// updates were recorded while WhatsApp was not connected: those rows wait
+// and are never sent by themselves (a message about a box that sailed weeks
+// ago is noise unless someone decides otherwise). Older updates stay
+// unsent; only the current one goes, and nobody gets it twice.
+exports.sendContainerCurrentStatus = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref} =
+        await loadContainerFor(db, uid, businessId, data.containerId);
+      if (!containerWhatsAppConfigured()) {
+        throw new HttpsError("failed-precondition",
+            "WhatsApp is not connected yet, so nothing can be sent.",
+            {reason: "whatsapp_not_configured"});
+      }
+      const events = await ref.collection("trackingEvents").get();
+      const update = latestCustomerUpdate(events.docs.map((d) => d.data()));
+      if (!update) {
+        throw new HttpsError("failed-precondition",
+            "This container has no news for customers yet. They hear when " +
+              "it ships.",
+            {reason: "no_customer_update"});
+      }
+      const businessDoc =
+        await db.collection("businesses").doc(businessId).get();
+      const lines = await db.collection("containerLines")
+          .where("containerId", "==", ref.id).get();
+      const tally = await queueContainerUpdate(db, lines.docs, {
+        businessId, containerId: ref.id,
+        businessName: String(businessDoc.data()?.name || ""),
+        update, status: CONTAINER_UPDATE_STATUS.QUEUED, requeue: true,
+        staffId: uid,
+      });
+      await containerAudit(businessId, ref.id, "customer_update_sent", uid,
+          `Sent the current status (${update}) to ${tally.queued} ` +
+          `${tally.queued === 1 ? "person" : "people"}` +
+          (tally.alreadySent ? `; ${tally.alreadySent} already had it` : ""));
+      return {success: true, containerId: ref.id, update, ...tally};
     },
 );
 
@@ -16788,12 +17326,16 @@ async function pollOneTrackedContainer(db, doc) {
   if (next) {
     // Shipping still needs a destination and something aboard; a box the
     // business has not finished recording is left for staff to ship.
-    const lineCount = await refreshContainerCounts(db, ref);
+    const lines = await db.collection("containerLines")
+        .where("containerId", "==", ref.id).get();
     const stepFrom = next === CONTAINER_STATUS.ARRIVED &&
       before === CONTAINER_STATUS.LOADING ?
       {...container, status: CONTAINER_STATUS.SHIPPED} : container;
-    if (!containerTransitionRefusal(stepFrom, next, lineCount)) {
-      await applyContainerStatus(db, ref, next, {source: "carrier"});
+    if (!containerTransitionRefusal(stepFrom, next, lines.size)) {
+      await applyContainerStatus(db, ref, next,
+          {source: "carrier", lineDocs: lines.docs});
+      // Recounted once the box is closed to adds (see setContainerStatus).
+      await refreshContainerCounts(db, ref);
       await containerAudit(String(container.businessId || ""), ref.id, next,
           "", `Carrier reported ${CONTAINER_STATUS_LABEL[carrierStatus]}`);
     }
@@ -17189,11 +17731,20 @@ exports.getContainerDocumentUrl = onCall(
         await loadContainerFor(db, uid, businessId, data.containerId);
       let token = String(current.documentToken || "").trim();
       if (!token) {
-        token = crypto.randomBytes(24).toString("base64url");
-        await ref.set({
-          documentToken: token,
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        }, {merge: true});
+        // Minted in a transaction that only fills an empty field: two
+        // first opens at once share one link instead of the second
+        // silently breaking the first's.
+        const candidate = crypto.randomBytes(24).toString("base64url");
+        token = await db.runTransaction(async (tx) => {
+          const fresh = await tx.get(ref);
+          const {value, write} =
+            keepExisting(fresh.data()?.documentToken, candidate);
+          if (write) {
+            tx.update(ref, {documentToken: value,
+              updatedAt: FirestoreFieldValue.serverTimestamp()});
+          }
+          return value;
+        });
       }
       const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
         "https://laawoldigital.com/d";
@@ -17203,17 +17754,9 @@ exports.getContainerDocumentUrl = onCall(
       // theirs now rather than printing a sheet with gaps.
       const lines = await db.collection("containerLines")
           .where("containerId", "==", ref.id).get();
+      // Each code is stored as it is assigned (first write wins), and the
+      // map holds the code actually stored for every line.
       const codes = await assignMissingLineCodes(db, lines.docs);
-      if (codes.size > 0) {
-        const batch = db.batch();
-        lines.docs.forEach((d) => {
-          if (codes.has(d.id)) {
-            batch.set(d.ref, {trackingCode: codes.get(d.id),
-              updatedAt: FirestoreFieldValue.serverTimestamp()}, {merge: true});
-          }
-        });
-        await batch.commit();
-      }
       // One line's labels - a reprint for one barrel - or the whole box.
       const lineId = String(data.lineId || "");
       const lineDoc = lineId ?

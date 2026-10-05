@@ -331,7 +331,238 @@ function whatsappConfigured(config) {
   return !placeholder(token) && /^\d{6,}$/.test(numberId);
 }
 
+// -------------------------------------------------------------------------
+// The send queue. Recording an update writes one `containerUpdates` row per
+// person (`queued`, or `waiting_for_whatsapp` until WhatsApp is connected);
+// a separate trigger sends each queued row on its own, so a big container
+// never runs one long serial loop, and a failure is retried row by row.
+//
+//   queued -> sending -> sent
+//                     -> retrying -> sending ... (a 5xx, a 429, the network)
+//                     -> failed                   (Meta refused the message)
+//
+// A row is claimed in a transaction (queued/retrying -> sending, with a
+// lease). A sender that dies mid-send leaves `sending` with a lease that
+// runs out; after that the row may be claimed again. The cost is at most
+// one duplicate message, never a row stuck forever.
+// -------------------------------------------------------------------------
+
+const UPDATE_STATUS = Object.freeze({
+  QUEUED: "queued",
+  SENDING: "sending",
+  RETRYING: "retrying",
+  SENT: "sent",
+  FAILED: "failed",
+  WAITING: "waiting_for_whatsapp",
+});
+
+// Longer than one send can take (the fetch gives up at WHATSAPP_TIMEOUT_MS
+// and the function at its own timeout), so a live sender is never robbed.
+const WHATSAPP_SEND_LEASE_MS = 5 * 60 * 1000;
+const WHATSAPP_TIMEOUT_MS = 15 * 1000;
+const WHATSAPP_MAX_ATTEMPTS = 5;
+// Retries of one event stop here even if something keeps throwing; the row
+// is marked failed and can be sent again by hand (sendContainerCurrentStatus).
+const WHATSAPP_MAX_EVENT_AGE_MS = 6 * 60 * 60 * 1000;
+
+const UPDATE_RANK = Object.freeze({
+  [CONTAINER_UPDATE.SHIPPED]: 1,
+  [CONTAINER_UPDATE.AT_PORT]: 2,
+  [CONTAINER_UPDATE.ARRIVED]: 3,
+});
+
+/**
+ * @param {string} update An update.
+ * @return {number} How far along it is; 0 for anything unknown.
+ */
+function updateRank(update) {
+  return UPDATE_RANK[text(update, 20)] || 0;
+}
+
+/**
+ * Whether a write to a containerUpdates row is the one that asks for it to
+ * be sent: it became `queued` (created queued, or re-queued by hand). The
+ * sender's own writes (sending, retrying, sent) never are.
+ *
+ * @param {object|null} before The row before the write.
+ * @param {object|null} after The row after it.
+ * @return {boolean} True when this write should send.
+ */
+function shouldSendQueuedRow(before, after) {
+  return text(after?.status, 40) === UPDATE_STATUS.QUEUED &&
+    text(before?.status, 40) !== UPDATE_STATUS.QUEUED;
+}
+
+/**
+ * Whether this sender may take the row, read inside the claiming
+ * transaction.
+ *
+ * @param {object|null} row The containerUpdates row now.
+ * @param {number} nowMs The time.
+ * @param {object} [opts] {eventAgeMs, maxAttempts, maxEventAgeMs}.
+ * @return {{action: string, attempts: number}} `claim` (send it), `busy`
+ *   (another sender holds a live lease - retry later), `give_up` (too many
+ *   tries or too old - mark failed), or `done` (nothing to do).
+ */
+function claimContainerUpdate(row, nowMs, opts = {}) {
+  const maxAttempts = opts.maxAttempts || WHATSAPP_MAX_ATTEMPTS;
+  const maxAge = opts.maxEventAgeMs || WHATSAPP_MAX_EVENT_AGE_MS;
+  const attempts = positiveInt(row?.attempts);
+  const status = text(row?.status, 40);
+  const claimable = status === UPDATE_STATUS.QUEUED ||
+    status === UPDATE_STATUS.RETRYING ||
+    (status === UPDATE_STATUS.SENDING &&
+      Number(row?.leaseUntilMs || 0) <= nowMs);
+  if (!row || !claimable) {
+    return {
+      action: status === UPDATE_STATUS.SENDING ? "busy" : "done",
+      attempts,
+    };
+  }
+  if (attempts >= maxAttempts || Number(opts.eventAgeMs || 0) > maxAge) {
+    return {action: "give_up", attempts};
+  }
+  return {action: "claim", attempts: attempts + 1};
+}
+
+/**
+ * What a WhatsApp answer means for the row.
+ *
+ * @param {object} result {ok, httpStatus} - httpStatus 0 when the request
+ *   never got an answer (network, timeout).
+ * @return {"sent"|"retry"|"failed"} `retry` for what may pass on a second
+ *   try (the network, Meta overloaded or rate-limiting), `failed` for what
+ *   never will (a template, a number or a token Meta refused).
+ */
+function whatsappSendOutcome(result) {
+  if (result?.ok) return "sent";
+  const status = Number(result?.httpStatus || 0);
+  if (!status || status === 408 || status === 429 || status >= 500) {
+    return "retry";
+  }
+  return "failed";
+}
+
+/**
+ * The row's status after one attempt.
+ *
+ * @param {string} outcome From whatsappSendOutcome.
+ * @param {number} attempts Attempts made, this one included.
+ * @param {number} [maxAttempts] The bound.
+ * @return {string} sent, retrying, or failed.
+ */
+function statusAfterAttempt(outcome, attempts,
+    maxAttempts = WHATSAPP_MAX_ATTEMPTS) {
+  if (outcome === "sent") return UPDATE_STATUS.SENT;
+  if (outcome === "retry" && positiveInt(attempts) < maxAttempts) {
+    return UPDATE_STATUS.RETRYING;
+  }
+  return UPDATE_STATUS.FAILED;
+}
+
+/**
+ * What "send the current status" does with one person's row.
+ *
+ * @param {object|null} row The containerUpdates row, or null.
+ * @param {number} nowMs The time.
+ * @return {"create"|"requeue"|"already_sent"|"in_flight"} `create` when
+ *   there is no row (the number was added after the update), `requeue` for
+ *   one that waited for WhatsApp, failed, or whose sender died.
+ */
+function requeueDecision(row, nowMs) {
+  if (!row) return "create";
+  const status = text(row.status, 40);
+  if (status === UPDATE_STATUS.SENT) return "already_sent";
+  if (status === UPDATE_STATUS.QUEUED || status === UPDATE_STATUS.RETRYING) {
+    return "in_flight";
+  }
+  if (status === UPDATE_STATUS.SENDING &&
+      Number(row.leaseUntilMs || 0) > nowMs) {
+    return "in_flight";
+  }
+  return "requeue";
+}
+
+const toMillis = (value) => {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * The container's current update: the furthest one along its timeline, so a
+ * late "on the ship" from the carrier never outranks "arrived".
+ *
+ * @param {object[]} events trackingEvents rows.
+ * @return {string|null} The update, or null when nothing was ever sent.
+ */
+function latestCustomerUpdate(events) {
+  let best = null;
+  let bestRank = 0;
+  let bestAt = -1;
+  for (const event of Array.isArray(events) ? events : []) {
+    const update = text(event?.customerUpdate, 20);
+    const rank = updateRank(update);
+    if (!rank) continue;
+    const at = toMillis(event?.timestamp);
+    if (rank > bestRank || (rank === bestRank && at > bestAt)) {
+      best = update;
+      bestRank = rank;
+      bestAt = at;
+    }
+  }
+  return best;
+}
+
+/**
+ * The line's `lastCustomerUpdate` after some people's news changed. Entries
+ * replace the same person's entry for the same update; a newer update starts
+ * the list again; an older one finishing late changes nothing.
+ *
+ * @param {object|null} previous The line's lastCustomerUpdate.
+ * @param {string} update The update the entries are about.
+ * @param {object[]} entries [{role, status, reason?}].
+ * @param {number} atMs The time.
+ * @return {object|null} The new value, or null to leave it.
+ */
+function mergeLastCustomerUpdate(previous, update, entries, atMs) {
+  const incoming = (Array.isArray(entries) ? entries : [])
+      .filter((entry) => entry && text(entry.role, 20));
+  if (incoming.length === 0) return null;
+  const before = previous && typeof previous === "object" ? previous : null;
+  const beforeRank = updateRank(before?.update);
+  const rank = updateRank(update);
+  if (before && beforeRank > rank) return null;
+  const kept = before && text(before.update, 20) === text(update, 20) &&
+    Array.isArray(before.results) ? before.results : [];
+  const roles = new Set(incoming.map((entry) => text(entry.role, 20)));
+  const results = [
+    ...kept.filter((entry) => !roles.has(text(entry?.role, 20))),
+    ...incoming.map((entry) => ({
+      role: text(entry.role, 20),
+      status: text(entry.status, 40),
+      ...(entry.reason ? {reason: text(entry.reason, 60)} : {}),
+    })),
+  ];
+  return {update: text(update, 20), results, atMs};
+}
+
 module.exports = {
+  UPDATE_STATUS,
+  WHATSAPP_SEND_LEASE_MS,
+  WHATSAPP_TIMEOUT_MS,
+  WHATSAPP_MAX_ATTEMPTS,
+  WHATSAPP_MAX_EVENT_AGE_MS,
+  updateRank,
+  shouldSendQueuedRow,
+  claimContainerUpdate,
+  whatsappSendOutcome,
+  statusAfterAttempt,
+  requeueDecision,
+  latestCustomerUpdate,
+  mergeLastCustomerUpdate,
   CONTAINER_UPDATE,
   CONTAINER_UPDATES,
   WHATSAPP_TEMPLATE,

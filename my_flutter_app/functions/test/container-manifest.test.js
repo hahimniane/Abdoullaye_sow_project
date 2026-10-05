@@ -16,6 +16,13 @@ const {
   isInternationalPhone,
   openContainerHoldingVin,
   containerCounts,
+  containerCountsDelta,
+  containerVinLockId,
+  vinLockHolder,
+  keepExisting,
+  containerStatusIsRepeat,
+  linesLagStatus,
+  inGroups,
 } = require("../container_manifest");
 
 const VIN = "1HGCM82633A004352";
@@ -280,6 +287,115 @@ describe("what a container carries", () => {
   });
 });
 
+describe("keeping the tallies without re-reading every line", () => {
+  it("adds and takes away one line's share", () => {
+    assert.deepEqual(containerCountsDelta({kind: "barrels", quantity: 3}, 1),
+        {lineCount: 1, barrelCount: 3});
+    assert.deepEqual(containerCountsDelta({kind: "car"}, -1),
+        {lineCount: -1, carCount: -1});
+    assert.deepEqual(containerCountsDelta({kind: "other", quantity: 2}, 1),
+        {lineCount: 1, otherCount: 2});
+  });
+
+  it("lands where a full recount would after adds, moves and removes", () => {
+    const lines = [{kind: "car"}, {kind: "barrels", quantity: 8},
+      {kind: "other", quantity: 2}, {kind: "barrels", quantity: 1}];
+    const tally = {lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0};
+    const apply = (line, sign) => {
+      for (const [key, value] of Object.entries(
+          containerCountsDelta(line, sign))) {
+        tally[key] += value;
+      }
+    };
+    lines.forEach((line) => apply(line, 1));
+    apply(lines[3], -1);
+    assert.deepEqual(tally, containerCounts(lines.slice(0, 3)));
+  });
+});
+
+describe("the VIN lock", () => {
+  const lock = {businessId: "biz_a", vinNumber: VIN, containerId: "c1",
+    lineId: "l1"};
+  const held = (extra = {}) => car({businessId: "biz_a", containerId: "c1",
+    containerStatus: "loading", ...extra});
+
+  it("is one document per business and VIN, however the VIN was typed", () => {
+    assert.equal(containerVinLockId("biz_a", VIN), `biz_a_${VIN}`);
+    assert.equal(containerVinLockId("biz_a", ` ${VIN.toLowerCase()} `),
+        `biz_a_${VIN}`);
+    assert.notEqual(containerVinLockId("biz_a", VIN),
+        containerVinLockId("biz_b", VIN));
+    assert.equal(containerVinLockId("biz/a", "AB/C123"), "biza_ABC123");
+    assert.equal(containerVinLockId("", VIN), "");
+    assert.equal(containerVinLockId("biz_a", ""), "");
+  });
+
+  it("holds while its line is on a box that has not arrived", () => {
+    assert.equal(vinLockHolder(lock, held()), "c1");
+    assert.equal(vinLockHolder(lock, held({containerStatus: "shipped"})),
+        "c1");
+    // A moved line names its new container, whatever the lock says.
+    assert.equal(vinLockHolder(lock, held({containerId: "c2"})), "c2");
+  });
+
+  // A release that never happened must not block the car for good.
+  it("is free once its line is gone, arrived, or no longer that car", () => {
+    assert.equal(vinLockHolder(null, held()), "");
+    assert.equal(vinLockHolder(lock, null), "");
+    assert.equal(vinLockHolder(lock, held({containerStatus: "arrived"})), "");
+    assert.equal(vinLockHolder(lock, held({vinNumber: "OTHERVIN123"})), "");
+    assert.equal(vinLockHolder(lock, held({kind: "barrels"})), "");
+    assert.equal(vinLockHolder(lock, held({businessId: "biz_b"})), "");
+  });
+});
+
+describe("first write wins", () => {
+  it("keeps a stored code or token and only fills an empty one", () => {
+    assert.deepEqual(keepExisting("CL-AAAAAA", "CL-BBBBBB"),
+        {value: "CL-AAAAAA", write: false});
+    assert.deepEqual(keepExisting("", "CL-BBBBBB"),
+        {value: "CL-BBBBBB", write: true});
+    assert.deepEqual(keepExisting(undefined, "tok"),
+        {value: "tok", write: true});
+    assert.deepEqual(keepExisting("  ", "tok"), {value: "tok", write: true});
+  });
+});
+
+describe("finishing a status change that only half landed", () => {
+  it("treats asking again for the same shipped or arrived as a repair", () => {
+    assert.equal(containerStatusIsRepeat({status: "shipped"}, "shipped"),
+        true);
+    assert.equal(containerStatusIsRepeat({status: "arrived"}, "arrived"),
+        true);
+    assert.equal(containerStatusIsRepeat({status: "loading"}, "loading"),
+        false);
+    assert.equal(containerStatusIsRepeat({}, "loading"), false);
+    assert.equal(containerStatusIsRepeat({status: "loading"}, "shipped"),
+        false);
+    assert.equal(containerStatusIsRepeat({status: "arrived"}, "shipped"),
+        false);
+  });
+
+  it("sees lines that have not caught up, or have no code", () => {
+    const done = {containerStatus: "shipped", trackingCode: "CL-AAAAAA"};
+    assert.equal(linesLagStatus([done, done], "shipped"), false);
+    assert.equal(linesLagStatus([done,
+      {containerStatus: "loading", trackingCode: "CL-B"}], "shipped"), true);
+    assert.equal(linesLagStatus([{containerStatus: "shipped"}], "shipped"),
+        true);
+    assert.equal(linesLagStatus([], "shipped"), false);
+  });
+});
+
+describe("working in groups", () => {
+  it("splits a list into groups of at most the size, in order", () => {
+    assert.deepEqual(inGroups([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+    assert.deepEqual(inGroups([], 10), []);
+    assert.deepEqual(inGroups([1, 2], 0), [[1], [2]]);
+    assert.deepEqual(inGroups(null, 3), []);
+  });
+});
+
 // The wiring, pinned by reading the source: the callables need Firestore to
 // run, and what matters is that each one is gated on the containers section,
 // that every change is audited as a container, and that the /d page can find
@@ -324,6 +440,87 @@ describe("the container callables and their gates", () => {
     assert.doesNotMatch(body, /openContainerHoldingVin\([\s\S]*?, ref\.id\)/);
   });
 
+  // Regression: two quick adds of the same VIN both passed the query and
+  // both wrote a line.
+  it("checks and writes a car inside one transaction on its VIN lock", () => {
+    const body = callable("addContainerLine");
+    assert.match(body, /db\.runTransaction\(/);
+    assert.match(body,
+        /containerVinLockRef\(db, businessId, record\.vinNumber\)/);
+    assert.match(body, /lockDoc = await tx\.get\(lockRef\)/);
+    assert.match(body, /vinLockHolder\(lock,/);
+    // The legacy query is part of the transaction too.
+    assert.match(body, /await tx\.get\(db\.collection\("containerLines"\)/);
+    assert.match(body, /tx\.create\(lockRef, lockBody\)/);
+    assert.match(body, /tx\.set\(lineRef, \{/);
+    // Losing the create race re-runs and refuses with the winner.
+    assert.match(body, /error\.code !== 6/);
+    // The checks come before the writes, as a transaction requires.
+    assert.ok(body.indexOf("vinLockHolder(") < body.indexOf("tx.set(lineRef"));
+    const lockRef = source.slice(
+        source.indexOf("function containerVinLockRef("),
+        source.indexOf("async function releaseContainerVinLocks("));
+    assert.match(lockRef, /collection\("containerVinLocks"\)/);
+  });
+
+  it("lets go of a car's lock when its line is removed, moves it on a move",
+      () => {
+        const remove = callable("removeContainerLine");
+        assert.match(remove, /db\.runTransaction\(/);
+        assert.match(remove, /tx\.delete\(lockRef\)/);
+        const move = callable("moveContainerLine");
+        assert.match(move, /db\.runTransaction\(/);
+        assert.match(move, /tx\.update\(lockRef, \{containerId: to\.ref\.id/);
+        const release = source.slice(
+            source.indexOf("async function releaseContainerVinLocks("),
+            source.indexOf("const CONTAINER_LINE_CODE_PREFIX"));
+        assert.match(release, /=== group\[i\]\.id/);
+      });
+
+  // Regression: every add, move and remove re-read every line on the box.
+  it("keeps the tallies with increments on add, remove and move", () => {
+    assert.match(callable("addContainerLine"),
+        /containerCountsIncrement\(record, 1\)/);
+    assert.match(callable("removeContainerLine"),
+        /containerCountsIncrement\(row, -1\)/);
+    const move = callable("moveContainerLine");
+    assert.match(move,
+        /tx\.set\(from\.ref, \{\s*\.\.\.containerCountsIncrement\(row, -1\)/);
+    assert.match(move,
+        /tx\.set\(to\.ref, \{\s*\.\.\.containerCountsIncrement\(row, 1\)/);
+    for (const name of ["addContainerLine", "removeContainerLine",
+      "moveContainerLine"]) {
+      assert.doesNotMatch(callable(name), /refreshContainerCounts\(/,
+          `${name} must not recount every line`);
+    }
+    // A status change still recounts in full, as a repair - but only after
+    // the box is closed, so the absolute write cannot drop an increment.
+    const status = callable("setContainerStatus");
+    assert.ok(status.indexOf("refreshContainerCounts(db, ref)") >
+      status.indexOf("applyContainerStatus(db, ref, next"));
+    const poll = source.slice(
+        source.indexOf("async function pollOneTrackedContainer("));
+    assert.ok(poll.indexOf("refreshContainerCounts(db, ref)") >
+      poll.indexOf("applyContainerStatus(db, ref, next"));
+    // Deleting counts inside its transaction and never writes the tallies.
+    const remove = callable("deleteContainer");
+    assert.match(remove, /db\.runTransaction\(/);
+    assert.doesNotMatch(remove, /refreshContainerCounts\(/);
+    const increment = source.slice(
+        source.indexOf("function containerCountsIncrement("),
+        source.indexOf("function containerVinLockRef("));
+    assert.match(increment, /FirestoreFieldValue\.increment\(value\)/);
+  });
+
+  // Regression: two first opens of the loading list could each mint a
+  // token, and the second silently broke the first's link.
+  it("mints the document token in a transaction, only if empty", () => {
+    const body = callable("getContainerDocumentUrl");
+    assert.match(body, /db\.runTransaction\(/);
+    assert.match(body, /keepExisting\(fresh\.data\(\)\?\.documentToken/);
+    assert.doesNotMatch(body, /batch\.set\(d\.ref, \{trackingCode/);
+  });
+
   it("audits every change as a container", () => {
     assert.match(source, /entityType: "container", entityId: containerId/);
     for (const action of ["created", "edited", "deleted", "line_added",
@@ -345,5 +542,7 @@ describe("the container callables and their gates", () => {
       assert.ok(block.length > 0, `${name} rule missing`);
       assert.match(block.slice(0, 220), /allow write: if false;/);
     }
+    const locks = rules.slice(rules.indexOf("match /containerVinLocks/"));
+    assert.match(locks.slice(0, 120), /allow read, write: if false;/);
   });
 });

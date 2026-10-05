@@ -639,6 +639,12 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // One lock per business and VIN, taken by addContainerLine inside the
+    // transaction that adds a car, so the same car cannot be loaded twice by
+    // two quick adds. Server bookkeeping only: no client reads or writes it.
+    match /containerVinLocks/{lockId} {
+      allow read, write: if false;
+    }
     // Invoices and receipts the business writes by hand: read by the
     // business's managers, written only through the invoice callables.
     match /invoices/{invoiceId} {
