@@ -6,7 +6,6 @@ import { httpsCallable } from "firebase/functions";
 import {
   collection,
   doc,
-  limit,
   onSnapshot,
   query,
   where,
@@ -201,8 +200,12 @@ export function PayReturn() {
             recordId,
             "paymentAttempts",
           ),
+          // Every attempt, not limit(5): an unordered cap returns attempts
+          // by document id, so a success could sit outside the five read.
+          // A settlement has one attempt per balance (balance_v1), the
+          // verdict below does not depend on order, and no orderBy keeps
+          // this off a composite index the return page would fail without.
           where("customerUid", "==", user.uid),
-          limit(5),
         );
         stopSnapshot = onSnapshot(
           attemptQuery,

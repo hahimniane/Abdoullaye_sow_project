@@ -24,7 +24,7 @@ test("the customer console no longer touches wallets at all", () => {
 });
 
 test("customer marketplace only requests active public listings", () => {
-  assert.match(publicCars, /where\("status", "==", "active"\)/);
+  assert.match(publicCars, /filters: \[\["status", "==", "active"\]\]/);
   assert.match(publicCars, /\.filter\(customerCarListingIsEligible\)/);
 });
 

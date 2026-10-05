@@ -688,7 +688,7 @@ test("the date window matches cars present during it, not only those inside it",
 test("the walk-up form offers the customers the lot already remembers", () => {
   // The panel reads the memory, scoped to this business like every other row
   // source in it.
-  assert.match(panelSource, /useBusinessRows\("lotCustomers", businessId/);
+  assert.match(panelSource, /useBusinessCollection\("lotCustomers", businessId, parkingEnabled, \{\s*pageSize: \d+,\s*orderBy: "lastSeenAt",/);
   assert.match(panelSource, /matchLotCustomers\(entryKnownCustomers, typed\)/);
 
   // An empty field opens on the people most recently seen. A picker that only
@@ -959,7 +959,8 @@ test("a walk-up reads as in the lot, a booking as reserved", () => {
 // Counting status === "active" always returned zero, because no parking record
 // has ever had that status. The header read "31 records · 0 active".
 test("the header counts cars that are actually in the lot", () => {
-  assert.match(panelSource, /const inLotCount = parkedCars\.rows\.filter\(/);
+  // Running stays are read whole (useActiveParkedCars), so the count is exact.
+  assert.match(panelSource, /const inLotCount = activeStays\.rows\.filter\(/);
   assert.match(panelSource, /businessParkingEndLabel\(row\) !== "Ended"/);
   assert.match(panelSource, /\$\{inLotCount\} in the lot/);
   assert.ok(

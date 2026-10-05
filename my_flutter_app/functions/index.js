@@ -34881,6 +34881,7 @@ const consoleTotals = createConsoleTotalsHandlers({
   hasBusinessPermission,
   getUserProfile,
   hasAdminCapability,
+  hasAdminSectionAccess,
   normalizeBusinessServices,
   ensureParkingOccupancyIndexed,
 });

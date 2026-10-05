@@ -16,6 +16,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const consoleSource = read("../components/business-console.tsx");
 const panelSource = read("../components/business/containers-panel.tsx");
 const operationsSource = read("../components/business/operations-panels.tsx");
+const businessDataSource = readFileSync("src/lib/business-data.ts", "utf8");
 const peopleSource = read("../components/business/profile-support-people.tsx");
 const sidebarSource = read("./business-sidebar.ts");
 const stylesSource = read("../app/globals.css");
@@ -168,17 +169,13 @@ test("picking a parked car fills the car and the owner through the shared helper
 });
 
 test("a parked-car row and a ledger activity say which container the car is on", () => {
-  // One index per render from rows the panel already holds — never a query per row.
-  const parkingHooks = operationsSource.match(/const parkingCustomers = useBusinessRows\("lotCustomers"[\s\S]*?const placementLang = /);
-  assert.ok(parkingHooks, "parking panel does not build the placement index");
-  assert.match(parkingHooks[0], /useBusinessRows\("containerLines", businessId, Boolean\(businessId && !previewMode\), \d+\)/);
-  assert.match(parkingHooks[0], /useBusinessRows\("containers", businessId, Boolean\(businessId && !previewMode\), \d+\)/);
-  assert.match(parkingHooks[0], /buildVinPlacementIndex\(containerLines\.rows, containerRows\.rows\)/);
-
-  const ledgerHooks = operationsSource.match(/const lotCustomers = useBusinessRows\("lotCustomers", businessId, enabled, 500\);[\s\S]*?const placementLang = /);
-  assert.ok(ledgerHooks, "ledger panel does not build the placement index");
-  assert.match(ledgerHooks[0], /useBusinessRows\("containerLines", businessId, enabled, \d+\)/);
-  assert.match(ledgerHooks[0], /buildVinPlacementIndex\(containerLines\.rows, containerRows\.rows\)/);
+  // One index per change, from the OPEN containers and their lines only
+  // (useOpenContainerPlacements) - never a query per row, and never the
+  // business's whole loading history (3,000 lines it used to subscribe to).
+  assert.match(operationsSource, /const \{ placements: vinPlacements \} = useOpenContainerPlacements\(businessId, parkingEnabled\);/);
+  assert.match(operationsSource, /const \{ placements: vinPlacements \} = useOpenContainerPlacements\(businessId, enabled\);/);
+  assert.doesNotMatch(operationsSource, /"containerLines"/, "the panels never read containerLines directly");
+  assert.match(businessDataSource, /export function useOpenContainerPlacements\([\s\S]*?where: \[\["status", "in", \[\.\.\.OPEN_CONTAINER_STATUSES\]\]\][\s\S]*?useDocsWhereIn\(\{\s*collection: "containerLines",\s*field: "containerId",[\s\S]*?buildVinPlacementIndex\(lines\.rows, open\.rows\)/);
 
   // Parking list row, parking card, and ledger activity row each render the line.
   const placements = operationsSource.match(/className="ctn-placement">\{vinPlacementText\(vinPlacements\.get\(/g) ?? [];

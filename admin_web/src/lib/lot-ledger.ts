@@ -12,6 +12,7 @@
  */
 
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "./business-parking-entry.ts";
+import type { QueryFilterSpec } from "./paged-query.ts";
 
 /** Same vocabulary as parking: a website link, or money taken off-platform. */
 export const LOT_ACTIVITY_PAYMENT_METHODS = ["payment_link", "direct"] as const;
@@ -1140,5 +1141,74 @@ export function lotLedgerTotals(input: {
     yearRevenueByMonth,
     yearRevenueByType,
     yearExpenseByMonth: months.map((m) => lotMonthExpenseCents(expenseLines, expenseEntries, m, nowMonth)),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// How the ledger's lists are read: ordered, and narrowed in the query.
+// ---------------------------------------------------------------------------
+
+/** [start, end) in UTC ms for inclusive "yyyy-mm" bounds (activityDate's month is UTC). */
+export function lotMonthSpanMs(fromMonth: string, throughMonth: string): { startMs: number; endMs: number } | null {
+  const parse = (mk: string) => /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(mk || ""));
+  const a = parse(fromMonth);
+  const b = parse(throughMonth);
+  if (!a || !b) return null;
+  const [from, through] = fromMonth <= throughMonth ? [a, b] : [b, a];
+  return {
+    startMs: Date.UTC(Number(from[1]), Number(from[2]) - 1, 1),
+    endMs: Date.UTC(Number(through[1]), Number(through[2]), 1),
+  };
+}
+
+export const LOT_OWED_STATUSES = ["awaiting_payment_link", "awaiting_direct_payment"] as const;
+export const LOT_PAID_STATUSES = ["succeeded", "paid"] as const;
+
+/**
+ * The Activity list's query: the jobs dated in the span, newest first, a page
+ * at a time, with the type and payment pickers applied in the query (a filter
+ * applied after a page hides every match beyond it). Voided jobs are still
+ * dropped by the panel, as before; search narrows the loaded pages.
+ */
+export function lotActivityListQuery(input: {
+  rangeStart: string;
+  rangeEnd: string;
+  typeFilter: string;
+  payFilter: "all" | "owed" | "paid";
+  pageSize?: number;
+}): {
+  pageSize: number;
+  orderBy: "activityDate";
+  direction: "desc";
+  where: QueryFilterSpec[];
+  sort: "query";
+} {
+  const span = lotMonthSpanMs(input.rangeStart, input.rangeEnd);
+  const where: QueryFilterSpec[] = [];
+  if (input.typeFilter === "custom") where.push(["activityTypeId", "==", LOT_CUSTOM_ACTIVITY_ID]);
+  else if (input.typeFilter && input.typeFilter !== "all") where.push(["activityTypeId", "==", input.typeFilter]);
+  if (input.payFilter === "owed") where.push(["paymentStatus", "in", [...LOT_OWED_STATUSES]]);
+  if (input.payFilter === "paid") where.push(["paymentStatus", "in", [...LOT_PAID_STATUSES]]);
+  if (span) {
+    where.push(["activityDate", ">=", new Date(span.startMs)]);
+    where.push(["activityDate", "<", new Date(span.endMs)]);
+  }
+  return { pageSize: input.pageSize ?? 50, orderBy: "activityDate", direction: "desc", where, sort: "query" };
+}
+
+/**
+ * The expense purchases the Expenses tab and the year report read: every
+ * entry billed to a month of the report year (the month on screen is always
+ * in it), plus the few logged without a bill month, which are dated by
+ * spentAt in code. Complete - a year bounds them - and the same reads the
+ * server's getLotLedgerTotals makes.
+ */
+export function lotExpenseEntryQueries(year: number): {
+  inYear: QueryFilterSpec[];
+  undated: QueryFilterSpec[];
+} {
+  return {
+    inYear: [["month", ">=", `${year}-01`], ["month", "<=", `${year}-12`]],
+    undated: [["month", "==", ""]],
   };
 }

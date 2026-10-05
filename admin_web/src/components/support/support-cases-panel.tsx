@@ -10,9 +10,7 @@ import {
   onSnapshot,
   orderBy,
   query,
-  where,
   type DocumentData,
-  type QueryConstraint,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -36,11 +34,17 @@ import {
   UserCheck,
 } from "lucide-react";
 
+import { LoadMoreButton } from "@/components/show-more";
 import { AttachmentPreview } from "@/components/support/attachment-preview";
 import { UserText } from "@/components/user-text";
 import { db, functions } from "@/lib/firebase";
 import { asDate, currentLocale, formatDate, formatMoney, text } from "@/lib/format";
 import { uploadSupportAttachmentFile } from "@/lib/support-attachments";
+import {
+  SUPPORT_CASES_PAGE_SIZE,
+  supportCasesQuerySpec,
+} from "@/lib/support-cases-query";
+import { usePagedQuery } from "@/lib/use-paged-query";
 import type {
   ActionConfirmationOptions,
   ActionRunner,
@@ -114,43 +118,64 @@ function useSupportCases(
   scope: "business" | "admin",
   businessId: string,
   enabled: boolean,
-): { rows: FirestoreRow[]; loading: boolean; error: string } {
-  const [rows, setRows] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
+  caseId: string,
+): {
+  rows: FirestoreRow[];
+  loading: boolean;
+  /** The deep-linked case is not in the loaded pages and is still being read. */
+  resolvingLink: boolean;
+  loadingMore: boolean;
+  error: string;
+  hasMore: boolean;
+  loadMore: () => void;
+} {
+  const active = enabled && !(scope === "business" && !businessId);
+  const spec = supportCasesQuerySpec(scope, businessId);
+  const paged = usePagedQuery({
+    source: active ? { path: ["supportCases"] } : null,
+    filters: spec.filters,
+    orderBy: spec.orderBy,
+    pageSize: SUPPORT_CASES_PAGE_SIZE,
+    enabled: active,
+  });
+  // A notification can name a case older than the loaded pages; listen to
+  // that one case so the deep link always opens it.
+  const linkedMissing = Boolean(
+    active && caseId && !paged.loading && !paged.rows.some((row) => row.id === caseId),
+  );
+  const [linked, setLinked] = useState<{ id: string; row: FirestoreRow | null }>(
+    { id: "", row: null },
+  );
   useEffect(() => {
-    if (!enabled || (scope === "business" && !businessId)) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-    const constraints: QueryConstraint[] =
-      scope === "business"
-        ? [where("businessId", "==", businessId), limit(300)]
-        : [where("escalationStatus", "==", "escalated"), limit(300)];
-    setLoading(true);
-    const unsubscribe = onSnapshot(
-      query(collection(db, "supportCases"), ...constraints),
-      (snapshot) => {
-        const next = snapshot.docs
-          .map(rowFromSnapshot)
-          .sort((a, b) => activityMs(b) - activityMs(a));
-        setRows(next);
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        setRows([]);
-        setError(snapshotError.message);
-        setLoading(false);
-      },
+    if (!linkedMissing) return undefined;
+    return onSnapshot(
+      doc(db, "supportCases", caseId),
+      (snapshot) => setLinked({
+        id: caseId,
+        row: snapshot.exists()
+          ? { id: snapshot.id, _path: snapshot.ref.path, ...snapshot.data() }
+          : null,
+      }),
+      () => setLinked({ id: caseId, row: null }),
     );
-    return unsubscribe;
-  }, [scope, businessId, enabled]);
+  }, [caseId, linkedMissing]);
+  const linkedRow = linkedMissing && linked.id === caseId ? linked.row : null;
+  const resolvingLink = linkedMissing && linked.id !== caseId;
 
-  return { rows, loading, error };
+  const rows = useMemo(() => {
+    const base = linkedRow ? [...paged.rows, linkedRow] : paged.rows;
+    return base.slice().sort((a, b) => activityMs(b) - activityMs(a));
+  }, [paged.rows, linkedRow]);
+
+  return {
+    rows,
+    loading: active && paged.loading,
+    resolvingLink,
+    loadingMore: paged.loadingMore,
+    error: paged.error,
+    hasMore: paged.hasMore,
+    loadMore: paged.loadMore,
+  };
 }
 
 function useSupportMessages(
@@ -340,7 +365,15 @@ export function SupportCasesPanel({
 }: SupportCasesPanelProps) {
   const enabled =
     enabledOverride ?? (scope === "admin" ? true : Boolean(businessId));
-  const { rows, loading, error } = useSupportCases(scope, businessId, enabled);
+  const {
+    rows,
+    loading,
+    resolvingLink,
+    loadingMore,
+    error,
+    hasMore,
+    loadMore,
+  } = useSupportCases(scope, businessId, enabled, caseId);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
   const [showResolved, setShowResolved] = useState(false);
@@ -379,11 +412,11 @@ export function SupportCasesPanel({
     if (rows.some((row) => row.id === selectedId)) return;
     // A notification can name a case before the list snapshot arrives.
     // Keep that selection until we know the list does not contain it.
-    if (caseId && selectedId === caseId && (loading || rows.length === 0)) {
+    if (caseId && selectedId === caseId && (loading || resolvingLink || rows.length === 0)) {
       return;
     }
     setSelectedId("");
-  }, [rows, selectedId, caseId, loading]);
+  }, [rows, selectedId, caseId, loading, resolvingLink]);
 
   useEffect(() => {
     if (!caseId) return;
@@ -545,6 +578,7 @@ export function SupportCasesPanel({
               );
             })}
           </div>
+          <LoadMoreButton hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
         </aside>
 
         <div className="sup-thread-wrap">

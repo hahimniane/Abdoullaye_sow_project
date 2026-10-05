@@ -359,11 +359,13 @@ export function BusinessConsole({
     onToday && services.has("carTransport"),
     recentOptions,
   );
+  // Stays recorded in the app carry no createdAt; every stay has its
+  // parkingDate, so the newest stays are read by that.
   const parkedCars = useBusinessCollection(
     "parkedCars",
     businessId,
     onToday && services.has("carParking"),
-    recentOptions,
+    { ...recentOptions, orderBy: "parkingDate" },
   );
   // Growth shows the three newest insights; that is all it reads.
   const insights = useBusinessCollection(

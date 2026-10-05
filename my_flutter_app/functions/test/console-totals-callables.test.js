@@ -156,7 +156,11 @@ const USERS = {
   outsider: {role: "businessOwner", businessId: "other"},
   customer: {role: "customer"},
   financeAdmin: {role: "admin", effectiveCapabilities: ["finance"]},
+  financeViewer: {role: "admin", effectiveCapabilities: [],
+    effectiveSections: {finance: "view"}},
   opsAdmin: {role: "admin", effectiveCapabilities: ["operations"]},
+  bareAdmin: {role: "admin", effectiveCapabilities: [],
+    effectiveSections: {}},
 };
 
 function hasBusinessPermission(user, section) {
@@ -213,6 +217,8 @@ function handlersFor(data, {touchGuard = false} = {}) {
     },
     hasAdminCapability: (user, capability) => user.role === "admin" &&
       (user.effectiveCapabilities || []).includes(capability),
+    hasAdminSectionAccess: (user, section) => user.role === "admin" &&
+      ["view", "manage"].includes((user.effectiveSections || {})[section]),
     normalizeBusinessServices: (raw) => Array.isArray(raw) ? raw :
       ["barrelShipping", "freight", "carSales", "carTransport", "carParking"],
     ensureParkingOccupancyIndexed: async () => {},
@@ -221,7 +227,8 @@ function handlersFor(data, {touchGuard = false} = {}) {
   return {handlers, db, gates};
 }
 
-const call = (uid, data = {}) => ({auth: uid ? {uid} : null, data});
+const call = (uid, data = {}, {verified = true} = {}) => ({
+  auth: uid ? {uid, token: {email_verified: verified}} : null, data});
 
 describe("console totals callables: who may call", () => {
   const businessCalls = [
@@ -257,21 +264,35 @@ describe("console totals callables: who may call", () => {
             {code: "invalid-argument"});
       });
 
-  it("getPlatformEarnings needs the finance capability", async () => {
-    const {handlers} = handlersFor({});
-    await assert.rejects(handlers.getPlatformEarnings(call("opsAdmin")),
-        {code: "permission-denied"});
-    await assert.rejects(handlers.getPlatformEarnings(call("owner")),
-        {code: "permission-denied"});
-  });
+  it("getPlatformEarnings needs finance (capability or view access)",
+      async () => {
+        const {handlers} = handlersFor({});
+        await assert.rejects(handlers.getPlatformEarnings(call("opsAdmin")),
+            {code: "permission-denied"});
+        await assert.rejects(handlers.getPlatformEarnings(call("owner")),
+            {code: "permission-denied"});
+        const viewer = await handlers.getPlatformEarnings(
+            call("financeViewer"));
+        assert.ok(viewer.summary, "a finance viewer reads the earnings");
+        const manager = await handlers.getPlatformEarnings(
+            call("financeAdmin"));
+        assert.ok(manager.summary);
+      });
 
-  it("getAdminOverview is for platform administrators only", async () => {
-    const {handlers} = handlersFor({});
-    await assert.rejects(handlers.getAdminOverview(call("owner")),
+  it("getAdminOverview is for verified platform administrators only",
+      async () => {
+        const {handlers} = handlersFor({});
+        await assert.rejects(handlers.getAdminOverview(call("owner")),
+            {code: "permission-denied"});
+        await assert.rejects(handlers.getAdminOverview(call(null)),
+            {code: "unauthenticated"});
+        await assert.rejects(handlers.getAdminOverview(
+            call("bareAdmin", {}, {verified: false})),
         {code: "permission-denied"});
-    await assert.rejects(handlers.getAdminOverview(call(null)),
-        {code: "unauthenticated"});
-  });
+        // Today is every admin's landing tab, view-only roles included.
+        const overview = await handlers.getAdminOverview(call("bareAdmin"));
+        assert.equal(typeof overview.users.total, "number");
+      });
 });
 
 describe("console totals callables: what they answer", () => {

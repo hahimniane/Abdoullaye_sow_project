@@ -832,10 +832,10 @@ test("the console records instalments, and the scoreboard reads them", () => {
   const panel = readFileSync(
     "src/components/business/operations-panels.tsx", "utf8");
 
-  // The instalment collection is read, and the scoreboard is built from it
-  // rather than from the activity rows alone.
-  assert.match(panel, /useBusinessRows\("lotActivityPayments"/);
-  assert.match(panel, /lotActivityScoreboard\(\{[\s\S]*?payments: activityPayments\.rows/);
+  // The scoreboard is lotActivityScoreboard over every job and instalment,
+  // run by the server (getLotLedgerTotals) - the list itself is paged.
+  assert.match(panel, /useServerTotals<ServerLedgerTotals>\(\s*"getLotLedgerTotals",/);
+  assert.match(panel, /const activityMoney = serverLedger\?\.scoreboard \?\?/);
 
   // The chase modal offers a part payment and calls the new callable.
   assert.match(panel, /"recordLotActivityInstalment"/);
@@ -984,7 +984,8 @@ test("a failed save says so inside the modal, not behind it", () => {
 test("the reports chart carries parked-car income, by the month it arrived", () => {
   const panel = readFileSync(
     "src/components/business/operations-panels.tsx", "utf8");
-  assert.match(panel, /businessParkingCollectedByMonth\(/);
+  // By the month it arrived, counted by the server over every stay.
+  assert.match(panel, /const yearParkingByMonth = serverParking\?\.collectedByMonth\?\.length === 12/);
   assert.match(panel, /<LotMonthlyChart revenue=\{yearRevenueByMonth\} parking=\{yearParkingByMonth\}/);
   assert.match(panel, /const yearIncome = yearRevenue \+ yearParking;/);
   assert.match(panel, /const yearNet = yearIncome - yearExpense;/);

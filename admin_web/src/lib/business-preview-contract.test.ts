@@ -43,7 +43,7 @@ test("business preview does not open authenticated Firestore listeners", () => {
   );
   assert.match(
     operationsSource,
-    /const enabled = Boolean\(businessId && !previewMode\);[\s\S]{0,500}useBusinessSubcollectionRows\("destinationCountries", businessId, enabled/,
+    /const enabled = Boolean\(businessId && !previewMode\);[\s\S]{0,1500}useBusinessDestinations\(businessId, enabled\)/,
   );
 });
 

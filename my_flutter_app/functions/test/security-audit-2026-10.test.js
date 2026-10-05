@@ -191,12 +191,23 @@ describe("flagged review moderation query has its index", () => {
       () => {
         const consoleSource = read(
             repoRoot, "admin_web", "src", "components", "admin-console.tsx");
-        assert.match(
-            consoleSource,
+        // The admin reads flagged reviews through the paged hook: the
+        // reviews collection group, filtered to flagged, newest first.
+        assert.match(consoleSource,
+            /\["moderationStatus", "==", "flagged"\]/);
+        assert.match(consoleSource,
             // eslint-disable-next-line max-len
-            /collectionGroup\(db, "reviews"\),\s*where\("moderationStatus", "==", "flagged"\)/,
-        );
+            /source: \{ group: "reviews" \},\s*filters: FLAGGED_REVIEW_FILTERS,\s*orderBy: \{ field: "createdAt", direction: "desc" \}/);
         const indexes = JSON.parse(read(appRoot, "firestore.indexes.json"));
+        // Ordered and paged, it needs the composite group index too.
+        assert.ok(indexes.indexes.some((index) =>
+          index.collectionGroup === "reviews" &&
+          index.queryScope === "COLLECTION_GROUP" &&
+          index.fields.length === 2 &&
+          index.fields[0].fieldPath === "moderationStatus" &&
+          index.fields[1].fieldPath === "createdAt" &&
+          index.fields[1].order === "DESCENDING"),
+        "missing reviews (moderationStatus, createdAt desc) group index");
         const override = indexes.fieldOverrides.find((entry) =>
           entry.collectionGroup === "reviews" &&
           entry.fieldPath === "moderationStatus");

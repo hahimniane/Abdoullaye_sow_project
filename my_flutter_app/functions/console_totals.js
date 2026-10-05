@@ -178,6 +178,7 @@ function createConsoleTotalsHandlers(deps) {
     hasBusinessPermission,
     getUserProfile,
     hasAdminCapability,
+    hasAdminSectionAccess = () => false,
     normalizeBusinessServices,
     ensureParkingOccupancyIndexed,
     now = () => new Date(),
@@ -527,9 +528,11 @@ function createConsoleTotalsHandlers(deps) {
   async function getAdminOverview(request) {
     const uid = requireAuth(request);
     const user = await getUserProfile(uid);
-    const allowed = ["businesses", "operations", "marketplace", "finance",
-      "support", "users", "website"].some((capability) =>
-      hasAdminCapability(user, capability));
+    // Today is every platform admin's landing tab, view-only roles included,
+    // and its counts are what the rules already let any verified admin read
+    // (isAdmin in firestore.rules): an admin profile and a verified email.
+    const allowed = user?.role === "admin" &&
+      request.auth?.token?.email_verified === true;
     if (!allowed) {
       throw new HttpsError("permission-denied",
           "Platform administrator permission required");
@@ -570,7 +573,10 @@ function createConsoleTotalsHandlers(deps) {
   async function getPlatformEarnings(request) {
     const uid = requireAuth(request);
     const user = await getUserProfile(uid);
-    if (!hasAdminCapability(user, "finance")) {
+    // Anyone who may open the Finance tab: the finance capability (manage)
+    // or view access to the finance section.
+    if (!hasAdminCapability(user, "finance") &&
+        !hasAdminSectionAccess(user, "finance", "view")) {
       throw new HttpsError("permission-denied",
           "Only finance admins can read platform earnings");
     }

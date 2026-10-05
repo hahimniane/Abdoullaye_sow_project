@@ -39,22 +39,11 @@ test("the commission summary renders above the transaction list", () => {
   );
 });
 
-test("the summary is aggregated client-side from records the view already holds", () => {
-  assert.match(financeSource, /summarizePlatformEarnings\(\{/);
-  for (const collection of [
-    "shipments",
-    "freightShipments",
-    "transports",
-    "parkedCars",
-    "purchases",
-    "businesses",
-  ]) {
-    assert.match(
-      financeSource,
-      new RegExp(`\\n\\s+${collection},`),
-      `${collection} must be fed into the platform earnings summary`,
-    );
-  }
+test("the summary is counted by the server over every record, not from paged rows", () => {
+  // The Finance lists are paged, so a sum of the loaded rows would only
+  // cover the pages loaded: getPlatformEarnings sums every record.
+  assert.match(financeSource, /useServerTotals<[^>]*>\(\s*"getPlatformEarnings",/);
+  assert.doesNotMatch(financeSource, /summarizePlatformEarnings\(\{/);
   assert.doesNotMatch(
     financeSource,
     /onSnapshot\(|collectionGroup\(|getDoc\(/,

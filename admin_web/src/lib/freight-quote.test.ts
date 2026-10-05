@@ -181,13 +181,11 @@ test("the business feed answers with a price and a promise", () => {
   // and a yes/no: what this business charges, and whether it stands behind
   // this parcel. Never an amount for the second.
   assert.match(operationsSource, /freightQuoteRequests/);
+  // Only requests this business may price AND that are still taking
+  // prices - both in the query, so a closed request never hides an open one.
   assert.match(
     operationsSource,
-    /where\("eligibleBusinessIds", "array-contains", scopedBusinessId\)/,
-  );
-  assert.match(
-    operationsSource,
-    /text\(row\.quoteStatus, "collecting"\) === "collecting"/,
+    /\["eligibleBusinessIds", "array-contains", scopedBusinessId\],\s*\["quoteStatus", "==", "collecting"\],/,
   );
   assert.match(operationsSource, /"submitFreightQuote"/);
   assert.match(operationsSource, /What you charge \(USD\)/);

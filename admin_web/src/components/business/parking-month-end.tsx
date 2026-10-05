@@ -5,6 +5,7 @@ import { httpsCallable } from "firebase/functions";
 import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, X } from "lucide-react";
 
 import { auth, functions } from "@/lib/firebase";
+import { useParkingMonthInputs } from "@/lib/business-data";
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "@/lib/business-parking-entry";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 
@@ -30,10 +31,10 @@ import type { FirestoreRow } from "@/types/admin";
 type Row = Record<string, unknown>;
 
 type ParkingMonthEndProps = {
-  rows: readonly FirestoreRow[];
-  /** The business's ledger activities: those dated in the month, and older
-   * ones still unpaid, go on the same bills. */
-  activities?: readonly FirestoreRow[];
+  /** The month's cars and ledger activities (those dated in the month, and
+   * older ones still unpaid, go on the same bills) are read here, scoped to
+   * the month on screen - never the lot's whole history. */
+  businessId: string;
   /** The team, for "Received by" when a whole bill is marked paid. */
   staff?: readonly FirestoreRow[];
   business: Row | null;
@@ -50,8 +51,11 @@ type ParkingMonthEndProps = {
  * to send. Worked out live from the cars; payments are recorded on the car
  * as always, oldest month first, so a bill flips to paid by itself.
  */
-export function ParkingMonthEnd({ rows, activities = [], staff = [], business, businessName, initialMonth, onClose, onOpenCar }: ParkingMonthEndProps) {
+export function ParkingMonthEnd({ businessId, staff = [], business, businessName, initialMonth, onClose, onOpenCar }: ParkingMonthEndProps) {
   const [monthKey, setMonthKey] = useState(initialMonth || previousMonthKey());
+  const inputs = useParkingMonthInputs(businessId, monthKey, Boolean(businessId));
+  const rows = inputs.cars;
+  const activities = inputs.activities;
   const [showAll, setShowAll] = useState(false);
   // Customers whose already-paid lines are unfolded on their card.
   const [openPaid, setOpenPaid] = useState<Set<string>>(() => new Set());
@@ -195,6 +199,11 @@ export function ParkingMonthEnd({ rows, activities = [], staff = [], business, b
         <div className="lst-form-error" role="status" style={{ background: "var(--mist)", color: "var(--brand-strong)" }}>
           {flash} <button className="ghost-button" type="button" onClick={() => setFlash("")}>Dismiss</button>
         </div>
+      )}
+
+      {inputs.error && <div className="error-box" role="alert">{inputs.error}</div>}
+      {inputs.loading && (
+        <div className="empty-state"><RefreshCw className="spin" size={16} /> Loading…</div>
       )}
 
       <div className="pk-scoreboard" role="group" aria-label="Month totals">

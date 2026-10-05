@@ -92,6 +92,9 @@ export function CustomerSupport({
     const request = query(
       collection(db, "supportCases"),
       where("customerUid", "==", uid),
+      // The newest 100 by activity: limit() alone returned 100 cases by
+      // document id. Every supportCases writer stamps updatedAt.
+      orderBy("updatedAt", "desc"),
       limit(100),
     );
     const unsubscribe = onSnapshot(

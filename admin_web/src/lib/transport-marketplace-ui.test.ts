@@ -70,8 +70,11 @@ test("business transport panel separates quote opportunities from accepted jobs"
   const end = businessSource.indexOf("export function ParkingPanel", start);
   const panel = businessSource.slice(start, end);
 
-  assert.match(panel, /useBusinessRows\("transportOpportunities"/);
-  assert.match(panel, /useBusinessRows\("transportQuotes"/);
+  // Open opportunities filtered in the query; this business's quotes looked
+  // up by the requests on screen; jobs paged.
+  assert.match(panel, /useBusinessCollection\("transportOpportunities", businessId, enabled, \{\s*pageSize: null,\s*where: \[\["status", "in", \[\.\.\.TRANSPORT_OPEN_OPPORTUNITY_STATUSES\]\]\],/);
+  assert.match(panel, /useDocsWhereIn\(\{\s*collection: "transportQuotes",\s*field: "requestId",/);
+  assert.match(panel, /useBusinessCollection\("transportRequests", businessId, enabled, \{/);
   assert.match(panel, /Quote opportunities/);
   assert.match(panel, /Accepted jobs/);
   assert.match(panel, /"submitTransportQuote"/);
