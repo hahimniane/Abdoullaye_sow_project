@@ -4788,7 +4788,7 @@ export function ParkingPanel({
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   useCarCatalog();
   const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
-  const parkingStaff = useBusinessStaff(businessId, Boolean(businessId && !previewMode), 200);
+  const parkingStaff = useBusinessStaff(businessId, Boolean(businessId && !previewMode));
   // The lot already remembers everyone it has taken a car from - walk-ups
   // write to lotCustomers through createBusinessParkingEntry. A regular is
   // therefore someone to pick, not someone to re-type.
@@ -7595,7 +7595,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const activityPayments = useBusinessRows("lotActivityPayments", businessId, enabled, 2000);
   const expenseLines = useBusinessRows("lotExpenseLines", businessId, enabled, 200);
   const expenseEntries = useBusinessRows("lotExpenseEntries", businessId, enabled, 2000);
-  const staff = useBusinessStaff(businessId, enabled, 200);
+  const staff = useBusinessStaff(businessId, enabled);
   // Parked cars are read so a VIN typed into the activity form can pull the
   // car and customer it already belongs to (reusing existing records rather
   // than re-typing) — the same reuse the handoff called for.

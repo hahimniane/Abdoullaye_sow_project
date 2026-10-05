@@ -41,9 +41,15 @@ test("the console routes the tab to ContainersPanel like every other panel", () 
 });
 
 test("the panel reads containers and lines by business and writes only through callables", () => {
-  assert.match(panelSource, /useBusinessCollection\("containers", businessId, enabled, \d+\)/);
-  assert.match(panelSource, /useBusinessCollection\("containerLines", businessId, enabled, \d+\)/);
-  assert.match(panelSource, /useBusinessDestinations\(businessId, enabled, \d+\)/, "destinations come from the business's own list");
+  // Open containers whole; arrived ones newest arrival first, paged; the
+  // lines only of the containers on screen (batched `in`), never the
+  // business's whole loading history.
+  assert.match(panelSource, /useBusinessCollection\("containers", businessId, enabled, \{\s*pageSize: null,\s*where: \[\["status", "in", \["loading", "shipped"\]\]\],/);
+  assert.match(panelSource, /useBusinessCollection\("containers", businessId, enabled, \{\s*pageSize: 25,\s*orderBy: "arrivedAt",\s*where: \[\["status", "==", "arrived"\]\],/);
+  assert.match(panelSource, /useDocsWhereIn\(\{\s*collection: "containerLines",\s*field: "containerId",\s*values: containerIds,/);
+  assert.doesNotMatch(panelSource, /useBusinessCollection\("containerLines"/);
+  assert.match(panelSource, /<LoadMoreButton\s*hasMore=\{arrivedContainers\.hasMore\}/);
+  assert.match(panelSource, /useBusinessDestinations\(businessId, enabled\)/, "destinations come from the business's own list");
   // The business's own destinations come first, but a container may go
   // anywhere: a business with no Services & coverage list still gets the
   // whole catalogue, never an empty picker.
@@ -95,10 +101,13 @@ test("the list filters by state and by destination", () => {
 
 test("the line form reuses the ledger's VIN prefill and customer memory rather than forking them", () => {
   // Same records the ledger scans, same shared helpers, same decode.
-  assert.match(panelSource, /findVehicleRecordByVin\(\[\.\.\.parkedCars\.rows, \.\.\.activities\.rows\], clean\)/);
+  // The cars in the lot first (already in memory), then a full VIN asks the
+  // lot's own records one document at a time - never a scan of every car.
+  assert.match(panelSource, /findVehicleRecordByVin\(parkedCars\.rows, clean\)/);
+  assert.match(panelSource, /await findBusinessVehicleRecord\(businessId, vin\)/);
   assert.match(panelSource, /await decodeVinWithCatalog\(vin\)/);
   assert.match(panelSource, /matchLotCustomers\(knownCustomers, typed\)/);
-  assert.match(panelSource, /useBusinessCollection\("lotCustomers", businessId, enabled, \d+\)/);
+  assert.match(panelSource, /useBusinessCollection\("lotCustomers", businessId, enabled, \{\s*pageSize: \d+,\s*orderBy: "lastSeenAt",/);
   // The ledger's record form now goes through the same helper.
   assert.match(operationsSource, /const match = findVehicleRecordByVin\(\[\.\.\.parkedCars\.rows, \.\.\.activities\.rows\], clean\);/);
   assert.match(operationsSource, /async function decodeActivityVin\(vin: string\) \{\s*setVinHint\(VIN_LOOKING_UP\);\s*try \{\s*const result = await decodeVinWithCatalog\(vin\);/);
@@ -128,7 +137,7 @@ test("a car line asks whether the car is in the lot before it shows a VIN field"
 });
 
 test("the pick list is the parked cars in the lot, from the subscription the VIN prefill already holds", () => {
-  const subscriptions = panelSource.match(/useBusinessCollection\("parkedCars", businessId, enabled, \d+\)/g) ?? [];
+  const subscriptions = panelSource.match(/useActiveParkedCars\(businessId, enabled\)/g) ?? [];
   assert.equal(subscriptions.length, 1, "one parkedCars subscription per panel, not one per modal");
   assert.match(panelSource, /parkedCarsInLot\(parkedCars\.rows\)\.map\(\(row\) => parkedCarPick\(row, vinPlacements\)\)/);
   assert.match(panelSource, /const vinPlacements = useMemo\(\s*\(\) => buildVinPlacementIndex\(lines\.rows, containers\.rows\),/);

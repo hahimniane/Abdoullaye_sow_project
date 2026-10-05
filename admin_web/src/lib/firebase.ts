@@ -5,7 +5,17 @@ import {
   type AppCheck,
 } from "firebase/app-check";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
-import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import {
+  connectFirestoreEmulator,
+  getFirestore,
+  initializeFirestore,
+  memoryLocalCache,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from "firebase/firestore";
+
+import { firestoreCacheChoice } from "./firestore-cache-choice.ts";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { connectStorageEmulator, getStorage } from "firebase/storage";
 
@@ -79,7 +89,31 @@ if (
 }
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Returning to a tab, or opening a second one, used to re-read every list
+// from the server. A persistent cache (shared across tabs) answers the first
+// snapshot from disk and only the changes come over the wire. Where the
+// browser offers no IndexedDB (some private windows, locked-down profiles)
+// the cache is memory-only - the SDK also falls back to memory by itself if
+// opening IndexedDB fails later - so listeners still answer and every
+// loading state still resolves; only the cross-visit saving is lost.
+function createFirestore(): Firestore {
+  if (typeof window === "undefined") return getFirestore(app);
+  try {
+    const choice = firestoreCacheChoice(globalThis);
+    return initializeFirestore(app, {
+      localCache: choice === "persistent"
+        ? persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+        : memoryLocalCache(),
+    });
+  } catch {
+    // Already initialised (a hot reload re-running this module) or refused:
+    // the instance that exists is the one to use.
+    return getFirestore(app);
+  }
+}
+
+export const db = createFirestore();
 export const functions = getFunctions(app);
 export const storage = getStorage(app);
 

@@ -29,10 +29,14 @@ import {
 import { runPanelAction } from "@/components/business/operations-panels";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import {
+  useActiveParkedCars,
   useBusinessCollection,
   useBusinessDestinations,
   useBusinessStaff,
 } from "@/lib/business-data";
+import { useDocsWhereIn } from "@/lib/use-paged-query";
+import { findBusinessVehicleRecord } from "@/lib/vin-records";
+import { LoadMoreButton } from "@/components/show-more";
 import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/lib/car-catalog";
 import { useCarCatalog } from "@/lib/use-car-catalog";
 import {
@@ -236,16 +240,49 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   useCarCatalog();
   const enabled = Boolean(businessId && !previewMode);
-  const containers = useBusinessCollection("containers", businessId, enabled, 500);
-  const lines = useBusinessCollection("containerLines", businessId, enabled, 3000);
-  const destinations = useBusinessDestinations(businessId, enabled, 500);
-  const staff = useBusinessStaff(businessId, enabled, 200);
-  // The same records the lot ledger's form scans when a VIN is typed: a
-  // parked car or a past activity already says what the car is and whose.
-  const parkedCars = useBusinessCollection("parkedCars", businessId, enabled, 500);
-  const activities = useBusinessCollection("lotActivities", businessId, enabled, 1000);
-  // The lot's customer memory, offered back as staff type a name.
-  const lotCustomers = useBusinessCollection("lotCustomers", businessId, enabled, 500);
+  // Every container still loading or at sea, whole and live; the arrived
+  // ones - history that only grows - newest arrival first, a page at a time.
+  const openContainers = useBusinessCollection("containers", businessId, enabled, {
+    pageSize: null,
+    where: [["status", "in", ["loading", "shipped"]]],
+  });
+  const arrivedContainers = useBusinessCollection("containers", businessId, enabled, {
+    pageSize: 25,
+    orderBy: "arrivedAt",
+    where: [["status", "==", "arrived"]],
+    sort: "query",
+  });
+  const containerRows = useMemo(
+    () => [...openContainers.rows, ...arrivedContainers.rows],
+    [openContainers.rows, arrivedContainers.rows],
+  );
+  const containers = {
+    rows: containerRows,
+    loading: openContainers.loading || arrivedContainers.loading,
+    error: openContainers.error || arrivedContainers.error,
+  };
+  // The lines of the containers on screen - never the business's whole
+  // loading history.
+  const containerIds = useMemo(() => containerRows.map((row) => String(row.id)), [containerRows]);
+  const lines = useDocsWhereIn({
+    collection: "containerLines",
+    field: "containerId",
+    values: containerIds,
+    filters: [["businessId", "==", businessId]],
+    enabled,
+  });
+  const destinations = useBusinessDestinations(businessId, enabled);
+  const staff = useBusinessStaff(businessId, enabled);
+  // The cars in the lot right now (the line form offers them), whole and
+  // live: the stays that have not ended.
+  const parkedCars = useActiveParkedCars(businessId, enabled);
+  // The lot's customer memory, offered back as staff type a name: the people
+  // seen most recently first.
+  const lotCustomers = useBusinessCollection("lotCustomers", businessId, enabled, {
+    pageSize: 300,
+    orderBy: "lastSeenAt",
+    sort: "query",
+  });
 
   const [statusFilter, setStatusFilter] = useState<"" | ContainerStatus>("");
   const [destinationFilter, setDestinationFilter] = useState("");
@@ -702,29 +739,44 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
       lastVinRef.current = "";
       return;
     }
-    const match = findVehicleRecordByVin([...parkedCars.rows, ...activities.rows], clean);
+    const match = findVehicleRecordByVin(parkedCars.rows, clean);
     if (match) {
       lastVinRef.current = clean;
-      setLineDraft((d) => ({
-        ...d,
-        carMake: text(match.carMake, d.carMake),
-        carModel: text(match.carModel, d.carModel),
-        carYear: text(match.carYear, d.carYear),
-        customerName: d.customerName || text(match.customerName ?? match.ownerName, ""),
-        customerPhone: d.customerPhone || text(match.customerPhone, ""),
-      }));
-      const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")].filter(Boolean).join(" ");
-      const who = text(match.customerName ?? match.ownerName, "");
-      setVinHint(recordHint(car, who));
+      fillFromRecord(match);
       return;
     }
-    // The yard has never seen this VIN: decode it. Only on a full VIN, and once
-    // per distinct one so it does not re-fire on every keystroke.
+    // Not a car in the lot now: a full VIN asks the lot's records (one
+    // lookup each), then the decoder - once per distinct VIN.
     setVinHint("");
     if (clean.length === 17 && clean !== lastVinRef.current) {
       lastVinRef.current = clean;
-      void decodeLineVin(clean);
+      void lookupLineVin(clean);
     }
+  }
+
+  async function lookupLineVin(vin: string) {
+    setVinHint(VIN_LOOKING_UP);
+    const match = await findBusinessVehicleRecord(businessId, vin);
+    if (lastVinRef.current !== vin) return;
+    if (match) {
+      fillFromRecord(match);
+      return;
+    }
+    await decodeLineVin(vin);
+  }
+
+  function fillFromRecord(match: Record<string, unknown>) {
+    setLineDraft((d) => ({
+      ...d,
+      carMake: text(match.carMake, d.carMake),
+      carModel: text(match.carModel, d.carModel),
+      carYear: text(match.carYear, d.carYear),
+      customerName: d.customerName || text(match.customerName ?? match.ownerName, ""),
+      customerPhone: d.customerPhone || text(match.customerPhone, ""),
+    }));
+    const car = [text(match.carYear, ""), text(match.carMake, ""), text(match.carModel, "")].filter(Boolean).join(" ");
+    const who = text(match.customerName ?? match.ownerName, "");
+    setVinHint(recordHint(car, who));
   }
 
   async function decodeLineVin(vin: string) {
@@ -1087,6 +1139,13 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                 })}
               </div>
             </div>
+          )}
+          {!searching && (statusFilter === "" || statusFilter === "arrived") && (
+            <LoadMoreButton
+              hasMore={arrivedContainers.hasMore}
+              loading={arrivedContainers.loadingMore}
+              onLoadMore={arrivedContainers.loadMore}
+            />
           )}
         </article>
       )}

@@ -2299,6 +2299,29 @@ button[data-loading="true"]::before {
   padding: 12px 0 4px;
 }
 
+/* When a server-computed scoreboard was worked out, and a way to ask again. */
+.totals-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.totals-status .ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.totals-status-error {
+  color: var(--danger);
+}
+
 /* A French page stays hidden until its translation has run (the boot script
    in app/layout.tsx sets this; french-dom-runtime.ts always removes it). */
 html[data-lang-pending] body {
