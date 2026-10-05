@@ -692,24 +692,11 @@
   "barrelPickupPricing": "Tarifs de ramassage des barils",
   "searchCountriesCodesFlags": "Rechercher des pays, codes ou drapeaux",
   "business": "Entreprise",
-  "migrationComplete": "Migration terminée : {count} écritures.",
-  "@migrationComplete": {
-    "placeholders": {
-      "count": {}
-    }
-  },
-  "migrationFailed": "Échec de la migration : {error}",
-  "@migrationFailed": {
-    "placeholders": {
-      "error": {}
-    }
-  },
   "status": "Statut",
   "pending": "En attente",
   "approved": "Approuvé",
   "suspended": "Suspendu",
   "saveBusiness": "Enregistrer l’entreprise",
-  "migrateKerenData": "Migrer les données Keren",
   "addBusiness": "Ajouter une entreprise",
   "updatePurchaseStatusQuestion": "Mettre à jour le statut de l’achat ?",
   "updatePurchaseStatusMessage": "Cela marquera {carTitle} comme {status} et mettra à jour la voiture liée.",

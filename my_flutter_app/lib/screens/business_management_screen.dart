@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
@@ -11,21 +10,6 @@ import '../widgets/language_toggle.dart';
 
 class BusinessManagementScreen extends StatelessWidget {
   const BusinessManagementScreen({super.key});
-
-  Future<void> _runMigration(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('migrateDefaultBusiness')
-          .call<Map<String, dynamic>>();
-      if (!context.mounted) return;
-      final writes = result.data['writes'] ?? 0;
-      showSuccessSnackBar(context, l10n.migrationComplete(writes));
-    } catch (error) {
-      if (!context.mounted) return;
-      showErrorSnackBar(context, l10n.migrationFailed(error));
-    }
-  }
 
   Future<void> _showBusinessForm(
     BuildContext context, {
@@ -233,12 +217,6 @@ class BusinessManagementScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              OutlinedButton.icon(
-                onPressed: () => _runMigration(context),
-                icon: const Icon(Icons.sync),
-                label: Text(l10n.migrateKerenData),
-              ),
-              const SizedBox(height: 12),
               FilledButton.icon(
                 onPressed: () => _showBusinessForm(context),
                 icon: const Icon(Icons.add_business),

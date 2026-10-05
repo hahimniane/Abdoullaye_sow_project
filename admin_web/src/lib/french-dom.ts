@@ -2272,8 +2272,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Default barrel price (USD)": "Prix de baril par défaut (USD)",
   "Default barrel pricing & destinations":
     "Prix de baril et destinations par défaut",
-  "Default business migration complete":
-    "Migration de l’entreprise par défaut terminée",
   Delete: "Supprimer",
   "Delete role": "Supprimer le rôle",
   "Deleting...": "Suppression...",
