@@ -10046,4 +10046,56 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pkgResultNotSent => 'not sent';
+
+  @override
+  String get moneyAmountInvalid => 'Enter an amount like 12.50 or 1,200.50.';
+
+  @override
+  String get authErrorUserDisabled =>
+      'This account has been disabled. Contact support if you think this is a mistake.';
+
+  @override
+  String get authErrorTooManyRequests =>
+      'Too many attempts. Wait a few minutes and try again.';
+
+  @override
+  String get authErrorNetwork =>
+      'No connection. Check your internet and try again.';
+
+  @override
+  String get authErrorWeakPassword =>
+      'Choose a stronger password - at least 6 characters.';
+
+  @override
+  String get authErrorEmailInUse =>
+      'An account already exists with this email.';
+
+  @override
+  String get authErrorNoAccountForEmail => 'No account uses this email.';
+
+  @override
+  String get authErrorSignInUnavailable =>
+      'Signing in with email is not available right now. Contact support.';
+
+  @override
+  String get authErrorSignInRequired => 'Sign in first.';
+
+  @override
+  String get authErrorInvalidOwnerPhone =>
+      'Enter a valid owner phone number with country code.';
+
+  @override
+  String get authErrorInvalidBusinessPhone =>
+      'Enter a valid business phone number with country code.';
+
+  @override
+  String get authErrorUnknown => 'Something went wrong. Please try again.';
+
+  @override
+  String get supportLoadEarlierMessages => 'Load earlier messages';
+
+  @override
+  String recordSavedReceiptUnavailable(String trackingCode) {
+    return 'Saved. Tracking number: $trackingCode. The receipt could not be printed, but the record is saved - do not save it again.';
+  }
 }

@@ -12,6 +12,10 @@ import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/business_permissions.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
+import 'auth_failure.dart';
+import 'auth_lookup_guard.dart';
+
+export 'auth_failure.dart';
 
 enum AuthInitializationIssue { profileUnavailable, profileMissing }
 
@@ -52,6 +56,21 @@ SignUpFailureKind classifySignUpFunctionsFailure({
     'unavailable' ||
     'deadline-exceeded' ||
     'internal' => SignUpFailureKind.serviceUnavailable,
+    _ => SignUpFailureKind.unknown,
+  };
+}
+
+/// The sign-up failure for a FirebaseAuthException raised while signing the
+/// new account in. The screen localizes the kind; it never shows Firebase's
+/// English message.
+SignUpFailureKind classifySignUpAuthFailure(String code) {
+  return switch (authErrorCodeFor(code)) {
+    AuthErrorCode.emailInUse => SignUpFailureKind.emailAlreadyInUse,
+    AuthErrorCode.invalidEmail ||
+    AuthErrorCode.weakPassword => SignUpFailureKind.invalidInput,
+    AuthErrorCode.tooManyRequests => SignUpFailureKind.rateLimited,
+    AuthErrorCode.network ||
+    AuthErrorCode.signInUnavailable => SignUpFailureKind.serviceUnavailable,
     _ => SignUpFailureKind.unknown,
   };
 }
@@ -159,18 +178,24 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _onAuthStateChanged(User? user) async {
+    final event = ++_authEventGeneration;
     _user = user;
     _initializationIssue = null;
     if (user != null) {
       _clearProfileState();
       _userEmail = user.email;
       await _checkUserRole();
+      // Signed out, or another account signed in, while the role loaded: the
+      // newer event owns the state now.
+      if (event != _authEventGeneration) return;
       // Covers the restored-session cold start, which never runs authenticate()
       // and so never re-registered a rotated FCM token. Does not prompt.
       unawaited(_refreshPushRegistrationIfPossible());
     } else {
+      _roleLookups.invalidate();
       _clearProfileState();
       _userEmail = null;
+      _pushNotifications.setAudience(NotificationAudience.customer);
     }
 
     if (_isInitializing) {
@@ -179,133 +204,171 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Bumped on every auth state event, so a slow event can tell that a newer
+  /// one has replaced it.
+  int _authEventGeneration = 0;
+
+  /// Retires role lookups that finish after their account is gone.
+  final AuthLookupGuard _roleLookups = AuthLookupGuard();
+  String? _roleCheckUid;
+
   Future<void> _checkUserRole() {
+    final uid = _auth.currentUser?.uid;
     final inFlight = _roleCheckInFlight;
-    if (inFlight != null) return inFlight;
+    // Share a lookup already running for this same account; a different
+    // account always gets its own.
+    if (inFlight != null && uid != null && uid == _roleCheckUid) {
+      return inFlight;
+    }
 
     late final Future<void> check;
     check = _checkUserRoleOnce().whenComplete(() {
       if (identical(_roleCheckInFlight, check)) {
         _roleCheckInFlight = null;
+        _roleCheckUid = null;
       }
     });
     _roleCheckInFlight = check;
+    _roleCheckUid = uid;
     return check;
   }
 
   Future<void> _checkUserRoleOnce() async {
     final signedInUser = _auth.currentUser;
-    if (signedInUser != null) {
-      try {
-        // Storage rules read role/businessId/etc. from the ID token's custom
-        // claims, which sync from Firestore server-side (syncUserCustomClaims)
-        // whenever the profile changes. A cached token doesn't pick that up
-        // until it naturally expires (~1hr), so force a refresh on every
-        // session load to avoid stale-claims storage/unauthorized errors.
-        await signedInUser.getIdToken(true);
-        debugPrint('🔍 Fetching user document from Firestore...');
-        var userDoc = await _firestore
-            .collection('users')
-            .doc(signedInUser.uid)
-            .get()
-            .timeout(const Duration(seconds: 15));
-        if (!userDoc.exists) {
-          await signedInUser.reload();
-          final refreshedUser = _auth.currentUser;
-          if (refreshedUser == null || refreshedUser.uid != signedInUser.uid) {
-            return;
-          }
-          _user = refreshedUser;
-          _userEmail = refreshedUser.email;
-
-          if (refreshedUser.emailVerified) {
-            try {
-              await refreshedUser.getIdToken(true);
-              await _functions
-                  .httpsCallable('acceptAccessInvitation')
-                  .call(<String, dynamic>{});
-            } on FirebaseFunctionsException catch (error) {
-              // Re-read the profile even when the callable response is lost:
-              // the invitation may already have been activated server-side.
-              debugPrint(
-                'ℹ️ Access invitation activation returned ${error.code}.',
-              );
-            }
-
-            userDoc = await _firestore
-                .collection('users')
-                .doc(refreshedUser.uid)
-                .get()
-                .timeout(const Duration(seconds: 15));
-          }
+    if (signedInUser == null) return;
+    final ticket = _roleLookups.begin(signedInUser.uid);
+    // After every await: is this still the newest lookup for the account that
+    // is signed in now? If not, its answer belongs to nobody - drop it.
+    bool current() => ticket.isCurrent(_auth.currentUser?.uid);
+    // A notification tap waits while the role is unknown instead of routing a
+    // lot's staff to customer screens.
+    _pushNotifications.setAudience(null);
+    try {
+      // Storage rules read role/businessId/etc. from the ID token's custom
+      // claims, which sync from Firestore server-side (syncUserCustomClaims)
+      // whenever the profile changes. A cached token doesn't pick that up
+      // until it naturally expires (~1hr), so force a refresh on every
+      // session load to avoid stale-claims storage/unauthorized errors.
+      await signedInUser.getIdToken(true);
+      if (!current()) return;
+      debugPrint('🔍 Fetching user document from Firestore...');
+      var userDoc = await _firestore
+          .collection('users')
+          .doc(signedInUser.uid)
+          .get()
+          .timeout(const Duration(seconds: 15));
+      if (!current()) return;
+      if (!userDoc.exists) {
+        await signedInUser.reload();
+        if (!current()) return;
+        final refreshedUser = _auth.currentUser;
+        if (refreshedUser == null || refreshedUser.uid != signedInUser.uid) {
+          return;
         }
-        if (userDoc.exists) {
-          final data = userDoc.data();
-          final role = data?['role'] as String?;
-          _role = role;
-          _isBusinessOwner = role == 'businessOwner';
-          _isStaff = role == 'staff';
-          _isAdmin = role == 'admin';
-          _adminRole = data?['adminRole'] as String?;
-          _businessId = data?['businessId'] as String?;
-          _businessName = data?['businessName'] as String?;
-          _businessServices = _stringList(data?['businessServices']);
-          _businessPermissions = _stringList(data?['businessPermissions']);
-          // Notification taps route by who is signed in: a lot's staff and
-          // owners land on business screens, everyone else on customer ones.
-          PushNotificationService.instance.audienceResolver = () =>
-              hasBusinessDashboardAccess
-                  ? NotificationAudience.business
-                  : NotificationAudience.customer;
-          _customerName = data?['fullName'] as String?;
-          _customerPhone = data?['phone'] as String?;
-          _normalizedPhone = data?['normalizedPhone'] as String?;
-          _phoneVerified = data?['phoneVerified'] == true;
-          _profileImageUrl = data?['profileImageUrl'] as String?;
-          _notificationPreferences = NotificationPreferences.fromMap(
-            data?['notificationPreferences'] is Map<String, dynamic>
-                ? data!['notificationPreferences'] as Map<String, dynamic>
-                : null,
-          );
-          if (_isAdmin) {
-            Map<String, dynamic>? permissionsConfig;
-            try {
-              final permissions = await _firestore
-                  .collection('platformConfig')
-                  .doc('permissions')
-                  .get()
-                  .timeout(const Duration(seconds: 10));
-              permissionsConfig = permissions.data();
-            } catch (error) {
-              // Built-in roles remain available when the optional override
-              // document is temporarily unavailable. Unknown roles fail closed.
-              debugPrint('⚠️ Platform permissions config unavailable: $error');
-            }
-            _platformAccess = PlatformAccess.resolve(
-              role: _adminRole,
-              permissionsConfig: permissionsConfig,
+        _user = refreshedUser;
+        _userEmail = refreshedUser.email;
+
+        if (refreshedUser.emailVerified) {
+          try {
+            await refreshedUser.getIdToken(true);
+            await _functions
+                .httpsCallable('acceptAccessInvitation')
+                .call(<String, dynamic>{});
+          } on FirebaseFunctionsException catch (error) {
+            // Re-read the profile even when the callable response is lost:
+            // the invitation may already have been activated server-side.
+            debugPrint(
+              'ℹ️ Access invitation activation returned ${error.code}.',
             );
           }
-          _initializationIssue = null;
-          debugPrint(
-            '👥 User role: ${_isAdmin
-                ? 'admin'
-                : _isBusinessOwner
-                ? 'businessOwner'
-                : _isStaff
-                ? 'staff'
-                : 'customer'}',
-          );
-        } else {
-          debugPrint('📄 User document not found.');
-          _clearProfileState();
-          _initializationIssue = AuthInitializationIssue.profileMissing;
+          if (!current()) return;
+
+          userDoc = await _firestore
+              .collection('users')
+              .doc(refreshedUser.uid)
+              .get()
+              .timeout(const Duration(seconds: 15));
+          if (!current()) return;
         }
-        // No longer need to notify here, _onAuthStateChanged will do it.
-      } catch (e) {
-        debugPrint('❌ Error checking user role: $e');
+      }
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        final role = data?['role'] as String?;
+        final adminRole = data?['adminRole'] as String?;
+        // Resolved before anything is written, so the profile lands all at
+        // once and only if this lookup is still the current one.
+        var platformAccess = const PlatformAccess.none();
+        if (role == 'admin') {
+          Map<String, dynamic>? permissionsConfig;
+          try {
+            final permissions = await _firestore
+                .collection('platformConfig')
+                .doc('permissions')
+                .get()
+                .timeout(const Duration(seconds: 10));
+            permissionsConfig = permissions.data();
+          } catch (error) {
+            // Built-in roles remain available when the optional override
+            // document is temporarily unavailable. Unknown roles fail closed.
+            debugPrint('⚠️ Platform permissions config unavailable: $error');
+          }
+          if (!current()) return;
+          platformAccess = PlatformAccess.resolve(
+            role: adminRole,
+            permissionsConfig: permissionsConfig,
+          );
+        }
+        _role = role;
+        _isBusinessOwner = role == 'businessOwner';
+        _isStaff = role == 'staff';
+        _isAdmin = role == 'admin';
+        _adminRole = adminRole;
+        _platformAccess = platformAccess;
+        _businessId = data?['businessId'] as String?;
+        _businessName = data?['businessName'] as String?;
+        _businessServices = _stringList(data?['businessServices']);
+        _businessPermissions = _stringList(data?['businessPermissions']);
+        _customerName = data?['fullName'] as String?;
+        _customerPhone = data?['phone'] as String?;
+        _normalizedPhone = data?['normalizedPhone'] as String?;
+        _phoneVerified = data?['phoneVerified'] == true;
+        _profileImageUrl = data?['profileImageUrl'] as String?;
+        _notificationPreferences = NotificationPreferences.fromMap(
+          data?['notificationPreferences'] is Map<String, dynamic>
+              ? data!['notificationPreferences'] as Map<String, dynamic>
+              : null,
+        );
+        debugPrint(
+          '👥 User role: ${_isAdmin
+              ? 'admin'
+              : _isBusinessOwner
+              ? 'businessOwner'
+              : _isStaff
+              ? 'staff'
+              : 'customer'}',
+        );
+      } else {
+        debugPrint('📄 User document not found.');
         _clearProfileState();
-        _initializationIssue = AuthInitializationIssue.profileUnavailable;
+        _initializationIssue = AuthInitializationIssue.profileMissing;
+      }
+      // No longer need to notify here, _onAuthStateChanged will do it.
+    } catch (e) {
+      debugPrint('❌ Error checking user role: $e');
+      if (!current()) return;
+      _clearProfileState();
+      _initializationIssue = AuthInitializationIssue.profileUnavailable;
+    } finally {
+      // The role is known now (customer when the lookup failed). Notification
+      // taps route by it: a lot's staff and owners land on business screens,
+      // everyone else on customer ones. A retired lookup says nothing - the
+      // newer one, or the sign-out, sets it.
+      if (current()) {
+        _pushNotifications.setAudience(
+          hasBusinessDashboardAccess
+              ? NotificationAudience.business
+              : NotificationAudience.customer,
+        );
       }
     }
   }
@@ -326,8 +389,6 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _clearProfileState() {
-    PushNotificationService.instance.audienceResolver = () =>
-        NotificationAudience.customer;
     _isStaff = false;
     _isAdmin = false;
     _isBusinessOwner = false;
@@ -449,91 +510,44 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
       _isLoading = false;
       notifyListeners();
-
-      String errorMessage;
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = 'No user found with this email.';
-          break;
-        case 'wrong-password':
-          errorMessage = 'Wrong password provided.';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Invalid email address.';
-          break;
-        case 'user-disabled':
-          errorMessage = 'This user account has been disabled.';
-          break;
-        case 'too-many-requests':
-          errorMessage = 'Too many failed attempts. Please try again later.';
-          break;
-        default:
-          errorMessage = 'Authentication failed: ${e.message}';
-      }
-
-      debugPrint('🚨 Throwing error: $errorMessage');
-      throw errorMessage;
+      // A code, not a sentence: the screen localizes it.
+      throw AuthFailure(authErrorCodeFor(e.code));
     } catch (e) {
       debugPrint('💥 Unexpected error during authentication: $e');
       _isLoading = false;
       notifyListeners();
-      throw 'An unexpected error occurred: $e';
+      throw const AuthFailure(AuthErrorCode.unknown);
     }
   }
 
   Future<void> logout() async {
     try {
-      try {
-        await _pushNotifications.disableCurrentToken();
-      } catch (e) {
-        debugPrint('Error disabling push token during logout: $e');
-      }
+      await _pushNotifications.disableCurrentToken();
+    } catch (e) {
+      debugPrint('Error disabling push token during logout: $e');
+    }
+    try {
       await _auth.signOut();
-      _user = null;
-      _isStaff = false;
-      _isAdmin = false;
-      _isBusinessOwner = false;
-      _role = null;
-      _businessId = null;
-      _businessName = null;
-      _businessServices = const [];
-      _businessPermissions = const [];
-      _userEmail = null;
-      _customerName = null;
-      _customerPhone = null;
-      _normalizedPhone = null;
-      _phoneVerified = false;
-      _profileImageUrl = null;
-      _notificationPreferences = NotificationPreferences.defaults;
-      notifyListeners();
     } catch (e) {
       debugPrint('Error during logout: $e');
       await _auth.signOut();
-      _user = null;
-      _isStaff = false;
-      _isAdmin = false;
-      _isBusinessOwner = false;
-      _role = null;
-      _businessId = null;
-      _businessName = null;
-      _businessServices = const [];
-      _businessPermissions = const [];
-      _userEmail = null;
-      _customerName = null;
-      _customerPhone = null;
-      _normalizedPhone = null;
-      _phoneVerified = false;
-      _profileImageUrl = null;
-      _notificationPreferences = NotificationPreferences.defaults;
-      notifyListeners();
     }
+    // A role lookup still running for this account must not land afterwards.
+    _roleLookups.invalidate();
+    _user = null;
+    _userEmail = null;
+    // The whole profile, admin role and platform access included - the
+    // previous hand-written list left an admin's access on the next session.
+    _clearProfileState();
+    _pushNotifications.setAudience(NotificationAudience.customer);
+    notifyListeners();
   }
 
   Future<void> updateCustomerPhone(String phone) async {
     final trimmed = phone.trim();
     if (_user == null || trimmed.isEmpty) return;
     if (!PhoneNumberValidator.isValid(trimmed)) {
-      throw 'Please enter a valid phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidPhone);
     }
     await updateAccountProfile(
       fullName: _customerName ?? buyerName,
@@ -552,7 +566,7 @@ class AuthProvider extends ChangeNotifier {
     final trimmedPhone = phone.trim();
     if (_user == null) return;
     if (!PhoneNumberValidator.isValid(trimmedPhone)) {
-      throw 'Please enter a valid phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidPhone);
     }
     final prefs = notificationPreferences ?? _notificationPreferences;
     final callable = _functions.httpsCallable('updateCustomerProfile');
@@ -700,14 +714,14 @@ class AuthProvider extends ChangeNotifier {
     required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     if (_user == null) {
-      throw 'Please create an account or sign in first.';
+      throw const AuthFailure(AuthErrorCode.signInRequired);
     }
     if (!PhoneNumberValidator.isValid(ownerPhone)) {
-      throw 'Please enter a valid owner phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidOwnerPhone);
     }
     if (businessPhone.trim().isNotEmpty &&
         !PhoneNumberValidator.isValid(businessPhone)) {
-      throw 'Please enter a valid business phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidBusinessPhone);
     }
 
     final callable = _functions.httpsCallable('submitBusinessApplication');
@@ -786,10 +800,10 @@ class AuthProvider extends ChangeNotifier {
     Map<String, dynamic>? pickupPlan,
   }) async {
     if (_user == null) {
-      throw 'Please sign in first.';
+      throw const AuthFailure(AuthErrorCode.signInRequired);
     }
     if (phone.trim().isNotEmpty && !PhoneNumberValidator.isValid(phone)) {
-      throw 'Please enter a valid business phone number.';
+      throw const AuthFailure(AuthErrorCode.invalidBusinessPhone);
     }
     final callable = _functions.httpsCallable('updateBusinessProfile');
     await callable.call({
@@ -856,7 +870,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       if (!PhoneNumberValidator.isValid(phone)) {
-        throw 'Please enter a valid phone number.';
+        throw const SignUpFailure(SignUpFailureKind.invalidInput);
       }
 
       debugPrint('📡 Creating new user through Cloud Functions...');
@@ -900,38 +914,16 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
       _isLoading = false;
       notifyListeners();
-
-      String errorMessage;
-      switch (e.code) {
-        case 'weak-password':
-          errorMessage = 'The password provided is too weak.';
-          break;
-        case 'email-already-in-use':
-          errorMessage = 'An account already exists with this email.';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Invalid email address.';
-          break;
-        case 'operation-not-allowed':
-          errorMessage =
-              'Email/password accounts are not enabled. Please contact support.';
-          break;
-        case 'network-request-failed':
-          errorMessage =
-              'Network error. Please check your internet connection.';
-          break;
-        default:
-          errorMessage = 'Sign up failed: ${e.message}';
-      }
-
-      debugPrint('🚨 Throwing error: $errorMessage');
-      throw errorMessage;
+      throw SignUpFailure(classifySignUpAuthFailure(e.code));
+    } on SignUpFailure {
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
     } catch (e) {
       debugPrint('💥 Unexpected error during sign up: $e');
       _isLoading = false;
       notifyListeners();
-
-      throw 'An unexpected error occurred: $e';
+      throw const SignUpFailure(SignUpFailureKind.unknown);
     }
   }
 
@@ -939,18 +931,12 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _auth.sendPasswordResetEmail(email: email);
     } on FirebaseAuthException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = 'No user found with this email.';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Invalid email address.';
-          break;
-        default:
-          errorMessage = 'Password reset failed: ${e.message}';
-      }
-      throw errorMessage;
+      final code = authErrorCodeFor(e.code);
+      // At sign-in "no such account" folds into invalid credentials; asking
+      // for a reset is the one place it says so.
+      throw AuthFailure(
+        e.code == 'user-not-found' ? AuthErrorCode.noAccountForEmail : code,
+      );
     }
   }
 

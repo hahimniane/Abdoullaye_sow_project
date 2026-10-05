@@ -355,6 +355,8 @@ Rules:
 | **Car attributes** (condition, body, fuel, …) | `staff_car_management_screen.dart` | `operations-panels.tsx` option lists | Keep both sides in sync. |
 | **Car make/model/year** (complete, cascading) | `lib/data/car_catalog.dart` → `CarCatalog.instance` (backed by `assets/data/car_models_flutter.json`) | `src/lib/car-catalog.ts` → `getMakes()`/`getModels()`/`getYears()` (backed by `src/lib/car-models-data.json`, a verbatim copy, fetched on demand: call `useCarCatalog()` in the picker, `await loadCarCatalog()` in async code) | 88 makes, 2,739 make/model/year rows. Do not accept free-text make/model — use the cascading pickers so listing data stays searchable/filterable. |
 | **Console translations** | n/a (app uses ARB l10n) | `src/lib/french-dom.ts` | See the translation guardrails in §3. |
+| **Typed money amounts** | `lib/utils/money_input.dart` → `readMoneyInput` / `parseMoneyCents` / `parseMoneyDollars` / `validateOptionalMoney` | `src/lib/lot-ledger.ts` / `src/lib/invoice-ledger.ts` `dollarsToCents` (still strip commas - not yet aligned) | "12,50" is $12.50; commas are thousands only in valid grouping; ambiguous input is refused, never guessed. Never `double.tryParse` a typed amount. |
+| **Displayed dates** | `lib/utils/date_display.dart` (`displayDate`, `displayDateTime`, … with `dateLocaleOf(context)`) | `src/lib/format.ts` | US month-first 12-hour in English, French form in French. A `DateFormat` with no locale fails `test/date_display_test.dart`. |
 
 If the thing you need is not in this table and is reference data or a reusable
 component, add it as a canonical source **and register it here** so the next

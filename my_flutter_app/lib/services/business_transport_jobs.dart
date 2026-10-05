@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/transport_opportunity.dart';
 import '../models/transport_quote.dart';
+import '../utils/money_input.dart';
 
 /// The business side of car transport, app side.
 ///
@@ -88,65 +89,27 @@ enum TransportQuoteError {
   termsTooLong,
 }
 
-/// A group separator, as opposed to a decimal mark: a comma followed by exactly
-/// three digits. `1,250` is twelve hundred and fifty dollars, not one dollar
-/// twenty-five, and a carrier who types it that way must not be quoted a
-/// thousandth of what they meant.
-final RegExp _groupSeparator = RegExp(r',(?=\d{3}(?:\D|$))');
-
-/// Whole dollars, optionally followed by one or two decimal places.
-final RegExp _wholeCents = RegExp(r'^(-?)(\d+)(?:\.(\d{1,2}))?$');
-
-/// The same shape but with more precision than cents can hold.
-final RegExp _fractionalCents = RegExp(r'^-?\d+\.\d{3,}$');
-
 /// Reads a typed amount as whole cents, or null when it is not a number.
 ///
 /// Money is integer cents end to end - the server takes `amountCents` and
-/// checks it with `Number.isSafeInteger`, so a double introduced here would
-/// only ever be a way to send it something it refuses. The text is parsed into
-/// dollars and cents as two integers and combined; nothing is ever multiplied
-/// by 100 as a double.
-///
-/// Both catalogs are in play, so both separators are read as the decimal mark:
-/// a French carrier types `1250,50` and an English one `1250.50`. A comma
-/// followed by exactly three digits is a thousands group and is dropped.
+/// checks it with `Number.isSafeInteger`. This is the app's one money parser
+/// ([readMoneyInput]): a French carrier types `1250,50` and an English one
+/// `1250.50`; `1,250` is a thousands group; separators with no single clean
+/// reading are refused rather than guessed at.
 ///
 /// Returns a negative value for a negative amount rather than null, so the
 /// caller can say "a quote cannot be negative" instead of "that is not a
 /// number". Returns null for more precision than cents can hold; callers
 /// separate that case with [transportQuoteAmountIsFractional].
-int? parseTransportQuoteCents(String input) {
-  final cleaned = input
-      .replaceAll(RegExp(r'[\s ]'), '')
-      .replaceAll(r'$', '')
-      .replaceAll(_groupSeparator, '')
-      .replaceAll(',', '.');
-  final match = _wholeCents.firstMatch(cleaned);
-  if (match == null) return null;
-  final dollars = int.tryParse(match.group(2) ?? '');
-  if (dollars == null) return null;
-  final fraction = match.group(3) ?? '';
-  final cents = fraction.isEmpty
-      ? 0
-      : int.parse(fraction.padRight(2, '0').substring(0, 2));
-  final total = dollars * 100 + cents;
-  return match.group(1) == '-' ? -total : total;
-}
+int? parseTransportQuoteCents(String input) => parseMoneyCents(input);
 
 /// Whether the text is a number but carries more precision than cents.
 ///
 /// Separated from [parseTransportQuoteCents] returning null so "1250.005" can
 /// be refused as "amounts are in whole cents" rather than as "that is not a
 /// number", which would send the carrier hunting for a typo that is not there.
-bool transportQuoteAmountIsFractional(String input) {
-  final cleaned = input
-      .replaceAll(RegExp(r'[\s ]'), '')
-      .replaceAll(r'$', '')
-      .replaceAll(_groupSeparator, '')
-      .replaceAll(',', '.');
-  return _fractionalCents.hasMatch(cleaned);
-}
+bool transportQuoteAmountIsFractional(String input) =>
+    readMoneyInput(input).issue == MoneyInputIssue.fractionalCents;
 
 /// What a carrier typed into the bid form.
 class TransportQuoteDraft {

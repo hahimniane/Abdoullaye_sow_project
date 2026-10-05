@@ -12,6 +12,34 @@ import '../utils/support_attachment_storage.dart';
 
 enum SupportInboxScope { customer, business, admin }
 
+/// How many of the newest messages a thread loads at a time; "Load earlier
+/// messages" asks for this many more.
+const supportMessagePageSize = 120;
+
+/// The window after "Load earlier messages": one page further back.
+int nextSupportMessageLimit(int current) => current + supportMessagePageSize;
+
+/// A key that changes exactly when a subscription's inputs change, so a
+/// screen can keep one stream per key instead of one per build.
+String supportStreamKey(List<Object?> parts) =>
+    parts.map((part) => '${part ?? ''}').join('|');
+
+/// The newest messages of a thread, up to the requested limit.
+class SupportMessageWindow {
+  const SupportMessageWindow({
+    required this.messages,
+    required this.reachedLimit,
+  });
+
+  /// Newest first, without the ones this viewer deleted for themselves.
+  final List<SupportMessage> messages;
+
+  /// The query came back full, so older messages may exist. Counted before
+  /// deleted-for-me messages are hidden, so hiding them cannot hide the way
+  /// back to older ones.
+  final bool reachedLimit;
+}
+
 abstract interface class SupportRepository {
   Stream<List<SupportCase>> watchInbox({
     required SupportInboxScope scope,
@@ -20,7 +48,11 @@ abstract interface class SupportRepository {
 
   Stream<SupportCase?> watchCase(String caseId);
 
-  Stream<List<SupportMessage>> watchMessages(String caseId, String uid);
+  Stream<SupportMessageWindow> watchMessages(
+    String caseId,
+    String uid, {
+    int limit = supportMessagePageSize,
+  });
 
   Stream<List<Map<String, dynamic>>> watchTimeline(String caseId);
 
@@ -176,19 +208,26 @@ class SupportService implements SupportRepository {
   }
 
   @override
-  Stream<List<SupportMessage>> watchMessages(String caseId, String uid) {
+  Stream<SupportMessageWindow> watchMessages(
+    String caseId,
+    String uid, {
+    int limit = supportMessagePageSize,
+  }) {
     return _firestore
         .collection('supportCases')
         .doc(caseId)
         .collection('messages')
         .orderBy('createdAt', descending: true)
-        .limit(120)
+        .limit(limit)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map(SupportMessage.fromFirestore)
-              .where((message) => !message.deletedFor(uid))
-              .toList();
+          return SupportMessageWindow(
+            messages: snapshot.docs
+                .map(SupportMessage.fromFirestore)
+                .where((message) => !message.deletedFor(uid))
+                .toList(),
+            reachedLimit: snapshot.docs.length >= limit,
+          );
         });
   }
 

@@ -10197,4 +10197,57 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pkgResultNotSent => 'non envoyée';
+
+  @override
+  String get moneyAmountInvalid =>
+      'Saisissez un montant comme 12,50 ou 1 200,50.';
+
+  @override
+  String get authErrorUserDisabled =>
+      'Ce compte a été désactivé. Contactez l’assistance si vous pensez qu’il s’agit d’une erreur.';
+
+  @override
+  String get authErrorTooManyRequests =>
+      'Trop de tentatives. Patientez quelques minutes et réessayez.';
+
+  @override
+  String get authErrorNetwork =>
+      'Pas de connexion. Vérifiez votre accès à Internet et réessayez.';
+
+  @override
+  String get authErrorWeakPassword =>
+      'Choisissez un mot de passe plus robuste - au moins 6 caractères.';
+
+  @override
+  String get authErrorEmailInUse => 'Un compte existe déjà avec cet e-mail.';
+
+  @override
+  String get authErrorNoAccountForEmail => 'Aucun compte n’utilise cet e-mail.';
+
+  @override
+  String get authErrorSignInUnavailable =>
+      'La connexion par e-mail n’est pas disponible pour le moment. Contactez l’assistance.';
+
+  @override
+  String get authErrorSignInRequired => 'Connectez-vous d’abord.';
+
+  @override
+  String get authErrorInvalidOwnerPhone =>
+      'Saisissez un numéro de téléphone du propriétaire valide avec l’indicatif pays.';
+
+  @override
+  String get authErrorInvalidBusinessPhone =>
+      'Saisissez un numéro de téléphone de l’entreprise valide avec l’indicatif pays.';
+
+  @override
+  String get authErrorUnknown =>
+      'Une erreur s’est produite. Veuillez réessayer.';
+
+  @override
+  String get supportLoadEarlierMessages => 'Charger les messages précédents';
+
+  @override
+  String recordSavedReceiptUnavailable(String trackingCode) {
+    return 'Enregistré. Numéro de suivi : $trackingCode. Le reçu n’a pas pu être imprimé, mais la fiche est enregistrée - ne l’enregistrez pas une seconde fois.';
+  }
 }

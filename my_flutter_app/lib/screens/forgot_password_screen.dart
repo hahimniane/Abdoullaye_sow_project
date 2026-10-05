@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_feedback.dart';
+import '../utils/auth_error_text.dart';
 import '../widgets/app_snackbars.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -65,7 +66,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
         }
       } catch (error) {
         if (mounted) {
-          showErrorSnackBar(context, error.toString());
+          showErrorSnackBar(
+            context,
+            authFailureMessage(AppLocalizations.of(context)!, error),
+          );
         }
       }
     }

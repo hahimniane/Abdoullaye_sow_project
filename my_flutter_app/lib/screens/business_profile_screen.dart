@@ -19,7 +19,9 @@ import '../providers/auth_provider.dart';
 import '../services/office_location_service.dart';
 import '../theme/app_colors.dart';
 import 'office_locations_screen.dart';
+import '../utils/auth_error_text.dart';
 import '../utils/business_profile_validation.dart';
+import '../utils/money_input.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
@@ -474,25 +476,55 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       sectionErrors[_BusinessProfileSectionKey.headquarters] =
           l10n.enterValidHeadquartersAddress;
     }
-    final holdFlatFee =
-        double.tryParse(_holdFlatFeeController.text.trim()) ?? 0;
-    final holdDailyRate =
-        double.tryParse(_holdDailyRateController.text.trim()) ?? 0;
+    final offersParking = _selectedServices.contains(
+      BusinessServiceKey.carParking.value,
+    );
+    // Every typed rate reads through the shared money parser ("12,50" is
+    // $12.50). Blank is 0; anything typed that does not read as money flags
+    // its section instead of quietly saving 0.
+    final moneyErrors = <_BusinessProfileSectionKey>{};
+    double money(
+      TextEditingController controller,
+      _BusinessProfileSectionKey? section,
+    ) {
+      final read = readMoneyInput(controller.text);
+      final cents = read.cents;
+      if (cents != null && cents >= 0) return cents / 100;
+      if (!read.isEmpty && section != null) moneyErrors.add(section);
+      return 0;
+    }
+
+    final holdFlatFee = money(
+      _holdFlatFeeController,
+      _holdPricingMode == 'flat'
+          ? _BusinessProfileSectionKey.paidHoldPricing
+          : null,
+    );
+    final holdDailyRate = money(
+      _holdDailyRateController,
+      _holdPricingMode == 'per_day'
+          ? _BusinessProfileSectionKey.paidHoldPricing
+          : null,
+    );
     final holdMaxDays = int.tryParse(_holdMaxDaysController.text.trim()) ?? 14;
     final parkingTotalSpaces =
         int.tryParse(_parkingTotalSpacesController.text.trim()) ?? 0;
     final parkingBlockedSpaces =
         int.tryParse(_parkingBlockedSpacesController.text.trim()) ?? 0;
-    final parkingDailyRate =
-        double.tryParse(_parkingDailyRateController.text.trim()) ?? 0;
+    final parkingSection =
+        offersParking ? _BusinessProfileSectionKey.parkingCapacity : null;
+    final parkingDailyRate = money(_parkingDailyRateController, parkingSection);
     final parkingWeeklyRate =
-        double.tryParse(_parkingWeeklyRateController.text.trim()) ?? 0;
+        money(_parkingWeeklyRateController, parkingSection);
     final parkingMonthlyRate =
-        double.tryParse(_parkingMonthlyRateController.text.trim()) ?? 0;
+        money(_parkingMonthlyRateController, parkingSection);
     final parkingMinimumDays =
         int.tryParse(_parkingMinimumDaysController.text.trim()) ?? 1;
-    final parkingPickupFee =
-        double.tryParse(_parkingPickupFeeController.text.trim()) ?? 0;
+    final parkingPickupFee = money(_parkingPickupFeeController, null);
+    if (offersParking &&
+        (_parkingRatesKey.currentState?.hasUnreadableRate ?? false)) {
+      moneyErrors.add(_BusinessProfileSectionKey.parkingCapacity);
+    }
     if ((_holdPricingMode == 'flat' && holdFlatFee <= 0) ||
         (_holdPricingMode == 'per_day' && holdDailyRate <= 0) ||
         holdMaxDays < 1 ||
@@ -500,9 +532,6 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       sectionErrors[_BusinessProfileSectionKey.paidHoldPricing] =
           l10n.enterValidPaidHoldPricing;
     }
-    final offersParking = _selectedServices.contains(
-      BusinessServiceKey.carParking.value,
-    );
     final normalizedParkingState =
         normalizeUsState(_parkingStateController.text) ?? '';
     if (parkingCapacityNeedsAttention(
@@ -518,6 +547,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     )) {
       sectionErrors[_BusinessProfileSectionKey.parkingCapacity] =
           l10n.enterValidParkingCapacity;
+    }
+    // Said last so the section names the actual problem: an unreadable amount.
+    for (final section in moneyErrors) {
+      sectionErrors[section] = l10n.moneyAmountInvalid;
     }
     final pickupPlanError = _pickupPlanKey.currentState?.validate(l10n);
     if (pickupPlanError != null) {
@@ -594,19 +627,16 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         parkingLongitude: parkingLongitude,
         freightPickupAvailable: _freightPickupAvailable,
         freightPickupModel: _freightPickupModel,
-        freightPickupBaseFee:
-            double.tryParse(_freightPickupBaseFeeController.text.trim()) ?? 0,
-        freightPickupPerKm:
-            double.tryParse(_freightPickupPerKmController.text.trim()) ?? 0,
-        freightPickupMinFee:
-            double.tryParse(_freightPickupMinFeeController.text.trim()) ?? 0,
+        freightPickupBaseFee: money(_freightPickupBaseFeeController, null),
+        freightPickupPerKm: money(_freightPickupPerKmController, null),
+        freightPickupMinFee: money(_freightPickupMinFeeController, null),
         freightPickupMaxKm:
             double.tryParse(_freightPickupMaxKmController.text.trim()) ?? 0,
         freightPickupOriginAddress: _freightPickupOriginController.text.trim(),
         freightPickupBoroughPrices: {
           for (final entry in _freightPickupBoroughControllers.entries)
-            if ((double.tryParse(entry.value.text.trim()) ?? 0) > 0)
-              entry.key: double.parse(entry.value.text.trim()),
+            if (money(entry.value, null) > 0)
+              entry.key: money(entry.value, null),
         },
         pickupPlan: _pickupPlanKey.currentState?.buildPlan(),
       );
@@ -618,7 +648,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       showSuccessSnackBar(context, l10n.businessProfileSaved);
     } catch (error) {
       if (!mounted) return;
-      showErrorSnackBar(context, '$error');
+      showErrorSnackBar(context, authFailureMessage(l10n, error));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -1727,7 +1757,7 @@ class _BusinessForm extends StatelessWidget {
                           ? l10n.flatHoldFee
                           : l10n.dailyHoldRate,
                       icon: Icons.attach_money,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onChanged: () => onSectionEdited(
                         _BusinessProfileSectionKey.paidHoldPricing,
                       ),
@@ -1859,7 +1889,7 @@ class _BusinessForm extends StatelessWidget {
                     enabled: canEdit,
                     label: l10n.dailyParkingRate,
                     icon: Icons.attach_money,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     onChanged: () => onSectionEdited(
                       _BusinessProfileSectionKey.parkingCapacity,
                     ),
@@ -1881,7 +1911,7 @@ class _BusinessForm extends StatelessWidget {
                     enabled: canEdit,
                     label: l10n.weeklyParkingRate,
                     icon: Icons.calendar_view_week_outlined,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     onChanged: () => onSectionEdited(
                       _BusinessProfileSectionKey.parkingCapacity,
                     ),
@@ -1891,7 +1921,7 @@ class _BusinessForm extends StatelessWidget {
                     enabled: canEdit,
                     label: l10n.monthlyParkingRate,
                     icon: Icons.calendar_month_outlined,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     onChanged: () => onSectionEdited(
                       _BusinessProfileSectionKey.parkingCapacity,
                     ),
@@ -2052,6 +2082,13 @@ class _ParkingRateCardsEditorState extends State<_ParkingRateCardsEditor> {
     return 'rate$n';
   }
 
+  /// Whether a card has a price typed that does not read as money. Such a
+  /// card must stop the save rather than be dropped as "no price".
+  bool get hasUnreadableRate => _drafts.any(
+    (draft) =>
+        validateOptionalMoney(draft.daily.text, 'invalid') != null,
+  );
+
   /// The cards as the callable wants them. A row with no name or no price is
   /// dropped rather than saved half-written — the same rule the console's
   /// hint states out loud.
@@ -2059,7 +2096,7 @@ class _ParkingRateCardsEditorState extends State<_ParkingRateCardsEditor> {
     final out = <Map<String, dynamic>>[];
     for (final draft in _drafts) {
       final label = draft.label.text.trim();
-      final daily = double.tryParse(draft.daily.text.trim()) ?? 0;
+      final daily = parseMoneyDollars(draft.daily.text) ?? 0;
       if (label.isEmpty || daily <= 0) continue;
       final minimum = int.tryParse(draft.minimum.text.trim()) ?? 0;
       out.add(<String, dynamic>{

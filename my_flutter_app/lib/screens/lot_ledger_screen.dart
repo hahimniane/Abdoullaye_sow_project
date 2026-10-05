@@ -19,6 +19,7 @@ import '../services/known_car_lookup.dart';
 import '../services/lot_ledger.dart';
 import '../services/vin_decoder_service.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/money_input.dart';
 import '../utils/vin_utils.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -146,6 +147,13 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
     _listen();
   }
 
+  /// An error handler for a listener the ledger can live without. Unhandled,
+  /// a stream error (the rules refusing `users` to staff without the people
+  /// permission, a dropped connection) was reported as a fatal crash. Keep
+  /// what is already on screen; the next snapshot replaces it.
+  void Function(Object) _keepWhatIsShown(String what) =>
+      (Object error) => debugPrint('Lot ledger: $what unavailable ($error)');
+
   void _listen() {
     final id = widget.businessId;
     Query<Map<String, dynamic>> scoped(String path) =>
@@ -160,7 +168,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
         _allTypes = list;
         _types = list.where((t) => t.active).toList();
       });
-    }));
+    }, onError: _keepWhatIsShown('lotActivityTypes')));
 
     _subs.add(scoped('lotExpenseLines').snapshots().listen((snap) {
       if (!mounted) return;
@@ -168,7 +176,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
         for (final d in snap.docs) LotExpenseLine.fromMap(d.id, d.data()),
       ]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       setState(() => _lines = list.where((l) => l.active).toList());
-    }));
+    }, onError: _keepWhatIsShown('lotExpenseLines')));
 
     _subs.add(_db
         .collection('users')
@@ -187,7 +195,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
                     .toString(),
               ),
           ]);
-    }));
+    }, onError: _keepWhatIsShown('users')));
 
     _subs.add(parkedCarsUnsettledSpec(id).build(_db).snapshots().listen((snap) {
       if (!mounted) return;
@@ -226,7 +234,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
             : lotDefaultProofThresholdCents;
         _parkingSpaces = spaces is num ? spaces.toInt() : 0;
       });
-    }));
+    }, onError: _keepWhatIsShown('businesses')));
 
     // The lot's customer memory is a one-shot read: it seeds the customer
     // picker, and a new customer written by a record refreshes it.
@@ -4361,6 +4369,13 @@ class _LedgerSettingsSheetState extends State<_LedgerSettingsSheet> {
 
   Future<void> _saveThreshold() async {
     final l10n = AppLocalizations.of(context)!;
+    // Something typed that does not read as money is refused, never saved as 0.
+    final invalid = validateOptionalMoney(_threshold.text, l10n.moneyAmountInvalid);
+    if (invalid != null) {
+      AppHaptics.refuse();
+      showErrorSnackBar(context, invalid);
+      return;
+    }
     setState(() => _savingThreshold = true);
     try {
       await FirebaseFunctions.instance
@@ -4631,6 +4646,12 @@ class _ActivityTypeSheetState extends State<_ActivityTypeSheet> {
       showErrorSnackBar(context, l10n.lotActivityTypeNameRequired);
       return;
     }
+    final invalidFee = validateOptionalMoney(_fee.text, l10n.moneyAmountInvalid);
+    if (invalidFee != null) {
+      AppHaptics.refuse();
+      showErrorSnackBar(context, invalidFee);
+      return;
+    }
     setState(() => _busy = true);
     try {
       final typeId = widget.type?.id ?? '';
@@ -4776,6 +4797,15 @@ class _ExpenseLineSheetState extends State<_ExpenseLineSheet> {
       AppHaptics.refuse();
       showErrorSnackBar(context, l10n.lotExpenseName);
       return;
+    }
+    if (_kind == lotExpenseKindFixed) {
+      final invalid =
+          validateOptionalMoney(_recurring.text, l10n.moneyAmountInvalid);
+      if (invalid != null) {
+        AppHaptics.refuse();
+        showErrorSnackBar(context, invalid);
+        return;
+      }
     }
     setState(() => _busy = true);
     try {

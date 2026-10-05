@@ -680,7 +680,13 @@ void main() {
       // The server checks amountCents with Number.isSafeInteger, so the amount
       // is built from two integers rather than by multiplying a parsed double
       // by 100 - which is how 12.34 becomes 1233.9999999999998 cents.
-      expect(module, contains('dollars * 100 + cents'));
+      // The quote goes through the app's one money parser, which does that.
+      expect(module, contains('parseMoneyCents(input)'));
+      final parser =
+          File('lib/utils/money_input.dart').readAsStringSync();
+      expect(parser, contains('dollars * 100 + cents'));
+      expect(parser, isNot(contains('double.parse')));
+      expect(parser, isNot(contains('double.tryParse')));
       expect(module, isNot(contains('double.parse')));
       expect(module, isNot(contains('double.tryParse')));
       expect(module, isNot(contains('.toDouble()')));

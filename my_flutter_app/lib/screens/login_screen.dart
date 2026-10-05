@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_feedback.dart';
+import '../utils/auth_error_text.dart';
 import '../utils/auth_navigation.dart';
 import '../utils/business_registration_navigation.dart';
 import '../widgets/app_snackbars.dart';
@@ -103,7 +104,12 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (error) {
       debugPrint('🔴 LoginScreen: Login error: $error');
       if (mounted) {
-        showErrorSnackBar(context, error.toString());
+        // The provider throws a code; the copy is ours, in the app's
+        // language - never Firebase's English message.
+        showErrorSnackBar(
+          context,
+          authFailureMessage(AppLocalizations.of(context)!, error),
+        );
       }
     }
   }

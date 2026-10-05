@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../services/car_viewing_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/car_viewing_negotiation.dart';
 import '../widgets/language_toggle.dart';
@@ -332,7 +333,7 @@ class _StaffPurchaseCard extends StatelessWidget {
                 !purchase.isViewingReservation)
               Text(
                 '${l10n.selectViewingTime}: '
-                '${purchase.appointmentLabel ?? DateFormat.yMMMd().add_jm().format(purchase.appointmentStart!)}',
+                '${purchase.appointmentLabel ?? displayDateTime(purchase.appointmentStart!, l10n.localeName)}',
               ),
             if (purchase.isViewingReservation) ...[
               const SizedBox(height: 10),
@@ -344,7 +345,7 @@ class _StaffPurchaseCard extends StatelessWidget {
             if (purchase.holdUntilDate != null)
               Text(
                 l10n.holdUntilDate(
-                  DateFormat.yMMMd().format(purchase.holdUntilDate!),
+                  displayDate(purchase.holdUntilDate!, l10n.localeName),
                 ),
               ),
             if (purchase.holdPricingMode != null)
@@ -381,8 +382,9 @@ class _StaffPurchaseCard extends StatelessWidget {
                   purchase.extensionRequestedHoldUntilDate == null
                       ? ''
                       : l10n.dateSuffix(
-                          DateFormat.yMMMd().format(
+                          displayDate(
                             purchase.extensionRequestedHoldUntilDate!,
+                            l10n.localeName,
                           ),
                         ),
                   purchase.extensionExtraAmount == null

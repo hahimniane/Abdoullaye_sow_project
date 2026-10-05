@@ -267,6 +267,24 @@ Add future project conventions and repeated architectural decisions here.
   status → `/orders` with inner tab + record; `shipment_tracking_update`
   still → `/tracking`. Register `/orders` and `/freight-quote` on the
   nested customer tab navigator, not only `MaterialApp.routes`.
+- Anything that opens a screen at launch (notification tap, tracking link)
+  parks itself and waits on `AppLaunchGate` (`lib/navigation/`); the splash
+  calls `markReady()` after replacing itself. Push taps also wait for the
+  role (`PushNotificationService.setAudience`, null while it loads); the
+  decision is the pure `decideNotificationTap`. Never push from a service
+  before the gate opens - the splash's pushReplacementNamed replaces it.
+- AuthProvider role lookups take an `AuthLookupGuard` ticket and re-check it
+  after every await; logout goes through `_clearProfileState` (admin role and
+  platform access included). Provider errors are codes (`AuthFailure`,
+  `SignUpFailure`) that screens localize with `authFailureMessage` - never
+  `'$error'` or Firebase's English message in a snackbar.
+- Firestore streams/futures belong in State (initState/didUpdateWidget, or a
+  cache keyed by their inputs), never in build: a rebuild re-subscribes and
+  swaps the content for a spinner. Show a spinner only when there is no data
+  yet.
+- Records written for a business query by that `businessId`: rules prove
+  `canManageBusiness` from the equality filter. An unscoped query works for
+  admins only and fails permission-denied for staff.
 - AppGate must probe `appConfig` before treating connectivity_plus `none`
   as offline. iOS Simulator 26.x reports `none` on cold start while the
   network works. `AppGateProvider.localEmulator()` stays a full bypass for

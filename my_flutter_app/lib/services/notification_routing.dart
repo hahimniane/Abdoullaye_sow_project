@@ -385,3 +385,51 @@ class FreightQuoteScreenArguments {
   final String requestId;
   final String trackingCode;
 }
+
+/// What to do with a notification tap at this moment.
+enum NotificationTapAction {
+  /// Keep it: the first real screen is not up yet, or it is not yet known
+  /// whether the person holding the phone is a customer or a business.
+  wait,
+
+  /// Open [NotificationTapDecision.route] now.
+  open,
+
+  /// Nothing in the payload is ours to open.
+  ignore,
+}
+
+class NotificationTapDecision {
+  const NotificationTapDecision.wait()
+    : action = NotificationTapAction.wait,
+      route = null;
+  const NotificationTapDecision.ignore()
+    : action = NotificationTapAction.ignore,
+      route = null;
+  const NotificationTapDecision.open(NotificationRoute this.route)
+    : action = NotificationTapAction.open;
+
+  final NotificationTapAction action;
+  final NotificationRoute? route;
+}
+
+/// Whether a tap can be opened now.
+///
+/// A tap that launched the app arrives before the splash screen has settled
+/// auth. Pushing it then puts it under the splash's own navigation to home,
+/// and routing it before the role is known sends a lot's staff to customer
+/// screens. So it waits for both: [appReady] (the splash has navigated to the
+/// first real screen) and [audience] (null while the role is still loading).
+NotificationTapDecision decideNotificationTap(
+  Map<String, dynamic> data, {
+  required bool appReady,
+  required NotificationAudience? audience,
+}) {
+  if (!appReady || audience == null) {
+    return const NotificationTapDecision.wait();
+  }
+  final route = routeForNotificationData(data, audience: audience);
+  return route == null
+      ? const NotificationTapDecision.ignore()
+      : NotificationTapDecision.open(route);
+}

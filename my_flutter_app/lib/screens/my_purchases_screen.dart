@@ -10,8 +10,10 @@ import '../services/car_purchase_service.dart';
 import '../services/car_viewing_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/date_display.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/async_action_button.dart';
 import '../widgets/car_viewing_negotiation.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
@@ -310,8 +312,10 @@ class _PurchaseCard extends StatelessWidget {
   });
 
   final CarPurchase purchase;
-  final VoidCallback? onRequestExtension;
-  final VoidCallback? onPayExtension;
+  // Async so the buttons can stay busy until the request settles: a second
+  // tap on Pay extension used to start a second payment.
+  final Future<void> Function()? onRequestExtension;
+  final Future<void> Function()? onPayExtension;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +360,7 @@ class _PurchaseCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 '${l10n.selectViewingTime}: '
-                '${purchase.appointmentLabel ?? DateFormat.yMMMd().add_jm().format(purchase.appointmentStart!)}',
+                '${purchase.appointmentLabel ?? displayDateTime(purchase.appointmentStart!, dateLocaleOf(context))}',
               ),
             ],
             if (purchase.isViewingReservation) ...[
@@ -370,14 +374,14 @@ class _PurchaseCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 l10n.holdUntilDate(
-                  DateFormat.yMMMd().format(purchase.holdUntilDate!),
+                  displayDate(purchase.holdUntilDate!, dateLocaleOf(context)),
                 ),
               ),
             ],
             if (purchase.extensionRequestStatus != null) ...[
               const SizedBox(height: 6),
               Text(
-                _extensionLabel(currency),
+                _extensionLabel(currency, dateLocaleOf(context)),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.lightMuted,
                   fontWeight: FontWeight.w700,
@@ -411,16 +415,16 @@ class _PurchaseCard extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   if (onRequestExtension != null)
-                    OutlinedButton.icon(
+                    AsyncActionButton.outlined(
                       onPressed: onRequestExtension,
-                      icon: const Icon(Icons.event_repeat_outlined),
-                      label: Text(l10n.requestExtension),
+                      icon: Icons.event_repeat_outlined,
+                      label: l10n.requestExtension,
                     ),
                   if (onPayExtension != null)
-                    FilledButton.icon(
+                    AsyncActionButton.filled(
                       onPressed: onPayExtension,
-                      icon: const Icon(Icons.payments_outlined),
-                      label: Text(l10n.payExtension),
+                      icon: Icons.payments_outlined,
+                      label: l10n.payExtension,
                     ),
                 ],
               ),
@@ -435,7 +439,7 @@ class _PurchaseCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              DateFormat.yMMMd().add_jm().format(purchase.createdAt),
+              displayDateTime(purchase.createdAt, dateLocaleOf(context)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -462,13 +466,13 @@ class _PurchaseCard extends StatelessWidget {
     return purchase.purchaseStatus;
   }
 
-  String _extensionLabel(NumberFormat currency) {
+  String _extensionLabel(NumberFormat currency, String locale) {
     final status = purchase.extensionRequestStatus;
     final date = purchase.extensionRequestedHoldUntilDate;
     final amount = purchase.extensionExtraAmount;
     final parts = <String>[
       'Extension: ${status ?? ''}',
-      if (date != null) DateFormat.yMMMd().format(date),
+      if (date != null) displayDate(date, locale),
       if (amount != null) 'extra ${currency.format(amount)}',
       if (purchase.extensionPaymentStatus != null)
         'payment ${purchase.extensionPaymentStatus}',

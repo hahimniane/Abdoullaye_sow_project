@@ -1,16 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../data/car_catalog.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/business_profile.dart';
 import '../models/destination_country.dart';
 import '../models/transport_request.dart';
 import '../providers/auth_provider.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/action_confirmation.dart';
+import '../services/payment_flow_safety.dart';
+import '../utils/money_input.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/destination_country_field.dart';
@@ -98,7 +100,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
     }
 
     final l10n = AppLocalizations.of(context)!;
-    final price = double.tryParse(_priceController.text.trim());
+    final price = parseMoneyDollars(_priceController.text);
     if (price == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -120,11 +122,16 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
 
     setState(() => _isSubmitting = true);
 
+    TransportRequest savedRequest;
     try {
       final auth = context.read<AuthProvider>();
+      final businessId = auth.isAdmin
+          ? BusinessProfile.defaultBusinessId
+          : auth.businessId ?? BusinessProfile.defaultBusinessId;
       final trackingCode = await TrackingCodeGenerator.generateUniqueCode(
         prefix: 'TR',
         collectionPath: 'transportRequests',
+        businessId: businessId,
       );
 
       final request = TransportRequest(
@@ -149,31 +156,34 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
           .collection('transportRequests')
           .add({
             ...request.toFirestore(),
-            'businessId': auth.isAdmin
-                ? BusinessProfile.defaultBusinessId
-                : auth.businessId ?? BusinessProfile.defaultBusinessId,
+            'businessId': businessId,
             'businessName': auth.isAdmin
                 ? BusinessProfile.defaultBusinessName
                 : auth.businessName ?? BusinessProfile.defaultBusinessName,
           });
 
-      final savedRequest = request.copyWith(id: docRef.id);
-      await generateTransportReceipt(request: savedRequest);
-
-      if (!mounted) return;
-      showSuccessSnackBar(
-        context,
-        l10n.transportRequestSavedWithTracking(savedRequest.trackingCode),
-      );
-      Navigator.of(context).pop();
+      savedRequest = request.copyWith(id: docRef.id);
     } catch (e) {
       if (!mounted) return;
       showErrorSnackBar(context, l10n.failedToSaveTransport(e.toString()));
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      setState(() => _isSubmitting = false);
+      return;
     }
+
+    // Saved. The receipt is best effort: a print failure must not read as a
+    // failed save and invite a second, duplicate request.
+    final printed = await runBestEffortPostPaymentAction(
+      () => generateTransportReceipt(request: savedRequest),
+    );
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    showSuccessSnackBar(
+      context,
+      printed
+          ? l10n.transportRequestSavedWithTracking(savedRequest.trackingCode)
+          : l10n.recordSavedReceiptUnavailable(savedRequest.trackingCode),
+    );
+    Navigator.of(context).pop();
   }
 
   @override
@@ -386,8 +396,9 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                               const SizedBox(height: 16),
                               _DatePickerTile(
                                 label: l10n.transportDate,
-                                value: DateFormat.yMMMd().format(
+                                value: displayDate(
                                   _transportDate,
+                                  dateLocaleOf(context),
                                 ),
                                 onTap: _pickTransportDate,
                               ),
@@ -403,7 +414,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                   if (value == null || value.trim().isEmpty) {
                                     return l10n.pleaseEnterPrice;
                                   }
-                                  if (double.tryParse(value.trim()) == null) {
+                                  if (parseMoneyDollars(value) == null) {
                                     return l10n.pleaseEnterValidNumber;
                                   }
                                   return null;

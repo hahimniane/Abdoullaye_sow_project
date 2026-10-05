@@ -55,3 +55,27 @@ String displayDate(DateTime date, String locale) =>
 /// "Sep 1, 2026 3:05 PM" / "1 sept. 2026 15:05".
 String displayDateTime(DateTime date, String locale) =>
     DateFormat.yMMMd(_dateLocale(locale)).add_jm().format(date);
+
+/// "September 1, 2026" / "1 septembre 2026".
+String displayLongDate(DateTime date, String locale) =>
+    DateFormat.yMMMMd(_dateLocale(locale)).format(date);
+
+/// "Sep 1" / "1 sept." - a date in the near past or future.
+String displayMonthDay(DateTime date, String locale) =>
+    DateFormat.MMMd(_dateLocale(locale)).format(date);
+
+/// "Sep 1 3:05 PM" / "1 sept. 15:05".
+String displayMonthDayTime(DateTime date, String locale) =>
+    DateFormat.MMMd(_dateLocale(locale)).add_jm().format(date);
+
+/// "Tue, Sep 1" / "mar. 1 sept.".
+String displayWeekdayMonthDay(DateTime date, String locale) =>
+    DateFormat.MMMEd(_dateLocale(locale)).format(date);
+
+/// "Tue, Sep 1, 2026 3:05 PM" / "mar. 1 sept. 2026 15:05".
+String displayWeekdayDateTime(DateTime date, String locale) =>
+    DateFormat.yMMMEd(_dateLocale(locale)).add_jm().format(date);
+
+/// "3:05 PM" / "15:05".
+String displayTime(DateTime date, String locale) =>
+    DateFormat.jm(_dateLocale(locale)).format(date);

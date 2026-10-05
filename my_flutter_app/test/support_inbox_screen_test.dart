@@ -22,10 +22,13 @@ class _FakeSupportRepository implements SupportRepository {
     required SupportInboxScope scope,
     String? businessId,
   }) {
+    watchInboxCount += 1;
     lastScope = scope;
     lastBusinessId = businessId;
     return Stream.value(cases);
   }
+
+  int watchInboxCount = 0;
 
   @override
   Future<String> createBusinessPlatformCase({
@@ -170,6 +173,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Payment dispute'), findsNothing);
     expect(find.text('Receipt uploaded'), findsOneWidget);
+
+    // Searching and filtering read the one subscription; they used to
+    // re-subscribe (and flash a spinner) on every keystroke and tap.
+    expect(repository.watchInboxCount, 1);
   });
 
   testWidgets('business inbox can create platform admin support case', (

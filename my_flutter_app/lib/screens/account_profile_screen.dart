@@ -12,6 +12,7 @@ import '../services/biometric_lock_service.dart';
 import '../services/push_notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import '../utils/auth_error_text.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/phone_verification_status.dart';
 import '../utils/root_navigation.dart';
@@ -147,7 +148,7 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
       _close();
     } catch (error) {
       if (!mounted) return;
-      showErrorSnackBar(context, '$error');
+      showErrorSnackBar(context, authFailureMessage(l10n, error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

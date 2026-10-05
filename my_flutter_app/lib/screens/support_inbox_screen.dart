@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/support_case.dart';
 import '../providers/auth_provider.dart';
 import '../services/support_service.dart';
@@ -89,11 +89,23 @@ class _SupportInboxScreenState extends State<SupportInboxScreen> {
     }
   }
 
+  Stream<List<SupportCase>>? _inbox;
+  String? _inboxKey;
+
+  /// One subscription per scope and business. It used to be created in
+  /// build, so every search keystroke and filter tap re-subscribed and
+  /// flashed a spinner over the list.
   Stream<List<SupportCase>> _stream(AuthProvider? auth) {
-    return _supportService.watchInbox(
-      scope: widget.scope,
-      businessId: widget.businessIdOverride ?? auth?.businessId,
-    );
+    final businessId = widget.businessIdOverride ?? auth?.businessId;
+    final key = supportStreamKey([widget.scope.name, businessId]);
+    if (_inbox == null || key != _inboxKey) {
+      _inboxKey = key;
+      _inbox = _supportService.watchInbox(
+        scope: widget.scope,
+        businessId: businessId,
+      );
+    }
+    return _inbox!;
   }
 
   @override
@@ -173,7 +185,10 @@ class _SupportInboxScreenState extends State<SupportInboxScreen> {
               child: StreamBuilder<List<SupportCase>>(
                 stream: _stream(auth),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+                  // Only the very first load shows a spinner; a list already
+                  // on screen stays while a new subscription catches up.
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
                   final cases = (snapshot.data ?? const <SupportCase>[])
@@ -302,7 +317,7 @@ class _SupportCaseCard extends StatelessWidget {
                         ),
                         if (time != null)
                           Text(
-                            DateFormat.MMMd().format(time),
+                            displayMonthDay(time, dateLocaleOf(context)),
                             style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(color: AppColors.muted),
                           ),

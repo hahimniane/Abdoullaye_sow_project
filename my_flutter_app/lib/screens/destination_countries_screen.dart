@@ -11,6 +11,7 @@ import '../models/destination_country.dart';
 import '../providers/auth_provider.dart';
 import '../services/barrel_pricing_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/money_input.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
@@ -77,8 +78,8 @@ class _DestinationCountriesScreenState
     if (trimmed.isEmpty) {
       return l10n.destinationServiceRateRequired(serviceLabel);
     }
-    final price = double.tryParse(trimmed);
-    if (price == null) return l10n.pleaseEnterValidNumber;
+    final price = parseMoneyDollars(trimmed);
+    if (price == null) return l10n.moneyAmountInvalid;
     if (price <= 0) {
       return l10n.destinationServiceRateGreaterThanZero(serviceLabel);
     }
@@ -526,13 +527,13 @@ class _DestinationCountriesScreenState
             'destinationCoverageVersion': 2,
             'serviceAvailability': serviceAvailability,
             'barrelShippingPrice': barrelShippingEnabled
-                ? double.tryParse(barrelPriceController.text.trim()) ?? 0
+                ? parseMoneyDollars(barrelPriceController.text) ?? 0
                 : 0,
             'freightAirPricePerKg': freightAirEnabled
-                ? double.tryParse(freightAirPriceController.text.trim()) ?? 0
+                ? parseMoneyDollars(freightAirPriceController.text) ?? 0
                 : 0,
             'freightSeaPricePerKg': freightSeaEnabled
-                ? double.tryParse(freightSeaPriceController.text.trim()) ?? 0
+                ? parseMoneyDollars(freightSeaPriceController.text) ?? 0
                 : 0,
             'freightAirDepartureDays': freightAirEnabled
                 ? _orderedDepartureDays(freightAirDepartureDays)
@@ -667,7 +668,7 @@ class _DestinationCountriesScreenState
             officeAddress: officeController.text.trim(),
             boroughPrices: {
               for (final entry in priceControllers.entries)
-                entry.key: double.parse(entry.value.text.trim()),
+                entry.key: parseMoneyDollars(entry.value.text) ?? 0,
             },
           ),
         );
@@ -689,9 +690,7 @@ class _DestinationCountriesScreenState
   String? Function(String?) _numberValidator(AppLocalizations l10n) {
     return (value) {
       if (value == null || value.trim().isEmpty) return l10n.requiredField;
-      return double.tryParse(value.trim()) == null
-          ? l10n.pleaseEnterValidNumber
-          : null;
+      return validateRequiredMoney(value, l10n.moneyAmountInvalid);
     };
   }
 

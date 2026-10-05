@@ -754,7 +754,22 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     });
   }
 
+  /// Set from the first tap until the booking flow ends. _busy only goes up
+  /// after the confirmation, so the office lookup and the sheet before it
+  /// were a window where a second tap started a second booking and charge.
+  bool _submitInFlight = false;
+
   Future<void> _submit() async {
+    if (_submitInFlight || _busy) return;
+    _submitInFlight = true;
+    try {
+      await _submitOnce();
+    } finally {
+      _submitInFlight = false;
+    }
+  }
+
+  Future<void> _submitOnce() async {
     final l10n = AppLocalizations.of(context)!;
     // A returning guest still has their anonymous session but not the
     // details that went with it, so "signed in" is not the same as "we can

@@ -9,11 +9,13 @@ import 'package:provider/provider.dart';
 import '../data/car_catalog.dart';
 import '../models/destination_country.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_display.dart';
 import '../models/transport_request.dart';
 import '../models/transport_quote.dart';
 import '../providers/auth_provider.dart';
 import '../services/transport_service.dart';
 import '../widgets/destination_country_field.dart';
+import '../utils/money_input.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/transport_journey.dart';
@@ -238,7 +240,7 @@ class _TransportRequestDetailsScreenState
     }
 
     final l10n = AppLocalizations.of(context)!;
-    final parsedPrice = double.tryParse(_priceController.text.trim());
+    final parsedPrice = parseMoneyDollars(_priceController.text);
     if (parsedPrice == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -491,7 +493,10 @@ class _TransportRequestDetailsScreenState
                           const SizedBox(height: 16),
                           _DatePickerTile(
                             label: l10n.transportDate,
-                            value: DateFormat.yMMMd().format(_transportDate),
+                            value: displayDate(
+                              _transportDate,
+                              dateLocaleOf(context),
+                            ),
                             onTap: canEdit ? _pickTransportDate : null,
                             enabled: canEdit,
                           ),
@@ -508,7 +513,7 @@ class _TransportRequestDetailsScreenState
                               if (value == null || value.trim().isEmpty) {
                                 return l10n.pleaseEnterPrice;
                               }
-                              if (double.tryParse(value.trim()) == null) {
+                              if (parseMoneyDollars(value) == null) {
                                 return l10n.pleaseEnterValidNumber;
                               }
                               return null;
