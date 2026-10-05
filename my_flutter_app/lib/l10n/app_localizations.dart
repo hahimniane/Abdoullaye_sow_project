@@ -17699,6 +17699,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'not sent'**
   String get pkgResultNotSent;
+
+  /// No description provided for @moneyAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount like 12.50 or 1,200.50.'**
+  String get moneyAmountInvalid;
 }
 
 class _AppLocalizationsDelegate

@@ -19,6 +19,7 @@ import '../services/destination_country_service.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/date_display.dart';
+import '../utils/money_input.dart';
 import '../utils/receiver_phone_rules.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
@@ -226,7 +227,7 @@ class _BarrelShipmentDetailsScreenState
   }
 
   double? _parsePrice(String value) {
-    return double.tryParse(value);
+    return parseMoneyDollars(value);
   }
 
   DestinationCountry? get _selectedDestinationDraft {

@@ -10026,4 +10026,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pkgResultNotSent => 'not sent';
+
+  @override
+  String get moneyAmountInvalid => 'Enter an amount like 12.50 or 1,200.50.';
 }

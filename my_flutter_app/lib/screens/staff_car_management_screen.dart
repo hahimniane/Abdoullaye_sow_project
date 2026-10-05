@@ -18,6 +18,7 @@ import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/car_option_localization.dart';
+import '../utils/money_input.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/vin_utils.dart';
 import '../widgets/app_back_button.dart';
@@ -1335,19 +1336,19 @@ class _CarFormSheetState extends State<_CarFormSheet> {
   }
 
   double? _priceValue() {
-    return double.tryParse(_priceController.text.trim().replaceAll(',', ''));
+    return parseMoneyDollars(_priceController.text);
   }
 
   double? _holdFlatFeeValue() {
-    final text = _holdFlatFeeController.text.trim().replaceAll(',', '');
+    final text = _holdFlatFeeController.text.trim();
     if (text.isEmpty) return null;
-    return double.tryParse(text);
+    return parseMoneyDollars(text);
   }
 
   double? _holdDailyRateValue() {
-    final text = _holdDailyRateController.text.trim().replaceAll(',', '');
+    final text = _holdDailyRateController.text.trim();
     if (text.isEmpty) return null;
-    return double.tryParse(text);
+    return parseMoneyDollars(text);
   }
 
   int? _holdMaxDaysValue() {
@@ -2752,7 +2753,7 @@ class _MarkAsSoldSheetState extends State<_MarkAsSoldSheet> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    final amount = double.tryParse(_salePriceController.text.trim());
+    final amount = parseMoneyDollars(_salePriceController.text);
     final result = SoldCarResult(
       customerName: _customerNameController.text.trim(),
       customerPhone: _customerPhoneController.text.trim(),
@@ -2843,7 +2844,11 @@ class _MarkAsSoldSheetState extends State<_MarkAsSoldSheet> {
                     TextFormField(
                       controller: _salePriceController,
                       decoration: InputDecoration(labelText: l10n.salePrice),
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: (value) =>
+                          validateOptionalMoney(value, l10n.moneyAmountInvalid),
                     ),
                     const SizedBox(height: 16),
                     ListTile(

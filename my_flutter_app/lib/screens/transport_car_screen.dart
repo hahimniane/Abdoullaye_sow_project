@@ -11,6 +11,7 @@ import '../models/transport_request.dart';
 import '../providers/auth_provider.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/money_input.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/destination_country_field.dart';
@@ -98,7 +99,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
     }
 
     final l10n = AppLocalizations.of(context)!;
-    final price = double.tryParse(_priceController.text.trim());
+    final price = parseMoneyDollars(_priceController.text);
     if (price == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -403,7 +404,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                   if (value == null || value.trim().isEmpty) {
                                     return l10n.pleaseEnterPrice;
                                   }
-                                  if (double.tryParse(value.trim()) == null) {
+                                  if (parseMoneyDollars(value) == null) {
                                     return l10n.pleaseEnterValidNumber;
                                   }
                                   return null;

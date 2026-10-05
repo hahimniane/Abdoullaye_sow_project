@@ -6,6 +6,8 @@ library;
 
 import 'package:intl/intl.dart';
 
+import '../utils/money_input.dart';
+
 import 'lot_ledger.dart' show lotDateOf;
 
 const invoiceStatusOpen = 'open';
@@ -151,12 +153,9 @@ class InvoiceLineDraft {
 }
 
 /// "1,250.50" or "$120" as typed → cents, or null when it is not a number.
-int? invoiceDollarsToCents(String value) {
-  final cleaned = value.replaceAll(RegExp(r'[$,\s]'), '');
-  if (cleaned.isEmpty) return null;
-  final n = double.tryParse(cleaned);
-  return n == null ? null : (n * 100).round();
-}
+///
+/// Reads through the app's one money parser, so "12,50" is $12.50.
+int? invoiceDollarsToCents(String value) => parseMoneyCents(value);
 
 String invoiceCentsToInput(int cents) =>
     cents % 100 == 0 ? '${cents ~/ 100}' : (cents / 100).toStringAsFixed(2);

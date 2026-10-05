@@ -27,6 +27,7 @@ import '../l10n/app_localizations.dart';
 import '../data/car_catalog.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/date_display.dart';
+import '../utils/money_input.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/vin_utils.dart';
 import '../theme/app_colors.dart';
@@ -1085,7 +1086,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     // A part payment is settled right after the car is recorded, so catch a
     // missing amount or missing staff here - before the record exists - rather
     // than record the car and then fail to take the money.
-    final num? partValue = num.tryParse(_partValueController.text.trim());
+    final num? partValue = _partByDays
+        ? num.tryParse(_partValueController.text.trim())
+        : parseMoneyDollars(_partValueController.text);
     if (_paymentMethod == BusinessParkingPaymentMethod.direct &&
         _paidChoice == 'part') {
       if (partValue == null || partValue <= 0) {

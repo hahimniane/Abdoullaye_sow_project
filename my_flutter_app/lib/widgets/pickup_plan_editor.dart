@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../data/nyc_boroughs.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/money_input.dart';
 
 /// The services a pickup plan can cover, in display order. Keys match the
 /// server's PICKUP_SERVICES (functions/pickup_plan.js).
@@ -95,13 +96,26 @@ class _PickupConfigDraft {
 
   void clear() => hydrate(const {});
 
+  /// A typed fee in dollars through the shared money parser ("12,50" is
+  /// $12.50), or null when blank, unreadable or negative.
   double? _fee(TextEditingController controller) {
-    final text = controller.text.trim();
-    if (text.isEmpty) return null;
-    final value = double.tryParse(text);
+    final value = parseMoneyDollars(controller.text);
     if (value == null || value < 0) return null;
     return value;
   }
+
+  /// Miles are a distance, not money.
+  double? _miles(TextEditingController controller) {
+    final text = controller.text.trim();
+    if (text.isEmpty) return null;
+    final value = double.tryParse(text.replaceAll(',', '.'));
+    if (value == null || value < 0) return null;
+    return value;
+  }
+
+  /// A fee field with something typed that does not read as money.
+  bool _unreadable(TextEditingController controller) =>
+      validateOptionalMoney(controller.text, 'invalid') != null;
 
   /// The section's config as the server expects it, with enabled: true.
   Map<String, dynamic> toConfig() {
@@ -113,7 +127,7 @@ class _PickupConfigDraft {
       };
       return config;
     }
-    config['maxPickupMiles'] = _fee(maxPickupMiles);
+    config['maxPickupMiles'] = _miles(maxPickupMiles);
     if (mode == 'flat') {
       config['flatFee'] = _fee(flatFee);
     } else {
@@ -132,6 +146,14 @@ class _PickupConfigDraft {
     String sectionLabel, {
     required bool isNewYorkBased,
   }) {
+    // A fee typed in a way that does not read as money is refused, never
+    // dropped or saved as nothing.
+    final fees = mode == 'borough'
+        ? boroughFees.values
+        : mode == 'flat'
+        ? [flatFee]
+        : [baseFee, perMileFee, minimumFee];
+    if (fees.any(_unreadable)) return l10n.moneyAmountInvalid;
     if (mode == 'borough') {
       if (!isNewYorkBased) {
         return l10n.pickupPlanErrorBoroughRequiresNewYork(sectionLabel);
@@ -140,7 +162,7 @@ class _PickupConfigDraft {
       if (!hasPrice) return l10n.pickupPlanErrorBoroughPrice(sectionLabel);
       return null;
     }
-    if (_fee(maxPickupMiles) == null || _fee(maxPickupMiles) == 0) {
+    if (_miles(maxPickupMiles) == null || _miles(maxPickupMiles) == 0) {
       return l10n.pickupPlanErrorCapRequired(sectionLabel);
     }
     if (mode == 'flat') {

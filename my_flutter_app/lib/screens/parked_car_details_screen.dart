@@ -24,6 +24,7 @@ import '../utils/action_confirmation.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
 import '../utils/date_display.dart';
+import '../utils/money_input.dart';
 import '../utils/vin_utils.dart';
 import '../utils/parking_status_options.dart';
 import '../widgets/app_back_button.dart';
@@ -235,7 +236,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
 
   void _calculateTotalCost() {
     if (_parkingEndDate != null && _costPerDayController.text.isNotEmpty) {
-      final costPerDay = double.tryParse(_costPerDayController.text);
+      final costPerDay = parseMoneyDollars(_costPerDayController.text);
       if (costPerDay != null) {
         final startDate = DateTime(
           _parkingStartDate.year,
@@ -1699,7 +1700,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       showErrorSnackBar(context, l10n.chooseParkingBusiness);
       return;
     }
-    final n = num.tryParse(_partValueController.text.trim());
+    final n = _partByDays
+        ? num.tryParse(_partValueController.text.trim())
+        : parseMoneyDollars(_partValueController.text);
     if (n == null || n <= 0) {
       showErrorSnackBar(context, l10n.parkingEnterDaysOrAmount);
       return;

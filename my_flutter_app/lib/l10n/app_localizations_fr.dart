@@ -10176,4 +10176,8 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pkgResultNotSent => 'non envoyée';
+
+  @override
+  String get moneyAmountInvalid =>
+      'Saisissez un montant comme 12,50 ou 1 200,50.';
 }

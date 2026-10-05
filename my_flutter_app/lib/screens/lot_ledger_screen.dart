@@ -16,6 +16,7 @@ import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/vin_decoder_service.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/money_input.dart';
 import '../utils/vin_utils.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -4239,6 +4240,13 @@ class _LedgerSettingsSheetState extends State<_LedgerSettingsSheet> {
 
   Future<void> _saveThreshold() async {
     final l10n = AppLocalizations.of(context)!;
+    // Something typed that does not read as money is refused, never saved as 0.
+    final invalid = validateOptionalMoney(_threshold.text, l10n.moneyAmountInvalid);
+    if (invalid != null) {
+      AppHaptics.refuse();
+      showErrorSnackBar(context, invalid);
+      return;
+    }
     setState(() => _savingThreshold = true);
     try {
       await FirebaseFunctions.instance
@@ -4509,6 +4517,12 @@ class _ActivityTypeSheetState extends State<_ActivityTypeSheet> {
       showErrorSnackBar(context, l10n.lotActivityTypeNameRequired);
       return;
     }
+    final invalidFee = validateOptionalMoney(_fee.text, l10n.moneyAmountInvalid);
+    if (invalidFee != null) {
+      AppHaptics.refuse();
+      showErrorSnackBar(context, invalidFee);
+      return;
+    }
     setState(() => _busy = true);
     try {
       final typeId = widget.type?.id ?? '';
@@ -4654,6 +4668,15 @@ class _ExpenseLineSheetState extends State<_ExpenseLineSheet> {
       AppHaptics.refuse();
       showErrorSnackBar(context, l10n.lotExpenseName);
       return;
+    }
+    if (_kind == lotExpenseKindFixed) {
+      final invalid =
+          validateOptionalMoney(_recurring.text, l10n.moneyAmountInvalid);
+      if (invalid != null) {
+        AppHaptics.refuse();
+        showErrorSnackBar(context, invalid);
+        return;
+      }
     }
     setState(() => _busy = true);
     try {

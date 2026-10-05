@@ -4543,5 +4543,6 @@
   "pkgResultNoPhone": "non envoyée, pas de téléphone",
   "pkgResultSwitchedOff": "non envoyée, mises à jour désactivées",
   "pkgResultNeedsCountryCode": "non envoyée, le téléphone n’a pas d’indicatif pays",
-  "pkgResultNotSent": "non envoyée"
+  "pkgResultNotSent": "non envoyée",
+  "moneyAmountInvalid": "Saisissez un montant comme 12,50 ou 1 200,50."
 }

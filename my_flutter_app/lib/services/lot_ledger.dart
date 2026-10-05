@@ -5,6 +5,8 @@
 library;
 
 import 'package:intl/intl.dart';
+
+import '../utils/money_input.dart';
 import 'business_parking_entry.dart' show businessParkingCollectedByMonth;
 
 // ---------------------------------------------------------------------------
@@ -83,14 +85,10 @@ String formatLotCents(int cents) {
   return cents < 0 ? '-$text' : text;
 }
 
-/// Dollars as typed ("12", "12.5", "$1,200.00") to cents, null when unusable.
-int? lotDollarsToCents(String raw) {
-  final cleaned = raw.replaceAll(RegExp(r'[$,\s]'), '');
-  if (cleaned.isEmpty) return null;
-  final value = double.tryParse(cleaned);
-  if (value == null || value.isNaN || value.isInfinite) return null;
-  return (value * 100).round();
-}
+/// Dollars as typed ("12", "12.5", "12,50", "$1,200.00") to cents, null when
+/// empty or unusable. Reads through the app's one money parser, so "12,50" is
+/// twelve dollars fifty, not $1,250.
+int? lotDollarsToCents(String raw) => parseMoneyCents(raw);
 
 /// `yyyy-MM` for a month.
 String lotMonthKey(DateTime day) => DateFormat('yyyy-MM').format(day);
