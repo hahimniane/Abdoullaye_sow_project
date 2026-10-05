@@ -201,7 +201,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       if (!mounted) return;
       _parkedUnsettled = {for (final d in snap.docs) d.id: d.data()};
       _mergeParkedRows();
-    }, onError: (_) {}));
+    }, onError: _keepWhatIsShown('parkedCars')));
 
     // Only the open boxes: an arrived container makes no link.
     _subs.add(openContainersSpec(id).build(_db).snapshots().listen((snap) {
@@ -211,7 +211,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       ];
       setState(() =>
           _containerLinks = containerVinLinks(_containerLines, _containers));
-    }, onError: (_) {}));
+    }, onError: _keepWhatIsShown('containers')));
 
     _subs.add(openContainerLinesSpec(id).build(_db).snapshots().listen((snap) {
       if (!mounted) return;
@@ -220,7 +220,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       ];
       setState(() =>
           _containerLinks = containerVinLinks(_containerLines, _containers));
-    }, onError: (_) {}));
+    }, onError: _keepWhatIsShown('containerLines')));
 
     _subs.add(_db.collection('businesses').doc(id).snapshots().listen((doc) {
       if (!mounted) return;
@@ -335,7 +335,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       setState(() => _entries = [
             for (final d in snap.docs) LotExpenseEntry.fromMap(d.id, d.data()),
           ]);
-    }, onError: (_) {}));
+    }, onError: _keepWhatIsShown('lotExpenseEntries')));
     // Stays that end on or after the window opens: every stay that can carry
     // money into it (open-ended ones included).
     _windowSubs.add(parkedCarsEndingFromSpec(
@@ -345,7 +345,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       if (!mounted) return;
       _parkedInWindow = {for (final d in snap.docs) d.id: d.data()};
       _mergeParkedRows();
-    }, onError: (_) {}));
+    }, onError: _keepWhatIsShown('parkedCars')));
   }
 
   Future<void> _loadCustomers() async {
