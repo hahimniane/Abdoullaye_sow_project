@@ -213,6 +213,17 @@ assert(
   "partner.html must populate business countries from country-catalog.js instead of a partial hardcoded list",
 );
 
+// Every App Store link goes to the real listing. They pointed at
+// contact.html while the iOS app was unpublished, and stayed that way after.
+const APP_STORE_URL = "https://apps.apple.com/app/laawol/id6791795025";
+for (const file of htmlFiles) {
+  const html = readFileSync(path.join(root, file), "utf8");
+  for (const tag of html.match(/<a\b[^>]*>(?:(?!<\/a>)[\s\S])*App Store(?:(?!<\/a>)[\s\S])*<\/a>|<a\b[^>]*App Store[^>]*>/g) || []) {
+    assert(tag.includes(`href="${APP_STORE_URL}"`),
+        `${file}: an App Store link must point to ${APP_STORE_URL}`);
+  }
+}
+
 console.log(
   `Verified public CMS/privacy hooks across ${htmlFiles.length} HTML files.`,
 );
