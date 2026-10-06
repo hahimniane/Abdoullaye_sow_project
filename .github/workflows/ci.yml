@@ -91,6 +91,12 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: deploy/package-lock.json
+          cache-dependency-path: |
+            deploy/package-lock.json
+            admin_web/package-lock.json
       - run: npm ci
+      # Preflight loads the build env with admin_web's own @next/env (the way
+      # `next build` does), and its tests exercise that loader.
+      - run: npm ci --ignore-scripts
+        working-directory: admin_web
       - run: npm test
