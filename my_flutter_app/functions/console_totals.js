@@ -219,6 +219,8 @@ function createConsoleTotalsHandlers(deps) {
       },
       pageSize: SCAN_PAGE_SIZE,
       deadlineMs,
+      // The deadline was taken from this clock; measure it with the same one.
+      now: () => now().getTime(),
     });
     return {rows, complete: result.exhausted};
   }
