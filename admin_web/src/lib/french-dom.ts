@@ -4231,6 +4231,59 @@ Object.assign(TEXT_TRANSLATIONS, {
   // A container line followed by its CL- code: loaded, at sea, landed.
   "Container shipment": "Expédition en conteneur",
   "Tracked shipment": "Envoi suivi",
+  // The staff view of a package above the public tracking result
+  // (package-staff-view.tsx, package-staff.ts). Mirrors the app's pkg* ARB
+  // strings. "What it is", "Quantity", "Owner", "Receiver", "Container",
+  // "Destination", "Sailed", "Arrived", "Business stock", "No phone" and the
+  // WhatsApp summaries are already above.
+  Package: "Colis",
+  "Staff view": "Vue de l’équipe",
+  "Loading the package…": "Chargement du colis…",
+  "This package could not be loaded. Check your connection and try again.":
+    "Ce colis n’a pas pu être chargé. Vérifiez votre connexion et réessayez.",
+  "This code is not on any of your containers. The public tracking result is below.":
+    "Ce code ne figure dans aucun de vos conteneurs. Le résultat du suivi public est ci-dessous.",
+  "No container line has this code. The public tracking result is below.":
+    "Aucune ligne de conteneur ne porte ce code. Le résultat du suivi public est ci-dessous.",
+  "Only your team sees this. The customer's public tracking result is below.":
+    "Seule votre équipe voit ceci. Le résultat du suivi public du client est ci-dessous.",
+  Kind: "Nature",
+  VIN: "NIV",
+  "No name": "Sans nom",
+  "No receiver recorded.": "Aucun destinataire enregistré.",
+  "No destination yet": "Pas encore de destination",
+  "Loading the container…": "Chargement du conteneur…",
+  Call: "Appeler",
+  "WhatsApp updates": "Mises à jour WhatsApp",
+  "No update has been sent yet. The first goes out when the container sails.":
+    "Aucune mise à jour envoyée pour l’instant. La première part quand le conteneur prend la mer.",
+  "Last update: left port": "Dernière mise à jour : parti du port",
+  "Last update: at the destination port": "Dernière mise à jour : au port de destination",
+  "Last update: arrived": "Dernière mise à jour : arrivé",
+  "Latest update": "Dernière mise à jour",
+  // One person's outcome on the last update, as whole sentences.
+  "Customer: sent": "Client : envoyée",
+  "Customer: failed to send": "Client : échec de l’envoi",
+  "Customer: waiting for WhatsApp to be connected": "Client : en attente de la connexion WhatsApp",
+  "Customer: queued to send": "Client : en file d’attente",
+  "Customer: sending": "Client : envoi en cours",
+  "Customer: retrying after a failed try": "Client : nouvel essai après un échec",
+  "Customer: not sent, no phone": "Client : non envoyée, pas de téléphone",
+  "Customer: not sent, updates switched off": "Client : non envoyée, mises à jour désactivées",
+  "Customer: not sent, the phone has no country code": "Client : non envoyée, le téléphone n’a pas d’indicatif pays",
+  "Customer: not sent": "Client : non envoyée",
+  "Receiver: sent": "Destinataire : envoyée",
+  "Receiver: failed to send": "Destinataire : échec de l’envoi",
+  "Receiver: waiting for WhatsApp to be connected": "Destinataire : en attente de la connexion WhatsApp",
+  "Receiver: queued to send": "Destinataire : en file d’attente",
+  "Receiver: sending": "Destinataire : envoi en cours",
+  "Receiver: retrying after a failed try": "Destinataire : nouvel essai après un échec",
+  "Receiver: not sent, no phone": "Destinataire : non envoyée, pas de téléphone",
+  "Receiver: not sent, updates switched off": "Destinataire : non envoyée, mises à jour désactivées",
+  "Receiver: not sent, the phone has no country code": "Destinataire : non envoyée, le téléphone n’a pas d’indicatif pays",
+  "Receiver: not sent": "Destinataire : non envoyée",
+  "Reprint labels": "Réimprimer les étiquettes",
+  "Open in business console": "Ouvrir dans la console entreprise",
   "In the container": "Dans le conteneur",
   "At sea": "En mer",
   "Received and loaded into the container": "Reçu et chargé dans le conteneur",

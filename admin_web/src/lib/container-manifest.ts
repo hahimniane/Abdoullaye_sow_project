@@ -22,6 +22,19 @@ import { destinationCountryOptionForRow } from "./destination-countries.ts";
 export const CONTAINER_STATUSES = ["loading", "shipped", "arrived"] as const;
 export type ContainerStatus = (typeof CONTAINER_STATUSES)[number];
 
+/** The state badge: its word and its `lst-badge` tone. */
+export const CONTAINER_STATUS_LABELS: Record<ContainerStatus, string> = {
+  loading: "Loading",
+  shipped: "Shipped",
+  arrived: "Arrived",
+};
+
+export const CONTAINER_STATUS_TONES: Record<ContainerStatus, string> = {
+  loading: "warn",
+  shipped: "navy",
+  arrived: "ok",
+};
+
 export const CONTAINER_LINE_KINDS = ["car", "barrels", "other"] as const;
 export type ContainerLineKind = (typeof CONTAINER_LINE_KINDS)[number];
 

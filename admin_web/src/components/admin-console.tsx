@@ -78,8 +78,12 @@ import { CITIES_BY_STATE, US_STATE_NAMES } from "@/lib/us-locations";
 import { auth, db, functions, storage } from "@/lib/firebase";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import {
+  mergedAdminRoles as mergedRoles,
   resolveAdminRoleKey,
   resolveAssignableAdminRole,
+  type AdminAccessLevel as AccessLevel,
+  type AdminPermissionsConfig as PermissionsConfig,
+  type AdminRoleConfig as RoleConfig,
 } from "@/lib/admin-access";
 import {
   VERIFICATION_STATUSES,
@@ -241,7 +245,6 @@ function businessOffersService(
 // are stored in Firestore (platformConfig/permissions). Each role grants each
 // console SECTION an access level ("none" | "view" | "manage") AND may be
 // limited to a set of platform SERVICES. The backend reads the same config.
-type AccessLevel = "none" | "view" | "manage";
 
 // Derived, never hand-listed: a new area declared in admin-areas.ts becomes
 // something a role can be granted without anyone editing this file. Getting
@@ -278,13 +281,6 @@ const PLATFORM_SERVICES: Array<{ id: string; label: string }> = [
   { id: "carParking", label: "Car parking" },
 ];
 
-type RoleConfig = {
-  label: string;
-  builtIn?: boolean;
-  sections: Record<string, AccessLevel>;
-  services: string[]; // empty = all services
-};
-type PermissionsConfig = { roles?: Record<string, RoleConfig> };
 
 const ROLE_LABELS_BUILTIN: Record<string, string> = {
   superAdmin: "Super admin",
@@ -294,64 +290,6 @@ const ROLE_LABELS_BUILTIN: Record<string, string> = {
   contentManager: "Content manager",
 };
 
-const DEFAULT_ROLES: Record<string, RoleConfig> = {
-  operationsManager: {
-    label: "Operations manager",
-    builtIn: true,
-    services: [],
-    sections: {
-      people: "view",
-      businesses: "manage",
-      marketplace: "manage",
-      operations: "manage",
-      finance: "none",
-      website: "manage",
-      support: "manage",
-    },
-  },
-  financeManager: {
-    label: "Finance manager",
-    builtIn: true,
-    services: [],
-    sections: {
-      people: "view",
-      businesses: "none",
-      marketplace: "none",
-      operations: "view",
-      finance: "manage",
-      website: "none",
-      support: "manage",
-    },
-  },
-  supportAdmin: {
-    label: "Support admin",
-    builtIn: true,
-    services: [],
-    sections: {
-      people: "view",
-      businesses: "view",
-      marketplace: "view",
-      operations: "view",
-      finance: "none",
-      website: "none",
-      support: "manage",
-    },
-  },
-  contentManager: {
-    label: "Content manager",
-    builtIn: true,
-    services: [],
-    sections: {
-      people: "view",
-      businesses: "view",
-      marketplace: "none",
-      operations: "none",
-      finance: "none",
-      website: "manage",
-      support: "none",
-    },
-  },
-};
 
 const SUPER_ADMIN_TABS: Tab[] = adminAreaIds;
 
@@ -364,31 +302,6 @@ type Perms = {
   canService: (serviceId: string) => boolean;
 };
 
-// Built-in defaults overlaid with any stored config (custom + edited roles).
-function mergedRoles(
-  config: PermissionsConfig | null,
-): Record<string, RoleConfig> {
-  const roles: Record<string, RoleConfig> = {};
-  for (const [key, value] of Object.entries(DEFAULT_ROLES)) {
-    roles[key] = {
-      ...value,
-      sections: { ...value.sections },
-      services: [...value.services],
-    };
-  }
-  for (const [key, value] of Object.entries(config?.roles ?? {})) {
-    const base = roles[key];
-    roles[key] = {
-      label: text(value.label, base?.label ?? key),
-      builtIn: base?.builtIn ?? false,
-      sections: { ...(base?.sections ?? {}), ...(value.sections ?? {}) },
-      services: Array.isArray(value.services)
-        ? value.services
-        : (base?.services ?? []),
-    };
-  }
-  return roles;
-}
 
 function roleLabel(roleKey: string, config: PermissionsConfig | null): string {
   if (roleKey === "superAdmin") return ROLE_LABELS_BUILTIN.superAdmin;

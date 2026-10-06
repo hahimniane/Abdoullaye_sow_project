@@ -20,7 +20,7 @@ import {
 } from "@/lib/console-host";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
-import { resolveConsoleKind } from "@/lib/console-routing";
+import { resolveConsoleKind, serviceEntryApplies } from "@/lib/console-routing";
 import { customerServiceFromSearch } from "@/lib/customer-service-intent";
 import { legalAcceptance } from "@/lib/disclosures";
 import { auth, db, functions } from "@/lib/firebase";
@@ -385,10 +385,7 @@ export function ConsoleRouter() {
   }
 
   const resolvedKind = profile ? resolveConsoleKind(profile.role) : null;
-  if (
-    serviceIntent &&
-    (!profile || resolvedKind === "customer")
-  ) {
+  if (serviceIntent && serviceEntryApplies(serviceIntent, resolvedKind)) {
     return (
       <CustomerServiceEntry
         authenticated={Boolean(firebaseUser && profile)}

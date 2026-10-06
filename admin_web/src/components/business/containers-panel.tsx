@@ -33,6 +33,7 @@ import {
   useBusinessCollection,
   useBusinessDestinations,
   useBusinessStaff,
+  useLiveDoc,
 } from "@/lib/business-data";
 import { useDocsWhereIn } from "@/lib/use-paged-query";
 import { findBusinessVehicleRecord } from "@/lib/vin-records";
@@ -41,10 +42,9 @@ import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/
 import { useCarCatalog } from "@/lib/use-car-catalog";
 import {
   CONTAINER_MESSAGES,
+  CONTAINER_STATUS_LABELS,
+  CONTAINER_STATUS_TONES,
   buildVinPlacementIndex,
-  containerLabelsRequest,
-  readContainerLabelChoice,
-  writeContainerLabelChoice,
   cleanVin,
   containerCallableFailure,
   containerDeleteRefusal,
@@ -81,7 +81,6 @@ import {
   validateContainerLineDraft,
   vinPlacementText,
   type ContainerDraft,
-  type ContainerLabelChoice,
   type ContainerLineContactsDraft,
   type ContainerLineDraft,
   type ContainerLineInLot,
@@ -99,6 +98,7 @@ import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
 import { CopyValue } from "@/components/copy-value";
+import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import {
   lotCustomerFromRow,
@@ -123,24 +123,18 @@ type ContainersPanelProps = {
   /** The business record, for the country its customers' phones default to. */
   business?: FirestoreRow | null;
   previewMode?: boolean;
+  /**
+   * Opened from a link (a package's "Open in business console"): the
+   * container to open, and the line on it to mark and scroll to.
+   */
+  focusContainerId?: string;
+  focusLineId?: string;
 };
 
 type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels";
 
-const STATUS_LABELS: Record<ContainerStatus, string> = {
-  loading: "Loading",
-  shipped: "Shipped",
-  arrived: "Arrived",
-};
-
-const STATUS_TONES: Record<ContainerStatus, string> = {
-  loading: "warn",
-  shipped: "navy",
-  arrived: "ok",
-};
-
 function StatusBadge({ status }: { status: ContainerStatus }) {
-  return <span className={`lst-badge ${STATUS_TONES[status]}`}>{STATUS_LABELS[status]}</span>;
+  return <span className={`lst-badge ${CONTAINER_STATUS_TONES[status]}`}>{CONTAINER_STATUS_LABELS[status]}</span>;
 }
 
 function EmptyState({ text: message }: { text: string }) {
@@ -236,7 +230,13 @@ function LineWhatsApp({ line }: { line: Row }) {
  * other cargo went into, when it sailed, and when it landed. Customers never
  * see this; it is the yard's record of what it declared.
  */
-export function ContainersPanel({ businessId, business = null, previewMode = false }: ContainersPanelProps) {
+export function ContainersPanel({
+  businessId,
+  business = null,
+  previewMode = false,
+  focusContainerId = "",
+  focusLineId = "",
+}: ContainersPanelProps) {
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   useCarCatalog();
   const enabled = Boolean(businessId && !previewMode);
@@ -252,10 +252,16 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
     where: [["status", "==", "arrived"]],
     sort: "query",
   });
-  const containerRows = useMemo(
-    () => [...openContainers.rows, ...arrivedContainers.rows],
-    [openContainers.rows, arrivedContainers.rows],
-  );
+  // A container opened from a link may be an arrival older than the page
+  // loaded above: read that one document so it opens all the same. Only this
+  // business's own; another business's id opens nothing.
+  const linkedContainer = useLiveDoc("containers", focusContainerId, enabled && Boolean(focusContainerId));
+  const linkedRow = linkedContainer && text(linkedContainer.businessId, "") === businessId ? linkedContainer : null;
+  const containerRows = useMemo(() => {
+    const rows = [...openContainers.rows, ...arrivedContainers.rows];
+    if (linkedRow && !rows.some((row) => String(row.id) === String(linkedRow.id))) rows.push(linkedRow);
+    return rows;
+  }, [openContainers.rows, arrivedContainers.rows, linkedRow]);
   const containers = {
     rows: containerRows,
     loading: openContainers.loading || arrivedContainers.loading,
@@ -317,13 +323,11 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
   // The line whose contacts are being corrected, and the form for it.
   const [contactsLineId, setContactsLineId] = useState("");
   const [contactsDraft, setContactsDraft] = useState<ContainerLineContactsDraft>(() => containerLineContactsDraftFromRow({}));
-  // Package labels: the container they print for, the one line when it is a
-  // reprint for one shipment, the format and count, and the link to show
-  // when the browser refused the new tab.
+  // Package labels: the container they print for, and the one line when it
+  // is a reprint for one shipment. The dialog holds the format, the count and
+  // the fallback link.
   const [labelsContainerId, setLabelsContainerId] = useState("");
   const [labelsLineId, setLabelsLineId] = useState("");
-  const [labelChoice, setLabelChoice] = useState<ContainerLabelChoice>(() => readContainerLabelChoice(null));
-  const [labelsLink, setLabelsLink] = useState("");
 
   const lang = currentLanguage() === "fr" ? "fr" : "en";
 
@@ -418,6 +422,24 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
     ? phoneCountryForDestination(selected, customerPhoneCountry, destinations.rows)
     : customerPhoneCountry;
 
+  // A link opens its container once, as soon as the container is known; a
+  // container that never turns up leaves the list as it is.
+  const focusOpened = useRef(false);
+  useEffect(() => {
+    if (focusOpened.current || !focusContainerId || !containerById.has(focusContainerId)) return;
+    focusOpened.current = true;
+    setSelectedId(focusContainerId);
+  }, [focusContainerId, containerById]);
+  // Then its line is scrolled into view once it has rendered.
+  const focusScrolled = useRef(false);
+  useEffect(() => {
+    if (focusScrolled.current || !focusLineId || selectedId !== focusContainerId) return;
+    const row = document.getElementById(`ctn-line-${focusLineId}`);
+    if (!row) return;
+    focusScrolled.current = true;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusLineId, focusContainerId, selectedId, lines.rows]);
+
   // A container deleted or lost from the list closes its detail view.
   useEffect(() => {
     if (selectedId && !containers.loading && !containerById.has(selectedId)) {
@@ -474,7 +496,6 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
     setContactsLineId("");
     setLabelsContainerId("");
     setLabelsLineId("");
-    setLabelsLink("");
   }
 
   function failInModal(error: unknown) {
@@ -597,31 +618,9 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
     if (!containerId) return;
     setLabelsContainerId(containerId);
     setLabelsLineId(line ? String(line.id) : "");
-    setLabelChoice(readContainerLabelChoice(labelStorage()));
-    setLabelsLink("");
     setDraftError("");
     setConflictId("");
     setModal("labels");
-  }
-
-  async function printLabels() {
-    if (!labelsContainerId) return;
-    setLabelsLink("");
-    setDraftError("");
-    writeContainerLabelChoice(labelStorage(), labelChoice);
-    const tab = openPendingTab(window);
-    const request = containerLabelsRequest(businessId, labelsContainerId, labelChoice, labelsLineId);
-    await runPanelAction(setBusy, setFlash, "", async () => {
-      const response = await httpsCallable(functions, "getContainerDocumentUrl")(request);
-      const data = (response.data ?? {}) as { url?: string };
-      const url = text(data.url, "");
-      if (!url) throw new Error("The labels are not ready yet. Try again in a moment.");
-      if (sendPendingTab(tab, url)) closeModal();
-      else setLabelsLink(url);
-    }, (message) => {
-      closePendingTab(tab);
-      failInModal(message);
-    });
   }
 
   async function openHistory(containerId: string) {
@@ -901,7 +900,6 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
   const contactsLineContainer = contactsLine ? containerById.get(text(contactsLine.containerId, "")) : undefined;
   const labelsContainer = labelsContainerId ? containerById.get(labelsContainerId) : undefined;
   const labelsLine = labelsLineId ? lines.rows.find((row) => String(row.id) === labelsLineId) : undefined;
-  const labelsLineCode = labelsLine ? text(labelsLine.trackingCode, "") : "";
   const conflictContainer = conflictId ? containerById.get(conflictId) : undefined;
 
   function jumpToConflict() {
@@ -1002,7 +1000,11 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
                   const stock = containerLineIsStock(row);
                   const by = staffName(text(row.addedByStaffId, ""));
                   return (
-                    <div className="mini-table-row" key={String(row.id)}>
+                    <div
+                      className={`mini-table-row${focusLineId && String(row.id) === focusLineId ? " ctn-line-focus" : ""}`}
+                      id={`ctn-line-${String(row.id)}`}
+                      key={String(row.id)}
+                    >
                       <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /></span>
                       <span>
                         {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(row.customerName, "")}</strong>}
@@ -1465,51 +1467,12 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
       )}
 
       {modal === "labels" && labelsContainer && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
-          <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-            <header className="lst-modal-head">
-              <div>
-                {labelsLine ? (
-                  <h3>Labels for {labelsLineCode ? <code className="ctn-code">{labelsLineCode}</code> : containerLineTitle(labelsLine)}</h3>
-                ) : (
-                  <h3>Print labels</h3>
-                )}
-                {labelsLine ? (
-                  <p>{containerLineTitle(labelsLine)} — only this line's packages.</p>
-                ) : (
-                  <p>{containerTitle(labelsContainer)} — a QR code and tracking code for every package on this container.</p>
-                )}
-              </div>
-              <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
-            </header>
-            <div className="lst-modal-body">
-              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
-              {labelsLink && (
-                <div className="lst-form-error" role="status" style={{ background: "var(--mist)", color: "var(--brand-strong)" }}>
-                  Your browser blocked the new tab. <a href={labelsLink} target="_blank" rel="noopener noreferrer">Open the labels page</a>
-                </div>
-              )}
-              <fieldset className="lst-fieldset">
-                <legend>Label format</legend>
-                <label className="lst-radio"><input type="radio" name="ctnlabelformat" checked={labelChoice.format === "sheet"} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, format: "sheet" }))} /><span>Letter sheet — Avery 5524 weatherproof, 6 per page</span></label>
-                <label className="lst-radio"><input type="radio" name="ctnlabelformat" checked={labelChoice.format === "thermal"} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, format: "thermal" }))} /><span>Thermal printer 4×6</span></label>
-              </fieldset>
-              <fieldset className="lst-fieldset">
-                <legend>Labels per package</legend>
-                <label className="lst-radio"><input type="radio" name="ctnlabelcopies" checked={labelChoice.copies === 2} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, copies: 2 }))} /><span>2 — one for each side (recommended)</span></label>
-                <label className="lst-radio"><input type="radio" name="ctnlabelcopies" checked={labelChoice.copies === 1} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, copies: 1 }))} /><span>1 — to replace a single torn label</span></label>
-              </fieldset>
-              <p className="lst-hint ctn-label-tip">Use weatherproof polyester or vinyl labels and cover each one with clear packing tape. On a thermal printer use thermal-transfer labels with a resin ribbon; direct-thermal labels fade in a hot container.</p>
-            </div>
-            <footer className="lst-modal-foot">
-              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void printLabels()}>
-                {busy ? <RefreshCw className="spin" size={16} /> : <Tag size={16} />}
-                {busy ? "Opening..." : "Open labels"}
-              </button>
-            </footer>
-          </div>
-        </div>
+        <ContainerLabelsDialog
+          businessId={businessId}
+          container={labelsContainer}
+          line={labelsLine}
+          onClose={closeModal}
+        />
       )}
 
       {modal === "history" && (
@@ -1536,15 +1499,6 @@ export function ContainersPanel({ businessId, business = null, previewMode = fal
       )}
     </div>
   );
-}
-
-/** This browser's storage, or null where reading it throws (a blocked or private window). */
-function labelStorage(): Storage | null {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
 }
 
 /** "Filled from an existing record: 2019 Toyota Camry for Aissatou. You can change anything below." */

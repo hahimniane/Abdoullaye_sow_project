@@ -14011,6 +14011,48 @@ html[data-lang-pending] body {
 .ctn-hit-state > .ghost-button { flex: none; }
 .lst-modal-head h3 .ctn-code { font-size: 0.85em; vertical-align: 0.08em; }
 .ctn-label-tip { margin: 14px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--mist); line-height: 1.45; }
+/* A line opened from a package's "Open in business console" link. */
+.ctn-table .mini-table-row.ctn-line-focus { background: rgba(245, 158, 11, 0.12); box-shadow: inset 3px 0 0 var(--accent); }
+
+/* The staff view of a package, above the public result on the tracking page:
+   the app's package screen, in the guest page's column. */
+.pkg-staff, .pkg-staff-note { width: 100%; max-width: 780px; margin: 0 auto; }
+.pkg-staff-note { box-sizing: border-box; }
+/* The listing card's badge is pinned to its photo; here it sits in the flow. */
+.pkg-staff .lst-badge { position: static; flex: none; box-shadow: none; text-transform: none; }
+.pkg-staff-loading { display: flex; align-items: center; gap: 8px; margin: 0; padding: 16px 18px; color: var(--muted); }
+.pkg-staff-code { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px 0; }
+.pkg-staff-code > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pkg-staff-code code { font: 800 24px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.05em; color: var(--ink); }
+.pkg-staff-code strong { font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+.pkg-staff-lede { margin: 6px 18px 0; }
+.pkg-staff-section { padding: 14px 18px 0; min-width: 0; }
+.pkg-staff-section > h3 { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.pkg-staff-section .pur-info b { overflow-wrap: anywhere; }
+.pkg-staff-section .pur-info small { color: var(--muted); font-size: 12px; }
+.pkg-staff-people { display: grid; grid-template-columns: 1fr 1fr; }
+.pkg-staff-person { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pkg-staff-person > strong { font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
+.pkg-staff-person > small { color: var(--muted); font-size: 13px; }
+.pkg-staff-person > small.pkg-staff-warn { color: #92400e; font-size: 12px; font-weight: 600; line-height: 1.35; }
+.pkg-staff-contact { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pkg-staff-contact .secondary-button { text-decoration: none; }
+.pkg-staff-muted { margin: 0; color: var(--muted); font-size: 13.5px; }
+.pkg-staff-warn { color: #92400e; font-weight: 600; }
+.pkg-staff-updates { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--ink); }
+.pkg-staff-result { padding-left: 14px; }
+.pkg-staff-result.ok { color: var(--money); }
+.pkg-staff-result.error { color: var(--danger); }
+.pkg-staff-result.warn { color: #92400e; }
+.pkg-staff-result.info { color: var(--brand-strong, #0f766e); }
+.pkg-staff-result.muted { color: var(--muted); }
+.pkg-staff-actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 18px; }
+.pkg-staff-actions .secondary-button { text-decoration: none; }
+@media (max-width: 600px) {
+  .pkg-staff-people { grid-template-columns: 1fr; }
+  .pkg-staff-code code { font-size: 20px; }
+  .pkg-staff-actions > * { flex: 1 1 100%; justify-content: center; }
+}
 
 /* One-tap copy beside a value nobody should retype (VIN, customer name). */
 .copy-value{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:6px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;vertical-align:middle}
