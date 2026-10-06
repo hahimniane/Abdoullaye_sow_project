@@ -1017,10 +1017,12 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
                     initialValue: method.isEmpty ? 'open' : method,
                     decoration:
                         InputDecoration(labelText: l10n.transportMethod),
-                    items: const [
-                      DropdownMenuItem(value: 'open', child: Text('Open')),
+                    items: [
                       DropdownMenuItem(
-                          value: 'enclosed', child: Text('Enclosed')),
+                          value: 'open', child: Text(l10n.openTransport)),
+                      DropdownMenuItem(
+                          value: 'enclosed',
+                          child: Text(l10n.enclosedTransport)),
                     ],
                     onChanged: (value) =>
                         setSheetState(() => method = value ?? method),

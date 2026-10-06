@@ -1406,13 +1406,13 @@ class _CarFormSheetState extends State<_CarFormSheet> {
         if (!_useBusinessHoldPricing) {
           final maxDays = _holdMaxDaysValue();
           if (maxDays == null || maxDays < 1 || maxDays > 30) {
-            return 'Hold max days must be between 1 and 30.';
+            return l10n.holdMaxDaysOutOfRange;
           }
           final fee = _holdPricingMode == 'flat'
               ? _holdFlatFeeValue()
               : _holdDailyRateValue();
           if (fee == null || fee <= 0) {
-            return 'Enter a positive paid hold amount.';
+            return l10n.holdAmountMustBePositive;
           }
         }
         return null;
@@ -2079,7 +2079,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
               const SizedBox(height: 12),
               _textField(
                 controller: _holdMaxDaysController,
-                label: 'Maximum hold days (1-30)',
+                label: l10n.holdMaxDaysLabel,
                 icon: Icons.event_busy_outlined,
                 keyboardType: TextInputType.number,
               ),
@@ -2481,12 +2481,16 @@ class _CarFormSheetState extends State<_CarFormSheet> {
           price == null ? '' : currency.format(price),
         ),
         _reviewLine(
-          'Paid hold',
+          l10n.paidHoldReviewLabel,
           _useBusinessHoldPricing
-              ? 'Business default'
+              ? l10n.holdPricingBusinessDefault
               : _holdPricingMode == 'flat'
-              ? 'Flat ${currency.format(_holdFlatFeeValue() ?? 0)}'
-              : '${currency.format(_holdDailyRateValue() ?? 0)} per day',
+              ? l10n.holdPricingFlatAmount(
+                  currency.format(_holdFlatFeeValue() ?? 0),
+                )
+              : l10n.holdPricingPerDayAmount(
+                  currency.format(_holdDailyRateValue() ?? 0),
+                ),
         ),
         _reviewLine(
           l10n.condition,

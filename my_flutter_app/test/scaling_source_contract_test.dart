@@ -132,6 +132,31 @@ void main() {
       expect(screen, contains('.findExact(vin)'));
     });
 
+    test('invoices read the open tab whole and history a page at a time', () {
+      final screen = read('lib/screens/invoices_screen.dart');
+      expect(screen, contains('invoicesOpenSpec(id)'));
+      expect(screen, contains('invoicesPageSpec(widget.businessId, pages: _pages)'));
+      expect(screen, isNot(contains("scoped('invoices')")));
+      expect(screen, isNot(contains(".collection('invoices').where(")));
+      // The board never sums a page: the server's totals, or this month's
+      // payments while the server cannot be reached.
+      expect(screen, contains("httpsCallable('getInvoiceBoardTotals')"));
+      expect(screen, contains('invoicePaymentsInMonthSpec('));
+      expect(screen, isNot(contains('_invoices.fold<int>(')));
+      expect(screen, contains("Key('invoices-load-more')"));
+      expect(screen, contains('_loadingSafety = Timer('));
+    });
+
+    test('purchase management pages, scoped by business and state', () {
+      final screen = read('lib/screens/staff_purchase_management_screen.dart');
+      expect(screen, contains('carPurchasesPageSpec('));
+      expect(screen, isNot(contains("collection('carPurchases')")));
+      expect(screen, isNot(contains('query.snapshots()')));
+      expect(screen, contains("Key('purchase-load-more')"));
+      expect(screen, contains("Key('purchase-business-filter')"));
+      expect(screen, contains("Key('purchase-status-filter')"));
+    });
+
     test('a container detail shares the list screen feed', () {
       final screen = read('lib/screens/containers_screen.dart');
       expect(screen, contains('class ContainerFeed extends ChangeNotifier'));

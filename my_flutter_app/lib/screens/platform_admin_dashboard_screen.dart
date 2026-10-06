@@ -15,6 +15,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import 'staff_car_management_screen.dart';
+import '../utils/service_catalog_localization.dart';
 
 class PlatformAdminDashboardScreen extends StatefulWidget {
   const PlatformAdminDashboardScreen({super.key});
@@ -1348,8 +1349,10 @@ Future<void> _showReviewSheet(
                           }
                         });
                       },
-                      title: Text(service.label),
-                      subtitle: Text(service.description),
+                      title: Text(businessServiceLabel(l10n, service.key)),
+                      subtitle: Text(
+                        businessServiceDescription(l10n, service.key),
+                      ),
                       secondary: Icon(service.icon),
                       contentPadding: EdgeInsets.zero,
                     ),

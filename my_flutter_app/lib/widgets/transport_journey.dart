@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/shipment_tracking_event.dart';
 import '../services/shipment_tracking_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/date_display.dart';
 import '../utils/transport_journey_stages.dart';
+import '../utils/service_catalog_localization.dart';
 
 /// The four-beat journey bar for a transport job - the same answer to
 /// "where is my car" that barrels give for "where is my barrel", so the
@@ -26,9 +28,9 @@ class TransportJourneyBar extends StatelessWidget {
           color: Colors.red.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: const Text(
-          'This transport job was cancelled.',
-          style: TextStyle(
+        child: Text(
+          AppLocalizations.of(context)!.transportJobCancelledNotice,
+          style: const TextStyle(
             color: Colors.red,
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -61,7 +63,7 @@ class TransportJourneyBar extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  transportJourneyStages[i].label,
+                  transportJourneyStageLabel(AppLocalizations.of(context)!, i),
                   maxLines: 1,
                   overflow: TextOverflow.visible,
                   softWrap: false,

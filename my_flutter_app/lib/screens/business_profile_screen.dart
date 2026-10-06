@@ -28,6 +28,7 @@ import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/pickup_plan_editor.dart';
 import '../services/parking_rates.dart';
+import '../utils/service_catalog_localization.dart';
 
 class BusinessProfileScreen extends StatefulWidget {
   const BusinessProfileScreen({super.key});
@@ -2515,7 +2516,10 @@ class _ServiceChoiceCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    service.label,
+                    businessServiceLabel(
+                      AppLocalizations.of(context)!,
+                      service.key,
+                    ),
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       color: AppColors.ink,
@@ -2523,7 +2527,10 @@ class _ServiceChoiceCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    service.description,
+                    businessServiceDescription(
+                      AppLocalizations.of(context)!,
+                      service.key,
+                    ),
                     style: const TextStyle(
                       color: AppColors.muted,
                       height: 1.25,

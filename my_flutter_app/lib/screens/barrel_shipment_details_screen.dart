@@ -1215,11 +1215,10 @@ class _BarrelShipmentDetailsScreenState
                                   ),
                                 ],
                                 if (isOwner && !canEditDetails && !_isCompleted)
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 16),
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 16),
                                     child: _InlineNotice(
-                                      message:
-                                          'This shipment can no longer be edited because pickup has arrived or the request is already being processed.',
+                                      message: l10n.shipmentLockedNotice,
                                     ),
                                   ),
                                 if (_isCompleted)

@@ -4570,5 +4570,242 @@
         "type": "String"
       }
     }
-  }
+  },
+  "invStatCollectedThisMonth": "Collected this month",
+  "invLoadOlder": "Load older invoices",
+  "invSearchLoadedHint": "Search covers every open invoice and the most recent paid ones. Load older invoices to search further back.",
+  "purchaseStatusAll": "All",
+  "purchaseStatusReviewPending": "Review pending",
+  "purchaseStatusNoShow": "No-show",
+  "purchaseStatusForfeited": "Deposit forfeited",
+  "paymentStatusFailed": "Failed",
+  "paymentStatusNotRequired": "Not required",
+  "extensionStatusRejected": "Rejected",
+  "extensionPaymentSuffix": " • payment {status}",
+  "@extensionPaymentSuffix": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseMarkSoldTitle": "Mark car sold?",
+  "purchaseMarkSoldMessage": "This will complete the paid hold for {carTitle}.",
+  "@purchaseMarkSoldMessage": {
+    "placeholders": {
+      "carTitle": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseNoShowTitle": "Customer did not come?",
+  "purchaseNoShowMessage": "This will release {carTitle}, forfeit the hold deposit, and add this outcome to the buyer history.",
+  "@purchaseNoShowMessage": {
+    "placeholders": {
+      "carTitle": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseApproveExtensionTitle": "Approve extension?",
+  "purchaseRejectExtensionTitle": "Reject extension?",
+  "purchaseApproveExtensionMessage": "The customer will be allowed to pay the extra hold amount.",
+  "purchaseRejectExtensionMessage": "The current hold date will stay unchanged.",
+  "purchaseApprove": "Approve",
+  "purchaseReject": "Reject",
+  "purchaseForfeitedCannotComplete": "A hold whose deposit was forfeited cannot be completed.",
+  "purchaseFilterBusiness": "Business",
+  "purchaseAllBusinesses": "All businesses",
+  "purchaseLoadMore": "Load more",
+  "holdMaxDaysOutOfRange": "Hold max days must be between 1 and 30.",
+  "holdAmountMustBePositive": "Enter a positive paid hold amount.",
+  "holdMaxDaysLabel": "Maximum hold days (1-30)",
+  "paidHoldReviewLabel": "Paid hold",
+  "holdPricingBusinessDefault": "Business default",
+  "holdPricingFlatAmount": "Flat {amount}",
+  "@holdPricingFlatAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "holdPricingPerDayAmount": "{amount} per day",
+  "@holdPricingPerDayAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsJoinRequestSent": "Join request sent. Deposit: {deposit}",
+  "@openBarrelsJoinRequestSent": {
+    "placeholders": {
+      "deposit": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsPosted": "Shared barrel posted. Deposit: {deposit}",
+  "@openBarrelsPosted": {
+    "placeholders": {
+      "deposit": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsPickupFee": "Pickup fee: {amount}",
+  "@openBarrelsPickupFee": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsDropOffAt": "Drop off at {address}",
+  "@openBarrelsDropOffAt": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsWalletApplied": "wallet applied {amount}",
+  "@openBarrelsWalletApplied": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsCardAmount": "card {amount}",
+  "@openBarrelsCardAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrSendStatus": "Send current status on WhatsApp",
+  "ctrSendStatusTitle": "Send the current status?",
+  "ctrSendStatusMessage": "Everyone on this container who hasn’t heard its latest update gets it on WhatsApp now. People who already have it are not messaged again.",
+  "ctrSendStatusConfirm": "Send",
+  "ctrSendStatusQueued": "{count, plural, =1{Sending “{moment}” to 1 person on WhatsApp.} other{Sending “{moment}” to {count} people on WhatsApp.}}",
+  "@ctrSendStatusQueued": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "moment": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrSendStatusInFlight": "{count, plural, =1{1 message is already on its way.} other{{count} messages are already on their way.}}",
+  "@ctrSendStatusInFlight": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrSendStatusNothingToSend": "Everyone who can be reached already has the latest update.",
+  "ctrSendStatusAlreadyHad": "{count, plural, =1{1 person already had it.} other{{count} people already had it.}}",
+  "@ctrSendStatusAlreadyHad": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrSendStatusCantReach": "{count, plural, =1{1 person can’t be reached (no phone, updates off, or no country code).} other{{count} people can’t be reached (no phone, updates off, or no country code).}}",
+  "@ctrSendStatusCantReach": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrSendStatusNoNews": "This container has no news for customers yet. They hear when it ships.",
+  "ctrWhatsAppNotConnectedTitle": "WhatsApp isn’t connected yet",
+  "ctrWhatsAppNotConnectedMessage": "Nothing was sent. Updates are being recorded, and once the platform connects WhatsApp you can send everyone on this container its current status from here.",
+  "pkgResultQueued": "queued to send",
+  "pkgResultSending": "sending",
+  "pkgResultRetrying": "retrying after a failed try",
+  "businessServiceBarrelShipping": "Barrel shipping",
+  "businessServiceSharedBarrels": "Shared barrels",
+  "businessServiceFreight": "Freight (parcels)",
+  "businessServiceCarSales": "Car sales",
+  "businessServiceCarParking": "Car parking",
+  "businessServiceCarTransport": "Car transport",
+  "businessServiceBarrelShippingHint": "Ship barrels to destination countries.",
+  "businessServiceSharedBarrelsHint": "Pool partial barrels and match customers by destination.",
+  "businessServiceFreightHint": "Ship parcels and boxes by weight, by air or sea.",
+  "businessServiceCarSalesHint": "List cars for customers to browse and buy.",
+  "businessServiceCarParkingHint": "Manage parked cars and parking receipts.",
+  "businessServiceCarTransportHint": "Track car transport requests.",
+  "customerServiceCars": "Cars",
+  "customerServiceBarrel": "Send barrels",
+  "customerServiceShared": "Shared barrels",
+  "customerServiceFreight": "Freight",
+  "customerServicePark": "Park a car",
+  "customerServiceTransport": "Transport",
+  "customerServicePurchases": "Purchases",
+  "customerServiceViewings": "Car viewings",
+  "customerServiceTracking": "Tracking",
+  "transportJourneyBooked": "Booked",
+  "transportJourneyScheduled": "Scheduled",
+  "transportJourneyOnItsWay": "On its way",
+  "transportJourneyDelivered": "Delivered",
+  "openBarrelsDeadline": "Deadline",
+  "openBarrelsMode": "Mode",
+  "openBarrelsDeposit": "Deposit",
+  "openBarrelsPerShare": "Per share",
+  "openBarrelsAckDelay": "I understand one bad item can delay the shared barrel.",
+  "openBarrelsAckProhibited": "I confirm there are no prohibited or unsafe items.",
+  "openBarrelsAckContents": "I confirm the contents and estimated weight are accurate.",
+  "openBarrelsPickupBorough": "Pickup borough",
+  "openBarrelsPickupAddress": "Pickup address",
+  "openBarrelsRequestPickup": "Request pickup",
+  "openBarrelsChoosePickupTime": "Choose pickup time",
+  "openBarrelsPostButton": "Post barrel",
+  "openBarrelsContentsLabel": "What are you sending?",
+  "openBarrelsReceiverName": "Receiver name",
+  "openBarrelsSenderName": "Sender name",
+  "openBarrelsYourShares": "Your shares",
+  "openBarrelsTotalShares": "Total shares",
+  "openBarrelsBusinessAndDestination": "Business and destination",
+  "openBarrelsPostHint": "Share the open space so others can join and fill the barrel.",
+  "openBarrelsPostTitle": "Post a partial barrel",
+  "openBarrelsConfirmAcknowledgements": "Confirm the shared-barrel acknowledgements.",
+  "openBarrelsPickupPriceUnavailable": "Pickup price is not available yet.",
+  "openBarrelsPickupRequired": "Enter a pickup address and future pickup time.",
+  "openBarrelsFillRequired": "Fill sender, receiver, phone, and contents.",
+  "openBarrelsNoBusinesses": "No business is accepting shared barrels yet.",
+  "openBarrelsDestinationsLoadFailed": "Could not load destinations. Check your connection and try again.",
+  "openBarrelsSendRequest": "Send request",
+  "openBarrelsRequestShareHint": "Reserve space in this open barrel.",
+  "openBarrelsRequestShareTitle": "Request a share",
+  "openBarrelsLeftPool": "You left the pool.",
+  "openBarrelsPoolCancelled": "Pool cancelled.",
+  "openBarrelsBalancePaid": "Balance paid.",
+  "openBarrelsLeavePool": "Leave pool",
+  "openBarrelsPayBalance": "Pay balance",
+  "openBarrelsMineEmptyHint": "Post a partial barrel or request a share to see it here.",
+  "openBarrelsMineEmptyTitle": "No shared barrel pools yet",
+  "openBarrelsMineLoadFailed": "Could not load your pools",
+  "openBarrelsSignInHint": "Your shared barrel posts will appear here after you sign in.",
+  "openBarrelsSignInTitle": "Sign in to see your pools",
+  "openBarrelsRequestOneShare": "Request one share",
+  "openBarrelsEmptyHint": "When a customer or business opens unused shares, they will appear here.",
+  "openBarrelsEmptyTitle": "No open shared barrels yet",
+  "openBarrelsLoadFailed": "Could not load open barrels",
+  "openBarrelsTabMine": "My pools",
+  "openBarrelsTabOpen": "Open pools",
+  "openBarrelsShareTitle": "Share a barrel",
+  "openBarrelsPostPartial": "Post partial barrel",
+  "sendBarrelSharedPromoTitle": "Can’t fill a barrel?",
+  "sendBarrelSharedPromoHint": "Join an open shared barrel or reserve a share.",
+  "transportJobCancelledNotice": "This transport job was cancelled.",
+  "shipmentLockedNotice": "This shipment can no longer be edited because pickup has arrived or the request is already being processed."
 }

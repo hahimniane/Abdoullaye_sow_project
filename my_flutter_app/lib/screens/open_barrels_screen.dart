@@ -50,10 +50,6 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
     _loadPickupPricing();
   }
 
-  String copy(String en, String fr) {
-    return Localizations.localeOf(context).languageCode == 'fr' ? fr : en;
-  }
-
   DestinationCountry? _countryForId(String countryId) {
     return CountryCatalog.all
         .where((country) => country.id == countryId)
@@ -68,18 +64,16 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
     final parts = <String>[_currency.format(result.depositAmount)];
     if (result.walletAppliedAmount > 0) {
       parts.add(
-        copy(
-          'wallet applied ${_currency.format(result.walletAppliedAmount)}',
-          'portefeuille utilisé ${_currency.format(result.walletAppliedAmount)}',
-        ),
+        AppLocalizations.of(
+          context,
+        )!.openBarrelsWalletApplied(_currency.format(result.walletAppliedAmount)),
       );
     }
     if (result.cardDepositAmount > 0) {
       parts.add(
-        copy(
-          'card ${_currency.format(result.cardDepositAmount)}',
-          'carte ${_currency.format(result.cardDepositAmount)}',
-        ),
+        AppLocalizations.of(
+          context,
+        )!.openBarrelsCardAmount(_currency.format(result.cardDepositAmount)),
       );
     }
     return parts.join(' · ');
@@ -152,7 +146,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showCreateSheet,
         icon: const Icon(Icons.add),
-        label: Text(copy('Post partial barrel', 'Publier un baril partiel')),
+        label: Text(AppLocalizations.of(context)!.openBarrelsPostPartial),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -172,7 +166,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                     const AppBackButton(onDarkBackground: true),
                     Expanded(
                       child: Text(
-                        copy('Share a barrel', 'Partager un baril'),
+                        AppLocalizations.of(context)!.openBarrelsShareTitle,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white,
@@ -202,8 +196,8 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                           labelColor: const Color(0xFF0B3B38),
                           unselectedLabelColor: const Color(0xFF64748B),
                           tabs: [
-                            Tab(text: copy('Open pools', 'Barils ouverts')),
-                            Tab(text: copy('My pools', 'Mes barils')),
+                            Tab(text: AppLocalizations.of(context)!.openBarrelsTabOpen),
+                            Tab(text: AppLocalizations.of(context)!.openBarrelsTabMine),
                           ],
                         ),
                         Expanded(
@@ -234,10 +228,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
           debugPrint('Open shared barrels failed: ${snapshot.error}');
           return _StateMessage(
             icon: Icons.error_outline,
-            title: copy(
-              'Could not load open barrels',
-              'Impossible de charger les barils ouverts',
-            ),
+            title: AppLocalizations.of(context)!.openBarrelsLoadFailed,
             body: AppLocalizations.of(context)!.sharedBarrelsLoadFailed,
           );
         }
@@ -245,21 +236,14 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
         if (pools.isEmpty) {
           return _StateMessage(
             icon: Icons.inventory_2_outlined,
-            title: copy(
-              'No open shared barrels yet',
-              'Aucun baril partagé ouvert pour le moment',
-            ),
-            body: copy(
-              'When a customer or business opens unused shares, they will appear here.',
-              'Quand un client ou une entreprise ouvre des parts disponibles, elles apparaîtront ici.',
-            ),
+            title: AppLocalizations.of(context)!.openBarrelsEmptyTitle,
+            body: AppLocalizations.of(context)!.openBarrelsEmptyHint,
           );
         }
         return _PoolList(
           pools: pools,
           currency: _currency,
-          copy: copy,
-          actionLabel: copy('Request one share', 'Demander une part'),
+          actionLabel: AppLocalizations.of(context)!.openBarrelsRequestOneShare,
           actionIcon: Icons.add_circle_outline,
           onAction: _showJoinSheet,
         );
@@ -273,11 +257,8 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
     if (uid == null) {
       return _StateMessage(
         icon: Icons.lock_outline,
-        title: copy('Sign in to see your pools', 'Connectez-vous'),
-        body: copy(
-          'Your shared barrel posts will appear here after you sign in.',
-          'Vos publications de barils partagés apparaîtront ici après connexion.',
-        ),
+        title: AppLocalizations.of(context)!.openBarrelsSignInTitle,
+        body: AppLocalizations.of(context)!.openBarrelsSignInHint,
       );
     }
     return StreamBuilder<List<BarrelPool>>(
@@ -290,10 +271,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
           debugPrint('Customer shared barrels failed: ${snapshot.error}');
           return _StateMessage(
             icon: Icons.error_outline,
-            title: copy(
-              'Could not load your pools',
-              'Impossible de charger vos barils',
-            ),
+            title: AppLocalizations.of(context)!.openBarrelsMineLoadFailed,
             body: AppLocalizations.of(context)!.sharedBarrelsLoadFailed,
           );
         }
@@ -301,20 +279,13 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
         if (pools.isEmpty) {
           return _StateMessage(
             icon: Icons.inventory_outlined,
-            title: copy(
-              'No shared barrel pools yet',
-              'Aucun baril partagé pour le moment',
-            ),
-            body: copy(
-              'Post a partial barrel or request a share to see it here.',
-              'Publiez un baril partiel ou demandez une part pour le voir ici.',
-            ),
+            title: AppLocalizations.of(context)!.openBarrelsMineEmptyTitle,
+            body: AppLocalizations.of(context)!.openBarrelsMineEmptyHint,
           );
         }
         return _PoolList(
           pools: pools,
           currency: _currency,
-          copy: copy,
           actionIcon: Icons.cancel_outlined,
           actionIconFor: (pool) => switch (barrelPoolPrimaryActionFor(pool)) {
             BarrelPoolPrimaryAction.payBalance => Icons.payments_outlined,
@@ -323,17 +294,11 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
             BarrelPoolPrimaryAction.leavePool => Icons.logout_outlined,
           },
           actionLabelFor: (pool) => switch (barrelPoolPrimaryActionFor(pool)) {
-            BarrelPoolPrimaryAction.payBalance => copy(
-              'Pay balance',
-              'Payer le solde',
-            ),
+            BarrelPoolPrimaryAction.payBalance => AppLocalizations.of(context)!.openBarrelsPayBalance,
             BarrelPoolPrimaryAction.manageRequests =>
               l10n.sharedBarrelManageRequests,
             BarrelPoolPrimaryAction.cancelPool => l10n.sharedBarrelCancelPool,
-            BarrelPoolPrimaryAction.leavePool => copy(
-              'Leave pool',
-              'Quitter le baril',
-            ),
+            BarrelPoolPrimaryAction.leavePool => AppLocalizations.of(context)!.openBarrelsLeavePool,
           },
           actionEnabled: (pool) =>
               !_busyPoolIds.contains(pool.id) &&
@@ -376,7 +341,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
         await _service.payBalance(pool, marketplaceAcceptance: acceptance);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(copy('Balance paid.', 'Solde payé.'))),
+          SnackBar(content: Text(AppLocalizations.of(context)!.openBarrelsBalancePaid)),
         );
       } catch (error) {
         debugPrint('Shared barrel balance payment failed: $error');
@@ -683,8 +648,8 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
         SnackBar(
           content: Text(
             pool.participantRole == 'owner'
-                ? copy('Pool cancelled.', 'Baril partagé annulé.')
-                : copy('You left the pool.', 'Vous avez quitté le baril.'),
+                ? AppLocalizations.of(context)!.openBarrelsPoolCancelled
+                : AppLocalizations.of(context)!.openBarrelsLeftPool,
           ),
         ),
       );
@@ -735,10 +700,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      copy(
-                        'Fill sender, receiver, phone, and contents.',
-                        'Renseignez expéditeur, destinataire, téléphone et contenu.',
-                      ),
+                      AppLocalizations.of(context)!.openBarrelsFillRequired,
                     ),
                   ),
                 );
@@ -772,10 +734,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        copy(
-                          'Enter a pickup address and future pickup time.',
-                          'Indiquez une adresse et une heure de collecte future.',
-                        ),
+                        AppLocalizations.of(context)!.openBarrelsPickupRequired,
                       ),
                     ),
                   );
@@ -785,10 +744,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        copy(
-                          'Pickup price is not available yet.',
-                          'Le prix de collecte n’est pas encore disponible.',
-                        ),
+                        AppLocalizations.of(context)!.openBarrelsPickupPriceUnavailable,
                       ),
                     ),
                   );
@@ -801,10 +757,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      copy(
-                        'Confirm the shared-barrel acknowledgements.',
-                        'Confirmez les engagements du baril partagé.',
-                      ),
+                      AppLocalizations.of(context)!.openBarrelsConfirmAcknowledgements,
                     ),
                   ),
                 );
@@ -846,11 +799,9 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      copy(
-                            'Join request sent. Deposit: ',
-                            'Demande envoyée. Acompte : ',
-                          ) +
-                          _depositSummary(result),
+                      AppLocalizations.of(
+                        context,
+                      )!.openBarrelsJoinRequestSent(_depositSummary(result)),
                     ),
                   ),
                 );
@@ -881,16 +832,13 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          copy('Request a share', 'Demander une part'),
+                          AppLocalizations.of(context)!.openBarrelsRequestShareTitle,
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          copy(
-                            'Reserve space in this open barrel.',
-                            'Réservez de l’espace dans ce baril ouvert.',
-                          ),
+                          AppLocalizations.of(context)!.openBarrelsRequestShareHint,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: Theme.of(context).hintColor,
@@ -902,13 +850,13 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                     TextField(
                       controller: senderController,
                       decoration: InputDecoration(
-                        labelText: copy('Sender name', 'Nom de l’expéditeur'),
+                        labelText: AppLocalizations.of(context)!.openBarrelsSenderName,
                       ),
                     ),
                     TextField(
                       controller: receiverController,
                       decoration: InputDecoration(
-                        labelText: copy('Receiver name', 'Nom du destinataire'),
+                        labelText: AppLocalizations.of(context)!.openBarrelsReceiverName,
                       ),
                     ),
                     CountryPhoneField(
@@ -920,7 +868,6 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                       ),
                     ),
                     _PickupSection(
-                      copy: copy,
                       currency: _currency,
                       pickupRequested: pickupRequested,
                       pickupAddressController: pickupAddressController,
@@ -954,14 +901,10 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                       controller: contentsController,
                       maxLines: 2,
                       decoration: InputDecoration(
-                        labelText: copy(
-                          'What are you sending?',
-                          'Qu’envoyez-vous ?',
-                        ),
+                        labelText: AppLocalizations.of(context)!.openBarrelsContentsLabel,
                       ),
                     ),
                     _AttestationChecks(
-                      copy: copy,
                       contentsAttested: contentsAttested,
                       prohibitedItemsAcknowledged: prohibitedItemsAcknowledged,
                       sharedLiabilityAccepted: sharedLiabilityAccepted,
@@ -992,7 +935,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.check_circle_outline),
-                      label: Text(copy('Send request', 'Envoyer la demande')),
+                      label: Text(AppLocalizations.of(context)!.openBarrelsSendRequest),
                     ),
                   ],
                 ),
@@ -1027,10 +970,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            copy(
-              'Could not load destinations. Check your connection and try again.',
-              'Impossible de charger les destinations. Vérifiez votre connexion et réessayez.',
-            ),
+            AppLocalizations.of(context)!.openBarrelsDestinationsLoadFailed,
           ),
         ),
       );
@@ -1049,10 +989,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            copy(
-              'No business is accepting shared barrels yet.',
-              'Aucune entreprise n’accepte encore les barils partagés.',
-            ),
+            AppLocalizations.of(context)!.openBarrelsNoBusinesses,
           ),
         ),
       );
@@ -1094,10 +1031,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      copy(
-                        'Fill sender, receiver, phone, and contents.',
-                        'Renseignez expéditeur, destinataire, téléphone et contenu.',
-                      ),
+                      AppLocalizations.of(context)!.openBarrelsFillRequired,
                     ),
                   ),
                 );
@@ -1131,10 +1065,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        copy(
-                          'Enter a pickup address and future pickup time.',
-                          'Indiquez une adresse et une heure de collecte future.',
-                        ),
+                        AppLocalizations.of(context)!.openBarrelsPickupRequired,
                       ),
                     ),
                   );
@@ -1144,10 +1075,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        copy(
-                          'Pickup price is not available yet.',
-                          'Le prix de collecte n’est pas encore disponible.',
-                        ),
+                        AppLocalizations.of(context)!.openBarrelsPickupPriceUnavailable,
                       ),
                     ),
                   );
@@ -1160,10 +1088,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      copy(
-                        'Confirm the shared-barrel acknowledgements.',
-                        'Confirmez les engagements du baril partagé.',
-                      ),
+                      AppLocalizations.of(context)!.openBarrelsConfirmAcknowledgements,
                     ),
                   ),
                 );
@@ -1207,11 +1132,9 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      copy(
-                            'Shared barrel posted. Deposit: ',
-                            'Baril partagé publié. Acompte : ',
-                          ) +
-                          _depositSummary(result),
+                      AppLocalizations.of(
+                        context,
+                      )!.openBarrelsPosted(_depositSummary(result)),
                     ),
                   ),
                 );
@@ -1242,19 +1165,13 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          copy(
-                            'Post a partial barrel',
-                            'Publier un baril partiel',
-                          ),
+                          AppLocalizations.of(context)!.openBarrelsPostTitle,
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          copy(
-                            'Share the open space so others can join and fill the barrel.',
-                            'Partagez l’espace libre pour que d’autres complètent le baril.',
-                          ),
+                          AppLocalizations.of(context)!.openBarrelsPostHint,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: Theme.of(context).hintColor,
@@ -1285,10 +1202,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                               }
                             },
                       decoration: InputDecoration(
-                        labelText: copy(
-                          'Business and destination',
-                          'Entreprise et destination',
-                        ),
+                        labelText: AppLocalizations.of(context)!.openBarrelsBusinessAndDestination,
                       ),
                     ),
                     Row(
@@ -1318,7 +1232,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                                     }
                                   },
                             decoration: InputDecoration(
-                              labelText: copy('Total shares', 'Parts totales'),
+                              labelText: AppLocalizations.of(context)!.openBarrelsTotalShares,
                             ),
                           ),
                         ),
@@ -1348,7 +1262,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                                     }
                                   },
                             decoration: InputDecoration(
-                              labelText: copy('Your shares', 'Vos parts'),
+                              labelText: AppLocalizations.of(context)!.openBarrelsYourShares,
                             ),
                           ),
                         ),
@@ -1357,13 +1271,13 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                     TextField(
                       controller: senderController,
                       decoration: InputDecoration(
-                        labelText: copy('Sender name', 'Nom de l’expéditeur'),
+                        labelText: AppLocalizations.of(context)!.openBarrelsSenderName,
                       ),
                     ),
                     TextField(
                       controller: receiverController,
                       decoration: InputDecoration(
-                        labelText: copy('Receiver name', 'Nom du destinataire'),
+                        labelText: AppLocalizations.of(context)!.openBarrelsReceiverName,
                       ),
                     ),
                     CountryPhoneField(
@@ -1373,7 +1287,6 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                       initialCountryCode: selected.country.displayCode,
                     ),
                     _PickupSection(
-                      copy: copy,
                       currency: _currency,
                       pickupRequested: pickupRequested,
                       pickupAddressController: pickupAddressController,
@@ -1407,14 +1320,10 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                       controller: contentsController,
                       maxLines: 2,
                       decoration: InputDecoration(
-                        labelText: copy(
-                          'What are you sending?',
-                          'Qu’envoyez-vous ?',
-                        ),
+                        labelText: AppLocalizations.of(context)!.openBarrelsContentsLabel,
                       ),
                     ),
                     _AttestationChecks(
-                      copy: copy,
                       contentsAttested: contentsAttested,
                       prohibitedItemsAcknowledged: prohibitedItemsAcknowledged,
                       sharedLiabilityAccepted: sharedLiabilityAccepted,
@@ -1445,7 +1354,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.inventory_2_outlined),
-                      label: Text(copy('Post barrel', 'Publier le baril')),
+                      label: Text(AppLocalizations.of(context)!.openBarrelsPostButton),
                     ),
                   ],
                 ),
@@ -1460,7 +1369,6 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
 
 class _PickupSection extends StatelessWidget {
   const _PickupSection({
-    required this.copy,
     required this.currency,
     required this.pickupRequested,
     required this.pickupAddressController,
@@ -1480,8 +1388,6 @@ class _PickupSection extends StatelessWidget {
     'Brooklyn',
     'Staten Island',
   ];
-
-  final String Function(String en, String fr) copy;
   final NumberFormat currency;
   final bool pickupRequested;
   final TextEditingController pickupAddressController;
@@ -1496,7 +1402,7 @@ class _PickupSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pickupDateLabel = pickupDateTime == null
-        ? copy('Choose pickup time', 'Choisir l’heure de collecte')
+        ? AppLocalizations.of(context)!.openBarrelsChoosePickupTime
         : displayDateTime(pickupDateTime!, dateLocaleOf(context));
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -1516,14 +1422,17 @@ class _PickupSection extends StatelessWidget {
                 value: pickupRequested,
                 onChanged: onPickupRequestedChanged,
                 title: Text(
-                  copy('Request pickup', 'Demander une collecte'),
+                  AppLocalizations.of(context)!.openBarrelsRequestPickup,
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 subtitle: Text(
                   pickupRequested
-                      ? copy('Pickup fee: ', 'Frais de collecte : ') +
-                            currency.format(pickupFee)
-                      : copy('Drop off at ', 'Dépôt à ') + officeAddress,
+                      ? AppLocalizations.of(
+                          context,
+                        )!.openBarrelsPickupFee(currency.format(pickupFee))
+                      : AppLocalizations.of(
+                          context,
+                        )!.openBarrelsDropOffAt(officeAddress),
                 ),
               ),
               if (pickupRequested) ...[
@@ -1531,7 +1440,7 @@ class _PickupSection extends StatelessWidget {
                 TextField(
                   controller: pickupAddressController,
                   decoration: InputDecoration(
-                    labelText: copy('Pickup address', 'Adresse de collecte'),
+                    labelText: AppLocalizations.of(context)!.openBarrelsPickupAddress,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -1547,7 +1456,7 @@ class _PickupSection extends StatelessWidget {
                       .toList(),
                   onChanged: onBoroughChanged,
                   decoration: InputDecoration(
-                    labelText: copy('Pickup borough', 'Arrondissement'),
+                    labelText: AppLocalizations.of(context)!.openBarrelsPickupBorough,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -1567,7 +1476,6 @@ class _PickupSection extends StatelessWidget {
 
 class _AttestationChecks extends StatelessWidget {
   const _AttestationChecks({
-    required this.copy,
     required this.contentsAttested,
     required this.prohibitedItemsAcknowledged,
     required this.sharedLiabilityAccepted,
@@ -1575,8 +1483,6 @@ class _AttestationChecks extends StatelessWidget {
     required this.onProhibitedChanged,
     required this.onLiabilityChanged,
   });
-
-  final String Function(String en, String fr) copy;
   final bool contentsAttested;
   final bool prohibitedItemsAcknowledged;
   final bool sharedLiabilityAccepted;
@@ -1597,10 +1503,7 @@ class _AttestationChecks extends StatelessWidget {
             value: contentsAttested,
             onChanged: onContentsChanged,
             title: Text(
-              copy(
-                'I confirm the contents and estimated weight are accurate.',
-                'Je confirme que le contenu et le poids estimé sont exacts.',
-              ),
+              AppLocalizations.of(context)!.openBarrelsAckContents,
             ),
           ),
           CheckboxListTile(
@@ -1610,10 +1513,7 @@ class _AttestationChecks extends StatelessWidget {
             value: prohibitedItemsAcknowledged,
             onChanged: onProhibitedChanged,
             title: Text(
-              copy(
-                'I confirm there are no prohibited or unsafe items.',
-                'Je confirme qu’il n’y a aucun article interdit ou dangereux.',
-              ),
+              AppLocalizations.of(context)!.openBarrelsAckProhibited,
             ),
           ),
           CheckboxListTile(
@@ -1623,10 +1523,7 @@ class _AttestationChecks extends StatelessWidget {
             value: sharedLiabilityAccepted,
             onChanged: onLiabilityChanged,
             title: Text(
-              copy(
-                'I understand one bad item can delay the shared barrel.',
-                'Je comprends qu’un mauvais article peut retarder le baril partagé.',
-              ),
+              AppLocalizations.of(context)!.openBarrelsAckDelay,
             ),
           ),
         ],
@@ -1639,7 +1536,6 @@ class _PoolList extends StatelessWidget {
   const _PoolList({
     required this.pools,
     required this.currency,
-    required this.copy,
     required this.actionIcon,
     required this.onAction,
     this.actionLabel,
@@ -1652,7 +1548,6 @@ class _PoolList extends StatelessWidget {
 
   final List<BarrelPool> pools;
   final NumberFormat currency;
-  final String Function(String en, String fr) copy;
   final String? actionLabel;
   final String Function(BarrelPool pool)? actionLabelFor;
   final IconData actionIcon;
@@ -1680,7 +1575,6 @@ class _PoolList extends StatelessWidget {
           actionEnabled: actionEnabled?.call(pool) ?? true,
           actionBusy: actionBusy?.call(pool) ?? false,
           onAction: () => onAction(pool),
-          copy: copy,
           showSupport: showSupport,
         );
       },
@@ -1701,7 +1595,6 @@ class _PoolCard extends StatelessWidget {
     required this.actionEnabled,
     required this.actionBusy,
     required this.onAction,
-    required this.copy,
     required this.showSupport,
   });
 
@@ -1714,7 +1607,6 @@ class _PoolCard extends StatelessWidget {
   final bool actionEnabled;
   final bool actionBusy;
   final VoidCallback onAction;
-  final String Function(String en, String fr) copy;
   final bool showSupport;
 
   @override
@@ -1765,14 +1657,14 @@ class _PoolCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _InfoChip(label: copy('Per share', 'Par part'), value: price),
-                _InfoChip(label: copy('Deposit', 'Acompte'), value: deposit),
+                _InfoChip(label: AppLocalizations.of(context)!.openBarrelsPerShare, value: price),
+                _InfoChip(label: AppLocalizations.of(context)!.openBarrelsDeposit, value: deposit),
                 _InfoChip(
-                  label: copy('Mode', 'Mode'),
+                  label: AppLocalizations.of(context)!.openBarrelsMode,
                   value: pool.shipMode.toUpperCase(),
                 ),
                 if (deadline.isNotEmpty)
-                  _InfoChip(label: copy('Deadline', 'Limite'), value: deadline),
+                  _InfoChip(label: AppLocalizations.of(context)!.openBarrelsDeadline, value: deadline),
               ],
             ),
             const SizedBox(height: 14),

@@ -701,6 +701,69 @@ const containerUpdateFailed = 'failed';
 const containerUpdateSkipped = 'skipped';
 const containerUpdateWaiting = 'waiting_for_whatsapp';
 
+// The send queue's in-between states (docs/WHATSAPP_CONTAINER_UPDATES.md):
+// waiting for the sender, claimed by one, or retrying after a network or
+// 5xx failure.
+const containerUpdateQueued = 'queued';
+const containerUpdateSending = 'sending';
+const containerUpdateRetrying = 'retrying';
+
+/// Why `sendContainerCurrentStatus` refused (`details.reason`).
+const containerStatusRefusalNotConfigured = 'whatsapp_not_configured';
+const containerStatusRefusalNoUpdate = 'no_customer_update';
+
+/// The `reason` a refusal of `sendContainerCurrentStatus` carries in its
+/// details, or '' when it carries none.
+String containerStatusRefusalReason(Object? details) =>
+    details is Map ? _text(details['reason'], 60) : '';
+
+/// What `sendContainerCurrentStatus` answered:
+/// `{update, queued, alreadySent, inFlight, skipped, waiting}`.
+class ContainerCurrentStatusResult {
+  const ContainerCurrentStatusResult({
+    required this.update,
+    this.queued = 0,
+    this.alreadySent = 0,
+    this.inFlight = 0,
+    this.skipped = 0,
+    this.waiting = 0,
+  });
+
+  /// The moment everyone was brought up to: shipped, at_port or arrived.
+  final String update;
+
+  /// People a message was queued for just now.
+  final int queued;
+
+  /// People who already had this update; nobody hears it twice.
+  final int alreadySent;
+
+  /// People whose message was already on its way.
+  final int inFlight;
+
+  /// People who cannot be reached: no phone, switched off, or no country
+  /// code.
+  final int skipped;
+  final int waiting;
+
+  factory ContainerCurrentStatusResult.fromCallable(Object? data) {
+    final map = data is Map ? data : const {};
+    int count(String key) {
+      final v = map[key];
+      return v is num && v.isFinite && v > 0 ? v.round() : 0;
+    }
+
+    return ContainerCurrentStatusResult(
+      update: _text(map['update'], 40),
+      queued: count('queued'),
+      alreadySent: count('alreadySent'),
+      inFlight: count('inFlight'),
+      skipped: count('skipped'),
+      waiting: count('waiting'),
+    );
+  }
+}
+
 /// What happened for one person on one WhatsApp update.
 class ContainerLineUpdateResult {
   const ContainerLineUpdateResult({

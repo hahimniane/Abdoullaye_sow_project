@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/business_activity_queries.dart';
+import '../services/firestore_query_spec.dart' show mergeById;
 import '../services/invoice_ledger.dart';
 import '../services/known_car_lookup.dart';
 import '../services/lot_customers.dart';
@@ -48,7 +50,32 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final List<StreamSubscription<Object?>> _subs = [];
 
-  List<Invoice> _invoices = const [];
+  /// Every invoice still owed on (`invoicesOpenSpec`), live and whole: the
+  /// Open and Overdue filters and the board's open figures read only these.
+  List<Invoice> _open = const [];
+
+  /// The newest invoices of any state (`invoicesPageSpec`), one growing page
+  /// at a time: paid history arrives through "Load more".
+  List<Invoice> _page = const [];
+  int _pages = 1;
+  bool _pageFull = false;
+  bool _loadingMore = false;
+  bool _openLoaded = false;
+  bool _pageLoaded = false;
+  StreamSubscription<Object?>? _pageSub;
+
+  /// The server's board over every invoice (`getInvoiceBoardTotals`), when
+  /// it answers: the invoice count and the all-time collected figure.
+  InvoiceBoardTotals? _serverBoard;
+
+  /// While the server's board cannot be reached, "collected" is what came
+  /// in this month (`invoicePaymentsInMonthSpec`) - a figure the payments of
+  /// one month answer exactly - instead of a sum over a page.
+  int? _collectedThisMonthCents;
+  StreamSubscription<Object?>? _monthSub;
+  Timer? _boardRefresh;
+  Timer? _loadingSafety;
+
   List<LotStaff> _staff = const [];
   List<LotCustomer> _customers = const [];
 
@@ -75,28 +102,25 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
 
   void _listen() {
     final id = widget.businessId;
-    // No orderBy on any collection: sorted client-side so no query needs a
-    // composite index.
-    Query<Map<String, dynamic>> scoped(String path) =>
-        _db.collection(path).where('businessId', isEqualTo: id);
+    // The spinner always resolves, even if a listener never answers.
+    _loadingSafety = Timer(const Duration(seconds: 20), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
 
-    _subs.add(scoped('invoices').snapshots().listen((snap) {
+    _subs.add(invoicesOpenSpec(id).build(_db).snapshots().listen((snap) {
       if (!mounted) return;
+      final first = !_openLoaded;
       setState(() {
-        _invoices = sortInvoices([
-          for (final d in snap.docs) Invoice.fromMap(d.id, d.data()),
-        ]);
-        _loading = false;
-        _loadFailed = false;
+        _open = [for (final d in snap.docs) Invoice.fromMap(d.id, d.data())];
+        _openLoaded = true;
+        _settleLoading();
       });
-    }, onError: (_) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _loadFailed = true;
-        });
-      }
-    }));
+      // A payment or a new line moves what is owed; the server's board
+      // follows, a moment later and once per burst of changes.
+      if (!first && _serverBoard != null) _scheduleBoardRefresh();
+    }, onError: (_) => _listenerFailed()));
+    _listenPage();
+    unawaited(_refreshBoard());
     unawaited(_carLookup.loadRecent().then((_) {
       if (mounted) setState(() {});
     }));
@@ -128,6 +152,96 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
     _loadCustomers();
   }
 
+  void _settleLoading() {
+    if (_openLoaded && _pageLoaded) {
+      _loading = false;
+      _loadFailed = false;
+      _loadingSafety?.cancel();
+    }
+  }
+
+  void _listenerFailed() {
+    if (!mounted) return;
+    _loadingSafety?.cancel();
+    setState(() {
+      _loading = false;
+      _loadingMore = false;
+      _loadFailed = true;
+    });
+  }
+
+  /// (Re)opens the page listener at the current page count. A growing limit
+  /// keeps the rows already on screen live; the SDK serves the overlap from
+  /// its cache.
+  void _listenPage() {
+    final spec = invoicesPageSpec(widget.businessId, pages: _pages);
+    _pageSub?.cancel();
+    _pageSub = spec.build(_db).snapshots().listen((snap) {
+      if (!mounted) return;
+      setState(() {
+        _page = [for (final d in snap.docs) Invoice.fromMap(d.id, d.data())];
+        _pageFull = snap.docs.length >= (spec.limit ?? 0);
+        _pageLoaded = true;
+        _loadingMore = false;
+        _settleLoading();
+      });
+    }, onError: (_) => _listenerFailed());
+  }
+
+  void _loadMore() {
+    if (_loadingMore || !_pageFull) return;
+    setState(() {
+      _loadingMore = true;
+      _pages++;
+    });
+    _listenPage();
+  }
+
+  void _scheduleBoardRefresh() {
+    _boardRefresh?.cancel();
+    _boardRefresh = Timer(const Duration(seconds: 2), () {
+      unawaited(_refreshBoard());
+    });
+  }
+
+  /// The totals a page cannot give - how many invoices there are, and what
+  /// has been collected on all of them - from the server, which counts every
+  /// invoice. Until that callable answers (not deployed yet, offline, or
+  /// refused), the board says what came in this month instead.
+  Future<void> _refreshBoard() async {
+    try {
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('getInvoiceBoardTotals')
+          .call<Object?>({
+        'businessId': widget.businessId,
+        'today': invoiceTodayKey(),
+      });
+      final board = InvoiceBoardTotals.fromCallable(response.data);
+      if (!mounted) return;
+      if (board == null) {
+        _listenCollectedThisMonth();
+        return;
+      }
+      setState(() => _serverBoard = board);
+    } catch (_) {
+      if (mounted) _listenCollectedThisMonth();
+    }
+  }
+
+  void _listenCollectedThisMonth() {
+    if (_monthSub != null) return;
+    final month = invoiceMonthKey(invoiceTodayKey());
+    _monthSub = invoicePaymentsInMonthSpec(widget.businessId, month)
+        .build(_db)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      setState(() => _collectedThisMonthCents = invoiceCollectedCents([
+            for (final d in snap.docs) InvoicePayment.fromMap(d.id, d.data()),
+          ]));
+    }, onError: (_) {});
+  }
+
   Future<void> _loadCustomers() async {
     try {
       final snap = await _db
@@ -151,6 +265,10 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
     for (final s in _subs) {
       s.cancel();
     }
+    _pageSub?.cancel();
+    _monthSub?.cancel();
+    _boardRefresh?.cancel();
+    _loadingSafety?.cancel();
     super.dispose();
   }
 
@@ -190,20 +308,29 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final today = invoiceTodayKey();
+    // The open invoices are all here; paid ones as far as the page reaches.
+    // The live open copy wins where both listeners hold an invoice.
+    final known = sortInvoices(
+      mergeById<Invoice>([_open, _page], (i) => i.id),
+    );
+    final board = invoiceOpenBoard(_open, today);
+    final server = _serverBoard;
     final counts = <String, int>{
-      invoiceFilterOpen: _invoices.where((i) => i.isOpen).length,
-      invoiceFilterOverdue:
-          _invoices.where((i) => invoiceIsOverdue(i, today)).length,
-      invoiceFilterPaid: _invoices.where((i) => i.isPaid).length,
-      invoiceFilterAll: _invoices.length,
+      invoiceFilterOpen: board.openCount,
+      invoiceFilterOverdue: board.overdueCount,
+      // A page is no basis for a count: these come from the server or not
+      // at all.
+      if (server != null) invoiceFilterPaid: server.paid,
+      if (server != null) invoiceFilterAll: server.count,
     };
-    final owed = _invoices
-        .where((i) => i.isOpen)
-        .fold<int>(0, (s, i) => s + (i.balanceCents < 0 ? 0 : i.balanceCents));
-    final collected = _invoices.fold<int>(
-        0, (s, i) => s + (i.paidCents < 0 ? 0 : i.paidCents));
-    final rows = filterInvoices(_invoices, _filter, _search, today);
+    final rows = filterInvoices(known, _filter, _search, today);
     final searching = _search.trim().length >= 2;
+    // Paging only ever hides paid history, so only the views that show it
+    // offer more.
+    final showMore = _pageFull &&
+        (searching ||
+            _filter == invoiceFilterPaid ||
+            _filter == invoiceFilterAll);
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -217,8 +344,11 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
             counts: counts,
             onFilter: (f) => setState(() => _filter = f),
             showFilter: !searching,
-            owedCents: owed,
-            collectedCents: collected,
+            owedCents: board.owedCents,
+            collected: invoiceCollectedStat(
+              allTimeCents: server?.collectedCents,
+              thisMonthCents: _collectedThisMonthCents,
+            ),
           ),
           Expanded(
             child: Stack(
@@ -230,13 +360,13 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                     icon: Icons.receipt_long_outlined,
                     title: l10n.lotCouldNotSave,
                   )
-                else if (_invoices.isEmpty)
+                else if (known.isEmpty && !_pageFull)
                   LotEmptyState(
                     icon: Icons.receipt_long_outlined,
                     title: l10n.invEmptyTitle,
                     hint: l10n.invEmptyHint,
                   )
-                else if (rows.isEmpty)
+                else if (rows.isEmpty && !showMore)
                   LotEmptyState(
                     icon: Icons.search_off_outlined,
                     title: l10n.invNoMatch,
@@ -246,11 +376,17 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                     key: const Key('invoices-list'),
                     padding: const EdgeInsets.fromLTRB(
                         AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 96),
-                    itemCount: rows.length,
-                    itemBuilder: (_, i) => _InvoiceCard(
-                      invoice: rows[i],
-                      onTap: () => _openDetail(rows[i].id),
-                    ),
+                    itemCount: rows.length + (showMore ? 1 : 0),
+                    itemBuilder: (_, i) => i < rows.length
+                        ? _InvoiceCard(
+                            invoice: rows[i],
+                            onTap: () => _openDetail(rows[i].id),
+                          )
+                        : InvoicesLoadMore(
+                            searching: searching,
+                            loading: _loadingMore,
+                            onTap: _loadMore,
+                          ),
                   ),
                 Positioned(
                   left: 0,
@@ -285,7 +421,7 @@ class _InvoicesHeader extends StatelessWidget {
     required this.onFilter,
     required this.showFilter,
     required this.owedCents,
-    required this.collectedCents,
+    required this.collected,
   });
 
   final String businessName;
@@ -296,7 +432,7 @@ class _InvoicesHeader extends StatelessWidget {
   final ValueChanged<String> onFilter;
   final bool showFilter;
   final int owedCents;
-  final int collectedCents;
+  final InvoiceCollectedStat collected;
 
   @override
   Widget build(BuildContext context) {
@@ -362,7 +498,15 @@ class _InvoicesHeader extends StatelessWidget {
                     tone: owedCents > 0 ? AppColors.warn : null,
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  _Stat(label: l10n.invStatCollected, value: invoiceMoney(collectedCents)),
+                  _Stat(
+                    key: const Key('invoices-stat-collected'),
+                    label: collected.scope == InvoiceCollectedScope.thisMonth
+                        ? l10n.invStatCollectedThisMonth
+                        : l10n.invStatCollected,
+                    value: collected.scope == InvoiceCollectedScope.unknown
+                        ? '—'
+                        : invoiceMoney(collected.cents),
+                  ),
                 ],
               ),
             ),
@@ -395,7 +539,7 @@ class _InvoicesHeader extends StatelessWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value, this.tone});
+  const _Stat({super.key, required this.label, required this.value, this.tone});
 
   final String label;
   final String value;
@@ -527,31 +671,37 @@ class _FilterChips extends StatelessWidget {
                     color: f == selected ? AppColors.cobalt : AppColors.rule,
                   ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _filterLabel(l10n, f),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: f == selected ? Colors.white : AppColors.muted,
-                      ),
-                    ),
-                    if ((counts[f] ?? 0) > 0) ...[
-                      const SizedBox(width: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                // Four chips share a phone's width; "Overdue 12" (or "En
+                // retard 12") shrinks to fit rather than overflowing.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        '${counts[f]}',
+                        _filterLabel(l10n, f),
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: f == selected
-                              ? Colors.white.withValues(alpha: 0.85)
-                              : AppColors.muted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: f == selected ? Colors.white : AppColors.muted,
                         ),
                       ),
+                      if ((counts[f] ?? 0) > 0) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '${counts[f]}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: f == selected
+                                ? Colors.white.withValues(alpha: 0.85)
+                                : AppColors.muted,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -569,6 +719,82 @@ String _filterLabel(AppLocalizations l10n, String f) => switch (f) {
       invoiceFilterPaid => l10n.invFilterPaid,
       _ => l10n.invFilterAll,
     };
+
+/// The foot of a paged list: older invoices on request. While searching it
+/// says what the search has covered, since only loaded invoices are matched.
+class InvoicesLoadMore extends StatelessWidget {
+  const InvoicesLoadMore({
+    super.key,
+    required this.searching,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final bool searching;
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Column(
+        children: [
+          if (searching)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Text(
+                l10n.invSearchLoadedHint,
+                key: const Key('invoices-search-loaded-hint'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: AppColors.muted,
+                ),
+              ),
+            ),
+          Center(
+            child: OutlinedButton.icon(
+              key: const Key('invoices-load-more'),
+              onPressed: loading ? null : onTap,
+              icon: loading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more, size: 18),
+              label: Text(l10n.invLoadOlder),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The board and its filters on their own, for widget tests: the screen
+/// itself listens to Firestore.
+@visibleForTesting
+Widget invoicesHeaderForTesting({
+  Map<String, int> counts = const {},
+  int owedCents = 0,
+  InvoiceCollectedStat collected =
+      const InvoiceCollectedStat(InvoiceCollectedScope.unknown),
+}) =>
+    _InvoicesHeader(
+      businessName: '',
+      search: '',
+      onSearch: (_) {},
+      filter: invoiceFilterOpen,
+      counts: counts,
+      onFilter: (_) {},
+      showFilter: true,
+      owedCents: owedCents,
+      collected: collected,
+    );
 
 // ---------------------------------------------------------------------------
 // The list.

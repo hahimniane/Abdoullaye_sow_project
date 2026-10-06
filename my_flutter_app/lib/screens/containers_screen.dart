@@ -1450,6 +1450,19 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                         onTap: container.isLoading ? _ship : _arrive,
                       ),
                     ],
+                    // Once the box has news for customers: catch everyone
+                    // on it up to the latest update they have not had.
+                    if (!container.isLoading && lines.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      ContainerSendStatusAction(
+                        businessId: widget.businessId,
+                        containerId: widget.containerId,
+                        enabled: !busy || _busy == 'status',
+                        onBusyChanged: (on) {
+                          if (mounted) setState(() => _busy = on ? 'status' : '');
+                        },
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.lg),
                     Padding(
                       padding: const EdgeInsets.only(left: 2, bottom: AppSpacing.sm),
@@ -1724,6 +1737,156 @@ class ContainerActionButton extends StatelessWidget {
     );
   }
 }
+
+/// Calls `sendContainerCurrentStatus` and answers its data. Injected in tests.
+typedef ContainerStatusSender = Future<Object?> Function(
+  Map<String, Object?> payload,
+);
+
+Future<Object?> _sendContainerStatusCallable(Map<String, Object?> payload) async {
+  final response = await FirebaseFunctions.instance
+      .httpsCallable('sendContainerCurrentStatus')
+      .call<Object?>(payload);
+  return response.data;
+}
+
+/// "Send current status on WhatsApp": everyone on the box who has not heard
+/// its latest update gets it now (`sendContainerCurrentStatus`). Asks first,
+/// shows progress while the server queues the messages, and says what
+/// happened - including, plainly, that nothing can go out until WhatsApp is
+/// connected.
+class ContainerSendStatusAction extends StatefulWidget {
+  const ContainerSendStatusAction({
+    super.key,
+    required this.businessId,
+    required this.containerId,
+    this.enabled = true,
+    this.onBusyChanged,
+    this.send,
+  });
+
+  final String businessId;
+  final String containerId;
+  final bool enabled;
+
+  /// Lets the container detail disable its other actions while this runs.
+  final ValueChanged<bool>? onBusyChanged;
+  final ContainerStatusSender? send;
+
+  @override
+  State<ContainerSendStatusAction> createState() =>
+      _ContainerSendStatusActionState();
+}
+
+class _ContainerSendStatusActionState extends State<ContainerSendStatusAction> {
+  bool _busy = false;
+
+  void _setBusy(bool busy) {
+    if (!mounted) return;
+    setState(() => _busy = busy);
+    widget.onBusyChanged?.call(busy);
+  }
+
+  Future<void> _run() async {
+    if (_busy) return;
+    final l10n = AppLocalizations.of(context)!;
+    final ok = await confirmMajorAction(
+      context,
+      title: l10n.ctrSendStatusTitle,
+      message: l10n.ctrSendStatusMessage,
+      confirmLabel: l10n.ctrSendStatusConfirm,
+      icon: Icons.chat_outlined,
+    );
+    if (!ok || !mounted) return;
+    _setBusy(true);
+    try {
+      final data = await (widget.send ?? _sendContainerStatusCallable)({
+        'businessId': widget.businessId,
+        'containerId': widget.containerId,
+      });
+      if (!mounted) return;
+      final result = ContainerCurrentStatusResult.fromCallable(data);
+      AppHaptics.commit();
+      showSuccessSnackBar(context, containerSendStatusSummary(l10n, result));
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      final reason = containerStatusRefusalReason(error.details);
+      if (reason == containerStatusRefusalNotConfigured) {
+        // The server has answered: the button stops spinning while the
+        // explanation is read.
+        _setBusy(false);
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            key: const Key('container-whatsapp-not-connected'),
+            icon: const Icon(Icons.link_off, color: AppColors.warn),
+            title: Text(l10n.ctrWhatsAppNotConnectedTitle),
+            content: Text(l10n.ctrWhatsAppNotConnectedMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(l10n.close),
+              ),
+            ],
+          ),
+        );
+      } else if (reason == containerStatusRefusalNoUpdate) {
+        showErrorSnackBar(context, l10n.ctrSendStatusNoNews);
+      } else {
+        showErrorSnackBar(context, _refusalText(l10n, error));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      showErrorSnackBar(context, l10n.lotCouldNotSave);
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return ContainerActionButton(
+      key: const Key('container-send-status'),
+      icon: Icons.chat_outlined,
+      label: l10n.ctrSendStatus,
+      busy: _busy,
+      enabled: widget.enabled && !_busy,
+      onTap: _run,
+    );
+  }
+}
+
+/// What the server did, in one sentence or three: who was messaged, who
+/// already had it, who cannot be reached.
+String containerSendStatusSummary(
+  AppLocalizations l10n,
+  ContainerCurrentStatusResult result,
+) {
+  final moment = containerUpdateMomentLabel(l10n, result.update);
+  final parts = <String>[
+    if (result.queued > 0)
+      l10n.ctrSendStatusQueued(result.queued, moment)
+    else if (result.inFlight > 0)
+      l10n.ctrSendStatusInFlight(result.inFlight)
+    else
+      l10n.ctrSendStatusNothingToSend,
+    if (result.alreadySent > 0) l10n.ctrSendStatusAlreadyHad(result.alreadySent),
+    if (result.skipped > 0) l10n.ctrSendStatusCantReach(result.skipped),
+  ];
+  return parts.join(' ');
+}
+
+/// A customer-update moment in words: "left port", "arrived".
+String containerUpdateMomentLabel(AppLocalizations l10n, String update) =>
+    switch (update) {
+      containerUpdateShipped => l10n.pkgMomentShipped,
+      containerUpdateAtPort => l10n.pkgMomentAtPort,
+      containerUpdateArrived => l10n.pkgMomentArrived,
+      _ => update,
+    };
 
 // ---------------------------------------------------------------------------
 // A line on the list.

@@ -20,6 +20,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
+import '../utils/service_catalog_localization.dart';
 
 class BusinessRegistrationScreen extends StatefulWidget {
   const BusinessRegistrationScreen({super.key});
@@ -805,10 +806,12 @@ class _ServiceChoiceTile extends StatelessWidget {
         ),
         secondary: Icon(service.icon, color: AppColors.cobaltDeep),
         title: Text(
-          service.label,
+          businessServiceLabel(AppLocalizations.of(context)!, service.key),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
-        subtitle: Text(service.description),
+        subtitle: Text(
+          businessServiceDescription(AppLocalizations.of(context)!, service.key),
+        ),
       ),
     );
   }

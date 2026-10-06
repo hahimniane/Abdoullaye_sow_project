@@ -887,8 +887,8 @@ class _Updates extends StatelessWidget {
             key: const Key('pkg-last-update'),
             icon: Icons.history,
             text: last.at == null
-                ? l10n.pkgLastUpdate(_momentLabel(l10n, last.update))
-                : l10n.pkgLastUpdateAt(_momentLabel(l10n, last.update),
+                ? l10n.pkgLastUpdate(containerUpdateMomentLabel(l10n, last.update))
+                : l10n.pkgLastUpdateAt(containerUpdateMomentLabel(l10n, last.update),
                     displayDateTime(last.at!, locale)),
           ),
           for (final result in last.results)
@@ -911,18 +911,15 @@ class _Updates extends StatelessWidget {
   }
 }
 
-String _momentLabel(AppLocalizations l10n, String update) => switch (update) {
-      containerUpdateShipped => l10n.pkgMomentShipped,
-      containerUpdateAtPort => l10n.pkgMomentAtPort,
-      containerUpdateArrived => l10n.pkgMomentArrived,
-      _ => update,
-    };
-
 String _resultLabel(AppLocalizations l10n, ContainerLineUpdateResult r) =>
     switch (r.status) {
       containerUpdateSent => l10n.pkgResultSent,
       containerUpdateFailed => l10n.pkgResultFailed,
       containerUpdateWaiting => l10n.pkgResultWaiting,
+      // The send queue's states: on its way, not a failure.
+      containerUpdateQueued => l10n.pkgResultQueued,
+      containerUpdateSending => l10n.pkgResultSending,
+      containerUpdateRetrying => l10n.pkgResultRetrying,
       _ => switch (r.reason) {
           'no_phone' => l10n.pkgResultNoPhone,
           'switched_off' => l10n.pkgResultSwitchedOff,
@@ -935,6 +932,9 @@ IconData _resultIcon(String status) => switch (status) {
       containerUpdateSent => Icons.check_circle_outline,
       containerUpdateFailed => Icons.error_outline,
       containerUpdateWaiting => Icons.hourglass_empty,
+      containerUpdateQueued => Icons.schedule_send_outlined,
+      containerUpdateSending => Icons.send_outlined,
+      containerUpdateRetrying => Icons.autorenew,
       _ => Icons.remove_circle_outline,
     };
 
@@ -942,6 +942,8 @@ Color _resultColor(String status) => switch (status) {
       containerUpdateSent => AppColors.sage,
       containerUpdateFailed => AppColors.errorRed,
       containerUpdateWaiting => AppColors.warn,
+      containerUpdateQueued || containerUpdateSending => AppColors.cobaltDeep,
+      containerUpdateRetrying => AppColors.warn,
       _ => AppColors.muted,
     };
 

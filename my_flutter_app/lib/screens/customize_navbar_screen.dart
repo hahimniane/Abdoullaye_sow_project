@@ -6,6 +6,7 @@ import '../models/customer_service_catalog.dart';
 import '../providers/app_gate_provider.dart';
 import '../services/nav_prefs.dart';
 import '../theme/app_colors.dart';
+import '../utils/service_catalog_localization.dart';
 
 /// Lets the customer choose, reorder and remove the services pinned to their
 /// bottom navbar. Changes persist immediately.
@@ -114,7 +115,7 @@ class _CustomizeNavbarScreenState extends State<CustomizeNavbarScreen> {
                               serviceById(id)!.icon,
                               color: AppColors.cobalt,
                             ),
-                            title: Text(serviceById(id)!.label),
+                            title: Text(customerServiceLabel(l10n, serviceById(id)!)),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -143,7 +144,7 @@ class _CustomizeNavbarScreenState extends State<CustomizeNavbarScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       leading: Icon(s.icon, color: AppColors.muted),
-                      title: Text(s.label),
+                      title: Text(customerServiceLabel(l10n, s)),
                       trailing: IconButton(
                         icon: const Icon(Icons.add_circle_outline),
                         color: full ? AppColors.rule : AppColors.cobalt,

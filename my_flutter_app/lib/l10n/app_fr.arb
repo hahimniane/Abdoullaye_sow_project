@@ -4570,5 +4570,242 @@
         "type": "String"
       }
     }
-  }
+  },
+  "invStatCollectedThisMonth": "Encaissé ce mois-ci",
+  "invLoadOlder": "Charger des factures plus anciennes",
+  "invSearchLoadedHint": "La recherche couvre toutes les factures ouvertes et les plus récentes payées. Chargez des factures plus anciennes pour chercher plus loin.",
+  "purchaseStatusAll": "Tous",
+  "purchaseStatusReviewPending": "Examen en attente",
+  "purchaseStatusNoShow": "Client absent",
+  "purchaseStatusForfeited": "Acompte conservé",
+  "paymentStatusFailed": "Échoué",
+  "paymentStatusNotRequired": "Non requis",
+  "extensionStatusRejected": "Refusée",
+  "extensionPaymentSuffix": " • paiement {status}",
+  "@extensionPaymentSuffix": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseMarkSoldTitle": "Marquer la voiture comme vendue ?",
+  "purchaseMarkSoldMessage": "Le blocage payé de {carTitle} sera finalisé.",
+  "@purchaseMarkSoldMessage": {
+    "placeholders": {
+      "carTitle": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseNoShowTitle": "Le client n’est pas venu ?",
+  "purchaseNoShowMessage": "{carTitle} sera libérée, l’acompte de blocage sera conservé et ce résultat sera ajouté à l’historique de l’acheteur.",
+  "@purchaseNoShowMessage": {
+    "placeholders": {
+      "carTitle": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseApproveExtensionTitle": "Approuver la prolongation ?",
+  "purchaseRejectExtensionTitle": "Rejeter la prolongation ?",
+  "purchaseApproveExtensionMessage": "Le client pourra payer le montant supplémentaire du blocage.",
+  "purchaseRejectExtensionMessage": "La date de blocage actuelle restera inchangée.",
+  "purchaseApprove": "Approuver",
+  "purchaseReject": "Rejeter",
+  "purchaseForfeitedCannotComplete": "Un blocage dont l’acompte a été conservé ne peut pas être terminé.",
+  "purchaseFilterBusiness": "Entreprise",
+  "purchaseAllBusinesses": "Toutes les entreprises",
+  "purchaseLoadMore": "Charger plus",
+  "holdMaxDaysOutOfRange": "Le nombre maximal de jours de blocage doit être compris entre 1 et 30.",
+  "holdAmountMustBePositive": "Saisissez un montant de blocage payé positif.",
+  "holdMaxDaysLabel": "Jours de blocage maximum (1-30)",
+  "paidHoldReviewLabel": "Blocage payé",
+  "holdPricingBusinessDefault": "Tarif par défaut de l’entreprise",
+  "holdPricingFlatAmount": "Forfait {amount}",
+  "@holdPricingFlatAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "holdPricingPerDayAmount": "{amount} par jour",
+  "@holdPricingPerDayAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsJoinRequestSent": "Demande envoyée. Acompte : {deposit}",
+  "@openBarrelsJoinRequestSent": {
+    "placeholders": {
+      "deposit": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsPosted": "Baril partagé publié. Acompte : {deposit}",
+  "@openBarrelsPosted": {
+    "placeholders": {
+      "deposit": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsPickupFee": "Frais de collecte : {amount}",
+  "@openBarrelsPickupFee": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsDropOffAt": "Dépôt à {address}",
+  "@openBarrelsDropOffAt": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsWalletApplied": "portefeuille utilisé {amount}",
+  "@openBarrelsWalletApplied": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "openBarrelsCardAmount": "carte {amount}",
+  "@openBarrelsCardAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrSendStatus": "Envoyer le statut actuel sur WhatsApp",
+  "ctrSendStatusTitle": "Envoyer le statut actuel ?",
+  "ctrSendStatusMessage": "Toutes les personnes de ce conteneur qui n’ont pas reçu la dernière mise à jour la reçoivent maintenant sur WhatsApp. Celles qui l’ont déjà ne reçoivent rien de plus.",
+  "ctrSendStatusConfirm": "Envoyer",
+  "ctrSendStatusQueued": "{count, plural, =1{Envoi de « {moment} » à 1 personne sur WhatsApp.} other{Envoi de « {moment} » à {count} personnes sur WhatsApp.}}",
+  "@ctrSendStatusQueued": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "moment": {
+        "type": "String"
+      }
+    }
+  },
+  "ctrSendStatusInFlight": "{count, plural, =1{1 message est déjà en cours d’envoi.} other{{count} messages sont déjà en cours d’envoi.}}",
+  "@ctrSendStatusInFlight": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrSendStatusNothingToSend": "Toutes les personnes joignables ont déjà la dernière mise à jour.",
+  "ctrSendStatusAlreadyHad": "{count, plural, =1{1 personne l’avait déjà.} other{{count} personnes l’avaient déjà.}}",
+  "@ctrSendStatusAlreadyHad": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrSendStatusCantReach": "{count, plural, =1{1 personne est injoignable (pas de téléphone, mises à jour désactivées ou pas d’indicatif pays).} other{{count} personnes sont injoignables (pas de téléphone, mises à jour désactivées ou pas d’indicatif pays).}}",
+  "@ctrSendStatusCantReach": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ctrSendStatusNoNews": "Ce conteneur n’a pas encore de nouvelles pour les clients. Ils sont prévenus à l’expédition.",
+  "ctrWhatsAppNotConnectedTitle": "WhatsApp n’est pas encore connecté",
+  "ctrWhatsAppNotConnectedMessage": "Rien n’a été envoyé. Les mises à jour sont enregistrées et, dès que la plateforme aura connecté WhatsApp, vous pourrez envoyer le statut actuel à tout le monde depuis ici.",
+  "pkgResultQueued": "en file d’attente",
+  "pkgResultSending": "envoi en cours",
+  "pkgResultRetrying": "nouvel essai après un échec",
+  "businessServiceBarrelShipping": "Envoi de barils",
+  "businessServiceSharedBarrels": "Barils partagés",
+  "businessServiceFreight": "Fret (colis)",
+  "businessServiceCarSales": "Vente de voitures",
+  "businessServiceCarParking": "Stationnement de voitures",
+  "businessServiceCarTransport": "Transport de voitures",
+  "businessServiceBarrelShippingHint": "Expédiez des barils vers les pays de destination.",
+  "businessServiceSharedBarrelsHint": "Regroupez des barils partiels et associez les clients par destination.",
+  "businessServiceFreightHint": "Expédiez colis et cartons au poids, par avion ou par bateau.",
+  "businessServiceCarSalesHint": "Publiez des voitures que les clients peuvent consulter et acheter.",
+  "businessServiceCarParkingHint": "Gérez les voitures stationnées et les reçus de stationnement.",
+  "businessServiceCarTransportHint": "Suivez les demandes de transport de voitures.",
+  "customerServiceCars": "Voitures",
+  "customerServiceBarrel": "Envoyer des barils",
+  "customerServiceShared": "Barils partagés",
+  "customerServiceFreight": "Fret",
+  "customerServicePark": "Garer une voiture",
+  "customerServiceTransport": "Transport",
+  "customerServicePurchases": "Achats",
+  "customerServiceViewings": "Visites de voitures",
+  "customerServiceTracking": "Suivi",
+  "transportJourneyBooked": "Réservé",
+  "transportJourneyScheduled": "Planifié",
+  "transportJourneyOnItsWay": "En route",
+  "transportJourneyDelivered": "Livré",
+  "openBarrelsDeadline": "Limite",
+  "openBarrelsMode": "Mode",
+  "openBarrelsDeposit": "Acompte",
+  "openBarrelsPerShare": "Par part",
+  "openBarrelsAckDelay": "Je comprends qu’un mauvais article peut retarder le baril partagé.",
+  "openBarrelsAckProhibited": "Je confirme qu’il n’y a aucun article interdit ou dangereux.",
+  "openBarrelsAckContents": "Je confirme que le contenu et le poids estimé sont exacts.",
+  "openBarrelsPickupBorough": "Arrondissement",
+  "openBarrelsPickupAddress": "Adresse de collecte",
+  "openBarrelsRequestPickup": "Demander une collecte",
+  "openBarrelsChoosePickupTime": "Choisir l’heure de collecte",
+  "openBarrelsPostButton": "Publier le baril",
+  "openBarrelsContentsLabel": "Qu’envoyez-vous ?",
+  "openBarrelsReceiverName": "Nom du destinataire",
+  "openBarrelsSenderName": "Nom de l’expéditeur",
+  "openBarrelsYourShares": "Vos parts",
+  "openBarrelsTotalShares": "Parts totales",
+  "openBarrelsBusinessAndDestination": "Entreprise et destination",
+  "openBarrelsPostHint": "Partagez l’espace libre pour que d’autres complètent le baril.",
+  "openBarrelsPostTitle": "Publier un baril partiel",
+  "openBarrelsConfirmAcknowledgements": "Confirmez les engagements du baril partagé.",
+  "openBarrelsPickupPriceUnavailable": "Le prix de collecte n’est pas encore disponible.",
+  "openBarrelsPickupRequired": "Indiquez une adresse et une heure de collecte future.",
+  "openBarrelsFillRequired": "Renseignez expéditeur, destinataire, téléphone et contenu.",
+  "openBarrelsNoBusinesses": "Aucune entreprise n’accepte encore les barils partagés.",
+  "openBarrelsDestinationsLoadFailed": "Impossible de charger les destinations. Vérifiez votre connexion et réessayez.",
+  "openBarrelsSendRequest": "Envoyer la demande",
+  "openBarrelsRequestShareHint": "Réservez de l’espace dans ce baril ouvert.",
+  "openBarrelsRequestShareTitle": "Demander une part",
+  "openBarrelsLeftPool": "Vous avez quitté le baril.",
+  "openBarrelsPoolCancelled": "Baril partagé annulé.",
+  "openBarrelsBalancePaid": "Solde payé.",
+  "openBarrelsLeavePool": "Quitter le baril",
+  "openBarrelsPayBalance": "Payer le solde",
+  "openBarrelsMineEmptyHint": "Publiez un baril partiel ou demandez une part pour le voir ici.",
+  "openBarrelsMineEmptyTitle": "Aucun baril partagé pour le moment",
+  "openBarrelsMineLoadFailed": "Impossible de charger vos barils",
+  "openBarrelsSignInHint": "Vos publications de barils partagés apparaîtront ici après connexion.",
+  "openBarrelsSignInTitle": "Connectez-vous",
+  "openBarrelsRequestOneShare": "Demander une part",
+  "openBarrelsEmptyHint": "Quand un client ou une entreprise ouvre des parts disponibles, elles apparaîtront ici.",
+  "openBarrelsEmptyTitle": "Aucun baril partagé ouvert pour le moment",
+  "openBarrelsLoadFailed": "Impossible de charger les barils ouverts",
+  "openBarrelsTabMine": "Mes barils",
+  "openBarrelsTabOpen": "Barils ouverts",
+  "openBarrelsShareTitle": "Partager un baril",
+  "openBarrelsPostPartial": "Publier un baril partiel",
+  "sendBarrelSharedPromoTitle": "Vous ne remplissez pas un baril ?",
+  "sendBarrelSharedPromoHint": "Rejoignez un baril partagé ouvert ou réservez une part.",
+  "transportJobCancelledNotice": "Ce transport a été annulé.",
+  "shipmentLockedNotice": "Cet envoi ne peut plus être modifié : l’enlèvement a eu lieu ou la demande est déjà en cours de traitement."
 }

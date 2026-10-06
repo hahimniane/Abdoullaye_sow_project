@@ -461,6 +461,133 @@ bool invoiceIsOverdue(Invoice invoice, [String? today]) {
   return invoice.isOpen && invoice.dueOn.isNotEmpty && invoice.dueOn.compareTo(t) < 0;
 }
 
+/// "yyyy-MM" of a "yyyy-MM-dd" day key, or "" when it is not one.
+String invoiceMonthKey(String dayKey) {
+  final day = invoiceDayKey(dayKey);
+  return day.isEmpty ? '' : day.substring(0, 7);
+}
+
+/// The figures on the invoice board that depend only on what is still owed:
+/// the Open count, the Overdue count and "Owed to you". A paid invoice moves
+/// none of them, so they come out the same from the open invoices alone as
+/// from the whole history - which is why the screen reads only the open ones
+/// for them (`invoicesOpenSpec`).
+class InvoiceOpenBoard {
+  const InvoiceOpenBoard({
+    required this.openCount,
+    required this.overdueCount,
+    required this.owedCents,
+  });
+
+  final int openCount;
+  final int overdueCount;
+  final int owedCents;
+}
+
+InvoiceOpenBoard invoiceOpenBoard(Iterable<Invoice> rows, [String? today]) {
+  var open = 0;
+  var overdue = 0;
+  var owed = 0;
+  for (final row in rows) {
+    if (!row.isOpen) continue;
+    open++;
+    if (invoiceIsOverdue(row, today)) overdue++;
+    owed += row.balanceCents < 0 ? 0 : row.balanceCents;
+  }
+  return InvoiceOpenBoard(
+    openCount: open,
+    overdueCount: overdue,
+    owedCents: owed,
+  );
+}
+
+/// Money that came in through [payments]: the ones still standing.
+int invoiceCollectedCents(Iterable<InvoicePayment> payments) =>
+    payments.where((p) => !p.reverted).fold<int>(
+          0,
+          (s, p) => s + (p.amountCents < 0 ? 0 : p.amountCents),
+        );
+
+/// The server's board over every invoice (`getInvoiceBoardTotals`):
+/// `{board: {count, open, overdue, owedCents, collectedCents}}`. The list is
+/// paged, so the invoice count and the all-time collected figure can only
+/// come from here.
+class InvoiceBoardTotals {
+  const InvoiceBoardTotals({
+    required this.count,
+    required this.open,
+    required this.overdue,
+    required this.owedCents,
+    required this.collectedCents,
+  });
+
+  final int count;
+  final int open;
+  final int overdue;
+  final int owedCents;
+  final int collectedCents;
+
+  int get paid => count - open < 0 ? 0 : count - open;
+
+  /// Null for anything that is not a board, so a malformed answer reads as
+  /// "no server totals" and the screen falls back.
+  static InvoiceBoardTotals? fromCallable(Object? data) {
+    if (data is! Map) return null;
+    final board = data['board'];
+    if (board is! Map) return null;
+    int? read(String key) {
+      final v = board[key];
+      return v is num && v.isFinite ? v.round() : null;
+    }
+
+    final count = read('count');
+    final collected = read('collectedCents');
+    if (count == null || collected == null) return null;
+    return InvoiceBoardTotals(
+      count: count,
+      open: read('open') ?? 0,
+      overdue: read('overdue') ?? 0,
+      owedCents: read('owedCents') ?? 0,
+      collectedCents: collected,
+    );
+  }
+}
+
+/// What the board's "collected" tile is a total of.
+enum InvoiceCollectedScope {
+  /// Every invoice, from the server's board.
+  allTime,
+
+  /// Payments dated this month: the fallback while the server's board
+  /// cannot be reached.
+  thisMonth,
+
+  /// Neither has answered yet.
+  unknown,
+}
+
+class InvoiceCollectedStat {
+  const InvoiceCollectedStat(this.scope, [this.cents = 0]);
+
+  final InvoiceCollectedScope scope;
+  final int cents;
+}
+
+/// The server's all-time figure when it has one; this month's payments
+/// otherwise; nothing rather than a sum over whatever page is loaded.
+InvoiceCollectedStat invoiceCollectedStat({
+  int? allTimeCents,
+  int? thisMonthCents,
+}) {
+  if (allTimeCents != null) {
+    return InvoiceCollectedStat(InvoiceCollectedScope.allTime, allTimeCents);
+  }
+  if (thisMonthCents != null) {
+    return InvoiceCollectedStat(InvoiceCollectedScope.thisMonth, thisMonthCents);
+  }
+  return const InvoiceCollectedStat(InvoiceCollectedScope.unknown);
+}
+
 /// "$1,250.50", never rounded away.
 String invoiceMoney(int cents) {
   final whole = NumberFormat('#,##0', 'en_US').format(cents.abs() ~/ 100);

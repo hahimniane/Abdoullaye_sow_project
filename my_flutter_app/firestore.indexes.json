@@ -1271,6 +1271,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "invoicePayments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "paidOn",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

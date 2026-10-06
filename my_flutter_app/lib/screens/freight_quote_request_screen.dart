@@ -263,7 +263,7 @@ class _FreightQuoteRequestScreenState extends State<FreightQuoteRequestScreen> {
                       DropdownMenuItem(
                         value: category.id,
                         child: Text(
-                          category.label,
+                          freightCategoryLabelForId(l10n, category.id),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

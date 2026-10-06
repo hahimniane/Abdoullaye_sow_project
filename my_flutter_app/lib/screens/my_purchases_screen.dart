@@ -10,6 +10,7 @@ import '../services/car_purchase_service.dart';
 import '../services/car_viewing_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/car_purchase_localization.dart';
 import '../utils/date_display.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
@@ -349,7 +350,7 @@ class _PurchaseCard extends StatelessWidget {
             Text(
               l10n.depositPaid(
                 currency.format(purchase.depositAmount),
-                purchase.paymentStatus,
+                carPurchasePaymentStatusLabel(l10n, purchase.paymentStatus),
               ),
             ),
             // Only for a paid hold or a purchase. A viewing's appointment is
@@ -381,7 +382,7 @@ class _PurchaseCard extends StatelessWidget {
             if (purchase.extensionRequestStatus != null) ...[
               const SizedBox(height: 6),
               Text(
-                _extensionLabel(currency, dateLocaleOf(context)),
+                _extensionLabel(l10n, currency, dateLocaleOf(context)),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.lightMuted,
                   fontWeight: FontWeight.w700,
@@ -455,30 +456,15 @@ class _PurchaseCard extends StatelessWidget {
     if (purchase.isViewingReservation) {
       return viewingStatusLabel(l10n, purchase.purchaseStatus);
     }
-    switch (purchase.purchaseStatus) {
-      case 'hold_review_required':
-        return 'Review pending';
-      case 'no_show':
-        return 'No-show';
-      default:
-        break;
-    }
-    return purchase.purchaseStatus;
+    return carPurchaseStatusLabel(l10n, purchase.purchaseStatus);
   }
 
-  String _extensionLabel(NumberFormat currency, String locale) {
-    final status = purchase.extensionRequestStatus;
-    final date = purchase.extensionRequestedHoldUntilDate;
-    final amount = purchase.extensionExtraAmount;
-    final parts = <String>[
-      'Extension: ${status ?? ''}',
-      if (date != null) displayDate(date, locale),
-      if (amount != null) 'extra ${currency.format(amount)}',
-      if (purchase.extensionPaymentStatus != null)
-        'payment ${purchase.extensionPaymentStatus}',
-    ];
-    return parts.join(' • ');
-  }
+  String _extensionLabel(
+    AppLocalizations l10n,
+    NumberFormat currency,
+    String locale,
+  ) =>
+      carPurchaseExtensionLine(l10n, purchase, currency, locale);
 }
 
 class _StatusPill extends StatelessWidget {

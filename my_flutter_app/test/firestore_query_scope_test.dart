@@ -9,6 +9,7 @@ import 'package:my_flutter_app/services/business_parking_entry.dart';
 import 'package:my_flutter_app/services/business_service_overview.dart';
 import 'package:my_flutter_app/services/business_transport_jobs.dart';
 import 'package:my_flutter_app/services/firestore_query_spec.dart';
+import 'package:my_flutter_app/services/invoice_ledger.dart';
 import 'package:my_flutter_app/services/known_car_lookup.dart';
 import 'package:my_flutter_app/services/parking_month_statement.dart';
 
@@ -197,6 +198,22 @@ void main() {
         '2026-01',
         '2026-12',
       ),
+      'invoices: open, whole': invoicesOpenSpec(_business),
+      'invoices: newest page': invoicesPageSpec(_business, pages: 1),
+      'invoices: third page': invoicesPageSpec(_business, pages: 3),
+      'invoices: payments this month': invoicePaymentsInMonthSpec(
+        _business,
+        '2026-10',
+      ),
+      'purchases: a business': carPurchasesPageSpec(
+        businessId: _business,
+        pages: 1,
+      ),
+      'purchases: a business, one state': carPurchasesPageSpec(
+        businessId: _business,
+        status: 'reserved',
+        pages: 2,
+      ),
     };
 
     bool hasIndex(FirestoreQuerySpec spec, List<IndexFieldSpec> fields) {
@@ -258,6 +275,28 @@ void main() {
         marketplaceCarsSpec(pages: 1, model: 'Corolla').filters.length,
         1,
       );
+    });
+
+    test('an admin across businesses still reads an ordered page', () {
+      // No business chosen: the one unscoped purchase shape. Bounded, and
+      // its state filter is indexed; the bare page needs only the built-in
+      // single-field index on createdAt.
+      final all = carPurchasesPageSpec(pages: 2);
+      expect(all.isBusinessScoped, isFalse);
+      expect(all.isBounded, isTrue);
+      expect(all.limit, carPurchasePageSize * 2);
+      expect(all.compositeIndex, const [
+        IndexFieldSpec('createdAt', descending: true),
+      ]);
+      final byState = carPurchasesPageSpec(status: 'completed', pages: 1);
+      expect(byState.isBounded, isTrue);
+      expect(hasIndex(byState, byState.compositeIndex!), isTrue);
+      // Blank inputs are no filter at all, never an equality on ''.
+      expect(
+        carPurchasesPageSpec(businessId: ' ', status: '', pages: 0).filters,
+        isEmpty,
+      );
+      expect(carPurchasesPageSpec(pages: 0).limit, carPurchasePageSize);
     });
 
     test('the index file is valid JSON in the shape the CLI deploys', () {
@@ -671,6 +710,217 @@ void main() {
       expect(
         knownCarRecentSpecs(_business).map((s) => s.limit),
         everyElement(knownCarRecentLimit),
+      );
+    });
+  });
+
+  group('the invoice board counts the same from the open invoices', () {
+    final random = Random(11);
+    const today = '2026-10-05';
+    String day(int back) => DateTime.utc(2026, 10, 5)
+        .subtract(Duration(days: back))
+        .toIso8601String()
+        .substring(0, 10);
+    final invoices = <Map<String, dynamic>>[
+      for (var i = 0; i < 500; i++)
+        () {
+          final total = (random.nextInt(400) + 1) * 500;
+          final paid = random.nextInt(3) == 0
+              ? total
+              : random.nextInt(total ~/ 100 + 1) * 100;
+          final balance = total - paid;
+          return <String, dynamic>{
+            'id': 'i$i',
+            'businessId': _business,
+            'number': 'INV-${i.toString().padLeft(4, '0')}',
+            'issuedOn': day(random.nextInt(700)),
+            if (random.nextBool()) 'dueOn': day(random.nextInt(700) - 60),
+            'status': balance == 0 ? 'paid' : 'open',
+            'totalCents': total,
+            'paidCents': paid,
+            'balanceCents': balance,
+          };
+        }(),
+      // Another business's open invoices never count.
+      for (var i = 0; i < 40; i++)
+        {
+          'id': 'x$i',
+          'businessId': 'other',
+          'issuedOn': day(i),
+          'status': 'open',
+          'balanceCents': 9999,
+        },
+    ];
+    List<Invoice> parse(Iterable<Map<String, dynamic>> rows) => [
+      for (final r in rows) Invoice.fromMap('${r['id']}', r),
+    ];
+
+    test('open count, overdue count and owed: exactly the whole history', () {
+      final full = invoiceOpenBoard(
+        parse(invoices.where((r) => r['businessId'] == _business)),
+        today,
+      );
+      final narrow = invoiceOpenBoard(
+        parse(run(invoicesOpenSpec(_business), invoices)),
+        today,
+      );
+      expect(narrow.openCount, full.openCount);
+      expect(narrow.overdueCount, full.overdueCount);
+      expect(narrow.owedCents, full.owedCents);
+      expect(full.openCount, greaterThan(0));
+      expect(full.overdueCount, greaterThan(0));
+      // And it reads a fraction of the history.
+      expect(
+        run(invoicesOpenSpec(_business), invoices).length,
+        lessThan(500),
+      );
+    });
+
+    test('a page is the newest invoices by day, and pages only grow', () {
+      List<Map<String, dynamic>> page(int pages) {
+        final spec = invoicesPageSpec(_business, pages: pages);
+        final rows = run(spec, invoices)
+          ..sort(
+            (a, b) => '${b['issuedOn']}'.compareTo('${a['issuedOn']}'),
+          );
+        return rows.take(spec.limit!).toList();
+      }
+
+      expect(page(1).length, invoicePageSize);
+      expect(page(2).length, invoicePageSize * 2);
+      final oldestOnFirst = '${page(1).last['issuedOn']}';
+      for (final row in page(2).skip(invoicePageSize)) {
+        expect('${row['issuedOn']}'.compareTo(oldestOnFirst) <= 0, isTrue);
+      }
+      // Every open invoice is on screen whatever the page: the open list
+      // is read whole and merged in.
+      final shown = mergeById<Map<String, dynamic>>([
+        run(invoicesOpenSpec(_business), invoices),
+        page(1),
+      ], (r) => '${r['id']}');
+      final open = invoices.where(
+        (r) => r['businessId'] == _business && r['status'] == 'open',
+      );
+      for (final row in open) {
+        expect(shown, contains(row));
+      }
+    });
+
+    test('collected this month: exactly the month of payments', () {
+      final payments = <Map<String, dynamic>>[
+        for (var i = 0; i < 300; i++)
+          {
+            'id': 'p$i',
+            'businessId': _business,
+            'invoiceId': 'i${random.nextInt(500)}',
+            'amountCents': (random.nextInt(50) + 1) * 1000,
+            'paidOn': day(random.nextInt(120)),
+            'reverted': random.nextInt(8) == 0,
+          },
+        {
+          'id': 'other',
+          'businessId': 'other',
+          'amountCents': 5000000,
+          'paidOn': today,
+          'reverted': false,
+        },
+        // Edges of the month.
+        {
+          'id': 'first',
+          'businessId': _business,
+          'amountCents': 100,
+          'paidOn': '2026-10-01',
+          'reverted': false,
+        },
+        {
+          'id': 'before',
+          'businessId': _business,
+          'amountCents': 100000,
+          'paidOn': '2026-09-30',
+          'reverted': false,
+        },
+        {
+          'id': 'after',
+          'businessId': _business,
+          'amountCents': 100000,
+          'paidOn': '2026-11-01',
+          'reverted': false,
+        },
+      ];
+      List<InvoicePayment> parse(Iterable<Map<String, dynamic>> rows) => [
+        for (final r in rows) InvoicePayment.fromMap('${r['id']}', r),
+      ];
+      final month = invoiceMonthKey(today);
+      expect(month, '2026-10');
+      final full = invoiceCollectedCents(
+        parse(
+          payments.where(
+            (r) =>
+                r['businessId'] == _business &&
+                '${r['paidOn']}'.startsWith('$month-'),
+          ),
+        ),
+      );
+      final narrowRows = run(
+        invoicePaymentsInMonthSpec(_business, month),
+        payments,
+      );
+      expect(invoiceCollectedCents(parse(narrowRows)), full);
+      expect(narrowRows.map((r) => r['id']), contains('first'));
+      expect(narrowRows.map((r) => r['id']), isNot(contains('before')));
+      expect(narrowRows.map((r) => r['id']), isNot(contains('after')));
+      // A reverted payment never counts as collected.
+      expect(
+        invoiceCollectedCents(
+          parse([
+            {'amountCents': 500, 'reverted': true},
+            {'amountCents': 700, 'reverted': false},
+          ]),
+        ),
+        700,
+      );
+      // December rolls into the next year.
+      expect(
+        invoicePaymentsInMonthSpec(_business, '2026-12').filters.last.value,
+        '2027-01-01',
+      );
+    });
+  });
+
+  group('the purchase list filters in the query', () {
+    final random = Random(3);
+    const states = ['pending', 'reserved', 'completed', 'cancelled', 'no_show'];
+    final rows = [
+      for (var i = 0; i < 200; i++)
+        {
+          'id': 'c$i',
+          'businessId': random.nextBool() ? _business : 'other',
+          'purchaseStatus': states[random.nextInt(states.length)],
+          'createdAt': Timestamp.fromMillisecondsSinceEpoch(i * 1000),
+        },
+    ];
+
+    test('a business and a state read exactly their rows', () {
+      final spec = carPurchasesPageSpec(
+        businessId: _business,
+        status: 'reserved',
+        pages: 1,
+      );
+      final got = run(spec, rows);
+      expect(got, isNotEmpty);
+      for (final row in got) {
+        expect(row['businessId'], _business);
+        expect(row['purchaseStatus'], 'reserved');
+      }
+      expect(
+        got.length,
+        rows
+            .where(
+              (r) =>
+                  r['businessId'] == _business &&
+                  r['purchaseStatus'] == 'reserved',
+            )
+            .length,
       );
     });
   });

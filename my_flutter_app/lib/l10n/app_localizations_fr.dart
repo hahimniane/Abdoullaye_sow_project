@@ -10250,4 +10250,482 @@ class AppLocalizationsFr extends AppLocalizations {
   String recordSavedReceiptUnavailable(String trackingCode) {
     return 'Enregistré. Numéro de suivi : $trackingCode. Le reçu n’a pas pu être imprimé, mais la fiche est enregistrée - ne l’enregistrez pas une seconde fois.';
   }
+
+  @override
+  String get invStatCollectedThisMonth => 'Encaissé ce mois-ci';
+
+  @override
+  String get invLoadOlder => 'Charger des factures plus anciennes';
+
+  @override
+  String get invSearchLoadedHint =>
+      'La recherche couvre toutes les factures ouvertes et les plus récentes payées. Chargez des factures plus anciennes pour chercher plus loin.';
+
+  @override
+  String get purchaseStatusAll => 'Tous';
+
+  @override
+  String get purchaseStatusReviewPending => 'Examen en attente';
+
+  @override
+  String get purchaseStatusNoShow => 'Client absent';
+
+  @override
+  String get purchaseStatusForfeited => 'Acompte conservé';
+
+  @override
+  String get paymentStatusFailed => 'Échoué';
+
+  @override
+  String get paymentStatusNotRequired => 'Non requis';
+
+  @override
+  String get extensionStatusRejected => 'Refusée';
+
+  @override
+  String extensionPaymentSuffix(String status) {
+    return ' • paiement $status';
+  }
+
+  @override
+  String get purchaseMarkSoldTitle => 'Marquer la voiture comme vendue ?';
+
+  @override
+  String purchaseMarkSoldMessage(String carTitle) {
+    return 'Le blocage payé de $carTitle sera finalisé.';
+  }
+
+  @override
+  String get purchaseNoShowTitle => 'Le client n’est pas venu ?';
+
+  @override
+  String purchaseNoShowMessage(String carTitle) {
+    return '$carTitle sera libérée, l’acompte de blocage sera conservé et ce résultat sera ajouté à l’historique de l’acheteur.';
+  }
+
+  @override
+  String get purchaseApproveExtensionTitle => 'Approuver la prolongation ?';
+
+  @override
+  String get purchaseRejectExtensionTitle => 'Rejeter la prolongation ?';
+
+  @override
+  String get purchaseApproveExtensionMessage =>
+      'Le client pourra payer le montant supplémentaire du blocage.';
+
+  @override
+  String get purchaseRejectExtensionMessage =>
+      'La date de blocage actuelle restera inchangée.';
+
+  @override
+  String get purchaseApprove => 'Approuver';
+
+  @override
+  String get purchaseReject => 'Rejeter';
+
+  @override
+  String get purchaseForfeitedCannotComplete =>
+      'Un blocage dont l’acompte a été conservé ne peut pas être terminé.';
+
+  @override
+  String get purchaseFilterBusiness => 'Entreprise';
+
+  @override
+  String get purchaseAllBusinesses => 'Toutes les entreprises';
+
+  @override
+  String get purchaseLoadMore => 'Charger plus';
+
+  @override
+  String get holdMaxDaysOutOfRange =>
+      'Le nombre maximal de jours de blocage doit être compris entre 1 et 30.';
+
+  @override
+  String get holdAmountMustBePositive =>
+      'Saisissez un montant de blocage payé positif.';
+
+  @override
+  String get holdMaxDaysLabel => 'Jours de blocage maximum (1-30)';
+
+  @override
+  String get paidHoldReviewLabel => 'Blocage payé';
+
+  @override
+  String get holdPricingBusinessDefault => 'Tarif par défaut de l’entreprise';
+
+  @override
+  String holdPricingFlatAmount(String amount) {
+    return 'Forfait $amount';
+  }
+
+  @override
+  String holdPricingPerDayAmount(String amount) {
+    return '$amount par jour';
+  }
+
+  @override
+  String openBarrelsJoinRequestSent(String deposit) {
+    return 'Demande envoyée. Acompte : $deposit';
+  }
+
+  @override
+  String openBarrelsPosted(String deposit) {
+    return 'Baril partagé publié. Acompte : $deposit';
+  }
+
+  @override
+  String openBarrelsPickupFee(String amount) {
+    return 'Frais de collecte : $amount';
+  }
+
+  @override
+  String openBarrelsDropOffAt(String address) {
+    return 'Dépôt à $address';
+  }
+
+  @override
+  String openBarrelsWalletApplied(String amount) {
+    return 'portefeuille utilisé $amount';
+  }
+
+  @override
+  String openBarrelsCardAmount(String amount) {
+    return 'carte $amount';
+  }
+
+  @override
+  String get ctrSendStatus => 'Envoyer le statut actuel sur WhatsApp';
+
+  @override
+  String get ctrSendStatusTitle => 'Envoyer le statut actuel ?';
+
+  @override
+  String get ctrSendStatusMessage =>
+      'Toutes les personnes de ce conteneur qui n’ont pas reçu la dernière mise à jour la reçoivent maintenant sur WhatsApp. Celles qui l’ont déjà ne reçoivent rien de plus.';
+
+  @override
+  String get ctrSendStatusConfirm => 'Envoyer';
+
+  @override
+  String ctrSendStatusQueued(int count, String moment) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Envoi de « $moment » à $count personnes sur WhatsApp.',
+      one: 'Envoi de « $moment » à 1 personne sur WhatsApp.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrSendStatusInFlight(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count messages sont déjà en cours d’envoi.',
+      one: '1 message est déjà en cours d’envoi.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ctrSendStatusNothingToSend =>
+      'Toutes les personnes joignables ont déjà la dernière mise à jour.';
+
+  @override
+  String ctrSendStatusAlreadyHad(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count personnes l’avaient déjà.',
+      one: '1 personne l’avait déjà.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ctrSendStatusCantReach(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count personnes sont injoignables (pas de téléphone, mises à jour désactivées ou pas d’indicatif pays).',
+      one:
+          '1 personne est injoignable (pas de téléphone, mises à jour désactivées ou pas d’indicatif pays).',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ctrSendStatusNoNews =>
+      'Ce conteneur n’a pas encore de nouvelles pour les clients. Ils sont prévenus à l’expédition.';
+
+  @override
+  String get ctrWhatsAppNotConnectedTitle =>
+      'WhatsApp n’est pas encore connecté';
+
+  @override
+  String get ctrWhatsAppNotConnectedMessage =>
+      'Rien n’a été envoyé. Les mises à jour sont enregistrées et, dès que la plateforme aura connecté WhatsApp, vous pourrez envoyer le statut actuel à tout le monde depuis ici.';
+
+  @override
+  String get pkgResultQueued => 'en file d’attente';
+
+  @override
+  String get pkgResultSending => 'envoi en cours';
+
+  @override
+  String get pkgResultRetrying => 'nouvel essai après un échec';
+
+  @override
+  String get businessServiceBarrelShipping => 'Envoi de barils';
+
+  @override
+  String get businessServiceSharedBarrels => 'Barils partagés';
+
+  @override
+  String get businessServiceFreight => 'Fret (colis)';
+
+  @override
+  String get businessServiceCarSales => 'Vente de voitures';
+
+  @override
+  String get businessServiceCarParking => 'Stationnement de voitures';
+
+  @override
+  String get businessServiceCarTransport => 'Transport de voitures';
+
+  @override
+  String get businessServiceBarrelShippingHint =>
+      'Expédiez des barils vers les pays de destination.';
+
+  @override
+  String get businessServiceSharedBarrelsHint =>
+      'Regroupez des barils partiels et associez les clients par destination.';
+
+  @override
+  String get businessServiceFreightHint =>
+      'Expédiez colis et cartons au poids, par avion ou par bateau.';
+
+  @override
+  String get businessServiceCarSalesHint =>
+      'Publiez des voitures que les clients peuvent consulter et acheter.';
+
+  @override
+  String get businessServiceCarParkingHint =>
+      'Gérez les voitures stationnées et les reçus de stationnement.';
+
+  @override
+  String get businessServiceCarTransportHint =>
+      'Suivez les demandes de transport de voitures.';
+
+  @override
+  String get customerServiceCars => 'Voitures';
+
+  @override
+  String get customerServiceBarrel => 'Envoyer des barils';
+
+  @override
+  String get customerServiceShared => 'Barils partagés';
+
+  @override
+  String get customerServiceFreight => 'Fret';
+
+  @override
+  String get customerServicePark => 'Garer une voiture';
+
+  @override
+  String get customerServiceTransport => 'Transport';
+
+  @override
+  String get customerServicePurchases => 'Achats';
+
+  @override
+  String get customerServiceViewings => 'Visites de voitures';
+
+  @override
+  String get customerServiceTracking => 'Suivi';
+
+  @override
+  String get transportJourneyBooked => 'Réservé';
+
+  @override
+  String get transportJourneyScheduled => 'Planifié';
+
+  @override
+  String get transportJourneyOnItsWay => 'En route';
+
+  @override
+  String get transportJourneyDelivered => 'Livré';
+
+  @override
+  String get openBarrelsDeadline => 'Limite';
+
+  @override
+  String get openBarrelsMode => 'Mode';
+
+  @override
+  String get openBarrelsDeposit => 'Acompte';
+
+  @override
+  String get openBarrelsPerShare => 'Par part';
+
+  @override
+  String get openBarrelsAckDelay =>
+      'Je comprends qu’un mauvais article peut retarder le baril partagé.';
+
+  @override
+  String get openBarrelsAckProhibited =>
+      'Je confirme qu’il n’y a aucun article interdit ou dangereux.';
+
+  @override
+  String get openBarrelsAckContents =>
+      'Je confirme que le contenu et le poids estimé sont exacts.';
+
+  @override
+  String get openBarrelsPickupBorough => 'Arrondissement';
+
+  @override
+  String get openBarrelsPickupAddress => 'Adresse de collecte';
+
+  @override
+  String get openBarrelsRequestPickup => 'Demander une collecte';
+
+  @override
+  String get openBarrelsChoosePickupTime => 'Choisir l’heure de collecte';
+
+  @override
+  String get openBarrelsPostButton => 'Publier le baril';
+
+  @override
+  String get openBarrelsContentsLabel => 'Qu’envoyez-vous ?';
+
+  @override
+  String get openBarrelsReceiverName => 'Nom du destinataire';
+
+  @override
+  String get openBarrelsSenderName => 'Nom de l’expéditeur';
+
+  @override
+  String get openBarrelsYourShares => 'Vos parts';
+
+  @override
+  String get openBarrelsTotalShares => 'Parts totales';
+
+  @override
+  String get openBarrelsBusinessAndDestination => 'Entreprise et destination';
+
+  @override
+  String get openBarrelsPostHint =>
+      'Partagez l’espace libre pour que d’autres complètent le baril.';
+
+  @override
+  String get openBarrelsPostTitle => 'Publier un baril partiel';
+
+  @override
+  String get openBarrelsConfirmAcknowledgements =>
+      'Confirmez les engagements du baril partagé.';
+
+  @override
+  String get openBarrelsPickupPriceUnavailable =>
+      'Le prix de collecte n’est pas encore disponible.';
+
+  @override
+  String get openBarrelsPickupRequired =>
+      'Indiquez une adresse et une heure de collecte future.';
+
+  @override
+  String get openBarrelsFillRequired =>
+      'Renseignez expéditeur, destinataire, téléphone et contenu.';
+
+  @override
+  String get openBarrelsNoBusinesses =>
+      'Aucune entreprise n’accepte encore les barils partagés.';
+
+  @override
+  String get openBarrelsDestinationsLoadFailed =>
+      'Impossible de charger les destinations. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get openBarrelsSendRequest => 'Envoyer la demande';
+
+  @override
+  String get openBarrelsRequestShareHint =>
+      'Réservez de l’espace dans ce baril ouvert.';
+
+  @override
+  String get openBarrelsRequestShareTitle => 'Demander une part';
+
+  @override
+  String get openBarrelsLeftPool => 'Vous avez quitté le baril.';
+
+  @override
+  String get openBarrelsPoolCancelled => 'Baril partagé annulé.';
+
+  @override
+  String get openBarrelsBalancePaid => 'Solde payé.';
+
+  @override
+  String get openBarrelsLeavePool => 'Quitter le baril';
+
+  @override
+  String get openBarrelsPayBalance => 'Payer le solde';
+
+  @override
+  String get openBarrelsMineEmptyHint =>
+      'Publiez un baril partiel ou demandez une part pour le voir ici.';
+
+  @override
+  String get openBarrelsMineEmptyTitle => 'Aucun baril partagé pour le moment';
+
+  @override
+  String get openBarrelsMineLoadFailed => 'Impossible de charger vos barils';
+
+  @override
+  String get openBarrelsSignInHint =>
+      'Vos publications de barils partagés apparaîtront ici après connexion.';
+
+  @override
+  String get openBarrelsSignInTitle => 'Connectez-vous';
+
+  @override
+  String get openBarrelsRequestOneShare => 'Demander une part';
+
+  @override
+  String get openBarrelsEmptyHint =>
+      'Quand un client ou une entreprise ouvre des parts disponibles, elles apparaîtront ici.';
+
+  @override
+  String get openBarrelsEmptyTitle =>
+      'Aucun baril partagé ouvert pour le moment';
+
+  @override
+  String get openBarrelsLoadFailed =>
+      'Impossible de charger les barils ouverts';
+
+  @override
+  String get openBarrelsTabMine => 'Mes barils';
+
+  @override
+  String get openBarrelsTabOpen => 'Barils ouverts';
+
+  @override
+  String get openBarrelsShareTitle => 'Partager un baril';
+
+  @override
+  String get openBarrelsPostPartial => 'Publier un baril partiel';
+
+  @override
+  String get sendBarrelSharedPromoTitle => 'Vous ne remplissez pas un baril ?';
+
+  @override
+  String get sendBarrelSharedPromoHint =>
+      'Rejoignez un baril partagé ouvert ou réservez une part.';
+
+  @override
+  String get transportJobCancelledNotice => 'Ce transport a été annulé.';
+
+  @override
+  String get shipmentLockedNotice =>
+      'Cet envoi ne peut plus être modifié : l’enlèvement a eu lieu ou la demande est déjà en cours de traitement.';
 }

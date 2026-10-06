@@ -377,3 +377,84 @@ FirestoreQuerySpec marketplaceCarsSpec({
   descending: true,
   limit: marketplacePageSize * (pages < 1 ? 1 : pages),
 );
+
+// ---------------------------------------------------------------------------
+// Invoices: the open tab live, history one page at a time.
+// ---------------------------------------------------------------------------
+
+/// One page of the invoice list.
+const int invoicePageSize = 25;
+
+/// The newest invoices, by invoice day, one growing page at a time. Open
+/// invoices are read whole by [invoicesOpenSpec], so paging only ever hides
+/// paid history, and "Load more" brings it in.
+FirestoreQuerySpec invoicesPageSpec(String businessId, {required int pages}) =>
+    FirestoreQuerySpec(
+      collection: 'invoices',
+      filters: [_business(businessId)],
+      orderBy: 'issuedOn',
+      descending: true,
+      limit: invoicePageSize * (pages < 1 ? 1 : pages),
+    );
+
+/// Every invoice still owed on. The board's Open count, Overdue count and
+/// "Owed to you" are exact from these alone - a paid invoice never moves
+/// them. Equality only, so merged single-field indexes serve it.
+FirestoreQuerySpec invoicesOpenSpec(String businessId) => FirestoreQuerySpec(
+  collection: 'invoices',
+  filters: [
+    _business(businessId),
+    const QueryFilterSpec('status', QueryFilterOp.equal, 'open'),
+  ],
+);
+
+/// Payments dated in the month of [monthKey] ("yyyy-MM"): the board's
+/// collected figure while the server's board totals cannot be reached.
+/// `paidOn` is a "yyyy-MM-dd" string, which sorts by day.
+FirestoreQuerySpec invoicePaymentsInMonthSpec(
+  String businessId,
+  String monthKey,
+) => FirestoreQuerySpec(
+  collection: 'invoicePayments',
+  filters: [
+    _business(businessId),
+    QueryFilterSpec('paidOn', QueryFilterOp.greaterOrEqual, '$monthKey-01'),
+    QueryFilterSpec(
+      'paidOn',
+      QueryFilterOp.less,
+      '${nextMonthKey(monthKey)}-01',
+    ),
+  ],
+  orderBy: 'paidOn',
+);
+
+// ---------------------------------------------------------------------------
+// Car purchases and viewings: the purchase-management screen.
+// ---------------------------------------------------------------------------
+
+/// One page of the purchase-management list.
+const int carPurchasePageSize = 25;
+
+/// The newest purchases and viewings, one growing page at a time, scoped to
+/// [businessId] when one is chosen and to [status] when filtered. A platform
+/// admin with no business chosen reads across businesses - the one unscoped
+/// shape, and still an ordered page.
+FirestoreQuerySpec carPurchasesPageSpec({
+  String? businessId,
+  String? status,
+  required int pages,
+}) {
+  final business = (businessId ?? '').trim();
+  final state = (status ?? '').trim();
+  return FirestoreQuerySpec(
+    collection: 'carPurchases',
+    filters: [
+      if (business.isNotEmpty) _business(business),
+      if (state.isNotEmpty)
+        QueryFilterSpec('purchaseStatus', QueryFilterOp.equal, state),
+    ],
+    orderBy: 'createdAt',
+    descending: true,
+    limit: carPurchasePageSize * (pages < 1 ? 1 : pages),
+  );
+}

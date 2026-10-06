@@ -1005,10 +1005,6 @@ class _SharedBarrelCard extends StatelessWidget {
 
   final VoidCallback onTap;
 
-  String _copy(BuildContext context, String en, String fr) {
-    return Localizations.localeOf(context).languageCode == 'fr' ? fr : en;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -1039,11 +1035,7 @@ class _SharedBarrelCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _copy(
-                        context,
-                        "Can't fill a barrel?",
-                        "Vous ne remplissez pas un baril ?",
-                      ),
+                      AppLocalizations.of(context)!.sendBarrelSharedPromoTitle,
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 16,
@@ -1052,11 +1044,7 @@ class _SharedBarrelCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _copy(
-                        context,
-                        'Join an open shared barrel or reserve a share.',
-                        'Rejoignez un baril partagé ouvert ou réservez une part.',
-                      ),
+                      AppLocalizations.of(context)!.sendBarrelSharedPromoHint,
                       style: const TextStyle(
                         color: Color(0xFF64748B),
                         height: 1.3,

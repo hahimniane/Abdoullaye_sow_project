@@ -17819,6 +17819,780 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Saved. Tracking number: {trackingCode}. The receipt could not be printed, but the record is saved - do not save it again.'**
   String recordSavedReceiptUnavailable(String trackingCode);
+
+  /// No description provided for @invStatCollectedThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected this month'**
+  String get invStatCollectedThisMonth;
+
+  /// No description provided for @invLoadOlder.
+  ///
+  /// In en, this message translates to:
+  /// **'Load older invoices'**
+  String get invLoadOlder;
+
+  /// No description provided for @invSearchLoadedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search covers every open invoice and the most recent paid ones. Load older invoices to search further back.'**
+  String get invSearchLoadedHint;
+
+  /// No description provided for @purchaseStatusAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get purchaseStatusAll;
+
+  /// No description provided for @purchaseStatusReviewPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Review pending'**
+  String get purchaseStatusReviewPending;
+
+  /// No description provided for @purchaseStatusNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'No-show'**
+  String get purchaseStatusNoShow;
+
+  /// No description provided for @purchaseStatusForfeited.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit forfeited'**
+  String get purchaseStatusForfeited;
+
+  /// No description provided for @paymentStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get paymentStatusFailed;
+
+  /// No description provided for @paymentStatusNotRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Not required'**
+  String get paymentStatusNotRequired;
+
+  /// No description provided for @extensionStatusRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get extensionStatusRejected;
+
+  /// No description provided for @extensionPaymentSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **' • payment {status}'**
+  String extensionPaymentSuffix(String status);
+
+  /// No description provided for @purchaseMarkSoldTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark car sold?'**
+  String get purchaseMarkSoldTitle;
+
+  /// No description provided for @purchaseMarkSoldMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will complete the paid hold for {carTitle}.'**
+  String purchaseMarkSoldMessage(String carTitle);
+
+  /// No description provided for @purchaseNoShowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer did not come?'**
+  String get purchaseNoShowTitle;
+
+  /// No description provided for @purchaseNoShowMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will release {carTitle}, forfeit the hold deposit, and add this outcome to the buyer history.'**
+  String purchaseNoShowMessage(String carTitle);
+
+  /// No description provided for @purchaseApproveExtensionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve extension?'**
+  String get purchaseApproveExtensionTitle;
+
+  /// No description provided for @purchaseRejectExtensionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reject extension?'**
+  String get purchaseRejectExtensionTitle;
+
+  /// No description provided for @purchaseApproveExtensionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer will be allowed to pay the extra hold amount.'**
+  String get purchaseApproveExtensionMessage;
+
+  /// No description provided for @purchaseRejectExtensionMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The current hold date will stay unchanged.'**
+  String get purchaseRejectExtensionMessage;
+
+  /// No description provided for @purchaseApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get purchaseApprove;
+
+  /// No description provided for @purchaseReject.
+  ///
+  /// In en, this message translates to:
+  /// **'Reject'**
+  String get purchaseReject;
+
+  /// No description provided for @purchaseForfeitedCannotComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'A hold whose deposit was forfeited cannot be completed.'**
+  String get purchaseForfeitedCannotComplete;
+
+  /// No description provided for @purchaseFilterBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Business'**
+  String get purchaseFilterBusiness;
+
+  /// No description provided for @purchaseAllBusinesses.
+  ///
+  /// In en, this message translates to:
+  /// **'All businesses'**
+  String get purchaseAllBusinesses;
+
+  /// No description provided for @purchaseLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get purchaseLoadMore;
+
+  /// No description provided for @holdMaxDaysOutOfRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold max days must be between 1 and 30.'**
+  String get holdMaxDaysOutOfRange;
+
+  /// No description provided for @holdAmountMustBePositive.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a positive paid hold amount.'**
+  String get holdAmountMustBePositive;
+
+  /// No description provided for @holdMaxDaysLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum hold days (1-30)'**
+  String get holdMaxDaysLabel;
+
+  /// No description provided for @paidHoldReviewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid hold'**
+  String get paidHoldReviewLabel;
+
+  /// No description provided for @holdPricingBusinessDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Business default'**
+  String get holdPricingBusinessDefault;
+
+  /// No description provided for @holdPricingFlatAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat {amount}'**
+  String holdPricingFlatAmount(String amount);
+
+  /// No description provided for @holdPricingPerDayAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} per day'**
+  String holdPricingPerDayAmount(String amount);
+
+  /// No description provided for @openBarrelsJoinRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Join request sent. Deposit: {deposit}'**
+  String openBarrelsJoinRequestSent(String deposit);
+
+  /// No description provided for @openBarrelsPosted.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared barrel posted. Deposit: {deposit}'**
+  String openBarrelsPosted(String deposit);
+
+  /// No description provided for @openBarrelsPickupFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup fee: {amount}'**
+  String openBarrelsPickupFee(String amount);
+
+  /// No description provided for @openBarrelsDropOffAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop off at {address}'**
+  String openBarrelsDropOffAt(String address);
+
+  /// No description provided for @openBarrelsWalletApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'wallet applied {amount}'**
+  String openBarrelsWalletApplied(String amount);
+
+  /// No description provided for @openBarrelsCardAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'card {amount}'**
+  String openBarrelsCardAmount(String amount);
+
+  /// No description provided for @ctrSendStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Send current status on WhatsApp'**
+  String get ctrSendStatus;
+
+  /// No description provided for @ctrSendStatusTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the current status?'**
+  String get ctrSendStatusTitle;
+
+  /// No description provided for @ctrSendStatusMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone on this container who hasn’t heard its latest update gets it on WhatsApp now. People who already have it are not messaged again.'**
+  String get ctrSendStatusMessage;
+
+  /// No description provided for @ctrSendStatusConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get ctrSendStatusConfirm;
+
+  /// No description provided for @ctrSendStatusQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Sending “{moment}” to 1 person on WhatsApp.} other{Sending “{moment}” to {count} people on WhatsApp.}}'**
+  String ctrSendStatusQueued(int count, String moment);
+
+  /// No description provided for @ctrSendStatusInFlight.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 message is already on its way.} other{{count} messages are already on their way.}}'**
+  String ctrSendStatusInFlight(int count);
+
+  /// No description provided for @ctrSendStatusNothingToSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone who can be reached already has the latest update.'**
+  String get ctrSendStatusNothingToSend;
+
+  /// No description provided for @ctrSendStatusAlreadyHad.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 person already had it.} other{{count} people already had it.}}'**
+  String ctrSendStatusAlreadyHad(int count);
+
+  /// No description provided for @ctrSendStatusCantReach.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 person can’t be reached (no phone, updates off, or no country code).} other{{count} people can’t be reached (no phone, updates off, or no country code).}}'**
+  String ctrSendStatusCantReach(int count);
+
+  /// No description provided for @ctrSendStatusNoNews.
+  ///
+  /// In en, this message translates to:
+  /// **'This container has no news for customers yet. They hear when it ships.'**
+  String get ctrSendStatusNoNews;
+
+  /// No description provided for @ctrWhatsAppNotConnectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp isn’t connected yet'**
+  String get ctrWhatsAppNotConnectedTitle;
+
+  /// No description provided for @ctrWhatsAppNotConnectedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was sent. Updates are being recorded, and once the platform connects WhatsApp you can send everyone on this container its current status from here.'**
+  String get ctrWhatsAppNotConnectedMessage;
+
+  /// No description provided for @pkgResultQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'queued to send'**
+  String get pkgResultQueued;
+
+  /// No description provided for @pkgResultSending.
+  ///
+  /// In en, this message translates to:
+  /// **'sending'**
+  String get pkgResultSending;
+
+  /// No description provided for @pkgResultRetrying.
+  ///
+  /// In en, this message translates to:
+  /// **'retrying after a failed try'**
+  String get pkgResultRetrying;
+
+  /// No description provided for @businessServiceBarrelShipping.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel shipping'**
+  String get businessServiceBarrelShipping;
+
+  /// No description provided for @businessServiceSharedBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared barrels'**
+  String get businessServiceSharedBarrels;
+
+  /// No description provided for @businessServiceFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight (parcels)'**
+  String get businessServiceFreight;
+
+  /// No description provided for @businessServiceCarSales.
+  ///
+  /// In en, this message translates to:
+  /// **'Car sales'**
+  String get businessServiceCarSales;
+
+  /// No description provided for @businessServiceCarParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Car parking'**
+  String get businessServiceCarParking;
+
+  /// No description provided for @businessServiceCarTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Car transport'**
+  String get businessServiceCarTransport;
+
+  /// No description provided for @businessServiceBarrelShippingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ship barrels to destination countries.'**
+  String get businessServiceBarrelShippingHint;
+
+  /// No description provided for @businessServiceSharedBarrelsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pool partial barrels and match customers by destination.'**
+  String get businessServiceSharedBarrelsHint;
+
+  /// No description provided for @businessServiceFreightHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ship parcels and boxes by weight, by air or sea.'**
+  String get businessServiceFreightHint;
+
+  /// No description provided for @businessServiceCarSalesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'List cars for customers to browse and buy.'**
+  String get businessServiceCarSalesHint;
+
+  /// No description provided for @businessServiceCarParkingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage parked cars and parking receipts.'**
+  String get businessServiceCarParkingHint;
+
+  /// No description provided for @businessServiceCarTransportHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Track car transport requests.'**
+  String get businessServiceCarTransportHint;
+
+  /// No description provided for @customerServiceCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars'**
+  String get customerServiceCars;
+
+  /// No description provided for @customerServiceBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Send barrels'**
+  String get customerServiceBarrel;
+
+  /// No description provided for @customerServiceShared.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared barrels'**
+  String get customerServiceShared;
+
+  /// No description provided for @customerServiceFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight'**
+  String get customerServiceFreight;
+
+  /// No description provided for @customerServicePark.
+  ///
+  /// In en, this message translates to:
+  /// **'Park a car'**
+  String get customerServicePark;
+
+  /// No description provided for @customerServiceTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get customerServiceTransport;
+
+  /// No description provided for @customerServicePurchases.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchases'**
+  String get customerServicePurchases;
+
+  /// No description provided for @customerServiceViewings.
+  ///
+  /// In en, this message translates to:
+  /// **'Car viewings'**
+  String get customerServiceViewings;
+
+  /// No description provided for @customerServiceTracking.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking'**
+  String get customerServiceTracking;
+
+  /// No description provided for @transportJourneyBooked.
+  ///
+  /// In en, this message translates to:
+  /// **'Booked'**
+  String get transportJourneyBooked;
+
+  /// No description provided for @transportJourneyScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled'**
+  String get transportJourneyScheduled;
+
+  /// No description provided for @transportJourneyOnItsWay.
+  ///
+  /// In en, this message translates to:
+  /// **'On its way'**
+  String get transportJourneyOnItsWay;
+
+  /// No description provided for @transportJourneyDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered'**
+  String get transportJourneyDelivered;
+
+  /// No description provided for @openBarrelsDeadline.
+  ///
+  /// In en, this message translates to:
+  /// **'Deadline'**
+  String get openBarrelsDeadline;
+
+  /// No description provided for @openBarrelsMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Mode'**
+  String get openBarrelsMode;
+
+  /// No description provided for @openBarrelsDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit'**
+  String get openBarrelsDeposit;
+
+  /// No description provided for @openBarrelsPerShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Per share'**
+  String get openBarrelsPerShare;
+
+  /// No description provided for @openBarrelsAckDelay.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand one bad item can delay the shared barrel.'**
+  String get openBarrelsAckDelay;
+
+  /// No description provided for @openBarrelsAckProhibited.
+  ///
+  /// In en, this message translates to:
+  /// **'I confirm there are no prohibited or unsafe items.'**
+  String get openBarrelsAckProhibited;
+
+  /// No description provided for @openBarrelsAckContents.
+  ///
+  /// In en, this message translates to:
+  /// **'I confirm the contents and estimated weight are accurate.'**
+  String get openBarrelsAckContents;
+
+  /// No description provided for @openBarrelsPickupBorough.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup borough'**
+  String get openBarrelsPickupBorough;
+
+  /// No description provided for @openBarrelsPickupAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup address'**
+  String get openBarrelsPickupAddress;
+
+  /// No description provided for @openBarrelsRequestPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Request pickup'**
+  String get openBarrelsRequestPickup;
+
+  /// No description provided for @openBarrelsChoosePickupTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose pickup time'**
+  String get openBarrelsChoosePickupTime;
+
+  /// No description provided for @openBarrelsPostButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Post barrel'**
+  String get openBarrelsPostButton;
+
+  /// No description provided for @openBarrelsContentsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What are you sending?'**
+  String get openBarrelsContentsLabel;
+
+  /// No description provided for @openBarrelsReceiverName.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver name'**
+  String get openBarrelsReceiverName;
+
+  /// No description provided for @openBarrelsSenderName.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender name'**
+  String get openBarrelsSenderName;
+
+  /// No description provided for @openBarrelsYourShares.
+  ///
+  /// In en, this message translates to:
+  /// **'Your shares'**
+  String get openBarrelsYourShares;
+
+  /// No description provided for @openBarrelsTotalShares.
+  ///
+  /// In en, this message translates to:
+  /// **'Total shares'**
+  String get openBarrelsTotalShares;
+
+  /// No description provided for @openBarrelsBusinessAndDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Business and destination'**
+  String get openBarrelsBusinessAndDestination;
+
+  /// No description provided for @openBarrelsPostHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Share the open space so others can join and fill the barrel.'**
+  String get openBarrelsPostHint;
+
+  /// No description provided for @openBarrelsPostTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Post a partial barrel'**
+  String get openBarrelsPostTitle;
+
+  /// No description provided for @openBarrelsConfirmAcknowledgements.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the shared-barrel acknowledgements.'**
+  String get openBarrelsConfirmAcknowledgements;
+
+  /// No description provided for @openBarrelsPickupPriceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup price is not available yet.'**
+  String get openBarrelsPickupPriceUnavailable;
+
+  /// No description provided for @openBarrelsPickupRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a pickup address and future pickup time.'**
+  String get openBarrelsPickupRequired;
+
+  /// No description provided for @openBarrelsFillRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill sender, receiver, phone, and contents.'**
+  String get openBarrelsFillRequired;
+
+  /// No description provided for @openBarrelsNoBusinesses.
+  ///
+  /// In en, this message translates to:
+  /// **'No business is accepting shared barrels yet.'**
+  String get openBarrelsNoBusinesses;
+
+  /// No description provided for @openBarrelsDestinationsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load destinations. Check your connection and try again.'**
+  String get openBarrelsDestinationsLoadFailed;
+
+  /// No description provided for @openBarrelsSendRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Send request'**
+  String get openBarrelsSendRequest;
+
+  /// No description provided for @openBarrelsRequestShareHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserve space in this open barrel.'**
+  String get openBarrelsRequestShareHint;
+
+  /// No description provided for @openBarrelsRequestShareTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a share'**
+  String get openBarrelsRequestShareTitle;
+
+  /// No description provided for @openBarrelsLeftPool.
+  ///
+  /// In en, this message translates to:
+  /// **'You left the pool.'**
+  String get openBarrelsLeftPool;
+
+  /// No description provided for @openBarrelsPoolCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Pool cancelled.'**
+  String get openBarrelsPoolCancelled;
+
+  /// No description provided for @openBarrelsBalancePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance paid.'**
+  String get openBarrelsBalancePaid;
+
+  /// No description provided for @openBarrelsLeavePool.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave pool'**
+  String get openBarrelsLeavePool;
+
+  /// No description provided for @openBarrelsPayBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay balance'**
+  String get openBarrelsPayBalance;
+
+  /// No description provided for @openBarrelsMineEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Post a partial barrel or request a share to see it here.'**
+  String get openBarrelsMineEmptyHint;
+
+  /// No description provided for @openBarrelsMineEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No shared barrel pools yet'**
+  String get openBarrelsMineEmptyTitle;
+
+  /// No description provided for @openBarrelsMineLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load your pools'**
+  String get openBarrelsMineLoadFailed;
+
+  /// No description provided for @openBarrelsSignInHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your shared barrel posts will appear here after you sign in.'**
+  String get openBarrelsSignInHint;
+
+  /// No description provided for @openBarrelsSignInTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to see your pools'**
+  String get openBarrelsSignInTitle;
+
+  /// No description provided for @openBarrelsRequestOneShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Request one share'**
+  String get openBarrelsRequestOneShare;
+
+  /// No description provided for @openBarrelsEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'When a customer or business opens unused shares, they will appear here.'**
+  String get openBarrelsEmptyHint;
+
+  /// No description provided for @openBarrelsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No open shared barrels yet'**
+  String get openBarrelsEmptyTitle;
+
+  /// No description provided for @openBarrelsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load open barrels'**
+  String get openBarrelsLoadFailed;
+
+  /// No description provided for @openBarrelsTabMine.
+  ///
+  /// In en, this message translates to:
+  /// **'My pools'**
+  String get openBarrelsTabMine;
+
+  /// No description provided for @openBarrelsTabOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open pools'**
+  String get openBarrelsTabOpen;
+
+  /// No description provided for @openBarrelsShareTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share a barrel'**
+  String get openBarrelsShareTitle;
+
+  /// No description provided for @openBarrelsPostPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Post partial barrel'**
+  String get openBarrelsPostPartial;
+
+  /// No description provided for @sendBarrelSharedPromoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t fill a barrel?'**
+  String get sendBarrelSharedPromoTitle;
+
+  /// No description provided for @sendBarrelSharedPromoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Join an open shared barrel or reserve a share.'**
+  String get sendBarrelSharedPromoHint;
+
+  /// No description provided for @transportJobCancelledNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This transport job was cancelled.'**
+  String get transportJobCancelledNotice;
+
+  /// No description provided for @shipmentLockedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipment can no longer be edited because pickup has arrived or the request is already being processed.'**
+  String get shipmentLockedNotice;
 }
 
 class _AppLocalizationsDelegate
