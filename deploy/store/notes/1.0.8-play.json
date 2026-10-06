@@ -1,0 +1,4 @@
+{
+  "en-US": "For businesses:\n\nScan a package: point the camera at its label to see the sender, receiver, container and status, with Call and WhatsApp buttons.\n\nPrint package labels with a QR code. Scanning a label now opens it in the app.\n\nInvoices and purchases load page by page, with exact totals.\n\nAlso: amounts like 12,50 are read correctly, the app remembers your language, and notifications open the right screen.",
+  "fr-FR": "Pour les entreprises :\n\nScannez un colis : visez son étiquette pour voir l'expéditeur, le destinataire, le conteneur et le statut, avec Appeler et WhatsApp.\n\nImprimez des étiquettes avec QR code. Scanner une étiquette l'ouvre dans l'application.\n\nFactures et achats se chargent page par page, avec des totaux exacts.\n\nAussi : les montants comme 12,50 sont bien lus, l'app garde votre langue et les notifications ouvrent le bon écran."
+}
