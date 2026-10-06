@@ -103,3 +103,12 @@ test("missing numbers read as zero rather than throwing", () => {
   assert.equal(verdict.fits, true);
   assert.equal(verdict.projected, 0);
 });
+
+test("a resumed rollout leaves out what already went out, and refuses typos", async () => {
+  const {remainingFunctions} = await import("../cloud-run-capacity-lib.mjs");
+  const names = ["a", "b", "c", "d"];
+  assert.deepEqual(remainingFunctions(names, undefined), {names, unknown: []});
+  assert.deepEqual(remainingFunctions(names, " a, c ,"),
+      {names: ["b", "d"], unknown: []});
+  assert.deepEqual(remainingFunctions(names, "a,zz").unknown, ["zz"]);
+});

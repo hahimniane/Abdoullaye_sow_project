@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   batchFunctionNames,
+  remainingFunctions,
   safeDeployBatchSize,
 } from "./cloud-run-capacity-lib.mjs";
 import {
@@ -108,9 +109,22 @@ const batchSize = Math.max(1, Math.min(
     Number(process.env.DEPLOY_BATCH_SIZE) || computedBatch,
     computedBatch,
 ));
-const batches = batchFunctionNames(functionNames, batchSize);
+// Resuming a rollout that stopped part way: leave out what already went out.
+const remaining = remainingFunctions(
+    functionNames, process.env.DEPLOY_SKIP_FUNCTIONS);
+if (remaining.unknown.length) {
+  console.error(
+      `DEPLOY_SKIP_FUNCTIONS names functions this commit does not export: ` +
+      `${remaining.unknown.join(", ")}`);
+  process.exit(1);
+}
+if (remaining.names.length < functionNames.length) {
+  console.log(`Resuming: skipping ${functionNames.length -
+    remaining.names.length} functions already deployed from this commit.`);
+}
+const batches = batchFunctionNames(remaining.names, batchSize);
 console.log(
-    `\nDeploying ${functionNames.length} functions in ${batches.length} ` +
+    `\nDeploying ${remaining.names.length} functions in ${batches.length} ` +
     `batches of up to ${batchSize}...`,
 );
 

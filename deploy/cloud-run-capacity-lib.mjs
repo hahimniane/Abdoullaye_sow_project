@@ -119,3 +119,25 @@ export function revisionCapacity(input) {
         "removes them and the count only climbs",
   };
 }
+
+/**
+ * The functions still to deploy after a rollout stopped part way.
+ *
+ * DEPLOY_SKIP_FUNCTIONS lists (comma-separated) the functions a stopped run
+ * already rolled out from this same commit, so a resumed run does not spend
+ * the region's 20 vCPU on them again. Unknown names are reported, never
+ * silently ignored: a typo would otherwise redeploy what it meant to skip.
+ *
+ * @param {string[]} names Every exported function, in deploy order.
+ * @param {string|undefined} skipCsv Names to leave out.
+ * @return {{names: string[], unknown: string[]}} What remains, and typos.
+ */
+export function remainingFunctions(names, skipCsv) {
+  const skip = new Set(String(skipCsv || "").split(",")
+      .map((name) => name.trim()).filter(Boolean));
+  const known = new Set(names);
+  return {
+    names: names.filter((name) => !skip.has(name)),
+    unknown: [...skip].filter((name) => !known.has(name)),
+  };
+}
