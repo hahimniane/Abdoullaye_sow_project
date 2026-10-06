@@ -522,6 +522,10 @@ if (checksBackend) {
         "--config",
         dryRunConfigPath,
         "--dry-run",
+        // The real deploy passes --force (backend-deploy.mjs); without it the
+        // CLI refuses any function with a retry policy before resolving the
+        // rest. A dry run writes nothing, so --force here only matches that.
+        "--force",
       ], {cwd: appDir});
     } finally {
       fs.rmSync(dryRunConfigPath, {force: true});

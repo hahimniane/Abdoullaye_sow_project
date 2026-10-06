@@ -457,3 +457,11 @@ test("Firebase dry-run config removes only duplicate predeploy hooks", () => {
   });
   assert.deepEqual(source.functions[0].predeploy, ["npm run lint", "npm test"]);
 });
+
+test("the functions dry run passes --force like the real deploy", () => {
+  // Without it the CLI stops at any function with a retry policy
+  // (deliverContainerCustomerUpdate) and the dry run fails before resolving.
+  const source = fs.readFileSync(new URL("../preflight.mjs", import.meta.url), "utf8");
+  const dryRun = source.slice(source.indexOf('"--dry-run"'), source.indexOf("{cwd: appDir}"));
+  assert.match(dryRun, /"--force"/);
+});
