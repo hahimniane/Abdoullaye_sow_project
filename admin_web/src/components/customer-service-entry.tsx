@@ -26,7 +26,15 @@ const GuestTracking = dynamic(
   () => import("@/components/guest-tracking").then((m) => m.GuestTracking),
   { ssr: false },
 );
+// Owners and staff scanning a package label get their staff view above the
+// public result. Only their sessions ever load it: customers and guests are
+// told apart before render, so they never download the staff code.
+const PackageStaffView = dynamic(
+  () => import("@/components/package-staff-view").then((m) => m.PackageStaffView),
+  { ssr: false },
+);
 import { recallGuestContact } from "@/lib/guest-contact";
+import { packageCodeFrom, packageStaffCandidate } from "@/lib/package-staff";
 import type { CustomerService } from "@/lib/customer-service-intent";
 import type { UserProfile } from "@/types/admin";
 
@@ -107,6 +115,21 @@ export function CustomerServiceEntry({
       agreedBusinessId: params.get("agreedBusiness") ?? "",
     };
   });
+  // The container-line code the tracking page is on: the label's code from
+  // the URL at arrival, then whatever the lookup box last found.
+  const [packageCode, setPackageCode] = useState(() =>
+    typeof window === "undefined" || initialService !== "tracking"
+      ? ""
+      : packageCodeFrom(new URLSearchParams(window.location.search).get("code")),
+  );
+  const staffCandidate =
+    initialService === "tracking" &&
+    authenticated &&
+    packageStaffCandidate({
+      profile,
+      signedIn: Boolean(firebaseUser),
+      isAnonymous: firebaseUser?.isAnonymous === true,
+    });
   const cars = usePublicCars(initialService === "cars");
   const shippingService:
     | "barrel"
@@ -225,12 +248,19 @@ export function CustomerServiceEntry({
             state={cars}
           />
         )}
+        {staffCandidate && packageCode && (
+          <PackageStaffView code={packageCode} firebaseUser={firebaseUser} profile={profile} />
+        )}
         {initialService === "tracking" && (
           <GuestTracking
             authenticated={authenticated}
             onAccountAccess={(mode) => {
               setAccountMode(mode);
               setAuthIntent("account-access");
+            }}
+            onFound={(code) => {
+              const next = packageCodeFrom(code);
+              if (next) setPackageCode(next);
             }}
           />
         )}

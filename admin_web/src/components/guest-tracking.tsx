@@ -32,6 +32,8 @@ import { auth, db, functions } from "@/lib/firebase";
 type GuestTrackingProps = {
   authenticated: boolean;
   onAccountAccess: (mode: "sign-in" | "sign-up") => void;
+  /** Told the code of every record found, so a staff view above can follow it. */
+  onFound?: (trackingCode: string) => void;
 };
 
 type GuestTrackingError =
@@ -53,6 +55,7 @@ const ERROR_COPY: Record<Exclude<GuestTrackingError, "">, string> = {
 export function GuestTracking({
   authenticated,
   onAccountAccess,
+  onFound,
 }: GuestTrackingProps) {
   const [identifier, setIdentifier] = useState("");
   const [loading, setLoading] = useState(false);
@@ -142,6 +145,7 @@ export function GuestTracking({
       }
       setIdentifier(parsed.record.trackingCode);
       setRecord(parsed.record);
+      onFound?.(parsed.record.trackingCode);
       window.setTimeout(() => resultRef.current?.focus(), 0);
     } catch (lookupError) {
       setError(guestTrackingErrorKind(lookupError));

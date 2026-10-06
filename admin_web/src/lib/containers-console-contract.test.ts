@@ -37,8 +37,29 @@ test("the Containers tab sits under Transport & shipping, gated by its permissio
 test("the console routes the tab to ContainersPanel like every other panel", () => {
   assert.match(consoleSource, /import \{ContainersPanel\} from "@\/components\/business\/containers-panel";/);
   // The business record rides along so the phone pickers open on its country.
-  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel businessId=\{businessId\} business=\{business\} previewMode=\{previewMode\} \/>\s*\)\}/);
+  // A package's "Open in business console" link rides along as the container
+  // and line to open.
+  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+focusContainerId=\{containerLink\?\.containerId \?\? ""\}\s+focusLineId=\{containerLink\?\.lineId \?\? ""\}\s+\/>\s*\)\}/);
   assert.match(consoleSource, /containers: <Container \{\.\.\.props\} \/>,/, "the sidebar icon map must cover the tab");
+});
+
+// The deep link a package's staff view opens:
+// https://business.laawoldigital.com/?container=<id>&line=<lineId>.
+test("?container=&line= opens the Containers tab on that container with the line marked", () => {
+  // Read once at mount, and only switches tab when the link is there.
+  assert.match(consoleSource, /const link = containerDeepLinkFromSearch\(window\.location\.search\);\s*if \(!link\) return;\s*setContainerLink\(link\);\s*setActiveTab\("containers"\);\s*\}, \[\]\);/);
+  // Staff without the tab still fall back to Today.
+  assert.match(consoleSource, /if \(!visibleTabs\.some\(\(tab\) => tab\.id === activeTab\)\) \{\s*setActiveTab\("today"\);/);
+  // The panel opens the container once it is known - an old arrival past the
+  // loaded page is read on its own, and only when it is this business's.
+  assert.match(panelSource, /const linkedContainer = useLiveDoc\("containers", focusContainerId, enabled && Boolean\(focusContainerId\)\);/);
+  assert.match(panelSource, /text\(linkedContainer\.businessId, ""\) === businessId/);
+  assert.match(panelSource, /if \(focusOpened\.current \|\| !focusContainerId \|\| !containerById\.has\(focusContainerId\)\) return;\s*focusOpened\.current = true;\s*setSelectedId\(focusContainerId\);/);
+  // The line is anchored, marked, and scrolled to once.
+  assert.match(panelSource, /id=\{`ctn-line-\$\{String\(row\.id\)\}`\}/);
+  assert.match(panelSource, /focusLineId && String\(row\.id\) === focusLineId \? " ctn-line-focus" : ""/);
+  assert.match(panelSource, /document\.getElementById\(`ctn-line-\$\{focusLineId\}`\)/);
+  assert.match(stylesSource, /\.ctn-table \.mini-table-row\.ctn-line-focus \{/);
 });
 
 test("the panel reads containers and lines by business and writes only through callables", () => {
@@ -323,14 +344,24 @@ test("every new contact and WhatsApp string has French", () => {
 });
 
 // Package labels: a QR and a large code per package, printed from the
-// container or from one line, on a Letter sheet or a thermal roll.
-test("the panel prints labels through getContainerDocumentUrl with view \"labels\"", () => {
-  assert.match(panelSource, /await httpsCallable\(functions, "getContainerDocumentUrl"\)\(request\);/);
-  assert.match(panelSource, /const request = containerLabelsRequest\(businessId, labelsContainerId, labelChoice, labelsLineId\);/);
+// container or from one line, on a Letter sheet or a thermal roll. One dialog
+// (container-labels-dialog.tsx) prints for the panel and for the package
+// view on the tracking page.
+const labelsSource = read("../components/business/container-labels-dialog.tsx");
+
+test("the labels dialog prints through getContainerDocumentUrl with view \"labels\"", () => {
+  assert.match(labelsSource, /await httpsCallable\(functions, "getContainerDocumentUrl"\)\(request\);/);
+  assert.match(labelsSource, /const request = containerLabelsRequest\(businessId, labelsContainerId, labelChoice, labelsLineId\);/);
   // The loading list still asks without a view.
   assert.match(panelSource, /httpsCallable\(functions, "getContainerDocumentUrl"\)\(\{ businessId, containerId: String\(row\.id\) \}\)/);
-  // A refusal lands in the modal and the waiting tab is closed.
-  assert.match(panelSource, /\(message\) => \{\s*closePendingTab\(tab\);\s*failInModal\(message\);\s*\}\);/);
+  // A refusal lands in the dialog and the waiting tab is closed.
+  assert.match(labelsSource, /\} catch \(error\) \{\s*closePendingTab\(tab\);\s*setDraftError\(containerCallableFailure\(error\)\.message\);/);
+  // Busy resolves on every path.
+  assert.match(labelsSource, /\} finally \{\s*setBusy\(false\);\s*\}/);
+  // The panel renders the shared dialog rather than a copy of it.
+  assert.match(panelSource, /import \{ ContainerLabelsDialog \} from "@\/components\/business\/container-labels-dialog";/);
+  assert.match(panelSource, /\{modal === "labels" && labelsContainer && \(\s*<ContainerLabelsDialog\s+businessId=\{businessId\}\s+container=\{labelsContainer\}\s+line=\{labelsLine\}\s+onClose=\{closeModal\}\s+\/>/);
+  assert.doesNotMatch(panelSource, /name="ctnlabelformat"/, "the panel must not fork the dialog");
 });
 
 test("Print labels sits next to the loading list, on every line and on every search hit", () => {
@@ -349,29 +380,31 @@ test("Print labels sits next to the loading list, on every line and on every sea
   const printAt = row[1].indexOf("openLabels(selectedId, row)");
   const openOnlyAt = row[1].indexOf("{selectedOpen && (");
   assert.ok(printAt >= 0 && openOnlyAt > printAt, "line labels must not be gated on the container still loading");
-  // A line's modal is titled with its tracking code.
-  assert.match(panelSource, /<h3>Labels for \{labelsLineCode \? <code className="ctn-code">\{labelsLineCode\}<\/code> : containerLineTitle\(labelsLine\)\}<\/h3>/);
+  // A line's dialog is titled with its tracking code.
+  assert.match(labelsSource, /<h3>Labels for \{labelsLineCode \? <code className="ctn-code" data-no-translate>\{labelsLineCode\}<\/code> : <span data-no-translate>\{containerLineTitle\(line\)\}<\/span>\}<\/h3>/);
 });
 
-test("the labels modal offers both formats and both counts, and remembers the choice", () => {
-  assert.match(panelSource, /checked=\{labelChoice\.format === "sheet"\}/);
-  assert.match(panelSource, /checked=\{labelChoice\.format === "thermal"\}/);
-  assert.match(panelSource, /checked=\{labelChoice\.copies === 2\}/);
-  assert.match(panelSource, /checked=\{labelChoice\.copies === 1\}/);
-  assert.match(panelSource, /<span>Letter sheet — Avery 5524 weatherproof, 6 per page<\/span>/);
-  assert.match(panelSource, /<span>Thermal printer 4×6<\/span>/);
-  assert.match(panelSource, /<span>2 — one for each side \(recommended\)<\/span>/);
-  assert.match(panelSource, /setLabelChoice\(readContainerLabelChoice\(labelStorage\(\)\)\);/);
-  assert.match(panelSource, /writeContainerLabelChoice\(labelStorage\(\), labelChoice\);/);
+test("the labels dialog offers both formats and both counts, and remembers the choice", () => {
+  assert.match(labelsSource, /checked=\{labelChoice\.format === "sheet"\}/);
+  assert.match(labelsSource, /checked=\{labelChoice\.format === "thermal"\}/);
+  assert.match(labelsSource, /checked=\{labelChoice\.copies === 2\}/);
+  assert.match(labelsSource, /checked=\{labelChoice\.copies === 1\}/);
+  assert.match(labelsSource, /<span>Letter sheet — Avery 5524 weatherproof, 6 per page<\/span>/);
+  assert.match(labelsSource, /<span>Thermal printer 4×6<\/span>/);
+  assert.match(labelsSource, /<span>2 — one for each side \(recommended\)<\/span>/);
+  assert.match(labelsSource, /useState<ContainerLabelChoice>\(\(\) => readContainerLabelChoice\(labelStorage\(\)\)\);/);
+  assert.match(labelsSource, /writeContainerLabelChoice\(labelStorage\(\), labelChoice\);/);
   // Reading window.localStorage can itself throw in a blocked window.
-  assert.match(panelSource, /function labelStorage\(\): Storage \| null \{\s*try \{\s*return window\.localStorage;\s*\} catch \{\s*return null;/);
+  assert.match(labelsSource, /function labelStorage\(\): Storage \| null \{\s*try \{\s*return window\.localStorage;\s*\} catch \{\s*return null;/);
 });
 
 test("documents open in a tab made inside the click, with the link as the fallback", () => {
-  assert.match(panelSource, /import \{ closePendingTab, openPendingTab, sendPendingTab \} from "@\/lib\/pending-tab";/);
+  for (const source of [panelSource, labelsSource]) {
+    assert.match(source, /import \{ closePendingTab, openPendingTab, sendPendingTab \} from "@\/lib\/pending-tab";/);
+  }
   // The tab opens before the callable is awaited, for labels and the loading list.
-  for (const fn of ["printLabels", "openLoadingList"]) {
-    const body = panelSource.match(new RegExp(`async function ${fn}\\([^)]*\\) \\{([\\s\\S]*?)\\n  \\}\\n`));
+  for (const [source, fn] of [[labelsSource, "printLabels"], [panelSource, "openLoadingList"]] as const) {
+    const body = source.match(new RegExp(`async function ${fn}\\([^)]*\\) \\{([\\s\\S]*?)\\n  \\}\\n`));
     assert.ok(body, `${fn} not found`);
     const openAt = body[1].indexOf("openPendingTab(window)");
     const awaitAt = body[1].indexOf("await ");
@@ -379,7 +412,8 @@ test("documents open in a tab made inside the click, with the link as the fallba
     assert.match(body[1], /sendPendingTab\(tab, url\)/);
   }
   assert.doesNotMatch(panelSource, /window\.open\(url/, "an open after the await is what blockers refuse");
-  assert.match(panelSource, /Your browser blocked the new tab\. <a href=\{labelsLink\} target="_blank" rel="noopener noreferrer">Open the labels page<\/a>/);
+  assert.doesNotMatch(labelsSource, /window\.open\(url/, "an open after the await is what blockers refuse");
+  assert.match(labelsSource, /Your browser blocked the new tab\. <a href=\{labelsLink\} target="_blank" rel="noopener noreferrer">Open the labels page<\/a>/);
 });
 
 test("every label string has French", () => {
@@ -402,7 +436,7 @@ test("every label string has French", () => {
     "Opening...",
   ];
   for (const english of strings) {
-    assert.ok(panelSource.includes(english), `"${english}" is no longer in the panel`);
+    assert.ok(labelsSource.includes(english), `"${english}" is no longer in the labels dialog`);
     const french = translateValue(english, "fr");
     assert.notEqual(french, english, `no French for "${english}"`);
     assert.equal(translateValue(french, "en"), english, `"${english}" does not round-trip`);

@@ -250,6 +250,9 @@ const SITES: Site[] = [
   { file: C("customer-review-composer.tsx"), kind: "query", what: "my reviews (group)", shapes: [raw("reviews", [eq("customerUid")], null, true)] },
   { file: C("notification-bell.tsx"), kind: "query", what: "my notifications", shapes: [raw("notifications", [], { field: "createdAt", direction: "desc" })] },
   { file: C("guest-tracking.tsx"), kind: "query", what: "claimed request", shapes: [raw("freightQuoteRequests", [eq("customerUid"), eq("trackingCode")])] },
+  // A package's staff view on the tracking page: the business's own line by
+  // code, or (platform admin) any line by code. Equalities only, limit 1.
+  { file: C("package-staff-view.tsx"), kind: "query", what: "package line by code", shapes: [raw("containerLines", [eq("businessId"), eq("trackingCode")]), raw("containerLines", [eq("trackingCode")])] },
   { file: C("customer-parking-pools.tsx"), kind: "query", what: "open barrels", shapes: [raw("openBarrels", [eq("status")])] },
   { file: C("customer-console.tsx"), kind: "query", what: "my records", shapes: [] },
   { file: C("recipient-name-field.tsx"), kind: "query", what: "saved recipients", shapes: [raw("savedRecipients", [], { field: "lastUsedAt", direction: "desc" })] },

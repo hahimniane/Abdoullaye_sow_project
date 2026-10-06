@@ -33,6 +33,7 @@ import {
 
 import {AssistantWidget} from "@/components/business/assistant-widget";
 import {ContainersPanel} from "@/components/business/containers-panel";
+import {containerDeepLinkFromSearch, type ContainerDeepLink} from "@/lib/package-staff";
 import {InvoicesPanel} from "@/components/business/invoices-panel";
 import {GrowthPanel} from "@/components/business/growth-panel";
 import {
@@ -191,6 +192,17 @@ export function BusinessConsole({
   const previewMode = Boolean(previewBusiness);
   const [activeTab, setActiveTab] = useState<BusinessTab>("today");
   useConsoleDocumentTitle("business");
+  // `?container=<id>&line=<lineId>`: a package's "Open in business console"
+  // on the tracking page. Read once at mount - an arrival, not a
+  // subscription to the URL. Staff without the Containers tab fall back to
+  // Today through the visible-tabs check below.
+  const [containerLink, setContainerLink] = useState<ContainerDeepLink | null>(null);
+  useEffect(() => {
+    const link = containerDeepLinkFromSearch(window.location.search);
+    if (!link) return;
+    setContainerLink(link);
+    setActiveTab("containers");
+  }, []);
   // Set when a notification is opened, so the destination panel can scroll to
   // and highlight the exact record instead of dropping the business into a
   // list of everything and making them hunt for it.
@@ -665,7 +677,13 @@ export function BusinessConsole({
             />
           )}
           {activeTab === "containers" && (
-            <ContainersPanel businessId={businessId} business={business} previewMode={previewMode} />
+            <ContainersPanel
+              businessId={businessId}
+              business={business}
+              previewMode={previewMode}
+              focusContainerId={containerLink?.containerId ?? ""}
+              focusLineId={containerLink?.lineId ?? ""}
+            />
           )}
           {activeTab === "invoices" && (
             <InvoicesPanel
