@@ -7,6 +7,7 @@ import {
   monthLabel,
   parkingMonthCustomerText,
   parkingMonthBillText,
+  parkingMonthCustomerPaid,
   parkingMonthStatement,
   parkingMonthSummary,
   previousMonthKey,
@@ -182,5 +183,71 @@ test("mark all paid: each line's due through its own payment; link cars skipped"
   assert.equal(plan.totalCents, 24600);
   const online = parkingMonthSummary([{ ...cars[0], source: "customer" }], "2026-09", OCT1).customers[0];
   assert.deepEqual(monthBillPaymentPlan(online).skipped.map((x) => x.reason), ["online"]);
+});
+
+// "Paid" at month end: billed for the month and nothing left owing - for the
+// month or carried in from before. Nothing billed is neither paid nor owing.
+// The same cases as the server's and the app's tests, so the three agree.
+test("who has paid for the month: fully, partly, overpaid, carried, nothing billed", () => {
+  const car = (over: Record<string, unknown>) => ({ ...diallo, ...over });
+  const cars = [
+    car({ id: "unpaid" }),
+    car({ id: "paid", customerName: "Barry", customerPhone: "6465550101", amountPaidCents: 45000, parkingPayments: [{ receivedVia: "cash" }, { receivedVia: "Zelle" }] }),
+    car({ id: "part", customerName: "Camara", customerPhone: "6465550102", amountPaidCents: 20000, parkingPayments: [{ receivedVia: "cash" }] }),
+    car({ id: "credit", customerName: "Keita", customerPhone: "6465550103", amountPaidCents: 60000, paymentMethod: "direct", directPaymentMethod: "venmo" }),
+    car({ id: "link", customerName: "Sylla", customerPhone: "6465550104", paymentMethod: "payment_link", paymentStatus: "succeeded" }),
+    car({ id: "online", customerName: "Bah", customerPhone: "6465550105", paymentStatus: "paid" }),
+    car({ id: "carried", customerName: "Sow", customerPhone: "6465550106", amountPaidCents: 45000, parkingPayments: [{ receivedVia: "cash" }] }),
+  ];
+  const act = (over: Record<string, unknown>) => ({ businessId: "k", activityTypeLabel: "title", feeCents: 10000, paymentStatus: "awaiting_direct_payment", ...over });
+  const acts = [
+    act({ id: "sowAug", activityDate: at("2026-08-20"), feeCents: 9000, customerName: "Sow", customerPhone: "6465550106" }),
+    act({ id: "fatou", activityDate: at("2026-09-03"), customerName: "Fatou", customerPhone: "6465550107", paymentStatus: "succeeded", paymentMethod: "direct", receivedVia: "cashapp" }),
+    act({ id: "diopAug", activityDate: at("2026-08-10"), feeCents: 5000, customerName: "Diop", customerPhone: "6465550108" }),
+  ];
+  const s = parkingMonthSummary(cars, "2026-09", OCT1, acts);
+  const by = (name: string) => s.customers.find((c) => c.customerName === name)!;
+
+  // One definition.
+  assert.equal(parkingMonthCustomerPaid({ monthCents: 100, dueCents: 0 }), true);
+  assert.equal(parkingMonthCustomerPaid({ monthCents: 100, dueCents: 1 }), false);
+  assert.equal(parkingMonthCustomerPaid({ monthCents: 0, dueCents: 0 }), false, "nothing billed is not paid");
+
+  assert.deepEqual(s.customersPaid.map((c) => c.customerName), ["Bah", "Barry", "Fatou", "Keita", "Sylla"]);
+  assert.deepEqual(s.customersOwing.map((c) => c.customerName), ["Diallo", "Camara", "Sow", "Diop"]);
+  assert.equal(s.customers.length, 9);
+  for (const c of s.customers) {
+    assert.equal(c.paid, parkingMonthCustomerPaid(c));
+    assert.ok(!(c.paid && c.owes), `${c.customerName} is not both`);
+  }
+
+  // Fully paid: what came in, and how.
+  assert.equal(by("Barry").paid, true);
+  assert.equal(by("Barry").monthPaidCents, 45000);
+  assert.deepEqual(by("Barry").paidVia, ["cash", "zelle"]);
+  assert.deepEqual(by("Sylla").paidVia, ["card_link"]);
+  assert.deepEqual(by("Bah").paidVia, ["online"]);
+  assert.deepEqual(by("Fatou").paidVia, ["cashapp"]);
+  // Partly paid still owes.
+  assert.equal(by("Camara").paid, false);
+  assert.equal(by("Camara").owes, true);
+  assert.equal(by("Camara").monthPaidCents, 20000);
+  assert.equal(by("Camara").dueCents, 25000);
+  assert.deepEqual(by("Camara").paidVia, ["cash"]);
+  assert.deepEqual(by("Diallo").paidVia, [], "nothing paid, no method");
+  // Overpaid is paid; the month is capped at its total.
+  assert.equal(by("Keita").paid, true);
+  assert.equal(by("Keita").monthPaidCents, 45000);
+  assert.equal(by("Keita").dueCents, 0);
+  assert.deepEqual(by("Keita").paidVia, ["venmo"]);
+  // The month paid but older still unpaid is not paid.
+  assert.equal(by("Sow").monthPaidCents, 45000);
+  assert.equal(by("Sow").priorUnpaidCents, 9000);
+  assert.equal(by("Sow").paid, false);
+  assert.equal(by("Sow").owes, true);
+  // Nothing billed for the month is neither.
+  assert.equal(by("Diop").monthCents, 0);
+  assert.equal(by("Diop").paid, false);
+  assert.equal(by("Diop").owes, true, "only the older unpaid job");
 });
 

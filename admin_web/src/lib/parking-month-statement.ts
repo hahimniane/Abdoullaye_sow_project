@@ -118,6 +118,45 @@ function paidCents(row: Row, today: number): number {
   return 0;
 }
 
+/**
+ * How money came in on a car, as method codes: each recorded payment's
+ * `receivedVia`, else the method that settled it, else "card_link" for a
+ * payment-link car and "online" for one booked and paid online. Codes, not
+ * words - each client names them in its own language. Mirrors the server.
+ */
+export function parkingPaidVia(row: Row): string[] {
+  const via: string[] = [];
+  const add = (v: unknown) => {
+    const code = text(v, 40).toLowerCase();
+    if (code && !via.includes(code)) via.push(code);
+  };
+  const payments = Array.isArray(row.parkingPayments) ? row.parkingPayments : [];
+  for (const p of payments) add((p as Row | null)?.receivedVia);
+  if (via.length === 0) add(row.directPaymentMethod);
+  if (via.length > 0) return via;
+  const method = text(row.paymentMethod, 40);
+  if (method === "payment_link") return ["card_link"];
+  return method === "direct" ? [] : ["online"];
+}
+
+/** How an activity's money came in: its `receivedVia`, else "card_link"
+ * when it went out as a payment link. Mirrors the server. */
+export function activityPaidVia(row: Row): string[] {
+  const via = text(row.receivedVia, 40).toLowerCase();
+  if (via) return [via];
+  return text(row.paymentMethod, 40) === "payment_link" ? ["card_link"] : [];
+}
+
+/**
+ * "Paid" at month end: billed something for the month and nothing left
+ * owing - not for the month and not carried in from before. A customer with
+ * nothing billed that month is neither paid nor owing. The one definition;
+ * mirrors the server and the app.
+ */
+export function parkingMonthCustomerPaid(c: { monthCents: number; dueCents: number }): boolean {
+  return c.monthCents > 0 && c.dueCents <= 0;
+}
+
 export type ParkingMonthBill = {
   id: string;
   monthKey: string;
@@ -140,6 +179,9 @@ export type ParkingMonthBill = {
   vinNumber: string;
   trackingCode: string;
   paymentMethod: string;
+  /** How what was paid toward this month came in (method codes); empty when
+   * nothing was paid toward it. */
+  paidVia: string[];
   /** A payment can be recorded by hand: a direct car the business entered. */
   recordable: boolean;
 };
@@ -192,6 +234,7 @@ export function parkingMonthStatement(row: Row, monthKey: string, now: Date = ne
     vinNumber: text(row.vinNumber, 17).toUpperCase(),
     trackingCode: text(row.trackingCode, 40),
     paymentMethod: text(row.paymentMethod, 40),
+    paidVia: monthPaidCents > 0 ? parkingPaidVia(row) : [],
     recordable: text(row.paymentMethod, 40) === "direct" && (text(row.source, 40) === "business" || row.enteredByBusiness === true),
   };
 }
@@ -216,6 +259,10 @@ export type ParkingMonthCustomer = {
   priorUnpaidCents: number;
   dueCents: number;
   owes: boolean;
+  /** Billed for the month and nothing left owing (parkingMonthCustomerPaid). */
+  paid: boolean;
+  /** How this month's payments came in, method codes in first-seen order. */
+  paidVia: string[];
   partialMonth: boolean;
 };
 
@@ -279,6 +326,11 @@ export function parkingMonthCustomers(
     const monthPaidCents = sumCars("monthPaidCents") + sumActs(inMonth, "paidCents");
     const monthUnpaidCents = sumCars("monthUnpaidCents") + sumActs(inMonth, "dueCents");
     const priorUnpaidCents = sumCars("priorUnpaidCents") + sumActs(older, "dueCents");
+    const dueCents = monthUnpaidCents + priorUnpaidCents;
+    const paidVia: string[] = [];
+    for (const line of [...cars.filter((b) => b.monthPaidCents > 0), ...inMonth.filter((a) => a.paidCents > 0)]) {
+      for (const code of line.paidVia) if (!paidVia.includes(code)) paidVia.push(code);
+    }
     customers.push({
       key,
       monthKey: (cars[0] ?? acts[0]).monthKey,
@@ -292,8 +344,10 @@ export function parkingMonthCustomers(
       monthPaidCents,
       monthUnpaidCents,
       priorUnpaidCents,
-      dueCents: monthUnpaidCents + priorUnpaidCents,
-      owes: monthUnpaidCents + priorUnpaidCents > 0,
+      dueCents,
+      owes: dueCents > 0,
+      paid: parkingMonthCustomerPaid({ monthCents, dueCents }),
+      paidVia,
       partialMonth: cars.some((b) => b.partialMonth),
     });
   }
@@ -307,6 +361,8 @@ export type ParkingMonthSummary = {
   activitiesInMonth: number;
   customers: ParkingMonthCustomer[];
   customersOwing: ParkingMonthCustomer[];
+  /** Billed for the month and fully paid, nothing carried in either. */
+  customersPaid: ParkingMonthCustomer[];
   billedCents: number;
   collectedCents: number;
   owedCents: number;
@@ -333,6 +389,8 @@ export type ParkingMonthActivity = {
   vehicle: string;
   vinNumber: string;
   trackingCode: string;
+  /** How what was paid came in (method codes); empty when nothing was. */
+  paidVia: string[];
 };
 
 /** An activity dated in the month is that month's; an older one still unpaid
@@ -365,6 +423,7 @@ export function activityMonthItem(row: Row, monthKey: string): ParkingMonthActiv
     vehicle: [row.carYear, row.carMake, row.carModel].map((v) => text(v, 80)).filter(Boolean).join(" "),
     vinNumber: text(row.vinNumber, 17).toUpperCase(),
     trackingCode: text(row.trackingCode, 40),
+    paidVia: paidCents > 0 ? activityPaidVia(row) : [],
   };
 }
 
@@ -395,6 +454,7 @@ export function parkingMonthSummary(
     activitiesInMonth: inMonth.length,
     customers,
     customersOwing,
+    customersPaid: customers.filter((c) => c.paid),
     billedCents: sumBills("monthCents") + sumActs("feeCents"),
     collectedCents: sumBills("monthPaidCents") + sumActs("paidCents"),
     owedCents: sumBills("monthUnpaidCents") + sumActs("dueCents"),

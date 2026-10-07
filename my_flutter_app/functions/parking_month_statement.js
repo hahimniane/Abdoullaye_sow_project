@@ -167,6 +167,57 @@ function paidCents(row, today) {
 }
 
 /**
+ * How money came in on a car, as method codes: each recorded payment's
+ * `receivedVia`, else the method that settled it, else "card_link" for a
+ * payment-link car and "online" for one booked and paid online. Codes, not
+ * words - each client names them in its own language.
+ *
+ * @param {object} row A parkedCars document.
+ * @return {string[]} Method codes, first seen first.
+ */
+function parkingPaidVia(row) {
+  const r = row && typeof row === "object" ? row : {};
+  const via = [];
+  const add = (v) => {
+    const code = text(v, 40).toLowerCase();
+    if (code && !via.includes(code)) via.push(code);
+  };
+  const payments = Array.isArray(r.parkingPayments) ? r.parkingPayments : [];
+  for (const p of payments) add(p?.receivedVia);
+  if (via.length === 0) add(r.directPaymentMethod);
+  if (via.length > 0) return via;
+  const method = text(r.paymentMethod, 40);
+  if (method === "payment_link") return ["card_link"];
+  return method === "direct" ? [] : ["online"];
+}
+
+/**
+ * How an activity's money came in: its `receivedVia`, else "card_link"
+ * when it went out as a payment link.
+ *
+ * @param {object} row A lotActivities document.
+ * @return {string[]} Method codes.
+ */
+function activityPaidVia(row) {
+  const via = text(row?.receivedVia, 40).toLowerCase();
+  if (via) return [via];
+  return text(row?.paymentMethod, 40) === "payment_link" ? ["card_link"] : [];
+}
+
+/**
+ * "Paid" at month end: billed something for the month and nothing left
+ * owing - not for the month and not carried in from before. A customer with
+ * nothing billed that month is neither paid nor owing. The one definition;
+ * the console and the app mirror it.
+ *
+ * @param {{monthCents: number, dueCents: number}} customer The customer.
+ * @return {boolean} Whether they have paid for the month.
+ */
+function parkingMonthCustomerPaid(customer) {
+  return Number(customer?.monthCents) > 0 && Number(customer?.dueCents) <= 0;
+}
+
+/**
  * One car's bill for one month, or null when the car was not on the lot
  * that month (or has nothing to collect at all).
  *
@@ -230,6 +281,8 @@ function parkingMonthStatement(row, monthKey, now = new Date()) {
     vinNumber: text(r.vinNumber, 17).toUpperCase(),
     trackingCode: text(r.trackingCode, 40),
     paymentMethod: text(r.paymentMethod, 40),
+    // How what was paid toward this month came in; empty when nothing was.
+    paidVia: monthPaidCents > 0 ? parkingPaidVia(r) : [],
     // A payment can be recorded by hand only on a car the business entered
     // and is paid directly (cash, Zelle...); anything else is Stripe's.
     recordable: text(r.paymentMethod, 40) === "direct" &&
@@ -278,6 +331,7 @@ function activityMonthItem(row, monthKey) {
         .filter(Boolean).join(" "),
     vinNumber: text(r.vinNumber, 17).toUpperCase(),
     trackingCode: text(r.trackingCode, 40),
+    paidVia: paidCents > 0 ? activityPaidVia(r) : [],
   };
 }
 
@@ -315,6 +369,8 @@ function parkingMonthSummary(rows, monthKey, now = new Date(),
     activitiesInMonth: inMonth.length,
     customers,
     customersOwing,
+    // Billed for the month and fully paid, nothing carried in either.
+    customersPaid: customers.filter((c) => c.paid),
     billedCents: sum(bills, "monthCents") + sum(inMonth, "feeCents"),
     collectedCents: sum(bills, "monthPaidCents") + sum(inMonth, "paidCents"),
     owedCents: sum(bills, "monthUnpaidCents") + sum(inMonth, "dueCents"),
@@ -412,6 +468,14 @@ function parkingMonthCustomers(bills, activities = []) {
       sum(inMonth, "dueCents");
     const priorUnpaidCents = sum(cars, "priorUnpaidCents") +
       sum(older, "dueCents");
+    const dueCents = monthUnpaidCents + priorUnpaidCents;
+    const paidVia = [];
+    for (const line of [...cars.filter((b) => b.monthPaidCents > 0),
+      ...inMonth.filter((a) => a.paidCents > 0)]) {
+      for (const code of line.paidVia || []) {
+        if (!paidVia.includes(code)) paidVia.push(code);
+      }
+    }
     customers.push({
       key,
       monthKey: (cars[0] || acts[0]).monthKey,
@@ -425,8 +489,10 @@ function parkingMonthCustomers(bills, activities = []) {
       monthPaidCents,
       monthUnpaidCents,
       priorUnpaidCents,
-      dueCents: monthUnpaidCents + priorUnpaidCents,
-      owes: monthUnpaidCents + priorUnpaidCents > 0,
+      dueCents,
+      owes: dueCents > 0,
+      paid: parkingMonthCustomerPaid({monthCents, dueCents}),
+      paidVia,
       partialMonth: cars.some((b) => b.partialMonth),
     });
   }
@@ -610,6 +676,9 @@ module.exports = {
   monthBoundsMs,
   monthBillPaymentPlan,
   activityMonthItem,
+  activityPaidVia,
+  parkingPaidVia,
+  parkingMonthCustomerPaid,
   parkingCustomerKey,
   parkingMonthCustomers,
   parkingMonthCustomerText,

@@ -127,6 +127,47 @@ int _paidCents(Map<String, dynamic> row, int today) {
   return 0;
 }
 
+/// How money came in on a car, as method codes: each recorded payment's
+/// `receivedVia`, else the method that settled it, else "card_link" for a
+/// payment-link car and "online" for one booked and paid online. Codes, not
+/// words - each client names them in its own language. Mirrors the server.
+List<String> parkingPaidVia(Map<String, dynamic> row) {
+  final via = <String>[];
+  void add(Object? v) {
+    final code = _text(v, 40).toLowerCase();
+    if (code.isNotEmpty && !via.contains(code)) via.add(code);
+  }
+
+  final payments = row['parkingPayments'];
+  if (payments is List) {
+    for (final p in payments) {
+      if (p is Map) add(p['receivedVia']);
+    }
+  }
+  if (via.isEmpty) add(row['directPaymentMethod']);
+  if (via.isNotEmpty) return via;
+  final method = _text(row['paymentMethod'], 40);
+  if (method == 'payment_link') return const ['card_link'];
+  return method == 'direct' ? const [] : const ['online'];
+}
+
+/// How an activity's money came in: its `receivedVia`, else "card_link"
+/// when it went out as a payment link. Mirrors the server.
+List<String> activityPaidVia(Map<String, dynamic> row) {
+  final via = _text(row['receivedVia'], 40).toLowerCase();
+  if (via.isNotEmpty) return [via];
+  return _text(row['paymentMethod'], 40) == 'payment_link'
+      ? const ['card_link']
+      : const [];
+}
+
+/// "Paid" at month end: billed something for the month and nothing left
+/// owing - not for the month and not carried in from before. A customer with
+/// nothing billed that month is neither paid nor owing. The one definition;
+/// mirrors the server and the console.
+bool parkingMonthCustomerPaid({required int monthCents, required int dueCents}) =>
+    monthCents > 0 && dueCents <= 0;
+
 class ParkingMonthBill {
   const ParkingMonthBill({
     required this.id,
@@ -150,6 +191,7 @@ class ParkingMonthBill {
     required this.vinNumber,
     required this.trackingCode,
     this.paymentMethod = '',
+    this.paidVia = const [],
     this.recordable = false,
   });
 
@@ -174,6 +216,10 @@ class ParkingMonthBill {
   final String vinNumber;
   final String trackingCode;
   final String paymentMethod;
+
+  /// How what was paid toward this month came in (method codes); empty when
+  /// nothing was paid toward it.
+  final List<String> paidVia;
 
   /// A payment can be recorded by hand: a direct car the business entered.
   final bool recordable;
@@ -235,6 +281,7 @@ ParkingMonthBill? parkingMonthStatement(
     vinNumber: _text(row['vinNumber'], 17).toUpperCase(),
     trackingCode: _text(row['trackingCode'], 40),
     paymentMethod: _text(row['paymentMethod'], 40),
+    paidVia: monthPaid > 0 ? parkingPaidVia(row) : const [],
     recordable: _text(row['paymentMethod'], 40) == 'direct' &&
         (_text(row['source'], 40) == 'business' || row['enteredByBusiness'] == true),
   );
@@ -257,6 +304,7 @@ class ParkingMonthActivity {
     required this.customerEmail,
     required this.vehicle,
     required this.vinNumber,
+    this.paidVia = const [],
   });
 
   final String id;
@@ -274,6 +322,9 @@ class ParkingMonthActivity {
   final String customerEmail;
   final String vehicle;
   final String vinNumber;
+
+  /// How what was paid came in (method codes); empty when nothing was.
+  final List<String> paidVia;
 }
 
 /// An activity dated in the month is that month's; an older one still unpaid
@@ -310,6 +361,7 @@ ParkingMonthActivity? activityMonthItem(Map<String, dynamic> row, String monthKe
         .where((v) => v.isNotEmpty)
         .join(' '),
     vinNumber: _text(row['vinNumber'], 17).toUpperCase(),
+    paidVia: paid > 0 ? activityPaidVia(row) : const [],
   );
 }
 
@@ -334,6 +386,8 @@ class ParkingMonthCustomer {
     required this.priorUnpaidCents,
     required this.dueCents,
     required this.owes,
+    required this.paid,
+    required this.paidVia,
     required this.partialMonth,
   });
 
@@ -357,6 +411,12 @@ class ParkingMonthCustomer {
   final int priorUnpaidCents;
   final int dueCents;
   final bool owes;
+
+  /// Billed for the month and nothing left owing ([parkingMonthCustomerPaid]).
+  final bool paid;
+
+  /// How this month's payments came in, method codes in first-seen order.
+  final List<String> paidVia;
   final bool partialMonth;
 }
 
@@ -439,6 +499,18 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
     final monthPaid = sumCars((b) => b.monthPaidCents) + sumActs(inMonth, (a) => a.paidCents);
     final monthUnpaid = sumCars((b) => b.monthUnpaidCents) + sumActs(inMonth, (a) => a.dueCents);
     final priorUnpaid = sumCars((b) => b.priorUnpaidCents) + sumActs(older, (a) => a.dueCents);
+    final due = monthUnpaid + priorUnpaid;
+    final paidVia = <String>[];
+    for (final codes in [
+      for (final b in cars)
+        if (b.monthPaidCents > 0) b.paidVia,
+      for (final a in inMonth)
+        if (a.paidCents > 0) a.paidVia,
+    ]) {
+      for (final code in codes) {
+        if (!paidVia.contains(code)) paidVia.add(code);
+      }
+    }
     String firstNonEmpty(Iterable<String> values) =>
         values.firstWhere((v) => v.isNotEmpty, orElse: () => '');
     customers.add(ParkingMonthCustomer(
@@ -457,8 +529,10 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
       monthPaidCents: monthPaid,
       monthUnpaidCents: monthUnpaid,
       priorUnpaidCents: priorUnpaid,
-      dueCents: monthUnpaid + priorUnpaid,
-      owes: monthUnpaid + priorUnpaid > 0,
+      dueCents: due,
+      owes: due > 0,
+      paid: parkingMonthCustomerPaid(monthCents: monthCents, dueCents: due),
+      paidVia: paidVia,
       partialMonth: cars.any((b) => b.partialMonth),
     ));
   }
@@ -527,6 +601,7 @@ class ParkingMonthSummary {
     required this.activitiesInMonth,
     required this.customers,
     required this.customersOwing,
+    required this.customersPaid,
     required this.billedCents,
     required this.collectedCents,
     required this.owedCents,
@@ -542,6 +617,9 @@ class ParkingMonthSummary {
   final int activitiesInMonth;
   final List<ParkingMonthCustomer> customers;
   final List<ParkingMonthCustomer> customersOwing;
+
+  /// Billed for the month and fully paid, nothing carried in either.
+  final List<ParkingMonthCustomer> customersPaid;
   final int billedCents;
   final int collectedCents;
   final int owedCents;
@@ -580,6 +658,7 @@ ParkingMonthSummary parkingMonthSummary(
     activitiesInMonth: inMonth.length,
     customers: customers,
     customersOwing: customersOwing,
+    customersPaid: customers.where((c) => c.paid).toList(),
     billedCents: sumBills((b) => b.monthCents) + sumActs((a) => a.feeCents),
     collectedCents: sumBills((b) => b.monthPaidCents) + sumActs((a) => a.paidCents),
     owedCents: sumBills((b) => b.monthUnpaidCents) + sumActs((a) => a.dueCents),

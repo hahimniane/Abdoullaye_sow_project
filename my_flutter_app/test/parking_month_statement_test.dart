@@ -241,4 +241,132 @@ void main() {
     expect(dayLabel('not a day'), 'not a day');
     expect(dayLabel(''), '');
   });
+
+  // "Paid" at month end: billed for the month and nothing left owing - for
+  // the month or carried in from before. Nothing billed is neither paid nor
+  // owing. The same cases as the server's and the console's tests.
+  group('who has paid for the month', () {
+    final cars = [
+      diallo({'id': 'unpaid'}),
+      diallo({
+        'id': 'paid', 'customerName': 'Barry', 'customerPhone': '6465550101',
+        'amountPaidCents': 45000,
+        'parkingPayments': [
+          {'receivedVia': 'cash'},
+          {'receivedVia': 'Zelle'},
+        ],
+      }),
+      diallo({
+        'id': 'part', 'customerName': 'Camara', 'customerPhone': '6465550102',
+        'amountPaidCents': 20000,
+        'parkingPayments': [
+          {'receivedVia': 'cash'},
+        ],
+      }),
+      diallo({
+        'id': 'credit', 'customerName': 'Keita', 'customerPhone': '6465550103',
+        'amountPaidCents': 60000, 'paymentMethod': 'direct',
+        'directPaymentMethod': 'venmo',
+      }),
+      diallo({
+        'id': 'link', 'customerName': 'Sylla', 'customerPhone': '6465550104',
+        'paymentMethod': 'payment_link', 'paymentStatus': 'succeeded',
+      }),
+      diallo({
+        'id': 'online', 'customerName': 'Bah', 'customerPhone': '6465550105',
+        'paymentStatus': 'paid',
+      }),
+      diallo({
+        'id': 'carried', 'customerName': 'Sow', 'customerPhone': '6465550106',
+        'amountPaidCents': 45000,
+        'parkingPayments': [
+          {'receivedVia': 'cash'},
+        ],
+      }),
+    ];
+    Map<String, dynamic> act(Map<String, dynamic> over) => {
+          'businessId': 'k',
+          'activityTypeLabel': 'title',
+          'feeCents': 10000,
+          'paymentStatus': 'awaiting_direct_payment',
+          ...over,
+        };
+    final acts = [
+      act({
+        'id': 'sowAug', 'activityDate': at('2026-08-20'), 'feeCents': 9000,
+        'customerName': 'Sow', 'customerPhone': '6465550106',
+      }),
+      act({
+        'id': 'fatou', 'activityDate': at('2026-09-03'), 'customerName': 'Fatou',
+        'customerPhone': '6465550107', 'paymentStatus': 'succeeded',
+        'paymentMethod': 'direct', 'receivedVia': 'cashapp',
+      }),
+      act({
+        'id': 'diopAug', 'activityDate': at('2026-08-10'), 'feeCents': 5000,
+        'customerName': 'Diop', 'customerPhone': '6465550108',
+      }),
+    ];
+    final s = parkingMonthSummary(cars, '2026-09', oct1, acts);
+    ParkingMonthCustomer by(String name) =>
+        s.customers.firstWhere((c) => c.customerName == name);
+
+    test('is billed and nothing left owing - one definition', () {
+      expect(parkingMonthCustomerPaid(monthCents: 100, dueCents: 0), isTrue);
+      expect(parkingMonthCustomerPaid(monthCents: 100, dueCents: 1), isFalse);
+      expect(parkingMonthCustomerPaid(monthCents: 0, dueCents: 0), isFalse,
+          reason: 'nothing billed is not paid');
+    });
+
+    test('splits the month into who owes, who paid, and everyone', () {
+      expect(s.customersPaid.map((c) => c.customerName),
+          ['Bah', 'Barry', 'Fatou', 'Keita', 'Sylla']);
+      expect(s.customersOwing.map((c) => c.customerName),
+          ['Diallo', 'Camara', 'Sow', 'Diop']);
+      expect(s.customers, hasLength(9));
+      for (final c in s.customers) {
+        expect(c.paid,
+            parkingMonthCustomerPaid(monthCents: c.monthCents, dueCents: c.dueCents));
+        expect(c.paid && c.owes, isFalse, reason: '${c.customerName} is not both');
+      }
+    });
+
+    test('fully paid shows what came in and how', () {
+      expect(by('Barry').paid, isTrue);
+      expect(by('Barry').owes, isFalse);
+      expect(by('Barry').monthPaidCents, 45000);
+      expect(by('Barry').paidVia, ['cash', 'zelle']);
+      expect(by('Sylla').paidVia, ['card_link']);
+      expect(by('Bah').paidVia, ['online']);
+      expect(by('Fatou').paidVia, ['cashapp']);
+    });
+
+    test('partly paid still owes', () {
+      expect(by('Camara').paid, isFalse);
+      expect(by('Camara').owes, isTrue);
+      expect(by('Camara').monthPaidCents, 20000);
+      expect(by('Camara').dueCents, 25000);
+      expect(by('Camara').paidVia, ['cash']);
+      expect(by('Diallo').paidVia, isEmpty, reason: 'nothing paid, no method');
+    });
+
+    test('overpaid is paid, the month capped at its total', () {
+      expect(by('Keita').paid, isTrue);
+      expect(by('Keita').monthPaidCents, 45000);
+      expect(by('Keita').dueCents, 0);
+      expect(by('Keita').paidVia, ['venmo']);
+    });
+
+    test('the month paid but older still unpaid is not paid', () {
+      expect(by('Sow').monthPaidCents, 45000);
+      expect(by('Sow').priorUnpaidCents, 9000);
+      expect(by('Sow').paid, isFalse);
+      expect(by('Sow').owes, isTrue);
+    });
+
+    test('nothing billed for the month is neither', () {
+      expect(by('Diop').monthCents, 0);
+      expect(by('Diop').paid, isFalse);
+      expect(by('Diop').owes, isTrue, reason: 'only the older unpaid job');
+    });
+  });
 }
