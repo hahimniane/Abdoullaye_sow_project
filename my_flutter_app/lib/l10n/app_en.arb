@@ -2003,12 +2003,12 @@
   "awaitingQuote": "Awaiting quote",
   "setPriceQuoteInstruction": "Set a price below to send this customer a quote.",
   "barrelOrder": "Barrel order",
-  "barrelOrderSummary": "{barrelCount} barrels • {destinationCount} destinations • {businessCount} businesses",
+  "barrelOrderSummary": "{barrelCount, plural, =1{1 barrel} other{{barrelCount} barrels}} • {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}} • {businessCount, plural, =1{1 business} other{{businessCount} businesses}}",
   "@barrelOrderSummary": {
     "placeholders": {
-      "barrelCount": {},
-      "destinationCount": {},
-      "businessCount": {}
+      "barrelCount": {"type": "int"},
+      "destinationCount": {"type": "int"},
+      "businessCount": {"type": "int"}
     }
   },
   "clear": "Clear",
@@ -3915,14 +3915,6 @@
     }
   },
   "ctrStock": "Stock",
-  "ctrBarrelsQty": "{count} barrels",
-  "@ctrBarrelsQty": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "ctrTimes": "× {count}",
   "@ctrTimes": {
     "placeholders": {

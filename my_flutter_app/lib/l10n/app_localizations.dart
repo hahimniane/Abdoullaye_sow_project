@@ -8303,11 +8303,11 @@ abstract class AppLocalizations {
   /// No description provided for @barrelOrderSummary.
   ///
   /// In en, this message translates to:
-  /// **'{barrelCount} barrels • {destinationCount} destinations • {businessCount} businesses'**
+  /// **'{barrelCount, plural, =1{1 barrel} other{{barrelCount} barrels}} • {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}} • {businessCount, plural, =1{1 business} other{{businessCount} businesses}}'**
   String barrelOrderSummary(
-    Object barrelCount,
-    Object destinationCount,
-    Object businessCount,
+    int barrelCount,
+    int destinationCount,
+    int businessCount,
   );
 
   /// No description provided for @clear.
@@ -15749,12 +15749,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stock'**
   String get ctrStock;
-
-  /// No description provided for @ctrBarrelsQty.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} barrels'**
-  String ctrBarrelsQty(int count);
 
   /// No description provided for @ctrTimes.
   ///

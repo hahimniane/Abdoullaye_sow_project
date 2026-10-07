@@ -2893,7 +2893,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   /// What a saved line reads as in the "added so far" tally.
   String _tallyLabel(AppLocalizations l10n, ContainerLineDraft d) {
     final what = d.kind == containerLineKindBarrels
-        ? l10n.ctrBarrelsQty(d.quantity)
+        ? l10n.ctrBarrelsCount(d.quantity)
         : '${d.description} ${l10n.ctrTimes(d.quantity)}';
     final whose = d.ownerKind == containerOwnerStock
         ? l10n.ctrStock
@@ -4159,7 +4159,7 @@ String containerKindLabel(AppLocalizations l10n, String kind) => switch (kind) {
 /// What a line is, in one phrase: "2019 Toyota Camry", "3 barrels".
 String containerLineTitle(AppLocalizations l10n, ContainerLine line) {
   if (line.isCar) return line.vehicleLabel;
-  if (line.isBarrels) return l10n.ctrBarrelsQty(line.quantity);
+  if (line.isBarrels) return l10n.ctrBarrelsCount(line.quantity);
   return line.quantity > 1
       ? '${line.description} ${l10n.ctrTimes(line.quantity)}'
       : line.description;

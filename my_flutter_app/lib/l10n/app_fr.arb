@@ -2003,12 +2003,12 @@
   "awaitingQuote": "En attente de devis",
   "setPriceQuoteInstruction": "Définissez un prix ci-dessous pour envoyer un devis à ce client.",
   "barrelOrder": "Commande de barils",
-  "barrelOrderSummary": "{barrelCount} barils • {destinationCount} destinations • {businessCount} entreprises",
+  "barrelOrderSummary": "{barrelCount, plural, =1{1 baril} other{{barrelCount} barils}} • {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}} • {businessCount, plural, =1{1 entreprise} other{{businessCount} entreprises}}",
   "@barrelOrderSummary": {
     "placeholders": {
-      "barrelCount": {},
-      "destinationCount": {},
-      "businessCount": {}
+      "barrelCount": {"type": "int"},
+      "destinationCount": {"type": "int"},
+      "businessCount": {"type": "int"}
     }
   },
   "clear": "Effacer",
@@ -3915,14 +3915,6 @@
     }
   },
   "ctrStock": "Stock",
-  "ctrBarrelsQty": "{count} barils",
-  "@ctrBarrelsQty": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "ctrTimes": "× {count}",
   "@ctrTimes": {
     "placeholders": {

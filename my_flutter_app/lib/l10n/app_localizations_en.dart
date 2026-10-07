@@ -4615,11 +4615,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String barrelOrderSummary(
-    Object barrelCount,
-    Object destinationCount,
-    Object businessCount,
+    int barrelCount,
+    int destinationCount,
+    int businessCount,
   ) {
-    return '$barrelCount barrels • $destinationCount destinations • $businessCount businesses';
+    String _temp0 = intl.Intl.pluralLogic(
+      barrelCount,
+      locale: localeName,
+      other: '$barrelCount barrels',
+      one: '1 barrel',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      destinationCount,
+      locale: localeName,
+      other: '$destinationCount destinations',
+      one: '1 destination',
+    );
+    String _temp2 = intl.Intl.pluralLogic(
+      businessCount,
+      locale: localeName,
+      other: '$businessCount businesses',
+      one: '1 business',
+    );
+    return '$_temp0 • $_temp1 • $_temp2';
   }
 
   @override
@@ -8884,11 +8902,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctrStock => 'Stock';
-
-  @override
-  String ctrBarrelsQty(int count) {
-    return '$count barrels';
-  }
 
   @override
   String ctrTimes(int count) {
