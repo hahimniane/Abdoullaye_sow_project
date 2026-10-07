@@ -17,6 +17,23 @@ const {
   openContainerHoldingVin,
   containerCounts,
   containerCountsDelta,
+  LINE_CONTACT_FIELDS,
+  LINE_SUBSTANCE_FIELDS,
+  LINE_EDIT_FIELDS,
+  CONTACT_FIELD_LABELS,
+  LINE_FIELD_LABELS,
+  barrelsLabel,
+  containerLineWhat,
+  containerLineEditable,
+  containerLineEditTarget,
+  validateContainerLineEdit,
+  containerLineEditChanges,
+  lineEditIsContactsOnly,
+  containerLineEditRefusal,
+  containerLineVinHandover,
+  containerLineEditCountsDelta,
+  containerLineEditLabels,
+  containerLineEditAudit,
   containerVinLockId,
   vinLockHolder,
   keepExisting,
@@ -313,6 +330,185 @@ describe("keeping the tallies without re-reading every line", () => {
   });
 });
 
+describe("editing a line after it was added", () => {
+  const barrels = (extra = {}) => containerLineRecord({
+    kind: "barrels", quantity: 3, ownerKind: "customer",
+    customerName: "Fatou", customerPhone: "+16465550100",
+    receiverName: "Mariama", receiverPhone: "+224620000000", ...extra,
+  }, {containerId: "c1"});
+  const carRow = (extra = {}) => containerLineRecord({
+    kind: "car", vinNumber: VIN, carMake: "Honda", carModel: "Accord",
+    carYear: "2003", ownerKind: "customer", customerName: "Fatou",
+    ...extra,
+  }, {containerId: "c1"});
+  const edit = (current, input) => {
+    const next = containerLineEditTarget(current, input, false);
+    return {next, changes: containerLineEditChanges(current, next)};
+  };
+
+  it("finds only the fields that really changed", () => {
+    const current = barrels();
+    assert.deepEqual(edit(current, {quantity: 5}).changes, ["quantity"]);
+    // The same line sent back whole changes nothing.
+    assert.deepEqual(edit(current, {...current}).changes, []);
+    // Formatting a person typed is not a change.
+    assert.deepEqual(
+        edit(current, {customerPhone: "+1 (646) 555-0100"}).changes, []);
+    // A legacy line with no WhatsApp switches reads as switched on.
+    const legacy = {...current};
+    delete legacy.notifyCustomer;
+    delete legacy.notifyReceiver;
+    assert.deepEqual(
+        containerLineEditChanges(legacy, containerLineEditTarget(
+            legacy, {notifyCustomer: true, notifyReceiver: true}, true)),
+        []);
+  });
+
+  it("keeps the car fields only on a car, and empties them on a new kind",
+      () => {
+        const {next, changes} = edit(carRow(), {kind: "barrels", quantity: 4});
+        assert.equal(next.vinNumber, "");
+        assert.equal(next.carMake, "");
+        assert.equal(next.quantity, 4);
+        assert.deepEqual(changes, ["kind", "vinNumber", "carMake",
+          "carModel", "carYear", "quantity"]);
+      });
+
+  it("takes only the contacts in contacts-only mode", () => {
+    const current = barrels();
+    const next = containerLineEditTarget(current,
+        {quantity: 9, kind: "car", receiverPhone: "+224 621 00 00 00"}, true);
+    assert.equal(next.quantity, 3);
+    assert.equal(next.kind, "barrels");
+    assert.equal(next.receiverPhone, "+224621000000");
+    assert.deepEqual(containerLineEditChanges(current, next),
+        ["receiverPhone"]);
+    assert.deepEqual(validateContainerLineEdit(current, {customerName: ""},
+        true), ["customer_name_required"]);
+    // Contacts-only mode never judges the kind's own fields.
+    assert.deepEqual(validateContainerLineEdit(current, {quantity: 0}, true),
+        []);
+  });
+
+  it("checks a whole-line edit the way an add is checked", () => {
+    assert.deepEqual(validateContainerLineEdit(barrels(), {quantity: 0},
+        false), ["quantity_required"]);
+    assert.deepEqual(validateContainerLineEdit(carRow(), {vinNumber: "1"},
+        false), ["vin_required"]);
+    assert.deepEqual(validateContainerLineEdit(barrels(),
+        {ownerKind: "stock"}, false), []);
+  });
+
+  it("lets contacts change in every state, the rest only while loading",
+      () => {
+        for (const status of ["loading", "shipped", "arrived"]) {
+          assert.equal(containerLineEditRefusal({status},
+              ["receiverPhone", "notifyReceiver"]), null, status);
+        }
+        assert.equal(containerLineEditRefusal({status: "loading"},
+            ["quantity", "customerName"]), null);
+        for (const status of ["shipped", "arrived"]) {
+          for (const field of ["kind", "vinNumber", "carMake", "quantity",
+            "description", "ownerKind"]) {
+            assert.equal(containerLineEditRefusal({status}, [field]),
+                "container_locked", `${field} on ${status}`);
+          }
+        }
+        assert.equal(lineEditIsContactsOnly(["customerName"]), true);
+        assert.equal(lineEditIsContactsOnly(["customerName", "quantity"]),
+            false);
+        assert.deepEqual([...LINE_CONTACT_FIELDS, ...LINE_SUBSTANCE_FIELDS]
+            .sort(), [...LINE_EDIT_FIELDS].sort());
+      });
+
+  it("hands the VIN lock over only when the car changes", () => {
+    const current = carRow();
+    const other = "2T1BURHE0JC123456";
+    assert.deepEqual(containerLineVinHandover(current,
+        edit(current, {vinNumber: other.toLowerCase()}).next),
+    {releaseVin: VIN, takeVin: other});
+    assert.deepEqual(containerLineVinHandover(current,
+        edit(current, {carMake: "Toyota"}).next),
+    {releaseVin: "", takeVin: ""});
+    assert.deepEqual(containerLineVinHandover(current,
+        edit(current, {kind: "barrels", quantity: 2}).next),
+    {releaseVin: VIN, takeVin: ""});
+    const was = barrels();
+    assert.deepEqual(containerLineVinHandover(was,
+        edit(was, {kind: "car", vinNumber: other}).next),
+    {releaseVin: "", takeVin: other});
+    assert.deepEqual(containerLineVinHandover(was,
+        edit(was, {quantity: 7}).next), {releaseVin: "", takeVin: ""});
+  });
+
+  it("moves the tallies by the difference, and leaves the line count", () => {
+    const current = barrels();
+    assert.deepEqual(containerLineEditCountsDelta(current,
+        edit(current, {quantity: 5}).next), {barrelCount: 2});
+    assert.deepEqual(containerLineEditCountsDelta(current,
+        edit(current, {kind: "car", vinNumber: VIN}).next),
+    {barrelCount: -3, carCount: 1});
+    assert.deepEqual(containerLineEditCountsDelta(current,
+        edit(current, {receiverName: "Awa"}).next), {});
+    // Applied to the stored tallies, an edit lands on a full recount.
+    const lines = [current, carRow(), barrels({quantity: 1})];
+    const tally = containerCounts(lines);
+    const after = edit(lines[0], {kind: "other", quantity: 2,
+      description: "tires"}).next;
+    for (const [key, value] of Object.entries(
+        containerLineEditCountsDelta(lines[0], after))) {
+      tally[key] += value;
+    }
+    assert.deepEqual(tally, containerCounts([after, lines[1], lines[2]]));
+  });
+
+  it("writes the history in words, keeping the contacts sentence", () => {
+    const current = barrels();
+    let {next, changes} = edit(current, {quantity: 5});
+    assert.deepEqual(containerLineEditAudit(current, next, changes), {
+      action: "line_edited",
+      summary: "Edited 5 barrels (was 3 barrels): quantity for Fatou",
+    });
+    ({next, changes} = edit(current, {receiverPhone: "+224621000000",
+      customerName: "Fatou Ba"}));
+    assert.deepEqual(containerLineEditAudit(current, next, changes), {
+      action: "line_contacts_edited",
+      summary: "Changed customer's name, receiver's phone for Fatou Ba",
+    });
+    const car = carRow();
+    ({next, changes} = edit(car, {carMake: "Toyota", carModel: "Camry"}));
+    assert.equal(containerLineEditAudit(car, next, changes).summary,
+        `Edited car ${VIN}: make, model for Fatou`);
+    ({next, changes} = edit(car, {kind: "barrels", quantity: 1,
+      ownerKind: "stock"}));
+    assert.equal(containerLineEditAudit(car, next, changes).summary,
+        `Edited 1 barrel (was car ${VIN}): kind, owner (business stock)`);
+    ({next, changes} = edit(current, {kind: "other", quantity: 2,
+      description: "tires"}));
+    assert.equal(containerLineEditAudit(current, next, changes).summary,
+        "Edited 2 × tires (was 3 barrels): kind for Fatou");
+  });
+
+  it("names lines and fields the way the history always has", () => {
+    assert.equal(barrelsLabel(1), "1 barrel");
+    assert.equal(barrelsLabel(3), "3 barrels");
+    assert.equal(containerLineWhat({kind: "car", vinNumber: "abc123"}),
+        "car ABC123");
+    assert.equal(containerLineWhat({kind: "other", quantity: 2,
+      description: "tires"}), "2 × tires");
+    assert.equal(CONTACT_FIELD_LABELS.receiverPhone, "receiver's phone");
+    assert.deepEqual(containerLineEditLabels(["kind", "vinNumber",
+      "quantity", "receiverName"]), ["kind", "receiver's name"]);
+    assert.deepEqual(containerLineEditLabels(["ownerKind", "customerName",
+      "customerPhone"]), ["owner"]);
+    for (const key of LINE_EDIT_FIELDS) {
+      assert.ok(LINE_FIELD_LABELS[key], `${key} has a history label`);
+    }
+    assert.deepEqual(Object.keys(containerLineEditable({})).sort(),
+        [...LINE_EDIT_FIELDS].sort());
+  });
+});
+
 describe("the VIN lock", () => {
   const lock = {businessId: "biz_a", vinNumber: VIN, containerId: "c1",
     lineId: "l1"};
@@ -416,7 +612,7 @@ describe("the container callables and their gates", () => {
   it("exposes every callable the clients call, gated on containers", () => {
     for (const name of ["createContainer", "updateContainer",
       "deleteContainer", "addContainerLine", "removeContainerLine",
-      "moveContainerLine", "setContainerStatus",
+      "moveContainerLine", "setContainerStatus", "updateContainerLine",
       "updateContainerLineContacts", "getContainerDocumentUrl"]) {
       const body = callable(name);
       // The gate is either inline or the shared loader, which carries it.
@@ -510,6 +706,48 @@ describe("the container callables and their gates", () => {
         source.indexOf("function containerCountsIncrement("),
         source.indexOf("function containerVinLockRef("));
     assert.match(increment, /FirestoreFieldValue\.increment\(value\)/);
+  });
+
+  // One implementation edits a line, whole or contacts only.
+  it("edits a line through one transaction, contacts or whole", () => {
+    const full = callable("updateContainerLine");
+    const contacts = callable("updateContainerLineContacts");
+    assert.match(full, /editContainerLine\(admin\.firestore\(\), \{/);
+    assert.match(full, /contactsOnly: false/);
+    assert.match(contacts, /editContainerLine\(admin\.firestore\(\), \{/);
+    assert.match(contacts, /contactsOnly: true/);
+    for (const whole of [full, contacts]) {
+      const body = whole.slice(0, whole.indexOf("\n);\n"));
+      assert.match(body,
+          /requireBusinessPermission\(uid, businessId, CONTAINER_SECTION\)/);
+      assert.doesNotMatch(body, /\.set\(|\.update\(/,
+          "the callables write only through editContainerLine");
+    }
+    const edit = source.slice(
+        source.indexOf("async function editContainerLine("),
+        source.indexOf("exports.updateContainerLine = onCall("));
+    assert.match(edit, /db\.runTransaction\(/);
+    // Re-read inside the transaction, refused by the shared rule.
+    assert.match(edit, /const lineDoc = await tx\.get\(lineRef\)/);
+    assert.match(edit, /containerLineEditRefusal\(/);
+    assert.match(edit, /reason: refusal/);
+    // The VIN handover: same checks as an add, the line itself excluded.
+    assert.match(edit, /containerLineVinHandover\(row, next\)/);
+    assert.match(edit, /vinLockHolder\(lock,/);
+    assert.match(edit, /heldBy !== lineId/);
+    assert.match(edit, /\.filter\(\(d\) => d\.id !== lineId\)/);
+    assert.match(edit, /conflictContainerId: conflict/);
+    assert.match(edit, /tx\.create\(takeRef, lockBody\)/);
+    assert.match(edit, /tx\.delete\(releaseRef\)/);
+    assert.match(edit, /error\.code !== 6/);
+    assert.ok(
+        edit.indexOf("vinLockHolder(") < edit.indexOf("tx.update(lineRef"));
+    // Tallies by increment, never a recount; the code is never rewritten.
+    assert.match(edit, /containerLineEditCountsDelta\(row, next\)/);
+    assert.match(edit, /FirestoreFieldValue\.increment\(value\)/);
+    assert.doesNotMatch(edit, /refreshContainerCounts\(/);
+    assert.doesNotMatch(edit, /trackingCode/);
+    assert.match(edit, /containerLineEditAudit\(row, next, changes\)/);
   });
 
   // Regression: two first opens of the loading list could each mint a

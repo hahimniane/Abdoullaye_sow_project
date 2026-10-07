@@ -267,6 +267,221 @@ describe("the container's tallies", () => {
   });
 });
 
+describe("editing a line", () => {
+  const lineRef = (id) => db.collection("containerLines").doc(id);
+  const lockRef = (vin) =>
+    db.collection("containerVinLocks").doc(`${BIZ}_${vin}`);
+  const tallies = async (box) => {
+    const row = (await db.collection("containers").doc(box).get()).data();
+    return {lineCount: row.lineCount, carCount: row.carCount,
+      barrelCount: row.barrelCount, otherCount: row.otherCount};
+  };
+  const recount = async (box) => {
+    const out = {lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0};
+    for (const doc of await linesOf(box)) {
+      const line = doc.data();
+      out.lineCount += 1;
+      if (line.kind === "car") out.carCount += 1;
+      else if (line.kind === "barrels") out.barrelCount += line.quantity;
+      else out.otherCount += line.quantity;
+    }
+    return out;
+  };
+  async function audits(box, action) {
+    const snap = await db.collection("lotLedgerAudit")
+        .where("entityId", "==", box).where("action", "==", action).get();
+    return snap.docs.map((d) => d.get("summary"));
+  }
+
+  it("changes what the line is, keeps its code, and moves the tallies",
+      async () => {
+        const box = await newContainer();
+        const {lineId} = await call("addContainerLine",
+            {containerId: box, line: barrelLine(3)});
+        await call("addContainerLine",
+            {containerId: box, line: carLine(freshVin())});
+        const code = (await lineRef(lineId).get()).get("trackingCode");
+        const result = await call("updateContainerLine", {lineId,
+          containerId: box, line: {...barrelLine(5),
+            customerName: "Fatou"}});
+        assert.deepEqual(result.changed, ["quantity", "customerName"]);
+        const line = (await lineRef(lineId).get()).data();
+        assert.equal(line.quantity, 5);
+        assert.equal(line.customerName, "Fatou");
+        assert.equal(line.trackingCode, code);
+        assert.equal(line.containerId, box);
+        assert.equal(line.editedByStaffId, OWNER);
+        assert.deepEqual(await tallies(box), await recount(box));
+        assert.equal((await tallies(box)).barrelCount, 5);
+        assert.deepEqual(await audits(box, "line_edited"),
+            ["Edited 5 barrels (was 3 barrels): quantity, customer's name " +
+              "for Fatou"]);
+        // A kind change moves a line's share between the counts.
+        await call("updateContainerLine", {lineId, line: {kind: "other",
+          quantity: 2, description: "Tires", ownerKind: "stock"}});
+        assert.deepEqual(await tallies(box), await recount(box));
+        assert.deepEqual(await tallies(box),
+            {lineCount: 2, carCount: 1, barrelCount: 0, otherCount: 2});
+        const stock = (await lineRef(lineId).get()).data();
+        assert.equal(stock.customerName, "");
+        assert.equal(stock.trackingCode, code);
+        // Asking for what is already there writes nothing.
+        const again = await call("updateContainerLine", {lineId,
+          line: {kind: "other", quantity: 2, description: "Tires",
+            ownerKind: "stock", receiverName: "Mariama Bah",
+            receiverPhone: "+224620000000"}});
+        assert.deepEqual(again.changed, []);
+      });
+
+  it("keeps the contacts-only path, open in every state", async () => {
+    const box = await newContainer();
+    const {lineId} = await call("addContainerLine",
+        {containerId: box, line: barrelLine(2)});
+    await call("setContainerStatus", {containerId: box, status: "shipped"});
+    const result = await call("updateContainerLineContacts", {lineId,
+      contacts: {customerName: "Fatou Diallo",
+        customerPhone: "+16465550100", receiverName: "Mariama Bah",
+        receiverPhone: "+224 621 00 00 00", quantity: 40, kind: "car"}});
+    assert.deepEqual(result.changed, ["receiverPhone"]);
+    const line = (await lineRef(lineId).get()).data();
+    assert.equal(line.receiverPhone, "+224621000000");
+    // Whatever else the contacts carried is never taken.
+    assert.equal(line.quantity, 2);
+    assert.equal(line.kind, "barrels");
+    assert.deepEqual(await audits(box, "line_contacts_edited"),
+        ["Changed receiver's phone for Fatou Diallo"]);
+    assert.deepEqual(await audits(box, "line_edited"), []);
+    // The whole-line callable takes a contacts-only change on a shipped box
+    // too, and writes the same sentence.
+    await call("updateContainerLine", {lineId, line: {...barrelLine(2),
+      receiverName: "Awa Ba", receiverPhone: "+224621000000"}});
+    assert.equal((await lineRef(lineId).get()).get("receiverName"), "Awa Ba");
+    assert.equal((await audits(box, "line_contacts_edited")).length, 2);
+    await assert.rejects(
+        call("updateContainerLineContacts", {lineId,
+          contacts: {customerName: " "}}),
+        (error) => error.code === "invalid-argument" &&
+          error.details?.reasons?.includes("customer_name_required"));
+  });
+
+  it("refuses to change what went once the box has shipped", async () => {
+    const box = await newContainer();
+    const {lineId} = await call("addContainerLine",
+        {containerId: box, line: barrelLine(3)});
+    await call("setContainerStatus", {containerId: box, status: "shipped"});
+    const before = await tallies(box);
+    for (const line of [barrelLine(4), {...barrelLine(3), ownerKind: "stock"},
+      carLine(freshVin())]) {
+      await assert.rejects(
+          call("updateContainerLine", {lineId, line}),
+          (error) => error.code === "failed-precondition" &&
+            error.details?.reason === "container_locked");
+    }
+    assert.equal((await lineRef(lineId).get()).get("quantity"), 3);
+    assert.deepEqual(await tallies(box), before);
+    // A line on another container is not found through this one.
+    const other = await newContainer();
+    await assert.rejects(
+        call("updateContainerLine", {lineId, containerId: other,
+          line: barrelLine(3)}),
+        (error) => error.code === "not-found");
+  });
+
+  it("hands the VIN lock over when the car changes", async () => {
+    const box = await newContainer();
+    const oldVin = freshVin();
+    const newVin = freshVin();
+    const {lineId} = await call("addContainerLine",
+        {containerId: box, line: carLine(oldVin)});
+    // Changing the car's details keeps its lock: the line holds its own VIN.
+    await call("updateContainerLine", {lineId,
+      line: {...carLine(oldVin), carMake: "Toyota", carModel: "Camry"}});
+    assert.equal((await lockRef(oldVin).get()).get("lineId"), lineId);
+    await call("updateContainerLine", {lineId, line: carLine(newVin)});
+    assert.equal((await lockRef(oldVin).get()).exists, false);
+    const lock = (await lockRef(newVin).get()).data();
+    assert.equal(lock.lineId, lineId);
+    assert.equal(lock.containerId, box);
+    assert.equal((await lineRef(lineId).get()).get("vinNumber"), newVin);
+    // The car it no longer is may go on another box; the one it is may not.
+    const elsewhere = await newContainer();
+    await call("addContainerLine", {containerId: elsewhere,
+      line: carLine(oldVin)});
+    await assert.rejects(
+        call("addContainerLine", {containerId: elsewhere,
+          line: carLine(newVin)}),
+        (error) => error.details?.conflictContainerId === box);
+    // Becoming barrels lets the car go entirely.
+    await call("updateContainerLine", {lineId, line: barrelLine(2)});
+    assert.equal((await lockRef(newVin).get()).exists, false);
+    assert.deepEqual(await tallies(box), await recount(box));
+  });
+
+  it("refuses a VIN already on an open container, naming it", async () => {
+    const box = await newContainer();
+    const holder = await newContainer();
+    const taken = freshVin();
+    await call("addContainerLine", {containerId: holder, line: carLine(taken)});
+    const {lineId} = await call("addContainerLine",
+        {containerId: box, line: carLine(freshVin())});
+    await assert.rejects(
+        call("updateContainerLine", {lineId, line: carLine(taken)}),
+        (error) => error.code === "failed-precondition" &&
+          error.details?.reason === "vin_already_loaded" &&
+          error.details?.conflictContainerId === holder);
+    // A car loaded before locks existed holds its VIN too.
+    const legacyVin = freshVin();
+    await db.collection("containerLines").doc().set({
+      businessId: BIZ, containerId: holder, containerStatus: "loading",
+      kind: "car", vinNumber: legacyVin, trackingCode: "CL-LEGACY2",
+    });
+    const {lineId: barrelsId} = await call("addContainerLine",
+        {containerId: box, line: barrelLine(1)});
+    await assert.rejects(
+        call("updateContainerLine", {lineId: barrelsId,
+          line: carLine(legacyVin)}),
+        (error) => error.details?.conflictContainerId === holder);
+    const unchanged = (await lineRef(barrelsId).get()).data();
+    assert.equal(unchanged.kind, "barrels");
+    assert.equal((await lockRef(legacyVin).get()).exists, false);
+  });
+
+  it("lets exactly one of an edit and an add take the same car", async () => {
+    const box = await newContainer();
+    const other = await newContainer();
+    const vin = freshVin();
+    const {lineId} = await call("addContainerLine",
+        {containerId: box, line: barrelLine(1)});
+    const results = await Promise.allSettled([
+      call("updateContainerLine", {lineId, line: carLine(vin)}),
+      call("addContainerLine", {containerId: other, line: carLine(vin)}),
+    ]);
+    assert.equal(results.filter((r) => r.status === "fulfilled").length, 1,
+        JSON.stringify(results.map((r) => r.reason?.message || "ok")));
+    const holders = (await db.collection("containerLines")
+        .where("businessId", "==", BIZ).where("vinNumber", "==", vin).get())
+        .size;
+    assert.equal(holders, 1);
+  });
+
+  it("is refused to staff without the containers section", async () => {
+    const box = await newContainer();
+    const {lineId} = await call("addContainerLine",
+        {containerId: box, line: barrelLine(1)});
+    for (const [name, data] of [
+      ["updateContainerLine", {lineId, line: barrelLine(9)}],
+      ["updateContainerLineContacts", {lineId,
+        contacts: {receiverName: "Someone"}}],
+    ]) {
+      await assert.rejects(call(name, data, NO_CONTAINERS),
+          (error) => error.code === "permission-denied", name);
+    }
+    const line = (await lineRef(lineId).get()).data();
+    assert.equal(line.quantity, 1);
+    assert.equal(line.receiverName, "Mariama Bah");
+  });
+});
+
 describe("a status change that only half landed", () => {
   // Regression: the container was written "shipped" before its lines; when
   // the line batch failed, the lines stayed "loading" and asking again was

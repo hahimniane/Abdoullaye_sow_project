@@ -338,11 +338,18 @@ const {
   containerDeleteRefusal,
   validateContainerLine,
   containerLineRecord,
-  validateContainerLineContacts,
-  containerLineContactsUpdate,
   openContainerHoldingVin,
   containerCounts,
   containerCountsDelta,
+  barrelsLabel,
+  containerLineWhat,
+  containerLineEditTarget,
+  validateContainerLineEdit,
+  containerLineEditChanges,
+  containerLineEditRefusal,
+  containerLineVinHandover,
+  containerLineEditCountsDelta,
+  containerLineEditAudit,
   containerVinLockId,
   vinLockHolder,
   keepExisting,
@@ -16663,27 +16670,6 @@ async function releaseContainerVinLocks(db, lineDocs) {
 const CONTAINER_LINE_CODE_PREFIX = "CL";
 
 /**
- * "1 barrel", "3 barrels" - the history reads like a sentence.
- *
- * @param {*} quantity The count.
- * @return {string} The phrase.
- */
-function barrelsLabel(quantity) {
-  const n = Number(quantity) || 0;
-  return `${n} barrel${n === 1 ? "" : "s"}`;
-}
-
-// How the history names a contact field, instead of its Firestore key.
-const CONTACT_FIELD_LABELS = Object.freeze({
-  customerName: "customer's name",
-  customerPhone: "customer's phone",
-  receiverName: "receiver's name",
-  receiverPhone: "receiver's phone",
-  notifyCustomer: "customer's WhatsApp updates",
-  notifyReceiver: "receiver's WhatsApp updates",
-});
-
-/**
  * Whether the Terminal49 key is a real one. The secret holds the
  * placeholder "unset" until a key is bought, and a request made with it is
  * refused - which must not be mistaken for "this carrier is unknown".
@@ -16958,12 +16944,8 @@ exports.addContainerLine = onCall(
           staffId: uid,
         });
       }
-      const what = record.kind === "car" ?
-        `car ${record.vinNumber}` :
-        (record.kind === "barrels" ? barrelsLabel(record.quantity) :
-          `${record.quantity} × ${record.description}`);
       await containerAudit(businessId, ref.id, "line_added", uid,
-          `Added ${what}` + (record.customerName ?
+          `Added ${containerLineWhat(record)}` + (record.customerName ?
             ` for ${record.customerName}` : " (business stock)") +
           (record.receiverName ? `, to ${record.receiverName}` : ""));
       return {success: true, lineId: lineRef.id, containerId: ref.id};
@@ -17101,9 +17083,176 @@ exports.moveContainerLine = onCall(
     },
 );
 
+/**
+ * Edits a line in place: its contacts in every container state, the rest of
+ * it (kind, car, count, description, owner) only while the box is loading.
+ * One transaction re-reads the line and its container, hands the car's VIN
+ * lock over when the VIN changes (same checks and race retry as an add, with
+ * the line's own document never counted as the conflict), moves the tallies
+ * by the difference, and writes only the fields that changed. The tracking
+ * code, the container and who added the line are never touched.
+ *
+ * The caller has already checked the containers permission.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, lineId, containerId, input,
+ *   contactsOnly}.
+ * @return {Promise<object>} The callable's answer.
+ */
+async function editContainerLine(db, args) {
+  const {uid, businessId, input, contactsOnly} = args;
+  const lineId = String(args.lineId || "").trim();
+  const containerId = String(args.containerId || "").trim();
+  if (!lineId) {
+    throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+  }
+  const lineRef = db.collection("containerLines").doc(lineId);
+  const edit = () => db.runTransaction(async (tx) => {
+    const lineDoc = await tx.get(lineRef);
+    const row = lineDoc.exists ? lineDoc.data() || {} : null;
+    if (!row || String(row.businessId) !== businessId ||
+        (containerId && String(row.containerId) !== containerId)) {
+      throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+    }
+    const errors = validateContainerLineEdit(row, input, contactsOnly);
+    if (errors.length > 0) {
+      throw new HttpsError("invalid-argument", containerMessage(errors),
+          {reasons: errors});
+    }
+    const next = containerLineEditTarget(row, input, contactsOnly);
+    const changes = containerLineEditChanges(row, next);
+    if (changes.length === 0) return {row, next, changes};
+    const boxRef = db.collection("containers")
+        .doc(String(row.containerId || ""));
+    const box = await tx.get(boxRef);
+    // A line whose box is gone is treated as closed: only its contacts.
+    const refusal = containerLineEditRefusal(
+        box.exists ? box.data() || {} : {status: CONTAINER_STATUS.ARRIVED},
+        changes);
+    if (refusal) {
+      throw new HttpsError("failed-precondition", CONTAINER_MESSAGES[refusal],
+          {reason: refusal});
+    }
+    // Reads first, as a transaction requires: the lock the line lets go of,
+    // and the lock (and any line holding the car) it would take.
+    const {releaseVin, takeVin} = containerLineVinHandover(row, next);
+    const releaseRef = releaseVin ?
+      containerVinLockRef(db, businessId, releaseVin) : null;
+    const takeRef = takeVin ?
+      containerVinLockRef(db, businessId, takeVin) : null;
+    const released = releaseRef ? await tx.get(releaseRef) : null;
+    let takenDoc = null;
+    if (takeRef) {
+      takenDoc = await tx.get(takeRef);
+      const lock = takenDoc.exists ? takenDoc.data() || {} : null;
+      const heldBy = String(lock?.lineId || "");
+      const heldLine = heldBy && heldBy !== lineId ? await tx.get(
+          db.collection("containerLines").doc(heldBy)) : null;
+      let conflict = vinLockHolder(lock,
+          heldLine?.exists ? heldLine.data() || {} : null);
+      if (!conflict) {
+        // Lines loaded before the lock existed hold their car too - every
+        // one but this line itself.
+        const sameVin = await tx.get(db.collection("containerLines")
+            .where("businessId", "==", businessId)
+            .where("vinNumber", "==", takeVin));
+        conflict = openContainerHoldingVin(sameVin.docs
+            .filter((d) => d.id !== lineId)
+            .map((d) => d.data() || {}));
+      }
+      if (conflict) {
+        throw new HttpsError(
+            "failed-precondition",
+            CONTAINER_MESSAGES.vin_already_loaded,
+            {reason: "vin_already_loaded", conflictContainerId: conflict});
+      }
+    }
+    const update = {};
+    for (const key of changes) update[key] = next[key];
+    tx.update(lineRef, {
+      ...update,
+      editedByStaffId: uid,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    const increments = {};
+    for (const [key, value] of
+      Object.entries(containerLineEditCountsDelta(row, next))) {
+      increments[key] = FirestoreFieldValue.increment(value);
+    }
+    if (Object.keys(increments).length > 0) {
+      tx.set(boxRef, {
+        ...increments,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
+    if (released?.exists &&
+        String(released.data()?.lineId || "") === lineId) {
+      tx.delete(releaseRef);
+    }
+    if (takeRef) {
+      const lockBody = {
+        businessId, vinNumber: takeVin,
+        containerId: String(row.containerId || ""), lineId,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      };
+      // A stale lock is taken over; a new one is created, which fails
+      // outright if an add of the same car got there first.
+      if (takenDoc.exists) tx.set(takeRef, lockBody);
+      else tx.create(takeRef, lockBody);
+    }
+    return {row, next, changes};
+  });
+  let result;
+  try {
+    result = await edit();
+  } catch (error) {
+    // Lost the race to create the lock: run again, and this time read the
+    // winner's lock and refuse with its container.
+    if (error.code !== 6 && error.code !== "already-exists") throw error;
+    result = await edit();
+  }
+  const {row, next, changes} = result;
+  if (changes.length === 0) {
+    return {success: true, lineId, changed: []};
+  }
+  if (next.ownerKind === "customer" && next.customerName) {
+    await rememberLotCustomer(db, {
+      businessId,
+      seen: {customerName: next.customerName,
+        customerPhone: next.customerPhone, customerEmail: ""},
+      source: "container",
+      staffId: uid,
+    });
+  }
+  const {action, summary} = containerLineEditAudit(row, next, changes);
+  await containerAudit(businessId, String(row.containerId || ""), action,
+      uid, summary);
+  return {success: true, lineId, changed: changes};
+}
+
+// The whole line: what it is and whose, as well as its contacts. Only the
+// contacts may change once the box has shipped.
+exports.updateContainerLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+      return editContainerLine(admin.firestore(), {
+        uid, businessId,
+        lineId: data.lineId,
+        containerId: data.containerId,
+        input: data.line && typeof data.line === "object" ? data.line : {},
+        contactsOnly: false,
+      });
+    },
+);
+
 // Who a line belongs to, who collects it, and whether each hears about the
 // shipment. Unlike the rest of the line this stays correctable after the box
 // sails: a wrong number is the one mistake that matters most once it has.
+// The same edit as updateContainerLine, limited to the contacts.
 exports.updateContainerLineContacts = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -17111,44 +17260,13 @@ exports.updateContainerLineContacts = onCall(
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
       await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
-      const db = admin.firestore();
-      const lineRef = db.collection("containerLines")
-          .doc(String(data.lineId || ""));
-      const lineDoc = data.lineId ? await lineRef.get() : null;
-      const line = lineDoc && lineDoc.exists ? lineDoc.data() || {} : null;
-      if (!line || String(line.businessId) !== businessId) {
-        throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
-      }
-      const contacts = data.contacts && typeof data.contacts === "object" ?
-        data.contacts : {};
-      const errors = validateContainerLineContacts(contacts, line);
-      if (errors.length > 0) {
-        throw new HttpsError("invalid-argument", containerMessage(errors),
-            {reasons: errors});
-      }
-      const update = containerLineContactsUpdate(contacts, line);
-      const changed = Object.keys(update).filter((key) =>
-        String(line[key] ?? "") !== String(update[key]));
-      if (changed.length === 0) return {success: true, lineId: lineRef.id};
-      await lineRef.set({
-        ...update,
-        updatedAt: FirestoreFieldValue.serverTimestamp(),
-      }, {merge: true});
-      if (line.ownerKind === "customer" && update.customerName) {
-        await rememberLotCustomer(db, {
-          businessId,
-          seen: {customerName: update.customerName,
-            customerPhone: update.customerPhone, customerEmail: ""},
-          source: "container",
-          staffId: uid,
-        });
-      }
-      await containerAudit(businessId, String(line.containerId || ""),
-          "line_contacts_edited", uid,
-          `Changed ${changed.map((key) => CONTACT_FIELD_LABELS[key] || key)
-              .join(", ")}` +
-            (update.customerName ? ` for ${update.customerName}` : ""));
-      return {success: true, lineId: lineRef.id};
+      return editContainerLine(admin.firestore(), {
+        uid, businessId,
+        lineId: data.lineId,
+        input: data.contacts && typeof data.contacts === "object" ?
+          data.contacts : {},
+        contactsOnly: true,
+      });
     },
 );
 

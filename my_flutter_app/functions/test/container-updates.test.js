@@ -514,10 +514,16 @@ describe("the server wiring", () => {
   });
 
   // Regression: the history said "Changed receiverPhone" and "1 barrels".
+  // The labels and the barrel phrase live with the other line rules now.
   it("names changed contact fields and counts barrels in words", () => {
-    assert.match(source, /receiverPhone: "receiver's phone"/);
-    assert.match(source, /CONTACT_FIELD_LABELS\[key\] \|\| key/);
+    const manifest = readFileSync(
+        path.join(__dirname, "..", "container_manifest.js"), "utf8");
+    assert.match(manifest, /receiverPhone: "receiver's phone"/);
+    assert.match(manifest, /LINE_FIELD_LABELS\[key\] \|\| key/);
     assert.doesNotMatch(source, /\.quantity\} barrels`/);
+    assert.doesNotMatch(manifest, /\.quantity\} barrels`/);
+    assert.doesNotMatch(source, /const CONTACT_FIELD_LABELS/);
+    assert.doesNotMatch(source, /function barrelsLabel\(/);
   });
 
   it("follows a numbered container on the carrier feed and polls it", () => {

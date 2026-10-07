@@ -394,6 +394,264 @@ function containerCountsDelta(line, sign = 1) {
 }
 
 // -------------------------------------------------------------------------
+// Editing a line after it was added.
+//
+// A line has two halves. Its contacts - who it belongs to by name and phone,
+// who collects it, who hears about it - stay correctable in every state: a
+// wrong number matters most once the box has sailed. What the line IS - its
+// kind, the car, the count, the description, and whether it is a customer's
+// or the business's own - is the record of what went, so it changes only
+// while the container is still loading, like adding, moving or removing a
+// line. One rule set serves both the full edit and the contacts-only one.
+// -------------------------------------------------------------------------
+
+const LINE_CONTACT_FIELDS = Object.freeze([
+  "customerName", "customerPhone", "receiverName", "receiverPhone",
+  "notifyCustomer", "notifyReceiver",
+]);
+const LINE_SUBSTANCE_FIELDS = Object.freeze([
+  "kind", "vinNumber", "carMake", "carModel", "carYear", "quantity",
+  "description", "ownerKind",
+]);
+const LINE_EDIT_FIELDS = Object.freeze(
+    [...LINE_SUBSTANCE_FIELDS, ...LINE_CONTACT_FIELDS]);
+
+// How the history names a field, instead of its Firestore key.
+const CONTACT_FIELD_LABELS = Object.freeze({
+  customerName: "customer's name",
+  customerPhone: "customer's phone",
+  receiverName: "receiver's name",
+  receiverPhone: "receiver's phone",
+  notifyCustomer: "customer's WhatsApp updates",
+  notifyReceiver: "receiver's WhatsApp updates",
+});
+const LINE_FIELD_LABELS = Object.freeze({
+  kind: "kind",
+  vinNumber: "VIN",
+  carMake: "make",
+  carModel: "model",
+  carYear: "year",
+  quantity: "quantity",
+  description: "description",
+  ownerKind: "owner",
+  ...CONTACT_FIELD_LABELS,
+});
+
+/**
+ * "1 barrel", "3 barrels" - the history reads like a sentence.
+ *
+ * @param {*} quantity The count.
+ * @return {string} The phrase.
+ */
+function barrelsLabel(quantity) {
+  const n = Number(quantity) || 0;
+  return `${n} barrel${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * What a line is, as the history says it: "car 1HG…", "3 barrels",
+ * "2 × tires".
+ *
+ * @param {object} line The line.
+ * @return {string} The phrase.
+ */
+function containerLineWhat(line) {
+  const row = line && typeof line === "object" ? line : {};
+  const kind = text(row.kind, 20);
+  if (kind === "car") {
+    return `car ${text(row.vinNumber, MAX_VIN).toUpperCase()}`;
+  }
+  if (kind === "barrels") return barrelsLabel(positiveInt(row.quantity));
+  return `${positiveInt(row.quantity)} × ${text(row.description, MAX_LABEL)}`;
+}
+
+/**
+ * The editable fields of a line as the server would store them, so a stored
+ * line and a requested one compare like for like (a legacy line with no
+ * WhatsApp switch reads as switched on, a car always counts one).
+ *
+ * @param {object} line A stored or requested line.
+ * @return {object} The fourteen editable fields.
+ */
+function containerLineEditable(line) {
+  const record = containerLineRecord(line && typeof line === "object" ?
+    line : {});
+  const out = {};
+  for (const key of LINE_EDIT_FIELDS) out[key] = record[key];
+  return out;
+}
+
+/**
+ * What a requested edit would make the line. In contacts-only mode only the
+ * contact half is taken from the request, against the line's own owner kind;
+ * otherwise the request is a whole line, any field it leaves out kept from
+ * the stored one.
+ *
+ * @param {object} current The stored line.
+ * @param {object} input The requested line, or contacts.
+ * @param {boolean} contactsOnly Whether only contacts may change.
+ * @return {object} The editable fields after the edit.
+ */
+function containerLineEditTarget(current, input, contactsOnly) {
+  const row = current && typeof current === "object" ? current : {};
+  const asked = input && typeof input === "object" ? input : {};
+  if (contactsOnly) {
+    return {
+      ...containerLineEditable(row),
+      ...containerLineContactsUpdate(asked, row),
+    };
+  }
+  return containerLineEditable({...row, ...asked});
+}
+
+/**
+ * Error codes for a requested edit, every problem at once: the contacts
+ * rules for a contacts-only edit, the whole-line rules otherwise.
+ *
+ * @param {object} current The stored line.
+ * @param {object} input The requested line, or contacts.
+ * @param {boolean} contactsOnly Whether only contacts may change.
+ * @return {string[]} Error codes.
+ */
+function validateContainerLineEdit(current, input, contactsOnly) {
+  const row = current && typeof current === "object" ? current : {};
+  const asked = input && typeof input === "object" ? input : {};
+  if (contactsOnly) return validateContainerLineContacts(asked, row);
+  return validateContainerLine({...row, ...asked});
+}
+
+/**
+ * The fields an edit changes, compared as stored.
+ *
+ * @param {object} current The stored line.
+ * @param {object} next The editable fields after the edit.
+ * @return {string[]} Field keys, in a fixed order.
+ */
+function containerLineEditChanges(current, next) {
+  const before = containerLineEditable(current);
+  const after = next && typeof next === "object" ? next : {};
+  return LINE_EDIT_FIELDS.filter((key) =>
+    String(before[key] ?? "") !== String(after[key] ?? ""));
+}
+
+/**
+ * @param {string[]} changes Changed field keys.
+ * @return {boolean} Whether only the contact half changed.
+ */
+function lineEditIsContactsOnly(changes) {
+  return (Array.isArray(changes) ? changes : [])
+      .every((key) => LINE_CONTACT_FIELDS.includes(key));
+}
+
+/**
+ * Whether an edit may land on a line in this container. Contacts may change
+ * in every state; anything else only while the box is loading, the same as
+ * adding, moving or removing a line.
+ *
+ * @param {object} container The line's container.
+ * @param {string[]} changes Changed field keys.
+ * @return {string|null} A refusal code, or null when allowed.
+ */
+function containerLineEditRefusal(container, changes) {
+  if (lineEditIsContactsOnly(changes)) return null;
+  return containerIsOpen(container) ? null : "container_locked";
+}
+
+/**
+ * The VIN locks an edit hands over: the car the line no longer is lets its
+ * lock go, the car it now is takes one. Unchanged (same car, or never a car)
+ * hands over nothing.
+ *
+ * @param {object} current The stored line.
+ * @param {object} next The editable fields after the edit.
+ * @return {{releaseVin: string, takeVin: string}} VINs, "" for none.
+ */
+function containerLineVinHandover(current, next) {
+  const vinOf = (line) => {
+    const row = line && typeof line === "object" ? line : {};
+    if (text(row.kind, 20) !== "car") return "";
+    return text(row.vinNumber, MAX_VIN).toUpperCase();
+  };
+  const before = vinOf(containerLineEditable(current));
+  const after = vinOf(next);
+  if (before === after) return {releaseVin: "", takeVin: ""};
+  return {releaseVin: before, takeVin: after};
+}
+
+/**
+ * What an edit does to its container's tallies: the old line's share taken
+ * away and the new one's added. Only the non-zero keys are returned, so an
+ * edit that leaves the counts alone writes none.
+ *
+ * @param {object} current The stored line.
+ * @param {object} next The editable fields after the edit.
+ * @return {object} e.g. {barrelCount: 2}.
+ */
+function containerLineEditCountsDelta(current, next) {
+  const out = {};
+  const add = (delta) => {
+    for (const [key, value] of Object.entries(delta)) {
+      out[key] = (out[key] || 0) + value;
+    }
+  };
+  add(containerCountsDelta(current, -1));
+  add(containerCountsDelta(next, 1));
+  for (const key of Object.keys(out)) if (!out[key]) delete out[key];
+  return out;
+}
+
+/**
+ * The fields an edit names in the history. A new kind says "kind" rather
+ * than listing every car field it emptied; a new owner says "owner" rather
+ * than the customer fields that came or went with it.
+ *
+ * @param {string[]} changes Changed field keys.
+ * @return {string[]} Labels, in order, without repeats.
+ */
+function containerLineEditLabels(changes) {
+  const list = Array.isArray(changes) ? changes : [];
+  const kindDependent = ["vinNumber", "carMake", "carModel", "carYear",
+    "quantity", "description"];
+  const ownerDependent = ["customerName", "customerPhone", "notifyCustomer"];
+  const shown = list.filter((key) =>
+    !(list.includes("kind") && kindDependent.includes(key)) &&
+    !(list.includes("ownerKind") && ownerDependent.includes(key)));
+  return [...new Set(shown.map((key) => LINE_FIELD_LABELS[key] || key))];
+}
+
+/**
+ * The history entry for an edit. A contacts-only change keeps the sentence
+ * it always had ("Changed receiver's phone for Fatou"); anything else says
+ * what the line is now and was before: "Edited 5 barrels (was 3 barrels):
+ * quantity for Fatou".
+ *
+ * @param {object} current The stored line.
+ * @param {object} next The editable fields after the edit.
+ * @param {string[]} changes Changed field keys.
+ * @return {{action: string, summary: string}} The audit action and sentence.
+ */
+function containerLineEditAudit(current, next, changes) {
+  const after = next && typeof next === "object" ? next : {};
+  const labels = containerLineEditLabels(changes).join(", ");
+  const name = text(after.customerName, MAX_LABEL);
+  if (lineEditIsContactsOnly(changes)) {
+    return {
+      action: "line_contacts_edited",
+      summary: `Changed ${labels}` + (name ? ` for ${name}` : ""),
+    };
+  }
+  const now = containerLineWhat(after);
+  const was = containerLineWhat(containerLineEditable(current));
+  const whose = text(after.ownerKind, 20) === "stock" ?
+    " (business stock)" : (name ? ` for ${name}` : "");
+  return {
+    action: "line_edited",
+    summary: `Edited ${now}` + (was !== now ? ` (was ${was})` : "") +
+      `: ${labels}${whose}`,
+  };
+}
+
+// -------------------------------------------------------------------------
 // Server-side bookkeeping: the VIN lock, first-write-wins fields, and the
 // repair of a status change that only half landed. Not mirrored on the
 // clients - they never write these.
@@ -553,6 +811,23 @@ module.exports = {
   openContainerHoldingVin,
   containerCounts,
   containerCountsDelta,
+  LINE_CONTACT_FIELDS,
+  LINE_SUBSTANCE_FIELDS,
+  LINE_EDIT_FIELDS,
+  CONTACT_FIELD_LABELS,
+  LINE_FIELD_LABELS,
+  barrelsLabel,
+  containerLineWhat,
+  containerLineEditable,
+  containerLineEditTarget,
+  validateContainerLineEdit,
+  containerLineEditChanges,
+  lineEditIsContactsOnly,
+  containerLineEditRefusal,
+  containerLineVinHandover,
+  containerLineEditCountsDelta,
+  containerLineEditLabels,
+  containerLineEditAudit,
   containerVinLockId,
   vinLockHolder,
   keepExisting,
