@@ -47,6 +47,28 @@ test("its words read in French", () => {
   }
 });
 
+test("three views, in order: Who owes · Paid · Everyone, each from the shared statement", () => {
+  const owes = view.indexOf("Who owes ({summary.customersOwing.length})");
+  const paid = view.indexOf("Paid ({summary.customersPaid.length})");
+  const everyone = view.indexOf("Everyone ({summary.customers.length})");
+  assert.ok(owes > 0 && paid > owes && everyone > paid, "tabs read Who owes · Paid · Everyone");
+  // The list is the statement's own split - no second definition of "paid" here.
+  assert.match(view, /view === "paid" \? summary\.customersPaid : summary\.customersOwing/);
+  assert.doesNotMatch(view, /dueCents === 0|dueCents <= 0 &&|monthCents > 0 &&/, "paid is decided in parking-month-statement.ts");
+  assert.match(view, /"Nobody has paid for this month yet\."/);
+  // The same customer card for every view, with what came in and how.
+  assert.equal(view.match(/<article className="pk-month-customer"/g)?.length, 1, "one card, not a fork");
+  assert.match(view, /customer\.paidVia\.map\(parkingPaidViaLabel\)/);
+  assert.match(view, /<span>Paid in full<\/span><b>\{summary\.customersPaid\.length\}<\/b>/);
+  assert.match(view, /<strong data-no-translate>\{customer\.customerName/, "a name is not copy");
+});
+
+test("the Paid view's words read in French", () => {
+  for (const english of ["Paid", "Paid in full", "Nobody has paid for this month yet.", "customers this month", "Online", "Payment link", "Cash payment", "Zelle transfer"]) {
+    assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
+  }
+});
+
 test("a paid line folds away on the card; only what is left to collect leads", () => {
   assert.match(view, /const owingLines = \[\.\.\.customer\.cars\.filter\(\(b\) => b\.dueCents > 0\)/);
   assert.match(view, /\{showPaid && paidLines\}/);

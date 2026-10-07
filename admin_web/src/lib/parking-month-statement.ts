@@ -5,6 +5,7 @@
  * unpaid from before as its own line, payments applied oldest month first.
  */
 
+import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "./business-parking-entry.ts";
 import { lotActivityPaidCents } from "./lot-ledger.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -137,6 +138,14 @@ export function parkingPaidVia(row: Row): string[] {
   const method = text(row.paymentMethod, 40);
   if (method === "payment_link") return ["card_link"];
   return method === "direct" ? [] : ["online"];
+}
+
+/** A `paidVia` code as the console shows it (English; french-dom.ts
+ * translates it): the same words as "How it was paid" everywhere else. */
+export function parkingPaidViaLabel(code: string): string {
+  if (code === "card_link") return "Payment link";
+  if (code === "online") return "Online";
+  return BUSINESS_PARKING_RECEIVED_VIA_OPTIONS.find((o) => o.value === code)?.label ?? "Another method";
 }
 
 /** How an activity's money came in: its `receivedVia`, else "card_link"

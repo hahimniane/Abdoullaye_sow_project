@@ -78,7 +78,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   List<({String id, String name})> _staff = const [];
   Map<String, dynamic> _business = const {};
   bool _loading = true;
-  bool _showAll = false;
+  ParkingMonthView _view = ParkingMonthView.owing;
   String _busy = '';
 
   @override
@@ -403,8 +403,6 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     final locale = Localizations.localeOf(context).toLanguageTag();
     final summary = _summary();
     final thisMonth = shiftParkingMonthKey(previousParkingMonthKey(), 1);
-    // One card per customer (grouped by phone), their cars underneath.
-    final listed = _showAll ? summary.customers : summary.customersOwing;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -531,28 +529,10 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                       ],
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _Tab(
-                            label: l10n.pmeWhoOwesCount(
-                              summary.customersOwing.length,
-                            ),
-                            selected: !_showAll,
-                            onTap: () => setState(() => _showAll = false),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: _Tab(
-                            label: l10n.pmeEveryoneCount(
-                              summary.customers.length,
-                            ),
-                            selected: _showAll,
-                            onTap: () => setState(() => _showAll = true),
-                          ),
-                        ),
-                      ],
+                    ParkingMonthViewTabs(
+                      summary: summary,
+                      view: _view,
+                      onChanged: (view) => setState(() => _view = view),
                     ),
                   ],
                 ),
@@ -562,27 +542,11 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : listed.isEmpty
-                ? LotEmptyState(
-                    icon: Icons.event_available_outlined,
-                    title: summary.carsOnLot == 0
-                        ? l10n.pmeNoCars
-                        : l10n.pmeNobodyOwes,
-                  )
-                : ListView.builder(
-                    key: const Key('month-end-list'),
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      AppSpacing.md,
-                      AppSpacing.lg,
-                      40,
-                    ),
-                    itemCount: listed.length,
-                    itemBuilder: (_, i) => _CustomerTile(
-                      customer: listed[i],
-                      busy: _busy == listed[i].key,
-                      onTap: () => _customerActions(listed[i]),
-                    ),
+                : ParkingMonthCustomerList(
+                    summary: summary,
+                    view: _view,
+                    busyKey: _busy,
+                    onTap: _customerActions,
                   ),
           ),
         ],
@@ -590,6 +554,124 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     );
   }
 }
+
+/// Which customers the month end lists: who still owes, who has paid for
+/// the month, everyone. The split itself is the statement's
+/// (`customersOwing` / `customersPaid`), shared with the console and server.
+enum ParkingMonthView { owing, paid, all }
+
+List<ParkingMonthCustomer> parkingMonthListed(
+  ParkingMonthSummary summary,
+  ParkingMonthView view,
+) => switch (view) {
+  ParkingMonthView.owing => summary.customersOwing,
+  ParkingMonthView.paid => summary.customersPaid,
+  ParkingMonthView.all => summary.customers,
+};
+
+/// The three views, in order: Who owes · Paid · Everyone, each with its count.
+class ParkingMonthViewTabs extends StatelessWidget {
+  const ParkingMonthViewTabs({
+    super.key,
+    required this.summary,
+    required this.view,
+    required this.onChanged,
+  });
+
+  final ParkingMonthSummary summary;
+  final ParkingMonthView view;
+  final ValueChanged<ParkingMonthView> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final tabs = [
+      (
+        ParkingMonthView.owing,
+        l10n.pmeWhoOwesCount(summary.customersOwing.length),
+      ),
+      (ParkingMonthView.paid, l10n.pmePaidCount(summary.customersPaid.length)),
+      (ParkingMonthView.all, l10n.pmeEveryoneCount(summary.customers.length)),
+    ];
+    return Row(
+      children: [
+        for (var i = 0; i < tabs.length; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _Tab(
+              key: Key('month-end-tab-${tabs[i].$1.name}'),
+              label: tabs[i].$2,
+              selected: view == tabs[i].$1,
+              onTap: () => onChanged(tabs[i].$1),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One card per customer (grouped by phone), their cars underneath - the
+/// same card in every view - or what the empty view means.
+class ParkingMonthCustomerList extends StatelessWidget {
+  const ParkingMonthCustomerList({
+    super.key,
+    required this.summary,
+    required this.view,
+    required this.onTap,
+    this.busyKey = '',
+  });
+
+  final ParkingMonthSummary summary;
+  final ParkingMonthView view;
+  final ValueChanged<ParkingMonthCustomer> onTap;
+  final String busyKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final listed = parkingMonthListed(summary, view);
+    if (listed.isEmpty) {
+      return LotEmptyState(
+        icon: Icons.event_available_outlined,
+        title: summary.customers.isEmpty
+            ? l10n.pmeNoCars
+            : view == ParkingMonthView.paid
+            ? l10n.pmeNobodyPaid
+            : l10n.pmeNobodyOwes,
+      );
+    }
+    return ListView.builder(
+      key: const Key('month-end-list'),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        40,
+      ),
+      itemCount: listed.length,
+      itemBuilder: (_, i) => _CustomerTile(
+        customer: listed[i],
+        busy: busyKey.isNotEmpty && busyKey == listed[i].key,
+        onTap: () => onTap(listed[i]),
+      ),
+    );
+  }
+}
+
+/// A payment method as the app names it: the "How it was paid" words, plus
+/// the payment link and online payments a month's bill can also carry.
+String _methodLabel(AppLocalizations l10n, String m) => switch (m) {
+  'cash' => l10n.invMethodCash,
+  'zelle' => l10n.invMethodZelle,
+  'cashapp' => l10n.invMethodCashapp,
+  'venmo' => l10n.invMethodVenmo,
+  'check' => l10n.invMethodCheck,
+  'card_in_person' => l10n.invMethodCardInPerson,
+  'card_link' => l10n.paymentLinkLabel,
+  'online' => l10n.lotPaymentOnline,
+  _ => l10n.invMethodOther,
+};
 
 class _Stat extends StatelessWidget {
   const _Stat({required this.label, required this.value, this.tone});
@@ -644,6 +726,7 @@ class _Stat extends StatelessWidget {
 
 class _Tab extends StatelessWidget {
   const _Tab({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -669,12 +752,19 @@ class _Tab extends StatelessWidget {
             color: selected ? AppColors.cobalt : AppColors.rule,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : AppColors.muted,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        // Three to a row on a phone: a long French label shrinks to fit
+        // rather than wrapping out of the 36pt pill.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : AppColors.muted,
+            ),
           ),
         ),
       ),
@@ -906,6 +996,11 @@ class _CustomerTileState extends State<_CustomerTile> {
                     '+ ${parkingMoney(customer.priorUnpaidCents)} ${l10n.pmeFromBefore.toLowerCase()}',
                   if (customer.monthPaidCents > 0)
                     '${l10n.invPdfPaid} ${parkingMoney(customer.monthPaidCents)}',
+                  if (customer.monthPaidCents > 0 &&
+                      customer.paidVia.isNotEmpty)
+                    customer.paidVia
+                        .map((m) => _methodLabel(l10n, m))
+                        .join(', '),
                 ].join(' · '),
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),
@@ -1001,16 +1096,6 @@ class _SettleSheetState extends State<_SettleSheet> {
     _note.dispose();
     super.dispose();
   }
-
-  String _methodLabel(AppLocalizations l10n, String m) => switch (m) {
-    'cash' => l10n.invMethodCash,
-    'zelle' => l10n.invMethodZelle,
-    'cashapp' => l10n.invMethodCashapp,
-    'venmo' => l10n.invMethodVenmo,
-    'check' => l10n.invMethodCheck,
-    'card_in_person' => l10n.invMethodCardInPerson,
-    _ => l10n.invMethodOther,
-  };
 
   Future<void> _pickVia() async {
     final l10n = AppLocalizations.of(context)!;

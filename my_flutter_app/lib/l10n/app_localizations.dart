@@ -17202,6 +17202,18 @@ abstract class AppLocalizations {
   /// **'Everyone ({count})'**
   String pmeEveryoneCount(int count);
 
+  /// No description provided for @pmePaidCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid ({count})'**
+  String pmePaidCount(int count);
+
+  /// No description provided for @pmeNobodyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody has paid for this month yet.'**
+  String get pmeNobodyPaid;
+
   /// No description provided for @pmeCustomersOwe.
   ///
   /// In en, this message translates to:

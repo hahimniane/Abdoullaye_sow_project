@@ -26,6 +26,25 @@ void main() {
         contains('case "parking_month_end":'));
   });
 
+  test('"paid for the month" has one definition, mirrored in all three statements', () {
+    final copies = {
+      'app': read('lib/services/parking_month_statement.dart'),
+      'console': read('../admin_web/src/lib/parking-month-statement.ts'),
+      'server': read('functions/parking_month_statement.js'),
+    };
+    for (final MapEntry(key: where, value: source) in copies.entries) {
+      expect(source,
+          contains(where == 'app' ? 'bool parkingMonthCustomerPaid(' : 'function parkingMonthCustomerPaid('),
+          reason: '$where defines the paid rule');
+      expect(source, contains('customersPaid'), reason: '$where splits out who paid');
+      expect(source, contains('paidVia'), reason: '$where says how they paid');
+    }
+    // The screen lists the statement's split; it does not re-decide "paid".
+    final screen = read('lib/screens/parking_month_end_screen.dart');
+    expect(screen, contains('ParkingMonthView.paid => summary.customersPaid'));
+    expect(screen, isNot(contains('dueCents == 0')));
+  });
+
   test('payments are recorded through the existing payments only, never written directly', () {
     final screen = read('lib/screens/parking_month_end_screen.dart');
     expect(screen, contains('ParkedCarDetailsScreen('));

@@ -21,6 +21,7 @@ import {
   monthLabel,
   moneyText,
   parkingMonthCustomerText,
+  parkingPaidViaLabel,
   parkingMonthSummary,
   previousMonthKey,
   shiftMonthKey,
@@ -56,7 +57,8 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   const inputs = useParkingMonthInputs(businessId, monthKey, Boolean(businessId));
   const rows = inputs.cars;
   const activities = inputs.activities;
-  const [showAll, setShowAll] = useState(false);
+  // Which customers: who still owes, who has paid for the month, everyone.
+  const [view, setView] = useState<"owing" | "paid" | "all">("owing");
   // Customers whose already-paid lines are unfolded on their card.
   const [openPaid, setOpenPaid] = useState<Set<string>>(() => new Set());
   const [busyId, setBusyId] = useState("");
@@ -81,7 +83,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   const summary = useMemo(() => parkingMonthSummary(rows, monthKey, new Date(), activities), [rows, activities, monthKey]);
   const thisMonth = new Date().toISOString().slice(0, 7);
   // One row per customer (grouped by phone), their cars underneath.
-  const listed = showAll ? summary.customers : summary.customersOwing;
+  const listed = view === "all" ? summary.customers : view === "paid" ? summary.customersPaid : summary.customersOwing;
   const rowById = useMemo(() => {
     const map = new Map<string, FirestoreRow>();
     rows.forEach((r) => map.set(String(r.id), r));
@@ -210,6 +212,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
         <div className="pk-stat"><span>Cars on the lot</span><b>{summary.carsOnLot}</b><small>{summary.customersOwing.length} customers still owe</small></div>
         <div className="pk-stat"><span>Billed</span><b>{moneyText(summary.billedCents)}</b><small>for the month</small></div>
         <div className="pk-stat"><span>Collected</span><b>{moneyText(summary.collectedCents)}</b><small>toward the month</small></div>
+        <div className="pk-stat"><span>Paid in full</span><b>{summary.customersPaid.length}</b><small>customers this month</small></div>
         <div className="pk-stat"><span>Still owed</span><b className={summary.dueCents > 0 ? "owed" : ""}>{moneyText(summary.dueCents)}</b>
           <small>{summary.olderOwedCents > 0 ? `incl. ${moneyText(summary.olderOwedCents)} from before` : "by the customers below"}</small>
         </div>
@@ -217,26 +220,27 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
 
       <div className="pk-month-tools">
         <div className="pk-view" role="group" aria-label="Which customers">
-          <button type="button" className={!showAll ? "on" : ""} aria-pressed={!showAll} onClick={() => setShowAll(false)}>Who owes ({summary.customersOwing.length})</button>
-          <button type="button" className={showAll ? "on" : ""} aria-pressed={showAll} onClick={() => setShowAll(true)}>Everyone ({summary.customers.length})</button>
+          <button type="button" className={view === "owing" ? "on" : ""} aria-pressed={view === "owing"} onClick={() => setView("owing")}>Who owes ({summary.customersOwing.length})</button>
+          <button type="button" className={view === "paid" ? "on" : ""} aria-pressed={view === "paid"} onClick={() => setView("paid")}>Paid ({summary.customersPaid.length})</button>
+          <button type="button" className={view === "all" ? "on" : ""} aria-pressed={view === "all"} onClick={() => setView("all")}>Everyone ({summary.customers.length})</button>
         </div>
       </div>
 
       {listed.length === 0 ? (
-        <div className="empty-state">{summary.carsOnLot === 0 ? "No car was on the lot that month." : "Nobody owes anything for this month."}</div>
+        <div className="empty-state">{summary.customers.length === 0 ? "No car was on the lot that month." : view === "paid" ? "Nobody has paid for this month yet." : "Nobody owes anything for this month."}</div>
       ) : (
         <div className="pk-month-list">
           {listed.map((customer) => (
             <article className="pk-month-customer" key={customer.key}>
               <header>
                 <div>
-                  <strong>{customer.customerName || "—"}</strong>
+                  <strong data-no-translate>{customer.customerName || "—"}</strong>
                   <small>{[customer.customerPhone, customer.cars.length ? `${customer.cars.length} car${customer.cars.length === 1 ? "" : "s"}` : "", customer.activities.length + customer.olderActivities.length ? `${customer.activities.length + customer.olderActivities.length} activit${customer.activities.length + customer.olderActivities.length === 1 ? "y" : "ies"}` : ""].filter(Boolean).join(" · ")}</small>
                 </div>
                 <div className="pk-month-due">
                   {customer.dueCents > 0
                     ? <><strong className="pk-owed">{moneyText(customer.dueCents)}</strong><small>{customer.monthPaidCents > 0 ? `${moneyText(customer.monthPaidCents)} paid · ` : ""}{moneyText(customer.monthCents)} this month{customer.priorUnpaidCents > 0 ? ` + ${moneyText(customer.priorUnpaidCents)} from before` : ""}</small></>
-                    : <span className="lst-badge ok">Paid</span>}
+                    : <><span className="lst-badge ok">Paid</span>{customer.monthPaidCents > 0 && <small className="pk-month-paid-via">{moneyText(customer.monthPaidCents)} paid{customer.paidVia.length > 0 ? ` · ${customer.paidVia.map(parkingPaidViaLabel).join(", ")}` : ""}</small>}</>}
                 </div>
                 <div className="pk-month-actions">
                   <button className="lst-btn ghost" type="button" disabled={busyId !== ""} onClick={() => void saveBill(customer)}>

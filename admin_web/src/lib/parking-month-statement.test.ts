@@ -9,6 +9,7 @@ import {
   parkingMonthBillText,
   parkingMonthCustomerPaid,
   parkingMonthStatement,
+  parkingPaidViaLabel,
   parkingMonthSummary,
   previousMonthKey,
   shiftMonthKey,
@@ -249,5 +250,13 @@ test("who has paid for the month: fully, partly, overpaid, carried, nothing bill
   assert.equal(by("Diop").monthCents, 0);
   assert.equal(by("Diop").paid, false);
   assert.equal(by("Diop").owes, true, "only the older unpaid job");
+});
+
+test("how it was paid reads in the console's own words", () => {
+  assert.equal(parkingPaidViaLabel("cash"), "Cash payment");
+  assert.equal(parkingPaidViaLabel("zelle"), "Zelle transfer");
+  assert.equal(parkingPaidViaLabel("card_link"), "Payment link");
+  assert.equal(parkingPaidViaLabel("online"), "Online");
+  assert.equal(parkingPaidViaLabel("barter"), "Another method");
 });
 

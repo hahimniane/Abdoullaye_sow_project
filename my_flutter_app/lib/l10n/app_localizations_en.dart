@@ -9707,6 +9707,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String pmePaidCount(int count) {
+    return 'Paid ($count)';
+  }
+
+  @override
+  String get pmeNobodyPaid => 'Nobody has paid for this month yet.';
+
+  @override
   String pmeCustomersOwe(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
