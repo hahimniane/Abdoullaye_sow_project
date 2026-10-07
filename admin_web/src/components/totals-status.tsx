@@ -46,7 +46,8 @@ export function TotalsStatus({
         onClick={onRefresh}
         type="button"
       >
-        <RefreshCw size={14} /> {loading ? "Loading…" : "Refresh"}
+        {/* A failed count is never a dead end: the same button retries. */}
+        <RefreshCw size={14} /> {loading ? "Loading…" : error ? "Retry" : "Refresh"}
       </button>
     </div>
   );

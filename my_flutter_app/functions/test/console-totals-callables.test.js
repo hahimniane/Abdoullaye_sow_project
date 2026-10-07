@@ -6,7 +6,8 @@ const path = require("node:path");
 const {describe, it} = require("node:test");
 const {Timestamp} = require("firebase-admin/firestore");
 
-const {createConsoleTotalsHandlers} = require("../console_totals");
+const {cacheDocId, createConsoleTotalsHandlers} =
+  require("../console_totals");
 const {invoiceBoard, lotLedgerTotals} = require("../console_summaries");
 
 class HttpsError extends Error {
@@ -124,6 +125,12 @@ class FakeQuery {
   doc(id) {
     const db = this.db;
     const name = this.name;
+    // Firestore reads "/" as a path separator: `collection(c).doc("a/b")`
+    // names a collection, and the Admin SDK throws.
+    if (typeof id !== "string" || !id || id.includes("/")) {
+      throw new Error(`Value for argument "documentPath" must point to a ` +
+        `document, but was "${name}/${id}".`);
+    }
     return {
       name, id,
       get: async () => snapshotOf(id, (db.data[name] || {})[id]),
@@ -404,6 +411,77 @@ describe("console totals callables: what they answer", () => {
             call("owner", {businessId: "biz", refresh: true}));
         assert.equal(third.cached, true);
       });
+
+  // Regression: the parking cache key embeds the viewer's zone, and an
+  // unencoded "America/New_York" made the cache id a path - every ledger
+  // and parking total failed ("Totals could not be loaded").
+  for (const timeZone of ["America/New_York",
+    "America/Argentina/Buenos_Aires", "Africa/Conakry", "UTC", ""]) {
+    it(`ledger and parking totals load for a viewer in "${timeZone}"`,
+        async () => {
+          const data = {
+            lotActivities: {}, lotActivityPayments: {}, lotExpenseLines: {},
+            lotExpenseEntries: {},
+            parkedCars: {},
+            businesses: {biz: {name: "Biz", parkingTotalSpaces: 10}},
+          };
+          const {handlers, db} = handlersFor(data);
+          const ledger = await handlers.getLotLedgerTotals(call("ledgerStaff",
+              {businessId: "biz", year: 2026, timeZone}));
+          assert.equal(ledger.complete, true);
+          const parking = await handlers.getParkingTotals(call("parkingStaff",
+              {businessId: "biz", year: 2026, timeZone}));
+          assert.equal(parking.parking.year, 2026);
+          const cacheWrites = db.writes
+              .filter((path) => path.startsWith("consoleSummaryCache/"));
+          assert.ok(cacheWrites.length > 0, "the ended-stays cache is written");
+          for (const written of cacheWrites) {
+            assert.equal(written.split("/").length, 2,
+                `${written} is one document id`);
+          }
+          // The second call is served from the cache written by the first.
+          const again = await handlers.getParkingTotals(call("parkingStaff",
+              {businessId: "biz", year: 2026, timeZone}));
+          assert.equal(again.parking.endedComputedAtMs,
+              parking.parking.endedComputedAtMs);
+        });
+  }
+});
+
+describe("console totals: cache document ids", () => {
+  it("encodes path separators and keeps plain keys unchanged", () => {
+    assert.equal(cacheDocId("businessOverview__biz__cars"),
+        "businessOverview__biz__cars");
+    assert.equal(cacheDocId("parkingEnded__biz__2026__UTC"),
+        "parkingEnded__biz__2026__UTC");
+    const zoned = cacheDocId("parkingEnded__biz__2026__America/New_York");
+    assert.equal(zoned, "parkingEnded__biz__2026__America%2FNew_York");
+    assert.doesNotMatch(zoned, /\//);
+  });
+
+  it("never collides two zones and never yields an invalid id", () => {
+    const a = cacheDocId("k__America/New_York");
+    const b = cacheDocId("k__America_New_York");
+    assert.notEqual(a, b);
+    for (const key of ["", ".", "..", "__x__", "x".repeat(2000),
+      "a/b/c/d", "biz with spaces/é"]) {
+      const id = cacheDocId(key);
+      assert.ok(id.length > 0 && id.length <= 400, key);
+      assert.doesNotMatch(id, /\//);
+      assert.notEqual(id, ".");
+      assert.notEqual(id, "..");
+      assert.doesNotMatch(id, /^__.*__$/);
+    }
+  });
+
+  it("every cache read and write goes through the encoder", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "console_totals.js"), "utf8");
+    const cacheDocs = source.match(
+        /collection\(CACHE_COLLECTION\)\s*\.doc\(([^)]*\)?)\)/g) || [];
+    assert.ok(cacheDocs.length >= 2);
+    for (const use of cacheDocs) assert.match(use, /\.doc\(cacheDocId\(/);
+  });
 });
 
 describe("console totals callables: wiring", () => {

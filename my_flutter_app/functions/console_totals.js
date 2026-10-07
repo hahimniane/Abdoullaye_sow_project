@@ -36,6 +36,7 @@ const {
   yearMonthKeys,
   zonedDayKey,
 } = require("./console_summaries");
+const crypto = require("node:crypto");
 const {drainPages} = require("./scheduled_sweep");
 
 const CACHE_COLLECTION = "consoleSummaryCache";
@@ -111,6 +112,32 @@ function normalizeLedgerRequest(data, now = new Date()) {
       .sort();
   return {timeZone, nowMonth, rangeStart, rangeEnd, month, year,
     readFrom: bounds[0], readThrough: bounds[bounds.length - 1]};
+}
+
+/** Longer encoded keys are hashed; Firestore allows 1,500 bytes. */
+const MAX_CACHE_DOC_ID_LENGTH = 400;
+
+/**
+ * The cache document id for a key built from request input.
+ *
+ * Keys carry the viewer's IANA zone ("America/New_York") and ids the caller
+ * sent, and "/" separates path segments in Firestore: an unencoded key
+ * pointed `doc()` at a collection, so every lot ledger total failed for a
+ * business viewed from such a zone. Percent-encoding leaves plain keys as
+ * they were (existing cache entries still hit) and readable; anything that
+ * is still too long, or would be empty, is hashed.
+ *
+ * @param {string} key The logical cache key.
+ * @return {string} One valid document id.
+ */
+function cacheDocId(key) {
+  const raw = String(key ?? "");
+  const encoded = encodeURIComponent(raw);
+  if (encoded && encoded.length <= MAX_CACHE_DOC_ID_LENGTH &&
+      encoded !== "." && encoded !== ".." && !/^__.*__$/.test(encoded)) {
+    return encoded;
+  }
+  return `h_${crypto.createHash("sha256").update(raw).digest("hex")}`;
 }
 
 function monthSpan(a, b) {
@@ -226,7 +253,8 @@ function createConsoleTotalsHandlers(deps) {
   }
 
   async function readCache(key) {
-    const snap = await db().collection(CACHE_COLLECTION).doc(key).get();
+    const snap = await db().collection(CACHE_COLLECTION)
+        .doc(cacheDocId(key)).get();
     if (!snap.exists) return null;
     const data = snap.data() || {};
     if (data.version !== CACHE_VERSION) return null;
@@ -240,7 +268,7 @@ function createConsoleTotalsHandlers(deps) {
 
   async function writeCache(key, payload, computedAtMs) {
     try {
-      await db().collection(CACHE_COLLECTION).doc(key).set({
+      await db().collection(CACHE_COLLECTION).doc(cacheDocId(key)).set({
         version: CACHE_VERSION,
         computedAtMs,
         payloadJson: JSON.stringify(payload),
@@ -650,6 +678,7 @@ module.exports = {
   ADMIN_STATUS_VOCABULARY,
   CACHE_COLLECTION,
   CLOSED_STATUSES,
+  cacheDocId,
   createConsoleTotalsHandlers,
   monthRangeMs,
   normalizeLedgerRequest,
