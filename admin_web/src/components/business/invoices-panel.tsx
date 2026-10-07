@@ -89,6 +89,7 @@ import {
   vinDecodeHint,
 } from "@/lib/vin-lookup";
 import { CopyValue } from "@/components/copy-value";
+import { statusPillClass } from "@/lib/status-pill";
 import type { FirestoreRow } from "@/types/admin";
 
 type Row = Record<string, unknown>;
@@ -103,9 +104,9 @@ type InvoicesPanelProps = {
 type InvoiceModal = "" | "invoice" | "line" | "payment" | "history" | "text";
 
 function StatusBadge({ row }: { row: Row }) {
-  if (invoiceStatus(row) === "paid") return <span className="lst-badge ok">Paid</span>;
-  if (invoiceIsOverdue(row)) return <span className="lst-badge warn">Overdue</span>;
-  return <span className="lst-badge navy">Open</span>;
+  if (invoiceStatus(row) === "paid") return <span className={statusPillClass("ok")}>Paid</span>;
+  if (invoiceIsOverdue(row)) return <span className={statusPillClass("warn")}>Overdue</span>;
+  return <span className={statusPillClass("navy")}>Open</span>;
 }
 
 function EmptyState({ text: message }: { text: string }) {

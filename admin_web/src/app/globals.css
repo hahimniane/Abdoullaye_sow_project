@@ -1810,6 +1810,32 @@ button[data-loading="true"]::before {
   white-space: normal;
 }
 
+/* Tones for in-flow status pills (statusPillClass in src/lib/status-pill.ts),
+   matching the listing badge's ok / warn / navy / muted. */
+.status-pill.ok {
+  background: rgba(5, 150, 105, 0.12);
+  border-color: rgba(5, 150, 105, 0.3);
+  color: var(--money);
+}
+
+.status-pill.warn {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.34);
+  color: #7a4b00;
+}
+
+.status-pill.navy {
+  background: rgba(30, 58, 138, 0.1);
+  border-color: rgba(30, 58, 138, 0.28);
+  color: #1e3a8a;
+}
+
+.status-pill.muted {
+  background: #eef3f2;
+  border-color: var(--rule);
+  color: var(--muted);
+}
+
 .muted-action {
   color: var(--muted);
   font-size: 14px;
@@ -13918,7 +13944,7 @@ html[data-lang-pending] body {
 .ctn-table .mini-table-row > span > small,
 .ctn-table .mini-table-row > span > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctn-table .mini-table-row > span > small { color: var(--muted); font-size: 12px; }
-.ctn-table .mini-table-row > span > .lst-badge { align-self: flex-start; }
+.ctn-table .mini-table-row > span > .status-pill { align-self: flex-start; }
 .ctn-table .ctn-row-actions {
   flex-direction: row;
   justify-content: flex-end;
@@ -14006,7 +14032,7 @@ html[data-lang-pending] body {
    at its right edge, and the label modal's durability tip reads as a note. */
 .ctn-table .mini-table-row > span.ctn-hit-state { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
 .ctn-hit-state > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ctn-hit-state > span > .lst-badge { align-self: flex-start; }
+.ctn-hit-state > span > .status-pill { align-self: flex-start; }
 .ctn-hit-state > span > small { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .ctn-hit-state > .ghost-button { flex: none; }
 .lst-modal-head h3 .ctn-code { font-size: 0.85em; vertical-align: 0.08em; }

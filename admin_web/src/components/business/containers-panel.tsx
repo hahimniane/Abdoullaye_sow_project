@@ -116,6 +116,7 @@ import {
   findVehicleRecordByVin,
   vinDecodeHint,
 } from "@/lib/vin-lookup";
+import { statusPillClass } from "@/lib/status-pill";
 import type { FirestoreRow } from "@/types/admin";
 
 type Row = Record<string, unknown>;
@@ -136,7 +137,7 @@ type ContainersPanelProps = {
 type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels";
 
 function StatusBadge({ status }: { status: ContainerStatus }) {
-  return <span className={`lst-badge ${CONTAINER_STATUS_TONES[status]}`}>{CONTAINER_STATUS_LABELS[status]}</span>;
+  return <span className={statusPillClass(CONTAINER_STATUS_TONES[status])}>{CONTAINER_STATUS_LABELS[status]}</span>;
 }
 
 function EmptyState({ text: message }: { text: string }) {
