@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { translateValue } from "./french-dom.ts";
 import {
   JOURNEY_STAGES,
   TRANSPORT_JOURNEY_STAGES,
+  deliveryDaysLabel,
   deliveryWindowLabel,
   eventDetail,
   journeyStageFor,
@@ -77,6 +80,25 @@ test("delivery window prefers the stated label, then the day range", () => {
     {deliveryEstimateMinDays: 10, deliveryEstimateMaxDays: 20}), "10-20 days");
   assert.equal(deliveryWindowLabel({deliveryEstimateMinDays: 10}), "10+ days");
   assert.equal(deliveryWindowLabel({}), "");
+});
+
+// Regression: the business console built "35-50 jours" by hand, so an
+// English page showed French. The range is English copy; French comes from
+// the dictionary.
+test("delivery day ranges are English copy that the French page translates", () => {
+  assert.equal(deliveryDaysLabel(35, 50), "35-50 days");
+  assert.equal(deliveryDaysLabel("35", "50"), "35-50 days");
+  assert.equal(deliveryDaysLabel(35, undefined), "35+ days");
+  assert.equal(deliveryDaysLabel(0, 10), "");
+  assert.equal(deliveryDaysLabel(undefined, undefined), "");
+  assert.equal(translateValue("35-50 days", "fr"), "35-50 jours");
+  assert.equal(translateValue("35+ days", "fr"), "35+ jours");
+  const panels = readFileSync(
+    new URL("../components/business/operations-panels.tsx", import.meta.url),
+    "utf8");
+  assert.doesNotMatch(panels, /\$\{[^}]*\}\s*jours/,
+      "no hand-built French day range in the console");
+  assert.match(panels, /deliveryDaysLabel\(/);
 });
 
 test("a carrier event with no location does not read as 'Unknown'", () => {

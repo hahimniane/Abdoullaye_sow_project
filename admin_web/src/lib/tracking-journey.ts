@@ -294,8 +294,23 @@ export function deliveryWindowLabel(
 ): string {
   const label = String(row.deliveryEstimateLabel || "").trim();
   if (label) return label;
-  const min = Number(row.deliveryEstimateMinDays);
-  const max = Number(row.deliveryEstimateMaxDays);
+  return deliveryDaysLabel(row.deliveryEstimateMinDays,
+      row.deliveryEstimateMaxDays);
+}
+
+/**
+ * A stored min/max day estimate as English copy ("35-50 days"); the French
+ * page translates "days" through french-dom.ts. Every console surface that
+ * shows a delivery range uses this - never a hand-built French string, which
+ * an English page showed as "35-50 jours".
+ *
+ * @param minDays The stored minimum.
+ * @param maxDays The stored maximum.
+ * @return "10-20 days", "10+ days", or "" when no usable minimum is set.
+ */
+export function deliveryDaysLabel(minDays: unknown, maxDays: unknown): string {
+  const min = Number(minDays);
+  const max = Number(maxDays);
   if (Number.isFinite(min) && min > 0 && Number.isFinite(max) && max >= min) {
     return `${min}-${max} days`;
   }

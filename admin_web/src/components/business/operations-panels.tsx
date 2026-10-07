@@ -81,6 +81,7 @@ import {
 import { useDocsWhereIn, usePagedQuery } from "@/lib/use-paged-query";
 import { loadedCountLabel, mergePages, statusFilterSpec, withFocusedRow } from "@/lib/paged-query";
 import { useServerTotals, viewerTimeZone } from "@/lib/use-server-totals";
+import { deliveryDaysLabel } from "@/lib/tracking-journey";
 import { findBusinessVehicleRecord } from "@/lib/vin-records";
 import { LoadMoreButton } from "@/components/show-more";
 import { TotalsStatus } from "@/components/totals-status";
@@ -7341,21 +7342,16 @@ function selectableStateOptions(current: string) {
   return [{ code: current, name: current }, ...US_STATE_OPTIONS];
 }
 
+// English copy ("35-50 days"); French pages translate it through french-dom.
 function deliveryWindow(row: FirestoreRow) {
-  const minDays = Number(row.deliveryEstimateMinDays);
-  const maxDays = Number(row.deliveryEstimateMaxDays);
-  if (!Number.isFinite(minDays) || !Number.isFinite(maxDays) || minDays <= 0 || maxDays <= 0) return "";
-  return `${minDays}-${maxDays} jours`;
+  return deliveryDaysLabel(row.deliveryEstimateMinDays, row.deliveryEstimateMaxDays);
 }
 
 // Country coverage rows can enable barrel shipping, air freight, and sea
 // freight at once, each with its own transit time, so the estimate is read
 // per service rather than one shared value for the whole row.
 function serviceDeliveryWindow(row: FirestoreRow, service: string) {
-  const minDays = Number(row[`${service}DeliveryEstimateMinDays`]);
-  const maxDays = Number(row[`${service}DeliveryEstimateMaxDays`]);
-  if (!Number.isFinite(minDays) || !Number.isFinite(maxDays) || minDays <= 0 || maxDays <= 0) return "";
-  return `${minDays}-${maxDays} jours`;
+  return deliveryDaysLabel(row[`${service}DeliveryEstimateMinDays`], row[`${service}DeliveryEstimateMaxDays`]);
 }
 
 function downloadCsv(filename: string, rows: FirestoreRow[], columns: string[]) {
