@@ -14125,6 +14125,7 @@ html[data-lang-pending] body {
 .pk-month-customer small { color: var(--muted); font-size: 12px; }
 .pk-month-due { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
 .pk-month-due .pk-owed { font-size: 16px; color: #b45309; }
+.pk-month-due .pk-month-paid-via { color: var(--muted); margin-top: 4px; }
 .pk-month-customer .pk-month-actions { display: flex; gap: 6px; }
 .pk-month-customer ul { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--rule); }
 .pk-month-customer li { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.9fr) 32px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--rule); font-size: 13px; }

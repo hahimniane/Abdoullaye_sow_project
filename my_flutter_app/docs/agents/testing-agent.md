@@ -413,6 +413,17 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   reach can be checked against an isolated emulator on non-default ports
   when 8080/9099 are taken. The emulator does not enforce composite indexes:
   every new query shape needs its entry in `firestore.indexes.json`.
+- Month-end classification ("Who owes" / "Paid" / "Everyone") lives only in
+  the three statement modules (`lib/services/parking_month_statement.dart`,
+  `admin_web/src/lib/parking-month-statement.ts`,
+  `functions/parking_month_statement.js`): paid = billed for the month
+  (`monthCents > 0`) and `dueCents == 0`, so prior unpaid carried in keeps a
+  customer owing and nothing billed is neither. Screens list
+  `customersOwing` / `customersPaid` / `customers` and never re-decide it.
+  Any rule change runs the same fixture cases in all three suites
+  (`parking_month_statement_test.dart`, `parking-month-statement.test.ts`,
+  `parking-month-statement.test.js`); `parking_month_end_parity_test.dart`
+  checks each copy still defines it.
 
 - Abuse limits must key on an address the caller cannot forge. On Cloud
   Functions v2 / Cloud Run, Google's front end appends the real client to

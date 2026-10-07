@@ -4317,6 +4317,15 @@
       }
     }
   },
+  "pmePaidCount": "Paid ({count})",
+  "@pmePaidCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeNobodyPaid": "Nobody has paid for this month yet.",
   "pmeCustomersOwe": "{count, plural, =1{1 customer owes} other{{count} customers owe}}",
   "@pmeCustomersOwe": {
     "placeholders": {
