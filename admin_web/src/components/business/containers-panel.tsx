@@ -866,7 +866,8 @@ export function ContainersPanel({
         closeModal();
         return;
       }
-      const what = line.kind === "barrels" ? `${line.quantity} barrels` : `${line.quantity} × ${line.description}`;
+      // "1 barrel" / "3 barrels" / "2 × tires": the list's own wording.
+      const what = containerLineTitle(line);
       const whose = line.customerName || "Business stock";
       setAddedThisSitting((list) => [...list, `${what} — ${whose}${line.receiverName ? ` → ${line.receiverName}` : ""}`]);
       setCustomerPick(null);

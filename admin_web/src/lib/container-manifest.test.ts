@@ -363,6 +363,14 @@ test("titles: the number when known, else the working name", () => {
   assert.equal(cleanVin(" 1hg-cm82633a004352xx "), "1HGCM82633A004352");
 });
 
+// Regression: the "Added so far" tally built `${quantity} barrels` by hand
+// and read "1 barrels"; it uses the line title like the list does.
+test("the added-so-far tally names a line the way the list does", () => {
+  const panel = readFileSync(new URL("../components/business/containers-panel.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(panel, /\$\{[^}]*quantity\} barrels/);
+  assert.match(panel, /const what = containerLineTitle\(line\);/);
+});
+
 test("the VIN index joins lines to containers once, skipping arrived boxes", () => {
   const containers = [
     { id: "L", label: "Box 2", status: "loading" },
