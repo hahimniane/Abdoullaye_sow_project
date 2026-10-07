@@ -19,6 +19,7 @@ import {
   containerCounts,
   containerLineContactsDraftFromRow,
   containerLineContactsPayload,
+  containerLineDraftFromRow,
   containerLineWhatsApp,
   containerLineWhatsAppText,
   containerDeleteRefusal,
@@ -49,6 +50,7 @@ import {
   readContainerLabelChoice,
   searchContainerLines,
   updateContainerLineContactsRequest,
+  updateContainerLineRequest,
   shortDayMonth,
   validateContainerDraft,
   validateContainerLineContactsDraft,
@@ -737,6 +739,73 @@ test("a contacts correction is validated and shaped like the server's update", (
   assert.equal(stock.customerPhone, "");
   assert.equal(stock.notifyCustomer, false);
   assert.equal(stock.notifyReceiver, true);
+});
+
+test("a stored line opens the add-line form pre-filled for editing", () => {
+  const car = {
+    id: "L1", containerId: "C1", kind: "car", vinNumber: "1hgcm82633a004352",
+    carMake: "Honda", carModel: "Accord", carYear: "2003", quantity: 1,
+    ownerKind: "customer", customerName: "Fatou", customerPhone: "+16465550100",
+    receiverName: "Mariama", receiverPhone: "+224620000000",
+    notifyCustomer: false, notifyReceiver: true, trackingCode: "CL-K7M4P2",
+  };
+  const draft = containerLineDraftFromRow(car);
+  assert.deepEqual(draft, {
+    kind: "car",
+    // The typed-VIN branch, so the car fields show at once.
+    inLot: "no",
+    parkedCarId: "",
+    vinNumber: "1HGCM82633A004352",
+    carMake: "Honda",
+    carModel: "Accord",
+    carYear: "2003",
+    quantity: "",
+    description: "",
+    ownerKind: "customer",
+    customerName: "Fatou",
+    customerPhone: "+16465550100",
+    receiverName: "Mariama",
+    receiverPhone: "+224620000000",
+    notifyCustomer: false,
+    notifyReceiver: true,
+  });
+  assert.deepEqual(validateContainerLineDraft(draft), []);
+  // Saved unchanged, the request is the line as stored: nothing to change.
+  const request = updateContainerLineRequest("biz", car, draft);
+  assert.equal(request.lineId, "L1");
+  assert.equal(request.containerId, "C1");
+  assert.equal(request.businessId, "biz");
+  assert.deepEqual(request.line, {
+    kind: "car",
+    vinNumber: "1HGCM82633A004352",
+    carMake: "Honda",
+    carModel: "Accord",
+    carYear: "2003",
+    quantity: 1,
+    description: "",
+    ownerKind: "customer",
+    customerName: "Fatou",
+    customerPhone: "+16465550100",
+    receiverName: "Mariama",
+    receiverPhone: "+224620000000",
+    notifyCustomer: false,
+    notifyReceiver: true,
+  });
+  assert.ok(!("trackingCode" in request.line), "the code is never sent");
+
+  const barrels = containerLineDraftFromRow({ kind: "barrels", quantity: 3, ownerKind: "stock", customerName: "ghost", receiverPhone: "" });
+  assert.equal(barrels.quantity, "3");
+  assert.equal(barrels.inLot, "");
+  assert.equal(barrels.ownerKind, "stock");
+  assert.equal(barrels.customerName, "");
+  // No number yet: the switch starts on, as on a new line.
+  assert.equal(barrels.notifyReceiver, true);
+  const other = containerLineDraftFromRow({ kind: "other", quantity: 2, description: "Tires", ownerKind: "customer", customerName: "Awa" });
+  assert.equal(other.description, "Tires");
+  assert.equal(other.quantity, "2");
+  assert.deepEqual(containerLinePayload(other), containerLinePayload({ ...emptyContainerLineDraft, ...other }));
+  // An unknown kind falls back to a car rather than an impossible form.
+  assert.equal(containerLineDraftFromRow({}).kind, "car");
 });
 
 test("the list says who gets WhatsApp updates and which number needs a country code", () => {

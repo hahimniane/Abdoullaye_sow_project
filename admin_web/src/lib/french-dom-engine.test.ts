@@ -185,6 +185,13 @@ test("container History sentences translate around the typed values", () => {
     ["Changed receiver's phone for Awa Diallo", "Modification : téléphone du destinataire pour Awa Diallo"],
     ["Changed customer's name, receiver's WhatsApp updates", "Modification : nom du client, mises à jour WhatsApp du destinataire"],
     ["Changed label, notes", "Modification : nom, notes"],
+    // updateContainerLine (container_manifest.js containerLineEditAudit).
+    ["Edited 5 barrels (was 3 barrels): quantity for Fatou", "Modification de 5 barils (auparavant 3 barils) : quantité pour Fatou"],
+    ["Edited car 1HGCM82633A004352: make, model for Pickup Express", "Modification de la voiture 1HGCM82633A004352 : marque, modèle pour Pickup Express"],
+    ["Edited 1 barrel (was car 1HGCM82633A004352): kind, owner (business stock)", "Modification de 1 baril (auparavant la voiture 1HGCM82633A004352) : type, propriétaire (stock de l’entreprise)"],
+    ["Edited 2 × tires (was 3 barrels): kind, receiver's phone for Awa", "Modification de 2 × tires (auparavant 3 barils) : type, téléphone du destinataire pour Awa"],
+    ["Edited car 2T1BURHE0JC123456 (was car 1HGCM82633A004352): VIN, year, customer's name for Awa Diallo", "Modification de la voiture 2T1BURHE0JC123456 (auparavant la voiture 1HGCM82633A004352) : VIN, année, nom du client pour Awa Diallo"],
+    ["Edited 3 barrels: description", "Modification de 3 barils : description"],
     ["Deleted Box 7", "Suppression de Box 7"],
     ["Carrier reported Discharged at terminal", "Le transporteur signale : Déchargé au terminal"],
   ];
@@ -223,6 +230,8 @@ test("ledger and invoice History sentences translate", () => {
 
 test("an unknown History sentence is left exactly as the server wrote it", () => {
   assert.equal(translateAuditSummary("Changed the weather for Pickup"), null);
+  // An edit naming a field the table does not know is left whole too.
+  assert.equal(translateAuditSummary("Edited 3 barrels: colour for Pickup"), null);
   // The dictionary substring pass would have rewritten "Pickup" and "Cancelled".
   assert.equal(translateAuditValue("Something new about Pickup, Cancelled", "fr"), "Something new about Pickup, Cancelled");
   assert.equal(translateAuditValue("Voided", "fr"), "Invalidé");

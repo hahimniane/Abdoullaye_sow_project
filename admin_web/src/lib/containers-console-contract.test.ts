@@ -86,6 +86,7 @@ test("the panel reads containers and lines by business and writes only through c
     "removeContainerLine",
     "moveContainerLine",
     "updateContainerLineContacts",
+    "updateContainerLine",
     "setContainerStatus",
     "getContainerDocumentUrl",
   ]) {
@@ -317,6 +318,32 @@ test("contacts can be corrected in every container state, from the line itself",
   assert.match(panelSource, /\{modal === "contacts" && contactsLine && \(/);
   assert.match(panelSource, /validateContainerLineContactsDraft\(contactsDraft, line\)/);
   assert.match(panelSource, /line_contacts_edited: "Contacts edited",/);
+});
+
+test("a line on a loading container is edited in the add-line form", () => {
+  // The action sits with the other loading-only ones; contacts stay outside.
+  const row = panelSource.match(/<span className="ctn-row-actions">([\s\S]*?)<\/span>\s*<\/div>/);
+  assert.ok(row, "row actions not found");
+  const openOnlyAt = row[1].indexOf("{selectedOpen && (");
+  const editAt = row[1].indexOf('onClick={() => openEditLine(row)} title="Edit line" aria-label="Edit line"');
+  assert.ok(editAt > openOnlyAt && openOnlyAt >= 0, "Edit line belongs to a loading container");
+  // The same modal and draft as adding, pre-filled from the stored line.
+  assert.match(panelSource, /function openEditLine\(row: FirestoreRow\) \{\s*const draft = containerLineDraftFromRow\(row\);\s*setLineDraft\(draft\);\s*setEditingLineId\(String\(row\.id\)\);/);
+  assert.match(panelSource, /lastVinRef\.current = draft\.vinNumber;/);
+  assert.equal((panelSource.match(/\{modal === "line" && selected && \(/g) ?? []).length, 1, "one line form, not a fork");
+  assert.match(panelSource, /<h3>\{editingLineId \? "Edit line" : "Add a line"\}<\/h3>/);
+  // Saved through updateContainerLine, the refusal kept in the modal.
+  assert.match(panelSource, /await httpsCallable\(functions, "updateContainerLine"\)\(updateContainerLineRequest\(businessId, editing, lineDraft\)\);\s*closeModal\(\);\s*\}, failInModal\);/);
+  // The line's own VIN is never its conflict.
+  assert.match(panelSource, /String\(row\.id\) !== editingLineId\);/);
+  // No "add another" while editing one line.
+  assert.match(panelSource, /lineDraft\.kind !== "car" && !editingLineId && \(\s*<button className="lst-btn ghost" type="button" disabled=\{busy\} onClick=\{\(\) => void saveLine\(true\)\}>/);
+  assert.match(panelSource, /closeModal\(\) \{[\s\S]*?setEditingLineId\(""\);/);
+  assert.match(panelSource, /line_edited: "Line changed",/);
+  for (const english of ["Edit line", "Save line", "Line updated.", "Line changed"]) {
+    const french = translateValue(english, "fr");
+    assert.notEqual(french, english, `no French for "${english}"`);
+  }
 });
 
 test("every new contact and WhatsApp string has French", () => {

@@ -516,6 +516,65 @@ export function containerLinePayload(draft: ContainerLineDraft) {
 }
 
 // ---------------------------------------------------------------------------
+// Editing a whole line — what it is and whose, as well as its contacts. The
+// server (`updateContainerLine`) takes a change to what the line is only while
+// the container is loading; contacts stay correctable in every state.
+// ---------------------------------------------------------------------------
+
+/**
+ * A stored line back into the add-line form, so the same form edits it. A
+ * car opens on the typed-VIN branch ("not picked from the lot") with its VIN,
+ * make, model and year filled; barrels and other cargo carry their count. A
+ * line saved before the WhatsApp switches existed reads as switched on, like
+ * the server's `onUnlessOff`.
+ */
+export function containerLineDraftFromRow(line: unknown): ContainerLineDraft {
+  const r = asRow(line);
+  const rawKind = text(r.kind, 20);
+  const kind: ContainerLineKind = (CONTAINER_LINE_KINDS as readonly string[]).includes(rawKind)
+    ? (rawKind as ContainerLineKind)
+    : "car";
+  const owner: ContainerOwnerKind = text(r.ownerKind, 20) === "stock" ? "stock" : "customer";
+  const isCar = kind === "car";
+  const quantity = positiveInt(r.quantity);
+  return {
+    kind,
+    inLot: isCar ? "no" : "",
+    parkedCarId: "",
+    vinNumber: isCar ? cleanVin(r.vinNumber) : "",
+    carMake: isCar ? text(r.carMake, 80) : "",
+    carModel: isCar ? text(r.carModel, 80) : "",
+    carYear: isCar ? text(r.carYear, 8) : "",
+    quantity: !isCar && quantity > 0 ? String(quantity) : "",
+    description: kind === "other" ? text(r.description, MAX_LABEL) : "",
+    ownerKind: owner,
+    customerName: owner === "customer" ? text(r.customerName, MAX_LABEL) : "",
+    customerPhone: owner === "customer" ? text(r.customerPhone, 40) : "",
+    receiverName: text(r.receiverName, MAX_LABEL),
+    receiverPhone: text(r.receiverPhone, 40),
+    // Someone with no number yet starts switched on, as on a new line; a
+    // switch staff turned off stays off.
+    notifyCustomer: !text(r.customerPhone, 40) || onUnlessOff(r.notifyCustomer),
+    notifyReceiver: !text(r.receiverPhone, 40) || onUnlessOff(r.notifyReceiver),
+  };
+}
+
+/** The whole `updateContainerLine` request for an edited line. */
+export function updateContainerLineRequest(
+  businessId: string,
+  line: unknown,
+  draft: ContainerLineDraft,
+) {
+  const r = asRow(line);
+  return {
+    businessId: text(businessId, MAX_LABEL),
+    lineId: text(r.id, MAX_LABEL),
+    containerId: text(r.containerId, MAX_LABEL),
+    line: containerLinePayload(draft),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Correcting a line's contacts — allowed in every container state, because a
 // wrong number matters most once the box has sailed.
 // ---------------------------------------------------------------------------

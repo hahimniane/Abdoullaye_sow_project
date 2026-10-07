@@ -4978,6 +4978,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Save contacts": "Enregistrer les contacts",
   "Contacts updated.": "Contacts mis à jour.",
   "Contacts edited": "Contacts modifiés",
+  // Editing a whole line (containers-panel.tsx), reusing the add-line form.
+  "Save line": "Enregistrer la ligne",
   // Package labels for a container or one line (containers-panel.tsx).
   "Print labels": "Imprimer les étiquettes",
   "Labels for": "Étiquettes pour",

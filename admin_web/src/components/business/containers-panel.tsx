@@ -51,6 +51,7 @@ import {
   containerDraftFromRow,
   containerIsOpen,
   containerLineContactsDraftFromRow,
+  containerLineDraftFromRow,
   containerLineIsStock,
   containerLinePayload,
   containerLineTitle,
@@ -76,6 +77,7 @@ import {
   phoneCountryForDestination,
   searchContainerLines,
   updateContainerLineContactsRequest,
+  updateContainerLineRequest,
   validateContainerDraft,
   validateContainerLineContactsDraft,
   validateContainerLineDraft,
@@ -307,6 +309,9 @@ export function ContainersPanel({
   const [containerDraft, setContainerDraft] = useState<ContainerDraft>(emptyContainerDraft);
   const [editingContainerId, setEditingContainerId] = useState("");
   const [lineDraft, setLineDraft] = useState<ContainerLineDraft>(emptyContainerLineDraft);
+  // The line the form is editing; "" when it is adding a new one. The same
+  // form and draft serve both.
+  const [editingLineId, setEditingLineId] = useState("");
   // Lines saved from this one opening of the form. Five barrels for three
   // customers are three lines, entered back to back without closing it.
   const [addedThisSitting, setAddedThisSitting] = useState<string[]>([]);
@@ -491,6 +496,7 @@ export function ContainersPanel({
     setDraftError("");
     setConflictId("");
     setEditingContainerId("");
+    setEditingLineId("");
     setMoveLineId("");
     setMoveTargetId("");
     setContactsLineId("");
@@ -651,9 +657,29 @@ export function ContainersPanel({
 
   function openAddLine() {
     setLineDraft(emptyContainerLineDraft);
+    setEditingLineId("");
     setAddedThisSitting([]);
     setVinHint("");
     lastVinRef.current = "";
+    setParkedFilter("");
+    setCustomerPick(null);
+    setCustomerMenuOpen(false);
+    setDraftError("");
+    setConflictId("");
+    setModal("line");
+  }
+
+  // The add-line form, pre-filled with a line already on the list. Only
+  // while the container loads: after that the list is the record of what
+  // went, and only the contacts change (Edit contacts).
+  function openEditLine(row: FirestoreRow) {
+    const draft = containerLineDraftFromRow(row);
+    setLineDraft(draft);
+    setEditingLineId(String(row.id));
+    setAddedThisSitting([]);
+    setVinHint("");
+    // The VIN is the line's own, so the decoder must not fire on render.
+    lastVinRef.current = draft.vinNumber;
     setParkedFilter("");
     setCustomerPick(null);
     setCustomerMenuOpen(false);
@@ -808,16 +834,30 @@ export function ContainersPanel({
       return;
     }
     const line = containerLinePayload(lineDraft);
+    const editing = editingLineId ? lines.rows.find((row) => String(row.id) === editingLineId) : undefined;
     // The same refusal the server gives, without the round trip: the rows are
     // already here, so a car on another open container is caught as typed.
+    // An edited line never conflicts with itself.
     if (line.kind === "car") {
-      const sameVin = lines.rows.filter((row) => cleanVin(row.vinNumber) === line.vinNumber);
-      const conflict = openContainerHoldingVin(sameVin, selectedId);
+      const sameVin = lines.rows.filter((row) =>
+        cleanVin(row.vinNumber) === line.vinNumber && String(row.id) !== editingLineId);
+      const conflict = editingLineId ? openContainerHoldingVin(sameVin) : openContainerHoldingVin(sameVin, selectedId);
       if (conflict) {
         setDraftError(CONTAINER_MESSAGES.vin_already_loaded);
         setConflictId(conflict);
         return;
       }
+    }
+    if (editingLineId) {
+      if (!editing) {
+        setDraftError(CONTAINER_MESSAGES.line_not_found);
+        return;
+      }
+      await runPanelAction(setBusy, setFlash, "Line updated.", async () => {
+        await httpsCallable(functions, "updateContainerLine")(updateContainerLineRequest(businessId, editing, lineDraft));
+        closeModal();
+      }, failInModal);
+      return;
     }
     await runPanelAction(setBusy, setFlash, andAnother ? "" : "Line added.", async () => {
       await httpsCallable(functions, "addContainerLine")({ businessId, containerId: selectedId, line });
@@ -1018,6 +1058,7 @@ export function ContainersPanel({
                         <button className="ghost-button" type="button" disabled={busy} onClick={() => openContacts(row)} title="Edit contacts" aria-label="Edit contacts"><Phone size={14} /></button>
                         {selectedOpen && (
                           <>
+                            <button className="ghost-button" type="button" disabled={busy} onClick={() => openEditLine(row)} title="Edit line" aria-label="Edit line"><Pencil size={14} /></button>
                             <button className="ghost-button" type="button" disabled={busy} onClick={() => openMove(row)} title="Move to another container"><ArrowRightLeft size={14} /></button>
                             <button className="ghost-button" type="button" disabled={busy} onClick={() => void removeLine(row)} title="Remove line"><X size={14} /></button>
                           </>
@@ -1214,7 +1255,7 @@ export function ContainersPanel({
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 660 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head">
-              <div><h3>Add a line</h3><p>{containerTitle(selected)} — what went in, and whose it is.</p></div>
+              <div><h3>{editingLineId ? "Edit line" : "Add a line"}</h3><p><span data-no-translate>{containerTitle(selected)}</span> — what went in, and whose it is.</p></div>
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
@@ -1363,18 +1404,18 @@ export function ContainersPanel({
                   />
                 </div>
               )}
-              {ownerVisible && lineDraft.kind !== "car" && (
+              {ownerVisible && lineDraft.kind !== "car" && !editingLineId && (
                 <p className="lst-hint">Several customers' barrels in one go? Save each customer's share and add the next.</p>
               )}
             </div>
             <footer className="lst-modal-foot">
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
-              {ownerVisible && lineDraft.kind !== "car" && (
+              {ownerVisible && lineDraft.kind !== "car" && !editingLineId && (
                 <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => void saveLine(true)}>Save & add another</button>
               )}
               <button className="lst-add" type="button" disabled={busy || !ownerVisible} aria-busy={busy} onClick={() => void saveLine()}>
-                {busy ? <RefreshCw className="spin" size={16} /> : <Plus size={16} />}
-                {busy ? "Saving..." : (addedThisSitting.length > 0 ? "Add & close" : "Add line")}
+                {busy ? <RefreshCw className="spin" size={16} /> : editingLineId ? null : <Plus size={16} />}
+                {busy ? "Saving..." : editingLineId ? "Save line" : (addedThisSitting.length > 0 ? "Add & close" : "Add line")}
               </button>
             </footer>
           </div>
@@ -1515,6 +1556,7 @@ function auditActionLabel(action: string) {
     line_removed: "Line removed",
     line_moved: "Line moved",
     line_contacts_edited: "Contacts edited",
+    line_edited: "Line changed",
     shipped: "Shipped",
     arrived: "Arrived",
     deleted: "Deleted",

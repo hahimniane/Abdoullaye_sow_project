@@ -37,6 +37,18 @@ const CONTAINER_FIELDS: Record<string, string> = {
   notes: "notes",
 };
 
+// container_manifest.js LINE_FIELD_LABELS: what an edited line names.
+const LINE_FIELDS: Record<string, string> = {
+  kind: "type",
+  VIN: "VIN",
+  make: "marque",
+  model: "modèle",
+  year: "année",
+  quantity: "quantité",
+  description: "description",
+  owner: "propriétaire",
+};
+
 // shipment_tracking.js CONTAINER_STATUS_LABEL.
 const CARRIER_STATUSES: Record<string, string> = {
   "Tracking request received": "Demande de suivi reçue",
@@ -88,7 +100,7 @@ function fieldList(value: string): string | null {
   const parts = value.split(", ");
   const out: string[] = [];
   for (const part of parts) {
-    const french = CONTACT_FIELDS[part] ?? CONTAINER_FIELDS[part];
+    const french = CONTACT_FIELDS[part] ?? CONTAINER_FIELDS[part] ?? LINE_FIELDS[part];
     if (!french) return null;
     if (!out.includes(french)) out.push(french);
   }
@@ -118,6 +130,15 @@ const rules: Rule[] = [
   [new RegExp(`^Removed (.+) \\((${MONEY})\\) from (.+)$`), (m) =>
     `${removal(m[1])} (${m[2]}) de ${m[3]}`],
   [/^Removed (.+)$/, (m) => removal(m[1])],
+  // updateContainerLine: "Edited 5 barrels (was 3 barrels): quantity for Fatou".
+  [/^Edited (car \S+|\d+ barrels?|\d+ × .+?)(?: \(was (car \S+|\d+ barrels?|\d+ × .+?)\))?: (.+?)(?: for (.+)|( \(business stock\)))?$/, (m) => {
+    const fields = fieldList(m[3]);
+    if (!fields) return null;
+    return `Modification de ${lineWhat(m[1])}` +
+      (m[2] ? ` (auparavant ${lineWhat(m[2])})` : "") +
+      ` : ${fields}` +
+      (m[4] ? ` pour ${m[4]}` : m[5] ? " (stock de l’entreprise)" : "");
+  }],
   [/^Moved (.+?) to (.+)$/, (m) => `Déplacement de ${lineWhat(m[1])} vers ${m[2]}`],
   // Invoice payment before the container "Received … from …".
   [new RegExp(`^Received (${MONEY}) \\(([^)]+)\\) on (.+?)(?: for (.+?))?( — paid in full)?$`), (m, lookup) =>
