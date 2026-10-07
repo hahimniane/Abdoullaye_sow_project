@@ -9127,6 +9127,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctrContactsSaved => 'Contacts updated';
 
   @override
+  String get ctrEditLine => 'Edit line';
+
+  @override
+  String get ctrLineUpdated => 'Line updated.';
+
+  @override
+  String get ctrEditLineNote =>
+      'What it is and whose it is can change until the container ships. After that, only the contacts.';
+
+  @override
   String get ctrLotQuestion => 'Is this car parked in your lot?';
 
   @override

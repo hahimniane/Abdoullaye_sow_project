@@ -52,6 +52,7 @@ void main() {
       'setContainerStatus',
       'getContainerDocumentUrl',
       'updateContainerLineContacts',
+      'updateContainerLine',
     ]) {
       expect(screen, contains("httpsCallable('$callable')"),
           reason: '$callable is called by the console and not by the app');
@@ -172,6 +173,30 @@ void main() {
     expect(screen, contains('l10n.ctrLineTrackingCode(line.trackingCode)'));
     expect(screen, contains('line.updatesCustomer'));
     expect(screen, contains('line.receiverPhoneLacksCountryCode'));
+  });
+
+  test('a line is edited in its own add-line form, only while loading', () {
+    // The action sits among the open-only ones, after the contacts.
+    final openOnly = screen.indexOf('if (open) ...[');
+    final edit = screen.indexOf("key: const Key('line-edit')");
+    expect(openOnly, greaterThan(0));
+    expect(edit, greaterThan(openOnly));
+    expect(edit, greaterThan(screen.indexOf("Key('line-edit-contacts')")));
+    // One form: the add-line sheet takes the line it edits.
+    expect(screen, contains('final ContainerLine? existing;'));
+    expect(screen, contains('existing: line,'));
+    expect(screen, contains("httpsCallable('updateContainerLine')"));
+    expect(screen, contains("'lineId': existing.id,"));
+    expect(screen, contains("'line': containerLineRecord(draft),"));
+    // The line's own VIN is never its conflict.
+    expect(screen, contains('.where((l) => l.id != existing.id)'));
+    // The package view opens the same form, never its own copy.
+    final result = read('lib/screens/package_result_screen.dart');
+    expect(result, contains('editContainerLine('));
+    expect(result, isNot(contains("httpsCallable('updateContainerLine')")));
+    expect(result, contains('_container?.isLoading == true ? _editLine : null'));
+    // The server rule the app mirrors by gating the action.
+    expect(backend, contains('function containerLineEditRefusal('));
   });
 
   test('a line is VIN first, filled from what the yard already knows', () {

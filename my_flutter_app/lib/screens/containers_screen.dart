@@ -1231,6 +1231,23 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
       await _printLabels(line: line);
       return;
     }
+    if (action == 'edit') {
+      final saved = await editContainerLine(
+        context,
+        businessId: widget.businessId,
+        line: line,
+        container: container,
+        containers: _containers,
+        lines: _allLines,
+        customers: widget.customers,
+        knownCars: widget.knownCars,
+        parkedCarRows: widget.parkedCarRows,
+        businessCountryCode: widget.businessCountryCode,
+        destinations: widget.destinations,
+      );
+      if (saved) widget.onCustomerRecorded();
+      return;
+    }
     if (action == 'move') {
       if (others.isEmpty) {
         AppHaptics.refuse();
@@ -2145,6 +2162,13 @@ class _LineActionsSheet extends StatelessWidget {
             onTap: () => Navigator.of(context).pop('labels'),
           ),
           if (open) ...[
+            // What the line is and whose: only while the box is loading.
+            _SheetAction(
+              key: const Key('line-edit'),
+              icon: Icons.edit_outlined,
+              label: l10n.ctrEditLine,
+              onTap: () => Navigator.of(context).pop('edit'),
+            ),
             _SheetAction(
               key: const Key('line-move'),
               icon: Icons.drive_file_move_outlined,
@@ -2501,7 +2525,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
 }
 
 // ---------------------------------------------------------------------------
-// Adding a line.
+// Adding a line, or editing one already on the list.
 // ---------------------------------------------------------------------------
 
 class _LineFormSheet extends StatefulWidget {
@@ -2516,10 +2540,15 @@ class _LineFormSheet extends StatefulWidget {
     this.customerCountryCode = 'US',
     this.receiverCountryCode = 'US',
     this.onLineAdded,
+    this.existing,
   });
 
   final String businessId;
   final ShippingContainer container;
+
+  /// The line being edited; null when adding a new one. The same form opens
+  /// pre-filled and saves through `updateContainerLine` instead.
+  final ContainerLine? existing;
 
   /// Where the customer's phone picker starts: the business's country.
   final String customerCountryCode;
@@ -2590,6 +2619,43 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   String _vinHint = '';
   bool _vinBusy = false;
   String _decodedVin = '';
+
+  bool get _editing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final line = widget.existing;
+    if (line == null) return;
+    // The stored line, as the form would have typed it. A car opens on the
+    // typed-VIN branch with its fields filled; its VIN counts as decoded so
+    // nothing is looked up until it is changed.
+    _kind = containerLineKinds.contains(line.kind)
+        ? line.kind
+        : containerLineKindCar;
+    _owner = line.isStock ? containerOwnerStock : containerOwnerCustomer;
+    if (line.isCar) {
+      _inLot = false;
+      _vin.text = line.vinNumber;
+      _make.text = line.carMake;
+      _model.text = line.carModel;
+      _year.text = line.carYear;
+      _decodedVin = line.vinNumber;
+    } else if (line.quantity > 0) {
+      _quantity.text = '${line.quantity}';
+    }
+    if (line.isOther) _description.text = line.description;
+    if (!line.isStock) {
+      _customer.text = line.customerName;
+      _phone.text = line.customerPhone;
+    }
+    _receiver.text = line.receiverName;
+    _receiverPhone.text = line.receiverPhone;
+    // A switch staff turned off stays off; someone with no number yet starts
+    // switched on, as on a new line.
+    _notifyCustomer = line.customerPhone.isEmpty || line.notifyCustomer;
+    _notifyReceiver = line.receiverPhone.isEmpty || line.notifyReceiver;
+  }
 
   @override
   void dispose() {
@@ -2710,11 +2776,19 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     _clearError('vin_already_loaded');
 
     // Refused here, at the field, before the round trip; the server would
-    // refuse the same VIN with the same code.
-    final holding = openContainerHoldingVin(
-      containerLinesForVin(widget.lines, clean),
-      ignoreContainerId: widget.container.id,
-    );
+    // refuse the same VIN with the same code. A line being edited never
+    // conflicts with itself.
+    final existing = widget.existing;
+    final holding = existing == null
+        ? openContainerHoldingVin(
+            containerLinesForVin(widget.lines, clean),
+            ignoreContainerId: widget.container.id,
+          )
+        : openContainerHoldingVin(
+            containerLinesForVin(widget.lines, clean)
+                .where((l) => l.id != existing.id)
+                .toList(),
+          );
     if (holding.isNotEmpty) {
       setState(() {
         _conflictName = widget.containers
@@ -2848,6 +2922,24 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       _serverNote = '';
     });
     try {
+      final existing = widget.existing;
+      if (existing != null) {
+        // The same line, edited in place: its code and container stay.
+        await FirebaseFunctions.instance
+            .httpsCallable('updateContainerLine')
+            .call<Object?>({
+          'businessId': widget.businessId,
+          'containerId': existing.containerId,
+          'lineId': existing.id,
+          'line': containerLineRecord(draft),
+        });
+        if (!mounted) return;
+        AppHaptics.commit();
+        widget.onLineAdded?.call();
+        Navigator.of(context).pop(true);
+        showSuccessSnackBar(context, l10n.ctrLineUpdated);
+        return;
+      }
       await FirebaseFunctions.instance
           .httpsCallable('addContainerLine')
           .call<Object?>({
@@ -2933,7 +3025,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     final showOwner = !isCar || showCarFields;
 
     return LotSheetShell(
-      title: l10n.ctrAddLine,
+      title: _editing ? l10n.ctrEditLine : l10n.ctrAddLine,
       subtitle: widget.container.displayName,
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2943,7 +3035,8 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             _RefusalNote(text: _serverNote),
             const SizedBox(height: AppSpacing.sm),
           ],
-          if (showOwner && !isCar) ...[
+          // One line edited is saved and closed; "add another" is for adding.
+          if (showOwner && !isCar && !_editing) ...[
             LotSheetButton(
               key: const Key('line-save-and-another'),
               label: l10n.ctrSaveAndAnother,
@@ -2955,9 +3048,14 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             const SizedBox(height: AppSpacing.sm),
           ],
           LotSheetButton(
-            label: _addedThisSitting.isEmpty ? l10n.ctrAdd : l10n.ctrAddAndClose,
+            key: Key(_editing ? 'line-save-edit' : 'line-save'),
+            label: _editing
+                ? l10n.lotSave
+                : (_addedThisSitting.isEmpty
+                    ? l10n.ctrAdd
+                    : l10n.ctrAddAndClose),
             busy: _busy,
-            busyLabel: l10n.ctrAdding,
+            busyLabel: _editing ? l10n.lotSaving : l10n.ctrAdding,
             onTap: _submit,
           ),
         ],
@@ -2965,6 +3063,18 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_editing) ...[
+            Text(
+              l10n.ctrEditLineNote,
+              key: const Key('line-edit-note'),
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                color: AppColors.muted,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           Text(
             l10n.ctrKind,
             style: const TextStyle(
@@ -3245,7 +3355,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               onNotifyChanged: (v) => setState(() => _notifyReceiver = v),
               onChanged: () => _clearError('receiver_phone_invalid'),
             ),
-            if (!isCar) ...[
+            if (!isCar && !_editing) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(
                 l10n.ctrSplitHint,
@@ -4178,6 +4288,47 @@ Future<bool> editContainerLineContacts(
   return true;
 }
 
+/// Opens the add-line form pre-filled with [line] and saves the edit through
+/// `updateContainerLine`; returns true on a save. Offered only while
+/// [container] is loading - after that the list is the record of what went
+/// and only the contacts change (see [editContainerLineContacts]). The lists
+/// let the form refuse a VIN already on an open box and offer the lot's cars
+/// and customers; without them the server still refuses the same VIN.
+Future<bool> editContainerLine(
+  BuildContext context, {
+  required String businessId,
+  required ContainerLine line,
+  required ShippingContainer container,
+  List<ShippingContainer> containers = const [],
+  List<ContainerLine> lines = const [],
+  List<LotCustomer> customers = const [],
+  List<LotKnownCar> knownCars = const [],
+  List<Map<String, dynamic>> parkedCarRows = const [],
+  String businessCountryCode = '',
+  List<DestinationCountry> destinations = const [],
+}) async {
+  final saved = await showLotSheet<bool>(
+    context,
+    _LineFormSheet(
+      businessId: businessId,
+      container: container,
+      containers: containers.isEmpty ? [container] : containers,
+      lines: lines,
+      customers: customers,
+      knownCars: knownCars,
+      parkedCarRows: parkedCarRows,
+      customerCountryCode: containerCustomerCountryCode(businessCountryCode),
+      receiverCountryCode: containerReceiverCountryCode(
+        container,
+        destinations: destinations,
+        businessCountryCode: businessCountryCode,
+      ),
+      existing: line,
+    ),
+  );
+  return saved == true;
+}
+
 /// The print-labels sheet for every package on [container], or for [line]
 /// alone. [opener] fetches the page and opens it (a fake in tests).
 Future<void> showContainerLabelSheet(
@@ -4210,23 +4361,27 @@ Future<void> showContainerLabelSheet(
 // valid form is submitted, so widget tests pump them directly.
 // ---------------------------------------------------------------------------
 
-/// The add-line sheet for [container], on its own.
+/// The add-line sheet for [container], on its own; with [existing], the same
+/// sheet editing that line.
 @visibleForTesting
 Widget containerLineFormSheetForTesting({
   required ShippingContainer container,
   List<LotCustomer> customers = const [],
   String customerCountryCode = 'US',
   String receiverCountryCode = 'US',
+  ContainerLine? existing,
+  List<ContainerLine> lines = const [],
 }) =>
     _LineFormSheet(
       businessId: container.businessId,
       container: container,
       containers: [container],
-      lines: const [],
+      lines: lines,
       customers: customers,
       knownCars: const [],
       customerCountryCode: customerCountryCode,
       receiverCountryCode: receiverCountryCode,
+      existing: existing,
     );
 
 /// The contacts sheet for [line], on its own.

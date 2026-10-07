@@ -183,6 +183,22 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
     );
   }
 
+  /// What the package is and whose, in the container's own add-line form.
+  /// Only while its container is loading; the view hides it otherwise.
+  Future<void> _editLine() async {
+    final line = _line;
+    final container = _container;
+    if (line == null || container == null || !container.isLoading) return;
+    await editContainerLine(
+      context,
+      businessId: widget.businessId,
+      line: line,
+      container: container,
+      businessCountryCode: _businessCountryCode,
+      destinations: _destinations,
+    );
+  }
+
   Future<void> _printLabels() async {
     final line = _line;
     final container = _container;
@@ -253,6 +269,7 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
         onCall: (phone) => _launch(packagePhoneCallUri(phone)),
         onWhatsApp: (phone) => _launch(packageWhatsAppUri(phone)),
         onEditContacts: _editContacts,
+        onEditLine: _container?.isLoading == true ? _editLine : null,
         onPrintLabels: _container == null ? null : _printLabels,
         onOpenContainer: _openContainer,
       );
@@ -371,6 +388,7 @@ class PackageResultView extends StatelessWidget {
     required this.onEditContacts,
     required this.onPrintLabels,
     required this.onOpenContainer,
+    this.onEditLine,
   });
 
   final ContainerLine line;
@@ -380,6 +398,10 @@ class PackageResultView extends StatelessWidget {
   final ValueChanged<String> onCall;
   final ValueChanged<String> onWhatsApp;
   final VoidCallback onEditContacts;
+
+  /// Edits what the package is and whose. Null unless its container is still
+  /// loading: after that the list is the record of what went.
+  final VoidCallback? onEditLine;
 
   /// Null until the container is known: labels are printed per container.
   final VoidCallback? onPrintLabels;
@@ -529,6 +551,15 @@ class PackageResultView extends StatelessWidget {
           enabled: onPrintLabels != null,
           onTap: onPrintLabels ?? () {},
         ),
+        if (onEditLine != null && c != null && c.isLoading) ...[
+          const SizedBox(height: AppSpacing.sm),
+          ContainerActionButton(
+            key: const Key('pkg-edit-line'),
+            icon: Icons.edit_outlined,
+            label: l10n.ctrEditLine,
+            onTap: onEditLine!,
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
@@ -955,6 +986,7 @@ Widget packageResultViewForTesting({
   ValueChanged<String>? onCall,
   ValueChanged<String>? onWhatsApp,
   VoidCallback? onEditContacts,
+  VoidCallback? onEditLine,
   VoidCallback? onPrintLabels,
   VoidCallback? onOpenContainer,
 }) =>
@@ -964,6 +996,7 @@ Widget packageResultViewForTesting({
       onCall: onCall ?? (_) {},
       onWhatsApp: onWhatsApp ?? (_) {},
       onEditContacts: onEditContacts ?? () {},
+      onEditLine: onEditLine,
       onPrintLabels: onPrintLabels,
       onOpenContainer: onOpenContainer ?? () {},
     );

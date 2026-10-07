@@ -16140,6 +16140,24 @@ abstract class AppLocalizations {
   /// **'Contacts updated'**
   String get ctrContactsSaved;
 
+  /// No description provided for @ctrEditLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit line'**
+  String get ctrEditLine;
+
+  /// No description provided for @ctrLineUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Line updated.'**
+  String get ctrLineUpdated;
+
+  /// No description provided for @ctrEditLineNote.
+  ///
+  /// In en, this message translates to:
+  /// **'What it is and whose it is can change until the container ships. After that, only the contacts.'**
+  String get ctrEditLineNote;
+
   /// No description provided for @ctrLotQuestion.
   ///
   /// In en, this message translates to:

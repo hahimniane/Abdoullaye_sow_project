@@ -9272,6 +9272,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get ctrContactsSaved => 'Contacts mis à jour';
 
   @override
+  String get ctrEditLine => 'Modifier la ligne';
+
+  @override
+  String get ctrLineUpdated => 'Ligne mise à jour.';
+
+  @override
+  String get ctrEditLineNote =>
+      'Le contenu et le propriétaire peuvent changer jusqu\'au départ du conteneur. Ensuite, seuls les contacts.';
+
+  @override
   String get ctrLotQuestion => 'Cette voiture est-elle garée dans votre parc ?';
 
   @override
