@@ -4,9 +4,14 @@ import '../models/office_location.dart';
 
 class OfficeLocationService {
   OfficeLocationService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _injectedFirestore = firestore;
 
-  final FirebaseFirestore _firestore;
+  final FirebaseFirestore? _injectedFirestore;
+
+  // Resolved on first use, so a test double that overrides the streams never
+  // touches Firebase.
+  FirebaseFirestore get _firestore =>
+      _injectedFirestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> _collection(String businessId) =>
       _firestore

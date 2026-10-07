@@ -2239,6 +2239,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dropOffLocationsLoading => 'Loading drop-off locations…';
+
+  @override
+  String get dropOffLocationsLoadFailed =>
+      'Drop-off locations could not be loaded.';
+
+  @override
   String get servicesForDestination => 'Services for this destination';
 
   @override

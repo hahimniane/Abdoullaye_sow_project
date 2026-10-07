@@ -10,14 +10,21 @@ import '../utils/drop_off_address.dart';
 /// so this shows a plain address tile when there's only one (or none
 /// configured, falling back to the business's own address), and a picker
 /// when the customer needs to choose among several. Shared by every
-/// "bring to office" flow (barrel, freight) so they behave identically.
-class OfficeLocationPicker extends StatelessWidget {
+/// "bring to office" flow (barrel, freight) so they behave identically, and
+/// matching the web customer console's PickupFields.
+///
+/// The head office is shown only once the business's active office
+/// locations have been read and there are none. While they load the tile
+/// says so, and a failed read offers Retry: showing the head office in
+/// either case told customers it was the only place to drop off.
+class OfficeLocationPicker extends StatefulWidget {
   const OfficeLocationPicker({
     super.key,
     required this.businessId,
     required this.fallbackAddress,
     required this.selectedLocationId,
     required this.onChanged,
+    this.service,
   });
 
   final String businessId;
@@ -25,14 +32,71 @@ class OfficeLocationPicker extends StatelessWidget {
   final String selectedLocationId;
   final ValueChanged<String> onChanged;
 
+  /// Where the locations come from; tests pass a double.
+  final OfficeLocationService? service;
+
+  @override
+  State<OfficeLocationPicker> createState() => _OfficeLocationPickerState();
+}
+
+class _OfficeLocationPickerState extends State<OfficeLocationPicker> {
+  // Held in State, keyed by the business: building the stream in build()
+  // re-subscribed on every parent rebuild (and every selection).
+  late Stream<List<OfficeLocation>> _locations;
+  // Bumped by Retry so the builder starts over (and shows loading) instead
+  // of keeping the failed snapshot while the new read runs.
+  int _attempt = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribe();
+  }
+
+  void _retry() {
+    setState(() {
+      _attempt += 1;
+      _subscribe();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant OfficeLocationPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.businessId != widget.businessId ||
+        oldWidget.service != widget.service) {
+      _subscribe();
+    }
+  }
+
+  void _subscribe() {
+    _locations = (widget.service ?? OfficeLocationService()).activeLocations(
+      widget.businessId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final businessId = widget.businessId;
+    final fallbackAddress = widget.fallbackAddress;
+    final selectedLocationId = widget.selectedLocationId;
+    final onChanged = widget.onChanged;
     return StreamBuilder<List<OfficeLocation>>(
-      stream: OfficeLocationService().activeLocations(businessId),
+      key: ValueKey('$businessId#$_attempt'),
+      stream: _locations,
       builder: (context, snapshot) {
-        final locations = snapshot.data ?? const <OfficeLocation>[];
+        final l10n = AppLocalizations.of(context)!;
+        if (snapshot.hasError) {
+          return _OfficeLocationsProblem(
+            message: l10n.dropOffLocationsLoadFailed,
+            onRetry: _retry,
+          );
+        }
+        if (!snapshot.hasData) {
+          return _OfficeLocationsProblem(message: l10n.dropOffLocationsLoading);
+        }
+        final locations = snapshot.data!;
         if (locations.length <= 1) {
-          final l10n = AppLocalizations.of(context)!;
           return OfficeDropOffTile(
             address: resolveOfficeDropOffAddress(
               officeAddress: locations.isNotEmpty
@@ -49,10 +113,9 @@ class OfficeLocationPicker extends StatelessWidget {
         );
         if (effectiveSelection != selectedLocationId) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            onChanged(effectiveSelection);
+            if (mounted) onChanged(effectiveSelection);
           });
         }
-        final l10n = AppLocalizations.of(context)!;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -145,6 +208,58 @@ class _OfficeLocationChoice extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The drop-off tile while the locations load (spinner) or after the read
+/// failed (Retry) - never the head office, which is only right once the
+/// business is known to have no other location.
+class _OfficeLocationsProblem extends StatelessWidget {
+  const _OfficeLocationsProblem({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = onRetry != null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: AppColors.lightSurfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        children: [
+          if (failed)
+            const Icon(Icons.error_outline, color: AppColors.muted)
+          else
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ),
+          if (failed)
+            TextButton(
+              onPressed: onRetry,
+              child: Text(AppLocalizations.of(context)!.retry),
+            ),
+        ],
       ),
     );
   }

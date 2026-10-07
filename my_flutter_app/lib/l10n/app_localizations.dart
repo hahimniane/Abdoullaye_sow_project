@@ -4166,6 +4166,18 @@ abstract class AppLocalizations {
   /// **'{count} locations available — choose one'**
   String locationsAvailableChooseOne(Object count);
 
+  /// No description provided for @dropOffLocationsLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading drop-off locations…'**
+  String get dropOffLocationsLoading;
+
+  /// No description provided for @dropOffLocationsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop-off locations could not be loaded.'**
+  String get dropOffLocationsLoadFailed;
+
   /// No description provided for @servicesForDestination.
   ///
   /// In en, this message translates to:

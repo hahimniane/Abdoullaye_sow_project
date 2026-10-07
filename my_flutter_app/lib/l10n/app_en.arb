@@ -902,6 +902,8 @@
       "count": {}
     }
   },
+  "dropOffLocationsLoading": "Loading drop-off locations…",
+  "dropOffLocationsLoadFailed": "Drop-off locations could not be loaded.",
   "servicesForDestination": "Services for this destination",
   "servicesForDestinationHelp": "Turn on only what this business offers for this country.",
   "enableBusinessServiceBeforeDestination": "Enable barrel shipping, freight, or car transport on the business profile before configuring destination coverage.",

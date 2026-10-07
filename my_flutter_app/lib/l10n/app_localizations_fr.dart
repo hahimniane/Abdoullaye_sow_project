@@ -2289,6 +2289,13 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get dropOffLocationsLoading => 'Chargement des points de dépôt…';
+
+  @override
+  String get dropOffLocationsLoadFailed =>
+      'Les points de dépôt n’ont pas pu être chargés.';
+
+  @override
   String get servicesForDestination => 'Services pour cette destination';
 
   @override

@@ -10,11 +10,13 @@ import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
 import '../models/barrel_order.dart';
+import '../models/office_location.dart';
 import '../models/destination_country.dart';
 import '../models/structured_address.dart';
 import '../services/barrel_pricing_service.dart';
 import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
+import '../services/office_location_service.dart';
 import '../services/service_ranking.dart';
 import '../services/payment_flow_safety.dart';
 import '../utils/barrel_receipt_generator.dart';
@@ -323,6 +325,20 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     });
 
     try {
+      if (!_usesDifferentPickupDetails && !_pickupRequested) {
+        // The picker auto-selects the first of several locations on a
+        // post-frame callback once its read resolves; a quick "Pay" can get
+        // here first, and the server refuses a drop-off with no chosen
+        // location. Resolve it now, as Send freight does.
+        final locations = await OfficeLocationService()
+            .activeLocations(_orderLines.first.business.businessId)
+            .first;
+        if (!mounted) return;
+        _sharedOfficeLocationId = OfficeLocation.resolveSelectedId(
+          locations,
+          _sharedOfficeLocationId,
+        );
+      }
       // Office location always travels per line (it depends on that line's
       // own business), even when pickup itself is shared across the order.
       final lines = _usesDifferentPickupDetails
