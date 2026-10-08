@@ -94,6 +94,8 @@ There is no button for it in the console or the app yet.
 
 ### 1. Meta business verification
 
+Status (2026-10-07): business portfolio **Laawol Digital LLC** (id 4527476690814512), Meta app **Laawol** (id 1850257899484218), test WhatsApp Business Account 3377183529120403. Both templates below were submitted on 2026-10-07. Meta asked for more static text than the first draft had ("too many variables for its length"), so the wording grew; the five variables keep their order.
+
 WhatsApp only lets a business start a conversation with a template Meta has
 approved, and only after the Meta Business account is verified. This is the
 blocker today.
@@ -109,7 +111,7 @@ template**, both named exactly `container_status_update`, category
 Body:
 
 ```
-Hello {{1}}, an update from {{2}} about {{3}}: {{4}}. Tracking code: {{5}}.
+Hello {{1}}, this is an update from {{2}} about your shipment of {{3}}: {{4}}. Your tracking code is {{5}}. Tap the button below to follow your shipment at any time.
 ```
 
 Button: *Visit website*, text `Track shipment`, URL type **Dynamic**:
@@ -123,7 +125,7 @@ https://customer.laawoldigital.com/t/{{1}}
 Body:
 
 ```
-Bonjour {{1}}, une mise à jour de {{2}} concernant {{3}} : {{4}}. Code de suivi : {{5}}.
+Bonjour {{1}}, voici une mise à jour de {{2}} concernant votre envoi de {{3}} : {{4}}. Votre code de suivi est {{5}}. Appuyez sur le bouton ci-dessous pour suivre votre envoi à tout moment.
 ```
 
 Button: *Visit website*, text `Suivre l'envoi`, same dynamic URL.
