@@ -116,3 +116,29 @@ test("SSH deploy publishes hashed assets before the HTML naming them", () => {
   assert.match(source, /function rsyncWithRetry/);
   assert.match(source, /ServerAliveInterval=15/);
 });
+
+// https://laawoldigital.com/get-app.html is a static button in the approved
+// WhatsApp template, so it must ship with every marketing deploy and be
+// checked after it. Both deploys copy the whole public_site/ directory rather
+// than a list of pages; keep it that way or add the page to the list.
+test("static deploys ship get-app.html and the smoke checks it", () => {
+  const read = (relative) => readFileSync(new URL(relative, import.meta.url), "utf8");
+  const page = read("../../public_site/get-app.html");
+  assert.match(page, /href="https:\/\/apps\.apple\.com\/app\/laawol\/id6791795025"/);
+  assert.match(page, /href="https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.laawoldigital\.app"/);
+
+  const ssh = read("../ssh-static-deploy.mjs");
+  assert.match(ssh, /const SITE_DIR = path\.join\(ROOT, "public_site"\);/);
+  assert.match(ssh, /`\$\{SITE_DIR\}\/`,\s*`\$\{dest\}\/`/);
+  assert.doesNotMatch(ssh, /--exclude",\s*"[^"]*\.html"/);
+  const ftp = read("../deploy.mjs");
+  assert.match(ftp, /const SITE_DIR = path\.join\(ROOT, "public_site"\);/);
+  assert.match(ftp, /uploadFromDir\(SITE_DIR, cfg\.remoteRoot\)/);
+
+  const script = remoteStaticSmokeScript({
+    marketingHost: "laawoldigital.com",
+    consoleHosts: [],
+  });
+  assert.match(script, /"https:\/\/laawoldigital\.com\/get-app\.html"/);
+  assert.match(read("../post-deploy-smoke.mjs"), /new URL\("get-app\.html"/);
+});

@@ -224,6 +224,49 @@ for (const file of htmlFiles) {
   }
 }
 
+// get-app.html is the static "Get the app" button in the WhatsApp template
+// (https://laawoldigital.com/get-app.html). Phones go straight to their
+// store; desktops, and browsers without JavaScript, see both badges.
+const PLAY_URL = "https://play.google.com/store/apps/details?id=com.laawoldigital.app";
+assert(existsSync(path.join(root, "get-app.html")), "get-app.html must exist");
+const getApp = read("get-app.html");
+assertIncludes(getApp, `href="${APP_STORE_URL}"`, "get-app.html App Store badge");
+assertIncludes(getApp, `href="${PLAY_URL}"`, "get-app.html Google Play badge");
+assertIncludes(getApp, "<noscript>", "get-app.html no-JavaScript fallback");
+for (const key of [
+  '"Follow every shipment in the Laawol app": "Suivez chaque expédition dans l’application Laawol"',
+  '"Opening your app store…": "Ouverture de votre boutique d’applications…"',
+  '"Choose your store below.": "Choisissez votre boutique ci-dessous."',
+]) {
+  assertIncludes(i18n, key, "get-app.html translation");
+}
+{
+  const inline = getApp.match(/<script>([\s\S]*?)<\/script>/);
+  assert(inline, "get-app.html must redirect with an inline script");
+  const { runInNewContext } = await import("node:vm");
+  const redirectFor = (userAgent, maxTouchPoints = 0) => {
+    let target = null;
+    const documentElement = { className: "notranslate" };
+    runInNewContext(inline[1], {
+      navigator: { userAgent, maxTouchPoints },
+      location: { replace: (url) => { target = url; } },
+      document: { documentElement },
+    });
+    return { target, className: documentElement.className };
+  };
+  const iphone = redirectFor("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", 5);
+  assert(iphone.target === APP_STORE_URL, "get-app.html must send an iPhone to the App Store");
+  assert(iphone.className.includes("getapp-redirect"), "get-app.html must show the opening status while redirecting");
+  const ipadAsMac = redirectFor("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15", 5);
+  assert(ipadAsMac.target === APP_STORE_URL, "get-app.html must send an iPad reporting as a Mac to the App Store");
+  const android = redirectFor("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36", 5);
+  assert(android.target === PLAY_URL, "get-app.html must send Android to Google Play");
+  const mac = redirectFor("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36", 0);
+  assert(mac.target === null && mac.className === "notranslate", "get-app.html must not redirect a desktop Mac");
+  const windows = redirectFor("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36", 10);
+  assert(windows.target === null, "get-app.html must not redirect a desktop (even a touchscreen PC)");
+}
+
 console.log(
   `Verified public CMS/privacy hooks across ${htmlFiles.length} HTML files.`,
 );

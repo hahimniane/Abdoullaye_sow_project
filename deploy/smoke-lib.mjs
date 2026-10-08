@@ -133,5 +133,9 @@ curl -fsSL --connect-timeout 5 --max-time 20 \\
   --resolve "${marketingHost}:443:127.0.0.1" \\
   -o /dev/null "https://${marketingHost}/"
 printf 'OK ${marketingHost} - HTTP 200\\n'
+curl -fsSL --connect-timeout 5 --max-time 20 \\
+  --resolve "${marketingHost}:443:127.0.0.1" \\
+  -o /dev/null "https://${marketingHost}/get-app.html"
+printf 'OK ${marketingHost}/get-app.html - HTTP 200\\n'
 ${consoleChecks}`;
 }

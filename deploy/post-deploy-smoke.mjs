@@ -160,6 +160,13 @@ if (scope === "static" || scope === "all") {
         [200],
         fetchStaticWithTimeout,
     ) && ok;
+    // The WhatsApp template's "Get the app" button links here.
+    ok = await requireStatus(
+        "Get-the-app page",
+        new URL("get-app.html", process.env.PUBLIC_SITE_URL || "https://laawoldigital.com/").href,
+        [200],
+        fetchStaticWithTimeout,
+    ) && ok;
     ok = await requireConsolePage(
         "Admin console",
         process.env.ADMIN_SITE_URL || "https://admin.laawoldigital.com/",
