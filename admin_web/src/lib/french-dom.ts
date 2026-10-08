@@ -4332,6 +4332,14 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Sign in to see your own receipts, payment details, and complete order history.":
     "Connectez-vous pour voir vos propres reçus, les détails de paiement et l’historique complet de vos commandes.",
   "Create account": "Créer un compte",
+  // The "Get the Laawol app" banner under a tracking result
+  // (get-app-banner.tsx, store labels in app-store-links.ts).
+  "Follow every shipment in the Laawol app":
+    "Suivez chaque expédition dans l’application Laawol",
+  "Get a notification at each step and keep all your orders in one place.":
+    "Recevez une notification à chaque étape et retrouvez toutes vos commandes au même endroit.",
+  "Download on the App Store": "Télécharger dans l’App Store",
+  "Get it on Google Play": "Disponible sur Google Play",
   "This booking was cancelled.": "Cette commande a été annulée.",
   "Your booking is confirmed": "Votre commande est confirmée",
   "The service is underway": "Le service est en cours",

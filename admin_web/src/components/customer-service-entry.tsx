@@ -262,6 +262,7 @@ export function CustomerServiceEntry({
               const next = packageCodeFrom(code);
               if (next) setPackageCode(next);
             }}
+            offerApp={!staffCandidate}
           />
         )}
       </main>

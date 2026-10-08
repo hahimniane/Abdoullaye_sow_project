@@ -6,6 +6,7 @@ import { httpsCallable } from "firebase/functions";
 import { signInAnonymously } from "firebase/auth";
 
 import { GuestJourneyProgress } from "@/components/customer-tracking-journey";
+import { GetAppBanner } from "@/components/get-app-banner";
 import {
   CustomerFreightQuotes,
   type FreightQuoteRequestRow,
@@ -34,6 +35,11 @@ type GuestTrackingProps = {
   onAccountAccess: (mode: "sign-in" | "sign-up") => void;
   /** Told the code of every record found, so a staff view above can follow it. */
   onFound?: (trackingCode: string) => void;
+  /**
+   * Offer the app under the answer. Off for staff on their own device, who
+   * work in the business flow rather than follow a shipment.
+   */
+  offerApp?: boolean;
 };
 
 type GuestTrackingError =
@@ -56,6 +62,7 @@ export function GuestTracking({
   authenticated,
   onAccountAccess,
   onFound,
+  offerApp = true,
 }: GuestTrackingProps) {
   const [identifier, setIdentifier] = useState("");
   const [loading, setLoading] = useState(false);
@@ -393,6 +400,13 @@ export function GuestTracking({
             </aside>
           )}
         </section>
+      )}
+
+      {/* After an answer - found or not - never while it is being looked
+          up. A link from a label or WhatsApp lands here when the app is not
+          installed, so this is where it is worth offering. */}
+      {offerApp && !loading && (record || error === "not_found") && (
+        <GetAppBanner />
       )}
     </section>
   );

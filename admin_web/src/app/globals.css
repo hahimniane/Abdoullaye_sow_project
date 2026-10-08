@@ -6202,6 +6202,16 @@ html[data-lang-pending] body {
   gap: 8px;
 }
 
+/* "Get the Laawol app" under a tracking result: the upsell's layout, with
+   store links for buttons. */
+.get-app-banner .guest-tracking-upsell-actions {
+  flex-wrap: wrap;
+}
+
+.get-app-banner .guest-tracking-upsell-actions > a {
+  text-decoration: none;
+}
+
 .customer-entry-locked-note {
   align-items: center;
   background: rgba(236, 253, 245, 0.78);
@@ -6372,7 +6382,8 @@ html[data-lang-pending] body {
     display: grid;
   }
 
-  .guest-tracking-upsell-actions > button {
+  .guest-tracking-upsell-actions > button,
+  .guest-tracking-upsell-actions > a {
     justify-content: center;
     width: 100%;
   }
