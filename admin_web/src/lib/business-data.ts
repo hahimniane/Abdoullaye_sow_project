@@ -209,6 +209,20 @@ export function useOpenContainerPlacements(businessId: string, enabled: boolean)
 }
 
 /**
+ * The packages dropped off and still waiting for a container, live and whole:
+ * a short list that empties as containers claim them. `containerLines` where
+ * businessId and containerStatus both equal a value - the pair the existing
+ * composite index already serves.
+ */
+export function useWaitingPackages(businessId: string, enabled: boolean): BusinessRowsResult {
+  return useBusinessCollection("containerLines", businessId, enabled, {
+    pageSize: null,
+    where: [["containerStatus", "==", "waiting"]],
+    sort: "query",
+  });
+}
+
+/**
  * What one month's parking bills are built from, live: the four narrow reads
  * of parkingMonthQueryPlan (the server's month-end notice makes the same
  * ones), each complete and bounded by the month. A payment recorded on a car

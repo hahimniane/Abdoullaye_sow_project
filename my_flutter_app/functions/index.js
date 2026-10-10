@@ -331,12 +331,20 @@ const {
 const {
   CONTAINER_STATUS,
   CONTAINER_MESSAGES,
+  LINE_STATUS_WAITING,
+  WAITING_HOLDER,
   validateContainer,
   containerRecord,
   containerTransitionRefusal,
   containerIsOpen,
   containerDeleteRefusal,
   validateContainerLine,
+  validateWaitingPackage,
+  cleanLineIds,
+  containerAssignRefusal,
+  containerLinesCountsDelta,
+  destinationMismatch,
+  lineIsWaiting,
   containerLineRecord,
   openContainerHoldingVin,
   containerCounts,
@@ -377,6 +385,14 @@ const {
   whatsappUpdateMessage,
   whatsappConfigured,
 } = require("./container_updates");
+const {
+  priceErrors: containerPriceErrors,
+  linePriceRecord: containerLinePriceRecord,
+  validateLinePayment: validateContainerLinePayment,
+  linePaymentRecord: containerLinePaymentRecord,
+  sumLivePayments: sumContainerLivePayments,
+  paymentRevertRefusal: containerPaymentRevertRefusal,
+} = require("./container_payments");
 const {
   INVOICE_MESSAGES,
   INVOICE_STATUS,
@@ -13508,6 +13524,15 @@ exports.parkingDocument = onRequest(
       if (!token || token.length < 16) return notFound();
 
       const db = admin.firestore();
+      // Several packages' labels in one link: tokens joined with ".". It can
+      // only be a line link, and is too long to ask the other collections
+      // about as one value.
+      if (token.includes(LABEL_TOKEN_SEPARATOR)) {
+        const page = await containerLineLabelsPage(db, req, token);
+        if (!page) return notFound();
+        res.set("Content-Type", "text/html; charset=utf-8");
+        return res.status(200).send(page);
+      }
       const matches = await db.collection("parkedCars")
           .where("paymentLinkToken", "==", token)
           .limit(1)
@@ -13527,7 +13552,13 @@ exports.parkingDocument = onRequest(
               .where("documentToken", "==", token)
               .limit(1)
               .get();
-          if (boxes.empty) return notFound();
+          if (boxes.empty) {
+            // A waiting package's labels: its own token, no container.
+            const page = await containerLineLabelsPage(db, req, token);
+            if (!page) return notFound();
+            res.set("Content-Type", "text/html; charset=utf-8");
+            return res.status(200).send(page);
+          }
           const box = boxes.docs[0];
           const lineDocs = await db.collection("containerLines")
               .where("containerId", "==", box.id)
@@ -16632,6 +16663,57 @@ function containerVinLockRef(db, businessId, vin) {
 }
 
 /**
+ * What to tell someone whose car is already held: another container, or the
+ * waiting list (conflict is WAITING_HOLDER, no container to name).
+ *
+ * @param {string} conflict The holder from openContainerHoldingVin.
+ * @return {string} The message.
+ */
+function vinConflictMessage(conflict) {
+  return conflict === WAITING_HOLDER ?
+    CONTAINER_MESSAGES.vin_already_waiting :
+    CONTAINER_MESSAGES.vin_already_loaded;
+}
+
+/**
+ * Checks that a car may take its VIN lock, inside the caller's transaction:
+ * the lock's own line, then any line loaded before locks existed. Refuses
+ * with the holder named (a container, or the waiting list). Used where a
+ * waiting package takes the lock; adding and editing a line carry the same
+ * check inline, pinned by the source-contract tests.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, lockRef, vin, ignoreLineId}.
+ * @return {Promise<object>} The lock snapshot (to set or create).
+ */
+async function takeVinLock(tx, db, args) {
+  const {businessId, lockRef, vin, ignoreLineId = ""} = args;
+  const lockDoc = await tx.get(lockRef);
+  const lock = lockDoc.exists ? lockDoc.data() || {} : null;
+  const heldBy = String(lock?.lineId || "");
+  const heldLine = heldBy && heldBy !== ignoreLineId ? await tx.get(
+      db.collection("containerLines").doc(heldBy)) : null;
+  let conflict = vinLockHolder(lock,
+      heldLine?.exists ? heldLine.data() || {} : null);
+  if (!conflict) {
+    const sameVin = await tx.get(db.collection("containerLines")
+        .where("businessId", "==", businessId)
+        .where("vinNumber", "==", vin));
+    conflict = openContainerHoldingVin(sameVin.docs
+        .filter((d) => d.id !== ignoreLineId)
+        .map((d) => d.data() || {}));
+  }
+  if (conflict) {
+    throw new HttpsError(
+        "failed-precondition", vinConflictMessage(conflict),
+        {reason: "vin_already_loaded", conflictContainerId: conflict,
+          conflictWaiting: conflict === WAITING_HOLDER});
+  }
+  return lockDoc;
+}
+
+/**
  * Lets go of the VIN locks a container's cars hold once it has arrived. Only
  * tidying: a lock whose line has arrived is already treated as free
  * (vinLockHolder), so a failure here is logged, never thrown.
@@ -16730,6 +16812,41 @@ function containerAudit(businessId, containerId, action, uid, summary) {
   });
 }
 
+/**
+ * The history of one package. A waiting package has no container to hang its
+ * history on, so its line is the entity; one on a container is told on the
+ * container's history, as every other change to the box is.
+ *
+ * @param {string} businessId The business.
+ * @param {string} lineId The line.
+ * @param {object} row The line as it was.
+ * @param {string} action The audit action.
+ * @param {string} uid Who did it.
+ * @param {string} summary The sentence.
+ * @return {Promise<void>}
+ */
+function containerLineAudit(businessId, lineId, row, action, uid, summary) {
+  const containerId = String(row?.containerId || "");
+  if (containerId) {
+    return containerAudit(businessId, containerId, action, uid, summary);
+  }
+  return writeLotLedgerAudit({
+    businessId, entityType: "container_line", entityId: lineId,
+    action, byStaffId: uid, summary, changes: [],
+  });
+}
+
+/**
+ * What a package's history says it is: "3 barrels for Fatou Diallo".
+ *
+ * @param {object} row The line.
+ * @return {string} The phrase.
+ */
+function containerLineTitle(row) {
+  const name = String(row?.customerName || "");
+  return containerLineWhat(row) + (name ? ` for ${name}` : "");
+}
+
 exports.createContainer = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -16786,6 +16903,20 @@ exports.updateContainer = onCall(
       if (changed.length > 0 && !containerIsOpen(current)) {
         throw new HttpsError(
             "failed-precondition", CONTAINER_MESSAGES.container_locked);
+      }
+      // Packages on the box are going where it was going; it cannot be sent
+      // elsewhere from under them.
+      if (changed.includes("destinationCountryId")) {
+        const onBox = await db.collection("containerLines")
+            .where("containerId", "==", ref.id).get();
+        const clash = onBox.docs
+            .filter((d) => destinationMismatch(d.data() || {}, merged))
+            .map((d) => d.id);
+        if (clash.length > 0) {
+          throw new HttpsError(
+              "failed-precondition", CONTAINER_MESSAGES.destination_mismatch,
+              {reason: "destination_mismatch", lineIds: clash});
+        }
       }
       await ref.set({
         ...merged,
@@ -16877,6 +17008,12 @@ exports.addContainerLine = onCall(
           throw new HttpsError(
               "failed-precondition", CONTAINER_MESSAGES.container_locked);
         }
+        // A line that says where it is going rides only a box going there.
+        const clash = destinationMismatch(record, box.data());
+        if (clash) {
+          throw new HttpsError("failed-precondition",
+              CONTAINER_MESSAGES[clash], {reason: clash, lineIds: []});
+        }
         let lockDoc = null;
         if (lockRef) {
           lockDoc = await tx.get(lockRef);
@@ -16897,8 +17034,10 @@ exports.addContainerLine = onCall(
           if (conflict) {
             throw new HttpsError(
                 "failed-precondition",
-                CONTAINER_MESSAGES.vin_already_loaded,
-                {reason: "vin_already_loaded", conflictContainerId: conflict});
+                vinConflictMessage(conflict),
+                {reason: "vin_already_loaded",
+                  conflictContainerId: conflict,
+                  conflictWaiting: conflict === WAITING_HOLDER});
           }
         }
         if (lockRef) {
@@ -16952,6 +17091,49 @@ exports.addContainerLine = onCall(
     },
 );
 
+/**
+ * Removes a package that is still waiting (no container): the line, and its
+ * car's VIN lock. Refused while payments are recorded against it - they are
+ * reverted first, so the money never disappears with the line.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, lineId}.
+ * @return {Promise<object>} The callable's answer.
+ */
+async function removeWaitingLine(db, args) {
+  const {uid, businessId} = args;
+  await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+  const lineId = String(args.lineId || "").trim();
+  if (!lineId) {
+    throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+  }
+  const lineRef = db.collection("containerLines").doc(lineId);
+  const line = await db.runTransaction(async (tx) => {
+    const lineDoc = await tx.get(lineRef);
+    const row = lineDoc.exists ? lineDoc.data() || {} : null;
+    if (!row || String(row.businessId) !== businessId ||
+        !lineIsWaiting(row)) {
+      throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+    }
+    if (Number(row.paidCents) > 0) {
+      throw new HttpsError("failed-precondition",
+          CONTAINER_MESSAGES.line_has_payments,
+          {reason: "line_has_payments"});
+    }
+    const lockRef = row.kind === "car" ?
+      containerVinLockRef(db, businessId, row.vinNumber) : null;
+    const lock = lockRef ? await tx.get(lockRef) : null;
+    tx.delete(lineRef);
+    if (lock?.exists && String(lock.data()?.lineId || "") === lineId) {
+      tx.delete(lockRef);
+    }
+    return row;
+  });
+  await containerLineAudit(businessId, lineId, line, "line_removed", uid,
+      `Removed waiting ${containerLineTitle(line)}`);
+  return {success: true, lineId};
+}
+
 exports.removeContainerLine = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -16959,6 +17141,10 @@ exports.removeContainerLine = onCall(
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
       const db = admin.firestore();
+      // No container named: the package is waiting for one.
+      if (!String(data.containerId || "").trim()) {
+        return removeWaitingLine(db, {uid, businessId, lineId: data.lineId});
+      }
       const {ref, data: current} =
         await loadContainerFor(db, uid, businessId, data.containerId);
       if (!containerIsOpen(current)) {
@@ -16983,6 +17169,11 @@ exports.removeContainerLine = onCall(
         if (!box.exists || !containerIsOpen(box.data())) {
           throw new HttpsError(
               "failed-precondition", CONTAINER_MESSAGES.container_locked);
+        }
+        if (Number(row.paidCents) > 0) {
+          throw new HttpsError("failed-precondition",
+              CONTAINER_MESSAGES.line_has_payments,
+              {reason: "line_has_payments"});
         }
         const lockRef = row.kind === "car" ?
           containerVinLockRef(db, businessId, row.vinNumber) : null;
@@ -17020,6 +17211,13 @@ exports.moveContainerLine = onCall(
         await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
         throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
       }
+      // A waiting package has no box to move from; it is added to one.
+      if (!String(line.containerId || "")) {
+        await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+        throw new HttpsError("failed-precondition",
+            CONTAINER_MESSAGES.line_is_waiting,
+            {reason: "line_is_waiting"});
+      }
       const from =
         await loadContainerFor(db, uid, businessId, line.containerId);
       const to =
@@ -17049,6 +17247,13 @@ exports.moveContainerLine = onCall(
         if (!toBox.exists || !containerIsOpen(toBox.data())) {
           throw new HttpsError("failed-precondition",
               CONTAINER_MESSAGES.move_target_not_loading);
+        }
+        // Only to a box going where the package is going.
+        const clash = destinationMismatch(row, toBox.data());
+        if (clash) {
+          throw new HttpsError("failed-precondition",
+              CONTAINER_MESSAGES[clash],
+              {reason: clash, lineIds: [lineRef.id]});
         }
         const lockRef = row.kind === "car" ?
           containerVinLockRef(db, businessId, row.vinNumber) : null;
@@ -17122,16 +17327,26 @@ async function editContainerLine(db, args) {
     const next = containerLineEditTarget(row, input, contactsOnly);
     const changes = containerLineEditChanges(row, next);
     if (changes.length === 0) return {row, next, changes};
-    const boxRef = db.collection("containers")
-        .doc(String(row.containerId || ""));
-    const box = await tx.get(boxRef);
+    // A waiting package has no box: it is as open as a loading one.
+    const boxRef = row.containerId ?
+      db.collection("containers").doc(String(row.containerId)) : null;
+    const box = boxRef ? await tx.get(boxRef) : null;
     // A line whose box is gone is treated as closed: only its contacts.
     const refusal = containerLineEditRefusal(
-        box.exists ? box.data() || {} : {status: CONTAINER_STATUS.ARRIVED},
+        !box ? null : (box.exists ? box.data() || {} :
+          {status: CONTAINER_STATUS.ARRIVED}),
         changes);
     if (refusal) {
       throw new HttpsError("failed-precondition", CONTAINER_MESSAGES[refusal],
           {reason: refusal});
+    }
+    // A package on a box keeps going where the box goes.
+    if (box && (changes.includes("destinationCountryId"))) {
+      const clash = destinationMismatch(next, box.data() || {});
+      if (clash) {
+        throw new HttpsError("failed-precondition", CONTAINER_MESSAGES[clash],
+            {reason: clash, lineIds: [lineId]});
+      }
     }
     // Reads first, as a transaction requires: the lock the line lets go of,
     // and the lock (and any line holding the car) it would take.
@@ -17163,8 +17378,9 @@ async function editContainerLine(db, args) {
       if (conflict) {
         throw new HttpsError(
             "failed-precondition",
-            CONTAINER_MESSAGES.vin_already_loaded,
-            {reason: "vin_already_loaded", conflictContainerId: conflict});
+            vinConflictMessage(conflict),
+            {reason: "vin_already_loaded", conflictContainerId: conflict,
+              conflictWaiting: conflict === WAITING_HOLDER});
       }
     }
     const update = {};
@@ -17179,7 +17395,7 @@ async function editContainerLine(db, args) {
       Object.entries(containerLineEditCountsDelta(row, next))) {
       increments[key] = FirestoreFieldValue.increment(value);
     }
-    if (Object.keys(increments).length > 0) {
+    if (boxRef && Object.keys(increments).length > 0) {
       tx.set(boxRef, {
         ...increments,
         updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -17225,8 +17441,7 @@ async function editContainerLine(db, args) {
     });
   }
   const {action, summary} = containerLineEditAudit(row, next, changes);
-  await containerAudit(businessId, String(row.containerId || ""), action,
-      uid, summary);
+  await containerLineAudit(businessId, lineId, row, action, uid, summary);
   return {success: true, lineId, changed: changes};
 }
 
@@ -17267,6 +17482,436 @@ exports.updateContainerLineContacts = onCall(
           data.contacts : {},
         contactsOnly: true,
       });
+    },
+);
+
+// -------------------------------------------------------------------------
+// Waiting packages: dropped off at the counter before anyone knows which
+// container they will ride. Same collection as the lines on a container, with
+// no container (`containerId: ""`, `containerStatus: "waiting"`); the code, the
+// label and the car's VIN lock are the line's own and survive the wait. No
+// customer is told anything at drop-off or when a package is added to a box:
+// the first message is still the one that says it sailed.
+// -------------------------------------------------------------------------
+
+/**
+ * A refusal the screens can act on: the message, the code, and the lines it
+ * is about.
+ *
+ * @param {string} code A CONTAINER_MESSAGES key.
+ * @param {string[]} lineIds The lines the refusal names.
+ * @return {HttpsError} The error to throw.
+ */
+function containerRefusal(code, lineIds = []) {
+  const gone = ["line_not_found", "payment_not_found"].includes(code);
+  return new HttpsError(gone ? "not-found" : "failed-precondition",
+      CONTAINER_MESSAGES[code] || code,
+      {reason: code, lineIds});
+}
+
+exports.addWaitingPackage = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+      const errors = validateWaitingPackage(data);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", containerMessage(errors),
+            {reasons: errors});
+      }
+      const db = admin.firestore();
+      const record = containerLineRecord(data, {
+        containerId: "",
+        containerStatus: LINE_STATUS_WAITING,
+        addedByStaffId: uid,
+      });
+      const lineRef = db.collection("containerLines").doc();
+      // Minted before the transaction: finding a free code reads other lines.
+      const trackingCode = await generateTrackingCode(
+          CONTAINER_LINE_CODE_PREFIX, "containerLines");
+      const lockRef = record.kind === "car" ?
+        containerVinLockRef(db, businessId, record.vinNumber) : null;
+      // A waiting car holds its VIN like a loaded one: the same car cannot be
+      // waiting twice, nor waiting and on a box. Checked and written in one
+      // transaction around the VIN's lock document.
+      const addLine = () => db.runTransaction(async (tx) => {
+        const lockDoc = lockRef ? await takeVinLock(tx, db, {
+          businessId, lockRef, vin: record.vinNumber}) : null;
+        if (lockRef) {
+          const lockBody = {
+            businessId, vinNumber: record.vinNumber,
+            containerId: "", lineId: lineRef.id,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          };
+          if (lockDoc.exists) tx.set(lockRef, lockBody);
+          else tx.create(lockRef, lockBody);
+        }
+        tx.set(lineRef, {
+          businessId,
+          ...record,
+          trackingCode,
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      });
+      try {
+        await addLine();
+      } catch (error) {
+        // Lost the race to create the lock: run again, and this time read
+        // the winner's lock and refuse with its holder.
+        if (error.code !== 6 && error.code !== "already-exists") throw error;
+        await addLine();
+      }
+      await rememberLotCustomer(db, {
+        businessId,
+        seen: {customerName: record.customerName,
+          customerPhone: record.customerPhone, customerEmail: ""},
+        source: "container",
+        staffId: uid,
+      });
+      await containerLineAudit(businessId, lineRef.id, record,
+          "line_added", uid,
+          `Received ${containerLineTitle(record)}` +
+          (record.destinationCountryName ?
+            `, going to ${record.destinationCountryName}` : "") +
+          ", waiting for a container");
+      return {success: true, lineId: lineRef.id, trackingCode};
+    },
+);
+
+exports.assignContainerLines = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const {ref} =
+        await loadContainerFor(db, uid, businessId, data.containerId);
+      const {ids, errors} = cleanLineIds(data.lineIds);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument", containerMessage(errors),
+            {reasons: errors});
+      }
+      const lineRefs = ids.map((id) => db.collection("containerLines").doc(id));
+      // All or none: every package is re-read with the container inside one
+      // transaction, so a box that shipped, or a package taken by another
+      // box a moment ago, refuses the whole request.
+      const placed = await db.runTransaction(async (tx) => {
+        const box = await tx.get(ref);
+        if (!box.exists || String(box.data()?.businessId) !== businessId) {
+          throw new HttpsError(
+              "not-found", CONTAINER_MESSAGES.container_not_found);
+        }
+        const boxData = box.data() || {};
+        const docs = await tx.getAll(...lineRefs);
+        const entries = docs.map((d) =>
+          ({id: d.id, line: d.exists ? d.data() || {} : null}));
+        const refusal = containerAssignRefusal(boxData, entries, businessId);
+        if (refusal) throw containerRefusal(refusal.code, refusal.lineIds);
+        const lockRefs = entries
+            .filter(({line}) => line.kind === "car")
+            .map(({id, line}) => ({id, lockRef: containerVinLockRef(
+                db, businessId, line.vinNumber)}))
+            .filter(({lockRef}) => lockRef);
+        const locks = lockRefs.length > 0 ?
+          await tx.getAll(...lockRefs.map(({lockRef}) => lockRef)) : [];
+        const status = String(boxData.status || CONTAINER_STATUS.LOADING);
+        for (const {id} of entries) {
+          tx.update(db.collection("containerLines").doc(id), {
+            containerId: ref.id,
+            containerStatus: status,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+        }
+        locks.forEach((lock, i) => {
+          if (lock.exists && String(lock.data()?.lineId || "") ===
+              lockRefs[i].id) {
+            tx.update(lock.ref, {containerId: ref.id,
+              updatedAt: FirestoreFieldValue.serverTimestamp()});
+          }
+        });
+        const increments = {};
+        for (const [key, value] of Object.entries(
+            containerLinesCountsDelta(entries.map(({line}) => line), 1))) {
+          increments[key] = FirestoreFieldValue.increment(value);
+        }
+        tx.set(ref, {
+          ...increments,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        return {box: boxData, entries};
+      });
+      const label = String(placed.box.label || ref.id);
+      const names = placed.entries.slice(0, 5)
+          .map(({line}) => containerLineTitle(line)).join("; ");
+      await containerAudit(businessId, ref.id, "lines_assigned", uid,
+          `Added ${placed.entries.length} waiting package` +
+          `${placed.entries.length === 1 ? "" : "s"}: ${names}` +
+          (placed.entries.length > 5 ?
+            ` and ${placed.entries.length - 5} more` : ""));
+      for (const group of inGroups(placed.entries, 20)) {
+        await Promise.all(group.map(({id, line}) => writeLotLedgerAudit({
+          businessId, entityType: "container_line", entityId: id,
+          action: "line_assigned", byStaffId: uid, changes: [],
+          summary: `Added ${containerLineTitle(line)} to ${label}`,
+        })));
+      }
+      return {success: true, assigned: placed.entries.length};
+    },
+);
+
+exports.unassignContainerLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+      const db = admin.firestore();
+      const lineId = String(data.lineId || "").trim();
+      if (!lineId) {
+        throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+      }
+      const lineRef = db.collection("containerLines").doc(lineId);
+      // The package, its box's tallies and its car's lock change together,
+      // with the box re-read so one that shipped a moment ago keeps it.
+      const placed = await db.runTransaction(async (tx) => {
+        const lineDoc = await tx.get(lineRef);
+        const row = lineDoc.exists ? lineDoc.data() || {} : null;
+        if (!row || String(row.businessId) !== businessId) {
+          throw containerRefusal("line_not_found", [lineId]);
+        }
+        const boxId = String(row.containerId || "");
+        if (!boxId) throw containerRefusal("line_not_in_container", [lineId]);
+        const boxRef = db.collection("containers").doc(boxId);
+        const box = await tx.get(boxRef);
+        if (!box.exists || !containerIsOpen(box.data())) {
+          throw containerRefusal("container_locked", [lineId]);
+        }
+        const lockRef = row.kind === "car" ?
+          containerVinLockRef(db, businessId, row.vinNumber) : null;
+        const lock = lockRef ? await tx.get(lockRef) : null;
+        tx.update(lineRef, {
+          containerId: "",
+          containerStatus: LINE_STATUS_WAITING,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        tx.set(boxRef, {
+          ...containerCountsIncrement(row, -1),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        // The car keeps its lock: it is still holding, now on the waiting
+        // list instead of on the box.
+        if (lock?.exists && String(lock.data()?.lineId || "") === lineId) {
+          tx.update(lockRef, {containerId: "",
+            updatedAt: FirestoreFieldValue.serverTimestamp()});
+        }
+        return {row, box: box.data() || {}, boxId};
+      });
+      const label = String(placed.box.label || placed.boxId);
+      await containerAudit(businessId, placed.boxId, "line_unassigned", uid,
+          `Sent ${containerLineTitle(placed.row)} back to waiting`);
+      await writeLotLedgerAudit({
+        businessId, entityType: "container_line", entityId: lineId,
+        action: "line_unassigned", byStaffId: uid, changes: [],
+        summary: `Taken off ${label}, waiting for a container`,
+      });
+      return {success: true};
+    },
+);
+
+// What a package costs. Any time, whatever state it is in: the price is
+// agreed or corrected after the box has sailed as often as before - but never
+// below what has already been paid.
+exports.setContainerLinePrice = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+      const db = admin.firestore();
+      const lineId = String(data.lineId || "").trim();
+      if (!lineId) {
+        throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+      }
+      const lineRef = db.collection("containerLines").doc(lineId);
+      const next = containerLinePriceRecord(data);
+      const done = await db.runTransaction(async (tx) => {
+        const lineDoc = await tx.get(lineRef);
+        const row = lineDoc.exists ? lineDoc.data() || {} : null;
+        if (!row || String(row.businessId) !== businessId) {
+          throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+        }
+        const errors = containerPriceErrors(data.priceCents, row.paidCents);
+        if (errors.length > 0) {
+          throw new HttpsError("invalid-argument", containerMessage(errors),
+              {reasons: errors});
+        }
+        tx.update(lineRef, {
+          ...next,
+          editedByStaffId: uid,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return row;
+      });
+      const money = (cents) => cents === null || cents === undefined ?
+        "no price" : lotMoney(cents);
+      const priceChanged = (done.priceCents ?? null) !== next.priceCents;
+      const arrivalChanged = (done.payOnArrival === true) !==
+        next.payOnArrival;
+      const parts = [];
+      if (priceChanged) {
+        parts.push(`price ${money(done.priceCents)} → ` +
+          `${money(next.priceCents)}`);
+      }
+      if (arrivalChanged) {
+        parts.push(next.payOnArrival ? "pay on arrival on" :
+          "pay on arrival off");
+      }
+      if (parts.length > 0) {
+        const summary = `Changed ${parts.join(", ")} for ` +
+          containerLineTitle(done);
+        await containerLineAudit(businessId, lineId, done, "price_set", uid,
+            summary);
+        if (done.containerId) {
+          await writeLotLedgerAudit({
+            businessId, entityType: "container_line", entityId: lineId,
+            action: "price_set", byStaffId: uid, summary, changes: [],
+          });
+        }
+      }
+      return {success: true, lineId, priceCents: next.priceCents,
+        payOnArrival: next.payOnArrival};
+    },
+);
+
+// Money received for one package, any amount up to what is still owed. The
+// line's paid total is recomputed from its payments in the same transaction,
+// so two staff recording at once cannot overpay it.
+exports.recordContainerLinePayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+      const db = admin.firestore();
+      const lineId = String(data.lineId || "").trim();
+      if (!lineId) {
+        throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+      }
+      const lineRef = db.collection("containerLines").doc(lineId);
+      const payRef = db.collection("containerLinePayments").doc();
+      const done = await db.runTransaction(async (tx) => {
+        const lineDoc = await tx.get(lineRef);
+        const row = lineDoc.exists ? lineDoc.data() || {} : null;
+        if (!row || String(row.businessId) !== businessId) {
+          throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+        }
+        const payments = await tx.get(db.collection("containerLinePayments")
+            .where("businessId", "==", businessId)
+            .where("lineId", "==", lineId));
+        const paidCents = sumContainerLivePayments(
+            payments.docs.map((d) => d.data() || {}));
+        // Judged against what the payments really add up to, not against a
+        // total that may have drifted.
+        const errors = validateContainerLinePayment(data, {...row, paidCents});
+        if (errors.length > 0) {
+          throw new HttpsError("invalid-argument", containerMessage(errors),
+              {reasons: errors});
+        }
+        const record = containerLinePaymentRecord(data);
+        tx.set(payRef, {
+          businessId,
+          lineId,
+          ...record,
+          receivedByStaffId: uid,
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        const after = paidCents + record.amountCents;
+        tx.update(lineRef, {
+          paidCents: after,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return {row, record, paidCents: after};
+      });
+      const owed = Number(done.row.priceCents) || 0;
+      const summary = `Received ${lotMoney(done.record.amountCents)} ` +
+        `(${done.record.method}) for ${containerLineTitle(done.row)}` +
+        (done.paidCents >= owed ? " — paid in full" : "");
+      await containerLineAudit(businessId, lineId, done.row,
+          "payment", uid, summary);
+      if (done.row.containerId) {
+        await writeLotLedgerAudit({
+          businessId, entityType: "container_line", entityId: lineId,
+          action: "payment", byStaffId: uid, summary, changes: [],
+        });
+      }
+      return {success: true, paymentId: payRef.id, paidCents: done.paidCents};
+    },
+);
+
+// Struck through, not erased: the row stays with who reverted it and when.
+exports.revertContainerLinePayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+      const db = admin.firestore();
+      const paymentId = String(data.paymentId || "").trim();
+      if (!paymentId) {
+        throw containerRefusal("payment_not_found");
+      }
+      const payRef = db.collection("containerLinePayments").doc(paymentId);
+      const done = await db.runTransaction(async (tx) => {
+        const payDoc = await tx.get(payRef);
+        const payment = payDoc.exists ? payDoc.data() || {} : null;
+        if (!payment || String(payment.businessId) !== businessId) {
+          throw containerRefusal("payment_not_found");
+        }
+        const refusal = containerPaymentRevertRefusal(payment);
+        if (refusal) throw containerRefusal(refusal);
+        const lineId = String(payment.lineId || "");
+        const lineRef = db.collection("containerLines").doc(lineId);
+        const lineDoc = await tx.get(lineRef);
+        const payments = await tx.get(db.collection("containerLinePayments")
+            .where("businessId", "==", businessId)
+            .where("lineId", "==", lineId));
+        const paidCents = sumContainerLivePayments(
+            payments.docs.filter((d) => d.id !== paymentId)
+                .map((d) => d.data() || {}));
+        tx.update(payRef, {
+          reverted: true,
+          revertedByStaffId: uid,
+          revertedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        if (lineDoc.exists) {
+          tx.update(lineRef, {
+            paidCents,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+        }
+        return {payment, lineId, row: lineDoc.exists ? lineDoc.data() : {},
+          paidCents};
+      });
+      const summary = `Reverted a ${lotMoney(done.payment.amountCents)} ` +
+        `(${done.payment.method}) payment for ` +
+        containerLineTitle(done.row);
+      await containerLineAudit(businessId, done.lineId, done.row,
+          "payment_reverted", uid, summary);
+      if (done.row.containerId) {
+        await writeLotLedgerAudit({
+          businessId, entityType: "container_line", entityId: done.lineId,
+          action: "payment_reverted", byStaffId: uid, summary, changes: [],
+        });
+      }
+      return {success: true, paidCents: done.paidCents};
     },
 );
 
@@ -18321,6 +18966,156 @@ exports.revertInvoicePayment = onCall(
     },
 );
 
+// A link may carry up to this many package tokens, joined with "." (a
+// character base64url never uses).
+const LABEL_TOKEN_SEPARATOR = ".";
+
+/**
+ * The labels link for packages that have no container, or any lines named
+ * outright. Each line carries its own secret token; the link holds the tokens
+ * of exactly the lines asked for, so it opens those labels and nothing else.
+ *
+ * @param {object} db Firestore.
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @param {object} data The callable data {lineIds | lineId, format, copies}.
+ * @return {Promise<object>} The callable's answer.
+ */
+async function containerLineLabelsUrl(db, uid, businessId, data) {
+  await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+  const named = Array.isArray(data.lineIds) ? data.lineIds :
+    (data.lineId ? [data.lineId] : []);
+  const {ids, errors} = cleanLineIds(named);
+  if (errors.length > 0) {
+    throw new HttpsError("invalid-argument", containerMessage(errors),
+        {reasons: errors});
+  }
+  const docs = await db.getAll(
+      ...ids.map((id) => db.collection("containerLines").doc(id)));
+  const gone = ids.filter((id, i) => !docs[i].exists ||
+    String(docs[i].data()?.businessId) !== businessId);
+  if (gone.length > 0) throw containerRefusal("line_not_found", gone);
+  // Lines from before codes existed get theirs now rather than printing a
+  // sheet with gaps.
+  const codes = await assignMissingLineCodes(db, docs);
+  const tokens = [];
+  for (const group of inGroups(docs, 10)) {
+    tokens.push(...await Promise.all(group.map(async (d) => {
+      const known = String(d.data()?.documentToken || "").trim();
+      if (known) return known;
+      // Minted in a transaction that only fills an empty field, as a
+      // container's is: two first opens share one link.
+      const candidate = crypto.randomBytes(24).toString("base64url");
+      return db.runTransaction(async (tx) => {
+        const fresh = await tx.get(d.ref);
+        const {value, write} =
+          keepExisting(fresh.data()?.documentToken, candidate);
+        if (write) {
+          tx.update(d.ref, {documentToken: value,
+            updatedAt: FirestoreFieldValue.serverTimestamp()});
+        }
+        return value;
+      });
+    })));
+  }
+  const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
+    "https://laawoldigital.com/d";
+  const single = docs.length === 1 ?
+    String(codes.get(docs[0].id) || docs[0].data()?.trackingCode || "") : "";
+  const query = new URLSearchParams({
+    t: tokens.join(LABEL_TOKEN_SEPARATOR),
+    view: "labels",
+    labels: labelFormat(data.format),
+    copies: String(labelCopies(data.copies)),
+    ...(single ? {code: single} : {}),
+  });
+  return {success: true, url: `${base}?${query.toString()}`};
+}
+
+/**
+ * The labels page for line tokens (see containerLineLabelsUrl), or null when
+ * no line carries any of them.
+ *
+ * @param {object} db Firestore.
+ * @param {object} req The request.
+ * @param {string} token The `t` parameter: one or more line tokens.
+ * @return {Promise<string|null>} The page, or null.
+ */
+async function containerLineLabelsPage(db, req, token) {
+  const tokens = [...new Set(token.split(LABEL_TOKEN_SEPARATOR)
+      .map((t) => t.trim()).filter((t) => t.length >= 16))].slice(0, 100);
+  if (tokens.length === 0) return null;
+  const found = [];
+  for (const group of inGroups(tokens, 30)) {
+    const snap = await db.collection("containerLines")
+        .where("documentToken", "in", group).get();
+    found.push(...snap.docs);
+  }
+  if (found.length === 0) return null;
+  // The page is one business's: the first line found names it.
+  const businessId = String(found[0].data()?.businessId || "");
+  const rows = found.map((d) => d.data() || {})
+      .filter((line) => String(line.businessId || "") === businessId)
+      .sort((a, b) => (a.createdAt?.toMillis?.() || 0) -
+        (b.createdAt?.toMillis?.() || 0));
+  const business = await db.collection("businesses").doc(businessId).get()
+      .catch(() => null);
+  const model = containerLabelsModel({
+    container: null,
+    lines: rows,
+    business: business && business.exists ? business.data() : {},
+    consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+    onlyCode: String(req.query?.code || ""),
+    copies: req.query?.copies,
+  });
+  const qrSvgByCode = {};
+  for (const label of model.labels) {
+    if (qrSvgByCode[label.code]) continue;
+    qrSvgByCode[label.code] = await QRCode.toString(label.link, {
+      type: "svg", errorCorrectionLevel: "H", margin: 1,
+    });
+  }
+  return renderContainerLabels(model, {
+    format: labelFormat(req.query?.labels),
+    qrSvgByCode,
+    query: `t=${encodeURIComponent(token)}&view=labels`,
+  });
+}
+
+// The destination new packages are pre-filled with. One per business, kept
+// here and not as a client write: the destinationCountries rule checks the
+// whole document on every write, which a fully set-up destination can push
+// past the rules' expression limit, so the flag could not be set from the
+// browser. Pass an empty countryId to have no main destination.
+exports.setMainDestination = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, "destinations");
+      const countryId = String(data.countryId || "").trim();
+      const db = admin.firestore();
+      const snap = await db.collection("businesses").doc(businessId)
+          .collection("destinationCountries").get();
+      if (countryId && !snap.docs.some((d) => d.id === countryId)) {
+        throw new HttpsError("not-found", "Destination not found");
+      }
+      const batch = db.batch();
+      for (const d of snap.docs) {
+        const want = d.id === countryId;
+        if ((d.data().isMain === true) !== want) {
+          batch.update(d.ref, {
+            isMain: want,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+        }
+      }
+      await batch.commit();
+      return {countryId};
+    },
+);
+
 exports.getContainerDocumentUrl = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -18328,6 +19123,10 @@ exports.getContainerDocumentUrl = onCall(
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
       const db = admin.firestore();
+      // No container named: the labels of packages that have none yet.
+      if (!String(data.containerId || "").trim()) {
+        return containerLineLabelsUrl(db, uid, businessId, data);
+      }
       const {ref, data: current} =
         await loadContainerFor(db, uid, businessId, data.containerId);
       let token = String(current.documentToken || "").trim();

@@ -10,6 +10,8 @@ export type GuestTrackingService =
 
 export type GuestTrackingStage =
   | "awaiting_payment"
+  // A container line dropped off and not on a container yet (CL- codes only).
+  | "waiting_container"
   | "booked"
   | "in_transit"
   | "arrived"
@@ -41,6 +43,7 @@ const SERVICES = new Set<GuestTrackingService>([
 ]);
 const STAGES = new Set<GuestTrackingStage>([
   "awaiting_payment",
+  "waiting_container",
   "booked",
   "in_transit",
   "arrived",
@@ -131,6 +134,7 @@ export function guestServiceLabel(service: string): string {
 
 export const GUEST_STAGE_LABEL: Record<GuestTrackingStage, string> = {
   awaiting_payment: "Waiting for payment",
+  waiting_container: "Waiting for a container",
   booked: "Booked",
   in_transit: "In progress",
   arrived: "Ready",
@@ -139,7 +143,7 @@ export const GUEST_STAGE_LABEL: Record<GuestTrackingStage, string> = {
 };
 
 export type GuestJourneyStage = {
-  id: "booked" | "in_transit" | "arrived" | "delivered";
+  id: "waiting_container" | "booked" | "in_transit" | "arrived" | "delivered";
   label: string;
   hint: string;
 };
@@ -153,11 +157,13 @@ export const GUEST_JOURNEY_STAGES: readonly GuestJourneyStage[] = [
 ];
 
 /**
- * A container line follows its box: loaded, at sea, landed. The server maps
- * the container's state onto booked / in_transit / arrived and nothing else,
- * so the journey has three steps and its own words.
+ * A container line follows its box: waiting for one, loaded, at sea, landed.
+ * The server maps a waiting package to waiting_container and the container's
+ * state onto booked / in_transit / arrived, so the journey has four steps and
+ * its own words.
  */
 export const GUEST_CONTAINER_STAGES: readonly GuestJourneyStage[] = [
+  {id: "waiting_container", label: "Waiting for a container", hint: "Received, waiting for a container"},
   {id: "booked", label: "In the container", hint: "Received and loaded into the container"},
   {id: "in_transit", label: "At sea", hint: "The container has sailed"},
   {id: "arrived", label: "Arrived", hint: "The container has reached its destination"},

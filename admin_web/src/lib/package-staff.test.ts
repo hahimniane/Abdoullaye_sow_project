@@ -305,3 +305,38 @@ test("the business console link opens on the container with the line marked, and
   assert.equal(containerDeepLinkFromSearch("?container=a/b"), null, "not a document id");
   assert.deepEqual(containerDeepLinkFromSearch("?container=box1&line=x/y"), { containerId: "box1", lineId: "" });
 });
+
+// ---------------------------------------------------------------------------
+// A package that has no container yet.
+// ---------------------------------------------------------------------------
+
+test("a waiting package has no container to show, but carries its size, country and money", () => {
+  const view = packageStaffViewModel(
+    {
+      id: "w1", businessId: "biz", kind: "barrels", quantity: 2, containerId: "", containerStatus: "waiting",
+      trackingCode: "CL-K7M4P2", customerName: "Fatou Diallo", customerPhone: "+12075550101",
+      destinationCountryId: "guinea", destinationCountryName: "Guinea",
+      lengthIn: 40, widthIn: 30, heightIn: 20, priceCents: 5000, paidCents: 2000, payOnArrival: true,
+    },
+    // A stale snapshot of some container never shows under a waiting line.
+    { id: "box1", status: "loading" },
+  );
+  assert.equal(view.waiting, true);
+  assert.equal(view.container, null);
+  assert.equal(view.destinationId, "guinea");
+  assert.equal(view.destinationName, "Guinea");
+  assert.equal(view.size?.dimensionsText, "40 × 30 × 20 in");
+  assert.equal(view.size?.volumeText, "13.89 ft³");
+  assert.equal(view.payment.status, "partial");
+  assert.equal(view.payment.balanceCents, 3000);
+  // No container to open on: the link is the console itself.
+  assert.equal(view.consoleLink, `${BUSINESS_CONSOLE_ORIGIN}/`);
+});
+
+test("a line on a container is not waiting, and an old line has no size or price", () => {
+  const view = packageStaffViewModel({ id: "l1", containerId: "box1", containerStatus: "loading", kind: "barrels", quantity: 1 }, null);
+  assert.equal(view.waiting, false);
+  assert.equal(view.size, null);
+  assert.equal(view.payment.status, "no_price");
+  assert.equal(view.payment.balanceCents, null);
+});

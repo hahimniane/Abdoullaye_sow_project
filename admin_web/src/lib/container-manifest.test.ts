@@ -57,6 +57,12 @@ import {
   validateContainerLineDraft,
   vinPlacementText,
   writeContainerLabelChoice,
+  containerLineFromRow,
+  containerLineIsWaiting,
+  LINE_STAGE_LABELS,
+  LINE_STAGE_TONES,
+  MAX_ASSIGN_LINES,
+  WAITING_STATUS,
   type ContainerRefusal,
 } from "./container-manifest.ts";
 
@@ -954,4 +960,102 @@ test("the label request mirrors what the server's callable and label page read",
   assert.match(callable, /labelFormat\(data\.format\)/);
   assert.match(callable, /labelCopies\(data\.copies\)/);
   assert.match(callable, /const lineId = String\(data\.lineId \|\| ""\);/);
+});
+
+// ---------------------------------------------------------------------------
+// Waiting packages: a line with no container yet.
+// ---------------------------------------------------------------------------
+
+test("a waiting package is a line with no container and the waiting state", () => {
+  assert.equal(WAITING_STATUS, "waiting");
+  assert.equal(containerLineIsWaiting({ containerId: "", containerStatus: "waiting" }), true);
+  assert.equal(containerLineIsWaiting({ containerId: "box1", containerStatus: "loading" }), false);
+  // The state is not a container's: nothing may ship "waiting".
+  assert.deepEqual([...CONTAINER_STATUSES], ["loading", "shipped", "arrived"]);
+  assert.equal(LINE_STAGE_LABELS.waiting, "Waiting list");
+  assert.equal(LINE_STAGE_LABELS.loading, "Loading");
+  assert.equal(LINE_STAGE_TONES.waiting, "muted");
+  assert.equal(MAX_ASSIGN_LINES, 100);
+});
+
+test("a stored line reads with the waiting-package fields defaulted for older lines", () => {
+  const older = containerLineFromRow({ id: "l1", kind: "barrels", quantity: 3, containerId: "box1", containerStatus: "loading" });
+  assert.equal(older.priceCents, null);
+  assert.equal(older.paidCents, 0);
+  assert.equal(older.payOnArrival, false);
+  assert.equal(older.lengthIn, null);
+  assert.equal(older.destinationCountryId, "");
+  const waiting = containerLineFromRow({
+    id: "l2", businessId: "biz", kind: "other", description: "tires", quantity: 4,
+    containerId: "", containerStatus: "waiting",
+    destinationCountryId: "guinea", destinationCountryName: "Guinea",
+    lengthIn: 40, widthIn: "30", heightIn: 20.5,
+    priceCents: 4550, paidCents: 1000, payOnArrival: true, trackingCode: "CL-K7M4P2",
+  });
+  assert.equal(waiting.containerStatus, "waiting");
+  assert.equal(waiting.containerId, "");
+  assert.deepEqual([waiting.lengthIn, waiting.widthIn, waiting.heightIn], [40, 30, 20.5]);
+  assert.equal(waiting.priceCents, 4550);
+  assert.equal(waiting.paidCents, 1000);
+  assert.equal(waiting.payOnArrival, true);
+  assert.equal(waiting.destinationCountryId, "guinea");
+  // Rubbish never becomes a size or a price.
+  const bad = containerLineFromRow({ lengthIn: -4, widthIn: "abc", priceCents: -1, paidCents: "x", payOnArrival: "yes" });
+  assert.deepEqual([bad.lengthIn, bad.widthIn, bad.priceCents, bad.paidCents, bad.payOnArrival], [null, null, null, 0, false]);
+});
+
+test("search finds waiting packages and says they are waiting rather than on a container", () => {
+  const waiting = [
+    { id: "w1", kind: "barrels", quantity: 2, customerName: "Fatou Diallo", customerPhone: "+12075550101", receiverPhone: "+224620111222", trackingCode: "CL-W7M4P2", containerId: "", containerStatus: "waiting" },
+  ];
+  const onBox = [
+    { id: "b1", kind: "barrels", quantity: 1, customerName: "Fatou Camara", containerId: "box1", containerStatus: "loading" },
+  ];
+  const containers = [{ id: "box1", status: "loading" }];
+  const hits = searchContainerLines([...onBox, ...waiting], containers, "fatou");
+  assert.deepEqual(hits.map((h) => [h.line.id, h.status, h.waiting]), [["b1", "loading", false], ["w1", "waiting", true]]);
+  assert.equal(hits[1].container, undefined);
+  // By phone (either person's), and by the code on the label.
+  assert.deepEqual(searchContainerLines(waiting, [], "207 555 0101").map((h) => h.line.id), ["w1"]);
+  assert.deepEqual(searchContainerLines(waiting, [], "620 111").map((h) => h.line.id), ["w1"]);
+  assert.deepEqual(searchContainerLines(waiting, [], "cl-w7m4").map((h) => h.line.id), ["w1"]);
+});
+
+test("labels for waiting packages are asked for by line id, with no container", () => {
+  assert.deepEqual(
+    containerLabelsRequest("biz1", "", { format: "sheet", copies: 2 }, "w1"),
+    { businessId: "biz1", view: "labels", format: "sheet", copies: 2, lineIds: ["w1"] },
+  );
+  assert.deepEqual(
+    containerLabelsRequest("biz1", "", { format: "thermal", copies: 1 }, [" w1 ", "w2", ""]),
+    { businessId: "biz1", view: "labels", format: "thermal", copies: 1, lineIds: ["w1", "w2"] },
+  );
+  // With a container the request is unchanged (a single lineId, no lineIds).
+  const withBox = containerLabelsRequest("biz1", "ctn1", DEFAULT_CONTAINER_LABEL_CHOICE, "w1");
+  assert.equal("lineIds" in withBox, false);
+  assert.equal((withBox as { lineId?: string }).lineId, "w1");
+});
+
+test("a destination mismatch names the packages that did not fit", () => {
+  const failure = containerCallableFailure({
+    code: "functions/failed-precondition",
+    message: CONTAINER_MESSAGES.destination_mismatch,
+    details: { reason: "destination_mismatch", lineIds: ["w1", " w2 "] },
+  });
+  assert.equal(failure.message, CONTAINER_MESSAGES.destination_mismatch);
+  assert.deepEqual(failure.offendingLineIds, ["w1", "w2"]);
+  // Another refusal never claims offending packages.
+  assert.deepEqual(containerCallableFailure({ details: { reason: "line_not_waiting", lineIds: ["w1"] } }).offendingLineIds, []);
+  // With no server sentence the reason's own is shown.
+  assert.equal(containerCallableFailure({ details: { reason: "payment_exceeds_balance" } }).message, CONTAINER_MESSAGES.payment_exceeds_balance);
+  assert.deepEqual(containerCallableFailure(null).offendingLineIds, []);
+  // A car held by a waiting package has no container to jump to.
+  const held = containerCallableFailure({
+    message: CONTAINER_MESSAGES.vin_already_waiting,
+    details: { reason: "vin_already_loaded", conflictContainerId: "waiting", conflictWaiting: true },
+  });
+  assert.equal(held.message, CONTAINER_MESSAGES.vin_already_waiting);
+  assert.equal(held.conflictContainerId, "");
+  assert.equal(held.conflictWaiting, true);
+  assert.equal(containerCallableFailure({ details: { reason: "vin_already_loaded", conflictContainerId: "S" } }).conflictWaiting, false);
 });

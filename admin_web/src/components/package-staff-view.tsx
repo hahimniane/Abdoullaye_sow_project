@@ -16,10 +16,12 @@ import { ExternalLink, MessageCircle, Package, Phone, RefreshCw, Tag } from "luc
 
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { resolveAdminRoleKey, type AdminPermissionsConfig } from "@/lib/admin-access";
-import { CONTAINER_STATUS_LABELS, CONTAINER_STATUS_TONES } from "@/lib/container-manifest";
+import { CONTAINER_STATUS_LABELS, CONTAINER_STATUS_TONES, LINE_STAGE_LABELS, LINE_STAGE_TONES } from "@/lib/container-manifest";
 import { destinationCountryName, destinationCountryOptionForRow } from "@/lib/destination-countries";
 import { db } from "@/lib/firebase";
 import { currentLanguage, formatDate, formatDateTime } from "@/lib/format";
+import { moneyText } from "@/lib/invoice-ledger";
+import { PACKAGE_PAYMENT_LABELS, PACKAGE_PAYMENT_TONES, destinationPlace } from "@/lib/waiting-packages";
 import {
   adminHasOperationsAccess,
   packageStaffScope,
@@ -233,6 +235,7 @@ export function PackageStaffView({
           <strong data-no-translate>{view.title}</strong>
         </div>
         {box && <span className={`lst-badge ${CONTAINER_STATUS_TONES[box.status]}`}>{CONTAINER_STATUS_LABELS[box.status]}</span>}
+        {view.waiting && <span className={`lst-badge ${LINE_STAGE_TONES.waiting}`}>{LINE_STAGE_LABELS.waiting}</span>}
       </div>
       <p className="panel-lede pkg-staff-lede">Only your team sees this. The customer&apos;s public tracking result is below.</p>
 
@@ -257,9 +260,31 @@ export function PackageStaffView({
         </section>
       </div>
 
+      {(view.size || view.payment.status !== "no_price") && (
+        <section className="pkg-staff-section">
+          <h3>Size and price</h3>
+          <div className="pur-info">
+            {view.size && <div><span>Package size</span><b data-no-translate>{view.size.dimensionsText}</b><small data-no-translate>{view.size.volumeText}</small></div>}
+            {view.payment.priceCents !== null && (
+              <>
+                <div><span>Price</span><b data-no-translate>{moneyText(view.payment.priceCents)}</b></div>
+                <div><span>Paid</span><b data-no-translate>{moneyText(view.payment.paidCents)}</b></div>
+                <div><span>Still owed</span><b data-no-translate>{moneyText(view.payment.balanceCents)}</b></div>
+              </>
+            )}
+            <div><span>Payment</span><b><span className={`lst-badge ${PACKAGE_PAYMENT_TONES[view.payment.status]}`}>{PACKAGE_PAYMENT_LABELS[view.payment.status]}</span></b></div>
+          </div>
+        </section>
+      )}
+
       <section className="pkg-staff-section">
         <h3>Container</h3>
-        {box ? (
+        {view.waiting ? (
+          <div className="pur-info">
+            <div><span>Container</span><b>Waiting for a container</b></div>
+            <div><span>Destination</span><b>{destinationPlace(view.destinationId, view.destinationName, lang) || "No destination yet"}</b></div>
+          </div>
+        ) : box ? (
           <div className="pur-info">
             <div>
               <span>Container</span>
@@ -301,7 +326,7 @@ export function PackageStaffView({
       <div className="pkg-staff-actions">
         <button
           className="primary-button"
-          disabled={!containerRow}
+          disabled={!containerRow && !view.waiting}
           onClick={() => setLabelsOpen(true)}
           type="button"
         >
@@ -316,7 +341,7 @@ export function PackageStaffView({
         )}
       </div>
 
-      {labelsOpen && containerRow && (
+      {labelsOpen && (containerRow || view.waiting) && (
         <ContainerLabelsDialog
           businessId={view.businessId}
           container={containerRow}

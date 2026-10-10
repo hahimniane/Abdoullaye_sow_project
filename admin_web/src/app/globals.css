@@ -14051,6 +14051,57 @@ html[data-lang-pending] body {
 /* A line opened from a package's "Open in business console" link. */
 .ctn-table .mini-table-row.ctn-line-focus { background: rgba(245, 158, 11, 0.12); box-shadow: inset 3px 0 0 var(--accent); }
 
+/* Waiting packages: dropped off, no container yet. The list reuses the
+   containers' mini-table with five columns (package, whose, destination,
+   payment, actions); the register form, the payment dialog and the "add to
+   container" picker are modals on the same primitives. */
+.wpk-table .mini-table-head,
+.wpk-table .mini-table-row {
+  grid-template-columns:
+    minmax(170px, 1.7fr)
+    minmax(160px, 1.5fr)
+    minmax(110px, 1fr)
+    minmax(120px, 1fr)
+    minmax(120px, 0.9fr);
+}
+.wpk-total { margin: 10px 16px 14px; }
+.wpk-size-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; margin-top: 14px; }
+.wpk-size-grid .wpk-volume { grid-column: 1 / -1; margin: 0; min-height: 1.2em; color: var(--brand-strong, #0f766e); font-weight: 600; }
+.wpk-price-cell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.wpk-pay-arrival { align-items: center; }
+.wpk-foot { flex-wrap: wrap; }
+.wpk-money-line { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.wpk-money-line small { color: var(--muted); }
+.wpk-inline-actions { display: flex; gap: 8px; margin: 10px 0 4px; }
+.wpk-payment-form { margin-top: 14px; }
+.wpk-history-title { margin: 18px 0 8px; font-size: 14px; }
+.wpk-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.wpk-history li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.wpk-history li > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wpk-history small { color: var(--muted); font-size: 12px; }
+.wpk-history .wpk-reverted-note { color: #92400e; font-weight: 600; }
+.wpk-history li.wpk-reverted > div > strong { text-decoration: line-through; color: var(--muted); }
+.wpk-pick-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.wpk-pick-tools input[type="search"] { flex: 1 1 200px; min-width: 0; }
+.wpk-pick-list { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; border: 1px solid var(--rule); border-radius: 10px; }
+.wpk-pick-list li { border-bottom: 1px solid var(--rule); }
+.wpk-pick-list li:last-child { border-bottom: 0; }
+.wpk-pick-list label { display: grid; grid-template-columns: 20px minmax(0, 1fr) minmax(0, 0.7fr); align-items: start; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.wpk-pick-list input[type="checkbox"] { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--brand); }
+.wpk-pick-main, .wpk-pick-side { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wpk-pick-side { align-items: flex-end; text-align: right; }
+.wpk-pick-list small { color: var(--muted); font-size: 12px; }
+.wpk-pick-list .wpk-block-reason { color: #92400e; font-weight: 600; }
+.wpk-pick-list li.wpk-blocked label { cursor: not-allowed; }
+.wpk-pick-list li.wpk-blocked .wpk-pick-main > strong { color: var(--muted); }
+.wpk-pick-list li.wpk-flagged { background: rgba(220, 38, 38, 0.08); }
+.wpk-pick-count { margin: 10px 0 0; }
+@media (max-width: 720px) {
+  .wpk-size-grid { grid-template-columns: 1fr 1fr 1fr; }
+  .wpk-pick-list label { grid-template-columns: 20px minmax(0, 1fr); }
+  .wpk-pick-side { grid-column: 2; align-items: flex-start; text-align: left; }
+}
+
 /* The staff view of a package, above the public result on the tracking page:
    the app's package screen, in the guest page's column. */
 .pkg-staff, .pkg-staff-note { width: 100%; max-width: 780px; margin: 0 auto; }

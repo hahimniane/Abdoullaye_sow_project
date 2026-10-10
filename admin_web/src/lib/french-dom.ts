@@ -5028,6 +5028,83 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Tous les enregistrements ne sont pas encore chargés. Chargez-en plus pour inclure le reste.",
   Other: "Autre",
   "Other prices (optional)": "Autres prix (facultatif)",
+  // Waiting packages: dropped off at the counter before a container is chosen
+  // (waiting-packages-panel.tsx, package-payment-dialog.tsx,
+  // add-waiting-packages-dialog.tsx, lib/waiting-packages.ts and
+  // container-manifest.ts). Whole sentences; the ones that carry a country or
+  // a count are built per language in waiting-packages.ts instead.
+  "Waiting list": "Liste d’attente",
+  "Container lists": "Listes de conteneurs",
+  "Register a package": "Enregistrer un colis",
+  "Edit package": "Modifier le colis",
+  "Remove package": "Retirer le colis",
+  "Package saved.": "Colis enregistré.",
+  "Package saved:": "Colis enregistré :",
+  "Package updated.": "Colis mis à jour.",
+  "Package removed.": "Colis retiré.",
+  "Packages customers dropped off before a container was chosen. Print the label now; add them to a container that goes to the same country when it is loading.":
+    "Colis déposés par des clients avant le choix d’un conteneur. Imprimez l’étiquette maintenant ; ajoutez-les à un conteneur qui va dans le même pays quand il est en chargement.",
+  "No packages are waiting. Register one when a customer drops it off.":
+    "Aucun colis n’attend. Enregistrez-en un quand un client le dépose.",
+  "No packages are waiting.": "Aucun colis n’est en attente.",
+  "No packages are waiting for a container.": "Aucun colis n’attend de conteneur.",
+  "No waiting package matches that search.": "Aucun colis en attente ne correspond à cette recherche.",
+  "Correct what was written on it.": "Corrigez ce qui est écrit dessus.",
+  "What the customer dropped off. It waits here until a container takes it.":
+    "Ce que le client a déposé. Il attend ici qu’un conteneur le prenne.",
+  "Nobody is messaged when a package is registered or added to a container. The first WhatsApp message goes out when the container ships.":
+    "Personne n’est averti quand un colis est enregistré ou ajouté à un conteneur. Le premier message WhatsApp part quand le conteneur est expédié.",
+  "Save & add another for the same customer": "Enregistrer et en ajouter un autre pour le même client",
+  "Save & print label": "Enregistrer et imprimer l’étiquette",
+  "Pay on arrival": "Paiement à l’arrivée",
+  "No price yet": "Pas encore de prix",
+  Unpaid: "Impayé",
+  Partial: "Partiel",
+  "Save price": "Enregistrer le prix",
+  "Price saved.": "Prix enregistré.",
+  "still owed": "restant dû",
+  "No payments recorded yet.": "Aucun paiement enregistré pour le moment.",
+  "Tick at least one package.": "Cochez au moins un colis.",
+  "Add waiting packages": "Ajouter des colis en attente",
+  "— tick the packages that go on this container.": "— cochez les colis qui vont dans ce conteneur.",
+  "Select all matching": "Sélectionner tous les résultats",
+  "Add to container": "Ajouter au conteneur",
+  "Adding...": "Ajout en cours...",
+  "Send back to waiting": "Remettre en attente",
+  "Package sent back to waiting.": "Colis remis en attente.",
+  "Waiting for a container": "En attente d’un conteneur",
+  "Received, waiting for a container": "Reçu, en attente d’un conteneur",
+  "Size and price": "Taille et prix",
+  "Package size": "Taille du colis",
+  "That package is already on a container.": "Ce colis est déjà dans un conteneur.",
+  // The server's refusals for waiting packages (container_manifest.js CONTAINER_MESSAGES).
+  "This car is already waiting for a container.": "Cette voiture attend déjà un conteneur.",
+  "Choose where this package is going.": "Choisissez où va ce colis.",
+  "Set a price before recording a payment.": "Définissez un prix avant d’enregistrer un paiement.",
+  "A package can only go on a container headed to the same country.":
+    "Un colis ne peut aller que dans un conteneur à destination du même pays.",
+  "Enter the length, width and height in inches, or leave all three empty.":
+    "Saisissez la longueur, la largeur et la hauteur en pouces, ou laissez les trois vides.",
+  "This package is waiting for a container. Add it to one from the waiting list.":
+    "Ce colis attend un conteneur. Ajoutez-le à un conteneur depuis la liste d’attente.",
+  "That package is not on a container.": "Ce colis n’est pas dans un conteneur.",
+  "Choose between 1 and 100 packages.": "Choisissez entre 1 et 100 colis.",
+  "Payments are recorded for this package. Revert them first.":
+    "Des paiements sont enregistrés pour ce colis. Annulez-les d’abord.",
+  "Enter the price in dollars, more than zero.": "Saisissez le prix en dollars, supérieur à zéro.",
+  "The price can't be less than what has been paid.":
+    "Le prix ne peut pas être inférieur à ce qui a été payé.",
+  "That amount is larger than a package can carry.": "Ce montant dépasse ce qu’un colis peut porter.",
+  "Choose where this container is going before adding packages to it.":
+    "Choisissez où va ce conteneur avant d’y ajouter des colis.",
+  "Main destination": "Destination principale",
+  "Make main": "Définir comme principale",
+  "Main destination saved.": "Destination principale enregistrée.",
+  "Main destination cleared.": "Destination principale retirée.",
+  "A QR code, tracking code and both phone numbers for each of the selected packages.":
+    "Un code QR, un code de suivi et les deux numéros de téléphone pour chacun des colis sélectionnés.",
+  "— a QR code, tracking code and both phone numbers.":
+    "— un code QR, un code de suivi et les deux numéros de téléphone.",
 });
 
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
@@ -5099,6 +5176,14 @@ export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "e.g. tires, a generator": "p. ex. pneus, un groupe électrogène",
   "Move to another container": "Déplacer vers un autre conteneur",
   "Remove line": "Retirer la ligne",
+  // Waiting packages: placeholders, titles and aria-labels.
+  "Search waiting packages": "Rechercher dans les colis en attente",
+  "Length (in)": "Longueur (po)",
+  "Width (in)": "Largeur (po)",
+  "Height (in)": "Hauteur (po)",
+  "Price ($)": "Prix ($)",
+  optional: "facultatif",
+  "New packages open on this country": "Les nouveaux colis s’ouvrent sur ce pays",
 };
 
 // Several English strings share one French translation ("Annulé" is the

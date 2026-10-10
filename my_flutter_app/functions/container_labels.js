@@ -15,13 +15,21 @@
  *
  * The QR holds the public tracking link, not a private id: a stranger who
  * scans a lost barrel sees where it is going and nothing personal, and the
- * business's app reads the code out of the same link to show the owner.
+ * business's app reads the code out of the same link to show the owner. The
+ * paper itself carries both people's names and full phone numbers, size and
+ * destination, because whoever holds the package in Conakry has to be able to
+ * call someone; it never carries the price.
+ *
+ * A package that is still waiting for a container prints too: no container
+ * means no container line in the footer, and the destination is the
+ * package's own.
  *
  * Pure: the caller loads the records and renders the QR codes (the `qrcode`
  * package is async); this turns them into a model and the model into a page.
  */
 
 const {trackingLink} = require("./container_updates");
+const {lineSizeText} = require("./container_manifest");
 const {documentLogo} = require("./parking_document");
 
 const LABELS_PER_PACKAGE = 2;
@@ -90,7 +98,8 @@ function packageName(line) {
  * order the lines were loaded. Lines without a tracking code are left out
  * (the caller assigns codes first).
  *
- * @param {object} input {container, lines, business, consoleUrl}.
+ * @param {object} input {container (null for waiting packages), lines,
+ *   business, consoleUrl}.
  * @return {object} The labels model.
  */
 function containerLabelsModel({container, lines, business, consoleUrl,
@@ -99,7 +108,9 @@ function containerLabelsModel({container, lines, business, consoleUrl,
   const perPackage = labelCopies(copies);
   const c = container && typeof container === "object" ? container : {};
   const org = business && typeof business === "object" ? business : {};
-  const reference = text(c.containerNumber, 20) || text(c.label, 120) ||
+  // No container, no reference: the footer leaves it out.
+  const reference = !container ? "" :
+    text(c.containerNumber, 20) || text(c.label, 120) ||
     text(c.bookingReference, 60) || "Container";
   const labels = [];
   const codes = [];
@@ -114,7 +125,7 @@ function containerLabelsModel({container, lines, business, consoleUrl,
     for (let n = 1; n <= packages; n++) {
       for (let copy = 1; copy <= perPackage; copy++) {
         if (labels.length >= MAX_LABELS) break;
-        labels.push({
+        const label = {
           code,
           link: trackingLink(consoleUrl, code),
           what: packageName(line),
@@ -122,15 +133,26 @@ function containerLabelsModel({container, lines, business, consoleUrl,
           packageNumber: n,
           packageCount: packages,
           // The name painted on the barrel is the receiver's; the sender is
-          // the fallback for a line with no receiver yet.
+          // printed beside it with the numbers of both, so whoever holds the
+          // package can call.
           receiver: text(line.receiverName, 120),
+          receiverPhone: text(line.receiverPhone, 40),
           sender: stock ? "" : text(line.customerName, 120),
-        });
+          senderPhone: stock ? "" : text(line.customerPhone, 40),
+          // The package's own destination, else its container's.
+          destination: text(line.destinationCountryName, 120) ||
+            text(c.destinationCountryName, 120),
+          size: lineSizeText(line),
+        };
+        label.place = [label.destination, label.size].filter(Boolean)
+            .join(" · ");
+        labels.push(label);
       }
     }
   }
   return {
     reference,
+    hasContainer: Boolean(container),
     destination: text(c.destinationCountryName, 120),
     businessName: text(org.name, 160),
     businessPhone: text(org.phone, 40),
@@ -162,16 +184,18 @@ function renderContainerLabels(model, opts = {}) {
     ` &middot; ${escape(label.packageNumber)} / ${escape(label.packageCount)}` :
     ""}</div>
       ${label.vin ? `<div class="sub">VIN ${escape(label.vin)}</div>` : ""}
-      ${label.receiver ? `<div class="to"><span>To / Pour</span>` +
-        `${escape(label.receiver)}</div>` : ""}
-      ${!label.receiver && label.sender ? `<div class="to"><span>` +
-        `From / De</span>${escape(label.sender)}</div>` : ""}
-      ${m.destination ? `<div class="sub">${escape(m.destination)}</div>` : ""}
+      ${label.receiver || label.receiverPhone ? `<div class="to"><span>` +
+        `To / Pour</span>${escape(label.receiver)}${label.receiverPhone ?
+          `<em>${escape(label.receiverPhone)}</em>` : ""}</div>` : ""}
+      ${label.sender || label.senderPhone ? `<div class="from"><span>` +
+        `From / De</span>${escape(label.sender)}${label.senderPhone ?
+          `<em>${escape(label.senderPhone)}</em>` : ""}</div>` : ""}
+      ${label.place ? `<div class="sub">${escape(label.place)}</div>` : ""}
     </div>
     <div class="foot">
       <span>${escape(m.businessName || "Laawol Digital")}${m.businessPhone ?
     ` &middot; ${escape(m.businessPhone)}` : ""}</span>
-      <span>${escape(m.reference)}</span>
+      ${m.reference ? `<span>${escape(m.reference)}</span>` : ""}
     </div>
   </div>`);
   const pages = [];
@@ -179,14 +203,16 @@ function renderContainerLabels(model, opts = {}) {
     pages.push(`<section class="page">${cells.slice(i, i + perPage)
         .join("")}</section>`);
   }
-  const title = `Labels ${m.reference || ""} - ${m.businessName || "Laawol"}`;
+  const title = `Labels ${m.reference || "waiting packages"} - ${
+    m.businessName || "Laawol"}`;
   const big = format === "thermal";
   // Each toolbar link changes one setting and keeps the others.
   const current = {labels: format, copies: String(m.copies || 2),
     ...(m.onlyCode ? {code: m.onlyCode} : {})};
   const link = (change) => escape(`${opts.query || ""}&${
     new URLSearchParams({...current, ...change}).toString()}`);
-  const empty = "<p class=\"hint\">No packages on this container yet.</p>";
+  const empty = `<p class="hint">${m.hasContainer === false ?
+    "No packages to print." : "No packages on this container yet."}</p>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escape(title)}</title>
@@ -227,8 +253,12 @@ function renderContainerLabels(model, opts = {}) {
   .pkg{font-weight:700;font-size:${big ? "15pt" : "10.5pt"}}
   .to{font-weight:800;font-size:${big ? "17pt" : "12pt"};line-height:1.15;
     overflow-wrap:anywhere}
-  .to span{display:block;font-weight:600;font-size:7.5pt;
+  .to span,.from span{display:block;font-weight:600;font-size:7.5pt;
     text-transform:uppercase;letter-spacing:.5px;color:#333}
+  .to em,.from em{display:block;font-style:normal;font-weight:700;
+    font-size:${big ? "13pt" : "9.5pt"};letter-spacing:.3px}
+  .from{font-weight:700;font-size:${big ? "13pt" : "9.5pt"};line-height:1.15;
+    overflow-wrap:anywhere}
   .sub{font-size:${big ? "11pt" : "8.5pt"};color:#222}
   .foot{grid-column:1/-1;display:flex;justify-content:space-between;gap:8px;
     border-top:1px solid #000;padding-top:3px;font-size:7.5pt;
@@ -244,7 +274,7 @@ function renderContainerLabels(model, opts = {}) {
 </style></head><body>
 <div class="actions">
   <b>${escape(m.labels?.length || 0)} labels &middot; ${escape(
-    m.onlyCode || m.reference)}</b>
+    m.onlyCode || m.reference || "Waiting packages")}</b>
   <a class="${format === "sheet" ? "" : "off"}" href="?${link(
     {labels: "sheet"})}">Sheet (Avery 5524)</a>
   <a class="${format === "thermal" ? "" : "off"}" href="?${link(

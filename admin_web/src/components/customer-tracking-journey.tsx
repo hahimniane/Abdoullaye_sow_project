@@ -23,7 +23,7 @@ export function GuestJourneyProgress({
   stage,
   stages = GUEST_JOURNEY_STAGES,
 }: {
-  stage: "booked" | "in_transit" | "arrived" | "delivered" | "cancelled";
+  stage: GuestJourneyStage["id"] | "cancelled";
   /** The steps to draw; a container line has three of its own. */
   stages?: readonly GuestJourneyStage[];
 }) {

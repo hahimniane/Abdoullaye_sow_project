@@ -21,6 +21,7 @@ import { adminSectionAccess, type AdminPermissionsConfig } from "./admin-access.
 import {
   cleanVin,
   containerLineIsStock,
+  containerLineIsWaiting,
   containerLineTitle,
   containerLineWhatsApp,
   containerLineWhatsAppText,
@@ -29,6 +30,8 @@ import {
   contactPhoneReach,
   type ContainerStatus,
 } from "./container-manifest.ts";
+import { destinationCountryOptionForRow } from "./destination-countries.ts";
+import { packagePayment, packageSize, type PackagePayment, type PackageSize } from "./waiting-packages.ts";
 
 type Row = Record<string, unknown>;
 
@@ -286,6 +289,14 @@ export type PackageStaffViewModel = {
   lineId: string;
   businessId: string;
   containerId: string;
+  /** Dropped off and not on a container yet: there is no container to show. */
+  waiting: boolean;
+  /** Where the package itself is going (its own field, not its container's). */
+  destinationId: string;
+  destinationName: string;
+  /** Null when no size was recorded. */
+  size: PackageSize | null;
+  payment: PackagePayment;
   code: string;
   /** "2019 Toyota Camry" / "12 barrels" / "3 × tires". */
   title: string;
@@ -351,10 +362,19 @@ export function packageStaffViewModel(line: unknown, container: unknown): Packag
   const lineId = text(row.id, 200);
   const containerId = text(row.containerId, 200);
   const ownContainer = packageContainer(container);
+  const destination = destinationCountryOptionForRow({
+    id: row.destinationCountryId,
+    name: row.destinationCountryName,
+  });
   return {
     lineId,
     businessId: text(row.businessId, 200),
     containerId,
+    waiting: containerLineIsWaiting(row),
+    destinationId: text(row.destinationCountryId, 60),
+    destinationName: text(row.destinationCountryName, 120) || (destination.id ? destination.name : ""),
+    size: packageSize(row),
+    payment: packagePayment(row),
     code: text(row.trackingCode, 40).toUpperCase(),
     title: containerLineTitle(row),
     kind,

@@ -179,6 +179,7 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "usePagedQuery", what: "business subcollections (destinations whole, reviews newest first)", shapes: [raw("destinationCountries"), raw("officeLocations"), raw("reviews", [], { field: "createdAt", direction: "desc" })] },
   { file: L("business-data.ts"), kind: "query", what: "useBusinessHasRecords probe (limit 1)", shapes: [raw("cars", [eq("businessId")])] },
   { file: L("business-data.ts"), kind: "query", what: "useBusinessCountsByValue", shapes: [raw("lotActivities", [eq("businessId"), eq("activityTypeId")])] },
+  { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useWaitingPackages", shapes: [bc("containerLines", { pageSize: null, where: [["containerStatus", "==", "waiting"]] })] },
   { file: L("business-data.ts"), kind: "useDocsWhereIn", what: "open container lines", shapes: [raw("containerLines", [eq("businessId"), ["containerId", "in", ["a"]]])] },
   // --- lib/use-paged-query.ts: the generic hooks themselves -----------------
   { file: L("use-paged-query.ts"), kind: "query", what: "usePagedQuery window (generic)", shapes: [] },
@@ -206,6 +207,8 @@ const SITES: Site[] = [
   { file: B("containers-panel.tsx"), kind: "useBusinessCollection", what: "lotCustomers", shapes: [bc("lotCustomers", { pageSize: 300, orderBy: "lastSeenAt" })] },
   { file: B("containers-panel.tsx"), kind: "useDocsWhereIn", what: "lines of the containers on screen", shapes: [raw("containerLines", [eq("businessId"), ["containerId", "in", ["a"]]])] },
   { file: B("containers-panel.tsx"), kind: "query", what: "container history", shapes: [raw("lotLedgerAudit", [eq("businessId"), eq("entityId")], { field: "at", direction: "desc" })] },
+  // --- package-payment-dialog.tsx -------------------------------------------
+  { file: B("package-payment-dialog.tsx"), kind: "useBusinessCollection", what: "containerLinePayments of one package", shapes: [bc("containerLinePayments", { pageSize: null, where: [eq("lineId")] })] },
   // --- operations-panels.tsx ------------------------------------------------
   { file: B("operations-panels.tsx"), kind: "useBusinessCollection", what: "listings (every car)", shapes: [bc("cars", { pageSize: null })] },
   { file: B("operations-panels.tsx"), kind: "useBusinessCollection", what: "barrel shipments", shapes: withStatus("status", (where) => bc("barrelShipments", { where })) },

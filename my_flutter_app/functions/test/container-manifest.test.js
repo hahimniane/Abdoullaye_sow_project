@@ -11,6 +11,18 @@ const {
   containerDeleteRefusal,
   validateContainerLine,
   containerLineRecord,
+  validateWaitingPackage,
+  dimensionOf,
+  lineVolumeCubicFeet,
+  lineSizeText,
+  lineIsWaiting,
+  destinationMismatch,
+  cleanLineIds,
+  containerAssignRefusal,
+  containerLinesCountsDelta,
+  LINE_STATUS_WAITING,
+  WAITING_HOLDER,
+  CONTAINER_MESSAGES,
   validateContainerLineContacts,
   containerLineContactsUpdate,
   isInternationalPhone,
@@ -19,6 +31,7 @@ const {
   containerCountsDelta,
   LINE_CONTACT_FIELDS,
   LINE_SUBSTANCE_FIELDS,
+  LINE_PRICE_FIELDS,
   LINE_EDIT_FIELDS,
   CONTACT_FIELD_LABELS,
   LINE_FIELD_LABELS,
@@ -417,8 +430,8 @@ describe("editing a line after it was added", () => {
         assert.equal(lineEditIsContactsOnly(["customerName"]), true);
         assert.equal(lineEditIsContactsOnly(["customerName", "quantity"]),
             false);
-        assert.deepEqual([...LINE_CONTACT_FIELDS, ...LINE_SUBSTANCE_FIELDS]
-            .sort(), [...LINE_EDIT_FIELDS].sort());
+        assert.deepEqual([...LINE_CONTACT_FIELDS, ...LINE_SUBSTANCE_FIELDS,
+          ...LINE_PRICE_FIELDS].sort(), [...LINE_EDIT_FIELDS].sort());
       });
 
   it("hands the VIN lock over only when the car changes", () => {
@@ -596,6 +609,261 @@ describe("working in groups", () => {
 // run, and what matters is that each one is gated on the containers section,
 // that every change is audited as a container, and that the /d page can find
 // a loading list by its own token.
+describe("a package waiting for a container", () => {
+  const waiting = (extra = {}) => ({kind: "barrels", quantity: 3,
+    ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000", destinationCountryId: "gn",
+    destinationCountryName: "Guinea", ...extra});
+  const stored = (extra = {}) => ({businessId: "biz", ...containerLineRecord(
+      waiting(extra), {containerId: "", containerStatus: LINE_STATUS_WAITING}),
+  ...extra});
+
+  it("needs a customer and a destination, on top of what a line needs", () => {
+    assert.deepEqual(validateWaitingPackage(waiting()), []);
+    assert.deepEqual(validateWaitingPackage(waiting({
+      destinationCountryId: " "})), ["package_destination_required"]);
+    // Stock is not "dropped off": there is a customer or nothing to wait for.
+    assert.deepEqual(validateWaitingPackage(waiting({ownerKind: "stock"})),
+        ["owner_kind_invalid"]);
+    assert.deepEqual(validateWaitingPackage({}), [
+      "line_kind_invalid", "owner_kind_invalid",
+      "package_destination_required"]);
+    assert.deepEqual(validateWaitingPackage(waiting({kind: "car",
+      vinNumber: "AB"})), ["vin_required"]);
+    assert.deepEqual(validateWaitingPackage(waiting({kind: "other",
+      description: "", quantity: 0})),
+    ["description_required", "quantity_required"]);
+  });
+
+  it("is stored with no container, its destination, and nothing paid", () => {
+    const line = containerLineRecord(waiting({priceCents: 12500,
+      payOnArrival: true, paidCents: 99999}),
+    {containerId: "", containerStatus: LINE_STATUS_WAITING,
+      addedByStaffId: "u1"});
+    assert.equal(line.containerId, "");
+    assert.equal(line.containerStatus, "waiting");
+    assert.equal(line.destinationCountryId, "gn");
+    assert.equal(line.destinationCountryName, "Guinea");
+    assert.equal(line.priceCents, 12500);
+    assert.equal(line.payOnArrival, true);
+    // What was paid is the server's: a request can never set it.
+    assert.equal(line.paidCents, 0);
+    assert.equal(line.lengthIn, null);
+    assert.equal(lineIsWaiting(line), true);
+    assert.equal(lineIsWaiting({...line, containerId: "c1"}), false);
+    assert.equal(lineIsWaiting({...line, containerStatus: "loading"}), false);
+  });
+
+  describe("size", () => {
+    it("is length by width by height in inches, all three or none", () => {
+      assert.deepEqual(validateContainerLine(waiting({lengthIn: 30,
+        widthIn: 20, heightIn: 12.5})), []);
+      assert.deepEqual(validateContainerLine(waiting()), []);
+      for (const bad of [{lengthIn: 30}, {lengthIn: 30, widthIn: 20,
+        heightIn: 0}, {lengthIn: 30, widthIn: 20, heightIn: -4},
+      {lengthIn: 30, widthIn: 20, heightIn: "wide"},
+      {lengthIn: 30, widthIn: 20, heightIn: 601}]) {
+        assert.deepEqual(validateContainerLine(waiting(bad)),
+            ["size_invalid"], JSON.stringify(bad));
+      }
+    });
+
+    it("works out cubic feet and reads as one line", () => {
+      const line = {lengthIn: 48, widthIn: 24, heightIn: 36};
+      assert.equal(lineVolumeCubicFeet(line), 24);
+      assert.equal(lineVolumeCubicFeet({lengthIn: 30, widthIn: 20,
+        heightIn: 12.5}), 4.34);
+      assert.equal(lineSizeText(line), "48 × 24 × 36 in");
+      assert.equal(lineVolumeCubicFeet({lengthIn: 30}), null);
+      assert.equal(lineSizeText({lengthIn: 30}), "");
+      assert.equal(dimensionOf("12.345"), 12.35);
+      assert.equal(dimensionOf(""), null);
+      assert.equal(dimensionOf(null), null);
+    });
+  });
+
+  describe("price", () => {
+    it("is whole cents above zero, or none yet", () => {
+      assert.deepEqual(validateContainerLine(waiting({priceCents: 15000})),
+          []);
+      assert.deepEqual(validateContainerLine(waiting({priceCents: null})),
+          []);
+      for (const bad of [0, -5, 12.5, "abc", 100000001]) {
+        assert.deepEqual(validateContainerLine(waiting({priceCents: bad})),
+            ["price_invalid"], String(bad));
+      }
+    });
+
+    it("never believes a request about what was paid", () => {
+      assert.deepEqual(validateContainerLine(waiting({priceCents: 15000,
+        paidCents: 99999})), []);
+      assert.deepEqual(validateWaitingPackage(waiting({priceCents: 15000,
+        paidCents: 99999})), []);
+    });
+
+    it("never drops below what was paid on an edit", () => {
+      const row = stored({priceCents: 15000, paidCents: 5000});
+      assert.deepEqual(validateContainerLineEdit(row,
+          {priceCents: 6000}, false), []);
+      assert.deepEqual(validateContainerLineEdit(row,
+          {priceCents: 4999}, false), ["price_below_paid"]);
+      assert.deepEqual(validateContainerLineEdit(row,
+          {priceCents: null}, false), ["price_below_paid"]);
+      // A request cannot lower the bar by claiming it paid less.
+      assert.deepEqual(validateContainerLineEdit(row,
+          {priceCents: 4000, paidCents: 0}, false), ["price_below_paid"]);
+    });
+  });
+
+  describe("destination", () => {
+    const box = (id) => ({status: "loading", destinationCountryId: id});
+
+    it("must match the container's, or the package stays out", () => {
+      assert.equal(destinationMismatch({destinationCountryId: "gn"},
+          box("gn")), null);
+      assert.equal(destinationMismatch({destinationCountryId: "sn"},
+          box("gn")), "destination_mismatch");
+      // A container that has not decided yet cannot take a package that has.
+      assert.equal(destinationMismatch({destinationCountryId: "gn"},
+          {status: "loading"}), "container_destination_required");
+      // Lines loaded before destinations existed ride anywhere.
+      assert.equal(destinationMismatch({}, box("gn")), null);
+      assert.equal(destinationMismatch({}, {}), null);
+    });
+
+    it("refuses all of a batch for the one that does not fit", () => {
+      const entries = [
+        {id: "a", line: stored()},
+        {id: "b", line: stored({destinationCountryId: "sn"})},
+        {id: "c", line: stored({destinationCountryId: "sn"})},
+        {id: "d", line: stored()},
+      ];
+      assert.deepEqual(containerAssignRefusal(box("gn"), entries, "biz"),
+          {code: "destination_mismatch", lineIds: ["b", "c"]});
+      assert.equal(containerAssignRefusal(box("gn"),
+          [entries[0], entries[3]], "biz"), null);
+      assert.deepEqual(containerAssignRefusal({status: "loading"},
+          [entries[0]], "biz"),
+      {code: "container_destination_required", lineIds: ["a"]});
+    });
+  });
+
+  describe("adding to a container", () => {
+    const box = {status: "loading", destinationCountryId: "gn"};
+
+    it("needs an open box and lines that are waiting and the business's",
+        () => {
+          assert.deepEqual(containerAssignRefusal({status: "shipped",
+            destinationCountryId: "gn"}, [{id: "a", line: stored()}], "biz"),
+          {code: "container_locked", lineIds: []});
+          assert.deepEqual(containerAssignRefusal(box,
+              [{id: "a", line: stored()}, {id: "gone", line: null}], "biz"),
+          {code: "line_not_found", lineIds: ["gone"]});
+          assert.deepEqual(containerAssignRefusal(box,
+              [{id: "other", line: stored({businessId: "elsewhere"})}], "biz"),
+          {code: "line_not_found", lineIds: ["other"]});
+          const loaded = {...stored(), containerId: "c1",
+            containerStatus: "loading"};
+          assert.deepEqual(containerAssignRefusal(box,
+              [{id: "a", line: stored()}, {id: "x", line: loaded}], "biz"),
+          {code: "line_not_waiting", lineIds: ["x"]});
+          assert.equal(containerAssignRefusal(box,
+              [{id: "a", line: stored()}], "biz"), null);
+        });
+
+    it("takes one to a hundred distinct ids", () => {
+      assert.deepEqual(cleanLineIds(["a", "b", "a"]),
+          {ids: ["a", "b"], errors: []});
+      for (const bad of [[], undefined, "a", [""], [1], [" "],
+        Array.from({length: 101}, (_, i) => `l${i}`)]) {
+        assert.deepEqual(cleanLineIds(bad),
+            {ids: [], errors: ["line_ids_invalid"]}, JSON.stringify(bad));
+      }
+      assert.equal(cleanLineIds(Array.from({length: 100},
+          (_, i) => `l${i}`)).ids.length, 100);
+    });
+
+    it("moves the tallies once, for the whole batch", () => {
+      assert.deepEqual(containerLinesCountsDelta([
+        {kind: "barrels", quantity: 3}, {kind: "car"},
+        {kind: "barrels", quantity: 2}, {kind: "other", quantity: 4}], 1),
+      {lineCount: 4, carCount: 1, barrelCount: 5, otherCount: 4});
+      assert.deepEqual(containerLinesCountsDelta([
+        {kind: "barrels", quantity: 3}], -1),
+      {lineCount: -1, barrelCount: -3});
+      assert.deepEqual(containerLinesCountsDelta([]), {});
+    });
+  });
+
+  it("holds its car's VIN like a loaded line does", () => {
+    const car = {kind: "car", vinNumber: VIN, containerId: "",
+      containerStatus: "waiting"};
+    assert.equal(openContainerHoldingVin([car]), WAITING_HOLDER);
+    assert.equal(openContainerHoldingVin([car], "c1"), WAITING_HOLDER);
+    // A lock whose line is waiting is not stale.
+    assert.equal(vinLockHolder(
+        {businessId: "biz", vinNumber: VIN},
+        {...car, businessId: "biz"}), WAITING_HOLDER);
+    // A loaded one still names its container, and an arrived one is free.
+    assert.equal(openContainerHoldingVin([{...car, containerId: "c9",
+      containerStatus: "loading"}]), "c9");
+    assert.equal(openContainerHoldingVin([{...car, containerId: "c9",
+      containerStatus: "arrived"}]), "");
+  });
+
+  describe("editing", () => {
+    const edit = (current, input) => {
+      const next = containerLineEditTarget(current, input, false);
+      return {next, changes: containerLineEditChanges(current, next)};
+    };
+
+    it("changes what it is while it waits, and its price always", () => {
+      const row = stored();
+      const {next, changes} = edit(row, {quantity: 5, lengthIn: 30,
+        widthIn: 20, heightIn: 10, destinationCountryId: "sn",
+        destinationCountryName: "Senegal", priceCents: 9000});
+      assert.deepEqual(changes, ["quantity", "destinationCountryId",
+        "destinationCountryName", "lengthIn", "widthIn", "heightIn",
+        "priceCents"]);
+      // No container: as open as a loading one.
+      assert.equal(containerLineEditRefusal(null, changes), null);
+      assert.equal(containerLineEditAudit(row, next, changes).summary,
+          "Edited 5 barrels (was 3 barrels): quantity, destination, size, " +
+          "price for Fatou Diallo");
+      // On a shipped box only contacts and the price may change.
+      for (const key of ["priceCents", "payOnArrival", "receiverPhone"]) {
+        assert.equal(containerLineEditRefusal({status: "shipped"}, [key]),
+            null, key);
+      }
+      for (const key of ["quantity", "lengthIn", "destinationCountryId"]) {
+        assert.equal(containerLineEditRefusal({status: "arrived"}, [key]),
+            "container_locked", key);
+      }
+    });
+
+    it("never changes what was paid", () => {
+      const row = stored({paidCents: 5000, priceCents: 9000});
+      const {next, changes} = edit(row, {paidCents: 0, priceCents: 9000});
+      assert.equal(Object.hasOwn(next, "paidCents"), false);
+      assert.deepEqual(changes, []);
+    });
+  });
+
+  it("explains every refusal it can make", () => {
+    for (const code of ["package_destination_required", "destination_mismatch",
+      "container_destination_required", "size_invalid", "line_not_waiting",
+      "line_is_waiting", "line_not_in_container", "line_ids_invalid",
+      "line_has_payments", "price_invalid", "price_below_paid",
+      "price_required", "amount_required", "amount_too_large",
+      "payment_method_invalid", "payment_exceeds_balance",
+      "payment_not_found", "payment_already_reverted",
+      "vin_already_waiting"]) {
+      assert.ok(CONTAINER_MESSAGES[code], code);
+    }
+  });
+});
+
 describe("the container callables and their gates", () => {
   const {readFileSync} = require("node:fs");
   const path = require("node:path");
@@ -613,7 +881,10 @@ describe("the container callables and their gates", () => {
     for (const name of ["createContainer", "updateContainer",
       "deleteContainer", "addContainerLine", "removeContainerLine",
       "moveContainerLine", "setContainerStatus", "updateContainerLine",
-      "updateContainerLineContacts", "getContainerDocumentUrl"]) {
+      "updateContainerLineContacts", "getContainerDocumentUrl",
+      "addWaitingPackage", "assignContainerLines", "unassignContainerLine",
+      "setContainerLinePrice", "recordContainerLinePayment",
+      "revertContainerLinePayment"]) {
       const body = callable(name);
       // The gate is either inline or the shared loader, which carries it.
       assert.match(body, /CONTAINER_SECTION|loadContainerFor\(/,
@@ -774,7 +1045,87 @@ describe("the container callables and their gates", () => {
     assert.match(source, /renderContainerDocument\(/);
   });
 
+  it("adds a waiting car under the same VIN lock as a loaded one", () => {
+    const body = callable("addWaitingPackage");
+    assert.match(body, /db\.runTransaction\(/);
+    assert.match(body, /takeVinLock\(tx, db, \{/);
+    assert.match(body, /containerId: "", lineId: lineRef\.id/);
+    assert.match(body, /tx\.create\(lockRef, lockBody\)/);
+    assert.match(body, /error\.code !== 6/);
+    assert.match(body,
+        /containerId: "",\s*containerStatus: LINE_STATUS_WAITING/);
+    const helper = source.slice(source.indexOf("async function takeVinLock("),
+        source.indexOf("async function releaseContainerVinLocks("));
+    assert.match(helper, /vinLockHolder\(lock,/);
+    assert.match(helper, /openContainerHoldingVin\(/);
+    assert.match(helper, /conflictContainerId: conflict/);
+  });
+
+  // The plan: no message at drop-off, none when a package is put on a box.
+  // The first thing a customer hears is still that it sailed.
+  it("tells no customer anything when adding or assigning", () => {
+    for (const name of ["addWaitingPackage", "assignContainerLines",
+      "unassignContainerLine"]) {
+      const body = callable(name);
+      assert.doesNotMatch(body, new RegExp("recordContainerEvent|" +
+        "trackingEvents|containerUpdates|whatsapp|customerUpdate", "i"),
+      name);
+    }
+  });
+
+  it("assigns all or none in one transaction that re-reads everything", () => {
+    const body = callable("assignContainerLines");
+    assert.match(body, /db\.runTransaction\(/);
+    assert.match(body, /tx\.getAll\(\.\.\.lineRefs\)/);
+    assert.match(body,
+        /containerAssignRefusal\(boxData, entries, businessId\)/);
+    // The checks come before any write, and the tallies move once.
+    assert.ok(body.indexOf("containerAssignRefusal(") <
+      body.indexOf("tx.update("));
+    assert.equal((body.match(/tx\.set\(ref,/g) || []).length, 1);
+    assert.match(body, /containerLinesCountsDelta\(/);
+    assert.match(body, /tx\.update\(lock\.ref, \{containerId: ref\.id/);
+    assert.doesNotMatch(body, /refreshContainerCounts\(/);
+  });
+
+  it("sends a package back to waiting with its lock and tallies", () => {
+    const body = callable("unassignContainerLine");
+    assert.match(body, /db\.runTransaction\(/);
+    assert.match(body, /containerStatus: LINE_STATUS_WAITING/);
+    assert.match(body, /containerCountsIncrement\(row, -1\)/);
+    assert.match(body, /tx\.update\(lockRef, \{containerId: ""/);
+    assert.doesNotMatch(body, /tx\.delete\(lockRef\)/);
+  });
+
+  it("records and reverts payments inside a transaction on the line", () => {
+    const record = callable("recordContainerLinePayment");
+    assert.match(record, /db\.runTransaction\(/);
+    assert.match(record, /validateContainerLinePayment\(data/);
+    assert.match(record, /receivedByStaffId: uid/);
+    assert.ok(record.indexOf("validateContainerLinePayment(") <
+      record.indexOf("tx.set(payRef"));
+    const revert = callable("revertContainerLinePayment");
+    assert.match(revert, /db\.runTransaction\(/);
+    assert.match(revert, /reverted: true,\s*revertedByStaffId: uid/);
+    assert.doesNotMatch(revert, /tx\.delete\(/);
+    assert.match(callable("setContainerLinePrice"), /db\.runTransaction\(/);
+  });
+
+  it("serves a waiting package's labels from its own line token", () => {
+    assert.match(source, new RegExp(
+        "collection\\(\"containerLines\"\\)\\s*" +
+        "\\.where\\(\"documentToken\", \"in\", group\\)"));
+    const handler = source.slice(source.indexOf("exports.parkingDocument ="));
+    assert.match(handler, /containerLineLabelsPage\(db, req, token\)/);
+    assert.match(callable("getContainerDocumentUrl"),
+        /containerLineLabelsUrl\(db, uid, businessId, data\)/);
+  });
+
   it("keeps both collections read-only to clients", () => {
+    const payments = rules.slice(
+        rules.indexOf("match /containerLinePayments/"));
+    assert.match(payments.slice(0, 220), /allow read: if lotLedgerRead\(/);
+    assert.match(payments.slice(0, 220), /allow write: if false;/);
     for (const name of ["containers", "containerLines"]) {
       const block = rules.slice(rules.indexOf(`match /${name}/`));
       assert.ok(block.length > 0, `${name} rule missing`);

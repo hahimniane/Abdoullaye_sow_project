@@ -1026,6 +1026,55 @@ describe("business dashboard Firestore rules", () => {
         {businessId: "biz_a", containerId: "box_a", kind: "car"}));
   });
 
+  // Waiting packages are lines with no container; the console subscribes to
+  // them by business and status, and to a package's payments by business and
+  // line (two equalities, so no composite index).
+  it("lets the lot read waiting packages and their payments, never write",
+      async () => {
+        const {query, collection, where, getDocs, doc, setDoc, updateDoc,
+          deleteDoc} = require("firebase/firestore");
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+          const db = context.firestore();
+          await setDoc(doc(db, "containerLines/wait_a"),
+              {businessId: "biz_a", containerId: "", kind: "barrels",
+                containerStatus: "waiting", destinationCountryId: "gn",
+                priceCents: 15000, paidCents: 5000});
+          await setDoc(doc(db, "containerLinePayments/pay_a"),
+              {businessId: "biz_a", lineId: "wait_a", amountCents: 5000,
+                method: "cash", receivedByStaffId: "owner-a",
+                reverted: false});
+        });
+        const owner = firestoreFor("owner-a");
+        await assertSucceeds(getDocs(query(collection(owner, "containerLines"),
+            where("businessId", "==", "biz_a"),
+            where("containerStatus", "==", "waiting"))));
+        await assertSucceeds(getDocs(query(
+            collection(owner, "containerLinePayments"),
+            where("businessId", "==", "biz_a"),
+            where("lineId", "==", "wait_a"))));
+        // Not by line alone: the rule authorises by business.
+        await assertFails(getDocs(query(
+            collection(owner, "containerLinePayments"),
+            where("lineId", "==", "wait_a"))));
+        await assertFails(getDocs(query(
+            collection(owner, "containerLinePayments"),
+            where("businessId", "==", "biz_b"))));
+        await assertFails(getDocs(query(
+            collection(firestoreFor("owner-b"), "containerLinePayments"),
+            where("businessId", "==", "biz_a"))));
+        // A client that could write here could write a package paid.
+        await assertFails(setDoc(doc(owner, "containerLinePayments/forged"),
+            {businessId: "biz_a", lineId: "wait_a", amountCents: 15000,
+              method: "cash", reverted: false}));
+        await assertFails(updateDoc(doc(owner, "containerLinePayments/pay_a"),
+            {reverted: true}));
+        await assertFails(deleteDoc(doc(owner,
+            "containerLinePayments/pay_a")));
+        await assertFails(updateDoc(doc(owner, "containerLines/wait_a"),
+            {paidCents: 15000, containerStatus: "shipped"}));
+        await assertFails(deleteDoc(doc(owner, "containerLines/wait_a")));
+      });
+
   // The VIN lock is how two quick adds of one car are serialised. A client
   // that could write it could block a car from every container, or delete
   // the lock and load it twice; one that could read it learns nothing it

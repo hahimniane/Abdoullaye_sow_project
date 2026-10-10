@@ -35,6 +35,26 @@ export const CONTAINER_STATUS_TONES: Record<ContainerStatus, string> = {
   arrived: "ok",
 };
 
+/**
+ * A package that has been dropped off but is not on a container yet. It is a
+ * line like any other (same collection, same tracking code for life) with
+ * `containerId: ""` and `containerStatus: "waiting"`; it is not a state a
+ * container can be in, so `CONTAINER_STATUSES` does not list it.
+ */
+export const WAITING_STATUS = "waiting";
+/** Where a line stands: waiting, or the state of the container it is on. */
+export type LineStage = ContainerStatus | typeof WAITING_STATUS;
+
+export const LINE_STAGE_LABELS: Record<LineStage, string> = {
+  ...CONTAINER_STATUS_LABELS,
+  waiting: "Waiting list",
+};
+
+export const LINE_STAGE_TONES: Record<LineStage, string> = {
+  ...CONTAINER_STATUS_TONES,
+  waiting: "muted",
+};
+
 export const CONTAINER_LINE_KINDS = ["car", "barrels", "other"] as const;
 export type ContainerLineKind = (typeof CONTAINER_LINE_KINDS)[number];
 
@@ -198,7 +218,26 @@ export type ContainerRefusal =
   | "customer_phone_invalid"
   | "receiver_phone_invalid"
   | "vin_already_loaded"
-  | "move_target_not_loading";
+  | "vin_already_waiting"
+  | "move_target_not_loading"
+  | "package_destination_required"
+  | "destination_mismatch"
+  | "container_destination_required"
+  | "size_invalid"
+  | "line_not_waiting"
+  | "line_is_waiting"
+  | "line_not_in_container"
+  | "line_ids_invalid"
+  | "line_has_payments"
+  | "price_invalid"
+  | "price_below_paid"
+  | "price_required"
+  | "amount_required"
+  | "amount_too_large"
+  | "payment_method_invalid"
+  | "payment_exceeds_balance"
+  | "payment_not_found"
+  | "payment_already_reverted";
 
 export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   container_label_required: "Give the container a working name, or its container or booking number.",
@@ -230,13 +269,41 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
     "The receiver's phone doesn't look like a phone number.",
   vin_already_loaded:
     "This car is already on another container that hasn't arrived.",
+  vin_already_waiting: "This car is already waiting for a container.",
   move_target_not_loading:
     "You can only move a line to a container that is still loading.",
+  package_destination_required: "Choose where this package is going.",
+  destination_mismatch:
+    "A package can only go on a container headed to the same country.",
+  container_destination_required:
+    "Choose where this container is going before adding packages to it.",
+  size_invalid:
+    "Enter the length, width and height in inches, or leave all three empty.",
+  line_not_waiting: "That package is already on a container.",
+  line_is_waiting:
+    "This package is waiting for a container. Add it to one from the " +
+    "waiting list.",
+  line_not_in_container: "That package is not on a container.",
+  line_ids_invalid: "Choose between 1 and 100 packages.",
+  line_has_payments:
+    "Payments are recorded for this package. Revert them first.",
+  price_invalid: "Enter the price in dollars, more than zero.",
+  price_below_paid: "The price can't be less than what has been paid.",
+  price_required: "Set a price before recording a payment.",
+  amount_required: "Enter the amount received.",
+  amount_too_large: "That amount is larger than a package can carry.",
+  payment_method_invalid: "Say how the payment arrived.",
+  payment_exceeds_balance: "That is more than what is still owed.",
+  payment_not_found: "That payment no longer exists.",
+  payment_already_reverted: "That payment was already reverted.",
 };
 
 export function containerMessage(codes: readonly ContainerRefusal[]): string {
   return codes.map((code) => CONTAINER_MESSAGES[code]).join(" ");
 }
+
+/** The most packages one `assignContainerLines` call takes. */
+export const MAX_ASSIGN_LINES = 100;
 
 // ---------------------------------------------------------------------------
 // The container.
@@ -702,22 +769,31 @@ export function writeContainerLabelChoice(storage: ChoiceStorage | null | undefi
 /**
  * The `getContainerDocumentUrl` request for labels: the whole container, or
  * only one line's packages when `lineId` is given (a reprint for one barrel).
+ * With no container - packages still waiting - the labels are asked for by
+ * `lineIds`, one or several.
  */
 export function containerLabelsRequest(
   businessId: string,
   containerId: string,
   choice: ContainerLabelChoice,
-  lineId = "",
+  lineId: string | readonly string[] = "",
 ) {
   const { format, copies } = containerLabelChoice(choice);
-  const line = text(lineId, MAX_LABEL);
-  return {
+  const lineIds = (Array.isArray(lineId) ? lineId : [lineId])
+    .map((id) => text(id, MAX_LABEL))
+    .filter(Boolean);
+  const container = text(containerId, MAX_LABEL);
+  const base = {
     businessId: text(businessId, MAX_LABEL),
-    containerId: text(containerId, MAX_LABEL),
     view: "labels" as const,
     format,
     copies,
-    ...(line ? { lineId: line } : {}),
+  };
+  if (!container) return { ...base, lineIds };
+  return {
+    ...base,
+    containerId: container,
+    ...(lineIds.length ? { lineId: lineIds[0] } : {}),
   };
 }
 
@@ -947,6 +1023,98 @@ export function containerLineIsStock(line: unknown): boolean {
   return text(asRow(line).ownerKind, 20) === "stock";
 }
 
+/** Whether a line is still waiting for a container (dropped off, not loaded). */
+export function containerLineIsWaiting(line: unknown): boolean {
+  const r = asRow(line);
+  return text(r.containerStatus, 20) === WAITING_STATUS || !text(r.containerId, MAX_LABEL);
+}
+
+/** A positive finite number (an inch measurement), or null. */
+function positiveNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Whole cents >= 0, or null when the field is absent or not a number. */
+function wholeCents(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+}
+
+/**
+ * A stored line as the console reads it. Every field a package can carry,
+ * with the waiting-package ones (destination, size, price, payments) read
+ * defensively: a line saved before they existed has none of them.
+ */
+export type ContainerLine = {
+  id: string;
+  businessId: string;
+  /** "" while the package waits. */
+  containerId: string;
+  containerStatus: LineStage | "";
+  kind: ContainerLineKind;
+  vinNumber: string;
+  carMake: string;
+  carModel: string;
+  carYear: string;
+  quantity: number;
+  description: string;
+  ownerKind: ContainerOwnerKind;
+  customerName: string;
+  customerPhone: string;
+  receiverName: string;
+  receiverPhone: string;
+  trackingCode: string;
+  destinationCountryId: string;
+  destinationCountryName: string;
+  lengthIn: number | null;
+  widthIn: number | null;
+  heightIn: number | null;
+  /** Null until a price is set. */
+  priceCents: number | null;
+  /** The sum of the payments not reverted; the server keeps it under the price. */
+  paidCents: number;
+  /** The customer settles on arrival; the Guinea team records it. */
+  payOnArrival: boolean;
+};
+
+export function containerLineFromRow(row: unknown): ContainerLine {
+  const r = asRow(row);
+  const rawKind = text(r.kind, 20);
+  const stage = text(r.containerStatus, 20);
+  return {
+    id: text(r.id, MAX_LABEL),
+    businessId: text(r.businessId, MAX_LABEL),
+    containerId: text(r.containerId, MAX_LABEL),
+    containerStatus: stage === WAITING_STATUS || (CONTAINER_STATUSES as readonly string[]).includes(stage)
+      ? (stage as LineStage)
+      : "",
+    kind: (CONTAINER_LINE_KINDS as readonly string[]).includes(rawKind) ? (rawKind as ContainerLineKind) : "other",
+    vinNumber: cleanVin(r.vinNumber),
+    carMake: text(r.carMake, 80),
+    carModel: text(r.carModel, 80),
+    carYear: text(r.carYear, 8),
+    quantity: positiveInt(r.quantity),
+    description: text(r.description, MAX_LABEL),
+    ownerKind: text(r.ownerKind, 20) === "stock" ? "stock" : "customer",
+    customerName: text(r.customerName, MAX_LABEL),
+    customerPhone: text(r.customerPhone, 40),
+    receiverName: text(r.receiverName, MAX_LABEL),
+    receiverPhone: text(r.receiverPhone, 40),
+    trackingCode: text(r.trackingCode, 40),
+    destinationCountryId: text(r.destinationCountryId, 60),
+    destinationCountryName: text(r.destinationCountryName, MAX_LABEL),
+    lengthIn: positiveNumber(r.lengthIn),
+    widthIn: positiveNumber(r.widthIn),
+    heightIn: positiveNumber(r.heightIn),
+    priceCents: wholeCents(r.priceCents),
+    paidCents: wholeCents(r.paidCents) ?? 0,
+    payOnArrival: r.payOnArrival === true,
+  };
+}
+
 function rowDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -1062,15 +1230,20 @@ export function filterContainers(
 
 export type ContainerLineHit = {
   line: Row;
+  /** Undefined for a package still waiting (or one whose container is not loaded). */
   container: Row | undefined;
-  status: ContainerStatus;
+  /** Where it is: waiting, or the state of its container. */
+  status: LineStage;
   sailedAt: unknown;
+  /** True while the package has no container yet. */
+  waiting: boolean;
 };
 
 /**
  * Lines matching a VIN, a tracking code, a customer's name or a phone number,
- * each with the container it sits on. Two characters is enough to start; digits match the
- * phone with its punctuation ignored.
+ * each with the container it sits on - or, for a package that has not been
+ * loaded yet, a hit that says it is waiting. Two characters is enough to
+ * start; digits match the phone with its punctuation ignored.
  */
 export function searchContainerLines(
   lines: readonly unknown[],
@@ -1107,11 +1280,17 @@ export function searchContainerLines(
       (qDigits.length >= 3 && receiverPhone.includes(qDigits));
     if (!matches) continue;
     const container = byId.get(text(r.containerId, MAX_LABEL));
+    const waiting = !container && containerLineIsWaiting(r);
     hits.push({
       line: r,
       container,
-      status: container ? containerStatus(container) : containerStatus(r.containerStatus ? { status: r.containerStatus } : {}),
+      status: container
+        ? containerStatus(container)
+        : waiting
+          ? WAITING_STATUS
+          : containerStatus(r.containerStatus ? { status: r.containerStatus } : {}),
       sailedAt: container?.sailedAt ?? null,
+      waiting,
     });
   }
   return hits;
@@ -1123,21 +1302,26 @@ export function searchContainerLines(
 
 export type ContainerCallableFailure = {
   message: string;
-  /** Set when the refusal was `vin_already_loaded`. */
+  /** Set when the refusal was `vin_already_loaded` and the car is on a container. */
   conflictContainerId: string;
+  /** Set when the car that is already held is a package waiting for a container (nothing to jump to). */
+  conflictWaiting: boolean;
+  /** Set when the refusal was `destination_mismatch`: the packages that do not fit. */
+  offendingLineIds: string[];
 };
 
 /**
- * A callable's rejection, read for the sentence and the one detail that
- * changes what the form offers: the container already holding the VIN, so
- * the person can jump to it instead of hunting for it.
+ * A callable's rejection, read for the sentence and the details that change
+ * what the form offers: the container already holding the VIN, so the person
+ * can jump to it instead of hunting for it, and the packages whose country
+ * does not match the container's.
  */
 export function containerCallableFailure(error: unknown): ContainerCallableFailure {
   // `runPanelAction` hands its onError the message it already read off the
   // error, not the error itself. Read as a row, a string is empty, and every
   // refusal used to collapse into "The change did not save."
   if (typeof error === "string") {
-    return { message: text(error, 500) || "The change did not save.", conflictContainerId: "" };
+    return { message: text(error, 500) || "The change did not save.", conflictContainerId: "", conflictWaiting: false, offendingLineIds: [] };
   }
   const e = asRow(error);
   const details = asRow(e.details);
@@ -1148,9 +1332,15 @@ export function containerCallableFailure(error: unknown): ContainerCallableFailu
       ? CONTAINER_MESSAGES[reason as ContainerRefusal]
       : "") ||
     "The change did not save.";
+  const rawIds = Array.isArray(details.lineIds) ? details.lineIds : details.lineId ? [details.lineId] : [];
+  // A waiting holder is named "waiting" (no container id): say so, and offer no jump.
+  const holder = reason === "vin_already_loaded" ? text(details.conflictContainerId, MAX_LABEL) : "";
+  const conflictWaiting = holder === "waiting" || details.conflictWaiting === true;
   return {
     message,
-    conflictContainerId:
-      reason === "vin_already_loaded" ? text(details.conflictContainerId, MAX_LABEL) : "",
+    conflictContainerId: conflictWaiting ? "" : holder,
+    conflictWaiting,
+    offendingLineIds:
+      reason === "destination_mismatch" ? rawIds.map((id) => text(id, MAX_LABEL)).filter(Boolean) : [],
   };
 }

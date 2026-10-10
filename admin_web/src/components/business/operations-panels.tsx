@@ -288,6 +288,7 @@ import { useCarCatalog } from "@/lib/use-car-catalog";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
+import { mainDestinationChanges } from "@/lib/waiting-packages";
 import type { FirestoreRow } from "@/types/admin";
 
 type PanelProps = {
@@ -861,6 +862,17 @@ export function DestinationsPanel({
     setMessage(`${country.name} configuration saved.`);
   }
 
+  // The main destination is where a new waiting package opens: one country
+  // at most. Turning one on turns the previous one off in the same write, so
+  // two are never main, even for a moment.
+  async function toggleMainDestination(row: FirestoreRow) {
+    const changes = mainDestinationChanges(destinations.rows, row.isMain === true ? "" : row.id);
+    if (changes.length === 0) return;
+    // A server call, not a client write: the destination rule checks the
+    // whole document, so a fully set-up destination was refused.
+    await httpsCallable(functions, "setMainDestination")({ businessId, countryId: row.isMain === true ? "" : row.id });
+  }
+
   async function pauseAllServices(row: FirestoreRow) {
     await setDoc(
       doc(db, "businesses", businessId, "destinationCountries", row.id),
@@ -1047,6 +1059,7 @@ export function DestinationsPanel({
                 <div className="dst-name">
                   <strong>{destinationRowCountryName(row)}</strong>
                   <span>{text(row.code ?? row.countryCode, "")}</span>
+                  {row.isMain === true && <span className="destination-status active">Main destination</span>}
                 </div>
               </div>
               <div className="destination-service-cell">
@@ -1095,6 +1108,16 @@ export function DestinationsPanel({
               </div>
               <div className="destination-row-actions">
                 <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editDestination(row)}><Pencil size={14} /> Configure</button>
+                <button
+                  className="lst-btn ghost"
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={row.isMain === true}
+                  title="New packages open on this country"
+                  onClick={() => runPanelAction(setBusy, setMessage, row.isMain === true ? "Main destination cleared." : "Main destination saved.", () => toggleMainDestination(row))}
+                >
+                  <Star size={14} /> {row.isMain === true ? "Main destination" : "Make main"}
+                </button>
                 {active ? (
                   <button className="destination-pause" type="button" disabled={busy} onClick={() => runPanelAction(setBusy, setMessage, "All services paused for this country.", () => pauseAllServices(row))}>Pause all</button>
                 ) : null}

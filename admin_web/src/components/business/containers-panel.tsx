@@ -23,6 +23,7 @@ import {
   Ship,
   Tag,
   Trash2,
+  Undo2,
   X,
 } from "lucide-react";
 
@@ -34,6 +35,7 @@ import {
   useBusinessDestinations,
   useBusinessStaff,
   useLiveDoc,
+  useWaitingPackages,
 } from "@/lib/business-data";
 import { useDocsWhereIn } from "@/lib/use-paged-query";
 import { findBusinessVehicleRecord } from "@/lib/vin-records";
@@ -42,8 +44,8 @@ import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/
 import { useCarCatalog } from "@/lib/use-car-catalog";
 import {
   CONTAINER_MESSAGES,
-  CONTAINER_STATUS_LABELS,
-  CONTAINER_STATUS_TONES,
+  LINE_STAGE_LABELS,
+  LINE_STAGE_TONES,
   buildVinPlacementIndex,
   cleanVin,
   containerCallableFailure,
@@ -87,8 +89,10 @@ import {
   type ContainerLineDraft,
   type ContainerLineInLot,
   type ContainerStatus,
+  type LineStage,
   type ParkedCarPick,
 } from "@/lib/container-manifest";
+import { defaultWaitingDestination } from "@/lib/waiting-packages";
 import {
   DESTINATION_COUNTRIES,
   destinationCountryName,
@@ -101,6 +105,9 @@ import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
 import { CopyValue } from "@/components/copy-value";
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
+import { AddWaitingPackagesDialog } from "@/components/business/add-waiting-packages-dialog";
+import { ContactPhone } from "@/components/business/contact-phone";
+import { PackageMoney, PackageSize, WaitingPackagesPanel } from "@/components/business/waiting-packages-panel";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import {
   lotCustomerFromRow,
@@ -134,74 +141,17 @@ type ContainersPanelProps = {
   focusLineId?: string;
 };
 
-type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels";
+type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels" | "assign";
 
-function StatusBadge({ status }: { status: ContainerStatus }) {
-  return <span className={statusPillClass(CONTAINER_STATUS_TONES[status])}>{CONTAINER_STATUS_LABELS[status]}</span>;
+/** The two lists the panel offers: the containers, and the packages still waiting for one. */
+type ListView = "containers" | "waiting";
+
+function StatusBadge({ status }: { status: LineStage }) {
+  return <span className={statusPillClass(LINE_STAGE_TONES[status])}>{LINE_STAGE_LABELS[status]}</span>;
 }
 
 function EmptyState({ text: message }: { text: string }) {
   return <div className="empty-state">{message}</div>;
-}
-
-/**
- * A contact's phone, the shared calling-code picker, and the WhatsApp switch
- * under it. The switch cannot be on without a number; a number with no
- * country code is saved (older app versions send them) but warned about,
- * because WhatsApp cannot reach it.
- */
-function ContactPhone({
-  id,
-  label,
-  value,
-  onChange,
-  notify,
-  onNotify,
-  initialCountryCode,
-  disabled = false,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  notify: boolean;
-  onNotify: (value: boolean) => void;
-  initialCountryCode: string;
-  disabled?: boolean;
-}) {
-  // A half-typed number is "incomplete" on every keystroke; only say so once
-  // the person has left the field.
-  const [touched, setTouched] = useState(false);
-  const reach = contactPhoneReach(value);
-  const hasPhone = reach !== "empty";
-  return (
-    <div className="ctn-phone">
-      <CustomerPhoneField
-        id={id}
-        label={label}
-        value={value}
-        onChange={(next) => { setTouched(false); onChange(next); }}
-        onBlur={() => setTouched(true)}
-        initialCountryCode={initialCountryCode}
-        disabled={disabled}
-      />
-      {reach === "local" && (
-        <small className="ctn-phone-warn" role="status">Add the country code so WhatsApp updates can reach this number.</small>
-      )}
-      {reach === "incomplete" && touched && (
-        <small className="ctn-phone-warn" role="status">This number is too short to receive WhatsApp updates.</small>
-      )}
-      <label className="ctn-notify">
-        <input
-          type="checkbox"
-          checked={notify && hasPhone}
-          disabled={disabled || !hasPhone}
-          onChange={(e) => onNotify(e.target.checked)}
-        />
-        <span>Send this person WhatsApp updates about this shipment</span>
-      </label>
-    </div>
-  );
 }
 
 /** The line's tracking code — what the customer types to follow it — with a copy. */
@@ -280,6 +230,9 @@ export function ContainersPanel({
     filters: [["businessId", "==", businessId]],
     enabled,
   });
+  // Packages dropped off and not on a container yet: their own list, and
+  // searchable beside the loaded lines.
+  const waiting = useWaitingPackages(businessId, enabled);
   const destinations = useBusinessDestinations(businessId, enabled);
   const staff = useBusinessStaff(businessId, enabled);
   // The cars in the lot right now (the line form offers them), whole and
@@ -297,6 +250,7 @@ export function ContainersPanel({
   const [destinationFilter, setDestinationFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [view, setView] = useState<ListView>("containers");
 
   const [modal, setModal] = useState<ContainerModal>("");
   const [busy, setBusy] = useState(false);
@@ -409,8 +363,8 @@ export function ContainersPanel({
   );
 
   const searchHits = useMemo(
-    () => searchContainerLines(lines.rows, containers.rows, search),
-    [lines.rows, containers.rows, search],
+    () => searchContainerLines([...lines.rows, ...waiting.rows], containers.rows, search),
+    [lines.rows, waiting.rows, containers.rows, search],
   );
   const searching = search.trim().length >= 2;
 
@@ -419,6 +373,9 @@ export function ContainersPanel({
   const selectedOpen = selected ? containerIsOpen(selected) : false;
   const selectedStatus = selected ? containerStatus(selected) : "loading";
   const selectedCounts = selected ? containerRowCounts(selected, selectedLines) : null;
+
+  // New packages open on the main destination (or the first one listed).
+  const waitingDestination = useMemo(() => defaultWaitingDestination(destinations.rows), [destinations.rows]);
 
   // Where the phone pickers open: the business's own country for the
   // customer handing the goods in, the container's destination for whoever
@@ -889,6 +846,20 @@ export function ContainersPanel({
     });
   }
 
+  // While the container loads, a package can leave it again: back to the
+  // waiting list, same label, same code.
+  async function sendBackToWaiting(row: FirestoreRow) {
+    if (!selected) return;
+    const ok = await confirmImportantAction(
+      `Send ${containerLineTitle(row)} back to waiting? It leaves ${containerTitle(selected)}; its label and code stay the same.`,
+      `Remettre ${containerLineTitle(row)} en attente ? Il quitte ${containerTitle(selected)} ; son étiquette et son code ne changent pas.`,
+    );
+    if (!ok) return;
+    await runPanelAction(setBusy, setFlash, "Package sent back to waiting.", async () => {
+      await httpsCallable(functions, "unassignContainerLine")({ businessId, lineId: String(row.id) });
+    });
+  }
+
   // Contacts stay correctable in every state: a wrong number matters most
   // once the box has sailed.
   function openContacts(row: FirestoreRow) {
@@ -958,6 +929,25 @@ export function ContainersPanel({
   const loading = containers.loading || lines.loading;
   const loadError = containers.error || lines.error;
 
+  // The two lists the panel offers, with how many each holds.
+  const viewTabs = (
+    <div className="service-segments" role="tablist" aria-label="Container lists">
+      {([["containers", "Containers", containers.rows.length], ["waiting", "Waiting list", waiting.rows.length]] as [ListView, string, number][]).map(([id, label, count]) => (
+        <span
+          key={id}
+          role="button"
+          tabIndex={0}
+          className={`segment ${view === id ? "active" : ""}`}
+          aria-pressed={view === id}
+          onClick={() => setView(id)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setView(id); } }}
+        >
+          {label}<b>{count}</b>
+        </span>
+      ))}
+    </div>
+  );
+
   return (
     <div className="ctn-panel">
       {flash && (
@@ -1026,6 +1016,7 @@ export function ContainersPanel({
             <div><h3>Lines</h3><span className="panel-count">{selectedLines.length}</span></div>
             {selectedOpen && (
               <span className="panel-action">
+                <button className="lst-btn ghost" type="button" disabled={busy || waiting.rows.length === 0} onClick={() => setModal("assign")}><Plus size={16} /> Add waiting packages</button>
                 <button className="lst-add" type="button" disabled={busy} onClick={openAddLine}><Plus size={16} /> Add line</button>
               </span>
             )}
@@ -1047,7 +1038,7 @@ export function ContainersPanel({
                       id={`ctn-line-${String(row.id)}`}
                       key={String(row.id)}
                     >
-                      <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /></span>
+                      <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} /></span>
                       <span>
                         {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(row.customerName, "")}</strong>}
                         {!stock && <small data-no-translate>{text(row.customerPhone, "")}</small>}
@@ -1062,6 +1053,7 @@ export function ContainersPanel({
                           <>
                             <button className="ghost-button" type="button" disabled={busy} onClick={() => openEditLine(row)} title="Edit line" aria-label="Edit line"><Pencil size={14} /></button>
                             <button className="ghost-button" type="button" disabled={busy} onClick={() => openMove(row)} title="Move to another container"><ArrowRightLeft size={14} /></button>
+                            <button className="ghost-button" type="button" disabled={busy} onClick={() => void sendBackToWaiting(row)} title="Send back to waiting" aria-label="Send back to waiting"><Undo2 size={14} /></button>
                             <button className="ghost-button" type="button" disabled={busy} onClick={() => void removeLine(row)} title="Remove line"><X size={14} /></button>
                           </>
                         )}
@@ -1073,6 +1065,22 @@ export function ContainersPanel({
             </div>
           )}
         </article>
+      ) : view === "waiting" ? (
+        <WaitingPackagesPanel
+          businessId={businessId}
+          rows={waiting.rows}
+          loading={waiting.loading}
+          error={waiting.error}
+          tabs={viewTabs}
+          destinationOptions={destinationOptions}
+          defaultDestination={waitingDestination}
+          destinationRows={destinations.rows}
+          customerPhoneCountry={customerPhoneCountry}
+          knownCustomers={knownCustomers}
+          staffName={staffName}
+          onFlash={setFlash}
+          enabled={enabled}
+        />
       ) : (
         <article className="panel">
           <div className="panel-header">
@@ -1081,6 +1089,7 @@ export function ContainersPanel({
               <button className="lst-add" type="button" disabled={busy || !enabled} onClick={openCreate}><Plus size={16} /> New container</button>
             </span>
           </div>
+          {viewTabs}
           <div className="panel-tools">
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "" | ContainerStatus)} aria-label="Filter by state">
               <option value="">Every state</option>
@@ -1108,14 +1117,19 @@ export function ContainersPanel({
                     const title = containerLineTitle(hit.line);
                     const stock = containerLineIsStock(hit.line);
                     const containerId = text(hit.container?.id, "");
+                    // A container opens its detail; a waiting package opens the waiting list.
+                    const open = () => {
+                      if (containerId) setSelectedId(containerId);
+                      else if (hit.waiting) { setSearch(""); setView("waiting"); }
+                    };
                     return (
                       <div
                         className="mini-table-row ctn-clickable"
                         key={String(hit.line.id)}
                         role="button"
                         tabIndex={0}
-                        onClick={() => { if (containerId) { setSelectedId(containerId); } }}
-                        onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && containerId) { e.preventDefault(); setSelectedId(containerId); } }}
+                        onClick={open}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
                       >
                         <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(hit.line.trackingCode, "")} /></span>
                         <span>
@@ -1123,7 +1137,11 @@ export function ContainersPanel({
                           {!stock && <small data-no-translate>{text(hit.line.customerPhone, "")}</small>}
                           <LineWhatsApp line={hit.line} />
                         </span>
-                        <span><strong data-no-translate>{hit.container ? containerTitle(hit.container) : "—"}</strong>{hit.container && <small>{destinationLabel(hit.container)}</small>}</span>
+                        <span>
+                          {hit.container ? <strong data-no-translate>{containerTitle(hit.container)}</strong> : hit.waiting ? <strong>Waiting for a container</strong> : <strong>—</strong>}
+                          {hit.container && <small>{destinationLabel(hit.container)}</small>}
+                          {hit.waiting && Boolean(text(hit.line.destinationCountryName, "")) && <small>{destinationLabel(hit.line)}</small>}
+                        </span>
                         <span className="ctn-hit-state">
                           <span><StatusBadge status={hit.status} />{Boolean(hit.sailedAt) && <small>{formatDate(hit.sailedAt)}</small>}</span>
                           {containerId && (
@@ -1507,6 +1525,16 @@ export function ContainersPanel({
             </footer>
           </div>
         </div>
+      )}
+
+      {modal === "assign" && selected && (
+        <AddWaitingPackagesDialog
+          businessId={businessId}
+          container={selected}
+          packages={waiting.rows}
+          onClose={closeModal}
+          onAssigned={setFlash}
+        />
       )}
 
       {modal === "labels" && labelsContainer && (

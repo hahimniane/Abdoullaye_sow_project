@@ -669,6 +669,15 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // One row per payment recorded against a package (waiting or on a
+    // container): who took how much, how, and whether it was reverted.
+    // Server-written only - a client that could write here could write a
+    // package paid. Read with the business scope (where businessId == ...)
+    // plus lineId, which needs no composite index.
+    match /containerLinePayments/{paymentId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
     // One lock per business and VIN, taken by addContainerLine inside the
     // transaction that adds a car, so the same car cannot be loaded twice by
     // two quick adds. Server bookkeeping only: no client reads or writes it.

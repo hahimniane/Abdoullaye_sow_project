@@ -78,7 +78,7 @@ test("guest tracking distinguishes throttling without exposing raw errors", () =
   );
 });
 
-test("a CL- code is a container shipment with its own three-step journey", () => {
+test("a CL- code is a container shipment with its own four-step journey", () => {
   const parsed = parseGuestTrackingResponse({
     version: 1,
     found: true,
@@ -102,8 +102,9 @@ test("a CL- code is a container shipment with its own three-step journey", () =>
   });
   assert.equal(guestServiceLabel("container"), "Container shipment");
   // The server maps a container to booked / in_transit / arrived only.
-  assert.deepEqual(GUEST_CONTAINER_STAGES.map((item) => item.id), ["booked", "in_transit", "arrived"]);
+  assert.deepEqual(GUEST_CONTAINER_STAGES.map((item) => item.id), ["waiting_container", "booked", "in_transit", "arrived"]);
   assert.equal(guestJourneyStages("container"), GUEST_CONTAINER_STAGES);
+  assert.equal(guestStageLabel("container", "waiting_container"), "Waiting for a container");
   assert.equal(guestStageLabel("container", "booked"), "In the container");
   assert.equal(guestStageLabel("container", "in_transit"), "At sea");
   assert.equal(guestStageLabel("container", "arrived"), "Arrived");
@@ -127,6 +128,15 @@ test("the server's container service and stage map are the ones this parser know
   );
   assert.match(server, /\{name: "containerLines", prefix: "CL", service: "container"\}/);
   assert.match(server, /loading: "booked",\s*shipped: "in_transit",\s*arrived: "arrived",/);
+  // A package dropped off before any container is its own stage, in the server's words.
+  assert.match(server, /const WAITING_STAGE = "waiting_container";/);
+  assert.match(server, /const WAITING_STAGE_LABEL = "Received, waiting for a container";/);
+  const waiting = parseGuestTrackingResponse({
+    version: 1,
+    found: true,
+    record: {trackingCode: "CL-K7M4P2", service: "container", stage: "waiting_container", updatedAtMs: 1},
+  });
+  assert.equal(waiting.found && waiting.record.stage, "waiting_container");
 });
 
 test("every container tracking string has French", () => {

@@ -22,19 +22,24 @@ type Row = Record<string, unknown>;
 
 /**
  * Package labels: the printable QR + code sheet for a container, or for one
- * line's packages when `line` is given (a reprint for one torn label). One
- * dialog for the Containers panel and the package view on the tracking page,
- * so both print the same way and remember the same choice.
+ * line's packages when `line` is given (a reprint for one torn label). With
+ * no `container` the package is still waiting for one: its label is asked for
+ * by line id alone (`line`, or several in `lines`). One dialog for the
+ * Containers panel, the waiting list and the package view on the tracking
+ * page, so all print the same way and remember the same choice.
  */
 export function ContainerLabelsDialog({
   businessId,
-  container,
+  container = null,
   line,
+  lines,
   onClose,
 }: {
   businessId: string;
-  container: Row;
+  container?: Row | null;
   line?: Row;
+  /** Several waiting packages on one sheet; ignored when there is a container. */
+  lines?: readonly Row[];
   onClose: () => void;
 }) {
   const [labelChoice, setLabelChoice] = useState<ContainerLabelChoice>(() => readContainerLabelChoice(labelStorage()));
@@ -42,19 +47,24 @@ export function ContainerLabelsDialog({
   const [draftError, setDraftError] = useState("");
   // The link to show when the browser refused the new tab.
   const [labelsLink, setLabelsLink] = useState("");
-  const labelsContainerId = text(container.id, "");
+  const labelsContainerId = container ? text(container.id, "") : "";
   const labelsLineId = line ? text(line.id, "") : "";
   const labelsLineCode = line ? text(line.trackingCode, "") : "";
+  // Waiting packages have no container to print from: their ids are the request.
+  const waitingIds = labelsContainerId
+    ? []
+    : (lines ?? (line ? [line] : [])).map((row) => text(row.id, "")).filter(Boolean);
+  const several = !labelsContainerId && waitingIds.length > 1;
 
   async function printLabels() {
-    if (!labelsContainerId || busy) return;
+    if (busy || (!labelsContainerId && waitingIds.length === 0)) return;
     setLabelsLink("");
     setDraftError("");
     writeContainerLabelChoice(labelStorage(), labelChoice);
     // Opened inside the click, before the await, so a popup blocker lets it
     // through; it is pointed at the labels once the server answers.
     const tab = openPendingTab(window);
-    const request = containerLabelsRequest(businessId, labelsContainerId, labelChoice, labelsLineId);
+    const request = containerLabelsRequest(businessId, labelsContainerId, labelChoice, labelsContainerId ? labelsLineId : waitingIds);
     setBusy(true);
     try {
       const response = await httpsCallable(functions, "getContainerDocumentUrl")(request);
@@ -76,16 +86,22 @@ export function ContainerLabelsDialog({
       <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
         <header className="lst-modal-head">
           <div>
-            {line ? (
+            {several ? (
+              <h3>Print labels</h3>
+            ) : line ? (
               <h3>Labels for {labelsLineCode ? <code className="ctn-code" data-no-translate>{labelsLineCode}</code> : <span data-no-translate>{containerLineTitle(line)}</span>}</h3>
             ) : (
               <h3>Print labels</h3>
             )}
-            {line ? (
+            {several ? (
+              <p>A QR code, tracking code and both phone numbers for each of the selected packages.</p>
+            ) : line && !labelsContainerId ? (
+              <p><span data-no-translate>{containerLineTitle(line)}</span> — a QR code, tracking code and both phone numbers.</p>
+            ) : line ? (
               <p><span data-no-translate>{containerLineTitle(line)}</span> — only this line's packages.</p>
-            ) : (
+            ) : container ? (
               <p><span data-no-translate>{containerTitle(container)}</span> — a QR code and tracking code for every package on this container.</p>
-            )}
+            ) : null}
           </div>
           <button className="lst-icon-btn" type="button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </header>

@@ -15,6 +15,7 @@ import { businessSidebarTabs } from "./business-sidebar.ts";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const consoleSource = read("../components/business-console.tsx");
 const panelSource = read("../components/business/containers-panel.tsx");
+const contactPhoneSource = read("../components/business/contact-phone.tsx");
 const operationsSource = read("../components/business/operations-panels.tsx");
 const businessDataSource = readFileSync("src/lib/business-data.ts", "utf8");
 const peopleSource = read("../components/business/profile-support-people.tsx");
@@ -110,7 +111,8 @@ test("a server refusal lands inside the modal, not only in the panel banner", ()
 });
 
 test("the search box finds lines by VIN, customer or phone and shows their container and state", () => {
-  assert.match(panelSource, /searchContainerLines\(lines\.rows, containers\.rows, search\)/);
+  // The packages still waiting for a container are searched with the loaded lines.
+  assert.match(panelSource, /searchContainerLines\(\[\.\.\.lines\.rows, \.\.\.waiting\.rows\], containers\.rows, search\)/);
   assert.match(panelSource, /<input type="search" placeholder="VIN, customer, phone" value=\{search\}/);
   assert.match(panelSource, /<span>Cargo<\/span><span>Whose<\/span><span>Container<\/span><span>State<\/span>/);
   assert.match(panelSource, /<StatusBadge status=\{hit\.status\} \/>\{Boolean\(hit\.sailedAt\) && <small>\{formatDate\(hit\.sailedAt\)\}<\/small>\}/);
@@ -272,8 +274,10 @@ test("one tap copies a VIN or a customer name where they are shown", () => {
 // the guardrails' rule that a phone takes the calling-code picker, never free
 // text, applies to both of the line's phones and to the contacts correction.
 test("a line's phones use the shared calling-code picker, never a free-text input", () => {
-  assert.match(panelSource, /import \{ CustomerPhoneField \} from "@\/components\/customer-phone-field";/);
-  assert.match(panelSource, /<CustomerPhoneField\s+id=\{id\}[\s\S]*?initialCountryCode=\{initialCountryCode\}/);
+  // One ContactPhone, shared with the waiting-packages form (contact-phone.tsx).
+  assert.match(panelSource, /import \{ ContactPhone \} from "@\/components\/business\/contact-phone";/);
+  assert.match(contactPhoneSource, /import \{ CustomerPhoneField \} from "@\/components\/customer-phone-field";/);
+  assert.match(contactPhoneSource, /<CustomerPhoneField\s+id=\{id\}[\s\S]*?initialCountryCode=\{initialCountryCode\}/);
   // No plain <input> is bound to either phone anywhere in the panel.
   assert.doesNotMatch(panelSource, /<input[^>]*value=\{[^}]*(customerPhone|receiverPhone)\}/);
   assert.doesNotMatch(panelSource, /<span>Phone<\/span><input/);
@@ -291,9 +295,9 @@ test("a line's phones use the shared calling-code picker, never a free-text inpu
 });
 
 test("each phone carries its WhatsApp switch, off without a number, and warns without a country code", () => {
-  assert.match(panelSource, /checked=\{notify && hasPhone\}\s*disabled=\{disabled \|\| !hasPhone\}/);
-  assert.match(panelSource, /<span>Send this person WhatsApp updates about this shipment<\/span>/);
-  assert.match(panelSource, /\{reach === "local" && \(\s*<small className="ctn-phone-warn" role="status">Add the country code so WhatsApp updates can reach this number\.<\/small>/);
+  assert.match(contactPhoneSource, /checked=\{notify && hasPhone\}\s*disabled=\{disabled \|\| !hasPhone\}/);
+  assert.match(contactPhoneSource, /<span>Send this person WhatsApp updates about this shipment<\/span>/);
+  assert.match(contactPhoneSource, /\{reach === "local" && \(\s*<small className="ctn-phone-warn" role="status">Add the country code so WhatsApp updates can reach this number\.<\/small>/);
   assert.match(panelSource, /notify=\{lineDraft\.notifyCustomer\}/);
   assert.match(panelSource, /notify=\{lineDraft\.notifyReceiver\}/);
   assert.match(panelSource, /notify=\{contactsDraft\.notifyCustomer\}/);
@@ -378,7 +382,8 @@ const labelsSource = read("../components/business/container-labels-dialog.tsx");
 
 test("the labels dialog prints through getContainerDocumentUrl with view \"labels\"", () => {
   assert.match(labelsSource, /await httpsCallable\(functions, "getContainerDocumentUrl"\)\(request\);/);
-  assert.match(labelsSource, /const request = containerLabelsRequest\(businessId, labelsContainerId, labelChoice, labelsLineId\);/);
+  // With no container (a waiting package) the line ids are the request.
+  assert.match(labelsSource, /const request = containerLabelsRequest\(businessId, labelsContainerId, labelChoice, labelsContainerId \? labelsLineId : waitingIds\);/);
   // The loading list still asks without a view.
   assert.match(panelSource, /httpsCallable\(functions, "getContainerDocumentUrl"\)\(\{ businessId, containerId: String\(row\.id\) \}\)/);
   // A refusal lands in the dialog and the waiting tab is closed.

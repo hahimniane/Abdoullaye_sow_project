@@ -18,8 +18,15 @@ const GUEST_TRACKING_COLLECTIONS = Object.freeze([
   Object.freeze({name: "containerLines", prefix: "CL", service: "container"}),
 ]);
 
+// A package dropped off before any container is chosen has a stage of its
+// own: it is received, and nothing is booked onto a box yet. The screens map
+// the stage to its words (and French) the way they do every other stage.
+const WAITING_STAGE = "waiting_container";
+const WAITING_STAGE_LABEL = "Received, waiting for a container";
+
 // A container line follows its box: received into it, at sea, landed.
 const CONTAINER_STAGE_BY_STATUS = Object.freeze({
+  waiting: WAITING_STAGE,
   loading: "booked",
   shipped: "in_transit",
   arrived: "arrived",
@@ -162,6 +169,9 @@ async function findGuestTrackingRecord(db, candidates) {
 module.exports = {
   GUEST_TRACKING_COLLECTIONS,
   PUBLIC_STAGE_BY_STATUS,
+  CONTAINER_STAGE_BY_STATUS,
+  WAITING_STAGE,
+  WAITING_STAGE_LABEL,
   findGuestTrackingRecord,
   guestTrackingCandidates,
   publicGuestTrackingRecord,

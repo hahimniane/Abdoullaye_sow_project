@@ -4,6 +4,9 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   GUEST_TRACKING_COLLECTIONS,
+  CONTAINER_STAGE_BY_STATUS,
+  WAITING_STAGE,
+  WAITING_STAGE_LABEL,
   guestTrackingCandidates,
   publicGuestTrackingRecord,
 } = require("../guest_tracking");
@@ -131,4 +134,23 @@ test("a container line follows its box, and shows nothing personal", () => {
   assert.equal(record("arrived").stage, "arrived");
   assert.deepEqual(Object.keys(record("shipped")).sort(),
       ["service", "stage", "trackingCode", "updatedAtMs"]);
+});
+
+test("a package waiting for a container has a public stage of its own", () => {
+  const result = publicGuestTrackingRecord({
+    id: "line2",
+    service: "container",
+    data: {
+      trackingCode: "CL-W4X5Y6", containerStatus: "waiting", containerId: "",
+      customerName: "Fatou Diallo", customerPhone: "+16465550100",
+      destinationCountryName: "Guinea", priceCents: 15000,
+    },
+  });
+  // Not "booked": nothing is on a box yet. Still nothing personal.
+  assert.equal(result.stage, WAITING_STAGE);
+  assert.equal(result.stage, "waiting_container");
+  assert.equal(WAITING_STAGE_LABEL, "Received, waiting for a container");
+  assert.deepEqual(Object.keys(result).sort(),
+      ["service", "stage", "trackingCode", "updatedAtMs"]);
+  assert.equal(CONTAINER_STAGE_BY_STATUS.waiting, WAITING_STAGE);
 });
