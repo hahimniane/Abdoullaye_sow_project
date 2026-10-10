@@ -13,6 +13,10 @@ enum GuestTrackingServiceType {
 
 enum GuestTrackingStage {
   awaitingPayment,
+
+  /// A container line dropped off before any container is chosen: received,
+  /// nothing booked onto a box yet (`waiting_container` on the wire).
+  waitingContainer,
   booked,
   inTransit,
   arrived,
@@ -97,6 +101,7 @@ GuestTrackingServiceType _serviceFromWire(Object? value) {
 GuestTrackingStage _stageFromWire(Object? value) {
   return switch (value) {
     'awaiting_payment' => GuestTrackingStage.awaitingPayment,
+    'waiting_container' => GuestTrackingStage.waitingContainer,
     'booked' => GuestTrackingStage.booked,
     'in_transit' => GuestTrackingStage.inTransit,
     'arrived' => GuestTrackingStage.arrived,

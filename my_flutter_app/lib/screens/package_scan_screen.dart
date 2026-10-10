@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
+import '../services/lot_ledger.dart' show LotStaff;
 import '../services/package_codes.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -32,6 +33,7 @@ class PackageScanScreen extends StatefulWidget {
     this.onOpenContainer,
     this.repository,
     this.cameraEnabled = true,
+    this.staff = const [],
   });
 
   final String businessId;
@@ -39,6 +41,9 @@ class PackageScanScreen extends StatefulWidget {
   final List<DestinationCountry> destinations;
   final void Function(String containerId)? onOpenContainer;
   final ContainerPackageRepository? repository;
+
+  /// Names for "recorded by" on a package's payments, when the caller has them.
+  final List<LotStaff> staff;
 
   /// Off in widget tests, where there is no camera plugin.
   @visibleForTesting
@@ -140,6 +145,7 @@ class _PackageScanScreenState extends State<PackageScanScreen> {
           destinations: widget.destinations,
           onOpenContainer: widget.onOpenContainer,
           repository: widget.repository,
+          staff: widget.staff,
         ),
       ),
     );
@@ -382,11 +388,17 @@ class _HitRow extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 13, height: 1.35, color: AppColors.muted),
                     ),
-                  if (line.trackingCode.isNotEmpty || container != null)
+                  if (line.trackingCode.isNotEmpty ||
+                      container != null ||
+                      hit.isWaiting)
                     Text(
                       [
                         if (line.trackingCode.isNotEmpty) line.trackingCode,
                         if (container != null) container.displayName,
+                        // A package with no container says where it is going.
+                        if (hit.isWaiting &&
+                            line.destinationCountryName.isNotEmpty)
+                          line.destinationCountryName,
                       ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -402,6 +414,12 @@ class _HitRow extends StatelessWidget {
             if (container != null) ...[
               const SizedBox(width: AppSpacing.sm),
               ContainerStatusPill(status: container.status),
+            ] else if (hit.isWaiting) ...[
+              const SizedBox(width: AppSpacing.sm),
+              const ContainerStatusPill(
+                key: Key('pkg-hit-waiting'),
+                status: containerLineStatusWaiting,
+              ),
             ],
           ],
         ),

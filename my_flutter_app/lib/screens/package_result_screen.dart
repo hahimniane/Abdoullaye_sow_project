@@ -7,7 +7,9 @@ import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
+import '../services/lot_ledger.dart' show LotStaff;
 import '../services/package_codes.dart';
+import '../services/waiting_packages.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -16,7 +18,9 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/guest_tracking_lookup.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/package_money.dart';
 import 'containers_screen.dart';
+import 'package_payment_sheet.dart';
 
 /// One package, as the yard needs it after scanning its label: whose it is
 /// (with a way to call or message them), who collects it, what it is, which
@@ -39,6 +43,7 @@ class PackageResultScreen extends StatefulWidget {
     this.onOpenContainer,
     this.repository,
     this.labelOpener = openContainerLabels,
+    this.staff = const [],
   }) : assert(code != '' || lineId != '');
 
   final String businessId;
@@ -60,6 +65,9 @@ class PackageResultScreen extends StatefulWidget {
   final void Function(String containerId)? onOpenContainer;
   final ContainerPackageRepository? repository;
   final ContainerLabelOpener labelOpener;
+
+  /// Names for "recorded by" in the payment history, when the caller has them.
+  final List<LotStaff> staff;
 
   @override
   State<PackageResultScreen> createState() => _PackageResultScreenState();
@@ -184,10 +192,21 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
   }
 
   /// What the package is and whose, in the container's own add-line form.
-  /// Only while its container is loading; the view hides it otherwise.
+  /// Only while its container is loading; the view hides it otherwise. A
+  /// package with no container yet opens the register form instead.
   Future<void> _editLine() async {
     final line = _line;
     final container = _container;
+    if (line != null && line.isWaiting) {
+      await showWaitingPackageSheet(
+        context,
+        businessId: widget.businessId,
+        businessCountryCode: _businessCountryCode,
+        destinations: _destinations,
+        existing: line,
+      );
+      return;
+    }
     if (line == null || container == null || !container.isLoading) return;
     await editContainerLine(
       context,
@@ -199,10 +218,22 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
     );
   }
 
+  /// The price, what has been paid and the payments behind it.
+  Future<void> _pricePayments() async {
+    final line = _line;
+    if (line == null) return;
+    await showPackagePaymentSheet(
+      context,
+      businessId: widget.businessId,
+      line: line,
+      staff: widget.staff,
+    );
+  }
+
   Future<void> _printLabels() async {
     final line = _line;
     final container = _container;
-    if (line == null || container == null) return;
+    if (line == null || (container == null && !line.isWaiting)) return;
     await showContainerLabelSheet(
       context,
       businessId: widget.businessId,
@@ -269,9 +300,14 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
         onCall: (phone) => _launch(packagePhoneCallUri(phone)),
         onWhatsApp: (phone) => _launch(packageWhatsAppUri(phone)),
         onEditContacts: _editContacts,
-        onEditLine: _container?.isLoading == true ? _editLine : null,
-        onPrintLabels: _container == null ? null : _printLabels,
+        onEditLine: line.isWaiting
+            ? _editLine
+            : (_container?.isLoading == true ? _editLine : null),
+        // A waiting package prints before any container exists.
+        onPrintLabels:
+            _container == null && !line.isWaiting ? null : _printLabels,
         onOpenContainer: _openContainer,
+        onPricePayments: _pricePayments,
       );
     }
     return Scaffold(
@@ -389,6 +425,7 @@ class PackageResultView extends StatelessWidget {
     required this.onPrintLabels,
     required this.onOpenContainer,
     this.onEditLine,
+    this.onPricePayments,
   });
 
   final ContainerLine line;
@@ -406,6 +443,9 @@ class PackageResultView extends StatelessWidget {
   /// Null until the container is known: labels are printed per container.
   final VoidCallback? onPrintLabels;
   final VoidCallback onOpenContainer;
+
+  /// Opens the price and payments sheet; null hides the button.
+  final VoidCallback? onPricePayments;
 
   @override
   Widget build(BuildContext context) {
@@ -439,6 +479,15 @@ class PackageResultView extends StatelessWidget {
                 ),
               if (line.description.isNotEmpty)
                 _Fact(icon: Icons.notes_outlined, text: line.description),
+              if (packageSize(line) != null)
+                _Fact(
+                  key: const Key('pkg-size'),
+                  icon: Icons.straighten,
+                  text: l10n.wpkSizeFact(
+                    packageSize(line)!.dimensionsText,
+                    packageSize(line)!.volumeText,
+                  ),
+                ),
             ],
           ),
         ),
@@ -477,7 +526,53 @@ class PackageResultView extends StatelessWidget {
         ),
         _Section(
           title: l10n.pkgContainer,
-          child: c == null
+          child: c == null && line.isWaiting
+              // Dropped off, no container yet: say so, and where it is going.
+              ? Column(
+                  key: const Key('pkg-waiting'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            l10n.wpkWaitingTitle,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        const ContainerStatusPill(
+                            status: containerLineStatusWaiting),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _Fact(
+                      icon: Icons.public,
+                      text: line.destinationCountryName.isEmpty
+                          ? l10n.ctrDestinationUnset
+                          : '${l10n.ctrDestination}: ${line.destinationCountryName}',
+                      muted: line.destinationCountryName.isEmpty,
+                    ),
+                    if (line.createdAt != null)
+                      _Fact(
+                        icon: Icons.inventory_2_outlined,
+                        text: l10n.wpkDroppedOff(
+                            displayDate(line.createdAt!, locale)),
+                      ),
+                    _Fact(
+                      icon: Icons.info_outline,
+                      text: line.destinationCountryName.isEmpty
+                          ? l10n.wpkWaitingExplainAny
+                          : l10n.wpkWaitingExplain(line.destinationCountryName),
+                      muted: true,
+                    ),
+                  ],
+                )
+              : c == null
               ? _Fact(
                   icon: Icons.view_in_ar_outlined,
                   text: l10n.pkgContainerUnknown,
@@ -538,6 +633,27 @@ class PackageResultView extends StatelessWidget {
                   ],
                 ),
         ),
+        // The price and what has been paid. A package nobody priced on a
+        // container shows nothing here (most predate prices); a waiting one
+        // always can be priced.
+        if (line.isWaiting || packageHasMoney(line))
+          _Section(
+            title: l10n.wpkPriceFact,
+            child: Column(
+              key: const Key('pkg-money'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (line.priceCents == null)
+                  _Fact(
+                    icon: Icons.payments_outlined,
+                    text: l10n.wpkNoPriceYet,
+                    muted: true,
+                  ),
+                PackageMoneyLine(
+                    payment: packagePayment(line), alwaysShow: true),
+              ],
+            ),
+          ),
         _Section(
           title: l10n.pkgUpdates,
           child: _Updates(line: line, locale: locale),
@@ -551,13 +667,23 @@ class PackageResultView extends StatelessWidget {
           enabled: onPrintLabels != null,
           onTap: onPrintLabels ?? () {},
         ),
-        if (onEditLine != null && c != null && c.isLoading) ...[
+        if (onEditLine != null &&
+            (line.isWaiting || (c != null && c.isLoading))) ...[
           const SizedBox(height: AppSpacing.sm),
           ContainerActionButton(
             key: const Key('pkg-edit-line'),
             icon: Icons.edit_outlined,
-            label: l10n.ctrEditLine,
+            label: line.isWaiting ? l10n.wpkEditPackage : l10n.ctrEditLine,
             onTap: onEditLine!,
+          ),
+        ],
+        if (onPricePayments != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          ContainerActionButton(
+            key: const Key('pkg-price-payments'),
+            icon: Icons.payments_outlined,
+            label: l10n.wpkMoney,
+            onTap: onPricePayments!,
           ),
         ],
         const SizedBox(height: AppSpacing.sm),
@@ -654,6 +780,9 @@ class _CodeCard extends StatelessWidget {
           if (container != null) ...[
             const SizedBox(width: AppSpacing.sm),
             ContainerStatusPill(status: container!.status),
+          ] else if (line.isWaiting) ...[
+            const SizedBox(width: AppSpacing.sm),
+            const ContainerStatusPill(status: containerLineStatusWaiting),
           ],
         ],
       ),
@@ -989,6 +1118,7 @@ Widget packageResultViewForTesting({
   VoidCallback? onEditLine,
   VoidCallback? onPrintLabels,
   VoidCallback? onOpenContainer,
+  VoidCallback? onPricePayments,
 }) =>
     PackageResultView(
       line: line,
@@ -999,4 +1129,5 @@ Widget packageResultViewForTesting({
       onEditLine: onEditLine,
       onPrintLabels: onPrintLabels,
       onOpenContainer: onOpenContainer ?? () {},
+      onPricePayments: onPricePayments,
     );

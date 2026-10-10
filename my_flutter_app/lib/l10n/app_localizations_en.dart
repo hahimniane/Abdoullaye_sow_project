@@ -10608,4 +10608,346 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get shipmentLockedNotice =>
       'This shipment can no longer be edited because pickup has arrived or the request is already being processed.';
+
+  @override
+  String get ctrStatusWaiting => 'Waiting';
+
+  @override
+  String get wpkWaitingTitle => 'Waiting for a container';
+
+  @override
+  String wpkEntryCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count packages waiting',
+      one: '1 package waiting',
+      zero: 'No packages waiting',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get wpkEntryHint => 'Dropped off, no container yet';
+
+  @override
+  String get wpkRegister => 'Register a package';
+
+  @override
+  String get wpkEditPackage => 'Edit package';
+
+  @override
+  String get wpkRegisterSubtitle => 'It waits here until a container takes it.';
+
+  @override
+  String get wpkNoNotice =>
+      'Nobody is messaged when a package is registered or added to a container. The first WhatsApp message goes out when the container ships.';
+
+  @override
+  String get wpkEmptyTitle => 'No packages are waiting.';
+
+  @override
+  String get wpkEmptyHint => 'Register one when a customer drops it off.';
+
+  @override
+  String get wpkNoMatch => 'No waiting package matches that search.';
+
+  @override
+  String wpkDroppedOff(String date) {
+    return 'Dropped off $date';
+  }
+
+  @override
+  String get wpkSizeTitle => 'Size in inches (optional)';
+
+  @override
+  String get wpkLength => 'Length';
+
+  @override
+  String get wpkWidth => 'Width';
+
+  @override
+  String get wpkHeight => 'Height';
+
+  @override
+  String get wpkSizeHint =>
+      'Length × width × height. All three, or leave them empty.';
+
+  @override
+  String get wpkPrice => 'Price (US dollars)';
+
+  @override
+  String get wpkPriceHint => 'Leave empty if there is no price yet.';
+
+  @override
+  String get wpkPayOnArrival => 'Pay on arrival';
+
+  @override
+  String get wpkPayOnArrivalNote =>
+      'The team at the destination will record the money.';
+
+  @override
+  String get wpkSaveAndPrint => 'Save & print label';
+
+  @override
+  String get wpkSaveAndAnother => 'Save & add another for the same customer';
+
+  @override
+  String wpkSaved(String code) {
+    return 'Package saved: $code';
+  }
+
+  @override
+  String get wpkSavedNoCode => 'Package saved.';
+
+  @override
+  String get wpkUpdated => 'Package updated.';
+
+  @override
+  String get wpkRemove => 'Remove package';
+
+  @override
+  String get wpkRemoveTitle => 'Remove this package?';
+
+  @override
+  String get wpkRemoveMessage =>
+      'It leaves the waiting list and its label stops working.';
+
+  @override
+  String get wpkRemoved => 'Package removed.';
+
+  @override
+  String get wpkMoney => 'Price & payments';
+
+  @override
+  String get wpkSendBack => 'Send back to waiting';
+
+  @override
+  String get wpkSendBackTitle => 'Send back to waiting?';
+
+  @override
+  String wpkSendBackMessage(String title, String container) {
+    return '$title leaves $container. Its label and code stay the same.';
+  }
+
+  @override
+  String get wpkSentBack => 'Package sent back to waiting.';
+
+  @override
+  String get wpkPayNoPrice => 'No price yet';
+
+  @override
+  String get wpkPayUnpaid => 'Unpaid';
+
+  @override
+  String get wpkPayPartial => 'Partial';
+
+  @override
+  String get wpkPayPaid => 'Paid';
+
+  @override
+  String wpkPaidOfPrice(String paid, String price) {
+    return '$paid of $price';
+  }
+
+  @override
+  String wpkStillOwed(String amount) {
+    return '$amount still owed';
+  }
+
+  @override
+  String get wpkRecordPayment => 'Record a payment';
+
+  @override
+  String get wpkAmountReceived => 'Amount received (US dollars)';
+
+  @override
+  String get wpkPayWholeBalance => 'Pay the whole balance';
+
+  @override
+  String get wpkMethod => 'How it arrived';
+
+  @override
+  String get wpkNote => 'Note (optional)';
+
+  @override
+  String get wpkSavePrice => 'Save price';
+
+  @override
+  String get wpkPriceSaved => 'Price saved.';
+
+  @override
+  String get wpkPaymentRecorded => 'Payment recorded.';
+
+  @override
+  String get wpkPaymentsTitle => 'Payments';
+
+  @override
+  String get wpkNoPayments => 'No payments recorded yet.';
+
+  @override
+  String get wpkRevert => 'Revert';
+
+  @override
+  String get wpkRevertTitle => 'Revert this payment?';
+
+  @override
+  String wpkRevertMessage(String amount) {
+    return 'The $amount payment is struck through and the balance goes back up.';
+  }
+
+  @override
+  String get wpkReverted => 'Payment reverted.';
+
+  @override
+  String get wpkRevertedMark => 'Reverted';
+
+  @override
+  String wpkRevertedBy(String name) {
+    return 'Reverted by $name';
+  }
+
+  @override
+  String wpkRecordedBy(String name) {
+    return 'recorded by $name';
+  }
+
+  @override
+  String get wpkAddWaiting => 'Add waiting packages';
+
+  @override
+  String wpkAddWaitingCount(int count) {
+    return 'Add waiting packages · $count';
+  }
+
+  @override
+  String wpkAddWaitingNote(String container) {
+    return 'Tick the packages that go on $container.';
+  }
+
+  @override
+  String get wpkNoneWaiting => 'No packages are waiting for a container.';
+
+  @override
+  String get wpkSelectAll => 'Select all matching';
+
+  @override
+  String get wpkClear => 'Clear';
+
+  @override
+  String wpkSelected(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String get wpkAddToContainer => 'Add to container';
+
+  @override
+  String wpkAdded(int count, String container) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Added $count packages to $container.',
+      one: 'Added 1 package to $container.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get wpkTickOne => 'Tick at least one package.';
+
+  @override
+  String wpkBlockedMismatch(String from, String to) {
+    return 'For $from, this container goes to $to.';
+  }
+
+  @override
+  String wpkWaitingExplain(String destination) {
+    return 'Received at the counter. It goes on a container headed to $destination when one is loading.';
+  }
+
+  @override
+  String get wpkWaitingExplainAny =>
+      'Received at the counter. It goes on a container when one is loading.';
+
+  @override
+  String wpkSizeFact(String dimensions, String volume) {
+    return 'Size: $dimensions · $volume';
+  }
+
+  @override
+  String get wpkPriceFact => 'Price & payments';
+
+  @override
+  String get wpkNoPriceYet => 'No price set yet.';
+
+  @override
+  String get ctrErrVinAlreadyWaiting =>
+      'This car is already waiting for a container.';
+
+  @override
+  String get wpkErrDestinationRequired => 'Choose where this package is going.';
+
+  @override
+  String get wpkErrDestinationMismatch =>
+      'A package can only go on a container headed to the same country.';
+
+  @override
+  String get wpkErrContainerDestinationRequired =>
+      'Choose where this container is going before adding packages to it.';
+
+  @override
+  String get wpkErrSizeInvalid =>
+      'Enter the length, width and height in inches, or leave all three empty.';
+
+  @override
+  String get wpkErrLineNotWaiting => 'That package is already on a container.';
+
+  @override
+  String get wpkErrLineIsWaiting =>
+      'This package is waiting for a container. Add it to one from the waiting list.';
+
+  @override
+  String get wpkErrLineNotInContainer => 'That package is not on a container.';
+
+  @override
+  String get wpkErrLineIdsInvalid => 'Choose between 1 and 100 packages.';
+
+  @override
+  String get wpkErrLineHasPayments =>
+      'Payments are recorded for this package. Revert them first.';
+
+  @override
+  String get wpkErrPriceInvalid =>
+      'Enter the price in dollars, more than zero.';
+
+  @override
+  String get wpkErrPriceBelowPaid =>
+      'The price can\'t be less than what has been paid.';
+
+  @override
+  String get wpkErrPriceRequired => 'Set a price before recording a payment.';
+
+  @override
+  String get wpkErrAmountRequired => 'Enter the amount received.';
+
+  @override
+  String get wpkErrAmountTooLarge =>
+      'That amount is larger than a package can carry.';
+
+  @override
+  String get wpkErrMethodInvalid => 'Say how the payment arrived.';
+
+  @override
+  String get wpkErrExceedsBalance => 'That is more than what is still owed.';
+
+  @override
+  String get wpkErrPaymentNotFound => 'That payment no longer exists.';
+
+  @override
+  String get wpkErrPaymentReverted => 'That payment was already reverted.';
+
+  @override
+  String get guestTrackingStageWaitingContainer =>
+      'Received, waiting for a container';
 }

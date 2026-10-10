@@ -10766,4 +10766,357 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get shipmentLockedNotice =>
       'Cet envoi ne peut plus être modifié : l’enlèvement a eu lieu ou la demande est déjà en cours de traitement.';
+
+  @override
+  String get ctrStatusWaiting => 'En attente';
+
+  @override
+  String get wpkWaitingTitle => 'En attente d\'un conteneur';
+
+  @override
+  String wpkEntryCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count colis en attente',
+      one: '1 colis en attente',
+      zero: 'Aucun colis en attente',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get wpkEntryHint => 'Déposés, pas encore de conteneur';
+
+  @override
+  String get wpkRegister => 'Enregistrer un colis';
+
+  @override
+  String get wpkEditPackage => 'Modifier le colis';
+
+  @override
+  String get wpkRegisterSubtitle => 'Il attend ici qu\'un conteneur le prenne.';
+
+  @override
+  String get wpkNoNotice =>
+      'Personne n\'est contacté quand un colis est enregistré ou ajouté à un conteneur. Le premier message WhatsApp part quand le conteneur est expédié.';
+
+  @override
+  String get wpkEmptyTitle => 'Aucun colis en attente.';
+
+  @override
+  String get wpkEmptyHint => 'Enregistrez-en un quand un client le dépose.';
+
+  @override
+  String get wpkNoMatch =>
+      'Aucun colis en attente ne correspond à cette recherche.';
+
+  @override
+  String wpkDroppedOff(String date) {
+    return 'Déposé le $date';
+  }
+
+  @override
+  String get wpkSizeTitle => 'Dimensions en pouces (facultatif)';
+
+  @override
+  String get wpkLength => 'Longueur';
+
+  @override
+  String get wpkWidth => 'Largeur';
+
+  @override
+  String get wpkHeight => 'Hauteur';
+
+  @override
+  String get wpkSizeHint =>
+      'Longueur × largeur × hauteur. Les trois, ou laissez vide.';
+
+  @override
+  String get wpkPrice => 'Prix (dollars US)';
+
+  @override
+  String get wpkPriceHint => 'Laissez vide s\'il n\'y a pas encore de prix.';
+
+  @override
+  String get wpkPayOnArrival => 'Paiement à l\'arrivée';
+
+  @override
+  String get wpkPayOnArrivalNote =>
+      'L\'équipe à destination enregistrera le paiement.';
+
+  @override
+  String get wpkSaveAndPrint => 'Enregistrer et imprimer l\'étiquette';
+
+  @override
+  String get wpkSaveAndAnother =>
+      'Enregistrer et en ajouter un pour le même client';
+
+  @override
+  String wpkSaved(String code) {
+    return 'Colis enregistré : $code';
+  }
+
+  @override
+  String get wpkSavedNoCode => 'Colis enregistré.';
+
+  @override
+  String get wpkUpdated => 'Colis mis à jour.';
+
+  @override
+  String get wpkRemove => 'Retirer le colis';
+
+  @override
+  String get wpkRemoveTitle => 'Retirer ce colis ?';
+
+  @override
+  String get wpkRemoveMessage =>
+      'Il quitte la liste d\'attente et son étiquette ne fonctionnera plus.';
+
+  @override
+  String get wpkRemoved => 'Colis retiré.';
+
+  @override
+  String get wpkMoney => 'Prix et paiements';
+
+  @override
+  String get wpkSendBack => 'Remettre en attente';
+
+  @override
+  String get wpkSendBackTitle => 'Remettre en attente ?';
+
+  @override
+  String wpkSendBackMessage(String title, String container) {
+    return '$title quitte $container. Son étiquette et son code restent les mêmes.';
+  }
+
+  @override
+  String get wpkSentBack => 'Colis remis en attente.';
+
+  @override
+  String get wpkPayNoPrice => 'Pas encore de prix';
+
+  @override
+  String get wpkPayUnpaid => 'Impayé';
+
+  @override
+  String get wpkPayPartial => 'Partiel';
+
+  @override
+  String get wpkPayPaid => 'Payé';
+
+  @override
+  String wpkPaidOfPrice(String paid, String price) {
+    return '$paid sur $price';
+  }
+
+  @override
+  String wpkStillOwed(String amount) {
+    return '$amount restant dû';
+  }
+
+  @override
+  String get wpkRecordPayment => 'Enregistrer un paiement';
+
+  @override
+  String get wpkAmountReceived => 'Montant reçu (dollars US)';
+
+  @override
+  String get wpkPayWholeBalance => 'Payer tout le solde';
+
+  @override
+  String get wpkMethod => 'Mode de paiement';
+
+  @override
+  String get wpkNote => 'Note (facultatif)';
+
+  @override
+  String get wpkSavePrice => 'Enregistrer le prix';
+
+  @override
+  String get wpkPriceSaved => 'Prix enregistré.';
+
+  @override
+  String get wpkPaymentRecorded => 'Paiement enregistré.';
+
+  @override
+  String get wpkPaymentsTitle => 'Paiements';
+
+  @override
+  String get wpkNoPayments => 'Aucun paiement enregistré.';
+
+  @override
+  String get wpkRevert => 'Annuler';
+
+  @override
+  String get wpkRevertTitle => 'Annuler ce paiement ?';
+
+  @override
+  String wpkRevertMessage(String amount) {
+    return 'Le paiement de $amount est barré et le solde remonte.';
+  }
+
+  @override
+  String get wpkReverted => 'Paiement annulé.';
+
+  @override
+  String get wpkRevertedMark => 'Annulé';
+
+  @override
+  String wpkRevertedBy(String name) {
+    return 'Annulé par $name';
+  }
+
+  @override
+  String wpkRecordedBy(String name) {
+    return 'enregistré par $name';
+  }
+
+  @override
+  String get wpkAddWaiting => 'Ajouter des colis en attente';
+
+  @override
+  String wpkAddWaitingCount(int count) {
+    return 'Ajouter des colis en attente · $count';
+  }
+
+  @override
+  String wpkAddWaitingNote(String container) {
+    return 'Cochez les colis qui vont sur $container.';
+  }
+
+  @override
+  String get wpkNoneWaiting => 'Aucun colis n\'attend de conteneur.';
+
+  @override
+  String get wpkSelectAll => 'Tout sélectionner';
+
+  @override
+  String get wpkClear => 'Effacer';
+
+  @override
+  String wpkSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sélectionnés',
+      one: '1 sélectionné',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get wpkAddToContainer => 'Ajouter au conteneur';
+
+  @override
+  String wpkAdded(int count, String container) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count colis ajoutés à $container.',
+      one: '1 colis ajouté à $container.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get wpkTickOne => 'Cochez au moins un colis.';
+
+  @override
+  String wpkBlockedMismatch(String from, String to) {
+    return 'Pour $from ; ce conteneur va vers $to.';
+  }
+
+  @override
+  String wpkWaitingExplain(String destination) {
+    return 'Reçu au comptoir. Il partira sur un conteneur à destination de $destination dès qu\'un sera en chargement.';
+  }
+
+  @override
+  String get wpkWaitingExplainAny =>
+      'Reçu au comptoir. Il partira sur un conteneur dès qu\'un sera en chargement.';
+
+  @override
+  String wpkSizeFact(String dimensions, String volume) {
+    return 'Taille : $dimensions · $volume';
+  }
+
+  @override
+  String get wpkPriceFact => 'Prix et paiements';
+
+  @override
+  String get wpkNoPriceYet => 'Aucun prix défini pour l\'instant.';
+
+  @override
+  String get ctrErrVinAlreadyWaiting =>
+      'Cette voiture attend déjà un conteneur.';
+
+  @override
+  String get wpkErrDestinationRequired =>
+      'Choisissez la destination de ce colis.';
+
+  @override
+  String get wpkErrDestinationMismatch =>
+      'Un colis ne peut aller que sur un conteneur à destination du même pays.';
+
+  @override
+  String get wpkErrContainerDestinationRequired =>
+      'Choisissez la destination de ce conteneur avant d\'y ajouter des colis.';
+
+  @override
+  String get wpkErrSizeInvalid =>
+      'Saisissez la longueur, la largeur et la hauteur en pouces, ou laissez les trois vides.';
+
+  @override
+  String get wpkErrLineNotWaiting => 'Ce colis est déjà sur un conteneur.';
+
+  @override
+  String get wpkErrLineIsWaiting =>
+      'Ce colis attend un conteneur. Ajoutez-le à un conteneur depuis la liste d\'attente.';
+
+  @override
+  String get wpkErrLineNotInContainer =>
+      'Ce colis n\'est pas sur un conteneur.';
+
+  @override
+  String get wpkErrLineIdsInvalid => 'Choisissez entre 1 et 100 colis.';
+
+  @override
+  String get wpkErrLineHasPayments =>
+      'Des paiements sont enregistrés pour ce colis. Annulez-les d\'abord.';
+
+  @override
+  String get wpkErrPriceInvalid =>
+      'Saisissez le prix en dollars, supérieur à zéro.';
+
+  @override
+  String get wpkErrPriceBelowPaid =>
+      'Le prix ne peut pas être inférieur à ce qui a été payé.';
+
+  @override
+  String get wpkErrPriceRequired =>
+      'Définissez un prix avant d\'enregistrer un paiement.';
+
+  @override
+  String get wpkErrAmountRequired => 'Saisissez le montant reçu.';
+
+  @override
+  String get wpkErrAmountTooLarge =>
+      'Ce montant dépasse ce qu\'un colis peut porter.';
+
+  @override
+  String get wpkErrMethodInvalid => 'Indiquez comment le paiement est arrivé.';
+
+  @override
+  String get wpkErrExceedsBalance => 'C\'est plus que ce qui reste dû.';
+
+  @override
+  String get wpkErrPaymentNotFound => 'Ce paiement n\'existe plus.';
+
+  @override
+  String get wpkErrPaymentReverted => 'Ce paiement a déjà été annulé.';
+
+  @override
+  String get guestTrackingStageWaitingContainer =>
+      'Reçu, en attente d\'un conteneur';
 }

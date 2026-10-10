@@ -24,6 +24,7 @@ class DestinationCountry {
     this.freightSeaDeliveryEstimateMinDays,
     this.freightSeaDeliveryEstimateMaxDays,
     this.destinationNote,
+    this.isMain = false,
   });
 
   static const fallback = DestinationCountry(
@@ -59,6 +60,11 @@ class DestinationCountry {
   final int? freightSeaDeliveryEstimateMinDays;
   final int? freightSeaDeliveryEstimateMaxDays;
   final String? destinationNote;
+
+  /// The business's main destination: where a new waiting package opens.
+  /// Set only through the `setMainDestination` callable, never written from
+  /// here ([toFirestore] leaves it out on purpose).
+  final bool isMain;
 
   Map<String, bool> get serviceAvailability => {
     'barrelShipping': barrelShippingAvailable,
@@ -205,6 +211,7 @@ class DestinationCountry {
       freightSeaDeliveryEstimateMaxDays:
           (data['freightSeaDeliveryEstimateMaxDays'] as num?)?.toInt(),
       destinationNote: data['destinationNote'] as String?,
+      isMain: data['isMain'] == true,
     );
   }
 

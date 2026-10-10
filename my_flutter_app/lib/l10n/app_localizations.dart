@@ -18629,6 +18629,570 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This shipment can no longer be edited because pickup has arrived or the request is already being processed.'**
   String get shipmentLockedNotice;
+
+  /// No description provided for @ctrStatusWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get ctrStatusWaiting;
+
+  /// No description provided for @wpkWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a container'**
+  String get wpkWaitingTitle;
+
+  /// No description provided for @wpkEntryCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No packages waiting} =1{1 package waiting} other{{count} packages waiting}}'**
+  String wpkEntryCount(int count);
+
+  /// No description provided for @wpkEntryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Dropped off, no container yet'**
+  String get wpkEntryHint;
+
+  /// No description provided for @wpkRegister.
+  ///
+  /// In en, this message translates to:
+  /// **'Register a package'**
+  String get wpkRegister;
+
+  /// No description provided for @wpkEditPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit package'**
+  String get wpkEditPackage;
+
+  /// No description provided for @wpkRegisterSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'It waits here until a container takes it.'**
+  String get wpkRegisterSubtitle;
+
+  /// No description provided for @wpkNoNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody is messaged when a package is registered or added to a container. The first WhatsApp message goes out when the container ships.'**
+  String get wpkNoNotice;
+
+  /// No description provided for @wpkEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No packages are waiting.'**
+  String get wpkEmptyTitle;
+
+  /// No description provided for @wpkEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Register one when a customer drops it off.'**
+  String get wpkEmptyHint;
+
+  /// No description provided for @wpkNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No waiting package matches that search.'**
+  String get wpkNoMatch;
+
+  /// No description provided for @wpkDroppedOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Dropped off {date}'**
+  String wpkDroppedOff(String date);
+
+  /// No description provided for @wpkSizeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Size in inches (optional)'**
+  String get wpkSizeTitle;
+
+  /// No description provided for @wpkLength.
+  ///
+  /// In en, this message translates to:
+  /// **'Length'**
+  String get wpkLength;
+
+  /// No description provided for @wpkWidth.
+  ///
+  /// In en, this message translates to:
+  /// **'Width'**
+  String get wpkWidth;
+
+  /// No description provided for @wpkHeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Height'**
+  String get wpkHeight;
+
+  /// No description provided for @wpkSizeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Length × width × height. All three, or leave them empty.'**
+  String get wpkSizeHint;
+
+  /// No description provided for @wpkPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Price (US dollars)'**
+  String get wpkPrice;
+
+  /// No description provided for @wpkPriceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty if there is no price yet.'**
+  String get wpkPriceHint;
+
+  /// No description provided for @wpkPayOnArrival.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay on arrival'**
+  String get wpkPayOnArrival;
+
+  /// No description provided for @wpkPayOnArrivalNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The team at the destination will record the money.'**
+  String get wpkPayOnArrivalNote;
+
+  /// No description provided for @wpkSaveAndPrint.
+  ///
+  /// In en, this message translates to:
+  /// **'Save & print label'**
+  String get wpkSaveAndPrint;
+
+  /// No description provided for @wpkSaveAndAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Save & add another for the same customer'**
+  String get wpkSaveAndAnother;
+
+  /// No description provided for @wpkSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Package saved: {code}'**
+  String wpkSaved(String code);
+
+  /// No description provided for @wpkSavedNoCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Package saved.'**
+  String get wpkSavedNoCode;
+
+  /// No description provided for @wpkUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Package updated.'**
+  String get wpkUpdated;
+
+  /// No description provided for @wpkRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove package'**
+  String get wpkRemove;
+
+  /// No description provided for @wpkRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this package?'**
+  String get wpkRemoveTitle;
+
+  /// No description provided for @wpkRemoveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'It leaves the waiting list and its label stops working.'**
+  String get wpkRemoveMessage;
+
+  /// No description provided for @wpkRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Package removed.'**
+  String get wpkRemoved;
+
+  /// No description provided for @wpkMoney.
+  ///
+  /// In en, this message translates to:
+  /// **'Price & payments'**
+  String get wpkMoney;
+
+  /// No description provided for @wpkSendBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Send back to waiting'**
+  String get wpkSendBack;
+
+  /// No description provided for @wpkSendBackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send back to waiting?'**
+  String get wpkSendBackTitle;
+
+  /// No description provided for @wpkSendBackMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{title} leaves {container}. Its label and code stay the same.'**
+  String wpkSendBackMessage(String title, String container);
+
+  /// No description provided for @wpkSentBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Package sent back to waiting.'**
+  String get wpkSentBack;
+
+  /// No description provided for @wpkPayNoPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'No price yet'**
+  String get wpkPayNoPrice;
+
+  /// No description provided for @wpkPayUnpaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid'**
+  String get wpkPayUnpaid;
+
+  /// No description provided for @wpkPayPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Partial'**
+  String get wpkPayPartial;
+
+  /// No description provided for @wpkPayPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get wpkPayPaid;
+
+  /// No description provided for @wpkPaidOfPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'{paid} of {price}'**
+  String wpkPaidOfPrice(String paid, String price);
+
+  /// No description provided for @wpkStillOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} still owed'**
+  String wpkStillOwed(String amount);
+
+  /// No description provided for @wpkRecordPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a payment'**
+  String get wpkRecordPayment;
+
+  /// No description provided for @wpkAmountReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount received (US dollars)'**
+  String get wpkAmountReceived;
+
+  /// No description provided for @wpkPayWholeBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay the whole balance'**
+  String get wpkPayWholeBalance;
+
+  /// No description provided for @wpkMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'How it arrived'**
+  String get wpkMethod;
+
+  /// No description provided for @wpkNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get wpkNote;
+
+  /// No description provided for @wpkSavePrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Save price'**
+  String get wpkSavePrice;
+
+  /// No description provided for @wpkPriceSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Price saved.'**
+  String get wpkPriceSaved;
+
+  /// No description provided for @wpkPaymentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment recorded.'**
+  String get wpkPaymentRecorded;
+
+  /// No description provided for @wpkPaymentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get wpkPaymentsTitle;
+
+  /// No description provided for @wpkNoPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'No payments recorded yet.'**
+  String get wpkNoPayments;
+
+  /// No description provided for @wpkRevert.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert'**
+  String get wpkRevert;
+
+  /// No description provided for @wpkRevertTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert this payment?'**
+  String get wpkRevertTitle;
+
+  /// No description provided for @wpkRevertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The {amount} payment is struck through and the balance goes back up.'**
+  String wpkRevertMessage(String amount);
+
+  /// No description provided for @wpkReverted.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reverted.'**
+  String get wpkReverted;
+
+  /// No description provided for @wpkRevertedMark.
+  ///
+  /// In en, this message translates to:
+  /// **'Reverted'**
+  String get wpkRevertedMark;
+
+  /// No description provided for @wpkRevertedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Reverted by {name}'**
+  String wpkRevertedBy(String name);
+
+  /// No description provided for @wpkRecordedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'recorded by {name}'**
+  String wpkRecordedBy(String name);
+
+  /// No description provided for @wpkAddWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Add waiting packages'**
+  String get wpkAddWaiting;
+
+  /// No description provided for @wpkAddWaitingCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Add waiting packages · {count}'**
+  String wpkAddWaitingCount(int count);
+
+  /// No description provided for @wpkAddWaitingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Tick the packages that go on {container}.'**
+  String wpkAddWaitingNote(String container);
+
+  /// No description provided for @wpkNoneWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'No packages are waiting for a container.'**
+  String get wpkNoneWaiting;
+
+  /// No description provided for @wpkSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all matching'**
+  String get wpkSelectAll;
+
+  /// No description provided for @wpkClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get wpkClear;
+
+  /// No description provided for @wpkSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String wpkSelected(int count);
+
+  /// No description provided for @wpkAddToContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to container'**
+  String get wpkAddToContainer;
+
+  /// No description provided for @wpkAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Added 1 package to {container}.} other{Added {count} packages to {container}.}}'**
+  String wpkAdded(int count, String container);
+
+  /// No description provided for @wpkTickOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Tick at least one package.'**
+  String get wpkTickOne;
+
+  /// No description provided for @wpkBlockedMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'For {from}, this container goes to {to}.'**
+  String wpkBlockedMismatch(String from, String to);
+
+  /// No description provided for @wpkWaitingExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'Received at the counter. It goes on a container headed to {destination} when one is loading.'**
+  String wpkWaitingExplain(String destination);
+
+  /// No description provided for @wpkWaitingExplainAny.
+  ///
+  /// In en, this message translates to:
+  /// **'Received at the counter. It goes on a container when one is loading.'**
+  String get wpkWaitingExplainAny;
+
+  /// No description provided for @wpkSizeFact.
+  ///
+  /// In en, this message translates to:
+  /// **'Size: {dimensions} · {volume}'**
+  String wpkSizeFact(String dimensions, String volume);
+
+  /// No description provided for @wpkPriceFact.
+  ///
+  /// In en, this message translates to:
+  /// **'Price & payments'**
+  String get wpkPriceFact;
+
+  /// No description provided for @wpkNoPriceYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No price set yet.'**
+  String get wpkNoPriceYet;
+
+  /// No description provided for @ctrErrVinAlreadyWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'This car is already waiting for a container.'**
+  String get ctrErrVinAlreadyWaiting;
+
+  /// No description provided for @wpkErrDestinationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose where this package is going.'**
+  String get wpkErrDestinationRequired;
+
+  /// No description provided for @wpkErrDestinationMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'A package can only go on a container headed to the same country.'**
+  String get wpkErrDestinationMismatch;
+
+  /// No description provided for @wpkErrContainerDestinationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose where this container is going before adding packages to it.'**
+  String get wpkErrContainerDestinationRequired;
+
+  /// No description provided for @wpkErrSizeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the length, width and height in inches, or leave all three empty.'**
+  String get wpkErrSizeInvalid;
+
+  /// No description provided for @wpkErrLineNotWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'That package is already on a container.'**
+  String get wpkErrLineNotWaiting;
+
+  /// No description provided for @wpkErrLineIsWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'This package is waiting for a container. Add it to one from the waiting list.'**
+  String get wpkErrLineIsWaiting;
+
+  /// No description provided for @wpkErrLineNotInContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'That package is not on a container.'**
+  String get wpkErrLineNotInContainer;
+
+  /// No description provided for @wpkErrLineIdsInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose between 1 and 100 packages.'**
+  String get wpkErrLineIdsInvalid;
+
+  /// No description provided for @wpkErrLineHasPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments are recorded for this package. Revert them first.'**
+  String get wpkErrLineHasPayments;
+
+  /// No description provided for @wpkErrPriceInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the price in dollars, more than zero.'**
+  String get wpkErrPriceInvalid;
+
+  /// No description provided for @wpkErrPriceBelowPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'The price can\'t be less than what has been paid.'**
+  String get wpkErrPriceBelowPaid;
+
+  /// No description provided for @wpkErrPriceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a price before recording a payment.'**
+  String get wpkErrPriceRequired;
+
+  /// No description provided for @wpkErrAmountRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount received.'**
+  String get wpkErrAmountRequired;
+
+  /// No description provided for @wpkErrAmountTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That amount is larger than a package can carry.'**
+  String get wpkErrAmountTooLarge;
+
+  /// No description provided for @wpkErrMethodInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Say how the payment arrived.'**
+  String get wpkErrMethodInvalid;
+
+  /// No description provided for @wpkErrExceedsBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'That is more than what is still owed.'**
+  String get wpkErrExceedsBalance;
+
+  /// No description provided for @wpkErrPaymentNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That payment no longer exists.'**
+  String get wpkErrPaymentNotFound;
+
+  /// No description provided for @wpkErrPaymentReverted.
+  ///
+  /// In en, this message translates to:
+  /// **'That payment was already reverted.'**
+  String get wpkErrPaymentReverted;
+
+  /// No description provided for @guestTrackingStageWaitingContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Received, waiting for a container'**
+  String get guestTrackingStageWaitingContainer;
 }
 
 class _AppLocalizationsDelegate

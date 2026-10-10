@@ -25,6 +25,27 @@ const containerStatuses = <String>[
   containerStatusArrived,
 ];
 
+/// Where a package stands while no container has it yet: dropped off at the
+/// counter, `containerId: ""`, `containerStatus: "waiting"`. A line's stage,
+/// never a container's state - it is deliberately not in [containerStatuses],
+/// which are the three a container itself can be in.
+const containerLineStatusWaiting = 'waiting';
+
+/// The holder `openContainerHoldingVin` names when the car that already holds
+/// its VIN is a package waiting for a container (there is no container id to
+/// give). Mirrors the server's `WAITING_HOLDER`.
+const containerWaitingHolder = 'waiting';
+
+/// Longest side a package can have, in inches (the server's cap): a 40 ft
+/// container is 480 in long, so anything over this is a typo.
+const containerMaxDimensionIn = 600.0;
+
+/// Most packages one `assignContainerLines` call takes.
+const containerMaxAssignLines = 100;
+
+/// Largest price or payment, in cents (the invoice ledger's `MAX_CENTS`).
+const containerMaxCents = 100000000;
+
 const containerLineKindCar = 'car';
 const containerLineKindBarrels = 'barrels';
 const containerLineKindOther = 'other';
@@ -77,7 +98,27 @@ const containerRefusalCodes = <String>[
   'customer_phone_invalid',
   'receiver_phone_invalid',
   'vin_already_loaded',
+  'vin_already_waiting',
   'move_target_not_loading',
+  // Waiting packages (docs/WAITING_PACKAGES.md).
+  'package_destination_required',
+  'destination_mismatch',
+  'container_destination_required',
+  'size_invalid',
+  'line_not_waiting',
+  'line_is_waiting',
+  'line_not_in_container',
+  'line_ids_invalid',
+  'line_has_payments',
+  'price_invalid',
+  'price_below_paid',
+  'price_required',
+  'amount_required',
+  'amount_too_large',
+  'payment_method_invalid',
+  'payment_exceeds_balance',
+  'payment_not_found',
+  'payment_already_reverted',
 ];
 
 String _text(Object? value, [int max = containerMaxText]) {
@@ -137,6 +178,25 @@ bool containerPhoneLacksCountryCode(Object? value) {
 /// A switch that is on unless it was explicitly turned off. Mirrors
 /// `onUnlessOff`.
 bool _onUnlessOff(Object? value) => value != false && value != 'false';
+
+/// A stored price: whole cents above zero, else null ("no price yet").
+/// Mirrors `priceCentsOf`.
+int? _priceCents(Object? value) {
+  if (value == null || (value is String && value.trim().isEmpty)) return null;
+  final n = value is num ? value : num.tryParse(value.toString().trim());
+  if (n == null || n is double && (n.isNaN || n.isInfinite)) return null;
+  final cents = n.round();
+  if (cents != n || cents <= 0 || cents > containerMaxCents) return null;
+  return cents;
+}
+
+/// A stored paid amount: whole non-negative cents. Mirrors `paidCentsOf`.
+int _paidCents(Object? value) {
+  final n = value is num ? value : num.tryParse((value ?? '').toString());
+  if (n == null || n is double && (n.isNaN || n.isInfinite)) return 0;
+  final cents = n.round();
+  return cents > 0 ? (cents > containerMaxCents ? containerMaxCents : cents) : 0;
+}
 
 int _positiveInt(Object? value) {
   final n = value is num
@@ -348,6 +408,13 @@ class ContainerLineDraft {
     this.receiverPhone = '',
     this.notifyCustomer = true,
     this.notifyReceiver = true,
+    this.destinationCountryId = '',
+    this.destinationCountryName = '',
+    this.lengthIn = '',
+    this.widthIn = '',
+    this.heightIn = '',
+    this.priceCents,
+    this.payOnArrival = false,
   });
 
   final String kind;
@@ -370,6 +437,21 @@ class ContainerLineDraft {
   /// record turns it off when the phone is empty.
   final bool notifyCustomer;
   final bool notifyReceiver;
+
+  /// Where the package is going. Only a waiting package must name one (it is
+  /// what decides which containers may take it); on a container's own line it
+  /// is left empty and the container's is used.
+  final String destinationCountryId;
+  final String destinationCountryName;
+
+  /// Inches as typed: all three or none.
+  final String lengthIn;
+  final String widthIn;
+  final String heightIn;
+
+  /// US dollars in whole cents; null is "no price yet".
+  final int? priceCents;
+  final bool payOnArrival;
 }
 
 /// Error codes. Mirrors `validateContainerLine`.
@@ -401,7 +483,48 @@ List<String> validateContainerLine(ContainerLineDraft input) {
   errors.addAll(
     _contactPhoneErrors(input.customerPhone, input.receiverPhone, owner),
   );
+  errors.addAll(packageSizeErrors(
+    input.lengthIn,
+    input.widthIn,
+    input.heightIn,
+  ));
+  errors.addAll(packagePriceErrors(input.priceCents));
   return errors;
+}
+
+/// One side of a package in inches to two decimals, or null when empty or not
+/// a usable length (the validator names that case). A decimal comma reads as
+/// a point. Mirrors `dimensionOf`.
+double? containerDimension(Object? value) {
+  final raw = _text(value, 20).replaceAll(',', '.');
+  if (raw.isEmpty) return null;
+  final n = value is num ? value.toDouble() : double.tryParse(raw);
+  if (n == null || n.isNaN || n.isInfinite) return null;
+  if (n <= 0 || n > containerMaxDimensionIn) return null;
+  return (n * 100).round() / 100;
+}
+
+/// Size is length x width x height or nothing: two sides of a box make no
+/// volume and print on no label. Mirrors `sizeErrors`.
+List<String> packageSizeErrors(Object? length, Object? width, Object? height) {
+  final sides = [length, width, height];
+  if (!sides.any((side) => _text(side, 20).isNotEmpty)) return const [];
+  return sides.every((side) => containerDimension(side) != null)
+      ? const []
+      : const ['size_invalid'];
+}
+
+/// A price must be whole cents above zero and within what a package can
+/// plausibly cost; absent is fine ("no price yet"). Taking a price away or
+/// lowering it below what was paid is the server's call to refuse, since only
+/// it holds `paidCents`. Mirrors `priceErrors` for a line that has none paid.
+List<String> packagePriceErrors(int? priceCents, [int paidCents = 0]) {
+  if (priceCents == null) return paidCents > 0 ? const ['price_below_paid'] : const [];
+  if (priceCents <= 0 || priceCents > containerMaxCents) {
+    return const ['price_invalid'];
+  }
+  if (priceCents < paidCents) return const ['price_below_paid'];
+  return const [];
 }
 
 /// Mirrors `contactPhoneErrors`: a customer's phone is only checked on a
@@ -582,6 +705,14 @@ class ContainerLine {
     required this.createdAt,
     required this.updatedAt,
     this.lastCustomerUpdate,
+    this.destinationCountryId = '',
+    this.destinationCountryName = '',
+    this.lengthIn,
+    this.widthIn,
+    this.heightIn,
+    this.priceCents,
+    this.paidCents = 0,
+    this.payOnArrival = false,
   });
 
   final String id;
@@ -623,6 +754,25 @@ class ContainerLine {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  /// Where the package is going. Older lines have none and ride any
+  /// container; a waiting package always has one.
+  final String destinationCountryId;
+  final String destinationCountryName;
+
+  /// Inches; all three or none.
+  final double? lengthIn;
+  final double? widthIn;
+  final double? heightIn;
+
+  /// US dollars in whole cents; null is "no price yet".
+  final int? priceCents;
+
+  /// What has been paid: the server's sum of the payments not reverted.
+  final int paidCents;
+
+  /// The team at the destination will record the money.
+  final bool payOnArrival;
+
   factory ContainerLine.fromMap(String id, Map<String, dynamic> d) {
     final customerPhone = _text(d['customerPhone'], 40);
     final receiverPhone = _text(d['receiverPhone'], 40);
@@ -652,8 +802,21 @@ class ContainerLine {
       createdAt: lotDateOf(d['createdAt']),
       updatedAt: lotDateOf(d['updatedAt']),
       lastCustomerUpdate: ContainerLineUpdate.fromMap(d['lastCustomerUpdate']),
+      destinationCountryId: _text(d['destinationCountryId'], 60),
+      destinationCountryName:
+          _text(d['destinationCountryName'], containerMaxLabel),
+      lengthIn: containerDimension(d['lengthIn']),
+      widthIn: containerDimension(d['widthIn']),
+      heightIn: containerDimension(d['heightIn']),
+      priceCents: _priceCents(d['priceCents']),
+      paidCents: _paidCents(d['paidCents']),
+      payOnArrival: d['payOnArrival'] == true,
     );
   }
+
+  /// Dropped off and not on any container yet. Mirrors `lineIsWaiting`.
+  bool get isWaiting =>
+      containerStatus == containerLineStatusWaiting && containerId.isEmpty;
 
   bool get isCar => kind == containerLineKindCar;
   bool get isBarrels => kind == containerLineKindBarrels;
@@ -837,6 +1000,9 @@ String openContainerHoldingVin(
   for (final line in lines) {
     if (!line.isCar) continue;
     if (line.containerStatus == containerStatusArrived) continue;
+    if (line.containerId.isEmpty && line.isWaiting) {
+      return containerWaitingHolder;
+    }
     if (line.containerId.isNotEmpty && line.containerId != ignore) {
       return line.containerId;
     }
@@ -965,7 +1131,21 @@ class ContainerSearchHit {
 
   /// Null when the line's container is not in the rows the screen holds - a
   /// deleted box, or one still arriving - so the hit still names the line.
+  /// Also null for a package still waiting for a container: [isWaiting].
   final ShippingContainer? container;
+
+  /// A package that has no container yet; the hit says "waiting" where it
+  /// would name the box.
+  bool get isWaiting => container == null && line.isWaiting;
+
+  /// Where the line is: [containerLineStatusWaiting], or its container's state
+  /// (its own recorded state when the container is not in the rows held).
+  String get stage => isWaiting
+      ? containerLineStatusWaiting
+      : (container?.status ??
+          (containerStatuses.contains(line.containerStatus)
+              ? line.containerStatus
+              : containerStatusArrived));
 }
 
 /// Lines matching a VIN, a customer name or a phone number, best first:
@@ -1024,11 +1204,17 @@ List<ContainerSearchHit> searchContainerLines(
   scored.sort((a, b) {
     final byScore = b.$2.compareTo(a.$2);
     if (byScore != 0) return byScore;
-    final ca = a.$1.container, cb = b.$1.container;
-    final byStatus = _statusRank(ca?.status ?? containerStatusArrived)
-        .compareTo(_statusRank(cb?.status ?? containerStatusArrived));
+    // A package waiting for a container is work to do, so it ranks with the
+    // boxes still loading rather than with the ones that are gone.
+    int rank(ContainerSearchHit hit) => hit.isWaiting
+        ? _statusRank(containerStatusLoading)
+        : _statusRank(hit.container?.status ?? containerStatusArrived);
+    final byStatus = rank(a.$1).compareTo(rank(b.$1));
     if (byStatus != 0) return byStatus;
-    return _newestFirst(ca?.sailedAt ?? ca?.updatedAt, cb?.sailedAt ?? cb?.updatedAt);
+    DateTime? when(ContainerSearchHit hit) => hit.isWaiting
+        ? hit.line.createdAt
+        : (hit.container?.sailedAt ?? hit.container?.updatedAt);
+    return _newestFirst(when(a.$1), when(b.$1));
   });
   return [for (final s in scored) s.$1];
 }
@@ -1093,18 +1279,30 @@ class ContainerRefusal {
     required this.codes,
     required this.conflictContainerId,
     required this.message,
+    this.lineIds = const [],
+    this.conflictWaiting = false,
   });
 
   final List<String> codes;
   final String conflictContainerId;
   final String message;
 
+  /// The packages a refusal is about (every one that does not fit a
+  /// container, say), so a list can mark each row.
+  final List<String> lineIds;
+
+  /// The car that already holds the VIN is a package waiting for a container:
+  /// there is no container to name or open.
+  final bool conflictWaiting;
+
   bool get isEmpty => codes.isEmpty;
 }
 
 ContainerRefusal parseContainerRefusal(Object? details, String? message) {
   final codes = <String>{};
+  final lineIds = <String>[];
   var conflict = '';
+  var conflictWaiting = false;
   void addCode(Object? value) {
     final code = _text(value, 60);
     if (containerRefusalCodes.contains(code)) codes.add(code);
@@ -1113,11 +1311,24 @@ ContainerRefusal parseContainerRefusal(Object? details, String? message) {
   if (details is Map) {
     addCode(details['code']);
     addCode(details['reason']);
-    for (final key in ['codes', 'errors']) {
+    // `reasons` is what validation failures carry (docs/WAITING_PACKAGES.md).
+    for (final key in ['codes', 'errors', 'reasons']) {
       final list = details[key];
       if (list is Iterable) list.forEach(addCode);
     }
     conflict = _text(details['conflictContainerId'], containerMaxLabel);
+    final rawIds = details['lineIds'];
+    if (rawIds is Iterable) {
+      for (final id in rawIds) {
+        final clean = _text(id, containerMaxLabel);
+        if (clean.isNotEmpty) lineIds.add(clean);
+      }
+    }
+    // A waiting holder is named "waiting" (no container id): say so, and
+    // offer no jump to a container.
+    conflictWaiting =
+        conflict == containerWaitingHolder || details['conflictWaiting'] == true;
+    if (conflictWaiting) conflict = '';
   }
   // A message made only of codes ("vin_required customer_name_required") is
   // the server speaking in codes; read them. Prose stays prose.
@@ -1131,5 +1342,7 @@ ContainerRefusal parseContainerRefusal(Object? details, String? message) {
     codes: codes.toList(),
     conflictContainerId: conflict,
     message: text,
+    lineIds: lineIds,
+    conflictWaiting: conflictWaiting,
   );
 }

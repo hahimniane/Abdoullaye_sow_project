@@ -18,6 +18,9 @@ import '../services/known_car_lookup.dart';
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/vin_decoder_service.dart';
+import '../services/invoice_ledger.dart' show invoiceCentsToInput;
+import '../services/waiting_package_service.dart';
+import '../services/waiting_packages.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -28,8 +31,14 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/label_print_sheet.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/package_money.dart';
+import '../widgets/waiting_package_fields.dart';
+import 'add_waiting_packages_sheet.dart';
+import 'package_payment_sheet.dart';
+import 'package_result_screen.dart';
 import 'package_scan_screen.dart';
 import 'vin_scanner_screen.dart';
+import 'waiting_packages_screen.dart';
 
 /// Containers, yard-side.
 ///
@@ -318,6 +327,43 @@ class _ContainersScreenState extends State<ContainersScreen> {
           businessCountryCode: _businessCountryCode,
           destinations: _destinations,
           onOpenContainer: _openDetail,
+          staff: _staff,
+        ),
+      ),
+    );
+  }
+
+  /// The packages dropped off with no container yet, on their own list.
+  void _openWaiting() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WaitingPackagesScreen(
+          businessId: widget.businessId,
+          feed: _feed,
+          staff: _staff,
+          customers: _customers,
+          knownCars: _knownCars,
+          parkedCarRows: _parkedCarRows,
+          destinations: _destinations,
+          businessCountryCode: _businessCountryCode,
+          onCustomerRecorded: _loadCustomers,
+        ),
+      ),
+    );
+  }
+
+  /// A search hit on a package that has no container opens its package page.
+  void _openWaitingHit(ContainerLine line) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PackageResultScreen(
+          businessId: widget.businessId,
+          code: line.trackingCode,
+          lineId: line.id,
+          businessCountryCode: _businessCountryCode,
+          destinations: _destinations,
+          onOpenContainer: _openDetail,
+          staff: _staff,
         ),
       ),
     );
@@ -361,6 +407,8 @@ class _ContainersScreenState extends State<ContainersScreen> {
               setState(() => _filter = v);
             },
             showFilter: !searching,
+            waitingCount: _lines.where((l) => l.isWaiting).length,
+            onOpenWaiting: _openWaiting,
           ),
           Expanded(
             child: Stack(
@@ -377,6 +425,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
                     hits: searchContainerLines(_lines, byId, _search),
                     staff: _staff,
                     onOpen: _openDetail,
+                    onOpenWaiting: _openWaitingHit,
                   )
                 else
                   _ContainerList(
@@ -418,6 +467,8 @@ class _ContainersHeader extends StatelessWidget {
     required this.counts,
     required this.onFilter,
     required this.showFilter,
+    required this.waitingCount,
+    required this.onOpenWaiting,
   });
 
   final String businessName;
@@ -428,6 +479,8 @@ class _ContainersHeader extends StatelessWidget {
   final Map<String, int> counts;
   final ValueChanged<String> onFilter;
   final bool showFilter;
+  final int waitingCount;
+  final VoidCallback onOpenWaiting;
 
   @override
   Widget build(BuildContext context) {
@@ -534,10 +587,18 @@ class _ContainersHeader extends StatelessWidget {
                   ? Padding(
                       padding: const EdgeInsets.fromLTRB(
                           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
-                      child: _StatusChips(
-                        selected: filter,
-                        counts: counts,
-                        onChanged: onFilter,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _StatusChips(
+                            selected: filter,
+                            counts: counts,
+                            onChanged: onFilter,
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          WaitingEntryRow(
+                              count: waitingCount, onTap: onOpenWaiting),
+                        ],
                       ),
                     )
                   : const SizedBox(height: AppSpacing.md, width: double.infinity),
@@ -835,11 +896,13 @@ class _SearchResults extends StatelessWidget {
     required this.hits,
     required this.staff,
     required this.onOpen,
+    required this.onOpenWaiting,
   });
 
   final List<ContainerSearchHit> hits;
   final List<LotStaff> staff;
   final ValueChanged<String> onOpen;
+  final ValueChanged<ContainerLine> onOpenWaiting;
 
   @override
   Widget build(BuildContext context) {
@@ -869,10 +932,31 @@ class _SearchResults extends StatelessWidget {
               key: ValueKey('hit-${hit.line.id}'),
               line: hit.line,
               staff: staff,
-              // The line's whereabouts, which is what a search is asking.
-              trailing: hit.container == null
-                  ? null
-                  : Column(
+              // The line's whereabouts, which is what a search is asking: the
+              // box it is on, or that it has none yet.
+              trailing: hit.isWaiting
+                  ? Column(
+                      key: Key('hit-waiting-${hit.line.id}'),
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const ContainerStatusPill(
+                            status: containerLineStatusWaiting),
+                        if (hit.line.destinationCountryName.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            hit.line.destinationCountryName,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ],
+                    )
+                  : hit.container == null
+                      ? null
+                      : Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -901,9 +985,11 @@ class _SearchResults extends StatelessWidget {
                         ],
                       ],
                     ),
-              onTap: hit.container == null
-                  ? null
-                  : () => onOpen(hit.container!.id),
+              onTap: hit.isWaiting
+                  ? () => onOpenWaiting(hit.line)
+                  : hit.container == null
+                      ? null
+                      : () => onOpen(hit.container!.id),
             ),
         ],
       ],
@@ -1023,7 +1109,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       AppHaptics.refuse();
-      showErrorSnackBar(context, _refusalText(l10n, error, containers: _byId));
+      showErrorSnackBar(context, containerRefusalText(l10n, error, containers: _byId));
     } catch (_) {
       if (!mounted) return;
       AppHaptics.refuse();
@@ -1038,7 +1124,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
   void _refuse(String code) {
     final l10n = AppLocalizations.of(context)!;
     AppHaptics.refuse();
-    showErrorSnackBar(context, _containerErrorText(l10n, code));
+    showErrorSnackBar(context, containerErrorText(l10n, code));
   }
 
   Future<void> _edit() async {
@@ -1073,6 +1159,23 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
       ),
     );
     if (added == true) widget.onCustomerRecorded();
+  }
+
+  /// Tick waiting packages onto this box; the server takes them all or none,
+  /// and refuses any that go to another country.
+  Future<void> _addWaiting() async {
+    final l10n = AppLocalizations.of(context)!;
+    final container = _container;
+    if (container == null || !container.isLoading) return;
+    final added = await showAddWaitingPackagesSheet(
+      context,
+      businessId: widget.businessId,
+      container: container,
+      packages: waitingLines(_allLines),
+    );
+    if (added == null || !mounted) return;
+    AppHaptics.commit();
+    showSuccessSnackBar(context, l10n.wpkAdded(added, container.displayName));
   }
 
   Future<void> _ship() async {
@@ -1231,6 +1334,33 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
       await _printLabels(line: line);
       return;
     }
+    if (action == 'money') {
+      // The price and what has been paid, in every state: the team at the
+      // port records the money as it arrives.
+      await showPackagePaymentSheet(
+        context,
+        businessId: widget.businessId,
+        line: line,
+        staff: widget.staff,
+      );
+      return;
+    }
+    if (action == 'back') {
+      final ok = await confirmMajorAction(
+        context,
+        title: l10n.wpkSendBackTitle,
+        message: l10n.wpkSendBackMessage(
+            containerLineTitle(l10n, line), container.displayName),
+        confirmLabel: l10n.wpkSendBack,
+      );
+      if (!ok || !mounted) return;
+      await _run('back', () async {
+        await FirebaseFunctions.instance
+            .httpsCallable('unassignContainerLine')
+            .call<Object?>(unassignLineRequest(widget.businessId, line.id));
+      }, done: l10n.wpkSentBack);
+      return;
+    }
     if (action == 'edit') {
       final saved = await editContainerLine(
         context,
@@ -1335,6 +1465,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     final countsText = _countsText(
         l10n, counts.carCount, counts.barrelCount, counts.otherCount);
     final busy = _busy.isNotEmpty;
+    final waitingCount = _allLines.where((l) => l.isWaiting).length;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -1478,6 +1609,18 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                         onBusyChanged: (on) {
                           if (mounted) setState(() => _busy = on ? 'status' : '');
                         },
+                      ),
+                    ],
+                    // Packages dropped off before any container: tick the ones
+                    // that go on this box. Only while it is still loading.
+                    if (container.isLoading) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      ContainerActionButton(
+                        key: const Key('container-add-waiting'),
+                        icon: Icons.inventory_2_outlined,
+                        label: l10n.wpkAddWaitingCount(waitingCount),
+                        enabled: !busy && waitingCount > 0,
+                        onTap: _addWaiting,
                       ),
                     ],
                     const SizedBox(height: AppSpacing.lg),
@@ -1851,7 +1994,7 @@ class _ContainerSendStatusActionState extends State<ContainerSendStatusAction> {
       } else if (reason == containerStatusRefusalNoUpdate) {
         showErrorSnackBar(context, l10n.ctrSendStatusNoNews);
       } else {
-        showErrorSnackBar(context, _refusalText(l10n, error));
+        showErrorSnackBar(context, containerRefusalText(l10n, error));
       }
     } catch (_) {
       if (!mounted) return;
@@ -2018,6 +2161,14 @@ class _LineCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (packageSize(line) != null)
+                    _LineNote(
+                      key: const Key('line-size'),
+                      icon: Icons.straighten,
+                      text:
+                          '${packageSize(line)!.dimensionsText} · ${packageSize(line)!.volumeText}',
+                      color: AppColors.muted,
+                    ),
                   if (line.trackingCode.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
@@ -2033,6 +2184,9 @@ class _LineCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                  // Priced packages show their payment standing; most lines on
+                  // a container predate prices and show nothing.
+                  PackageMoneyLine(payment: packagePayment(line)),
                   if (updated.isNotEmpty)
                     _LineNote(
                       key: const Key('line-updates'),
@@ -2149,33 +2303,48 @@ class _LineActionsSheet extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           // Contacts stay correctable after the box ships; the rest of the
           // line is the record of what went.
-          _SheetAction(
+          ContainerSheetAction(
             key: const Key('line-edit-contacts'),
             icon: Icons.contact_phone_outlined,
             label: l10n.ctrEditContacts,
             onTap: () => Navigator.of(context).pop('contacts'),
           ),
-          _SheetAction(
+          ContainerSheetAction(
             key: const Key('line-print-labels'),
             icon: Icons.qr_code_2,
             label: l10n.ctrPrintLineLabels,
             onTap: () => Navigator.of(context).pop('labels'),
           ),
+          // A price is agreed and money arrives after the box has sailed as
+          // often as before, so this stays open in every state.
+          ContainerSheetAction(
+            key: const Key('line-price-payments'),
+            icon: Icons.payments_outlined,
+            label: l10n.wpkMoney,
+            onTap: () => Navigator.of(context).pop('money'),
+          ),
           if (open) ...[
             // What the line is and whose: only while the box is loading.
-            _SheetAction(
+            ContainerSheetAction(
               key: const Key('line-edit'),
               icon: Icons.edit_outlined,
               label: l10n.ctrEditLine,
               onTap: () => Navigator.of(context).pop('edit'),
             ),
-            _SheetAction(
+            ContainerSheetAction(
               key: const Key('line-move'),
               icon: Icons.drive_file_move_outlined,
               label: l10n.ctrMoveLine,
               onTap: () => Navigator.of(context).pop('move'),
             ),
-            _SheetAction(
+            // Back to the waiting list, keeping its label and code.
+            ContainerSheetAction(
+              key: const Key('line-send-back'),
+              icon: Icons.undo,
+              label: l10n.wpkSendBack,
+              onTap: () => Navigator.of(context).pop('back'),
+            ),
+            ContainerSheetAction(
               key: const Key('line-remove'),
               icon: Icons.remove_circle_outline,
               label: l10n.ctrRemoveLine,
@@ -2189,8 +2358,8 @@ class _LineActionsSheet extends StatelessWidget {
   }
 }
 
-class _SheetAction extends StatelessWidget {
-  const _SheetAction({
+class ContainerSheetAction extends StatelessWidget {
+  const ContainerSheetAction({
     super.key,
     required this.icon,
     required this.label,
@@ -2306,40 +2475,15 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
   }
 
   Future<void> _pickDestination() async {
-    final l10n = AppLocalizations.of(context)!;
-    // The business's own destinations first, then every other country: a
-    // business that lists none under Services & coverage still has the
-    // whole world to choose from, never an empty sheet.
-    final ownIds = {for (final d in widget.destinations) d.id};
-    final own = [...widget.destinations]
-      ..sort((a, b) => a.name.compareTo(b.name));
-    final rest = [
-      for (final c in CountryCatalog.all)
-        if (!ownIds.contains(c.id)) c,
-    ]..sort((a, b) => a.name.compareTo(b.name));
-    final picked = await pickLotSearchableOption<String>(
+    final picked = await pickContainerDestination(
       context,
-      title: l10n.ctrDestination,
-      searchHint: l10n.ctrSearchCountries,
-      selected: _destinationId,
-      sections: [
-        if (own.isNotEmpty)
-          LotOptionSection(l10n.ctrYourDestinations, [
-            for (final d in own) LotOption(d.id, d.name, detail: d.code),
-          ]),
-        LotOptionSection(
-          own.isEmpty ? l10n.ctrEveryCountry : l10n.ctrEveryOtherCountry,
-          [for (final c in rest) LotOption(c.id, c.name, detail: c.code)],
-        ),
-      ],
+      destinations: widget.destinations,
+      selectedId: _destinationId,
     );
     if (picked == null || !mounted) return;
-    final country = [...widget.destinations, ...CountryCatalog.all]
-        .where((d) => d.id == picked)
-        .firstOrNull;
     setState(() {
-      _destinationId = picked;
-      _destinationName = country?.name ?? picked;
+      _destinationId = picked.id;
+      _destinationName = picked.name;
       _errors = {..._errors}..remove('destination_required');
     });
   }
@@ -2400,7 +2544,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
       setState(() {
         _errors = fieldCodes;
         _serverNote = rest.isNotEmpty
-            ? rest.map((c) => _containerErrorText(l10n, c)).join(' ')
+            ? rest.map((c) => containerErrorText(l10n, c)).join(' ')
             : (fieldCodes.isEmpty
                 ? (refusal.message.isNotEmpty
                     ? refusal.message
@@ -2426,7 +2570,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     String? errorFor(String code) =>
-        _errors.contains(code) ? _containerErrorText(l10n, code) : null;
+        _errors.contains(code) ? containerErrorText(l10n, code) : null;
 
     return LotSheetShell(
       title: _editing ? l10n.ctrEditContainer : l10n.ctrNewContainer,
@@ -2531,7 +2675,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
 class _LineFormSheet extends StatefulWidget {
   const _LineFormSheet({
     required this.businessId,
-    required this.container,
+    this.container,
     required this.containers,
     required this.lines,
     required this.customers,
@@ -2541,10 +2685,30 @@ class _LineFormSheet extends StatefulWidget {
     this.receiverCountryCode = 'US',
     this.onLineAdded,
     this.existing,
-  });
+    this.waiting = false,
+    this.destinations = const [],
+    this.defaultDestination,
+    this.caller = callContainerCallable,
+  }) : assert(waiting || container != null);
 
   final String businessId;
-  final ShippingContainer container;
+
+  /// The container the line goes on; null for a package dropped off before
+  /// any container ([waiting]).
+  final ShippingContainer? container;
+
+  /// The same form, registering (or correcting) a package that waits for a
+  /// container: always a customer's, plus where it is going, its size and its
+  /// price, saved through `addWaitingPackage`.
+  final bool waiting;
+
+  /// The business's own destinations, which lead the destination picker, and
+  /// the one a new package opens on (the main destination).
+  final List<DestinationCountry> destinations;
+  final DestinationRef? defaultDestination;
+
+  /// How a waiting package is saved; a fake in tests.
+  final ContainerCallableCaller caller;
 
   /// The line being edited; null when adding a new one. The same form opens
   /// pre-filled and saves through `updateContainerLine` instead.
@@ -2588,6 +2752,13 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   final _receiver = TextEditingController();
   final _receiverPhone = TextEditingController();
   final _lotFilter = TextEditingController();
+  final _length = TextEditingController();
+  final _width = TextEditingController();
+  final _height = TextEditingController();
+  final _price = TextEditingController();
+  String _destinationId = '';
+  String _destinationName = '';
+  bool _payOnArrival = false;
 
   /// Lines saved from this one opening of the sheet. Five barrels for three
   /// customers are three lines, entered back to back without closing it.
@@ -2604,6 +2775,9 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   Set<String> _errors = {};
   String _serverNote = '';
   String _conflictName = '';
+
+  /// The VIN is held by a package waiting for a container: no box to name.
+  bool _conflictWaiting = false;
   List<LotCustomer> _suggestions = const [];
 
   /// "Is this car parked in your lot?" - unanswered until one of the two is
@@ -2621,12 +2795,20 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   String _decodedVin = '';
 
   bool get _editing => widget.existing != null;
+  bool get _waiting => widget.waiting;
 
   @override
   void initState() {
     super.initState();
     final line = widget.existing;
-    if (line == null) return;
+    if (line == null) {
+      final start = widget.defaultDestination;
+      if (_waiting && start != null) {
+        _destinationId = start.id;
+        _destinationName = start.name;
+      }
+      return;
+    }
     // The stored line, as the form would have typed it. A car opens on the
     // typed-VIN branch with its fields filled; its VIN counts as decoded so
     // nothing is looked up until it is changed.
@@ -2655,13 +2837,23 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     // switched on, as on a new line.
     _notifyCustomer = line.customerPhone.isEmpty || line.notifyCustomer;
     _notifyReceiver = line.receiverPhone.isEmpty || line.notifyReceiver;
+    if (_waiting) {
+      _destinationId = line.destinationCountryId;
+      _destinationName = line.destinationCountryName;
+      _length.text = line.lengthIn == null ? '' : trimNumber(line.lengthIn!);
+      _width.text = line.widthIn == null ? '' : trimNumber(line.widthIn!);
+      _height.text = line.heightIn == null ? '' : trimNumber(line.heightIn!);
+      _price.text =
+          line.priceCents == null ? '' : invoiceCentsToInput(line.priceCents!);
+      _payOnArrival = line.payOnArrival;
+    }
   }
 
   @override
   void dispose() {
     for (final c in [
       _vin, _make, _model, _year, _quantity, _description, _customer, _phone,
-      _receiver, _receiverPhone, _lotFilter,
+      _receiver, _receiverPhone, _lotFilter, _length, _width, _height, _price,
     ]) {
       c.dispose();
     }
@@ -2698,6 +2890,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     _vinHint = '';
     _decodedVin = '';
     _conflictName = '';
+    _conflictWaiting = false;
     _errors = {..._errors}
       ..remove('vin_required')
       ..remove('vin_already_loaded');
@@ -2782,7 +2975,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     final holding = existing == null
         ? openContainerHoldingVin(
             containerLinesForVin(widget.lines, clean),
-            ignoreContainerId: widget.container.id,
+            ignoreContainerId: widget.container?.id ?? '',
           )
         : openContainerHoldingVin(
             containerLinesForVin(widget.lines, clean)
@@ -2791,11 +2984,16 @@ class _LineFormSheetState extends State<_LineFormSheet> {
           );
     if (holding.isNotEmpty) {
       setState(() {
-        _conflictName = widget.containers
-                .where((c) => c.id == holding)
-                .firstOrNull
-                ?.displayName ??
-            '';
+        // A package waiting for a container holds the VIN too, and there is
+        // no box to name for it.
+        _conflictWaiting = holding == containerWaitingHolder;
+        _conflictName = _conflictWaiting
+            ? ''
+            : widget.containers
+                    .where((c) => c.id == holding)
+                    .firstOrNull
+                    ?.displayName ??
+                '';
         _errors = {..._errors, 'vin_already_loaded'};
       });
     }
@@ -2888,7 +3086,43 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         receiverPhone: _receiverPhone.text,
         notifyCustomer: _notifyCustomer,
         notifyReceiver: _notifyReceiver,
+        // The package's own fields only when it is one: a line on a container
+        // sends none of them, so editing it leaves its size and price alone.
+        destinationCountryId: _waiting ? _destinationId : '',
+        destinationCountryName: _waiting ? _destinationName : '',
+        lengthIn: _waiting ? _length.text : '',
+        widthIn: _waiting ? _width.text : '',
+        heightIn: _waiting ? _height.text : '',
+        priceCents: _waiting ? readPackagePrice(_price.text).cents : null,
+        payOnArrival: _waiting && _payOnArrival,
       );
+
+  Future<void> _pickDestination() async {
+    final picked = await pickContainerDestination(
+      context,
+      destinations: widget.destinations,
+      selectedId: _destinationId,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _destinationId = picked.id;
+      _destinationName = picked.name;
+      _errors = {..._errors}..remove('package_destination_required');
+    });
+  }
+
+  /// Where the receiver's phone picker opens: the package's own destination
+  /// once chosen, else the box's (or the business's) country.
+  String get _receiverCountry =>
+      CallingCodeCatalog.countryCodeForReference(
+        _destinationId,
+        extra: widget.destinations,
+      ) ??
+      CallingCodeCatalog.countryCodeForReference(
+        _destinationName,
+        extra: widget.destinations,
+      ) ??
+      widget.receiverCountryCode;
 
   /// What a saved line reads as in the "added so far" tally.
   String _tallyLabel(AppLocalizations l10n, ContainerLineDraft d) {
@@ -2904,10 +3138,20 @@ class _LineFormSheetState extends State<_LineFormSheet> {
 
   /// `andAnother` keeps the sheet open after the save with the same kind of
   /// cargo selected and the customer cleared, for the next customer's share.
-  Future<void> _submit({bool andAnother = false}) async {
+  Future<void> _submit({
+    bool andAnother = false,
+    bool printLabel = false,
+  }) async {
     final l10n = AppLocalizations.of(context)!;
     final draft = _draft;
-    final errors = validateContainerLine(draft).toSet();
+    final errors =
+        (_waiting ? validateWaitingPackage(draft) : validateContainerLine(draft))
+            .toSet();
+    // A price that was typed but cannot be read is its own refusal; the draft
+    // only carries the cents it could read.
+    if (_waiting && readPackagePrice(_price.text).error != null) {
+      errors.add('price_invalid');
+    }
     if (_kind == containerLineKindCar && _errors.contains('vin_already_loaded')) {
       errors.add('vin_already_loaded');
     }
@@ -2922,6 +3166,10 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       _serverNote = '';
     });
     try {
+      if (_waiting) {
+        await _saveWaiting(draft, andAnother: andAnother, printLabel: printLabel);
+        return;
+      }
       final existing = widget.existing;
       if (existing != null) {
         // The same line, edited in place: its code and container stay.
@@ -2944,7 +3192,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
           .httpsCallable('addContainerLine')
           .call<Object?>({
         'businessId': widget.businessId,
-        'containerId': widget.container.id,
+        'containerId': widget.container!.id,
         'line': containerLineRecord(draft),
       });
       if (!mounted) return;
@@ -2976,6 +3224,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       final rest = refusal.codes.where((c) => !_fieldCodes.contains(c));
       setState(() {
         _errors = fieldCodes;
+        _conflictWaiting = refusal.conflictWaiting;
         if (refusal.conflictContainerId.isNotEmpty) {
           _conflictName = widget.containers
                   .where((c) => c.id == refusal.conflictContainerId)
@@ -2984,7 +3233,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               '';
         }
         _serverNote = rest.isNotEmpty
-            ? rest.map((c) => _containerErrorText(l10n, c)).join(' ')
+            ? rest.map((c) => containerErrorText(l10n, c)).join(' ')
             : (fieldCodes.isEmpty
                 ? (refusal.message.isNotEmpty
                     ? refusal.message
@@ -3000,6 +3249,102 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     }
   }
 
+  /// Registers a package that waits for a container, or corrects one. The
+  /// sheet closes with what was saved - or, on "add another", stays open on
+  /// the same customer for the next box.
+  Future<void> _saveWaiting(
+    ContainerLineDraft draft, {
+    required bool andAnother,
+    required bool printLabel,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final existing = widget.existing;
+    if (existing != null) {
+      await widget.caller(
+        'updateContainerLine',
+        updateWaitingPackageRequest(widget.businessId, existing.id, draft),
+      );
+      // The price is audited and checked against what was paid, so it goes
+      // through its own callable.
+      if (packagePriceChanged(existing, draft)) {
+        await widget.caller(
+          'setContainerLinePrice',
+          setPackagePriceRequest(
+            widget.businessId,
+            existing.id,
+            priceCents: draft.priceCents,
+            payOnArrival: draft.payOnArrival,
+          ),
+        );
+      }
+      if (!mounted) return;
+      AppHaptics.commit();
+      widget.onLineAdded?.call();
+      Navigator.of(context).pop(WaitingPackageSaved(
+        lineId: existing.id,
+        trackingCode: existing.trackingCode,
+        edited: true,
+        line: existing,
+      ));
+      showSuccessSnackBar(context, l10n.wpkUpdated);
+      return;
+    }
+    final data = await widget.caller(
+      'addWaitingPackage',
+      addWaitingPackageRequest(widget.businessId, draft),
+    );
+    final map = data is Map ? data : const {};
+    final lineId = (map['lineId'] ?? '').toString();
+    final code = (map['trackingCode'] ?? '').toString();
+    final saved = WaitingPackageSaved(
+      lineId: lineId,
+      trackingCode: code,
+      printLabel: printLabel,
+      line: ContainerLine.fromMap(lineId, {
+        ...addWaitingPackageRequest(widget.businessId, draft),
+        'containerId': '',
+        'containerStatus': containerLineStatusWaiting,
+        'trackingCode': code,
+      }),
+    );
+    if (!mounted) return;
+    AppHaptics.commit();
+    widget.onLineAdded?.call();
+    if (andAnother) {
+      // The same customer's next box: the people, the country and the
+      // WhatsApp switches stay; everything about the box itself starts over.
+      setState(() {
+        _addedThisSitting.add(
+          '${draft.kind == containerLineKindCar ? draft.vinNumber : _tallyLabel(l10n, draft)}'
+          '${saved.trackingCode.isEmpty ? '' : ' (${saved.trackingCode})'}',
+        );
+        _pickedCar = null;
+        _inLot = null;
+        for (final c in [
+          _vin, _make, _model, _year, _quantity, _description, _lotFilter,
+          _length, _width, _height, _price,
+        ]) {
+          c.clear();
+        }
+        _vinHint = '';
+        _decodedVin = '';
+        _conflictName = '';
+        _conflictWaiting = false;
+        _payOnArrival = false;
+        _errors = {};
+        _serverNote = '';
+      });
+      return;
+    }
+    Navigator.of(context).pop(saved);
+    showSuccessSnackBar(
+      context,
+      saved.trackingCode.isEmpty
+          ? l10n.wpkSavedNoCode
+          : l10n.wpkSaved(saved.trackingCode),
+    );
+  }
+
   static const _fieldCodes = {
     'vin_required',
     'vin_already_loaded',
@@ -3008,13 +3353,22 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     'customer_name_required',
     'customer_phone_invalid',
     'receiver_phone_invalid',
+    'package_destination_required',
+    'size_invalid',
+    'price_invalid',
+    'price_below_paid',
   };
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     String? errorFor(String code) => _errors.contains(code)
-        ? _containerErrorText(l10n, code, conflictName: _conflictName)
+        ? containerErrorText(
+            l10n,
+            code,
+            conflictName: _conflictName,
+            conflictWaiting: _conflictWaiting,
+          )
         : null;
     final isCar = _kind == containerLineKindCar;
     final isOther = _kind == containerLineKindOther;
@@ -3025,8 +3379,12 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     final showOwner = !isCar || showCarFields;
 
     return LotSheetShell(
-      title: _editing ? l10n.ctrEditLine : l10n.ctrAddLine,
-      subtitle: widget.container.displayName,
+      title: _waiting
+          ? (_editing ? l10n.wpkEditPackage : l10n.wpkRegister)
+          : (_editing ? l10n.ctrEditLine : l10n.ctrAddLine),
+      subtitle: _waiting
+          ? l10n.wpkRegisterSubtitle
+          : widget.container!.displayName,
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -3035,8 +3393,30 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             _RefusalNote(text: _serverNote),
             const SizedBox(height: AppSpacing.sm),
           ],
+          // A waiting package: add another box for the same customer, or
+          // print this one's label now. Any kind of cargo, cars included.
+          if (_waiting && showOwner && !_editing) ...[
+            LotSheetButton(
+              key: const Key('line-save-and-another'),
+              label: l10n.wpkSaveAndAnother,
+              busy: _busy,
+              busyLabel: l10n.ctrAdding,
+              tone: LotTone.neutral,
+              onTap: () => _submit(andAnother: true),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            LotSheetButton(
+              key: const Key('line-save-and-print'),
+              label: l10n.wpkSaveAndPrint,
+              busy: _busy,
+              busyLabel: l10n.ctrAdding,
+              tone: LotTone.neutral,
+              onTap: () => _submit(printLabel: true),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           // One line edited is saved and closed; "add another" is for adding.
-          if (showOwner && !isCar && !_editing) ...[
+          if (!_waiting && showOwner && !isCar && !_editing) ...[
             LotSheetButton(
               key: const Key('line-save-and-another'),
               label: l10n.ctrSaveAndAnother,
@@ -3051,9 +3431,11 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             key: Key(_editing ? 'line-save-edit' : 'line-save'),
             label: _editing
                 ? l10n.lotSave
-                : (_addedThisSitting.isEmpty
-                    ? l10n.ctrAdd
-                    : l10n.ctrAddAndClose),
+                : (_waiting
+                    ? l10n.lotSave
+                    : (_addedThisSitting.isEmpty
+                        ? l10n.ctrAdd
+                        : l10n.ctrAddAndClose)),
             busy: _busy,
             busyLabel: _editing ? l10n.lotSaving : l10n.ctrAdding,
             onTap: _submit,
@@ -3063,7 +3445,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_editing) ...[
+          if (_editing && !_waiting) ...[
             Text(
               l10n.ctrEditLineNote,
               key: const Key('line-edit-note'),
@@ -3235,6 +3617,37 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               ),
             ),
           ],
+          if (_waiting && showOwner)
+            WaitingPackageFields(
+              destinationName: _destinationName,
+              onPickDestination: _pickDestination,
+              length: _length,
+              width: _width,
+              height: _height,
+              price: _price,
+              payOnArrival: _payOnArrival,
+              onPayOnArrival: (v) => setState(() => _payOnArrival = v),
+              onEdited: () {
+                if (_serverNote.isNotEmpty ||
+                    _errors.any(const {
+                      'size_invalid',
+                      'price_invalid',
+                      'price_below_paid',
+                    }.contains)) {
+                  setState(() {
+                    _serverNote = '';
+                    _errors = {..._errors}
+                      ..remove('size_invalid')
+                      ..remove('price_invalid')
+                      ..remove('price_below_paid');
+                  });
+                }
+              },
+              destinationError: errorFor('package_destination_required'),
+              sizeError: errorFor('size_invalid'),
+              priceError:
+                  errorFor('price_invalid') ?? errorFor('price_below_paid'),
+            ),
           if (showOwner) ...[
             const SizedBox(height: AppSpacing.lg),
             Text(
@@ -3247,12 +3660,15 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            LotChoiceCard(
-              title: l10n.ctrOwnerCustomer,
-              note: l10n.ctrOwnerCustomerNote,
-              selected: _owner == containerOwnerCustomer,
-              onTap: () => setState(() => _owner = containerOwnerCustomer),
-            ),
+            // A package dropped off is always a customer's: stock is not
+            // "dropped off", so there is nothing to choose.
+            if (!_waiting)
+              LotChoiceCard(
+                title: l10n.ctrOwnerCustomer,
+                note: l10n.ctrOwnerCustomerNote,
+                selected: _owner == containerOwnerCustomer,
+                onTap: () => setState(() => _owner = containerOwnerCustomer),
+              ),
             if (_owner == containerOwnerCustomer) ...[
               TextField(
                 key: const Key('line-customer'),
@@ -3325,15 +3741,16 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               ),
               const SizedBox(height: AppSpacing.sm),
             ],
-            LotChoiceCard(
-              title: l10n.ctrOwnerStock,
-              note: l10n.ctrOwnerStockNote,
-              selected: _owner == containerOwnerStock,
-              onTap: () => setState(() {
-                _owner = containerOwnerStock;
-                _errors = {..._errors}..remove('customer_name_required');
-              }),
-            ),
+            if (!_waiting)
+              LotChoiceCard(
+                title: l10n.ctrOwnerStock,
+                note: l10n.ctrOwnerStockNote,
+                selected: _owner == containerOwnerStock,
+                onTap: () => setState(() {
+                  _owner = containerOwnerStock;
+                  _errors = {..._errors}..remove('customer_name_required');
+                }),
+              ),
             const SizedBox(height: AppSpacing.md),
             TextField(
               key: const Key('line-receiver'),
@@ -3349,16 +3766,24 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               fieldKey: 'line-receiver-phone',
               controller: _receiverPhone,
               label: l10n.ctrReceiverPhone,
-              initialCountryCode: widget.receiverCountryCode,
+              initialCountryCode: _waiting ? _receiverCountry : widget.receiverCountryCode,
               errorText: errorFor('receiver_phone_invalid'),
               notify: _notifyReceiver,
               onNotifyChanged: (v) => setState(() => _notifyReceiver = v),
               onChanged: () => _clearError('receiver_phone_invalid'),
             ),
-            if (!isCar && !_editing) ...[
+            if (!isCar && !_editing && !_waiting) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(
                 l10n.ctrSplitHint,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            ],
+            if (_waiting && !_editing) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                l10n.wpkNoNotice,
+                key: const Key('wpk-no-notice'),
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),
             ],
@@ -3599,7 +4024,7 @@ class _LineContactsSheetState extends State<_LineContactsSheet> {
       setState(() {
         _errors = fieldCodes;
         _serverNote = rest.isNotEmpty
-            ? rest.map((c) => _containerErrorText(l10n, c)).join(' ')
+            ? rest.map((c) => containerErrorText(l10n, c)).join(' ')
             : (fieldCodes.isEmpty
                 ? (refusal.message.isNotEmpty
                     ? refusal.message
@@ -3619,7 +4044,7 @@ class _LineContactsSheetState extends State<_LineContactsSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     String? errorFor(String code) =>
-        _errors.contains(code) ? _containerErrorText(l10n, code) : null;
+        _errors.contains(code) ? containerErrorText(l10n, code) : null;
 
     return LotSheetShell(
       title: l10n.ctrEditContacts,
@@ -4097,6 +4522,17 @@ class _RefusalNote extends StatelessWidget {
   }
 }
 
+/// [_RefusalNote] for the waiting-package sheets, which live in their own
+/// files and say a refusal the same way.
+class ContainerRefusalNote extends StatelessWidget {
+  const ContainerRefusalNote({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => _RefusalNote(text: text);
+}
+
 // ---------------------------------------------------------------------------
 // Shared bits: the state pill, kinds, counts, and the refusal vocabulary.
 // ---------------------------------------------------------------------------
@@ -4114,6 +4550,7 @@ class ContainerStatusPill extends StatelessWidget {
     final color = switch (status) {
       containerStatusShipped => AppColors.cobalt,
       containerStatusArrived => AppColors.sage,
+      containerLineStatusWaiting => AppColors.muted,
       _ => AppColors.warn,
     };
     return Container(
@@ -4139,6 +4576,7 @@ class ContainerStatusPill extends StatelessWidget {
 String _statusLabel(AppLocalizations l10n, String status) => switch (status) {
       containerStatusShipped => l10n.ctrStatusShipped,
       containerStatusArrived => l10n.ctrStatusArrived,
+      containerLineStatusWaiting => l10n.ctrStatusWaiting,
       _ => l10n.ctrStatusLoading,
     };
 
@@ -4176,10 +4614,11 @@ String _countsText(AppLocalizations l10n, int cars, int barrels, int other) {
 
 /// One vocabulary of refusals, whether the screen refused locally or the
 /// server did: both speak the codes in `functions/container_manifest.js`.
-String _containerErrorText(
+String containerErrorText(
   AppLocalizations l10n,
   String code, {
   String conflictName = '',
+  bool conflictWaiting = false,
 }) {
   return switch (code) {
     'container_label_required' => l10n.ctrErrLabelRequired,
@@ -4200,10 +4639,32 @@ String _containerErrorText(
     'customer_name_required' => l10n.lotErrCustomerName,
     'customer_phone_invalid' => l10n.ctrErrCustomerPhoneInvalid,
     'receiver_phone_invalid' => l10n.ctrErrReceiverPhoneInvalid,
-    'vin_already_loaded' => conflictName.isEmpty
-        ? l10n.ctrErrVinAlreadyLoaded
-        : l10n.ctrErrVinAlreadyLoadedIn(conflictName),
+    'vin_already_loaded' => conflictWaiting
+        ? l10n.ctrErrVinAlreadyWaiting
+        : conflictName.isEmpty
+            ? l10n.ctrErrVinAlreadyLoaded
+            : l10n.ctrErrVinAlreadyLoadedIn(conflictName),
+    'vin_already_waiting' => l10n.ctrErrVinAlreadyWaiting,
     'move_target_not_loading' => l10n.ctrErrMoveTarget,
+    // Waiting packages: copy in lib/l10n (wpkErr*), the server's own words.
+    'package_destination_required' => l10n.wpkErrDestinationRequired,
+    'destination_mismatch' => l10n.wpkErrDestinationMismatch,
+    'container_destination_required' => l10n.wpkErrContainerDestinationRequired,
+    'size_invalid' => l10n.wpkErrSizeInvalid,
+    'line_not_waiting' => l10n.wpkErrLineNotWaiting,
+    'line_is_waiting' => l10n.wpkErrLineIsWaiting,
+    'line_not_in_container' => l10n.wpkErrLineNotInContainer,
+    'line_ids_invalid' => l10n.wpkErrLineIdsInvalid,
+    'line_has_payments' => l10n.wpkErrLineHasPayments,
+    'price_invalid' => l10n.wpkErrPriceInvalid,
+    'price_below_paid' => l10n.wpkErrPriceBelowPaid,
+    'price_required' => l10n.wpkErrPriceRequired,
+    'amount_required' => l10n.wpkErrAmountRequired,
+    'amount_too_large' => l10n.wpkErrAmountTooLarge,
+    'payment_method_invalid' => l10n.wpkErrMethodInvalid,
+    'payment_exceeds_balance' => l10n.wpkErrExceedsBalance,
+    'payment_not_found' => l10n.wpkErrPaymentNotFound,
+    'payment_already_reverted' => l10n.wpkErrPaymentReverted,
     _ => l10n.lotCouldNotSave,
   };
 }
@@ -4211,7 +4672,7 @@ String _containerErrorText(
 /// What to say for a refusal the server sent back: its codes in our words,
 /// naming the conflicting container when it named one; the server's own
 /// message when it spoke no code we know.
-String _refusalText(
+String containerRefusalText(
   AppLocalizations l10n,
   FirebaseFunctionsException error, {
   Map<String, ShippingContainer> containers = const {},
@@ -4222,7 +4683,12 @@ String _refusalText(
   }
   final conflict = containers[refusal.conflictContainerId]?.displayName ?? '';
   return refusal.codes
-      .map((c) => _containerErrorText(l10n, c, conflictName: conflict))
+      .map((c) => containerErrorText(
+            l10n,
+            c,
+            conflictName: conflict,
+            conflictWaiting: refusal.conflictWaiting,
+          ))
       .join(' ');
 }
 
@@ -4258,6 +4724,45 @@ String containerReceiverCountryCode(
             )) ??
     containerCustomerCountryCode(businessCountryCode);
 
+/// Picks the country a container or a waiting package is going to: the
+/// business's own destinations first, then every other country, so a business
+/// that lists none under Services & coverage still has the whole world to
+/// choose from, never an empty sheet. Null when dismissed.
+Future<({String id, String name})?> pickContainerDestination(
+  BuildContext context, {
+  required List<DestinationCountry> destinations,
+  String selectedId = '',
+}) async {
+  final l10n = AppLocalizations.of(context)!;
+  final ownIds = {for (final d in destinations) d.id};
+  final own = [...destinations]..sort((a, b) => a.name.compareTo(b.name));
+  final rest = [
+    for (final c in CountryCatalog.all)
+      if (!ownIds.contains(c.id)) c,
+  ]..sort((a, b) => a.name.compareTo(b.name));
+  final picked = await pickLotSearchableOption<String>(
+    context,
+    title: l10n.ctrDestination,
+    searchHint: l10n.ctrSearchCountries,
+    selected: selectedId,
+    sections: [
+      if (own.isNotEmpty)
+        LotOptionSection(l10n.ctrYourDestinations, [
+          for (final d in own) LotOption(d.id, d.name, detail: d.code),
+        ]),
+      LotOptionSection(
+        own.isEmpty ? l10n.ctrEveryCountry : l10n.ctrEveryOtherCountry,
+        [for (final c in rest) LotOption(c.id, c.name, detail: c.code)],
+      ),
+    ],
+  );
+  if (picked == null) return null;
+  final country = [...destinations, ...CountryCatalog.all]
+      .where((d) => d.id == picked)
+      .firstOrNull;
+  return (id: picked, name: country?.name ?? picked);
+}
+
 /// Opens the contacts sheet for [line]; on a save, confirms it and returns
 /// true. Correctable in every container state.
 Future<bool> editContainerLineContacts(
@@ -4275,11 +4780,22 @@ Future<bool> editContainerLineContacts(
       businessId: businessId,
       line: line,
       customerCountryCode: containerCustomerCountryCode(businessCountryCode),
-      receiverCountryCode: containerReceiverCountryCode(
-        container,
-        destinations: destinations,
-        businessCountryCode: businessCountryCode,
-      ),
+      // A package with no container yet opens on the country it is going to.
+      receiverCountryCode: container == null && line.destinationCountryId.isNotEmpty
+          ? (CallingCodeCatalog.countryCodeForReference(
+                line.destinationCountryId,
+                extra: destinations,
+              ) ??
+              CallingCodeCatalog.countryCodeForReference(
+                line.destinationCountryName,
+                extra: destinations,
+              ) ??
+              containerCustomerCountryCode(businessCountryCode))
+          : containerReceiverCountryCode(
+              container,
+              destinations: destinations,
+              businessCountryCode: businessCountryCode,
+            ),
     ),
   );
   if (saved != true || !context.mounted) return false;
@@ -4329,25 +4845,72 @@ Future<bool> editContainerLine(
   return saved == true;
 }
 
+/// Opens the register form for a package dropped off before any container:
+/// the same form as a line on a container, with where it is going, its size
+/// and its price. Registers a new one, or corrects [existing]. Answers what
+/// was saved - null when dismissed - so the caller can print its label.
+Future<WaitingPackageSaved?> showWaitingPackageSheet(
+  BuildContext context, {
+  required String businessId,
+  List<ShippingContainer> containers = const [],
+  List<ContainerLine> lines = const [],
+  List<LotCustomer> customers = const [],
+  List<LotKnownCar> knownCars = const [],
+  List<Map<String, dynamic>> parkedCarRows = const [],
+  String businessCountryCode = '',
+  List<DestinationCountry> destinations = const [],
+  ContainerLine? existing,
+  VoidCallback? onLineAdded,
+  ContainerCallableCaller caller = callContainerCallable,
+}) {
+  final start = existing == null
+      ? defaultWaitingDestination(destinations)
+      : DestinationRef(
+          existing.destinationCountryId, existing.destinationCountryName);
+  return showLotSheet<WaitingPackageSaved>(
+    context,
+    _LineFormSheet(
+      businessId: businessId,
+      containers: containers,
+      lines: lines,
+      customers: customers,
+      knownCars: knownCars,
+      parkedCarRows: parkedCarRows,
+      customerCountryCode: containerCustomerCountryCode(businessCountryCode),
+      receiverCountryCode: containerCustomerCountryCode(businessCountryCode),
+      onLineAdded: onLineAdded,
+      existing: existing,
+      waiting: true,
+      destinations: destinations,
+      defaultDestination: start,
+      caller: caller,
+    ),
+  );
+}
+
 /// The print-labels sheet for every package on [container], or for [line]
 /// alone. [opener] fetches the page and opens it (a fake in tests).
+///
+/// A package still waiting for a container has none: pass the [line] alone and
+/// the labels are asked for by line id, printable before any container exists.
 Future<void> showContainerLabelSheet(
   BuildContext context, {
   required String businessId,
-  required ShippingContainer container,
+  ShippingContainer? container,
   ContainerLine? line,
   ContainerLabelOpener opener = openContainerLabels,
 }) {
+  assert(container != null || line != null);
   final l10n = AppLocalizations.of(context)!;
   return showLotSheet<bool>(
     context,
     LabelPrintSheet(
       subtitle: line == null
-          ? l10n.ctrPrintLabelsAll(container.displayName)
+          ? l10n.ctrPrintLabelsAll(container!.displayName)
           : l10n.ctrPrintLabelsOne(containerLineTitle(l10n, line)),
       onPrint: (choice) => opener(
         businessId: businessId,
-        containerId: container.id,
+        containerId: container?.id ?? '',
         choice: choice,
         lineId: line?.id ?? '',
       ),
@@ -4382,6 +4945,32 @@ Widget containerLineFormSheetForTesting({
       customerCountryCode: customerCountryCode,
       receiverCountryCode: receiverCountryCode,
       existing: existing,
+    );
+
+/// The register-a-waiting-package sheet, on its own. [caller] stands in for
+/// the callables.
+@visibleForTesting
+Widget waitingPackageSheetForTesting({
+  required ContainerCallableCaller caller,
+  List<DestinationCountry> destinations = const [],
+  DestinationRef? defaultDestination,
+  ContainerLine? existing,
+  List<ContainerLine> lines = const [],
+  List<LotCustomer> customers = const [],
+}) =>
+    _LineFormSheet(
+      businessId: 'b1',
+      containers: const [],
+      lines: lines,
+      customers: customers,
+      knownCars: const [],
+      customerCountryCode: 'US',
+      receiverCountryCode: 'GN',
+      existing: existing,
+      waiting: true,
+      destinations: destinations,
+      defaultDestination: defaultDestination,
+      caller: caller,
     );
 
 /// The contacts sheet for [line], on its own.

@@ -175,18 +175,30 @@ class LabelPrintChoice {
 /// The `getContainerDocumentUrl` payload for labels: the whole container,
 /// or one line's labels when [lineId] is given. Format and copies are
 /// clamped to what the server accepts (`labelFormat` / `labelCopies`).
+///
+/// With no [containerId] - packages still waiting for a container - the
+/// server asks for the lines by id instead (`lineIds`, 1..100): [lineIds],
+/// else the one [lineId].
 Map<String, Object> containerLabelsRequest({
   required String businessId,
   required String containerId,
   required LabelPrintChoice choice,
   String lineId = '',
-}) =>
-    {
-      'businessId': businessId,
-      'containerId': containerId,
-      'view': 'labels',
-      'format':
-          choice.format == labelFormatThermal ? labelFormatThermal : labelFormatSheet,
-      'copies': choice.copies == 1 ? 1 : 2,
-      if (lineId.trim().isNotEmpty) 'lineId': lineId.trim(),
-    };
+  List<String> lineIds = const [],
+}) {
+  final byLines = containerId.trim().isEmpty;
+  final ids = {
+    for (final id in [...lineIds, lineId])
+      if (id.trim().isNotEmpty) id.trim(),
+  }.toList();
+  return {
+    'businessId': businessId,
+    'containerId': containerId,
+    'view': 'labels',
+    'format':
+        choice.format == labelFormatThermal ? labelFormatThermal : labelFormatSheet,
+    'copies': choice.copies == 1 ? 1 : 2,
+    if (byLines && ids.isNotEmpty) 'lineIds': ids,
+    if (!byLines && lineId.trim().isNotEmpty) 'lineId': lineId.trim(),
+  };
+}

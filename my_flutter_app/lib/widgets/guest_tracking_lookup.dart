@@ -585,6 +585,8 @@ String _stageLabel(AppLocalizations l10n, GuestTrackingStage stage) {
   return switch (stage) {
     GuestTrackingStage.awaitingPayment =>
       l10n.guestTrackingStageAwaitingPayment,
+    GuestTrackingStage.waitingContainer =>
+      l10n.guestTrackingStageWaitingContainer,
     GuestTrackingStage.booked => l10n.guestTrackingStageBooked,
     GuestTrackingStage.inTransit => l10n.guestTrackingStageInTransit,
     GuestTrackingStage.arrived => l10n.guestTrackingStageArrived,

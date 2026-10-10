@@ -4813,5 +4813,226 @@
   "sendBarrelSharedPromoTitle": "Can’t fill a barrel?",
   "sendBarrelSharedPromoHint": "Join an open shared barrel or reserve a share.",
   "transportJobCancelledNotice": "This transport job was cancelled.",
-  "shipmentLockedNotice": "This shipment can no longer be edited because pickup has arrived or the request is already being processed."
+  "shipmentLockedNotice": "This shipment can no longer be edited because pickup has arrived or the request is already being processed.",
+  "ctrStatusWaiting": "Waiting",
+  "wpkWaitingTitle": "Waiting for a container",
+  "wpkEntryCount": "{count, plural, =0{No packages waiting} =1{1 package waiting} other{{count} packages waiting}}",
+  "@wpkEntryCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wpkEntryHint": "Dropped off, no container yet",
+  "wpkRegister": "Register a package",
+  "wpkEditPackage": "Edit package",
+  "wpkRegisterSubtitle": "It waits here until a container takes it.",
+  "wpkNoNotice": "Nobody is messaged when a package is registered or added to a container. The first WhatsApp message goes out when the container ships.",
+  "wpkEmptyTitle": "No packages are waiting.",
+  "wpkEmptyHint": "Register one when a customer drops it off.",
+  "wpkNoMatch": "No waiting package matches that search.",
+  "wpkDroppedOff": "Dropped off {date}",
+  "@wpkDroppedOff": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkSizeTitle": "Size in inches (optional)",
+  "wpkLength": "Length",
+  "wpkWidth": "Width",
+  "wpkHeight": "Height",
+  "wpkSizeHint": "Length × width × height. All three, or leave them empty.",
+  "wpkPrice": "Price (US dollars)",
+  "wpkPriceHint": "Leave empty if there is no price yet.",
+  "wpkPayOnArrival": "Pay on arrival",
+  "wpkPayOnArrivalNote": "The team at the destination will record the money.",
+  "wpkSaveAndPrint": "Save & print label",
+  "wpkSaveAndAnother": "Save & add another for the same customer",
+  "wpkSaved": "Package saved: {code}",
+  "@wpkSaved": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkSavedNoCode": "Package saved.",
+  "wpkUpdated": "Package updated.",
+  "wpkRemove": "Remove package",
+  "wpkRemoveTitle": "Remove this package?",
+  "wpkRemoveMessage": "It leaves the waiting list and its label stops working.",
+  "wpkRemoved": "Package removed.",
+  "wpkMoney": "Price & payments",
+  "wpkSendBack": "Send back to waiting",
+  "wpkSendBackTitle": "Send back to waiting?",
+  "wpkSendBackMessage": "{title} leaves {container}. Its label and code stay the same.",
+  "@wpkSendBackMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkSentBack": "Package sent back to waiting.",
+  "wpkPayNoPrice": "No price yet",
+  "wpkPayUnpaid": "Unpaid",
+  "wpkPayPartial": "Partial",
+  "wpkPayPaid": "Paid",
+  "wpkPaidOfPrice": "{paid} of {price}",
+  "@wpkPaidOfPrice": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkStillOwed": "{amount} still owed",
+  "@wpkStillOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkRecordPayment": "Record a payment",
+  "wpkAmountReceived": "Amount received (US dollars)",
+  "wpkPayWholeBalance": "Pay the whole balance",
+  "wpkMethod": "How it arrived",
+  "wpkNote": "Note (optional)",
+  "wpkSavePrice": "Save price",
+  "wpkPriceSaved": "Price saved.",
+  "wpkPaymentRecorded": "Payment recorded.",
+  "wpkPaymentsTitle": "Payments",
+  "wpkNoPayments": "No payments recorded yet.",
+  "wpkRevert": "Revert",
+  "wpkRevertTitle": "Revert this payment?",
+  "wpkRevertMessage": "The {amount} payment is struck through and the balance goes back up.",
+  "@wpkRevertMessage": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkReverted": "Payment reverted.",
+  "wpkRevertedMark": "Reverted",
+  "wpkRevertedBy": "Reverted by {name}",
+  "@wpkRevertedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkRecordedBy": "recorded by {name}",
+  "@wpkRecordedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkAddWaiting": "Add waiting packages",
+  "wpkAddWaitingCount": "Add waiting packages · {count}",
+  "@wpkAddWaitingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wpkAddWaitingNote": "Tick the packages that go on {container}.",
+  "@wpkAddWaitingNote": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkNoneWaiting": "No packages are waiting for a container.",
+  "wpkSelectAll": "Select all matching",
+  "wpkClear": "Clear",
+  "wpkSelected": "{count} selected",
+  "@wpkSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wpkAddToContainer": "Add to container",
+  "wpkAdded": "{count, plural, =1{Added 1 package to {container}.} other{Added {count} packages to {container}.}}",
+  "@wpkAdded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkTickOne": "Tick at least one package.",
+  "wpkBlockedMismatch": "For {from}, this container goes to {to}.",
+  "@wpkBlockedMismatch": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkWaitingExplain": "Received at the counter. It goes on a container headed to {destination} when one is loading.",
+  "@wpkWaitingExplain": {
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkWaitingExplainAny": "Received at the counter. It goes on a container when one is loading.",
+  "wpkSizeFact": "Size: {dimensions} · {volume}",
+  "@wpkSizeFact": {
+    "placeholders": {
+      "dimensions": {
+        "type": "String"
+      },
+      "volume": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkPriceFact": "Price & payments",
+  "wpkNoPriceYet": "No price set yet.",
+  "ctrErrVinAlreadyWaiting": "This car is already waiting for a container.",
+  "wpkErrDestinationRequired": "Choose where this package is going.",
+  "wpkErrDestinationMismatch": "A package can only go on a container headed to the same country.",
+  "wpkErrContainerDestinationRequired": "Choose where this container is going before adding packages to it.",
+  "wpkErrSizeInvalid": "Enter the length, width and height in inches, or leave all three empty.",
+  "wpkErrLineNotWaiting": "That package is already on a container.",
+  "wpkErrLineIsWaiting": "This package is waiting for a container. Add it to one from the waiting list.",
+  "wpkErrLineNotInContainer": "That package is not on a container.",
+  "wpkErrLineIdsInvalid": "Choose between 1 and 100 packages.",
+  "wpkErrLineHasPayments": "Payments are recorded for this package. Revert them first.",
+  "wpkErrPriceInvalid": "Enter the price in dollars, more than zero.",
+  "wpkErrPriceBelowPaid": "The price can't be less than what has been paid.",
+  "wpkErrPriceRequired": "Set a price before recording a payment.",
+  "wpkErrAmountRequired": "Enter the amount received.",
+  "wpkErrAmountTooLarge": "That amount is larger than a package can carry.",
+  "wpkErrMethodInvalid": "Say how the payment arrived.",
+  "wpkErrExceedsBalance": "That is more than what is still owed.",
+  "wpkErrPaymentNotFound": "That payment no longer exists.",
+  "wpkErrPaymentReverted": "That payment was already reverted.",
+  "guestTrackingStageWaitingContainer": "Received, waiting for a container"
 }

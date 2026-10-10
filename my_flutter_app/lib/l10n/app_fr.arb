@@ -4813,5 +4813,226 @@
   "sendBarrelSharedPromoTitle": "Vous ne remplissez pas un baril ?",
   "sendBarrelSharedPromoHint": "Rejoignez un baril partagé ouvert ou réservez une part.",
   "transportJobCancelledNotice": "Ce transport a été annulé.",
-  "shipmentLockedNotice": "Cet envoi ne peut plus être modifié : l’enlèvement a eu lieu ou la demande est déjà en cours de traitement."
+  "shipmentLockedNotice": "Cet envoi ne peut plus être modifié : l’enlèvement a eu lieu ou la demande est déjà en cours de traitement.",
+  "ctrStatusWaiting": "En attente",
+  "wpkWaitingTitle": "En attente d'un conteneur",
+  "wpkEntryCount": "{count, plural, =0{Aucun colis en attente} =1{1 colis en attente} other{{count} colis en attente}}",
+  "@wpkEntryCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wpkEntryHint": "Déposés, pas encore de conteneur",
+  "wpkRegister": "Enregistrer un colis",
+  "wpkEditPackage": "Modifier le colis",
+  "wpkRegisterSubtitle": "Il attend ici qu'un conteneur le prenne.",
+  "wpkNoNotice": "Personne n'est contacté quand un colis est enregistré ou ajouté à un conteneur. Le premier message WhatsApp part quand le conteneur est expédié.",
+  "wpkEmptyTitle": "Aucun colis en attente.",
+  "wpkEmptyHint": "Enregistrez-en un quand un client le dépose.",
+  "wpkNoMatch": "Aucun colis en attente ne correspond à cette recherche.",
+  "wpkDroppedOff": "Déposé le {date}",
+  "@wpkDroppedOff": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkSizeTitle": "Dimensions en pouces (facultatif)",
+  "wpkLength": "Longueur",
+  "wpkWidth": "Largeur",
+  "wpkHeight": "Hauteur",
+  "wpkSizeHint": "Longueur × largeur × hauteur. Les trois, ou laissez vide.",
+  "wpkPrice": "Prix (dollars US)",
+  "wpkPriceHint": "Laissez vide s'il n'y a pas encore de prix.",
+  "wpkPayOnArrival": "Paiement à l'arrivée",
+  "wpkPayOnArrivalNote": "L'équipe à destination enregistrera le paiement.",
+  "wpkSaveAndPrint": "Enregistrer et imprimer l'étiquette",
+  "wpkSaveAndAnother": "Enregistrer et en ajouter un pour le même client",
+  "wpkSaved": "Colis enregistré : {code}",
+  "@wpkSaved": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkSavedNoCode": "Colis enregistré.",
+  "wpkUpdated": "Colis mis à jour.",
+  "wpkRemove": "Retirer le colis",
+  "wpkRemoveTitle": "Retirer ce colis ?",
+  "wpkRemoveMessage": "Il quitte la liste d'attente et son étiquette ne fonctionnera plus.",
+  "wpkRemoved": "Colis retiré.",
+  "wpkMoney": "Prix et paiements",
+  "wpkSendBack": "Remettre en attente",
+  "wpkSendBackTitle": "Remettre en attente ?",
+  "wpkSendBackMessage": "{title} quitte {container}. Son étiquette et son code restent les mêmes.",
+  "@wpkSendBackMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkSentBack": "Colis remis en attente.",
+  "wpkPayNoPrice": "Pas encore de prix",
+  "wpkPayUnpaid": "Impayé",
+  "wpkPayPartial": "Partiel",
+  "wpkPayPaid": "Payé",
+  "wpkPaidOfPrice": "{paid} sur {price}",
+  "@wpkPaidOfPrice": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkStillOwed": "{amount} restant dû",
+  "@wpkStillOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkRecordPayment": "Enregistrer un paiement",
+  "wpkAmountReceived": "Montant reçu (dollars US)",
+  "wpkPayWholeBalance": "Payer tout le solde",
+  "wpkMethod": "Mode de paiement",
+  "wpkNote": "Note (facultatif)",
+  "wpkSavePrice": "Enregistrer le prix",
+  "wpkPriceSaved": "Prix enregistré.",
+  "wpkPaymentRecorded": "Paiement enregistré.",
+  "wpkPaymentsTitle": "Paiements",
+  "wpkNoPayments": "Aucun paiement enregistré.",
+  "wpkRevert": "Annuler",
+  "wpkRevertTitle": "Annuler ce paiement ?",
+  "wpkRevertMessage": "Le paiement de {amount} est barré et le solde remonte.",
+  "@wpkRevertMessage": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkReverted": "Paiement annulé.",
+  "wpkRevertedMark": "Annulé",
+  "wpkRevertedBy": "Annulé par {name}",
+  "@wpkRevertedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkRecordedBy": "enregistré par {name}",
+  "@wpkRecordedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkAddWaiting": "Ajouter des colis en attente",
+  "wpkAddWaitingCount": "Ajouter des colis en attente · {count}",
+  "@wpkAddWaitingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wpkAddWaitingNote": "Cochez les colis qui vont sur {container}.",
+  "@wpkAddWaitingNote": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkNoneWaiting": "Aucun colis n'attend de conteneur.",
+  "wpkSelectAll": "Tout sélectionner",
+  "wpkClear": "Effacer",
+  "wpkSelected": "{count, plural, =1{1 sélectionné} other{{count} sélectionnés}}",
+  "@wpkSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wpkAddToContainer": "Ajouter au conteneur",
+  "wpkAdded": "{count, plural, =1{1 colis ajouté à {container}.} other{{count} colis ajoutés à {container}.}}",
+  "@wpkAdded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "container": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkTickOne": "Cochez au moins un colis.",
+  "wpkBlockedMismatch": "Pour {from} ; ce conteneur va vers {to}.",
+  "@wpkBlockedMismatch": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkWaitingExplain": "Reçu au comptoir. Il partira sur un conteneur à destination de {destination} dès qu'un sera en chargement.",
+  "@wpkWaitingExplain": {
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkWaitingExplainAny": "Reçu au comptoir. Il partira sur un conteneur dès qu'un sera en chargement.",
+  "wpkSizeFact": "Taille : {dimensions} · {volume}",
+  "@wpkSizeFact": {
+    "placeholders": {
+      "dimensions": {
+        "type": "String"
+      },
+      "volume": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkPriceFact": "Prix et paiements",
+  "wpkNoPriceYet": "Aucun prix défini pour l'instant.",
+  "ctrErrVinAlreadyWaiting": "Cette voiture attend déjà un conteneur.",
+  "wpkErrDestinationRequired": "Choisissez la destination de ce colis.",
+  "wpkErrDestinationMismatch": "Un colis ne peut aller que sur un conteneur à destination du même pays.",
+  "wpkErrContainerDestinationRequired": "Choisissez la destination de ce conteneur avant d'y ajouter des colis.",
+  "wpkErrSizeInvalid": "Saisissez la longueur, la largeur et la hauteur en pouces, ou laissez les trois vides.",
+  "wpkErrLineNotWaiting": "Ce colis est déjà sur un conteneur.",
+  "wpkErrLineIsWaiting": "Ce colis attend un conteneur. Ajoutez-le à un conteneur depuis la liste d'attente.",
+  "wpkErrLineNotInContainer": "Ce colis n'est pas sur un conteneur.",
+  "wpkErrLineIdsInvalid": "Choisissez entre 1 et 100 colis.",
+  "wpkErrLineHasPayments": "Des paiements sont enregistrés pour ce colis. Annulez-les d'abord.",
+  "wpkErrPriceInvalid": "Saisissez le prix en dollars, supérieur à zéro.",
+  "wpkErrPriceBelowPaid": "Le prix ne peut pas être inférieur à ce qui a été payé.",
+  "wpkErrPriceRequired": "Définissez un prix avant d'enregistrer un paiement.",
+  "wpkErrAmountRequired": "Saisissez le montant reçu.",
+  "wpkErrAmountTooLarge": "Ce montant dépasse ce qu'un colis peut porter.",
+  "wpkErrMethodInvalid": "Indiquez comment le paiement est arrivé.",
+  "wpkErrExceedsBalance": "C'est plus que ce qui reste dû.",
+  "wpkErrPaymentNotFound": "Ce paiement n'existe plus.",
+  "wpkErrPaymentReverted": "Ce paiement a déjà été annulé.",
+  "guestTrackingStageWaitingContainer": "Reçu, en attente d'un conteneur"
 }

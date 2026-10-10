@@ -260,7 +260,12 @@ void main() {
     });
     expect(result.record!.service, GuestTrackingServiceType.container);
     expect(result.record!.stage, GuestTrackingStage.inTransit);
-    for (final stage in ['booked', 'in_transit', 'arrived']) {
+    for (final stage in [
+      'waiting_container',
+      'booked',
+      'in_transit',
+      'arrived',
+    ]) {
       expect(
         () => GuestTrackingRecord.fromMap({
           'trackingCode': 'CL-K7M4P2',
@@ -271,6 +276,34 @@ void main() {
       );
     }
   });
+
+  // A package dropped off before any container has a stage of its own; the
+  // lookup used to refuse it as "unsupported" and show a failure for a code
+  // that was found.
+  for (final (locale, stage) in [
+    (const Locale('en'), 'Received, waiting for a container'),
+    (const Locale('fr'), "Reçu, en attente d'un conteneur"),
+  ]) {
+    testWidgets('a waiting package reads as received, not as an error '
+        '(${locale.languageCode})', (tester) async {
+      final service = _FakeGuestTrackingService(
+        (_) async => GuestTrackingResult.fromMap({
+          'version': 1,
+          'found': true,
+          'record': {
+            'trackingCode': 'CL-K7M4P2',
+            'service': 'container',
+            'stage': 'waiting_container',
+          },
+        }),
+      );
+      await _pumpLookup(tester, service, initialCode: 'CL-K7M4P2',
+          locale: locale);
+      await tester.pumpAndSettle();
+      expect(find.text(stage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   for (final (locale, label, stage) in [
     (const Locale('en'), 'Container shipment', 'In transit'),

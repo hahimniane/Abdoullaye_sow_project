@@ -147,6 +147,7 @@ Future<void> openContainerLabels({
   required String containerId,
   required LabelPrintChoice choice,
   String lineId = '',
+  List<String> lineIds = const [],
 }) async {
   final response = await FirebaseFunctions.instance
       .httpsCallable('getContainerDocumentUrl')
@@ -155,6 +156,7 @@ Future<void> openContainerLabels({
         containerId: containerId,
         choice: choice,
         lineId: lineId,
+        lineIds: lineIds,
       ));
   final data = response.data;
   final url = data is Map ? (data['url'] ?? '').toString() : '';
