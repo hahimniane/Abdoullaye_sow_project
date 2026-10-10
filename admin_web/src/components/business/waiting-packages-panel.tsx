@@ -101,6 +101,8 @@ type WaitingPackagesPanelProps = {
   customerPhoneCountry: string;
   knownCustomers: readonly LotCustomer[];
   staffName: (id: string) => string;
+  /** Who can be named as having taken a payment's money. */
+  staffOptions: readonly { id: string; name: string }[];
   onFlash: (message: string) => void;
   /** Counters stay off while the business is a preview. */
   enabled: boolean;
@@ -127,6 +129,7 @@ export function WaitingPackagesPanel({
   customerPhoneCountry,
   knownCustomers,
   staffName,
+  staffOptions,
   onFlash,
   enabled,
 }: WaitingPackagesPanelProps) {
@@ -543,6 +546,7 @@ export function WaitingPackagesPanel({
           businessId={businessId}
           line={paymentLine}
           staffName={staffName}
+          staffOptions={staffOptions}
           onClose={closeModal}
           onFlash={onFlash}
         />

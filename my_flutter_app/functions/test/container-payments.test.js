@@ -56,7 +56,8 @@ describe("a package's price", () => {
 
 describe("recording a payment", () => {
   const line = (extra = {}) => ({priceCents: 15000, paidCents: 0, ...extra});
-  const pay = (extra = {}) => ({amountCents: 5000, method: "cash", ...extra});
+  const pay = (extra = {}) => ({amountCents: 5000, method: "cash",
+    receivedByStaffId: "staff-1", ...extra});
 
   it("takes any amount up to what is still owed", () => {
     assert.deepEqual(validateLinePayment(pay(), line()), []);
@@ -90,8 +91,22 @@ describe("recording a payment", () => {
         line()), ["amount_too_large"]);
     assert.deepEqual(validateLinePayment(pay({method: "barter"}), line()),
         ["payment_method_invalid"]);
-    assert.deepEqual(validateLinePayment({amountCents: 0, method: ""},
-        line()), ["amount_required", "payment_method_invalid"]);
+    assert.deepEqual(validateLinePayment({amountCents: 0, method: "",
+      receivedByStaffId: "s"}, line()),
+    ["amount_required", "payment_method_invalid"]);
+  });
+
+  it("needs to say who took the money, as parking does", () => {
+    for (const blank of ["", "   ", null, undefined]) {
+      assert.deepEqual(validateLinePayment(pay({receivedByStaffId: blank}),
+          line()), ["received_by_required"], String(blank));
+    }
+    const noOne = {amountCents: 5000, method: "cash"};
+    assert.deepEqual(validateLinePayment(noOne, line()),
+        ["received_by_required"]);
+    // Every problem at once, in the order the screens mirror.
+    assert.deepEqual(validateLinePayment({amountCents: 0, method: ""}, line()),
+        ["amount_required", "payment_method_invalid", "received_by_required"]);
   });
 
   it("uses the same ways of paying as invoices do", () => {
@@ -103,8 +118,10 @@ describe("recording a payment", () => {
 
   it("is stored as whole cents with a trimmed note, not reverted", () => {
     assert.deepEqual(linePaymentRecord({amountCents: "5000.4",
-      method: "zelle", note: "  paid by the sister  "}),
+      method: "zelle", note: "  paid by the sister  ",
+      receivedByStaffId: "  staff-1 "}, "uid-9"),
     {amountCents: 5000, method: "zelle", note: "paid by the sister",
+      receivedByStaffId: "staff-1", recordedByStaffId: "uid-9",
       reverted: false});
     assert.equal(linePaymentRecord({amountCents: 100, method: "cash",
       note: "x".repeat(500)}).note.length, 200);
@@ -173,7 +190,7 @@ describe("the words the screens show", () => {
     for (const code of ["price_invalid", "price_below_paid", "price_required",
       "amount_required", "amount_too_large", "payment_method_invalid",
       "payment_exceeds_balance", "payment_not_found",
-      "payment_already_reverted"]) {
+      "payment_already_reverted", "received_by_required"]) {
       assert.ok(CONTAINER_MESSAGES[code], code);
     }
   });

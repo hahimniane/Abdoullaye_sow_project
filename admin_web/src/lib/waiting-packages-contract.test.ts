@@ -101,6 +101,24 @@ for (const [name, source, path] of [
   });
 }
 
+test("the payment dialog asks who took the money exactly like parking does", () => {
+  // A required select, blank by default, fed the business's people.
+  assert.match(paymentSource, /<span>Received by<\/span>[\s\S]*?<option value="">Choose staff<\/option>[\s\S]*?staffOptions\.map/);
+  assert.match(paymentSource, /receivedByStaffId: e\.target\.value/);
+  assert.match(paymentSource, /staffOptions: readonly \{ id: string; name: string \}\[\]/);
+  // The history says who held it and, when someone else typed it in, who did.
+  assert.match(paymentSource, /<span>Received by<\/span> <span data-no-translate>\{received\}/);
+  assert.match(paymentSource, /<span>entered by<\/span> <span data-no-translate>\{entered\}/);
+  assert.match(paymentSource, /entry\.recordedByStaffId !== entry\.receivedByStaffId/);
+  // The list panel passes the staff list on, built once from the staff index.
+  assert.match(panelSource, /staffOptions=\{staffOptions\}/);
+  assert.match(containersSource, /staffOptionsFrom\(staffNames\)/);
+  assert.match(containersSource, /staffOptions=\{staffOptions\}/);
+  for (const english of ["Received by", "Choose staff", "entered by", "Say which staff member took the payment."]) {
+    assert.ok(english in TEXT_TRANSLATIONS || english in ATTRIBUTE_TRANSLATIONS, english);
+  }
+});
+
 test("the sentences the pure modules build for the new screens have their French", () => {
   const strings: string[] = [
     ...Object.values(CONTAINER_MESSAGES),
@@ -208,4 +226,10 @@ test("a package with no container reads 'Waiting for a container', never 'Contai
 test("the destinations list sets the main destination through the server, one at a time", () => {
   assert.match(operationsSource, /const changes = mainDestinationChanges\(destinations\.rows, row\.isMain === true \? "" : row\.id\);/);
   assert.match(operationsSource, /httpsCallable\(functions, "setMainDestination"\)\(\{ businessId, countryId: row\.isMain === true \? "" : row\.id \}\)/);
+});
+
+test("the destinations page lists only the countries in use; Add country brings others in", () => {
+  assert.match(operationsSource, /import \{ destinationIsInUse \} from "@\/lib\/destination-visibility";/);
+  assert.match(operationsSource, /\.filter\(\(row\) => destinationIsInUse\(/);
+  assert.doesNotMatch(operationsSource, /showAllCountries/);
 });

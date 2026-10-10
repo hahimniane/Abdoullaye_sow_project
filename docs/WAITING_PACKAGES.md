@@ -38,8 +38,12 @@ Rules of the road
 | `documentToken` | string | secret behind the labels link (minted on first `getContainerDocumentUrl` with `lineIds`) |
 
 `containerLinePayments/{id}` (server-write only): `businessId`, `lineId`,
-`amountCents`, `method`, `note`, `receivedByStaffId`, `createdAt`,
-`reverted`, and once reverted `revertedByStaffId`, `revertedAt`.
+`amountCents`, `method`, `note`, `receivedByStaffId` (who held the money,
+chosen in the payment sheet, as for parking and lot payments),
+`recordedByStaffId` (who typed it in: the signed-in uid, which differs when
+one person enters another's cash), `createdAt`, `reverted`, and once reverted
+`revertedByStaffId`, `revertedAt`. Payments written before `recordedByStaffId`
+existed carry only `receivedByStaffId` (then the uid who typed it).
 Methods: `cash, zelle, cashapp, venmo, check, card_in_person, other`
 (`INVOICE_PAYMENT_METHODS`).
 
@@ -62,7 +66,8 @@ New codes: `package_destination_required`, `destination_mismatch`,
 `line_is_waiting`, `line_not_in_container`, `line_ids_invalid`,
 `line_has_payments`, `price_invalid`, `price_below_paid`, `price_required`,
 `amount_required`, `amount_too_large`, `payment_method_invalid`,
-`payment_exceeds_balance`, `payment_not_found`, `payment_already_reverted`,
+`received_by_required`, `payment_exceeds_balance`, `payment_not_found`,
+`payment_already_reverted`,
 `vin_already_waiting` (message only; see VIN below).
 
 ## Callables
@@ -125,9 +130,15 @@ non-positive/non-integer price, `price_below_paid` for a price under what was
 paid (or clearing it after a payment). Both fields are written every call.
 
 ### `recordContainerLinePayment`
-`{businessId, lineId, amountCents, method, note?}` -> `{success, paymentId,
-paidCents}`. Needs a price (`price_required`), amount > 0 and <= balance
-(`payment_exceeds_balance`). Transactional: the paid total is recomputed from
+`{businessId, lineId, amountCents, method, receivedByStaffId, note?}` ->
+`{success, paymentId, paidCents}`. Needs a price (`price_required`), amount > 0
+and <= balance (`payment_exceeds_balance`), and **who took the money**
+(`receivedByStaffId`, trimmed, required: `received_by_required`, the same rule
+and wording as parking). The row stores `receivedByStaffId` = the chosen person
+and `recordedByStaffId` = the caller. The audit summary reads
+`Received $X (method) by <receiver> (entered by <caller>) for <package>`; the
+receiver is named only when it is one of this business's people (read from
+`users`), and "entered by" only when it is someone else. Transactional: the paid total is recomputed from
 the line's live payments, so concurrent payments cannot overpay.
 
 ### `revertContainerLinePayment`

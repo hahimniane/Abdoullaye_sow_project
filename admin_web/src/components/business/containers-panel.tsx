@@ -100,7 +100,7 @@ import {
 } from "@/lib/destination-countries";
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
-import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
+import { staffNameFrom, staffNameIndex, staffOptionsFrom } from "@/lib/staff-names";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
 import { CopyValue } from "@/components/copy-value";
@@ -312,6 +312,7 @@ export function ContainersPanel({
   // Built once per staff list, read per row (never a find() per row).
   const staffNames = useMemo(() => staffNameIndex(staff.rows), [staff.rows]);
   const staffName = (id: string) => staffNameFrom(staffNames, id);
+  const staffOptions = useMemo(() => staffOptionsFrom(staffNames), [staffNames]);
 
   // The business's own destination list, labelled in the reader's language,
   // offered first; then every other country. A container goes wherever the
@@ -1078,6 +1079,7 @@ export function ContainersPanel({
           customerPhoneCountry={customerPhoneCountry}
           knownCustomers={knownCustomers}
           staffName={staffName}
+          staffOptions={staffOptions}
           onFlash={setFlash}
           enabled={enabled}
         />

@@ -4441,6 +4441,7 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Espèces, Zelle, un chèque. Indiquez qui a reçu le paiement.",
   "How it was paid": "Mode de paiement",
   "Received by": "Reçu par",
+  "entered by": "saisi par",
   "Choose staff": "Choisir un membre",
   "Save changes": "Enregistrer les modifications",
   "Add expense line": "Ajouter une ligne de dépense",

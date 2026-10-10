@@ -4933,8 +4933,16 @@
       }
     }
   },
-  "wpkRecordedBy": "enregistré par {name}",
-  "@wpkRecordedBy": {
+  "wpkReceivedByName": "reçu par {name}",
+  "@wpkReceivedByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkEnteredBy": "saisi par {name}",
+  "@wpkEnteredBy": {
     "placeholders": {
       "name": {
         "type": "String"
@@ -5031,6 +5039,7 @@
   "wpkErrAmountRequired": "Saisissez le montant reçu.",
   "wpkErrAmountTooLarge": "Ce montant dépasse ce qu'un colis peut porter.",
   "wpkErrMethodInvalid": "Indiquez comment le paiement est arrivé.",
+  "wpkErrReceivedByRequired": "Indiquez quel employé a reçu le paiement.",
   "wpkErrExceedsBalance": "C'est plus que ce qui reste dû.",
   "wpkErrPaymentNotFound": "Ce paiement n'existe plus.",
   "wpkErrPaymentReverted": "Ce paiement a déjà été annulé.",

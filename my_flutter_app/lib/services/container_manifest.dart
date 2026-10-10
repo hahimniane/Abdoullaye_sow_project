@@ -116,6 +116,7 @@ const containerRefusalCodes = <String>[
   'amount_required',
   'amount_too_large',
   'payment_method_invalid',
+  'received_by_required',
   'payment_exceeds_balance',
   'payment_not_found',
   'payment_already_reverted',

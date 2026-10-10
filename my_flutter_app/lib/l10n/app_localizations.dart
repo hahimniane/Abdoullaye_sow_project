@@ -18972,11 +18972,17 @@ abstract class AppLocalizations {
   /// **'Reverted by {name}'**
   String wpkRevertedBy(String name);
 
-  /// No description provided for @wpkRecordedBy.
+  /// No description provided for @wpkReceivedByName.
   ///
   /// In en, this message translates to:
-  /// **'recorded by {name}'**
-  String wpkRecordedBy(String name);
+  /// **'received by {name}'**
+  String wpkReceivedByName(String name);
+
+  /// No description provided for @wpkEnteredBy.
+  ///
+  /// In en, this message translates to:
+  /// **'entered by {name}'**
+  String wpkEnteredBy(String name);
 
   /// No description provided for @wpkAddWaiting.
   ///
@@ -19169,6 +19175,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Say how the payment arrived.'**
   String get wpkErrMethodInvalid;
+
+  /// No description provided for @wpkErrReceivedByRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Say which staff member took the payment.'**
+  String get wpkErrReceivedByRequired;
 
   /// No description provided for @wpkErrExceedsBalance.
   ///

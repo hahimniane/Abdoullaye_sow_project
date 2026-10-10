@@ -289,6 +289,7 @@ import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { mainDestinationChanges } from "@/lib/waiting-packages";
+import { destinationIsInUse } from "@/lib/destination-visibility";
 import type { FirestoreRow } from "@/types/admin";
 
 type PanelProps = {
@@ -648,12 +649,21 @@ export function DestinationsPanel({
   const [formOpen, setFormOpen] = useState(false);
   const [handledOpenToken, setHandledOpenToken] = useState(0);
 
+  // A business can hold a record for every country (the platform's seed
+  // action writes the whole catalog). The page lists only the countries it
+  // uses - active, the main destination, or with a service on - and "Add
+  // country" brings any other one in, so unused records are never listed.
   const rows = useMemo(
     () =>
-      [...destinations.rows].sort((a, b) =>
-        destinationRowCountryName(a).localeCompare(destinationRowCountryName(b)),
-      ),
-    [destinations.rows],
+      [...destinations.rows]
+        .filter((row) => destinationIsInUse(
+          row,
+          Object.values(canonicalDestinationServiceAvailability(enabledServices, destinationServiceAvailability(row))).some(Boolean),
+        ))
+        .sort((a, b) =>
+          destinationRowCountryName(a).localeCompare(destinationRowCountryName(b)),
+        ),
+    [destinations.rows, enabledServices],
   );
   const filteredRows = useMemo(
     () => filterRows(rows, search, ["name", "destinationCountryName", "code", "countryCode", "barrelShippingPrice", "freightAirPricePerKg", "freightSeaPricePerKg"]),

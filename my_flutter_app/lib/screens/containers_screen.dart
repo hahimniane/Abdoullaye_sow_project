@@ -4662,6 +4662,7 @@ String containerErrorText(
     'amount_required' => l10n.wpkErrAmountRequired,
     'amount_too_large' => l10n.wpkErrAmountTooLarge,
     'payment_method_invalid' => l10n.wpkErrMethodInvalid,
+    'received_by_required' => l10n.wpkErrReceivedByRequired,
     'payment_exceeds_balance' => l10n.wpkErrExceedsBalance,
     'payment_not_found' => l10n.wpkErrPaymentNotFound,
     'payment_already_reverted' => l10n.wpkErrPaymentReverted,

@@ -170,7 +170,7 @@ test("a price never goes below what was paid, and cannot be taken away once mone
 
 test("a payment is refused the way the server refuses it", () => {
   const owing = packagePayment({ priceCents: 5000, paidCents: 2000 });
-  const ok = { ...emptyPackagePaymentDraft, amount: "30" };
+  const ok = { ...emptyPackagePaymentDraft, amount: "30", receivedByStaffId: "s1" };
   assert.deepEqual(validatePackagePaymentDraft(ok, owing), []);
   assert.deepEqual(validatePackagePaymentDraft({ ...ok, amount: "30.01" }, owing), ["payment_exceeds_balance"]);
   assert.deepEqual(validatePackagePaymentDraft({ ...ok, amount: "" }, owing), ["amount_required"]);
@@ -179,6 +179,15 @@ test("a payment is refused the way the server refuses it", () => {
   assert.deepEqual(validatePackagePaymentDraft({ ...ok, amount: "x" }, owing), ["amount_required"]);
   assert.deepEqual(validatePackagePaymentDraft({ ...ok, method: "bitcoin" as never }, owing), ["payment_method_invalid"]);
   assert.deepEqual(validatePackagePaymentDraft(ok, packagePayment({})), ["price_required"], "nothing to pay against");
+  // Who took the money is required, blank by default, as for parking; every problem at once, in the server's order.
+  assert.equal(emptyPackagePaymentDraft.receivedByStaffId, "");
+  assert.deepEqual(validatePackagePaymentDraft({ ...ok, receivedByStaffId: "" }, owing), ["received_by_required"]);
+  assert.deepEqual(validatePackagePaymentDraft({ ...ok, receivedByStaffId: "   " }, owing), ["received_by_required"]);
+  assert.deepEqual(
+    validatePackagePaymentDraft({ ...emptyPackagePaymentDraft, amount: "", method: "bitcoin" as never }, owing),
+    ["amount_required", "payment_method_invalid", "received_by_required"],
+  );
+  assert.equal(packagePaymentMessage(["received_by_required"]), "Say which staff member took the payment.");
   assert.deepEqual(validatePackagePaymentDraft(ok, packagePayment({ priceCents: 5000, paidCents: 5000 })), ["payment_exceeds_balance"]);
   assert.equal(packagePaymentMessage(["price_required"]), CONTAINER_MESSAGES.price_required);
 });
@@ -190,21 +199,39 @@ test("pay the whole balance fills the amount with what is left", () => {
   assert.equal(wholeBalanceInput(packagePayment({})), "");
   // And what it fills is accepted by the validator.
   const payment = packagePayment({ priceCents: 5000, paidCents: 1999 });
-  assert.deepEqual(validatePackagePaymentDraft({ ...emptyPackagePaymentDraft, amount: wholeBalanceInput(payment) }, payment), []);
+  assert.deepEqual(
+    validatePackagePaymentDraft({ ...emptyPackagePaymentDraft, amount: wholeBalanceInput(payment), receivedByStaffId: "s1" }, payment),
+    [],
+  );
 });
 
-test("the payment requests carry whole cents, the method id and a bounded note", () => {
+test("the payment requests carry whole cents, the method id, who took it and a bounded note", () => {
   assert.deepEqual(
-    recordPackagePaymentRequest(" biz ", "w1", { amount: "12,50", method: "zelle", note: "  deposit " }),
-    { businessId: "biz", lineId: "w1", amountCents: 1250, method: "zelle", note: "deposit" },
+    recordPackagePaymentRequest(" biz ", "w1", { amount: "12,50", method: "zelle", note: "  deposit ", receivedByStaffId: " s1 " }),
+    { businessId: "biz", lineId: "w1", amountCents: 1250, method: "zelle", receivedByStaffId: "s1", note: "deposit" },
   );
-  assert.equal(recordPackagePaymentRequest("b", "l", { amount: "1", method: "cash", note: "x".repeat(500) }).note.length, 200);
+  assert.equal(
+    recordPackagePaymentRequest("b", "l", { amount: "1", method: "cash", note: "x".repeat(500), receivedByStaffId: "s1" }).note.length,
+    200,
+  );
   assert.deepEqual(revertPackagePaymentRequest(" biz ", " p1 "), { businessId: "biz", paymentId: "p1" });
   assert.equal(packageMethodLabel("card_in_person"), "Card in person");
   assert.equal(packageMethodLabel("mystery"), "mystery");
 });
 
-test("payment history keeps reverted rows, marked, newest first, with who took and who reverted", () => {
+test("the server's payment validator asks for the same things, in the same order", () => {
+  const server = readFileSync(new URL("../../../my_flutter_app/functions/container_payments.js", import.meta.url), "utf8");
+  const codes = [...server.matchAll(/errors\.push\("([a-z_]+)"\)/g)].map((m) => m[1]);
+  const client = readFileSync(new URL("./waiting-packages.ts", import.meta.url), "utf8");
+  const start = client.indexOf("export function validatePackagePaymentDraft");
+  const end = client.indexOf("export function wholeBalanceInput");
+  const mirrored = [...client.slice(start, end).matchAll(/errors\.push\("([a-z_]+)"\)/g)].map((m) => m[1]);
+  // The client answers a missing price before anything else, so it never pushes that code.
+  assert.deepEqual(mirrored, codes.filter((code) => code !== "price_required"));
+  assert.ok(mirrored.includes("received_by_required"));
+});
+
+test("payment history keeps reverted rows, marked, newest first, with who took, who entered and who reverted", () => {
   const entries = packagePaymentEntries([
     { id: "a", amountCents: 1000, method: "cash", createdAt: new Date("2026-10-01T10:00:00Z"), receivedByStaffId: "s1" },
     { id: "b", amountCents: 500, method: "zelle", createdAt: new Date("2026-10-03T10:00:00Z"), receivedByStaffId: "s2", reverted: true, revertedByStaffId: "s1" },
@@ -216,6 +243,11 @@ test("payment history keeps reverted rows, marked, newest first, with who took a
   assert.equal(entries[0].methodLabel, "Zelle");
   assert.equal(entries[1].note, "ref 4");
   assert.equal(entries[2].reverted, false);
+  // Held by one person, typed in by another; older rows have no recorder.
+  const [held] = packagePaymentEntries([{ id: "d", amountCents: 100, method: "cash", receivedByStaffId: "cashier", recordedByStaffId: "owner" }]);
+  assert.equal(held.receivedByStaffId, "cashier");
+  assert.equal(held.recordedByStaffId, "owner");
+  assert.equal(entries[0].recordedByStaffId, "");
 });
 
 // ---------------------------------------------------------------------------

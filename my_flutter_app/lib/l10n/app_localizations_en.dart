@@ -10808,8 +10808,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String wpkRecordedBy(String name) {
-    return 'recorded by $name';
+  String wpkReceivedByName(String name) {
+    return 'received by $name';
+  }
+
+  @override
+  String wpkEnteredBy(String name) {
+    return 'entered by $name';
   }
 
   @override
@@ -10937,6 +10942,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get wpkErrMethodInvalid => 'Say how the payment arrived.';
+
+  @override
+  String get wpkErrReceivedByRequired =>
+      'Say which staff member took the payment.';
 
   @override
   String get wpkErrExceedsBalance => 'That is more than what is still owed.';

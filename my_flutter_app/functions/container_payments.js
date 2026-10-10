@@ -33,6 +33,7 @@ const PAYMENT_STATUS = Object.freeze({
 });
 
 const MAX_NOTE = 200;
+const MAX_STAFF_ID = 120;
 
 const text = (value, max = MAX_NOTE) =>
   String(value ?? "").trim().slice(0, max);
@@ -102,7 +103,8 @@ function linePriceRecord(input) {
 }
 
 /**
- * @param {object} input Raw callable data {amountCents, method, note}.
+ * @param {object} input Raw callable data {amountCents, method, note,
+ *   receivedByStaffId}.
  * @param {object} line The stored line, read inside the transaction.
  * @return {string[]} Error codes.
  */
@@ -122,18 +124,27 @@ function validateLinePayment(input, line) {
   if (!CONTAINER_PAYMENT_METHODS.includes(text(input?.method, 40))) {
     errors.push("payment_method_invalid");
   }
+  // Money taken at the counter must say who held it, so the cash can be
+  // reconciled: the same rule parking and lot payments follow.
+  if (!text(input?.receivedByStaffId, MAX_STAFF_ID)) {
+    errors.push("received_by_required");
+  }
   return errors;
 }
 
 /**
  * @param {object} input Validated callable data.
- * @return {object} The payment body (the caller adds who and when).
+ * @param {string} recordedByStaffId Who typed it in (the signed-in uid),
+ *   which is not always who held the money.
+ * @return {object} The payment body (the caller adds when).
  */
-function linePaymentRecord(input) {
+function linePaymentRecord(input, recordedByStaffId = "") {
   return {
     amountCents: Math.round(Number(input.amountCents)),
     method: text(input.method, 40),
     note: text(input.note),
+    receivedByStaffId: text(input.receivedByStaffId, MAX_STAFF_ID),
+    recordedByStaffId: text(recordedByStaffId, MAX_STAFF_ID),
     reverted: false,
   };
 }

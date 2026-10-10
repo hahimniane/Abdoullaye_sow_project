@@ -31,11 +31,19 @@ const db = admin.firestore();
 const BIZ = "container-test-biz";
 const OWNER = "container-test-owner";
 const NO_CONTAINERS = "container-test-ledger-only";
+// Who holds the cash at the counter; the owner types it in.
+const RECEIVER = "container-test-cashier";
+const OTHER_BIZ_STAFF = "container-test-other-business-staff";
 const VIN = "1HGCM82633A004352";
 
 const call = (name, data, uid = OWNER) =>
   functions[name].run({auth: {uid, token: {}}, data: {businessId: BIZ,
     ...data}});
+
+// A package payment says who took the money, as a parking one does.
+const pay = (data, uid = OWNER) =>
+  call("recordContainerLinePayment", {receivedByStaffId: RECEIVER, ...data},
+      uid);
 
 let boxes = 0;
 async function newContainer(extra = {}) {
@@ -123,6 +131,15 @@ before(async () => {
     }),
     db.collection("users").doc(OWNER).set({
       role: "businessOwner", businessId: BIZ, email: "owner@example.test",
+      fullName: "Dala Owner",
+    }),
+    db.collection("users").doc(RECEIVER).set({
+      role: "staff", businessId: BIZ, businessPermissions: ["containers"],
+      fullName: "Awa Cashier", email: "cashier@example.test",
+    }),
+    db.collection("users").doc(OTHER_BIZ_STAFF).set({
+      role: "staff", businessId: "some-other-business",
+      fullName: "Stranger Danger", email: "stranger@example.test",
     }),
     db.collection("users").doc(NO_CONTAINERS).set({
       role: "staff", businessId: BIZ, businessPermissions: ["ledger"],
@@ -839,7 +856,7 @@ describe("waiting packages", () => {
           assert.equal(reason.details.conflictWaiting, true);
         } else {
           assert.match(`${reason.code} ${reason.message}`,
-              /abort|contention/i);
+              /abort|contention|invalid or closed/i);
         }
       }
       const lock = await lockRef(vin).get();
@@ -1167,7 +1184,7 @@ describe("waiting packages", () => {
           await assert.rejects(call("updateContainerLine", {lineId,
             line: {lengthIn: 10}}),
           (error) => error.details?.reasons?.includes("size_invalid"));
-          await call("recordContainerLinePayment", {lineId,
+          await pay( {lineId,
             amountCents: 5000, method: "cash"});
           await assert.rejects(call("updateContainerLine", {lineId,
             line: {priceCents: 4000}}),
@@ -1217,7 +1234,7 @@ describe("waiting packages", () => {
           const vin = freshVin();
           const {lineId} = await call("addWaitingPackage", {...waitingCar(vin),
             priceCents: 10000});
-          await call("recordContainerLinePayment", {lineId,
+          await pay( {lineId,
             amountCents: 2000, method: "cash"});
           await assert.rejects(call("removeContainerLine", {lineId}),
               (error) => error.details?.reason === "line_has_payments");
@@ -1259,7 +1276,7 @@ describe("waiting packages", () => {
       let line = (await lineRef(lineId).get()).data();
       assert.equal(line.priceCents, 15000);
       assert.equal(line.payOnArrival, true);
-      await call("recordContainerLinePayment", {lineId, amountCents: 6000,
+      await pay( {lineId, amountCents: 6000,
         method: "zelle"});
       await assert.rejects(call("setContainerLinePrice", {lineId,
         priceCents: 5999, payOnArrival: true}),
@@ -1290,10 +1307,10 @@ describe("waiting packages", () => {
     it("records partial payments up to the price, who and when", async () => {
       const {lineId} = await call("addWaitingPackage",
           waitingPackage({priceCents: 15000}));
-      const first = await call("recordContainerLinePayment", {lineId,
+      const first = await pay( {lineId,
         amountCents: 5000, method: "cash", note: "at the counter"});
       assert.equal(first.paidCents, 5000);
-      const second = await call("recordContainerLinePayment", {lineId,
+      const second = await pay( {lineId,
         amountCents: 10000, method: "zelle"});
       assert.equal(second.paidCents, 15000);
       const rows = await payments(lineId);
@@ -1303,7 +1320,9 @@ describe("waiting packages", () => {
       assert.equal(row.amountCents, 5000);
       assert.equal(row.method, "cash");
       assert.equal(row.note, "at the counter");
-      assert.equal(row.receivedByStaffId, OWNER);
+      // The cashier held the money; the owner typed it in.
+      assert.equal(row.receivedByStaffId, RECEIVER);
+      assert.equal(row.recordedByStaffId, OWNER);
       assert.equal(row.reverted, false);
       assert.ok(row.createdAt);
       assert.equal((await lineRef(lineId).get()).get("paidCents"), 15000);
@@ -1313,24 +1332,69 @@ describe("waiting packages", () => {
       assert.equal(full.length, 1);
     });
 
+    it("refuses a payment that does not say who took the money", async () => {
+      const {lineId} = await call("addWaitingPackage",
+          waitingPackage({priceCents: 10000}));
+      for (const blank of [undefined, "", "   "]) {
+        await assert.rejects(call("recordContainerLinePayment",
+            {lineId, amountCents: 100, method: "cash",
+              receivedByStaffId: blank}),
+        (error) => error.code === "invalid-argument" &&
+            error.details?.reasons?.includes("received_by_required") &&
+            error.message === "Say which staff member took the payment.",
+        String(blank));
+      }
+      assert.equal((await payments(lineId)).length, 0);
+      assert.equal((await lineRef(lineId).get()).get("paidCents"), 0);
+    });
+
+    it("names who took it and who typed it in, when they differ",
+        async () => {
+          const {lineId} = await call("addWaitingPackage",
+              waitingPackage({priceCents: 10000}));
+          await pay({lineId, amountCents: 2000, method: "cash"});
+          // Typing in one's own receipt names the person once.
+          await pay({lineId, amountCents: 1000, method: "zelle",
+            receivedByStaffId: OWNER});
+          // Someone who is not this business's person is stored as chosen,
+          // but never named in the history.
+          await pay({lineId, amountCents: 500, method: "cash",
+            receivedByStaffId: OTHER_BIZ_STAFF});
+          const summaries = (await audits(lineId, "payment"))
+              .map((e) => e.summary);
+          const both = new RegExp("^Received \\$20\\.00 \\(cash\\) by " +
+            "Awa Cashier \\(entered by Dala Owner\\) for ");
+          assert.ok(summaries.some((t) => both.test(t)), summaries.join("|"));
+          assert.ok(summaries.some((t) =>
+            /^Received \$10\.00 \(zelle\) by Dala Owner for /.test(t) &&
+            !/entered by/.test(t)), summaries.join(" | "));
+          const stranger = summaries.find((t) => /\$5\.00/.test(t));
+          assert.doesNotMatch(stranger, /Stranger/);
+          assert.match(stranger,
+              /^Received \$5\.00 \(cash\) \(entered by Dala Owner\) for /);
+          assert.ok((await payments(lineId)).some((p) =>
+            p.receivedByStaffId === OTHER_BIZ_STAFF &&
+            p.recordedByStaffId === OWNER));
+        });
+
     it("refuses an overpayment, no price, and a bad payment", async () => {
       const unpriced = await call("addWaitingPackage", waitingPackage());
-      await assert.rejects(call("recordContainerLinePayment",
+      await assert.rejects(pay(
           {lineId: unpriced.lineId, amountCents: 100, method: "cash"}),
       (error) => error.details?.reasons?.includes("price_required"));
       const {lineId} = await call("addWaitingPackage",
           waitingPackage({priceCents: 10000}));
-      await call("recordContainerLinePayment", {lineId, amountCents: 7000,
+      await pay( {lineId, amountCents: 7000,
         method: "cash"});
-      await assert.rejects(call("recordContainerLinePayment",
+      await assert.rejects(pay(
           {lineId, amountCents: 3001, method: "cash"}),
       (error) => error.code === "invalid-argument" &&
           error.details?.reasons?.includes("payment_exceeds_balance"));
-      await assert.rejects(call("recordContainerLinePayment",
+      await assert.rejects(pay(
           {lineId, amountCents: 0, method: "barter"}),
       (error) => error.details?.reasons?.includes("amount_required") &&
           error.details?.reasons?.includes("payment_method_invalid"));
-      await assert.rejects(call("recordContainerLinePayment",
+      await assert.rejects(pay(
           {lineId, amountCents: 100, method: "cash"}, NO_CONTAINERS),
       (error) => error.code === "permission-denied");
       assert.equal((await lineRef(lineId).get()).get("paidCents"), 7000);
@@ -1341,7 +1405,7 @@ describe("waiting packages", () => {
       const {lineId} = await call("addWaitingPackage",
           waitingPackage({priceCents: 10000}));
       const results = await Promise.allSettled([1, 2, 3, 4].map(() =>
-        call("recordContainerLinePayment",
+        pay(
             {lineId, amountCents: 4000, method: "cash"})));
       const paid = (await lineRef(lineId).get()).get("paidCents");
       const live = (await payments(lineId)).reduce(
@@ -1355,9 +1419,9 @@ describe("waiting packages", () => {
     it("reverts a payment softly, and works the total out again", async () => {
       const {lineId} = await call("addWaitingPackage",
           waitingPackage({priceCents: 10000}));
-      const a = await call("recordContainerLinePayment", {lineId,
+      const a = await pay( {lineId,
         amountCents: 4000, method: "cash"});
-      await call("recordContainerLinePayment", {lineId, amountCents: 3000,
+      await pay( {lineId, amountCents: 3000,
         method: "venmo"});
       const reverted = await call("revertContainerLinePayment",
           {paymentId: a.paymentId});
@@ -1370,7 +1434,8 @@ describe("waiting packages", () => {
       assert.equal(row.reverted, true);
       assert.equal(row.revertedByStaffId, OWNER);
       assert.ok(row.revertedAt);
-      assert.equal(row.receivedByStaffId, OWNER);
+      assert.equal(row.receivedByStaffId, RECEIVER);
+      assert.equal(row.recordedByStaffId, OWNER);
       assert.equal(row.amountCents, 4000);
       await assert.rejects(call("revertContainerLinePayment",
           {paymentId: a.paymentId}),
@@ -1382,7 +1447,7 @@ describe("waiting packages", () => {
           {paymentId: a.paymentId}, NO_CONTAINERS),
       (error) => error.code === "permission-denied");
       // The room it made is usable again.
-      await call("recordContainerLinePayment", {lineId, amountCents: 7000,
+      await pay( {lineId, amountCents: 7000,
         method: "cash"});
       assert.equal((await lineRef(lineId).get()).get("paidCents"), 10000);
       assert.equal((await audits(lineId, "payment_reverted")).length, 1);
@@ -1397,7 +1462,7 @@ describe("waiting packages", () => {
             lineIds: [lineId]});
           await call("setContainerStatus", {containerId: box,
             status: "shipped"});
-          const result = await call("recordContainerLinePayment",
+          const result = await pay(
               {lineId, amountCents: 10000, method: "cash"});
           assert.equal(result.paidCents, 10000);
           assert.equal((await audits(box, "payment")).length, 1);

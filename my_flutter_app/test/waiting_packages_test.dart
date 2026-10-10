@@ -174,9 +174,14 @@ void main() {
     test('payments: a real amount, a price, never above the balance', () {
       final standing = packagePayment(
           _line('l', {'priceCents': 10000, 'paidCents': 2500}));
-      List<String> check(String amount, [String method = 'cash']) =>
+      List<String> check(String amount,
+              [String method = 'cash', String receivedBy = 's1']) =>
           validatePackagePayment(
-              amount: amount, method: method, standing: standing);
+            amount: amount,
+            method: method,
+            standing: standing,
+            receivedByStaffId: receivedBy,
+          );
       expect(check('75'), isEmpty);
       expect(check('20.50'), isEmpty);
       expect(check(''), ['amount_required']);
@@ -185,11 +190,21 @@ void main() {
       expect(check('999999999'), ['amount_too_large']);
       expect(check('10', 'barter'), ['payment_method_invalid']);
       expect(check('', 'barter'), ['amount_required', 'payment_method_invalid']);
+      // Who took the money is required, as for parking; every problem at
+      // once, in the server's order.
+      expect(check('10', 'cash', ''), ['received_by_required']);
+      expect(check('10', 'cash', '   '), ['received_by_required']);
+      expect(check('', 'barter', ''), [
+        'amount_required',
+        'payment_method_invalid',
+        'received_by_required',
+      ]);
       expect(
         validatePackagePayment(
           amount: '5',
           method: 'zelle',
           standing: packagePayment(_line('l')),
+          receivedByStaffId: 's1',
         ),
         ['price_required'],
       );
@@ -217,6 +232,7 @@ void main() {
           'amountCents': 2500,
           'method': 'cash',
           'receivedByStaffId': 's1',
+          'recordedByStaffId': ' s9 ',
           'createdAt': DateTime(2026, 10, 1, 9),
         }),
         ContainerLinePayment.fromMap('p2', {
@@ -235,6 +251,11 @@ void main() {
       expect(sorted.first.reverted, isTrue);
       expect(sorted.first.revertedByStaffId, 's2');
       expect(sorted.last.amountCents, 0, reason: 'a negative amount reads as 0');
+      // Who held it and who typed it in are two people; older rows have no
+      // recorder.
+      expect(sorted[1].receivedByStaffId, 's1');
+      expect(sorted[1].recordedByStaffId, 's9');
+      expect(sorted.first.recordedByStaffId, '');
     });
   });
 
@@ -459,12 +480,16 @@ void main() {
       );
       expect(
         recordPackagePaymentRequest('b1', 'l1',
-            amountCents: 7500, method: 'zelle', note: ' paid '),
+            amountCents: 7500,
+            method: 'zelle',
+            receivedByStaffId: ' s1 ',
+            note: ' paid '),
         {
           'businessId': 'b1',
           'lineId': 'l1',
           'amountCents': 7500,
           'method': 'zelle',
+          'receivedByStaffId': 's1',
           'note': 'paid',
         },
       );
@@ -545,6 +570,7 @@ void main() {
         'amount_required',
         'amount_too_large',
         'payment_method_invalid',
+        'received_by_required',
         'payment_exceeds_balance',
         'payment_not_found',
         'payment_already_reverted',

@@ -4933,8 +4933,16 @@
       }
     }
   },
-  "wpkRecordedBy": "recorded by {name}",
-  "@wpkRecordedBy": {
+  "wpkReceivedByName": "received by {name}",
+  "@wpkReceivedByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkEnteredBy": "entered by {name}",
+  "@wpkEnteredBy": {
     "placeholders": {
       "name": {
         "type": "String"
@@ -5031,6 +5039,7 @@
   "wpkErrAmountRequired": "Enter the amount received.",
   "wpkErrAmountTooLarge": "That amount is larger than a package can carry.",
   "wpkErrMethodInvalid": "Say how the payment arrived.",
+  "wpkErrReceivedByRequired": "Say which staff member took the payment.",
   "wpkErrExceedsBalance": "That is more than what is still owed.",
   "wpkErrPaymentNotFound": "That payment no longer exists.",
   "wpkErrPaymentReverted": "That payment was already reverted.",

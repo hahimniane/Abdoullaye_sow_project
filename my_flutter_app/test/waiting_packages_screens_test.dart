@@ -521,7 +521,17 @@ void main() {
   });
 
   group('price and payments sheet', () {
-    final staff = [const LotStaff(id: 's1', name: 'Awa Camara')];
+    final staff = [
+      const LotStaff(id: 's1', name: 'Awa Camara'),
+      const LotStaff(id: 's2', name: 'Ibrahima Sow'),
+    ];
+
+    /// Who took the money, picked the way the parking sheet does.
+    Future<void> pickReceivedBy(WidgetTester tester, String name) async {
+      await _tap(tester, 'pay-received-by');
+      await tester.tap(find.text(name));
+      await tester.pumpAndSettle();
+    }
 
     Widget sheet(
       _Calls calls, {
@@ -557,17 +567,21 @@ void main() {
       await _openSheet<void>(tester, sheet(calls));
       await _tap(tester, 'pay-whole-balance');
       expect(_field(tester, 'pay-amount'), '75');
+      await pickReceivedBy(tester, 'Awa Camara');
       await _tap(tester, 'pay-record');
 
       final sent = calls.of('recordContainerLinePayment').single;
       expect(sent['lineId'], 'w1');
       expect(sent['amountCents'], 7500);
       expect(sent['method'], 'cash');
+      expect(sent['receivedByStaffId'], 's1');
       // The server's total drives the screen: paid in full.
       expect(find.text('Paid'), findsOneWidget);
       expect(find.text(r'$100.00 of $100.00'), findsOneWidget);
       expect(find.text('Payment recorded.'), findsOneWidget);
       expect(_field(tester, 'pay-amount'), '');
+      // Back to blank: the next payment may be taken by someone else.
+      expect(find.text('Awa Camara'), findsNothing);
       // Nothing left to record.
       expect(find.text('Record a payment'), findsOneWidget);
       final button = find.byKey(const Key('pay-record'));
@@ -589,6 +603,40 @@ void main() {
       expect(calls.log, isEmpty);
     });
 
+    testWidgets('who took the money is required, and blank until chosen',
+        (tester) async {
+      final calls = _Calls()
+        ..answers['recordContainerLinePayment'] = {'paidCents': 3500};
+      await _openSheet<void>(tester, sheet(calls));
+      // Blank by default: the picker shows its label and nobody is named.
+      expect(find.byKey(const Key('pay-received-by')), findsOneWidget);
+      expect(find.text('Awa Camara'), findsNothing);
+      await _type(tester, 'pay-amount', '10');
+      await _tap(tester, 'pay-record');
+      expect(find.text('Say which staff member took the payment.'),
+          findsOneWidget);
+      expect(calls.log, isEmpty, reason: 'refused before the round trip');
+      // Choosing someone clears the message and lets it through.
+      await pickReceivedBy(tester, 'Ibrahima Sow');
+      expect(find.text('Say which staff member took the payment.'),
+          findsNothing);
+      await _tap(tester, 'pay-record');
+      expect(calls.of('recordContainerLinePayment').single['receivedByStaffId'],
+          's2');
+    });
+
+    testWidgets('the server\'s received_by_required refusal is said in words',
+        (tester) async {
+      final calls = _Calls()
+        ..refuse = (_) => _refusal('received_by_required');
+      await _openSheet<void>(tester, sheet(calls));
+      await _type(tester, 'pay-amount', '10');
+      await pickReceivedBy(tester, 'Awa Camara');
+      await _tap(tester, 'pay-record');
+      expect(find.text('Say which staff member took the payment.'),
+          findsOneWidget);
+    });
+
     testWidgets('how it arrived is chosen from the shared list', (tester) async {
       final calls = _Calls()
         ..answers['recordContainerLinePayment'] = {'paidCents': 3500};
@@ -598,6 +646,7 @@ void main() {
       await tester.pumpAndSettle();
       await _type(tester, 'pay-amount', '10');
       await _type(tester, 'pay-note', 'at the counter');
+      await pickReceivedBy(tester, 'Awa Camara');
       await _tap(tester, 'pay-record');
       final sent = calls.of('recordContainerLinePayment').single;
       expect(sent['method'], 'zelle');
@@ -610,6 +659,7 @@ void main() {
         ..refuse = (_) => _refusal('payment_exceeds_balance');
       await _openSheet<void>(tester, sheet(calls));
       await _type(tester, 'pay-amount', '10');
+      await pickReceivedBy(tester, 'Awa Camara');
       await _tap(tester, 'pay-record');
       expect(find.text('That is more than what is still owed.'), findsOneWidget);
       // Released: the paid total did not move.
@@ -627,6 +677,8 @@ void main() {
           'method': 'zelle',
           'note': 'deposit',
           'receivedByStaffId': 's1',
+          // Held by Awa, typed in by Ibrahima.
+          'recordedByStaffId': 's2',
           'createdAt': DateTime(2026, 10, 3, 14, 15),
         }),
         ContainerLinePayment.fromMap('p0', {
@@ -643,7 +695,11 @@ void main() {
       expect(find.byKey(const Key('pay-history')), findsOneWidget);
       expect(find.text(r'$25.00'), findsOneWidget);
       expect(find.textContaining('Oct 3, 2026 2:15'), findsOneWidget);
-      expect(find.textContaining('recorded by Awa Camara'), findsNWidgets(2));
+      expect(find.textContaining('received by Awa Camara'), findsNWidgets(2));
+      // Only the row someone else typed in says so; an older row has no
+      // recorder and a person is not named twice.
+      expect(find.textContaining('entered by Ibrahima Sow'), findsOneWidget);
+      expect(find.textContaining('entered by Awa Camara'), findsNothing);
       expect(find.text('deposit'), findsOneWidget);
       // A reverted payment stays, marked, with who reverted it, and offers no
       // second revert.
@@ -1162,7 +1218,10 @@ void main() {
         PackagePaymentSheet(
           businessId: 'b1',
           line: _waiting({'priceCents': 1234567, 'paidCents': 250000}),
-          staff: const [LotStaff(id: 's1', name: 'Awa Camara-Diallo')],
+          staff: const [
+            LotStaff(id: 's1', name: 'Awa Camara-Diallo'),
+            LotStaff(id: 's2', name: 'Ibrahima Sow-Barry'),
+          ],
           caller: _Calls().call,
           payments: _Payments([
             ContainerLinePayment.fromMap('p1', {
@@ -1170,6 +1229,7 @@ void main() {
               'method': 'card_in_person',
               'note': 'a long note that wraps over more than one line, easily',
               'receivedByStaffId': 's1',
+              'recordedByStaffId': 's2',
               'createdAt': DateTime(2026, 10, 3, 14, 15),
             }),
           ]),
@@ -1178,7 +1238,14 @@ void main() {
         width: 320,
       );
       expect(find.text(r'$2,500.00 sur $12,345.67'), findsOneWidget);
-      expect(find.textContaining('enregistré par Awa Camara-Diallo'),
+      expect(find.textContaining('reçu par Awa Camara-Diallo'),
+          findsOneWidget);
+      expect(find.textContaining('saisi par Ibrahima Sow-Barry'),
+          findsOneWidget);
+      // The picker and its message fit the narrowest phone, in French.
+      await _type(tester, 'pay-amount', '10');
+      await _tap(tester, 'pay-record');
+      expect(find.text('Indiquez quel employé a reçu le paiement.'),
           findsOneWidget);
       expect(tester.takeException(), isNull);
     });

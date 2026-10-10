@@ -16837,6 +16837,27 @@ function containerLineAudit(businessId, lineId, row, action, uid, summary) {
 }
 
 /**
+ * The name a business's own person goes by in its history, or "" when the
+ * id is not one of that business's people (a name never leaks across
+ * businesses) or has none.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business whose person this must be.
+ * @param {string} staffId The person's uid.
+ * @return {Promise<string>} The name, else "".
+ */
+async function businessStaffName(db, businessId, staffId) {
+  const id = String(staffId || "").trim();
+  if (!id || id.includes("/")) return "";
+  const doc = await db.collection("users").doc(id).get().catch(() => null);
+  const row = doc && doc.exists ? doc.data() || {} : null;
+  if (!row || String(row.businessId || "") !== businessId) return "";
+  return [row.fullName, row.name, row.email]
+      .map((value) => String(value || "").trim())
+      .find(Boolean) || "";
+}
+
+/**
  * What a package's history says it is: "3 barrels for Fatou Diallo".
  *
  * @param {object} row The line.
@@ -17824,12 +17845,13 @@ exports.recordContainerLinePayment = onCall(
           throw new HttpsError("invalid-argument", containerMessage(errors),
               {reasons: errors});
         }
-        const record = containerLinePaymentRecord(data);
+        // `receivedByStaffId` is who held the money (chosen, as for parking);
+        // `recordedByStaffId` is who typed it in (the signed-in person).
+        const record = containerLinePaymentRecord(data, uid);
         tx.set(payRef, {
           businessId,
           lineId,
           ...record,
-          receivedByStaffId: uid,
           createdAt: FirestoreFieldValue.serverTimestamp(),
         });
         const after = paidCents + record.amountCents;
@@ -17840,8 +17862,16 @@ exports.recordContainerLinePayment = onCall(
         return {row, record, paidCents: after};
       });
       const owed = Number(done.row.priceCents) || 0;
+      // Who took the money, and who typed it in when that is someone else.
+      const receiverName = await businessStaffName(
+          db, businessId, done.record.receivedByStaffId);
+      const recorderName = done.record.receivedByStaffId === uid ? "" :
+        await businessStaffName(db, businessId, uid);
       const summary = `Received ${lotMoney(done.record.amountCents)} ` +
-        `(${done.record.method}) for ${containerLineTitle(done.row)}` +
+        `(${done.record.method})` +
+        (receiverName ? ` by ${receiverName}` : "") +
+        (recorderName ? ` (entered by ${recorderName})` : "") +
+        ` for ${containerLineTitle(done.row)}` +
         (done.paidCents >= owed ? " — paid in full" : "");
       await containerLineAudit(businessId, lineId, done.row,
           "payment", uid, summary);

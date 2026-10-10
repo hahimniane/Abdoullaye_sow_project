@@ -55,6 +55,18 @@ void main() {
         reason: 'toFirestore must never write the flag');
   });
 
+  test('a package payment names who took the money, as parking does', () {
+    // The app sends it; the server requires it and stores both people.
+    expect(money, contains("'recordContainerLinePayment'"));
+    expect(money, contains('receivedByStaffId: _receivedBy'));
+    expect(read('lib/services/waiting_packages.dart'),
+        contains("'receivedByStaffId': receivedByStaffId.trim()"));
+    expect(payments, contains('"received_by_required"'));
+    expect(backend, contains('received_by_required: '));
+    expect(index, contains('containerLinePaymentRecord(data, uid)'));
+    expect(payments, contains('recordedByStaffId'));
+  });
+
   test('the payments and waiting packages are read the way the rules allow', () {
     // Both equalities: the rule authorises the read by business.
     expect(service, contains("collection('containerLinePayments')"));

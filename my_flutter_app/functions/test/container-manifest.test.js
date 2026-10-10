@@ -1101,7 +1101,9 @@ describe("the container callables and their gates", () => {
     const record = callable("recordContainerLinePayment");
     assert.match(record, /db\.runTransaction\(/);
     assert.match(record, /validateContainerLinePayment\(data/);
-    assert.match(record, /receivedByStaffId: uid/);
+    // Who held the money is the chosen person; who typed it in is the uid.
+    assert.match(record, /containerLinePaymentRecord\(data, uid\)/);
+    assert.doesNotMatch(record, /receivedByStaffId: uid/);
     assert.ok(record.indexOf("validateContainerLinePayment(") <
       record.indexOf("tx.set(payRef"));
     const revert = callable("revertContainerLinePayment");

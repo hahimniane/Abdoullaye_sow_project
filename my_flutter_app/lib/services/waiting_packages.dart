@@ -202,12 +202,14 @@ List<String> validatePackagePrice(String raw, int paidCents) {
 }
 
 /// The server's checks on `recordContainerLinePayment`, in its order: a real
-/// amount, a price to pay against, never above the balance, a known method.
-/// Mirrors `validateLinePayment`.
+/// amount, a price to pay against, never above the balance, a known method,
+/// and who took the money (as parking and lot payments ask). Mirrors
+/// `validateLinePayment`.
 List<String> validatePackagePayment({
   required String amount,
   required String method,
   required PackagePayment standing,
+  required String receivedByStaffId,
 }) {
   final errors = <String>[];
   final cents = readMoneyInput(amount).cents;
@@ -223,6 +225,7 @@ List<String> validatePackagePayment({
   if (!invoicePaymentMethods.contains(method.trim())) {
     errors.add('payment_method_invalid');
   }
+  if (receivedByStaffId.trim().isEmpty) errors.add('received_by_required');
   return errors;
 }
 
@@ -242,6 +245,7 @@ class ContainerLinePayment {
     required this.method,
     required this.note,
     required this.receivedByStaffId,
+    this.recordedByStaffId = '',
     required this.revertedByStaffId,
     required this.createdAt,
     required this.revertedAt,
@@ -253,7 +257,13 @@ class ContainerLinePayment {
   final int amountCents;
   final String method;
   final String note;
+
+  /// Who held the money (chosen when it was recorded).
   final String receivedByStaffId;
+
+  /// Who typed it in; empty on older rows, which stored only the person who
+  /// entered them (as the receiver).
+  final String recordedByStaffId;
   final String revertedByStaffId;
   final DateTime? createdAt;
   final DateTime? revertedAt;
@@ -275,6 +285,7 @@ class ContainerLinePayment {
       method: text(d['method'], 40),
       note: text(d['note'], 200),
       receivedByStaffId: text(d['receivedByStaffId'], containerMaxLabel),
+      recordedByStaffId: text(d['recordedByStaffId'], containerMaxLabel),
       revertedByStaffId: text(d['revertedByStaffId'], containerMaxLabel),
       createdAt: lotDateOf(d['createdAt']),
       revertedAt: lotDateOf(d['revertedAt']),
@@ -523,6 +534,7 @@ Map<String, Object?> recordPackagePaymentRequest(
   String lineId, {
   required int amountCents,
   required String method,
+  required String receivedByStaffId,
   String note = '',
 }) =>
     {
@@ -530,6 +542,7 @@ Map<String, Object?> recordPackagePaymentRequest(
       'lineId': lineId.trim(),
       'amountCents': amountCents,
       'method': method.trim(),
+      'receivedByStaffId': receivedByStaffId.trim(),
       'note': note.trim().length > 200 ? note.trim().substring(0, 200) : note.trim(),
     };
 

@@ -25,3 +25,8 @@ export function staffNameFrom(index: ReadonlyMap<string, string>, id: unknown): 
   const key = String(id ?? "").trim();
   return key ? index.get(key) ?? "" : "";
 }
+
+/** The business's people as `{id, name}` choices for a "Received by" select, in the index's order. */
+export function staffOptionsFrom(index: ReadonlyMap<string, string>): { id: string; name: string }[] {
+  return Array.from(index, ([id, name]) => ({ id, name }));
+}

@@ -93,6 +93,9 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
   late bool _savedPayOnArrival = widget.line.payOnArrival;
   late bool _payOnArrival = widget.line.payOnArrival;
   String _method = 'cash';
+
+  /// Who took the money: blank until chosen, as for parking.
+  String? _receivedBy;
   List<ContainerLinePayment> _payments = const [];
   bool _historyLoaded = false;
 
@@ -219,6 +222,7 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
       amount: _amount.text,
       method: _method,
       standing: standing,
+      receivedByStaffId: _receivedBy ?? '',
     );
     if (errors.isNotEmpty) {
       AppHaptics.refuse();
@@ -234,6 +238,7 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
           widget.line.id,
           amountCents: parseMoneyCents(_amount.text) ?? 0,
           method: _method,
+          receivedByStaffId: _receivedBy ?? '',
           note: _note.text,
         ),
       );
@@ -243,6 +248,8 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
         _paidCents = paid ?? _paidCents + (parseMoneyCents(_amount.text) ?? 0);
         _amount.clear();
         _note.clear();
+        // The next payment may be taken by someone else: start blank.
+        _receivedBy = null;
       });
       showSuccessSnackBar(context, l10n.wpkPaymentRecorded);
     });
@@ -288,6 +295,23 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
     );
     if (picked == null || !mounted) return;
     setState(() => _method = picked);
+  }
+
+  Future<void> _pickReceivedBy() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.lotReceivedBy,
+      selected: _receivedBy,
+      options: [
+        for (final member in widget.staff) LotOption(member.id, member.name),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _receivedBy = picked;
+      _errors = {..._errors}..remove('received_by_required');
+    });
   }
 
   @override
@@ -434,6 +458,15 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
               error: errorFor(['payment_method_invalid']),
             ),
             const SizedBox(height: AppSpacing.md),
+            LotPickerField(
+              key: const Key('pay-received-by'),
+              label: l10n.lotReceivedBy,
+              value: _staffName(_receivedBy ?? ''),
+              placeholder: l10n.lotReceivedBy,
+              onTap: busy ? () {} : _pickReceivedBy,
+              error: errorFor(['received_by_required']),
+            ),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               key: const Key('pay-note'),
               controller: _note,
@@ -475,6 +508,13 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
                     payment: payment,
                     locale: locale,
                     receivedBy: _staffName(payment.receivedByStaffId),
+                    // Only when someone else typed it in; older rows have no
+                    // recorder, and the same person is not named twice.
+                    enteredBy: payment.recordedByStaffId.isNotEmpty &&
+                            payment.recordedByStaffId !=
+                                payment.receivedByStaffId
+                        ? _staffName(payment.recordedByStaffId)
+                        : '',
                     revertedBy: _staffName(payment.revertedByStaffId),
                     busy: busy,
                     reverting: _busy == 'revert:${payment.id}',
@@ -494,6 +534,7 @@ class _PaymentRow extends StatelessWidget {
     required this.payment,
     required this.locale,
     required this.receivedBy,
+    required this.enteredBy,
     required this.revertedBy,
     required this.busy,
     required this.reverting,
@@ -503,6 +544,7 @@ class _PaymentRow extends StatelessWidget {
   final ContainerLinePayment payment;
   final String locale;
   final String receivedBy;
+  final String enteredBy;
   final String revertedBy;
   final bool busy;
   final bool reverting;
@@ -518,7 +560,8 @@ class _PaymentRow extends StatelessWidget {
     final detail = [
       containerPaymentMethodLabel(l10n, payment.method),
       if (when.isNotEmpty) when,
-      if (receivedBy.isNotEmpty) l10n.wpkRecordedBy(receivedBy),
+      if (receivedBy.isNotEmpty) l10n.wpkReceivedByName(receivedBy),
+      if (enteredBy.isNotEmpty) l10n.wpkEnteredBy(enteredBy),
     ].join(' · ');
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),

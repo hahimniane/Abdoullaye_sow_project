@@ -570,16 +570,19 @@ export type PackagePaymentDraft = {
   amount: string;
   method: InvoicePaymentMethod;
   note: string;
+  /** The staff member who took the money; blank until chosen, as for parking. */
+  receivedByStaffId: string;
 };
 
-export const emptyPackagePaymentDraft: PackagePaymentDraft = { amount: "", method: "cash", note: "" };
+export const emptyPackagePaymentDraft: PackagePaymentDraft = { amount: "", method: "cash", note: "", receivedByStaffId: "" };
 
 export type PackagePaymentError =
   | "price_required"
   | "amount_required"
   | "amount_too_large"
   | "payment_exceeds_balance"
-  | "payment_method_invalid";
+  | "payment_method_invalid"
+  | "received_by_required";
 
 export function packagePaymentMessage(codes: readonly PackagePaymentError[]): string {
   return containerMessage(codes);
@@ -589,7 +592,7 @@ export function packagePriceMessage(codes: readonly PackagePriceError[]): string
   return containerMessage(codes);
 }
 
-/** Same checks as the server's payment validator: a real amount, a known method, never above the balance. */
+/** Same checks as the server's payment validator: a real amount, a known method, who took it, never above the balance. */
 export function validatePackagePaymentDraft(draft: PackagePaymentDraft, payment: PackagePayment): PackagePaymentError[] {
   if (payment.balanceCents === null) return ["price_required"];
   const errors: PackagePaymentError[] = [];
@@ -601,6 +604,7 @@ export function validatePackagePaymentDraft(draft: PackagePaymentDraft, payment:
   if (!(INVOICE_PAYMENT_METHODS as readonly string[]).includes(text(draft.method, 40))) {
     errors.push("payment_method_invalid");
   }
+  if (!text(draft.receivedByStaffId, 120)) errors.push("received_by_required");
   return errors;
 }
 
@@ -616,6 +620,7 @@ export function recordPackagePaymentRequest(businessId: string, lineId: string, 
     lineId: text(lineId, 200),
     amountCents: readMoneyInput(draft.amount).cents ?? 0,
     method: text(draft.method, 40),
+    receivedByStaffId: text(draft.receivedByStaffId, 120),
     note: text(draft.note, MAX_NOTE),
   };
 }
@@ -636,7 +641,10 @@ export type PackagePaymentEntry = {
   method: string;
   methodLabel: string;
   note: string;
+  /** Who held the money. */
   receivedByStaffId: string;
+  /** Who typed it in; blank on older rows, which stored only the person who entered them as the receiver. */
+  recordedByStaffId: string;
   revertedByStaffId: string;
   at: unknown;
   reverted: boolean;
@@ -664,6 +672,7 @@ export function packagePaymentEntries(rows: readonly unknown[]): PackagePaymentE
       methodLabel: packageMethodLabel(row.method),
       note: text(row.note, MAX_NOTE),
       receivedByStaffId: text(row.receivedByStaffId, 200),
+      recordedByStaffId: text(row.recordedByStaffId, 200),
       revertedByStaffId: text(row.revertedByStaffId, 200),
       at: row.createdAt ?? null,
       reverted: row.reverted === true,

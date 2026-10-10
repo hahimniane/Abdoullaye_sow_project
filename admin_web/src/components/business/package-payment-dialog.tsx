@@ -47,12 +47,15 @@ export function PackagePaymentDialog({
   businessId,
   line,
   staffName,
+  staffOptions,
   onClose,
   onFlash,
 }: {
   businessId: string;
   line: Row;
   staffName: (id: string) => string;
+  /** The business's people, for "Received by". */
+  staffOptions: readonly { id: string; name: string }[];
   onClose: () => void;
   onFlash: (message: string) => void;
 }) {
@@ -84,6 +87,7 @@ export function PackagePaymentDialog({
     setError("");
     await runPackageCall(setBusy, async () => {
       await httpsCallable(functions, "recordContainerLinePayment")(recordPackagePaymentRequest(businessId, lineId, draft));
+      // The next payment may be taken by someone else: start blank, as parking does.
       setDraft(emptyPackagePaymentDraft);
       onFlash("Payment recorded.");
     }, fail);
@@ -167,6 +171,12 @@ export function PackagePaymentDialog({
                     {INVOICE_PAYMENT_METHODS.map((m) => (<option key={m} value={m}>{INVOICE_PAYMENT_METHOD_LABELS[m]}</option>))}
                   </select>
                 </label>
+                <label className="lst-field"><span>Received by</span>
+                  <select value={draft.receivedByStaffId} disabled={busy} onChange={(e) => setDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}>
+                    <option value="">Choose staff</option>
+                    {staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                  </select>
+                </label>
                 <label className="lst-field wide"><span>Note</span>
                   <input value={draft.note} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} placeholder="optional" disabled={busy} />
                 </label>
@@ -193,6 +203,10 @@ export function PackagePaymentDialog({
             <ul className="wpk-history">
               {entries.map((entry) => {
                 const received = staffName(entry.receivedByStaffId);
+                // Only when someone else typed it in; older rows have no such field.
+                const entered = entry.recordedByStaffId && entry.recordedByStaffId !== entry.receivedByStaffId
+                  ? staffName(entry.recordedByStaffId)
+                  : "";
                 const revertedBy = staffName(entry.revertedByStaffId);
                 return (
                   <li className={entry.reverted ? "wpk-reverted" : undefined} key={entry.id}>
@@ -202,7 +216,8 @@ export function PackagePaymentDialog({
                       {entry.note && <small data-no-translate>{entry.note}</small>}
                       <small>
                         <time data-no-translate>{formatDateTime(entry.at)}</time>
-                        {received && <> · <span data-no-translate>{received}</span></>}
+                        {received && <> · <span>Received by</span> <span data-no-translate>{received}</span></>}
+                        {entered && <> · <span>entered by</span> <span data-no-translate>{entered}</span></>}
                       </small>
                       {entry.reverted && (
                         <small className="wpk-reverted-note">
