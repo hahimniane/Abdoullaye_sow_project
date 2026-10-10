@@ -11128,4 +11128,57 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get guestTrackingStageWaitingContainer =>
       'Reçu, en attente d\'un conteneur';
+
+  @override
+  String get dstAddCountry => 'Ajouter un pays';
+
+  @override
+  String get dstAddCountryTitle => 'Ajouter un pays';
+
+  @override
+  String get dstAddCountrySearchHint => 'Rechercher un pays';
+
+  @override
+  String get dstAddCountryNone => 'Tous les pays sont déjà dans la liste.';
+
+  @override
+  String dstListedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count destinations utilisées',
+      one: '1 destination utilisée',
+      zero: 'Aucune destination utilisée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dstEmptyInstruction =>
+      'Vous n\'avez encore aucune destination. Touchez Ajouter un pays, choisissez où vous expédiez et activez les services que vous y proposez.';
+
+  @override
+  String get dstMakeMain => 'Définir comme principale';
+
+  @override
+  String get dstMainDestination => 'Destination principale';
+
+  @override
+  String get dstMainHelp => 'Les nouveaux colis s\'ouvrent sur ce pays';
+
+  @override
+  String get dstMainSaved => 'Destination principale enregistrée.';
+
+  @override
+  String get dstMainCleared => 'Destination principale retirée.';
+
+  @override
+  String get dstSeedConfirmTitle => 'Ajouter tous les pays ?';
+
+  @override
+  String get dstSeedConfirmBody =>
+      'Cela ajoute une fiche pour chaque pays, environ 250 au total. Ceux que vous n\'utilisez pas restent masqués dans cette liste, et vous pouvez toujours en ajouter un avec Ajouter un pays.';
+
+  @override
+  String get dstSeedConfirmAction => 'Ajouter tous les pays';
 }

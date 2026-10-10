@@ -10959,4 +10959,57 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get guestTrackingStageWaitingContainer =>
       'Received, waiting for a container';
+
+  @override
+  String get dstAddCountry => 'Add country';
+
+  @override
+  String get dstAddCountryTitle => 'Add a country';
+
+  @override
+  String get dstAddCountrySearchHint => 'Search countries';
+
+  @override
+  String get dstAddCountryNone => 'Every country is already listed.';
+
+  @override
+  String dstListedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count destinations in use',
+      one: '1 destination in use',
+      zero: 'No destinations in use',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dstEmptyInstruction =>
+      'You have no destinations yet. Tap Add country, pick where you ship to, and switch on the services you offer there.';
+
+  @override
+  String get dstMakeMain => 'Make main';
+
+  @override
+  String get dstMainDestination => 'Main destination';
+
+  @override
+  String get dstMainHelp => 'New packages open on this country';
+
+  @override
+  String get dstMainSaved => 'Main destination saved.';
+
+  @override
+  String get dstMainCleared => 'Main destination cleared.';
+
+  @override
+  String get dstSeedConfirmTitle => 'Add every country?';
+
+  @override
+  String get dstSeedConfirmBody =>
+      'This adds a record for every country, about 250 in all. The ones you do not use stay hidden from this list, and you can still bring any of them in with Add country.';
+
+  @override
+  String get dstSeedConfirmAction => 'Add all countries';
 }

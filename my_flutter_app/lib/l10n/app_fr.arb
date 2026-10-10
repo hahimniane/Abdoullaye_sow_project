@@ -5043,5 +5043,26 @@
   "wpkErrExceedsBalance": "C'est plus que ce qui reste dû.",
   "wpkErrPaymentNotFound": "Ce paiement n'existe plus.",
   "wpkErrPaymentReverted": "Ce paiement a déjà été annulé.",
-  "guestTrackingStageWaitingContainer": "Reçu, en attente d'un conteneur"
+  "guestTrackingStageWaitingContainer": "Reçu, en attente d'un conteneur",
+  "dstAddCountry": "Ajouter un pays",
+  "dstAddCountryTitle": "Ajouter un pays",
+  "dstAddCountrySearchHint": "Rechercher un pays",
+  "dstAddCountryNone": "Tous les pays sont déjà dans la liste.",
+  "dstListedCount": "{count, plural, =0{Aucune destination utilisée} =1{1 destination utilisée} other{{count} destinations utilisées}}",
+  "@dstListedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dstEmptyInstruction": "Vous n'avez encore aucune destination. Touchez Ajouter un pays, choisissez où vous expédiez et activez les services que vous y proposez.",
+  "dstMakeMain": "Définir comme principale",
+  "dstMainDestination": "Destination principale",
+  "dstMainHelp": "Les nouveaux colis s'ouvrent sur ce pays",
+  "dstMainSaved": "Destination principale enregistrée.",
+  "dstMainCleared": "Destination principale retirée.",
+  "dstSeedConfirmTitle": "Ajouter tous les pays ?",
+  "dstSeedConfirmBody": "Cela ajoute une fiche pour chaque pays, environ 250 au total. Ceux que vous n'utilisez pas restent masqués dans cette liste, et vous pouvez toujours en ajouter un avec Ajouter un pays.",
+  "dstSeedConfirmAction": "Ajouter tous les pays"
 }

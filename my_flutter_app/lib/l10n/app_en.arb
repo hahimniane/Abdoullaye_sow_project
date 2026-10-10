@@ -5043,5 +5043,24 @@
   "wpkErrExceedsBalance": "That is more than what is still owed.",
   "wpkErrPaymentNotFound": "That payment no longer exists.",
   "wpkErrPaymentReverted": "That payment was already reverted.",
-  "guestTrackingStageWaitingContainer": "Received, waiting for a container"
+  "guestTrackingStageWaitingContainer": "Received, waiting for a container",
+  "dstAddCountry": "Add country",
+  "dstAddCountryTitle": "Add a country",
+  "dstAddCountrySearchHint": "Search countries",
+  "dstAddCountryNone": "Every country is already listed.",
+  "dstListedCount": "{count, plural, =0{No destinations in use} =1{1 destination in use} other{{count} destinations in use}}",
+  "@dstListedCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "dstEmptyInstruction": "You have no destinations yet. Tap Add country, pick where you ship to, and switch on the services you offer there.",
+  "dstMakeMain": "Make main",
+  "dstMainDestination": "Main destination",
+  "dstMainHelp": "New packages open on this country",
+  "dstMainSaved": "Main destination saved.",
+  "dstMainCleared": "Main destination cleared.",
+  "dstSeedConfirmTitle": "Add every country?",
+  "dstSeedConfirmBody": "This adds a record for every country, about 250 in all. The ones you do not use stay hidden from this list, and you can still bring any of them in with Add country.",
+  "dstSeedConfirmAction": "Add all countries"
 }

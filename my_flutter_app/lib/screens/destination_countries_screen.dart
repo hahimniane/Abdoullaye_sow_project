@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,14 +9,46 @@ import '../models/business_service.dart';
 import '../models/destination_country.dart';
 import '../providers/auth_provider.dart';
 import '../services/barrel_pricing_service.dart';
+import '../services/destination_visibility.dart';
+import '../services/waiting_package_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/money_input.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 
+/// The business's destination records, live. A parameter so a widget test
+/// feeds records without Firestore; the default reads the collection.
+typedef DestinationRecordsStream =
+    Stream<List<DestinationCountry>> Function(String businessId);
+
+Stream<List<DestinationCountry>> _firestoreDestinationRecords(
+  String businessId,
+) => FirebaseFirestore.instance
+    .collection('businesses')
+    .doc(businessId)
+    .collection('destinationCountries')
+    .snapshots()
+    .map(
+      (snap) => [
+        for (final doc in snap.docs) DestinationCountry.fromFirestore(doc),
+      ],
+    );
+
 class DestinationCountriesScreen extends StatefulWidget {
-  const DestinationCountriesScreen({super.key});
+  const DestinationCountriesScreen({
+    super.key,
+    this.businessId,
+    this.records = _firestoreDestinationRecords,
+    this.caller = callContainerCallable,
+  });
+
+  /// Tests pass the business; the app reads it from the signed-in user.
+  final String? businessId;
+  final DestinationRecordsStream records;
+
+  /// Calls `seedDestinationCountries` and `setMainDestination`.
+  final ContainerCallableCaller caller;
 
   @override
   State<DestinationCountriesScreen> createState() =>
@@ -31,6 +62,8 @@ class _DestinationCountriesScreenState
   bool _isSeeding = false;
   bool _isSavingDestination = false;
   bool _isSavingPickupPricing = false;
+  bool _isSettingMain = false;
+  List<DestinationCountry> _stored = const [];
 
   @override
   void dispose() {
@@ -41,11 +74,32 @@ class _DestinationCountriesScreenState
   Future<void> _seed(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     if (_isSeeding) return;
+    // Adding every country is a big, mostly pointless change for a business
+    // that ships to a few: ask first, and say what it does.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('dst-seed-confirm'),
+        title: Text(l10n.dstSeedConfirmTitle),
+        content: Text(l10n.dstSeedConfirmBody),
+        actions: [
+          TextButton(
+            key: const Key('dst-seed-cancel'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            key: const Key('dst-seed-confirm-yes'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(l10n.dstSeedConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted || _isSeeding) return;
     setState(() => _isSeeding = true);
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('seedDestinationCountries')
-          .call();
+      await widget.caller('seedDestinationCountries', const {});
       if (!context.mounted) return;
       showSuccessSnackBar(context, l10n.countriesSeeded);
     } catch (error) {
@@ -137,6 +191,50 @@ class _DestinationCountriesScreenState
       'enabledServices': businessData['enabledServices'],
       'serviceNote': businessData['serviceNote'] ?? '',
     };
+  }
+
+  Future<void> _toggleMain(
+    BuildContext context,
+    String businessId,
+    DestinationCountry country,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_isSettingMain) return;
+    setState(() => _isSettingMain = true);
+    try {
+      final isNowMain = await setMainDestination(
+        businessId: businessId,
+        country: country,
+        caller: widget.caller,
+      );
+      if (!context.mounted) return;
+      showSuccessSnackBar(
+        context,
+        isNowMain ? l10n.dstMainSaved : l10n.dstMainCleared,
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      showErrorSnackBar(context, _friendlyError(l10n, error));
+    } finally {
+      if (mounted) setState(() => _isSettingMain = false);
+    }
+  }
+
+  /// "Add country": every country that is not listed (including ones whose
+  /// record exists but is unused), searchable. Picking one opens the usual
+  /// coverage form for it.
+  Future<void> _addCountry(
+    BuildContext context,
+    List<DestinationCountry> stored,
+  ) async {
+    final picked = await showModalBottomSheet<DestinationCountry>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _AddCountrySheet(options: destinationsToAdd(stored)),
+    );
+    if (picked == null || !context.mounted) return;
+    await _showForm(context, country: picked);
   }
 
   Future<void> _showForm(
@@ -696,10 +794,13 @@ class _DestinationCountriesScreenState
 
   List<Widget> _actions(BuildContext context, AppLocalizations l10n) {
     return [
-      AsyncActionButton.outlined(
-        onPressed: _isSeeding ? null : () => _seed(context),
-        icon: Icons.public,
-        label: l10n.seedDefaultCountries,
+      // Plain buttons: both wait on a sheet or dialog, which an async button
+      // would show as a spinner on the page behind it.
+      FilledButton.icon(
+        key: const Key('dst-add-country'),
+        onPressed: _isBusy ? null : () => _addCountry(context, _stored),
+        icon: const Icon(Icons.add_location_alt_outlined),
+        label: Text(l10n.dstAddCountry),
       ),
       const SizedBox(height: 12),
       AsyncActionButton.outlined(
@@ -708,6 +809,17 @@ class _DestinationCountriesScreenState
             : () => _showPickupPricingForm(context),
         icon: Icons.local_shipping,
         label: l10n.barrelPickupPricing,
+      ),
+      const SizedBox(height: 4),
+      // Reachable, but a quiet last resort: it asks before it adds ~250 records.
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          key: const Key('dst-seed'),
+          onPressed: _isSeeding ? null : () => _seed(context),
+          icon: const Icon(Icons.public),
+          label: Text(l10n.seedDefaultCountries),
+        ),
       ),
     ];
   }
@@ -723,7 +835,10 @@ class _DestinationCountriesScreenState
   }
 
   bool get _isBusy =>
-      _isSeeding || _isSavingDestination || _isSavingPickupPricing;
+      _isSeeding ||
+      _isSavingDestination ||
+      _isSavingPickupPricing ||
+      _isSettingMain;
 
   Widget _searchField() {
     return TextField(
@@ -746,8 +861,9 @@ class _DestinationCountriesScreenState
 
   List<Widget> _countryContent(
     BuildContext context,
-    AsyncSnapshot<QuerySnapshot> snapshot,
+    AsyncSnapshot<List<DestinationCountry>> snapshot,
     AppLocalizations l10n,
+    String businessId,
   ) {
     if (snapshot.hasError) {
       if (_isPermissionDenied(snapshot.error)) {
@@ -778,43 +894,53 @@ class _DestinationCountriesScreenState
       return [_stateMessage(context, const CircularProgressIndicator())];
     }
 
-    final countries = snapshot.data!.docs
-        .map(DestinationCountry.fromFirestore)
-        .toList();
-    final filteredCountries = _orderedCountries(_filterCountries(countries));
+    // Only the destinations in use are listed; the search covers only those.
+    final listed = listedDestinations(snapshot.data!);
+    final filteredCountries = _orderedCountries(_filterCountries(listed));
 
-    if (countries.isEmpty) {
+    if (listed.isEmpty) {
       return [
         _stateMessage(
           context,
-          Text(l10n.seedCountriesEmptyInstruction, textAlign: TextAlign.center),
+          Text(l10n.dstEmptyInstruction, textAlign: TextAlign.center),
         ),
       ];
     }
 
-    if (filteredCountries.isEmpty) {
-      return [
+    return [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          l10n.dstListedCount(listed.length),
+          key: const Key('dst-listed-count'),
+          style: const TextStyle(
+            color: AppColors.muted,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      if (filteredCountries.isEmpty)
         _stateMessage(
           context,
           Text(l10n.noResultsFound, textAlign: TextAlign.center),
+        )
+      else
+        ..._countryTiles(
+          context,
+          filteredCountries,
+          canEdit: true,
+          businessId: businessId,
         ),
-      ];
-    }
-
-    return _countryTiles(context, filteredCountries, canEdit: true);
+    ];
   }
 
   List<DestinationCountry> _filterCountries(
     List<DestinationCountry> countries,
   ) {
-    final query = _searchQuery.toLowerCase();
-    if (query.isEmpty) return countries;
-    return countries.where((country) {
-      final code = country.code?.toLowerCase() ?? '';
-      return country.name.toLowerCase().contains(query) ||
-          code.contains(query) ||
-          country.flagEmoji.contains(_searchQuery);
-    }).toList();
+    return [
+      for (final country in countries)
+        if (destinationMatchesSearch(country, _searchQuery)) country,
+    ];
   }
 
   List<DestinationCountry> _orderedCountries(
@@ -911,6 +1037,7 @@ class _DestinationCountriesScreenState
     BuildContext context,
     List<DestinationCountry> countries, {
     required bool canEdit,
+    String? businessId,
   }) {
     final l10n = AppLocalizations.of(context)!;
     return [
@@ -921,7 +1048,28 @@ class _DestinationCountriesScreenState
               country.flagEmoji,
               style: const TextStyle(fontSize: 28),
             ),
-            title: Text(country.name),
+            title: Row(
+              children: [
+                Expanded(child: Text(country.name)),
+                if (canEdit && businessId != null)
+                  IconButton(
+                    key: Key('dst-main-${country.id}'),
+                    tooltip: country.isMain
+                        ? l10n.dstMainDestination
+                        : l10n.dstMakeMain,
+                    visualDensity: VisualDensity.compact,
+                    isSelected: country.isMain,
+                    icon: const Icon(Icons.star_border),
+                    selectedIcon: const Icon(
+                      Icons.star,
+                      color: AppColors.saffron,
+                    ),
+                    onPressed: _isBusy
+                        ? null
+                        : () => _toggleMain(context, businessId, country),
+                  ),
+              ],
+            ),
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Column(
@@ -981,8 +1129,8 @@ class _DestinationCountriesScreenState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final auth = context.watch<AuthProvider>();
-    final businessId = _currentBusinessId(auth);
+    final businessId =
+        widget.businessId ?? _currentBusinessId(context.watch<AuthProvider>());
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.destinationCountries),
@@ -990,13 +1138,10 @@ class _DestinationCountriesScreenState
       ),
       body: Stack(
         children: [
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('businesses')
-                .doc(businessId)
-                .collection('destinationCountries')
-                .snapshots(),
+          StreamBuilder<List<DestinationCountry>>(
+            stream: widget.records(businessId),
             builder: (context, snapshot) {
+              _stored = snapshot.data ?? const [];
               return ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -1004,7 +1149,7 @@ class _DestinationCountriesScreenState
                   const SizedBox(height: 12),
                   _searchField(),
                   const SizedBox(height: 12),
-                  ..._countryContent(context, snapshot, l10n),
+                  ..._countryContent(context, snapshot, l10n, businessId),
                 ],
               );
             },
@@ -1285,15 +1430,106 @@ class _DestinationSummaryChip extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: foreground),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: foreground,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The "Add country" picker: every country not currently listed, searchable.
+/// Pops the chosen [DestinationCountry].
+class _AddCountrySheet extends StatefulWidget {
+  const _AddCountrySheet({required this.options});
+
+  final List<DestinationCountry> options;
+
+  @override
+  State<_AddCountrySheet> createState() => _AddCountrySheetState();
+}
+
+class _AddCountrySheetState extends State<_AddCountrySheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final shown = [
+      for (final country in widget.options)
+        if (destinationMatchesSearch(country, _query)) country,
+    ];
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.85,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 12,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l10n.dstAddCountryTitle,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('dst-add-search'),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: l10n.dstAddCountrySearchHint,
+              ),
+              onChanged: (value) => setState(() => _query = value),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: shown.isEmpty
+                  ? Center(
+                      child: Text(
+                        widget.options.isEmpty
+                            ? l10n.dstAddCountryNone
+                            : l10n.noResultsFound,
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: shown.length,
+                      itemBuilder: (context, index) {
+                        final country = shown[index];
+                        return ListTile(
+                          key: Key('dst-add-${country.id}'),
+                          leading: Text(
+                            country.flagEmoji,
+                            style: const TextStyle(fontSize: 24),
+                          ),
+                          title: Text(country.name),
+                          subtitle: country.displayCode.isEmpty
+                              ? null
+                              : Text(country.displayCode),
+                          onTap: () => Navigator.pop(context, country),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

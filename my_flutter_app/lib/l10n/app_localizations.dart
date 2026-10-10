@@ -19205,6 +19205,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Received, waiting for a container'**
   String get guestTrackingStageWaitingContainer;
+
+  /// No description provided for @dstAddCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Add country'**
+  String get dstAddCountry;
+
+  /// No description provided for @dstAddCountryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a country'**
+  String get dstAddCountryTitle;
+
+  /// No description provided for @dstAddCountrySearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search countries'**
+  String get dstAddCountrySearchHint;
+
+  /// No description provided for @dstAddCountryNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Every country is already listed.'**
+  String get dstAddCountryNone;
+
+  /// No description provided for @dstListedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No destinations in use} =1{1 destination in use} other{{count} destinations in use}}'**
+  String dstListedCount(int count);
+
+  /// No description provided for @dstEmptyInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no destinations yet. Tap Add country, pick where you ship to, and switch on the services you offer there.'**
+  String get dstEmptyInstruction;
+
+  /// No description provided for @dstMakeMain.
+  ///
+  /// In en, this message translates to:
+  /// **'Make main'**
+  String get dstMakeMain;
+
+  /// No description provided for @dstMainDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Main destination'**
+  String get dstMainDestination;
+
+  /// No description provided for @dstMainHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'New packages open on this country'**
+  String get dstMainHelp;
+
+  /// No description provided for @dstMainSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Main destination saved.'**
+  String get dstMainSaved;
+
+  /// No description provided for @dstMainCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Main destination cleared.'**
+  String get dstMainCleared;
+
+  /// No description provided for @dstSeedConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add every country?'**
+  String get dstSeedConfirmTitle;
+
+  /// No description provided for @dstSeedConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This adds a record for every country, about 250 in all. The ones you do not use stay hidden from this list, and you can still bring any of them in with Add country.'**
+  String get dstSeedConfirmBody;
+
+  /// No description provided for @dstSeedConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add all countries'**
+  String get dstSeedConfirmAction;
 }
 
 class _AppLocalizationsDelegate
