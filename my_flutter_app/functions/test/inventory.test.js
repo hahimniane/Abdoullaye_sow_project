@@ -1318,3 +1318,17 @@ describe("inventory v2: summaries per store", () => {
     });
   });
 });
+
+describe("the store conversion's id ordering", () => {
+  it("uses the standard FieldPath import, which the functions emulator provides", () => {
+    // `admin.firestore.FieldPath` is undefined inside the functions emulator
+    // (second store creation answered INTERNAL there); the modular import is
+    // not. Keep the inventory code on the import.
+    const src = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+    const start = src.indexOf("async function materializeInventoryMainStock");
+    const end = src.indexOf("\n}\n", start);
+    const body = src.slice(start, end);
+    assert.match(body, /FirestoreFieldPath\.documentId\(\)/);
+    assert.doesNotMatch(body, /admin\.firestore\.FieldPath/);
+  });
+});

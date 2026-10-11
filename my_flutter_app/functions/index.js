@@ -149,6 +149,7 @@ const admin = require("firebase-admin");
 const {
   FieldValue: FirestoreFieldValue,
   Timestamp: FirestoreTimestamp,
+  FieldPath: FirestoreFieldPath,
 } = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
 const {ALL_COUNTRIES} = require("./country_catalog");
@@ -19831,7 +19832,7 @@ async function syncInventoryCategoryName(db, businessId, categoryId, name) {
     let query = db.collection("inventoryItems")
         .where("businessId", "==", businessId)
         .where("categoryId", "==", categoryId)
-        .orderBy(admin.firestore.FieldPath.documentId())
+        .orderBy(FirestoreFieldPath.documentId())
         .limit(INVENTORY_RENAME_PAGE);
     if (last) query = query.startAfter(last);
     const snap = await query.get();
@@ -20487,7 +20488,7 @@ async function materializeInventoryMainStock(db, businessId, mainStoreId) {
     const walked = await db.runTransaction(async (tx) => {
       let query = db.collection("inventoryItems")
           .where("businessId", "==", businessId)
-          .orderBy(admin.firestore.FieldPath.documentId())
+          .orderBy(FirestoreFieldPath.documentId())
           .limit(INVENTORY_EAGER_PAGE);
       if (last) query = query.startAfter(last);
       const snap = await tx.get(query);
