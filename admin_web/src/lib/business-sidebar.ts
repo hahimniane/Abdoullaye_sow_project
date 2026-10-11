@@ -11,6 +11,7 @@ export type BusinessTab =
   | "ledger"
   | "containers"
   | "invoices"
+  | "inventory"
   | "destinations"
   | "people"
   | "reviews"
@@ -64,6 +65,11 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   // platform or off it, so no service gate; the ledger permission covers
   // them - the same people who work the lot's money.
   {id: "invoices", label: "Invoices", description: "Receipts and what is owed", group: "manage", permission: "ledger"},
+  // Inventory is the shop's own goods, sold at the counter in the app and
+  // recorded here. Its own service (admin switches it on per business, no
+  // charge) and its own permission. It sits with Invoices - both are what the
+  // business sold - rather than under "Vehicle sales", which it is not.
+  {id: "inventory", label: "Inventory", description: "Products, stock and counter sales", group: "manage", service: "inventory", permission: "inventory"},
   {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "manage", permission: "reviews"},
   {id: "cases", label: "Support", description: "Customers and help", group: "manage", permission: "support"},
   {id: "growth", label: "Growth", description: "Plan and advisor", group: "manage", permission: "growth"},

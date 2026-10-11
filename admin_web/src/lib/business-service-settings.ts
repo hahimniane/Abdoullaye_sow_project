@@ -17,6 +17,7 @@ export const BUSINESS_SERVICE_IDS = [
   "carSales",
   "carTransport",
   "carParking",
+  "inventory",
 ] as const;
 
 

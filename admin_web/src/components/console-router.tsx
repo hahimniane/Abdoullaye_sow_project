@@ -21,7 +21,8 @@ import {
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { resolveConsoleKind, serviceEntryApplies } from "@/lib/console-routing";
-import { customerServiceFromSearch } from "@/lib/customer-service-intent";
+import { customerServiceFromLocation } from "@/lib/customer-service-intent";
+import { ItemTagPage } from "@/components/item-tag-page";
 import { legalAcceptance } from "@/lib/disclosures";
 import { auth, db, functions } from "@/lib/firebase";
 import { useFrenchDomTranslation } from "@/lib/french-dom-runtime";
@@ -104,6 +105,7 @@ const previewBusinessProfile: UserProfile = {
     "carSales",
     "carTransport",
     "carParking",
+    "inventory",
   ],
 };
 
@@ -122,6 +124,7 @@ const previewBusiness: FirestoreRow = {
     "carSales",
     "carTransport",
     "carParking",
+    "inventory",
   ],
   addressLine1: "410 East 138th Street",
   city: "Bronx",
@@ -265,11 +268,13 @@ export function ConsoleRouter() {
   const [previewStripeState, setPreviewStripeState] = useState<PreviewStripeState>("none");
   const [profileRetry, setProfileRetry] = useState(0);
   const [serviceIntent, setServiceIntent] = useState(
-    null as ReturnType<typeof customerServiceFromSearch>,
+    null as ReturnType<typeof customerServiceFromLocation>,
   );
 
   useEffect(() => {
-    setServiceIntent(customerServiceFromSearch(window.location.search));
+    setServiceIntent(
+      customerServiceFromLocation(window.location.pathname, window.location.search),
+    );
   }, []);
 
   useEffect(() => {
@@ -386,6 +391,9 @@ export function ConsoleRouter() {
 
   const resolvedKind = profile ? resolveConsoleKind(profile.role) : null;
   if (serviceIntent && serviceEntryApplies(serviceIntent, resolvedKind)) {
+    // A shop's inventory tag scanned with a phone camera: a plain notice, no
+    // sign-in and nothing read about the product (see item-tag-page.tsx).
+    if (serviceIntent === "item-tag") return <ItemTagPage />;
     return (
       <CustomerServiceEntry
         authenticated={Boolean(firebaseUser && profile)}

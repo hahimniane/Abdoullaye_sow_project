@@ -5011,7 +5011,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Your browser blocked the new tab.": "Votre navigateur a bloqué le nouvel onglet.",
   "Open the labels page": "Ouvrir la page des étiquettes",
   "The labels are not ready yet. Try again in a moment.":
-    "Les étiquettes ne sont pas encore prêtes. Réessayez dans un instant.",
+    "Les étiquettes produit ne sont pas encore prêtes. Réessayez dans un instant.",
   // Paged lists and server-counted totals (paged-query, TotalsStatus).
   "Load more": "Charger plus",
   "This list is taking longer than usual to load. Check your connection and try again.":
@@ -5106,6 +5106,179 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Un code QR, un code de suivi et les deux numéros de téléphone pour chacun des colis sélectionnés.",
   "— a QR code, tracking code and both phone numbers.":
     "— un code QR, un code de suivi et les deux numéros de téléphone.",
+});
+
+// Inventory (docs/INVENTORY.md): the products, stock, tags and counter-sales
+// console, its public tag page and the sentences the server's refusals map to.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Enter the product's name.": "Saisissez le nom du produit.",
+  "The product's name is too long.": "Le nom du produit est trop long.",
+  "Type the product's code to confirm the deletion.":
+    "Saisissez le code du produit pour confirmer la suppression.",
+  "A link to a picture on the web. Leave empty for none.":
+    "Un lien vers une image sur le web. Laissez vide s’il n’y en a pas.",
+  "A sale was rung up for more than the count showed, so the count went to 0. Count the shelf and set the real number to clear this mark.":
+    "Une vente a dépassé la quantité affichée, donc la quantité est passée à 0. Comptez le rayon et définissez le vrai nombre pour effacer cette marque.",
+  "Add at least one product to the sale.": "Ajoutez au moins un produit à la vente.",
+  "Add stock / set count": "Ajouter du stock / définir la quantité",
+  "Add stock or set the count": "Ajouter du stock ou définir la quantité",
+  "Add stock that arrived": "Ajouter le stock arrivé",
+  "Add stock": "Ajouter du stock",
+  "All products": "Tous les produits",
+  "Archive": "Archiver",
+  "Archived": "Archivé",
+  "Best sellers": "Meilleures ventes",
+  "Change what is shown at the counter. The count changes through Add stock.":
+    "Modifiez ce qui s’affiche au comptoir. La quantité change avec Ajouter du stock.",
+  "Choose between 1 and 500 tags.": "Choisissez entre 1 et 500 étiquettes.",
+  "Confirm the deletion first.": "Confirmez d’abord la suppression.",
+  "Copy code": "Copier le code",
+  "Cost ($)": "Coût ($)",
+  "Cost": "Coût",
+  "Could not reach Laawol. Check your connection and try again.":
+    "Impossible de joindre Laawol. Vérifiez votre connexion et réessayez.",
+  "Count after": "Quantité après",
+  "Count saved.": "Quantité enregistrée.",
+  "Count set": "Quantité définie",
+  "Count was off": "Quantité inexacte",
+  "Delete the product": "Supprimer le produit",
+  "Delete this product?": "Supprimer ce produit ?",
+  "Discount": "Remise",
+  "Each tag is a QR code only, made for a 2 × 1 inch thermal label. Anyone who scans it with a phone camera sees a plain page with no product details; staff scanning it in the Laawol app can sell it.":
+    "Chaque étiquette est un simple code QR, prévu pour une étiquette thermique de 2 × 1 pouce. Quiconque la scanne avec l’appareil photo d’un téléphone voit une page neutre sans détail sur le produit ; le personnel qui la scanne dans l’application Laawol peut vendre le produit.",
+  "Edit product": "Modifier le produit",
+  "Enter how many are in stock, a whole number from 0.":
+    "Saisissez la quantité en stock, un nombre entier à partir de 0.",
+  "Enter how many are sold, a whole number above zero.":
+    "Saisissez la quantité vendue, un nombre entier supérieur à zéro.",
+  "Enter how many to add, a whole number above zero.":
+    "Saisissez la quantité à ajouter, un nombre entier supérieur à zéro.",
+  "Enter the cost in dollars, or leave it empty.":
+    "Saisissez le coût en dollars, ou laissez le champ vide.",
+  "Enter the low-stock number as a whole number, or leave it empty.":
+    "Saisissez le seuil de stock bas en nombre entier, ou laissez le champ vide.",
+  "Enter the number you counted, a whole number from 0.":
+    "Saisissez le nombre compté, un nombre entier à partir de 0.",
+  "Enter the price it sold at, in dollars.": "Saisissez le prix de vente, en dollars.",
+  "Every sale rung up at the counter in the Laawol app. Open one to see what each product was listed at and what it sold for. Voiding a sale puts its stock back and keeps it here, marked.":
+    "Toutes les ventes encaissées au comptoir dans l’application Laawol. Ouvrez-en une pour voir le prix catalogue de chaque produit et son prix de vente. Annuler une vente remet son stock en place et la garde ici, marquée.",
+  "Filter products": "Filtrer les produits",
+  "Flagged as low at or below this number, and always at 0.":
+    "Signalé comme bas à ce nombre ou en dessous, et toujours à 0.",
+  "From 1 to 500, all with the same code.": "De 1 à 500, toutes avec le même code.",
+  "How many in stock": "Quantité en stock",
+  "How many tags": "Nombre d’étiquettes",
+  "How many to add": "Quantité à ajouter",
+  "If you may sell it again, archive it instead: it disappears from selling and keeps its history.":
+    "Si vous pouvez le revendre, archivez-le plutôt : il disparaît de la vente et son historique est conservé.",
+  "In stock now": "En stock actuellement",
+  "In stock": "En stock",
+  "Inventory is not switched on for this business.":
+    "L’inventaire n’est pas activé pour cette entreprise.",
+  "Inventory lists": "Listes d’inventaire",
+  "Inventory": "Inventaire",
+  "Keep the sale": "Garder la vente",
+  "Last changed": "Dernière modification",
+  "Line total": "Total de la ligne",
+  "List price": "Prix catalogue",
+  "Low at": "Bas à",
+  "Low only at 0": "Bas seulement à 0",
+  "Low stock at": "Stock bas à",
+  "Low stock": "Stock bas",
+  "Name, category or code": "Nom, catégorie ou code",
+  "New product": "Nouveau produit",
+  "No archived products.": "Aucun produit archivé.",
+  "No changes to the count yet.": "Aucun changement de quantité pour l’instant.",
+  "No cost entered": "Aucun coût saisi",
+  "No product has a count that was off.": "Aucun produit n’a une quantité inexacte.",
+  "No product matches that search.": "Aucun produit ne correspond à cette recherche.",
+  "No products yet. Add your first product, then print its tag.":
+    "Aucun produit pour l’instant. Ajoutez votre premier produit, puis imprimez son étiquette.",
+  "No products.": "Aucun produit.",
+  "No sales yet. They appear here once staff sell a product in the app.":
+    "Aucune vente pour l’instant. Elles apparaissent ici dès que le personnel vend un produit dans l’application.",
+  "Nothing is running low.": "Aucun produit n’est en stock bas.",
+  "Number counted": "Nombre compté",
+  "One product, one tag. Each size or colour is its own product.":
+    "Un produit, une étiquette. Chaque taille ou couleur est un produit à part.",
+  "Open tags": "Ouvrir les étiquettes produit",
+  "Open the tags page": "Ouvrir la page des étiquettes produit",
+  "Out of stock": "Rupture de stock",
+  "Paid with": "Payé avec",
+  "Photo link": "Lien de la photo",
+  "Print tags": "Imprimer les étiquettes produit",
+  "Product archived. It is hidden from selling and its history is kept.":
+    "Produit archivé. Il est masqué de la vente et son historique est conservé.",
+  "Product deleted.": "Produit supprimé.",
+  "Product figures": "Chiffres du produit",
+  "Product is back on sale.": "Le produit est de nouveau en vente.",
+  "Product saved.": "Produit enregistré.",
+  "Product updated.": "Produit mis à jour.",
+  "Product": "Produit",
+  "Products": "Produits",
+  "Products, stock and counter sales": "Produits, stock et ventes au comptoir",
+  "Profit": "Bénéfice",
+  "Recount it and set the count.": "Recomptez-le et définissez la quantité.",
+  "Running low": "Bientôt épuisés",
+  "Sale voided": "Vente annulée",
+  "Sale voided. The stock went back.": "Vente annulée. Le stock a été remis.",
+  "Sale": "Vente",
+  "Sales": "Ventes",
+  "Sales summary": "Résumé des ventes",
+  "Sales totals": "Totaux des ventes",
+  "Save & print tags": "Enregistrer et imprimer les étiquettes",
+  "Save the count": "Enregistrer la quantité",
+  "Say how the customer paid.": "Indiquez comment le client a payé.",
+  "Search products": "Rechercher des produits",
+  "Set the count after counting the shelf": "Définir la quantité après avoir compté le rayon",
+  "Setting the count corrects it and clears the count-was-off mark.":
+    "Définir la quantité la corrige et efface la marque de quantité inexacte.",
+  "Shop staff tag": "Étiquette du personnel du magasin",
+  "Sign in again to continue.": "Reconnectez-vous pour continuer.",
+  "Sold at": "Prix de vente",
+  "Starting count": "Quantité de départ",
+  "Stock added": "Stock ajouté",
+  "Stock added.": "Stock ajouté.",
+  "Stock after this": "Stock après ce changement",
+  "Stock history": "Historique du stock",
+  "Summary period": "Période du résumé",
+  "Tag code": "Code de l’étiquette",
+  "That product is archived. Unarchive it before selling it.":
+    "Ce produit est archivé. Désarchivez-le avant de le vendre.",
+  "That product no longer exists.": "Ce produit n’existe plus.",
+  "That sale is larger than the system can record.":
+    "Cette vente dépasse ce que le système peut enregistrer.",
+  "That sale no longer exists.": "Cette vente n’existe plus.",
+  "That sale was already voided.": "Cette vente a déjà été annulée.",
+  "The category is too long.": "La catégorie est trop longue.",
+  "The change did not save.": "La modification n’a pas été enregistrée.",
+  "The code is": "Le code est",
+  "The note is too long.": "La note est trop longue.",
+  "The photo link must be a web address that starts with https://.":
+    "Le lien de la photo doit être une adresse web commençant par https://.",
+  "The products you sell. Each has one tag: staff scan it in the Laawol app to sell it at the counter, and the count goes down with every sale.":
+    "Les produits que vous vendez. Chacun a une étiquette : le personnel la scanne dans l’application Laawol pour le vendre au comptoir, et la quantité diminue à chaque vente.",
+  "The tags are not ready yet. Try again in a moment.":
+    "Les étiquettes ne sont pas encore prêtes. Réessayez dans un instant.",
+  "This cannot be undone. The product and its tags stop working. Sales already made keep its name and price in the history.":
+    "Cette action est irréversible. Le produit et ses étiquettes ne fonctionnent plus. Les ventes déjà faites gardent son nom et son prix dans l’historique.",
+  "This tag is for the shop's staff. Open it in the Laawol app.":
+    "Cette étiquette est réservée au personnel du magasin. Ouvrez-la dans l’application Laawol.",
+  "Type the product code to confirm": "Saisissez le code du produit pour confirmer",
+  "Unarchive": "Désarchiver",
+  "Void the sale": "Annuler la vente",
+  "Void this sale": "Annuler cette vente",
+  "Void this sale?": "Annuler cette vente ?",
+  "Voiding...": "Annulation de la vente...",
+  "What happened": "Ce qui s’est passé",
+  "What it cost you. Only used to work out profit.":
+    "Ce que le produit vous a coûté. Sert uniquement à calculer le bénéfice.",
+  "You do not have access to Inventory. Ask the owner to add it to your permissions.":
+    "Vous n’avez pas accès à l’inventaire. Demandez au propriétaire de l’ajouter à vos autorisations.",
+  "from the costs you entered": "d’après les coûts saisis",
+  "in discounts": "de remises",
+  "items sold": "articles vendus",
+  "what was taken at the counter": "ce qui a été encaissé au comptoir",
 });
 
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

@@ -12,4 +12,9 @@
   # /t/CL-K7M4P2. The app claims /t/ as a universal/app link; without the
   # app installed, the browser lands on the tracking page for that code.
   RewriteRule ^t/([A-Za-z0-9-]{4,40})/?$ /?service=tracking&code=$1 [R=302,L,QSA]
+  # Inventory tags stuck on a shop's products: /i/IT-K7M4P2. The app claims
+  # /i/ like /t/; without it (a customer's phone camera) the browser lands on a
+  # plain notice. The code is deliberately NOT carried over: that page shows
+  # nothing about any product.
+  RewriteRule ^i/([A-Za-z0-9-]{4,40})/?$ /?service=item-tag [R=302,L]
 </IfModule>
