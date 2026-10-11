@@ -409,10 +409,23 @@ describe("selling", () => {
     const id = await newItem({quantity: 5});
     const key = requestId();
     const lines = [{itemId: id, quantity: 1, soldPriceCents: 1000}];
-    const results = await Promise.all(Array.from({length: 4}, () =>
+    const settled = await Promise.allSettled(Array.from({length: 4}, () =>
       sell(lines, {clientRequestId: key})));
+    const results = settled.filter((r) => r.status === "fulfilled")
+        .map((r) => r.value);
+    // A send that loses the transaction race can be refused with a
+    // contention error (the emulator reports it as "invalid or closed");
+    // retrying with the same key is the app's answer to that.
+    for (const r of settled.filter((x) => x.status === "rejected")) {
+      assert.match(`${r.reason?.code} ${r.reason?.message}`,
+          /abort|contention|invalid or closed/i);
+    }
+    assert.ok(results.length >= 1);
     assert.equal(new Set(results.map((r) => r.saleId)).size, 1);
     assert.equal(results.filter((r) => !r.replayed).length, 1);
+    const again = await sell(lines, {clientRequestId: key});
+    assert.equal(again.replayed, true);
+    assert.equal(again.saleId, results[0].saleId);
     assert.equal((await itemDoc(id)).quantity, 4);
   });
 
