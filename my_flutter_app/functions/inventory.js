@@ -35,8 +35,14 @@ const MIN_COPIES = 1;
 const MAX_COPIES = 500;
 const TAG_CODE_PREFIX = "IT";
 
+const MAX_ADDRESS = 200;
+const MAX_PHONE = 40;
+/** The name the implicit first store gets when the owner adds a second one. */
+const MAIN_STORE_NAME = "Main store";
+const UNCATEGORIZED = "Uncategorized";
+
 const MOVEMENT_TYPES = Object.freeze(
-    ["initial", "add", "set", "sale", "void"]);
+    ["initial", "add", "set", "sale", "void", "transfer_out", "transfer_in"]);
 const SUMMARY_RANGES = Object.freeze(["today", "month"]);
 
 /** How many products the "best sellers" list names. */
@@ -82,20 +88,47 @@ const INVENTORY_MESSAGES = Object.freeze({
   client_request_id_invalid: "The sale has no valid retry key.",
   copies_invalid: `Print between ${MIN_COPIES} and ${MAX_COPIES} tags.`,
   range_invalid: "The summary covers today or this month.",
+  category_name_required: "Give the category a name.",
+  category_name_taken: "A category with that name already exists.",
+  category_not_found: "That category was not found.",
+  store_name_required: "Give the store a name.",
+  store_field_too_long: `A store address can be at most ${MAX_ADDRESS} ` +
+    `characters and a phone number at most ${MAX_PHONE}.`,
+  store_not_found: "That store was not found.",
+  store_archived: "That store is archived. Restore it first.",
+  store_has_stock: "That store still holds stock. Move it to another " +
+    "store first.",
+  last_store_active: "At least one store has to stay active.",
+  store_not_allowed: "This account cannot use that store.",
+  home_store_required: "This account has no store assigned yet. Ask the " +
+    "owner to assign one.",
+  same_store: "Pick two different stores.",
+  insufficient_stock: "The source store does not hold that many pieces.",
+  owner_only: "Only the business owner can do this.",
+  user_not_found: "That staff member was not found in this business.",
+  all_stores_invalid: "Say whether the staff member sees all stores " +
+    "(true) or only their own (false).",
 });
 
 /** Codes answered as `not-found`; the rest of the state refusals below. */
 const NOT_FOUND_CODES = Object.freeze(
-    ["business_not_found", "item_not_found", "sale_not_found"]);
+    ["business_not_found", "item_not_found", "sale_not_found",
+      "category_not_found", "store_not_found", "user_not_found"]);
 const PRECONDITION_CODES = Object.freeze(
-    ["service_disabled", "item_archived", "sale_voided"]);
+    ["service_disabled", "item_archived", "sale_voided", "store_archived",
+      "store_has_stock", "last_store_active", "home_store_required",
+      "insufficient_stock"]);
+const PERMISSION_CODES = Object.freeze(["store_not_allowed", "owner_only"]);
+const ALREADY_EXISTS_CODES = Object.freeze(["category_name_taken"]);
 
 /**
  * @param {string} code A refusal code.
- * @return {"not-found"|"failed-precondition"|"invalid-argument"} The
- *   HttpsError code that carries it.
+ * @return {"not-found"|"failed-precondition"|"invalid-argument"|
+ *   "permission-denied"|"already-exists"} The HttpsError code that carries it.
  */
 function refusalKind(code) {
+  if (PERMISSION_CODES.includes(code)) return "permission-denied";
+  if (ALREADY_EXISTS_CODES.includes(code)) return "already-exists";
   if (NOT_FOUND_CODES.includes(code)) return "not-found";
   if (PRECONDITION_CODES.includes(code)) return "failed-precondition";
   return "invalid-argument";
@@ -187,20 +220,57 @@ function itemFieldErrors(data, requireAll) {
   if (String(row.category ?? "").trim().length > MAX_CATEGORY) {
     errors.push("category_too_long");
   }
+  if (row.categoryId !== undefined && row.categoryId !== null &&
+      typeof row.categoryId !== "string") {
+    errors.push("category_not_found");
+  }
   if (!photoUrlOk(row.photoUrl)) errors.push("photo_url_invalid");
   return errors;
 }
 
+/** The most stores one product can be stocked in at creation. */
+const MAX_STOCK_ENTRIES = 100;
+
+/**
+ * The per-store starting counts of a new product: {storeId: quantity}.
+ *
+ * @param {*} value The `stock` field.
+ * @return {{errors: string[], entries: Array<[string, number]>}} The pairs
+ *   (store id, count), or `quantity_invalid` when it is not a clean map.
+ */
+function parseStockMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {errors: ["quantity_invalid"], entries: []};
+  }
+  const keys = Object.keys(value);
+  if (keys.length === 0 || keys.length > MAX_STOCK_ENTRIES) {
+    return {errors: ["quantity_invalid"], entries: []};
+  }
+  const entries = [];
+  for (const key of keys) {
+    const storeId = text(key, 200);
+    const count = wholeNumber(value[key], 0, MAX_QUANTITY);
+    if (!storeId || storeId.includes("/") || count === null) {
+      return {errors: ["quantity_invalid"], entries: []};
+    }
+    entries.push([storeId, count]);
+  }
+  return {errors: [], entries};
+}
+
 /**
  * @param {object} data The createInventoryItem data.
- * @return {string[]} Refusal codes.
+ * @return {string[]} Refusal codes. A `stock` map stands in for `quantity`.
  */
 function validateItemCreate(data) {
   const errors = itemFieldErrors(data, true);
-  if (wholeNumber(data?.quantity, 0, MAX_QUANTITY) === null) {
+  const hasStock = data?.stock !== undefined && data?.stock !== null;
+  if (hasStock) {
+    errors.push(...parseStockMap(data.stock).errors);
+  } else if (wholeNumber(data?.quantity, 0, MAX_QUANTITY) === null) {
     errors.push("quantity_invalid");
   }
-  return errors;
+  return [...new Set(errors)];
 }
 
 /**
@@ -209,9 +279,11 @@ function validateItemCreate(data) {
  */
 function validateItemUpdate(data) {
   const row = data && typeof data === "object" ? data : {};
-  if (row.quantity !== undefined) return ["quantity_not_editable"];
+  if (row.quantity !== undefined || row.stock !== undefined) {
+    return ["quantity_not_editable"];
+  }
   const fields = ["name", "priceCents", "costCents", "lowStockAt", "category",
-    "photoUrl"];
+    "categoryId", "photoUrl"];
   if (!fields.some((key) => row[key] !== undefined)) {
     return ["nothing_to_update"];
   }
@@ -223,19 +295,24 @@ function validateItemUpdate(data) {
  * minted, `documentToken`).
  *
  * @param {object} data Validated createInventoryItem data.
- * @param {object} extra {businessId, code, uid}.
+ * @param {object} extra {businessId, code, uid, quantity?, category?}:
+ *   `quantity` (the total, when it comes from a per-store map) and
+ *   `category` ({categoryId, name}, once resolved) replace the raw fields.
  * @return {object} The stored fields.
  */
-function itemCreateRecord(data, {businessId, code, uid}) {
+function itemCreateRecord(data, {businessId, code, uid, quantity, category}) {
   return {
     businessId,
     name: text(data.name, MAX_NAME),
     code,
     priceCents: Number(data.priceCents),
     costCents: given(data.costCents) ? Number(data.costCents) : null,
-    quantity: Number(data.quantity),
+    quantity: quantity === undefined ? Number(data.quantity) :
+      Number(quantity),
     lowStockAt: given(data.lowStockAt) ? Number(data.lowStockAt) : null,
-    category: text(data.category, MAX_CATEGORY),
+    category: category ? text(category.name, MAX_CATEGORY) :
+      text(data.category, MAX_CATEGORY),
+    categoryId: category ? text(category.categoryId, 200) : "",
     photoUrl: text(data.photoUrl, MAX_PHOTO_URL),
     archived: false,
     countWasOff: false,
@@ -365,11 +442,11 @@ function planStockAdjust(item, input) {
  * One row of a product's stock history.
  *
  * @param {object} args {businessId, itemId, type, delta, quantityAfter, uid,
- *   note, saleId}.
+ *   note, saleId, storeId, transferId}.
  * @return {object} The stored fields (the caller adds `createdAt`).
  */
 function movementRecord({businessId, itemId, type, delta, quantityAfter, uid,
-  note = "", saleId = ""}) {
+  note = "", saleId = "", storeId = "", transferId = ""}) {
   return {
     businessId,
     itemId,
@@ -379,6 +456,10 @@ function movementRecord({businessId, itemId, type, delta, quantityAfter, uid,
     byStaffId: text(uid, 128),
     note: text(note, MAX_NOTE),
     saleId: text(saleId, 128),
+    // Only a business with stores records where; a single-store business's
+    // rows keep the shape they always had.
+    ...(text(storeId, 200) ? {storeId: text(storeId, 200)} : {}),
+    ...(text(transferId, 128) ? {transferId: text(transferId, 128)} : {}),
   };
 }
 
@@ -512,6 +593,10 @@ function planSale(lines, items) {
       name: text(item.name, MAX_NAME),
       code: text(item.code, 40),
       quantity: line.quantity,
+      // What the product was filed under when it sold: reports group by it
+      // even if the product moves to another category later.
+      categoryId: text(item.categoryId, 200),
+      category: text(item.category, MAX_CATEGORY),
       listPriceCents: Number(item.priceCents) || 0,
       soldPriceCents: line.soldPriceCents,
       costCents: item.costCents === null || item.costCents === undefined ?
@@ -826,6 +911,607 @@ function planInventoryService(current, enabled, validOrder) {
   return {valid: true, changed: had !== enabled, services, enabled};
 }
 
+// ---------------------------------------------------------------------------
+// Categories (v2).
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {*} name A category name as typed.
+ * @return {string} Its key: trimmed, inner spaces collapsed, lower case. Two
+ *   names with the same key are the same category.
+ */
+function categoryNameKey(name) {
+  return String(name ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/**
+ * @param {*} name A category name as typed.
+ * @return {string} The name as stored: trimmed, inner spaces collapsed.
+ */
+function categoryDisplayName(name) {
+  return String(name ?? "").trim().replace(/\s+/g, " ");
+}
+
+/**
+ * @param {*} name A category name as typed.
+ * @return {string[]} Refusal codes.
+ */
+function validateCategoryName(name) {
+  const clean = categoryDisplayName(name);
+  if (!clean) return ["category_name_required"];
+  if (clean.length > MAX_CATEGORY) return ["category_too_long"];
+  return [];
+}
+
+/**
+ * The lock document that keeps one category per name in a business: the same
+ * name always lands on the same id, so two quick creates cannot both win.
+ *
+ * @param {string} businessId The business.
+ * @param {string} nameKey categoryNameKey of the name.
+ * @return {string} A 40-character id.
+ */
+function categoryKeyDocId(businessId, nameKey) {
+  return crypto.createHash("sha256")
+      .update(`${businessId}\u0000${nameKey}`)
+      .digest("hex").slice(0, 40);
+}
+
+// ---------------------------------------------------------------------------
+// Stores and who may use them (v2).
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {string} businessId The business.
+ * @return {string} The id of its Main store, once there is one.
+ */
+function mainStoreIdOf(businessId) {
+  return `${businessId}_main`;
+}
+
+/**
+ * @param {string} itemId The product.
+ * @param {string} storeId The store.
+ * @return {string} The id of the product's stock row in that store.
+ */
+function stockDocId(itemId, storeId) {
+  return `${itemId}__${storeId}`;
+}
+
+/**
+ * What a signed-in caller may do with stores.
+ *
+ * @param {object} user The caller's profile.
+ * @return {{owner: boolean, all: boolean, homeStoreId: string}} `owner` is
+ *   the business owner or a platform admin; `all` adds staff the owner gave
+ *   all-stores access; `homeStoreId` is the staff member's own store.
+ */
+function storeAccessOf(user) {
+  const owner = user?.role === "businessOwner" || user?.role === "admin";
+  return {
+    owner,
+    all: owner || user?.inventoryAllStores === true,
+    homeStoreId: text(user?.inventoryHomeStoreId, 200),
+  };
+}
+
+/**
+ * @param {Array<object>} stores Every store of a business.
+ * @return {object[]} The active ones.
+ */
+function activeStores(stores) {
+  return (Array.isArray(stores) ? stores : []).filter(
+      (store) => store && store.archived !== true);
+}
+
+/**
+ * @param {Array<object>} stores Every store of a business.
+ * @return {boolean} True with two or more active stores: the point where
+ *   the screens start to show stores and staff are tied to one.
+ */
+function isMultiStore(stores) {
+  return activeStores(stores).length >= 2;
+}
+
+/**
+ * Which store a stock action is about, and whether the caller may use it.
+ *
+ * Without stores (never converted) there is no store at all and naming one is
+ * refused. With stores, omitting it means the caller's home store (the
+ * Main store for an owner without one), and a single active store is simply
+ * "the" store. A staff member without all-stores access may only name their
+ * own, and has none to default to until the owner assigns one.
+ *
+ * @param {object} args {converted, stores, mainStoreId, access,
+ *   requestedStoreId}.
+ * @return {{store: ?object, code: ?string}} The store (null for an
+ *   unconverted business) or the refusal code.
+ */
+function resolveStore({converted, stores, mainStoreId, access,
+  requestedStoreId}) {
+  const requested = text(requestedStoreId, 200);
+  if (!converted) {
+    return requested ? {store: null, code: "store_not_found"} :
+      {store: null, code: null};
+  }
+  const all = Array.isArray(stores) ? stores : [];
+  const active = activeStores(all);
+  const multi = active.length >= 2;
+  if (requested) {
+    const found = all.find((store) => store.id === requested);
+    if (!found) return {store: null, code: "store_not_found"};
+    if (found.archived === true) return {store: null, code: "store_archived"};
+    if (multi && !access.all && found.id !== access.homeStoreId) {
+      return {store: null, code: "store_not_allowed"};
+    }
+    return {store: found, code: null};
+  }
+  if (!multi) {
+    return active.length === 1 ? {store: active[0], code: null} :
+      {store: null, code: "store_not_found"};
+  }
+  const home = access.homeStoreId &&
+    active.find((store) => store.id === access.homeStoreId);
+  if (home) return {store: home, code: null};
+  if (access.all) {
+    const main = active.find((store) => store.id === mainStoreId) ||
+      [...active].sort((a, b) => String(a.name).localeCompare(
+          String(b.name)))[0];
+    return {store: main, code: null};
+  }
+  return {store: null, code: "home_store_required"};
+}
+
+/**
+ * @param {object} data createInventoryStore / updateInventoryStore data.
+ * @param {boolean} requireName True on create.
+ * @return {{errors: string[], fields: object}} Refusal codes and the cleaned
+ *   fields that were sent.
+ */
+function cleanStoreInput(data, requireName) {
+  const row = data && typeof data === "object" ? data : {};
+  const errors = [];
+  const fields = {};
+  if (requireName || row.name !== undefined) {
+    const name = text(row.name, MAX_NAME + 1);
+    if (!name) errors.push("store_name_required");
+    else if (name.length > MAX_NAME) errors.push("name_too_long");
+    else fields.name = name;
+  }
+  for (const [key, max] of [["address", MAX_ADDRESS], ["phone", MAX_PHONE]]) {
+    if (row[key] === undefined) continue;
+    const value = String(row[key] ?? "").trim();
+    if (value.length > max) errors.push("store_field_too_long");
+    else fields[key] = value;
+  }
+  return {errors: [...new Set(errors)], fields};
+}
+
+// ---------------------------------------------------------------------------
+// Stock per store (v2). A product's `quantity` is the total; the stores hold
+// it in `inventoryStock` rows. A product that has no rows yet
+// (`storeStock !== true`) is held, whole, by the Main store.
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {object} item The stored product.
+ * @param {?object} row The stock row at the store (undefined when none).
+ * @param {string} storeId The store.
+ * @param {string} mainStoreId The Main store.
+ * @return {{quantity: number, countWasOff: boolean, tracked: boolean}} What
+ *   the store holds of the product. `tracked` is false when the product has
+ *   never been in that store.
+ */
+function effectiveRow(item, row, storeId, mainStoreId) {
+  if (row) {
+    return {
+      quantity: Math.max(0, Math.round(Number(row.quantity) || 0)),
+      countWasOff: row.countWasOff === true,
+      tracked: true,
+    };
+  }
+  if (item?.storeStock !== true && storeId === mainStoreId) {
+    return {
+      quantity: Math.max(0, Math.round(Number(item?.quantity) || 0)),
+      countWasOff: item?.countWasOff === true,
+      tracked: true,
+    };
+  }
+  return {quantity: 0, countWasOff: false, tracked: false};
+}
+
+/**
+ * The Main row a not-yet-converted product must get the moment any other
+ * store row of it is written, so the total is always the rows' sum.
+ *
+ * @param {object} item The stored product.
+ * @param {string} mainStoreId The Main store.
+ * @param {string[]} writtenStoreIds Stores whose rows are being written now.
+ * @return {object[]} [] or [{storeId, quantity, countWasOff}].
+ */
+function mainRowToMaterialize(item, mainStoreId, writtenStoreIds) {
+  if (item?.storeStock === true || writtenStoreIds.includes(mainStoreId)) {
+    return [];
+  }
+  return [{storeId: mainStoreId,
+    quantity: Math.max(0, Math.round(Number(item?.quantity) || 0)),
+    countWasOff: item?.countWasOff === true}];
+}
+
+/**
+ * A sale at one store of a business that has stores. The count that floors
+ * and flags `countWasOff` is that store's, the product's total goes down by
+ * what really left the shelf.
+ *
+ * @param {object[]} lines Cleaned lines.
+ * @param {Map<string, object>} items The products.
+ * @param {Map<string, object>} rows The stock row at `storeId` per product
+ *   (absent when there is none).
+ * @param {object} ctx {storeId, mainStoreId}.
+ * @return {object} planSale's answer plus `writes`: [{itemId, rowQuantity,
+ *   rowCountWasOff, totalAfter, itemCountWasOff, extraRows}] (the store's new
+ *   row, the product's new total and the Main row to create, if any).
+ */
+function planStoreSale(lines, items, rows, {storeId, mainStoreId}) {
+  const view = new Map();
+  const before = new Map();
+  for (const [itemId, item] of items) {
+    const eff = effectiveRow(item, rows.get(itemId), storeId, mainStoreId);
+    before.set(itemId, eff);
+    view.set(itemId, {...item, quantity: eff.quantity,
+      countWasOff: eff.countWasOff});
+  }
+  const plan = planSale(lines, view);
+  const flagged = new Set(plan.warnings.map((w) => w.itemId));
+  const writes = plan.items.map((change) => {
+    const item = items.get(change.itemId) || {};
+    const deducted = before.get(change.itemId).quantity - change.quantityAfter;
+    return {
+      itemId: change.itemId,
+      rowQuantity: change.quantityAfter,
+      rowCountWasOff: change.countWasOff,
+      totalAfter: Math.max(0, (Number(item.quantity) || 0) - deducted),
+      itemCountWasOff: flagged.has(change.itemId) ||
+        item.countWasOff === true,
+      extraRows: mainRowToMaterialize(item, mainStoreId, [storeId]),
+    };
+  });
+  return {...plan, writes};
+}
+
+/**
+ * Putting a voided sale's stock back into the store it was sold from.
+ *
+ * @param {object} sale The stored sale.
+ * @param {Map<string, object>} items The products that still exist.
+ * @param {Map<string, object>} rows The stock row at `storeId` per product.
+ * @param {object} ctx {storeId, mainStoreId}.
+ * @return {object} planVoid's answer plus `writes` like planStoreSale.
+ */
+function planStoreVoid(sale, items, rows, {storeId, mainStoreId}) {
+  const view = new Map();
+  const before = new Map();
+  for (const [itemId, item] of items) {
+    const eff = effectiveRow(item, rows.get(itemId), storeId, mainStoreId);
+    before.set(itemId, eff);
+    view.set(itemId, {...item, quantity: eff.quantity});
+  }
+  const plan = planVoid(sale, view);
+  const writes = plan.items.map((change) => {
+    const item = items.get(change.itemId) || {};
+    const gained = change.quantityAfter - before.get(change.itemId).quantity;
+    return {
+      itemId: change.itemId,
+      rowQuantity: change.quantityAfter,
+      rowCountWasOff: before.get(change.itemId).countWasOff,
+      totalAfter: Math.max(0, (Number(item.quantity) || 0) + gained),
+      extraRows: mainRowToMaterialize(item, mainStoreId, [storeId]),
+    };
+  });
+  return {...plan, writes};
+}
+
+/**
+ * A stock add or set at one store of a business that has stores.
+ *
+ * @param {object} item The stored product.
+ * @param {Map<string, object>} rows Every existing stock row of the
+ *   product, by store id.
+ * @param {string} storeId The store being changed.
+ * @param {object} input {mode, quantity}.
+ * @param {string} mainStoreId The Main store.
+ * @return {object} {errors, type, quantityAfter (the store's), delta,
+ *   rowCountWasOff, totalAfter, itemCountWasOff, extraRows}.
+ */
+function planStoreAdjust(item, rows, storeId, input, mainStoreId) {
+  const eff = effectiveRow(item, rows.get(storeId), storeId, mainStoreId);
+  const plan = planStockAdjust({quantity: eff.quantity,
+    countWasOff: eff.countWasOff}, input);
+  if (plan.errors.length > 0) return {errors: plan.errors};
+  let total = plan.quantityAfter;
+  let anyOff = plan.countWasOff;
+  for (const [otherId, row] of rows) {
+    if (otherId === storeId) continue;
+    total += Math.max(0, Math.round(Number(row.quantity) || 0));
+    anyOff = anyOff || row.countWasOff === true;
+  }
+  const extraRows = mainRowToMaterialize(item, mainStoreId, [storeId])
+      .filter((extra) => !rows.has(extra.storeId));
+  for (const extra of extraRows) {
+    total += extra.quantity;
+    anyOff = anyOff || extra.countWasOff;
+  }
+  if (total > MAX_QUANTITY) return {errors: ["quantity_invalid"]};
+  return {
+    errors: [],
+    type: plan.type,
+    quantityAfter: plan.quantityAfter,
+    delta: plan.delta,
+    rowCountWasOff: plan.countWasOff,
+    totalAfter: total,
+    itemCountWasOff: anyOff,
+    extraRows,
+  };
+}
+
+/**
+ * Moving pieces of one product from one store to another. The total never
+ * changes and no count goes below zero.
+ *
+ * @param {object} item The stored product.
+ * @param {Map<string, object>} rows The product's existing stock rows.
+ * @param {object} move {fromStoreId, toStoreId, quantity}.
+ * @param {string} mainStoreId The Main store.
+ * @return {object} {errors, amount, from: {quantityAfter, countWasOff},
+ *   to: {...}, extraRows}.
+ */
+function planTransfer(item, rows, {fromStoreId, toStoreId, quantity},
+    mainStoreId) {
+  if (fromStoreId === toStoreId) return {errors: ["same_store"]};
+  const amount = wholeNumber(quantity, 1, MAX_QUANTITY);
+  if (amount === null) return {errors: ["quantity_invalid"]};
+  const from = effectiveRow(item, rows.get(fromStoreId), fromStoreId,
+      mainStoreId);
+  const to = effectiveRow(item, rows.get(toStoreId), toStoreId, mainStoreId);
+  if (from.quantity < amount) return {errors: ["insufficient_stock"]};
+  if (to.quantity + amount > MAX_QUANTITY) {
+    return {errors: ["quantity_invalid"]};
+  }
+  return {
+    errors: [],
+    amount,
+    from: {quantityAfter: from.quantity - amount,
+      countWasOff: from.countWasOff},
+    to: {quantityAfter: to.quantity + amount, countWasOff: to.countWasOff},
+    extraRows: mainRowToMaterialize(item, mainStoreId,
+        [fromStoreId, toStoreId]),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Summary additions (v2).
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {object} sale A stored sale.
+ * @param {string} mainStoreId The Main store ("" when there are no stores).
+ * @return {string} The store it was rung up at; a sale from before stores
+ *   existed belongs to the Main store.
+ */
+function saleStoreId(sale, mainStoreId) {
+  return text(sale?.storeId, 200) || mainStoreId || "";
+}
+
+/**
+ * Whether a sale's line lacks the category it was sold under. Lines from
+ * before categories existed carry neither field and are read through the
+ * product's current category instead.
+ *
+ * @param {object} line A stored sale line.
+ * @return {boolean} True for a line written without a snapshot.
+ */
+function lineIsLegacyCategory(line) {
+  return !line || (!("categoryId" in line) && !("category" in line));
+}
+
+/**
+ * The sales figures per category, voided sales left out, all categories that
+ * sold (not capped), biggest revenue first.
+ *
+ * @param {object[]} sales Stored sales.
+ * @param {object} ctx {categories: Array<{id, name}>, items: Map<string,
+ *   object>}: the business's categories and its products (for lines with no
+ *   snapshot).
+ * @return {object[]} [{categoryId, name, itemsSold, revenueCents,
+ *   profitCents}]; categoryId "" is "Uncategorized".
+ */
+function summarizeByCategory(sales, {categories = [], items = new Map()}) {
+  const names = new Map();
+  const keyToId = new Map();
+  for (const category of categories) {
+    names.set(category.id, category.name);
+    keyToId.set(categoryNameKey(category.name), category.id);
+  }
+  const groups = new Map();
+  for (const sale of Array.isArray(sales) ? sales : []) {
+    if (!sale || sale.voided === true) continue;
+    for (const line of Array.isArray(sale.lines) ? sale.lines : []) {
+      let id = text(line.categoryId, 200);
+      let name = text(line.category, MAX_CATEGORY);
+      if (lineIsLegacyCategory(line)) {
+        const item = items.get(line.itemId);
+        id = text(item?.categoryId, 200);
+        name = text(item?.category, MAX_CATEGORY);
+      }
+      if (!id && name) id = keyToId.get(categoryNameKey(name)) || "";
+      const key = id || (name ? `text:${categoryNameKey(name)}` : "");
+      const label = id ? (names.get(id) || name || UNCATEGORIZED) :
+        (name || UNCATEGORIZED);
+      const quantity = Number(line.quantity) || 0;
+      const revenue = quantity * (Number(line.soldPriceCents) || 0);
+      const entry = groups.get(key) || {categoryId: id, name: label,
+        itemsSold: 0, revenueCents: 0, knownRevenue: 0, costCents: 0};
+      entry.itemsSold += quantity;
+      entry.revenueCents += revenue;
+      if (line.costCents !== null && line.costCents !== undefined) {
+        entry.knownRevenue += revenue;
+        entry.costCents += quantity * (Number(line.costCents) || 0);
+      }
+      groups.set(key, entry);
+    }
+  }
+  return [...groups.values()]
+      .map((e) => ({categoryId: e.categoryId, name: e.name,
+        itemsSold: e.itemsSold, revenueCents: e.revenueCents,
+        profitCents: e.knownRevenue - e.costCents}))
+      .sort((a, b) => b.revenueCents - a.revenueCents ||
+        a.name.localeCompare(b.name));
+}
+
+/**
+ * The sales figures per store, voided sales left out. Every active store is
+ * listed (a store with no sales shows zeros), plus an archived one that sold.
+ *
+ * @param {object[]} sales Stored sales.
+ * @param {Array<object>} stores Every store, each with `id`, `name`,
+ *   `archived`.
+ * @param {string} mainStoreId The Main store.
+ * @return {object[]} [{storeId, name, salesCount, itemsSold, revenueCents,
+ *   profitCents}], biggest revenue first.
+ */
+function summarizeByStore(sales, stores, mainStoreId) {
+  const rows = new Map();
+  for (const store of Array.isArray(stores) ? stores : []) {
+    rows.set(store.id, {storeId: store.id, name: text(store.name, MAX_NAME),
+      archived: store.archived === true, salesCount: 0, itemsSold: 0,
+      revenueCents: 0, knownRevenue: 0, costCents: 0});
+  }
+  for (const sale of Array.isArray(sales) ? sales : []) {
+    if (!sale || sale.voided === true) continue;
+    const id = saleStoreId(sale, mainStoreId);
+    const row = rows.get(id) || {storeId: id, name: id, archived: true,
+      salesCount: 0, itemsSold: 0, revenueCents: 0, knownRevenue: 0,
+      costCents: 0};
+    rows.set(id, row);
+    row.salesCount += 1;
+    for (const line of Array.isArray(sale.lines) ? sale.lines : []) {
+      const quantity = Number(line.quantity) || 0;
+      const revenue = quantity * (Number(line.soldPriceCents) || 0);
+      row.itemsSold += quantity;
+      row.revenueCents += revenue;
+      if (line.costCents !== null && line.costCents !== undefined) {
+        row.knownRevenue += revenue;
+        row.costCents += quantity * (Number(line.costCents) || 0);
+      }
+    }
+  }
+  return [...rows.values()]
+      .filter((row) => !row.archived || row.salesCount > 0)
+      .map((row) => ({storeId: row.storeId, name: row.name,
+        salesCount: row.salesCount, itemsSold: row.itemsSold,
+        revenueCents: row.revenueCents,
+        profitCents: row.knownRevenue - row.costCents}))
+      .sort((a, b) => b.revenueCents - a.revenueCents ||
+        a.name.localeCompare(b.name));
+}
+
+/**
+ * The shelf half of the summary for a business with several stores: low stock
+ * and doubtful counts are judged PER STORE, only where the product is
+ * tracked, and each entry names its store. Archived products and archived
+ * stores are hidden.
+ *
+ * @param {object} args {items: products with `id`, rows: every stock row,
+ *   stores, mainStoreId, visibleStoreIds: Set|null (null = every store)}.
+ * @return {object} {low, lowCount, countWasOff, countWasOffCount}.
+ */
+function summarizeShelfByStore({items, rows, stores, mainStoreId,
+  visibleStoreIds = null}) {
+  const storeById = new Map(activeStores(stores).map((s) => [s.id, s]));
+  const rowsByItem = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const list = rowsByItem.get(row.itemId) || [];
+    list.push(row);
+    rowsByItem.set(row.itemId, list);
+  }
+  const low = [];
+  const off = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!item || item.archived === true) continue;
+    const tracked = item.storeStock === true ?
+      (rowsByItem.get(item.id) || []) :
+      [{storeId: mainStoreId, quantity: item.quantity,
+        countWasOff: item.countWasOff === true}];
+    for (const row of tracked) {
+      const store = storeById.get(row.storeId);
+      if (!store) continue;
+      if (visibleStoreIds && !visibleStoreIds.has(row.storeId)) continue;
+      const quantity = Math.max(0, Math.round(Number(row.quantity) || 0));
+      if (itemIsLow({quantity, lowStockAt: item.lowStockAt})) {
+        low.push({itemId: item.id, name: text(item.name, MAX_NAME), quantity,
+          lowStockAt: item.lowStockAt === undefined ? null : item.lowStockAt,
+          storeId: store.id, storeName: text(store.name, MAX_NAME)});
+      }
+      if (row.countWasOff === true) {
+        off.push({itemId: item.id, name: text(item.name, MAX_NAME),
+          storeId: store.id, storeName: text(store.name, MAX_NAME)});
+      }
+    }
+  }
+  const byName = (a, b) => a.name.localeCompare(b.name) ||
+    a.storeName.localeCompare(b.storeName);
+  low.sort((a, b) => a.quantity - b.quantity || byName(a, b));
+  off.sort(byName);
+  return {
+    low: low.slice(0, SUMMARY_LIST_CAP),
+    lowCount: low.length,
+    countWasOff: off.slice(0, SUMMARY_LIST_CAP),
+    countWasOffCount: off.length,
+  };
+}
+
+/**
+ * Which stores a summary covers for a caller.
+ *
+ * @param {object} args {converted, stores, access, requestedStoreId}.
+ * @return {object} {code, multi, filterStoreId, allView}: `filterStoreId` is
+ *   "" for every store; `allView` is true when the caller sees all stores in
+ *   a multi-store business (and so gets `byStore`).
+ */
+function resolveSummaryScope({converted, stores, access, requestedStoreId}) {
+  const requested = text(requestedStoreId, 200);
+  if (!converted) {
+    return {code: requested ? "store_not_found" : null, multi: false,
+      filterStoreId: "", allView: false};
+  }
+  const all = Array.isArray(stores) ? stores : [];
+  const active = activeStores(all);
+  const multi = active.length >= 2;
+  if (!multi) {
+    return {code: null, multi: false, filterStoreId: "", allView: false};
+  }
+  if (access.all) {
+    if (!requested) {
+      return {code: null, multi, filterStoreId: "", allView: true};
+    }
+    if (!all.some((store) => store.id === requested)) {
+      return {code: "store_not_found", multi, filterStoreId: "",
+        allView: true};
+    }
+    return {code: null, multi, filterStoreId: requested, allView: true};
+  }
+  const home = active.find((store) => store.id === access.homeStoreId);
+  if (!home) {
+    return {code: "home_store_required", multi, filterStoreId: "",
+      allView: false};
+  }
+  if (requested && requested !== home.id) {
+    return {code: "store_not_allowed", multi, filterStoreId: home.id,
+      allView: false};
+  }
+  return {code: null, multi, filterStoreId: home.id, allView: false};
+}
+
 module.exports = {
   ownerEditableServices,
   planInventoryService,
@@ -839,6 +1525,10 @@ module.exports = {
   MAX_COPIES,
   MAX_REASON,
   MAX_NOTE,
+  MAX_ADDRESS,
+  MAX_PHONE,
+  MAIN_STORE_NAME,
+  UNCATEGORIZED,
   MOVEMENT_TYPES,
   SUMMARY_RANGES,
   TAG_CODE_PREFIX,
@@ -846,6 +1536,7 @@ module.exports = {
   SUMMARY_LIST_CAP,
   refusalKind,
   inventoryMessage,
+  parseStockMap,
   validateItemCreate,
   validateItemUpdate,
   itemCreateRecord,
@@ -866,6 +1557,29 @@ module.exports = {
   rangeBounds,
   summarizeSales,
   summarizeShelf,
+  categoryNameKey,
+  categoryDisplayName,
+  validateCategoryName,
+  categoryKeyDocId,
+  mainStoreIdOf,
+  stockDocId,
+  storeAccessOf,
+  activeStores,
+  isMultiStore,
+  resolveStore,
+  cleanStoreInput,
+  effectiveRow,
+  mainRowToMaterialize,
+  planStoreSale,
+  planStoreVoid,
+  planStoreAdjust,
+  planTransfer,
+  saleStoreId,
+  lineIsLegacyCategory,
+  summarizeByCategory,
+  summarizeByStore,
+  summarizeShelfByStore,
+  resolveSummaryScope,
   tagCopies,
   inventoryLink,
   tagsModel,

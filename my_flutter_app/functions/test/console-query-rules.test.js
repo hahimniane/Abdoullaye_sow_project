@@ -29,6 +29,14 @@ const USERS = {
   "owner-b": {role: "businessOwner", businessId: "biz_b"},
   "staff-freight-a": {role: "staff", businessId: "biz_a",
     businessPermissions: ["freight"]},
+  // Inventory staff of a multi-store business: one tied to a store, one with
+  // no store yet, one with all-stores access.
+  "staff-inv-annex": {role: "staff", businessId: "biz_a",
+    businessPermissions: ["inventory"], inventoryHomeStoreId: "biz_a-annex"},
+  "staff-inv-none": {role: "staff", businessId: "biz_a",
+    businessPermissions: ["inventory"]},
+  "staff-inv-all": {role: "staff", businessId: "biz_a",
+    businessPermissions: ["inventory"], inventoryAllStores: true},
   "platform-admin": {role: "admin", adminRole: "superAdmin"},
 };
 
@@ -94,6 +102,33 @@ before(async () => {
         totalCents: 1000, createdAt: ts("2026-09-01"), lines: []});
       put(`inventoryMovements/${biz}-move`, {businessId: biz,
         itemId: `${biz}-item`, type: "sale", createdAt: ts("2026-09-01")});
+      // Categories and stores (v2); the business has two active stores.
+      put(`inventoryConfig/${biz}`, {businessId: biz, storesConverted: true,
+        mainStoreId: `${biz}-main`, multiStore: true});
+      put(`inventoryCategories/${biz}-cat`, {businessId: biz, name: "Skin",
+        nameKey: "skin", archived: false});
+      put(`inventoryCategories/${biz}-cat-old`, {businessId: biz,
+        name: "Old", nameKey: "old", archived: true});
+      put(`inventoryStores/${biz}-main`, {businessId: biz, name: "Main store",
+        archived: false, isMain: true});
+      put(`inventoryStores/${biz}-annex`, {businessId: biz, name: "Annex",
+        archived: false, isMain: false});
+      put(`inventoryStores/${biz}-closed`, {businessId: biz, name: "Closed",
+        archived: true, isMain: false});
+      for (const store of ["main", "annex"]) {
+        put(`inventoryStock/${biz}-item__${biz}-${store}`, {businessId: biz,
+          itemId: `${biz}-item`, storeId: `${biz}-${store}`, quantity: 3,
+          countWasOff: false});
+        put(`inventorySales/${biz}-sale-${store}`, {businessId: biz,
+          voided: false, totalCents: 1000, createdAt: ts("2026-09-02"),
+          lines: [], storeId: `${biz}-${store}`});
+        put(`inventoryMovements/${biz}-move-${store}`, {businessId: biz,
+          itemId: `${biz}-item`, type: "sale", createdAt: ts("2026-09-02"),
+          storeId: `${biz}-${store}`});
+      }
+      put(`inventoryMovements/${biz}-transfer`, {businessId: biz,
+        itemId: `${biz}-item`, type: "transfer_out", transferId: "t1",
+        createdAt: ts("2026-09-03"), storeId: `${biz}-main`});
       put(`lotActivities/${biz}-1`, {businessId: biz, activityTypeId: "title",
         activityDate: ts("2026-09-03"), paymentStatus:
           "awaiting_direct_payment"});
@@ -186,6 +221,42 @@ const SHAPES = [
     db.collection("inventoryMovements").where("businessId", "==", b)
         .where("itemId", "==", `${b}-item`)
         .orderBy("createdAt", "desc").limit(50)],
+  ["inventory: categories by name", (db, b) =>
+    db.collection("inventoryCategories").where("businessId", "==", b)
+        .orderBy("nameKey").limit(200)],
+  ["inventory: active categories by name", (db, b) =>
+    db.collection("inventoryCategories").where("businessId", "==", b)
+        .where("archived", "==", false).orderBy("nameKey").limit(200)],
+  ["inventory: stores by name", (db, b) =>
+    db.collection("inventoryStores").where("businessId", "==", b)
+        .orderBy("name").limit(50)],
+  ["inventory: active stores by name", (db, b) =>
+    db.collection("inventoryStores").where("businessId", "==", b)
+        .where("archived", "==", false).orderBy("name").limit(50)],
+  ["inventory: every stock row", (db, b) =>
+    db.collection("inventoryStock").where("businessId", "==", b).limit(500)],
+  ["inventory: a store's stock rows", (db, b) =>
+    db.collection("inventoryStock").where("businessId", "==", b)
+        .where("storeId", "==", `${b}-annex`).limit(500)],
+  ["inventory: a product's stock rows", (db, b) =>
+    db.collection("inventoryStock").where("businessId", "==", b)
+        .where("itemId", "==", `${b}-item`)],
+  ["inventory: a store's sales, newest first", (db, b) =>
+    db.collection("inventorySales").where("businessId", "==", b)
+        .where("storeId", "==", `${b}-annex`)
+        .orderBy("createdAt", "desc").limit(50)],
+  ["inventory: a store's stock history", (db, b) =>
+    db.collection("inventoryMovements").where("businessId", "==", b)
+        .where("storeId", "==", `${b}-annex`)
+        .orderBy("createdAt", "desc").limit(50)],
+  ["inventory: a product's history in one store", (db, b) =>
+    db.collection("inventoryMovements").where("businessId", "==", b)
+        .where("itemId", "==", `${b}-item`)
+        .where("storeId", "==", `${b}-main`)
+        .orderBy("createdAt", "desc").limit(50)],
+  ["inventory: the two sides of a transfer", (db, b) =>
+    db.collection("inventoryMovements").where("businessId", "==", b)
+        .where("transferId", "==", "t1")],
   ["activity list, ranged, typed, owed", (db, b) =>
     db.collection("lotActivities").where("businessId", "==", b)
         .where("activityTypeId", "==", "title")
@@ -233,6 +304,72 @@ describe("console query shapes pass the rules for their own business", () => {
           await assertFails(build(dbFor("owner-b"), "biz_a").get());
         });
   }
+
+  describe("a multi-store business: staff see only their store", () => {
+    // The three tables a store limits, as the clients ask for them.
+    const SCOPED = [
+      ["stock rows", (db, b, store) => {
+        const q = db.collection("inventoryStock").where("businessId", "==", b);
+        return store ? q.where("storeId", "==", store) : q;
+      }],
+      ["sales, newest first", (db, b, store) => {
+        const q = db.collection("inventorySales").where("businessId", "==", b);
+        return (store ? q.where("storeId", "==", store) : q)
+            .orderBy("createdAt", "desc");
+      }],
+      ["a product's history", (db, b, store) => {
+        const q = db.collection("inventoryMovements")
+            .where("businessId", "==", b)
+            .where("itemId", "==", `${b}-item`);
+        return store ? q.where("storeId", "==", store) : q;
+      }],
+    ];
+
+    for (const [label, build] of SCOPED) {
+      it(`${label}: scoped to the home store, refused otherwise`,
+          async () => {
+            const annex = "biz_a-annex";
+            const staff = dbFor("staff-inv-annex");
+            const mine = await assertSucceeds(build(staff, "biz_a", annex)
+                .get());
+            if (mine.size < 1) throw new Error("the home store's rows load");
+            for (const row of mine.docs) {
+              if (row.data().storeId !== annex) {
+                throw new Error("a row of another store came back");
+              }
+            }
+            await assertFails(build(staff, "biz_a", "biz_a-main").get());
+            await assertFails(build(staff, "biz_a", null).get());
+          });
+
+      it(`${label}: no home store sees nothing, all-stores sees all`,
+          async () => {
+            await assertFails(build(dbFor("staff-inv-none"), "biz_a",
+                "biz_a-annex").get());
+            await assertFails(build(dbFor("staff-inv-none"), "biz_a", null)
+                .get());
+            const all = await assertSucceeds(build(dbFor("staff-inv-all"),
+                "biz_a", null).get());
+            const owner = await assertSucceeds(build(dbFor("owner-a"),
+                "biz_a", null).get());
+            const admin = await assertSucceeds(build(dbFor("platform-admin"),
+                "biz_a", null).get());
+            if (all.size < 2 || owner.size < 2 || admin.size < 2) {
+              throw new Error("all stores load for the all-store roles");
+            }
+            await assertFails(build(dbFor("owner-b"), "biz_a", null).get());
+          });
+    }
+
+    it("the shared lists stay readable by store staff", async () => {
+      const staff = dbFor("staff-inv-none");
+      for (const name of ["inventoryItems", "inventoryCategories",
+        "inventoryStores"]) {
+        await assertSucceeds(staff.collection(name)
+            .where("businessId", "==", "biz_a").get());
+      }
+    });
+  });
 
   it("open freight price requests: eligible business only", async () => {
     const query = (db, b) => db.collection("freightQuoteRequests")

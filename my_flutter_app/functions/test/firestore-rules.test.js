@@ -1164,6 +1164,240 @@ describe("business dashboard Firestore rules", () => {
         await assertFails(deleteDoc(doc(owner, "inventoryMovements/move_a")));
       });
 
+  // Categories and stores (v2). Once a business has two or more active
+  // stores, a staff member reads only their home store's stock rows, sales
+  // and stock movements; the owner, a platform admin and staff with
+  // all-stores access read everything; and a business that is not
+  // multi-store reads exactly as before. Nothing here is client-writable.
+  describe("inventory categories and stores", () => {
+    const {query, collection, where, orderBy, getDocs, getDoc, doc, setDoc,
+      updateDoc, deleteDoc} = require("firebase/firestore");
+
+    async function seedStores({multiStore}) {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const put = (p, data) => setDoc(doc(db, p), data);
+        await Promise.all([
+          put("users/inv-clerk-annex", {role: "staff", businessId: "biz_a",
+            businessPermissions: ["inventory"],
+            inventoryHomeStoreId: "store_annex"}),
+          put("users/inv-clerk-main", {role: "staff", businessId: "biz_a",
+            businessPermissions: ["inventory"],
+            inventoryHomeStoreId: "store_main"}),
+          put("users/inv-clerk-none", {role: "staff", businessId: "biz_a",
+            businessPermissions: ["inventory"]}),
+          put("users/inv-clerk-empty", {role: "staff", businessId: "biz_a",
+            businessPermissions: ["inventory"], inventoryHomeStoreId: ""}),
+          put("users/inv-rover", {role: "staff", businessId: "biz_a",
+            businessPermissions: ["inventory"], inventoryAllStores: true}),
+          put("users/inv-clerk-b", {role: "staff", businessId: "biz_b",
+            businessPermissions: ["inventory"],
+            inventoryHomeStoreId: "store_annex"}),
+          put("inventoryConfig/biz_a", {businessId: "biz_a",
+            storesConverted: true, mainStoreId: "store_main", multiStore}),
+          put("inventoryCategoryKeys/lock1", {businessId: "biz_a",
+            categoryId: "cat_a"}),
+          put("inventoryCategories/cat_a", {businessId: "biz_a",
+            name: "Skin", nameKey: "skin", archived: false}),
+          put("inventoryStores/store_main", {businessId: "biz_a",
+            name: "Main store", isMain: true, archived: false}),
+          put("inventoryStores/store_annex", {businessId: "biz_a",
+            name: "Annex", isMain: false, archived: false}),
+          put("inventoryStock/item_a__store_main", {businessId: "biz_a",
+            itemId: "item_a", storeId: "store_main", quantity: 4}),
+          put("inventoryStock/item_a__store_annex", {businessId: "biz_a",
+            itemId: "item_a", storeId: "store_annex", quantity: 2}),
+          put("inventorySales/sale_main", {businessId: "biz_a",
+            storeId: "store_main", totalCents: 1000, voided: false,
+            createdAt: new Date("2026-10-10"), lines: []}),
+          put("inventorySales/sale_annex", {businessId: "biz_a",
+            storeId: "store_annex", totalCents: 500, voided: false,
+            createdAt: new Date("2026-10-10"), lines: []}),
+          put("inventorySales/sale_legacy", {businessId: "biz_a",
+            totalCents: 700, voided: false,
+            createdAt: new Date("2026-10-01"), lines: []}),
+          put("inventoryMovements/move_annex", {businessId: "biz_a",
+            itemId: "item_a", storeId: "store_annex", type: "sale",
+            createdAt: new Date("2026-10-10")}),
+        ]);
+      });
+    }
+
+    const stockQuery = (db, storeId) => query(collection(db, "inventoryStock"),
+        where("businessId", "==", "biz_a"),
+        ...(storeId ? [where("storeId", "==", storeId)] : []));
+    const salesQuery = (db, storeId) => query(collection(db, "inventorySales"),
+        where("businessId", "==", "biz_a"),
+        ...(storeId ? [where("storeId", "==", storeId)] : []),
+        orderBy("createdAt", "desc"));
+    const movesQuery = (db, storeId) => query(
+        collection(db, "inventoryMovements"),
+        where("businessId", "==", "biz_a"), where("itemId", "==", "item_a"),
+        ...(storeId ? [where("storeId", "==", storeId)] : []));
+
+    it("limits staff to their home store once there are several stores",
+        async () => {
+          await seedStores({multiStore: true});
+          const annex = firestoreFor("inv-clerk-annex");
+          for (const [ask, id] of [[stockQuery, 1], [salesQuery, 1],
+            [movesQuery, 1]]) {
+            const mine = await assertSucceeds(getDocs(ask(annex,
+                "store_annex")));
+            assert.equal(mine.size, id);
+            assert.equal(mine.docs[0].data().storeId, "store_annex");
+            await assertFails(getDocs(ask(annex, "store_main")));
+            // An unscoped list cannot be proven to stay in the store.
+            await assertFails(getDocs(ask(annex, null)));
+          }
+          // Reading one document: own store's yes, the other's no.
+          await assertSucceeds(getDoc(doc(annex,
+              "inventoryStock/item_a__store_annex")));
+          await assertFails(getDoc(doc(annex,
+              "inventoryStock/item_a__store_main")));
+          await assertSucceeds(getDoc(doc(annex, "inventorySales/sale_annex")));
+          await assertFails(getDoc(doc(annex, "inventorySales/sale_main")));
+          // A sale from before stores existed has no store: staff do not see
+          // it, the owner does.
+          await assertFails(getDoc(doc(annex, "inventorySales/sale_legacy")));
+          // The clerk of another store sees theirs, not the annex's.
+          const main = firestoreFor("inv-clerk-main");
+          await assertSucceeds(getDocs(stockQuery(main, "store_main")));
+          await assertFails(getDocs(stockQuery(main, "store_annex")));
+        });
+
+    it("shows nothing to staff with no home store, in a multi-store business",
+        async () => {
+          await seedStores({multiStore: true});
+          for (const uid of ["inv-clerk-none", "inv-clerk-empty"]) {
+            const db = firestoreFor(uid);
+            for (const ask of [stockQuery, salesQuery, movesQuery]) {
+              await assertFails(getDocs(ask(db, null)));
+              await assertFails(getDocs(ask(db, "store_annex")));
+              await assertFails(getDocs(ask(db, "")));
+            }
+            await assertFails(getDoc(doc(db, "inventorySales/sale_legacy")));
+          }
+        });
+
+    it("shows everything to the owner, an admin and all-stores staff",
+        async () => {
+          await seedStores({multiStore: true});
+          for (const uid of ["owner-a", "super-admin", "inv-rover"]) {
+            const db = firestoreFor(uid);
+            assert.equal((await assertSucceeds(getDocs(stockQuery(db, null))))
+                .size, 2, uid);
+            assert.equal((await assertSucceeds(getDocs(salesQuery(db, null))))
+                .size, 3, uid);
+            assert.equal((await assertSucceeds(getDocs(movesQuery(db, null))))
+                .size, 1, uid);
+            await assertSucceeds(getDocs(stockQuery(db, "store_main")));
+            await assertSucceeds(getDoc(doc(db, "inventorySales/sale_legacy")));
+          }
+          // Another business's people never see these.
+          for (const uid of ["owner-b", "inv-clerk-b", "customer-owner"]) {
+            const db = firestoreFor(uid);
+            await assertFails(getDocs(stockQuery(db, "store_annex")));
+            await assertFails(getDocs(salesQuery(db, null)));
+          }
+          await assertFails(getDocs(stockQuery(firestoreFor(null), null)));
+        });
+
+    it("reads as before while the business has fewer than two stores",
+        async () => {
+          await seedStores({multiStore: false});
+          for (const uid of ["inv-clerk-none", "inv-clerk-annex",
+            "inv-clerk-empty"]) {
+            const db = firestoreFor(uid);
+            assert.equal((await assertSucceeds(getDocs(stockQuery(db, null))))
+                .size, 2, uid);
+            assert.equal((await assertSucceeds(getDocs(salesQuery(db, null))))
+                .size, 3, uid);
+            await assertSucceeds(getDocs(movesQuery(db, null)));
+            await assertSucceeds(getDoc(doc(db, "inventorySales/sale_legacy")));
+          }
+          await assertFails(getDocs(salesQuery(firestoreFor("owner-b"), null)));
+        });
+
+    it("reads as before for a business that never had stores", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, "inventorySales/sale_old"), {businessId: "biz_a",
+          totalCents: 100, voided: false, createdAt: new Date("2026-10-01"),
+          lines: []});
+      });
+      const owner = firestoreFor("owner-a");
+      assert.equal((await assertSucceeds(getDocs(salesQuery(owner, null))))
+          .size, 1);
+    });
+
+    it("lets managers list categories and stores, and nobody write them",
+        async () => {
+          await seedStores({multiStore: true});
+          for (const name of ["inventoryCategories", "inventoryStores"]) {
+            const list = (db, b) => getDocs(query(collection(db, name),
+                where("businessId", "==", b)));
+            for (const uid of ["owner-a", "inv-clerk-none",
+              "inv-clerk-annex"]) {
+              await assertSucceeds(list(firestoreFor(uid), "biz_a"));
+            }
+            await assertFails(list(firestoreFor("owner-b"), "biz_a"));
+            await assertFails(list(firestoreFor(null), "biz_a"));
+            await assertFails(getDocs(query(collection(
+                firestoreFor("owner-a"), name))));
+          }
+          const owner = firestoreFor("owner-a");
+          const writes = [
+            ["inventoryCategories/forged", {businessId: "biz_a", name: "X"}],
+            ["inventoryStores/forged", {businessId: "biz_a", name: "X"}],
+            ["inventoryStock/forged", {businessId: "biz_a", itemId: "i",
+              storeId: "store_main", quantity: 99}],
+            ["inventoryConfig/forged", {businessId: "biz_a",
+              multiStore: false}],
+            ["inventoryCategoryKeys/forged", {businessId: "biz_a"}],
+          ];
+          for (const [path, data] of writes) {
+            await assertFails(setDoc(doc(owner, path), data));
+          }
+          await assertFails(updateDoc(doc(owner,
+              "inventoryStock/item_a__store_main"), {quantity: 999}));
+          await assertFails(deleteDoc(doc(owner,
+              "inventoryStock/item_a__store_main")));
+          await assertFails(updateDoc(doc(owner,
+              "inventoryStores/store_main"), {archived: true}));
+          await assertFails(updateDoc(doc(owner,
+              "inventoryCategories/cat_a"), {name: "Renamed"}));
+          await assertFails(deleteDoc(doc(owner,
+              "inventoryStores/store_main")));
+        });
+
+    it("keeps the store bookkeeping out of every client's reach",
+        async () => {
+          await seedStores({multiStore: true});
+          for (const uid of ["owner-a", "super-admin", "inv-rover"]) {
+            const db = firestoreFor(uid);
+            await assertFails(getDoc(doc(db, "inventoryConfig/biz_a")));
+            await assertFails(getDoc(doc(db, "inventoryCategoryKeys/lock1")));
+          }
+        });
+
+    it("does not let staff give themselves a store or all-stores access",
+        async () => {
+          await seedStores({multiStore: true});
+          const clerk = firestoreFor("inv-clerk-none");
+          await assertFails(updateDoc(doc(clerk, "users/inv-clerk-none"),
+              {inventoryHomeStoreId: "store_main"}));
+          await assertFails(updateDoc(doc(clerk, "users/inv-clerk-none"),
+              {inventoryAllStores: true}));
+          const annex = firestoreFor("inv-clerk-annex");
+          await assertFails(updateDoc(doc(annex, "users/inv-clerk-annex"),
+              {inventoryHomeStoreId: "store_main"}));
+          // The owner cannot write it from a client either: it is a
+          // callable (setInventoryStaffAccess).
+          await assertFails(updateDoc(doc(firestoreFor("owner-a"),
+              "users/inv-clerk-none"), {inventoryHomeStoreId: "store_main"}));
+        });
+  });
+
   it("lets a business owner read their own private records only", async () => {
     const ownerDb = firestoreFor("owner-a");
 

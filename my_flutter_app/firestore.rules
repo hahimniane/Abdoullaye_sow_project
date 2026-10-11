@@ -694,12 +694,65 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
-    match /inventorySales/{saleId} {
+    // Categories and stores (v2): the business's own managers read them (a
+    // store's name and address are not secret from its staff); every write is
+    // a callable. `inventoryConfig` (the store bookkeeping) and
+    // `inventoryCategoryKeys` (one-name-one-category locks) are the server's
+    // alone.
+    match /inventoryCategories/{categoryId} {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
-    match /inventoryMovements/{movementId} {
+    match /inventoryStores/{storeId} {
       allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /inventoryConfig/{businessId} {
+      allow read, write: if false;
+    }
+    match /inventoryCategoryKeys/{keyId} {
+      allow read, write: if false;
+    }
+    // Once a business has two or more active stores, a staff member sees only
+    // their home store's stock rows, sales and stock movements: those queries
+    // must carry `where storeId == <home store>`. The owner, a platform admin
+    // and staff the owner gave all-stores access see everything, and a
+    // business without several stores reads as it always did.
+    function inventoryMultiStore(businessId) {
+      return exists(/databases/$(database)/documents/inventoryConfig/$(businessId)) &&
+        get(/databases/$(database)/documents/inventoryConfig/$(businessId))
+          .data.get('multiStore', false) == true;
+    }
+    function inventoryAllStores(userId) {
+      return isAdmin(userId) ||
+        userRole(userId) == 'businessOwner' ||
+        userProfile(userId).get('inventoryAllStores', false) == true;
+    }
+    function inventoryStoreRead(businessId, storeId) {
+      return lotLedgerRead(businessId) &&
+        (
+          !inventoryMultiStore(businessId) ||
+          inventoryAllStores(request.auth.uid) ||
+          (
+            userProfile(request.auth.uid).get('inventoryHomeStoreId', '') is string &&
+            userProfile(request.auth.uid).get('inventoryHomeStoreId', '') != '' &&
+            userProfile(request.auth.uid).get('inventoryHomeStoreId', '') == storeId
+          )
+        );
+    }
+    match /inventoryStock/{rowId} {
+      allow read: if inventoryStoreRead(
+        resource.data.businessId, resource.data.get('storeId', ''));
+      allow write: if false;
+    }
+    match /inventorySales/{saleId} {
+      allow read: if inventoryStoreRead(
+        resource.data.businessId, resource.data.get('storeId', ''));
+      allow write: if false;
+    }
+    match /inventoryMovements/{movementId} {
+      allow read: if inventoryStoreRead(
+        resource.data.businessId, resource.data.get('storeId', ''));
       allow write: if false;
     }
     // Invoices and receipts the business writes by hand: read by the

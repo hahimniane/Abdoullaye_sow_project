@@ -81,8 +81,9 @@ describe("inventory: a product", () => {
     assert.deepEqual(record, {
       businessId: "biz", name: "Shea butter", code: "IT-K7M4P2",
       priceCents: 1000, costCents: null, quantity: 5, lowStockAt: null,
-      category: "Care", photoUrl: "", archived: false, countWasOff: false,
-      createdByStaffId: "staff", updatedByStaffId: "staff",
+      category: "Care", categoryId: "", photoUrl: "", archived: false,
+      countWasOff: false, createdByStaffId: "staff",
+      updatedByStaffId: "staff",
     });
   });
 
@@ -258,6 +259,7 @@ describe("inventory: what a sale does", () => {
         items({a: item({quantity: 5})}));
     assert.deepEqual(plan.lines, [{
       itemId: "a", name: "Shea butter", code: "IT-K7M4P2", quantity: 2,
+      categoryId: "", category: "",
       listPriceCents: 1000, soldPriceCents: 800, costCents: 400,
       countWasOff: false, stockDeducted: 2,
     }]);
@@ -533,12 +535,16 @@ describe("inventory: wiring in index.js", () => {
     const names = ["createInventoryItem", "updateInventoryItem",
       "adjustInventoryStock", "archiveInventoryItem", "deleteInventoryItem",
       "recordInventorySale", "voidInventorySale", "getInventoryLabelsUrl",
-      "getInventorySummary"];
+      "getInventorySummary", "createInventoryCategory",
+      "renameInventoryCategory", "archiveInventoryCategory",
+      "syncInventoryCategories", "createInventoryStore",
+      "updateInventoryStore", "archiveInventoryStore",
+      "setInventoryStaffAccess", "transferInventoryStock"];
     for (const name of names) {
       const start = source.indexOf(`exports.${name} = onCall(`);
       assert.ok(start > 0, `${name} is exported`);
       const body = source.slice(start, start + 900);
-      assert.match(body, /requireInventoryAccess\(uid, businessId\)/,
+      assert.match(body, /requireInventory(Access|Context)\(uid, businessId\)/,
           `${name} checks permission and service`);
     }
   });
@@ -650,5 +656,665 @@ describe("Asking for Inventory is a flag, not a service", () => {
   it("is cleared by the admin switch when Inventory goes on", () => {
     assert.match(toggle, /requestedInventory: false/);
     assert.match(toggle, /plan\.enabled && business\.requestedInventory/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Categories and stores (v2): the pure rules.
+// ---------------------------------------------------------------------------
+
+describe("inventory v2: refusal kinds", () => {
+  it("maps the new codes to the right error kind", () => {
+    assert.equal(inv.refusalKind("store_not_allowed"), "permission-denied");
+    assert.equal(inv.refusalKind("owner_only"), "permission-denied");
+    assert.equal(inv.refusalKind("category_name_taken"), "already-exists");
+    for (const code of ["category_not_found", "store_not_found",
+      "user_not_found"]) {
+      assert.equal(inv.refusalKind(code), "not-found", code);
+    }
+    for (const code of ["store_archived", "store_has_stock",
+      "home_store_required", "insufficient_stock", "last_store_active"]) {
+      assert.equal(inv.refusalKind(code), "failed-precondition", code);
+    }
+    for (const code of ["category_name_required", "store_name_required",
+      "same_store", "all_stores_invalid", "store_field_too_long"]) {
+      assert.equal(inv.refusalKind(code), "invalid-argument", code);
+    }
+    // v1 kinds are unchanged.
+    assert.equal(inv.refusalKind("item_not_found"), "not-found");
+    assert.equal(inv.refusalKind("service_disabled"), "failed-precondition");
+    assert.equal(inv.refusalKind("price_invalid"), "invalid-argument");
+  });
+
+  it("has an English message for every code the contract names", () => {
+    for (const code of ["category_name_required", "category_name_taken",
+      "category_not_found", "store_name_required", "store_not_found",
+      "store_archived", "store_has_stock", "store_not_allowed",
+      "home_store_required", "same_store", "insufficient_stock",
+      "owner_only", "last_store_active", "user_not_found",
+      "all_stores_invalid", "store_field_too_long"]) {
+      assert.ok(inv.INVENTORY_MESSAGES[code], code);
+    }
+  });
+});
+
+describe("inventory v2: categories", () => {
+  it("keys a name by trimmed, single-spaced, lower case", () => {
+    assert.equal(inv.categoryNameKey("  Skin   Care "), "skin care");
+    assert.equal(inv.categoryNameKey(null), "");
+    assert.equal(inv.categoryDisplayName("  Skin   Care "), "Skin Care");
+  });
+
+  it("validates a name", () => {
+    assert.deepEqual(inv.validateCategoryName("Skin"), []);
+    assert.deepEqual(inv.validateCategoryName("   "),
+        ["category_name_required"]);
+    assert.deepEqual(inv.validateCategoryName(undefined),
+        ["category_name_required"]);
+    assert.deepEqual(inv.validateCategoryName("x".repeat(61)),
+        ["category_too_long"]);
+    assert.deepEqual(inv.validateCategoryName("x".repeat(60)), []);
+  });
+
+  it("gives one lock id per business and name", () => {
+    const a = inv.categoryKeyDocId("biz", "skin");
+    assert.match(a, /^[0-9a-f]{40}$/);
+    assert.equal(a, inv.categoryKeyDocId("biz", "skin"));
+    assert.notEqual(a, inv.categoryKeyDocId("other", "skin"));
+    assert.notEqual(a, inv.categoryKeyDocId("biz", "hair"));
+  });
+
+  it("takes categoryId as an update field and refuses it with a count", () => {
+    assert.deepEqual(inv.validateItemUpdate({categoryId: ""}), []);
+    assert.deepEqual(inv.validateItemUpdate({stock: {a: 1}}),
+        ["quantity_not_editable"]);
+    assert.deepEqual(inv.validateItemUpdate({categoryId: 5}),
+        ["category_not_found"]);
+  });
+
+  it("stores the resolved category on a new product", () => {
+    const record = inv.itemCreateRecord(
+        {name: "Soap", priceCents: 500, quantity: 2, category: "ignored"},
+        {businessId: "biz", code: "IT-K7M4P2", uid: "u", quantity: 9,
+          category: {categoryId: "c1", name: "Skin"}});
+    assert.equal(record.category, "Skin");
+    assert.equal(record.categoryId, "c1");
+    assert.equal(record.quantity, 9);
+  });
+
+  it("snapshots the category on a sale line", () => {
+    const plan = inv.planSale(
+        [{itemId: "a", quantity: 1, soldPriceCents: 800}],
+        items({a: item({categoryId: "c1", category: "Skin"})}));
+    assert.equal(plan.lines[0].categoryId, "c1");
+    assert.equal(plan.lines[0].category, "Skin");
+  });
+
+  describe("byCategory", () => {
+    const line = (extra) => ({itemId: "a", quantity: 1, soldPriceCents: 1000,
+      costCents: 400, categoryId: "", category: "", ...extra});
+    const cats = [{id: "c1", name: "Skin"}, {id: "c2", name: "Hair"}];
+
+    it("groups, sorts by revenue, leaves voided sales out", () => {
+      const out = inv.summarizeByCategory([
+        {voided: false, lines: [
+          line({categoryId: "c1", category: "Skin", quantity: 2}),
+          line({categoryId: "c2", category: "Hair", quantity: 1,
+            soldPriceCents: 5000, costCents: null}),
+          line({})]},
+        {voided: true, lines: [line({categoryId: "c1", quantity: 99})]},
+      ], {categories: cats});
+      assert.deepEqual(out, [
+        {categoryId: "c2", name: "Hair", itemsSold: 1, revenueCents: 5000,
+          profitCents: 0},
+        {categoryId: "c1", name: "Skin", itemsSold: 2, revenueCents: 2000,
+          profitCents: 2000 - 800},
+        {categoryId: "", name: "Uncategorized", itemsSold: 1,
+          revenueCents: 1000, profitCents: 600}]);
+    });
+
+    it("shows a category's current name, not the one at sale time", () => {
+      const out = inv.summarizeByCategory([{voided: false, lines: [
+        line({categoryId: "c1", category: "Old name"})]}],
+      {categories: cats});
+      assert.equal(out[0].name, "Skin");
+    });
+
+    it("reads a line with no snapshot through the product's category", () => {
+      const legacy = {itemId: "a", quantity: 1, soldPriceCents: 700};
+      assert.equal(inv.lineIsLegacyCategory(legacy), true);
+      assert.equal(inv.lineIsLegacyCategory(line({})), false);
+      const out = inv.summarizeByCategory(
+          [{voided: false, lines: [legacy, {...legacy, itemId: "gone"}]}],
+          {categories: cats, items: new Map([
+            ["a", {categoryId: "c2", category: "Hair"}]])});
+      assert.deepEqual(out.map((e) => [e.categoryId, e.name, e.revenueCents]),
+          [["c2", "Hair", 700], ["", "Uncategorized", 700]]);
+    });
+
+    it("matches typed text with no id to the list by name", () => {
+      const out = inv.summarizeByCategory([{voided: false, lines: [
+        line({category: " skin "}), line({category: "Odd one"})]}],
+      {categories: cats});
+      assert.deepEqual(out.map((e) => [e.categoryId, e.name]).sort(),
+          [["", "Odd one"], ["c1", "Skin"]].sort());
+    });
+
+    it("is empty without sales", () => {
+      assert.deepEqual(inv.summarizeByCategory([], {categories: cats}), []);
+    });
+  });
+});
+
+describe("inventory v2: the stock map of a new product", () => {
+  it("reads {storeId: count} and refuses anything else", () => {
+    assert.deepEqual(inv.parseStockMap({a: 1, b: "2", c: 0}),
+        {errors: [], entries: [["a", 1], ["b", 2], ["c", 0]]});
+    for (const bad of [null, undefined, [], "x", {}, {a: -1}, {a: 1.5},
+      {a: ""}, {"a/b": 1}, {a: 1000001}]) {
+      assert.deepEqual(inv.parseStockMap(bad).errors, ["quantity_invalid"],
+          JSON.stringify(bad));
+    }
+  });
+
+  it("lets a stock map stand in for the quantity on create", () => {
+    const base = {name: "x", priceCents: 5};
+    assert.deepEqual(inv.validateItemCreate({...base, stock: {a: 2}}), []);
+    assert.deepEqual(inv.validateItemCreate({...base, stock: {a: -2}}),
+        ["quantity_invalid"]);
+    assert.deepEqual(inv.validateItemCreate({...base}),
+        ["quantity_invalid"]);
+    assert.deepEqual(inv.validateItemCreate({...base, quantity: 1}), []);
+  });
+
+  it("adds a store and transfer id to a movement only when given", () => {
+    const base = {businessId: "b", itemId: "i", type: "sale", delta: -1,
+      quantityAfter: 4, uid: "u"};
+    const plain = inv.movementRecord(base);
+    assert.equal("storeId" in plain, false);
+    assert.equal("transferId" in plain, false);
+    const full = inv.movementRecord({...base, storeId: "s",
+      transferId: "t"});
+    assert.deepEqual([full.storeId, full.transferId], ["s", "t"]);
+    assert.ok(inv.MOVEMENT_TYPES.includes("transfer_out"));
+    assert.ok(inv.MOVEMENT_TYPES.includes("transfer_in"));
+  });
+});
+
+describe("inventory v2: stores and access", () => {
+  const stores = [
+    {id: "main", name: "Main store", isMain: true},
+    {id: "annex", name: "Annex"},
+    {id: "old", name: "Old", archived: true}];
+  const staff = inv.storeAccessOf({role: "staff",
+    inventoryHomeStoreId: "annex"});
+  const owner = inv.storeAccessOf({role: "businessOwner"});
+  const rover = inv.storeAccessOf({role: "staff", inventoryAllStores: true});
+  const nobody = inv.storeAccessOf({role: "staff"});
+  const pick = (access, requestedStoreId, extra = {}) => inv.resolveStore({
+    converted: true, stores, mainStoreId: "main", access,
+    requestedStoreId, ...extra});
+
+  it("tells owners, admins and all-stores staff from the rest", () => {
+    assert.deepEqual(owner, {owner: true, all: true, homeStoreId: ""});
+    assert.equal(inv.storeAccessOf({role: "admin"}).all, true);
+    assert.deepEqual(rover, {owner: false, all: true, homeStoreId: ""});
+    assert.deepEqual(staff, {owner: false, all: false, homeStoreId: "annex"});
+    assert.equal(inv.storeAccessOf({role: "staff",
+      inventoryAllStores: "true"}).all, false);
+    assert.equal(inv.storeAccessOf(null).all, false);
+  });
+
+  it("has no store at all before the first one is added", () => {
+    const none = {converted: false, stores: [], mainStoreId: "",
+      access: owner};
+    assert.deepEqual(inv.resolveStore({...none, requestedStoreId: ""}),
+        {store: null, code: null});
+    assert.deepEqual(inv.resolveStore({...none, requestedStoreId: "x"}),
+        {store: null, code: "store_not_found"});
+  });
+
+  it("defaults to the home store, the Main store for an all-stores user",
+      () => {
+        assert.equal(pick(staff, "").store.id, "annex");
+        assert.equal(pick(owner, "").store.id, "main");
+        assert.equal(pick(rover, "").store.id, "main");
+        assert.equal(pick(inv.storeAccessOf({role: "staff",
+          inventoryAllStores: true, inventoryHomeStoreId: "annex"}), "")
+            .store.id, "annex");
+      });
+
+  it("cannot sell without a home store in a multi-store business", () => {
+    assert.equal(pick(nobody, "").code, "home_store_required");
+    // A home store that was archived counts as none.
+    assert.equal(pick(inv.storeAccessOf({role: "staff",
+      inventoryHomeStoreId: "old"}), "").code, "home_store_required");
+  });
+
+  it("lets staff name their own store only", () => {
+    assert.equal(pick(staff, "annex").store.id, "annex");
+    assert.equal(pick(staff, "main").code, "store_not_allowed");
+    assert.equal(pick(nobody, "annex").code, "store_not_allowed");
+    assert.equal(pick(owner, "main").store.id, "main");
+    assert.equal(pick(rover, "annex").store.id, "annex");
+  });
+
+  it("refuses an unknown or archived store", () => {
+    assert.equal(pick(owner, "nope").code, "store_not_found");
+    assert.equal(pick(owner, "old").code, "store_archived");
+    assert.equal(pick(staff, "old").code, "store_archived");
+  });
+
+  it("treats one active store as 'the' store for everybody", () => {
+    const one = [{id: "main", name: "Main store"},
+      {id: "old", name: "Old", archived: true}];
+    assert.equal(inv.isMultiStore(one), false);
+    assert.equal(inv.isMultiStore(stores), true);
+    assert.equal(pick(nobody, "", {stores: one}).store.id, "main");
+    assert.equal(pick(nobody, "main", {stores: one}).store.id, "main");
+    assert.equal(pick(nobody, "", {stores: []}).code, "store_not_found");
+    assert.deepEqual(inv.activeStores(stores).map((s) => s.id),
+        ["main", "annex"]);
+  });
+
+  it("builds the Main store's id and a stock row's id", () => {
+    assert.equal(inv.mainStoreIdOf("biz1"), "biz1_main");
+    assert.equal(inv.stockDocId("item1", "store1"), "item1__store1");
+  });
+
+  it("cleans a store's fields", () => {
+    assert.deepEqual(inv.cleanStoreInput(
+        {name: "  Annex ", address: " 1 Rue ", phone: ""}, true),
+    {errors: [], fields: {name: "Annex", address: "1 Rue", phone: ""}});
+    assert.deepEqual(inv.cleanStoreInput({}, true).errors,
+        ["store_name_required"]);
+    assert.deepEqual(inv.cleanStoreInput({}, false),
+        {errors: [], fields: {}});
+    assert.deepEqual(inv.cleanStoreInput({name: ""}, false).errors,
+        ["store_name_required"]);
+    assert.deepEqual(inv.cleanStoreInput(
+        {name: "x".repeat(121)}, true).errors, ["name_too_long"]);
+    assert.deepEqual(inv.cleanStoreInput({name: "x", address: "a".repeat(201),
+      phone: "9".repeat(41)}, true).errors, ["store_field_too_long"]);
+    assert.deepEqual(inv.cleanStoreInput({phone: "555"}, false).fields,
+        {phone: "555"});
+  });
+});
+
+describe("inventory v2: per-store stock", () => {
+  const ctx = {storeId: "annex", mainStoreId: "main"};
+  const row = (quantity, countWasOff = false) => ({quantity, countWasOff});
+
+  describe("what a store holds", () => {
+    it("reads its own row", () => {
+      assert.deepEqual(inv.effectiveRow(item({storeStock: true}), row(3, true),
+          "annex", "main"), {quantity: 3, countWasOff: true, tracked: true});
+    });
+    it("gives a product with no rows yet, whole, to the Main store", () => {
+      assert.deepEqual(inv.effectiveRow(item({quantity: 7}), undefined,
+          "main", "main"), {quantity: 7, countWasOff: false, tracked: true});
+      assert.deepEqual(inv.effectiveRow(item({quantity: 7}), undefined,
+          "annex", "main"), {quantity: 0, countWasOff: false, tracked: false});
+    });
+    it("reads a missing row of a converted product as zero", () => {
+      assert.deepEqual(inv.effectiveRow(item({storeStock: true, quantity: 7}),
+          undefined, "main", "main"),
+      {quantity: 0, countWasOff: false, tracked: false});
+    });
+    it("writes the Main row along with any other store's first row", () => {
+      assert.deepEqual(inv.mainRowToMaterialize(item({quantity: 7}), "main",
+          ["annex"]), [{storeId: "main", quantity: 7, countWasOff: false}]);
+      assert.deepEqual(inv.mainRowToMaterialize(item({quantity: 7}), "main",
+          ["main", "annex"]), []);
+      assert.deepEqual(inv.mainRowToMaterialize(item({storeStock: true}),
+          "main", ["annex"]), []);
+    });
+  });
+
+  describe("a sale", () => {
+    const line = (quantity) => [{itemId: "a", quantity,
+      soldPriceCents: 1000}];
+
+    it("takes the store's count and the product's total down together",
+        () => {
+          const it = item({quantity: 10, storeStock: true});
+          const plan = inv.planStoreSale(line(3), items({a: it}),
+              new Map([["a", row(4)]]), ctx);
+          assert.deepEqual(plan.writes, [{itemId: "a", rowQuantity: 1,
+            rowCountWasOff: false, totalAfter: 7, itemCountWasOff: false,
+            extraRows: []}]);
+          assert.deepEqual(plan.movements,
+              [{itemId: "a", delta: -3, quantityAfter: 1}]);
+          assert.deepEqual(plan.warnings, []);
+          assert.equal(plan.lines[0].stockDeducted, 3);
+        });
+
+    it("floors at zero in that store and flags only the store and product",
+        () => {
+          const it = item({quantity: 10, storeStock: true});
+          const plan = inv.planStoreSale(line(3), items({a: it}),
+              new Map([["a", row(1)]]), ctx);
+          assert.equal(plan.writes[0].rowQuantity, 0);
+          assert.equal(plan.writes[0].rowCountWasOff, true);
+          assert.equal(plan.writes[0].itemCountWasOff, true);
+          assert.equal(plan.writes[0].totalAfter, 9);
+          assert.equal(plan.lines[0].stockDeducted, 1);
+          assert.deepEqual(plan.warnings,
+              [{itemId: "a", reason: "count_was_off"}]);
+        });
+
+    it("sells from a store the product was never in without going negative",
+        () => {
+          const it = item({quantity: 10, storeStock: true});
+          const plan = inv.planStoreSale(line(2), items({a: it}), new Map(),
+              ctx);
+          assert.equal(plan.writes[0].rowQuantity, 0);
+          assert.equal(plan.writes[0].totalAfter, 10);
+          assert.equal(plan.writes[0].rowCountWasOff, true);
+        });
+
+    it("keeps the Main pieces of a product with no rows when another store" +
+        " sells", () => {
+      const plan = inv.planStoreSale(line(1), items({a: item({quantity: 7})}),
+          new Map(), ctx);
+      assert.deepEqual(plan.writes[0].extraRows,
+          [{storeId: "main", quantity: 7, countWasOff: false}]);
+      assert.equal(plan.writes[0].totalAfter, 7);
+    });
+
+    it("sells a product with no rows from Main as if it were the shelf",
+        () => {
+          const plan = inv.planStoreSale(line(2),
+              items({a: item({quantity: 7})}), new Map(),
+              {storeId: "main", mainStoreId: "main"});
+          assert.equal(plan.writes[0].rowQuantity, 5);
+          assert.equal(plan.writes[0].totalAfter, 5);
+          assert.deepEqual(plan.writes[0].extraRows, []);
+        });
+
+    it("keeps the product's flag when the sale itself is covered", () => {
+      const plan = inv.planStoreSale(line(1),
+          items({a: item({quantity: 10, storeStock: true,
+            countWasOff: true})}), new Map([["a", row(5)]]), ctx);
+      assert.equal(plan.writes[0].itemCountWasOff, true);
+      assert.equal(plan.writes[0].rowCountWasOff, false);
+    });
+
+    it("shares one store's stock between two lines of a product", () => {
+      const plan = inv.planStoreSale(
+          [{itemId: "a", quantity: 2, soldPriceCents: 1000},
+            {itemId: "a", quantity: 2, soldPriceCents: 900}],
+          items({a: item({quantity: 3, storeStock: true})}),
+          new Map([["a", row(3)]]), ctx);
+      assert.equal(plan.writes.length, 1);
+      assert.equal(plan.writes[0].rowQuantity, 0);
+      assert.equal(plan.writes[0].totalAfter, 0);
+      assert.equal(plan.lines[1].stockDeducted, 1);
+    });
+  });
+
+  describe("a void", () => {
+    const sale = {lines: [{itemId: "a", quantity: 3, stockDeducted: 2}]};
+
+    it("puts back exactly what left, into the sale's store", () => {
+      const plan = inv.planStoreVoid(sale,
+          items({a: item({quantity: 10, storeStock: true})}),
+          new Map([["a", row(1, true)]]), ctx);
+      assert.deepEqual(plan.writes, [{itemId: "a", rowQuantity: 3,
+        rowCountWasOff: true, totalAfter: 12, extraRows: []}]);
+      assert.deepEqual(plan.movements,
+          [{itemId: "a", delta: 2, quantityAfter: 3}]);
+    });
+
+    it("skips a product that was deleted", () => {
+      const plan = inv.planStoreVoid(sale, new Map(), new Map(), ctx);
+      assert.deepEqual(plan.writes, []);
+      assert.deepEqual(plan.skipped, ["a"]);
+    });
+
+    it("restores a sale from before the stores into Main", () => {
+      const plan = inv.planStoreVoid(sale, items({a: item({quantity: 5})}),
+          new Map(), {storeId: "main", mainStoreId: "main"});
+      assert.equal(plan.writes[0].rowQuantity, 7);
+      assert.equal(plan.writes[0].totalAfter, 7);
+    });
+  });
+
+  describe("an add or a set", () => {
+    const rows = (entries) => new Map(Object.entries(entries));
+
+    it("adds to one store and the total follows the rows", () => {
+      const plan = inv.planStoreAdjust(item({quantity: 9, storeStock: true}),
+          rows({main: row(5), annex: row(4)}), "annex",
+          {mode: "add", quantity: 3}, "main");
+      assert.deepEqual([plan.errors, plan.quantityAfter, plan.delta,
+        plan.totalAfter, plan.itemCountWasOff],
+      [[], 7, 3, 12, false]);
+    });
+
+    it("sets a count down to zero and clears that store's flag only", () => {
+      const plan = inv.planStoreAdjust(item({quantity: 9, storeStock: true,
+        countWasOff: true}),
+      rows({main: row(5, true), annex: row(4, true)}), "annex",
+      {mode: "set", quantity: 0}, "main");
+      assert.equal(plan.quantityAfter, 0);
+      assert.equal(plan.delta, -4);
+      assert.equal(plan.rowCountWasOff, false);
+      // Main is still doubtful, so the product is too.
+      assert.equal(plan.itemCountWasOff, true);
+      assert.equal(plan.totalAfter, 5);
+      const clean = inv.planStoreAdjust(item({quantity: 9, storeStock: true,
+        countWasOff: true}),
+      rows({main: row(5), annex: row(4, true)}), "annex",
+      {mode: "set", quantity: 4}, "main");
+      assert.equal(clean.itemCountWasOff, false);
+    });
+
+    it("keeps Main's pieces when a product with no rows is set elsewhere",
+        () => {
+          const plan = inv.planStoreAdjust(item({quantity: 7}), new Map(),
+              "annex", {mode: "set", quantity: 2}, "main");
+          assert.deepEqual(plan.extraRows,
+              [{storeId: "main", quantity: 7, countWasOff: false}]);
+          assert.equal(plan.totalAfter, 9);
+        });
+
+    it("sets Main itself on a product with no rows", () => {
+      const plan = inv.planStoreAdjust(item({quantity: 7}), new Map(), "main",
+          {mode: "add", quantity: 1}, "main");
+      assert.deepEqual(plan.extraRows, []);
+      assert.equal(plan.quantityAfter, 8);
+      assert.equal(plan.totalAfter, 8);
+    });
+
+    it("refuses bad input and a total past the limit", () => {
+      const it = item({quantity: 9, storeStock: true});
+      assert.deepEqual(inv.planStoreAdjust(it, new Map(), "annex",
+          {mode: "x", quantity: 1}, "main").errors, ["mode_invalid"]);
+      assert.deepEqual(inv.planStoreAdjust(it, new Map(), "annex",
+          {mode: "add", quantity: 0}, "main").errors, ["quantity_invalid"]);
+      assert.deepEqual(inv.planStoreAdjust(it,
+          rows({main: row(inv.MAX_QUANTITY)}), "annex",
+          {mode: "add", quantity: 1}, "main").errors, ["quantity_invalid"]);
+    });
+  });
+
+  describe("a transfer", () => {
+    const rows = (entries) => new Map(Object.entries(entries));
+    const move = (rowsIn, quantity, from = "main", to = "annex", it = item({
+      quantity: 9, storeStock: true})) => inv.planTransfer(it, rowsIn,
+        {fromStoreId: from, toStoreId: to, quantity}, "main");
+
+    it("moves pieces and never makes a count negative", () => {
+      const plan = move(rows({main: row(5), annex: row(4)}), 5);
+      assert.deepEqual([plan.errors, plan.amount, plan.from.quantityAfter,
+        plan.to.quantityAfter], [[], 5, 0, 9]);
+      assert.deepEqual(move(rows({main: row(5)}), 6).errors,
+          ["insufficient_stock"]);
+      assert.deepEqual(move(rows({}), 1).errors, ["insufficient_stock"]);
+    });
+
+    it("refuses the same store and bad quantities", () => {
+      assert.deepEqual(move(rows({main: row(5)}), 1, "main", "main").errors,
+          ["same_store"]);
+      for (const bad of [0, -1, 1.5, "x", null, undefined, true]) {
+        assert.deepEqual(move(rows({main: row(5)}), bad).errors,
+            ["quantity_invalid"], String(bad));
+      }
+    });
+
+    it("refuses to push a store past the limit", () => {
+      assert.deepEqual(move(rows({main: row(5),
+        annex: row(inv.MAX_QUANTITY)}), 1).errors, ["quantity_invalid"]);
+    });
+
+    it("keeps the doubtful flag of each side", () => {
+      const plan = move(rows({main: row(5, true), annex: row(0, false)}), 2);
+      assert.equal(plan.from.countWasOff, true);
+      assert.equal(plan.to.countWasOff, false);
+    });
+
+    it("moves out of Main on a product with no rows without losing it", () => {
+      const plan = move(rows({}), 3, "main", "annex", item({quantity: 7}));
+      assert.deepEqual([plan.errors, plan.from.quantityAfter,
+        plan.to.quantityAfter, plan.extraRows], [[], 4, 3, []]);
+      // Neither side is Main: Main would still hold the pieces, so it is
+      // written too, and the source (not Main) has nothing to give.
+      const other = move(rows({}), 1, "annex", "depot", item({quantity: 7}));
+      assert.deepEqual(other.errors, ["insufficient_stock"]);
+      const between = move(rows({annex: row(2)}), 1, "annex", "depot",
+          item({quantity: 7}));
+      assert.deepEqual(between.extraRows,
+          [{storeId: "main", quantity: 7, countWasOff: false}]);
+    });
+  });
+});
+
+describe("inventory v2: summaries per store", () => {
+  const stores = [
+    {id: "main", name: "Main store"}, {id: "annex", name: "Annex"},
+    {id: "old", name: "Old", archived: true}];
+  const sale = (extra, lines) => ({voided: false, lines: lines || [{
+    itemId: "a", quantity: 2, soldPriceCents: 1000, costCents: 400}],
+  ...extra});
+
+  it("tells which store a sale was rung up at", () => {
+    assert.equal(inv.saleStoreId({storeId: "annex"}, "main"), "annex");
+    assert.equal(inv.saleStoreId({}, "main"), "main");
+    assert.equal(inv.saleStoreId({}, ""), "");
+  });
+
+  it("adds up sales per store, with an empty row for a quiet store", () => {
+    const out = inv.summarizeByStore([
+      sale({storeId: "annex"}), sale({storeId: "annex"}),
+      sale({voided: true, storeId: "annex"}),
+      sale({}, [{itemId: "a", quantity: 1, soldPriceCents: 500,
+        costCents: null}])], stores, "main");
+    assert.deepEqual(out, [
+      {storeId: "annex", name: "Annex", salesCount: 2, itemsSold: 4,
+        revenueCents: 4000, profitCents: 4000 - 1600},
+      {storeId: "main", name: "Main store", salesCount: 1, itemsSold: 1,
+        revenueCents: 500, profitCents: 0}]);
+    const quiet = inv.summarizeByStore([], stores, "main");
+    assert.deepEqual(quiet.map((r) => [r.storeId, r.salesCount]),
+        [["annex", 0], ["main", 0]]);
+  });
+
+  it("lists an archived store only when it sold", () => {
+    const out = inv.summarizeByStore([sale({storeId: "old"})], stores,
+        "main");
+    assert.ok(out.some((r) => r.storeId === "old" && r.salesCount === 1));
+  });
+
+  describe("low stock and count-was-off per store", () => {
+    const products = [
+      {id: "a", name: "Alpha", lowStockAt: 3, storeStock: true},
+      {id: "b", name: "Beta", lowStockAt: null, storeStock: true},
+      {id: "c", name: "Charlie", lowStockAt: 5, quantity: 4,
+        countWasOff: true},
+      {id: "d", name: "Archived", archived: true, storeStock: true,
+        lowStockAt: 9}];
+    const rows = [
+      {itemId: "a", storeId: "main", quantity: 20, countWasOff: false},
+      {itemId: "a", storeId: "annex", quantity: 3, countWasOff: true},
+      {itemId: "b", storeId: "main", quantity: 0, countWasOff: false},
+      {itemId: "b", storeId: "old", quantity: 0, countWasOff: false},
+      {itemId: "d", storeId: "main", quantity: 0, countWasOff: false}];
+
+    it("judges each store's count against the one level", () => {
+      const out = inv.summarizeShelfByStore({items: products, rows, stores,
+        mainStoreId: "main"});
+      assert.deepEqual(out.low.map((e) => [e.itemId, e.storeId, e.storeName,
+        e.quantity]),
+      [["b", "main", "Main store", 0], ["a", "annex", "Annex", 3],
+        ["c", "main", "Main store", 4]]);
+      assert.equal(out.lowCount, 3);
+      assert.deepEqual(out.countWasOff.map((e) => [e.itemId, e.storeName]),
+          [["a", "Annex"], ["c", "Main store"]]);
+      assert.equal(out.countWasOffCount, 2);
+    });
+
+    it("never judges a store the product was never in", () => {
+      const out = inv.summarizeShelfByStore({items: products, rows, stores,
+        mainStoreId: "main"});
+      assert.ok(!out.low.some((e) => e.itemId === "a" &&
+        e.storeId === "main"));
+      assert.ok(!out.low.some((e) => e.itemId === "c" &&
+        e.storeId === "annex"));
+    });
+
+    it("hides archived stores and archived products", () => {
+      const out = inv.summarizeShelfByStore({items: products, rows, stores,
+        mainStoreId: "main"});
+      assert.ok(!out.low.some((e) => e.storeId === "old"));
+      assert.ok(!out.low.some((e) => e.itemId === "d"));
+    });
+
+    it("shows a staff member only their store", () => {
+      const out = inv.summarizeShelfByStore({items: products, rows, stores,
+        mainStoreId: "main", visibleStoreIds: new Set(["annex"])});
+      assert.deepEqual(out.low.map((e) => e.storeId), ["annex"]);
+      assert.deepEqual(out.countWasOff.map((e) => e.storeId), ["annex"]);
+    });
+  });
+
+  describe("which stores a summary covers", () => {
+    const scope = (access, requestedStoreId = "", extra = {}) =>
+      inv.resolveSummaryScope({converted: true, stores, access,
+        requestedStoreId, ...extra});
+    const owner = inv.storeAccessOf({role: "businessOwner"});
+    const staff = inv.storeAccessOf({role: "staff",
+      inventoryHomeStoreId: "annex"});
+
+    it("covers everything for a business without stores", () => {
+      assert.deepEqual(inv.resolveSummaryScope({converted: false, stores: [],
+        access: owner, requestedStoreId: ""}),
+      {code: null, multi: false, filterStoreId: "", allView: false});
+      assert.equal(inv.resolveSummaryScope({converted: false, stores: [],
+        access: owner, requestedStoreId: "x"}).code, "store_not_found");
+    });
+
+    it("covers everything for one active store", () => {
+      const one = [{id: "main", name: "Main store"}];
+      assert.deepEqual(scope(staff, "", {stores: one}),
+          {code: null, multi: false, filterStoreId: "", allView: false});
+    });
+
+    it("lets an all-stores caller see all or one store", () => {
+      assert.deepEqual(scope(owner),
+          {code: null, multi: true, filterStoreId: "", allView: true});
+      assert.equal(scope(owner, "annex").filterStoreId, "annex");
+      assert.equal(scope(owner, "old").filterStoreId, "old");
+      assert.equal(scope(owner, "nope").code, "store_not_found");
+    });
+
+    it("gives staff their own store whatever they ask", () => {
+      assert.deepEqual(scope(staff),
+          {code: null, multi: true, filterStoreId: "annex", allView: false});
+      assert.equal(scope(staff, "annex").code, null);
+      assert.equal(scope(staff, "main").code, "store_not_allowed");
+      assert.equal(scope(inv.storeAccessOf({role: "staff"})).code,
+          "home_store_required");
+    });
   });
 });

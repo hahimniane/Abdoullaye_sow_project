@@ -333,8 +333,9 @@ describe("selling", () => {
         assert.equal(sale.totalCents, 1600);
         assert.deepEqual(sale.lines, [{
           itemId: id, name: "Black soap", code: (await itemDoc(id)).code,
-          quantity: 2, listPriceCents: 1000, soldPriceCents: 800,
-          costCents: 400, countWasOff: false, stockDeducted: 2,
+          quantity: 2, categoryId: "", category: "", listPriceCents: 1000,
+          soldPriceCents: 800, costCents: 400, countWasOff: false,
+          stockDeducted: 2,
         }]);
         const row = await itemDoc(id);
         assert.equal(row.quantity, 3);
@@ -1056,4 +1057,1134 @@ describe("a platform admin switches Inventory on or off", () => {
     }
     assert.ok(!(await servicesOf()).includes("inventory"));
   });
+});
+
+// ===========================================================================
+// Categories and stores (v2). Each block owns its business so the numbers
+// are exact; v1-shaped payloads (no storeId, no categoryId, `category` text,
+// `quantity`) are replayed throughout.
+// ===========================================================================
+
+const callIn = (biz) => (name, data, uid) => functions[name].run({
+  auth: {uid, token: {}}, data: {businessId: biz, ...data}});
+
+async function seedBusiness(biz, users) {
+  await db.collection("businesses").doc(biz).set({
+    name: biz, status: "approved", enabledServices: ["inventory"]});
+  await Promise.all(Object.entries(users).map(([uid, profile]) =>
+    db.collection("users").doc(uid).set({
+      email: `${uid}@example.test`, fullName: uid, ...profile})));
+}
+
+describe("v2 callables are gated like the rest", () => {
+  it("refuses every new callable while the service is off", async () => {
+    const off = (name, data) => functions[name].run({
+      auth: {uid: OFF_OWNER, token: {}}, data: {businessId: BIZ_OFF, ...data},
+    });
+    const calls = [
+      ["createInventoryCategory", {name: "Skin"}],
+      ["renameInventoryCategory", {categoryId: "x", name: "Skin"}],
+      ["archiveInventoryCategory", {categoryId: "x", archived: true}],
+      ["syncInventoryCategories", {}],
+      ["createInventoryStore", {name: "Annex"}],
+      ["updateInventoryStore", {storeId: "x", name: "Annex"}],
+      ["archiveInventoryStore", {storeId: "x", archived: true}],
+      ["setInventoryStaffAccess", {userId: "x", homeStoreId: "",
+        allStores: false}],
+      ["transferInventoryStock", {itemId: "x", fromStoreId: "a",
+        toStoreId: "b", quantity: 1}],
+    ];
+    for (const [name, data] of calls) {
+      await assert.rejects(off(name, data),
+          refusal("service_disabled", "failed-precondition"), name);
+    }
+  });
+
+  it("refuses staff without the inventory section", async () => {
+    for (const name of ["createInventoryCategory", "createInventoryStore",
+      "transferInventoryStock"]) {
+      await assert.rejects(call(name, {name: "x"}, NO_INVENTORY),
+          (error) => error.code === "permission-denied", name);
+    }
+  });
+});
+
+describe("categories", () => {
+  const CB = "inv-cat-biz";
+  const C_OWNER = "inv-cat-owner";
+  const C_STAFF = "inv-cat-staff";
+  const c = callIn(CB);
+  const categoriesOf = async () => (await db.collection("inventoryCategories")
+      .where("businessId", "==", CB).get()).docs
+      .map((d) => ({id: d.id, ...d.data()}));
+  const itemRow = async (id) => (await db.collection("inventoryItems").doc(id)
+      .get()).data();
+  const mk = async (extra = {}) => (await c("createInventoryItem", {
+    name: `Product ${++keys}`, priceCents: 1000, quantity: 5, ...extra,
+  }, C_OWNER)).itemId;
+
+  before(async () => {
+    await seedBusiness(CB, {
+      [C_OWNER]: {role: "businessOwner", businessId: CB},
+      [C_STAFF]: {role: "staff", businessId: CB,
+        businessPermissions: ["inventory"]},
+    });
+  });
+
+  it("creates a category, trimmed, and refuses a duplicate in any case",
+      async () => {
+        const made = await c("createInventoryCategory",
+            {name: "  Skin   care "}, C_STAFF);
+        assert.equal(made.name, "Skin care");
+        const row = (await db.collection("inventoryCategories")
+            .doc(made.categoryId).get()).data();
+        assert.deepEqual(
+            [row.businessId, row.name, row.nameKey, row.archived,
+              row.createdByStaffId],
+            [CB, "Skin care", "skin care", false, C_STAFF]);
+        await assert.rejects(
+            c("createInventoryCategory", {name: "SKIN CARE"}, C_OWNER),
+            (error) => {
+              assert.equal(error.details.reason, "category_name_taken");
+              assert.equal(error.code, "already-exists");
+              assert.equal(error.details.categoryId, made.categoryId);
+              return true;
+            });
+        await assert.rejects(c("createInventoryCategory", {name: "  "},
+            C_OWNER), refusal("category_name_required", "invalid-argument"));
+        await assert.rejects(c("createInventoryCategory",
+            {name: "x".repeat(61)}, C_OWNER), refusal("category_too_long"));
+        // Two businesses may both have a "Skin care".
+        await functions.createInventoryCategory.run({
+          auth: {uid: OWNER, token: {}},
+          data: {businessId: BIZ, name: "Skin care"}});
+      });
+
+  it("gives a product the category it picked, with a name snapshot",
+      async () => {
+        const {categoryId} = await c("createInventoryCategory",
+            {name: "Hair"}, C_OWNER);
+        const id = await mk({categoryId});
+        const row = await itemRow(id);
+        assert.equal(row.categoryId, categoryId);
+        assert.equal(row.category, "Hair");
+        await assert.rejects(mk({categoryId: "no-such-category"}),
+            refusal("category_not_found", "not-found"));
+        await assert.rejects(mk({categoryId: "a/b"}),
+            refusal("category_not_found"));
+      });
+
+  it("finds a typed name in the list, or creates it, never twice",
+      async () => {
+        const before = (await categoriesOf()).length;
+        const ids = await Promise.all(Array.from({length: 4}, (_, i) =>
+          mk({category: i % 2 ? "Candles" : "  candles "})));
+        const rows = await Promise.all(ids.map(itemRow));
+        assert.equal(new Set(rows.map((r) => r.categoryId)).size, 1);
+        assert.ok(rows.every((r) => r.categoryId));
+        assert.equal((await categoriesOf()).length, before + 1);
+        // The snapshot is the category's own spelling, not what was typed.
+        const casing = new Set(rows.map((r) => r.category));
+        assert.equal(casing.size, 1);
+        // An existing category is matched by name, whatever the case.
+        const again = await mk({category: "HAIR"});
+        assert.equal((await itemRow(again)).category, "Hair");
+        assert.equal((await categoriesOf()).length, before + 1);
+      });
+
+  it("keeps the v1 shape: a `category` text works and an empty one clears",
+      async () => {
+        const id = await mk({category: "Oils"});
+        const row = await itemRow(id);
+        assert.equal(row.category, "Oils");
+        assert.ok(row.categoryId);
+        await c("updateInventoryItem", {itemId: id, category: ""}, C_OWNER);
+        const cleared = await itemRow(id);
+        assert.equal(cleared.category, "");
+        assert.equal(cleared.categoryId, "");
+        await c("updateInventoryItem", {itemId: id, category: "Oils"},
+            C_OWNER);
+        assert.equal((await itemRow(id)).categoryId, row.categoryId);
+        await c("updateInventoryItem", {itemId: id, categoryId: ""}, C_OWNER);
+        assert.equal((await itemRow(id)).categoryId, "");
+        await c("updateInventoryItem", {itemId: id, categoryId: row.categoryId},
+            C_OWNER);
+        assert.equal((await itemRow(id)).category, "Oils");
+      });
+
+  it("renames a category on its products but not on past sales",
+      async () => {
+        const {categoryId} = await c("createInventoryCategory",
+            {name: "Bags"}, C_OWNER);
+        const ids = await Promise.all([mk({categoryId}), mk({categoryId})]);
+        const sold = await c("recordInventorySale", {
+          clientRequestId: requestId(), paymentMethod: "cash",
+          lines: [{itemId: ids[0], quantity: 1, soldPriceCents: 1000}]},
+        C_OWNER);
+        const done = await c("renameInventoryCategory",
+            {categoryId, name: "Handbags"}, C_STAFF);
+        assert.equal(done.itemsUpdated, 2);
+        assert.equal(done.complete, true);
+        for (const id of ids) {
+          const row = await itemRow(id);
+          assert.equal(row.category, "Handbags");
+          assert.equal(row.categoryId, categoryId);
+        }
+        const sale = (await db.collection("inventorySales").doc(sold.saleId)
+            .get()).data();
+        assert.equal(sale.lines[0].category, "Bags");
+        assert.equal(sale.lines[0].categoryId, categoryId);
+        // The old name is free again, the new one is taken.
+        await c("createInventoryCategory", {name: "bags"}, C_OWNER);
+        await assert.rejects(
+            c("renameInventoryCategory", {categoryId, name: "BAGS"}, C_OWNER),
+            refusal("category_name_taken"));
+        // Renaming in place (only the case) is fine.
+        await c("renameInventoryCategory", {categoryId, name: "HANDBAGS"},
+            C_OWNER);
+        assert.equal((await itemRow(ids[1])).category, "HANDBAGS");
+        await assert.rejects(c("renameInventoryCategory",
+            {categoryId: "nope", name: "Z"}, C_OWNER),
+        refusal("category_not_found"));
+        await assert.rejects(c("renameInventoryCategory",
+            {categoryId, name: ""}, C_OWNER),
+        refusal("category_name_required"));
+      });
+
+  it("archives a category and keeps it on the products", async () => {
+    const {categoryId} = await c("createInventoryCategory",
+        {name: "Seasonal"}, C_OWNER);
+    const id = await mk({categoryId});
+    await c("archiveInventoryCategory", {categoryId, archived: true},
+        C_STAFF);
+    assert.equal((await db.collection("inventoryCategories").doc(categoryId)
+        .get()).get("archived"), true);
+    assert.equal((await itemRow(id)).categoryId, categoryId);
+    // The picker no longer offers it, but editing the product keeps it.
+    await c("updateInventoryItem", {itemId: id, categoryId, name: "Kept"},
+        C_OWNER);
+    await assert.rejects(mk({categoryId}), refusal("category_not_found"));
+    await assert.rejects(c("archiveInventoryCategory",
+        {categoryId, archived: "yes"}, C_OWNER), refusal("archived_invalid"));
+    // Typing its name brings it back instead of making a twin.
+    const typed = await mk({category: "seasonal"});
+    assert.equal((await itemRow(typed)).categoryId, categoryId);
+    assert.equal((await db.collection("inventoryCategories").doc(categoryId)
+        .get()).get("archived"), false);
+  });
+
+  it("matches legacy typed categories into the list as they are seen",
+      async () => {
+        const legacy = await db.collection("inventoryItems").add({
+          businessId: CB, name: "Legacy bar", code: `IT-L${++keys}`,
+          priceCents: 500, costCents: 100, quantity: 4, lowStockAt: null,
+          category: "Soap", photoUrl: "", archived: false, countWasOff: false,
+        });
+        const twin = await db.collection("inventoryItems").add({
+          businessId: CB, name: "Legacy bar 2", code: `IT-L${++keys}`,
+          priceCents: 500, costCents: null, quantity: 4, lowStockAt: null,
+          category: " Soap ", photoUrl: "", archived: false,
+          countWasOff: false,
+        });
+        const s = await c("getInventorySummary", {range: "today"}, C_OWNER);
+        assert.equal(s.truncated, false);
+        const cats = (await categoriesOf()).filter((x) => x.nameKey === "soap");
+        assert.equal(cats.length, 1);
+        for (const ref of [legacy, twin]) {
+          const row = (await ref.get()).data();
+          assert.equal(row.categoryId, cats[0].id);
+          assert.equal(row.category, "Soap");
+        }
+        // Idempotent: a second look makes nothing new.
+        const total = (await categoriesOf()).length;
+        await c("getInventorySummary", {range: "today"}, C_OWNER);
+        assert.equal((await categoriesOf()).length, total);
+        const synced = await c("syncInventoryCategories", {}, C_STAFF);
+        assert.equal(synced.remaining, 0);
+      });
+
+  it("snapshots the category on a sale line, legacy products included",
+      async () => {
+        const legacy = await db.collection("inventoryItems").add({
+          businessId: CB, name: "Old Hair thing", code: `IT-L${++keys}`,
+          priceCents: 500, costCents: null, quantity: 4, lowStockAt: null,
+          category: "hair", photoUrl: "", archived: false, countWasOff: false,
+        });
+        const sale = await c("recordInventorySale", {
+          clientRequestId: requestId(), paymentMethod: "cash",
+          lines: [{itemId: legacy.id, quantity: 1, soldPriceCents: 500}]},
+        C_OWNER);
+        const line = (await db.collection("inventorySales").doc(sale.saleId)
+            .get()).data().lines[0];
+        const hair = (await categoriesOf()).find((x) => x.nameKey === "hair");
+        assert.equal(line.categoryId, hair.id);
+        assert.equal(line.category, "hair");
+      });
+
+  describe("byCategory", () => {
+    const RB = "inv-cat-report-biz";
+    const r = callIn(RB);
+    const R_OWNER = "inv-cat-report-owner";
+    before(async () => {
+      await seedBusiness(RB, {
+        [R_OWNER]: {role: "businessOwner", businessId: RB}});
+    });
+    const mkr = async (extra) => (await r("createInventoryItem", {
+      priceCents: 1000, quantity: 20, ...extra}, R_OWNER)).itemId;
+    const ring = (lines) => r("recordInventorySale", {
+      clientRequestId: requestId(), paymentMethod: "cash", lines}, R_OWNER);
+
+    it("groups revenue and profit, drops voided sales, sorts by revenue",
+        async () => {
+          const food = (await r("createInventoryCategory", {name: "Food"},
+              R_OWNER)).categoryId;
+          const gear = (await r("createInventoryCategory", {name: "Gear"},
+              R_OWNER)).categoryId;
+          const rice = await mkr({name: "Rice", categoryId: food,
+            costCents: 300});
+          const tape = await mkr({name: "Tape", categoryId: gear,
+            costCents: null});
+          const misc = await mkr({name: "Misc"});
+          const sold = await ring([
+            {itemId: rice, quantity: 2, soldPriceCents: 800},
+            {itemId: tape, quantity: 3, soldPriceCents: 1000},
+            {itemId: misc, quantity: 1, soldPriceCents: 250}]);
+          const gone = await ring([
+            {itemId: tape, quantity: 5, soldPriceCents: 1000}]);
+          await r("voidInventorySale", {saleId: gone.saleId}, R_OWNER);
+          // A line written before categories existed: no snapshot at all.
+          await db.collection("inventorySales").add({
+            businessId: RB, voided: false, totalCents: 1000,
+            createdAt: admin.firestore.Timestamp.now(),
+            lines: [{itemId: rice, name: "Rice", quantity: 1,
+              soldPriceCents: 1000, listPriceCents: 1000, costCents: 300}]});
+          const s = await r("getInventorySummary", {range: "today"}, R_OWNER);
+          assert.deepEqual(s.byCategory, [
+            {categoryId: gear, name: "Gear", itemsSold: 3,
+              revenueCents: 3000, profitCents: 0},
+            {categoryId: food, name: "Food", itemsSold: 3,
+              revenueCents: 2600, profitCents: 2600 - 900},
+            {categoryId: "", name: "Uncategorized", itemsSold: 1,
+              revenueCents: 250, profitCents: 0}]);
+          assert.equal(s.revenueCents, 5850);
+          // The category's current name shows on past sales.
+          await r("renameInventoryCategory",
+              {categoryId: food, name: "Groceries"}, R_OWNER);
+          const after = await r("getInventorySummary", {range: "today"},
+              R_OWNER);
+          assert.ok(after.byCategory.some((e) => e.categoryId === food &&
+            e.name === "Groceries"));
+          assert.ok(sold.saleId);
+          assert.deepEqual(after.byStore, []);
+          assert.equal(after.multiStore, false);
+        });
+  });
+});
+
+describe("stores", () => {
+  const SB = "inv-store-biz";
+  const OWN = "inv-store-owner";
+  const HOME_A = "inv-store-clerk-a";
+  const HOME_B = "inv-store-clerk-b";
+  const ROVER = "inv-store-rover";
+  const NOHOME = "inv-store-nohome";
+  const FOREIGN = "inv-store-foreign-staff";
+  const s = callIn(SB);
+  const row = async (id) => (await db.collection("inventoryItems").doc(id)
+      .get()).data();
+  const stockAt = async (itemId, storeId) => {
+    const doc = await db.collection("inventoryStock")
+        .doc(`${itemId}__${storeId}`).get();
+    return doc.exists ? doc.data() : null;
+  };
+  const stockRows = async (itemId) => (await db.collection("inventoryStock")
+      .where("businessId", "==", SB).where("itemId", "==", itemId).get())
+      .docs.map((d) => d.data());
+  // The product's total always equals the sum of its stores' counts.
+  const sumRows = async (itemId) => (await stockRows(itemId))
+      .reduce((n, x) => n + x.quantity, 0);
+  const assertInvariant = async (itemId) => {
+    const item = await row(itemId);
+    assert.equal(item.storeStock, true, "per-store rows exist");
+    assert.equal(item.quantity, await sumRows(itemId), "total = sum of rows");
+  };
+  const config = async () => (await db.collection("inventoryConfig")
+      .doc(SB).get()).data();
+  const moves = async (itemId) => (await db.collection("inventoryMovements")
+      .where("businessId", "==", SB).where("itemId", "==", itemId).get())
+      .docs.map((d) => d.data())
+      .sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis());
+  const mk = async (extra = {}, uid = OWN) => (await s("createInventoryItem", {
+    name: `Item ${++keys}`, priceCents: 1000, costCents: 400, quantity: 10,
+    lowStockAt: 2, ...extra,
+  }, uid)).itemId;
+  const ring = (itemId, quantity, extra = {}, uid = OWN) =>
+    s("recordInventorySale", {clientRequestId: requestId(),
+      paymentMethod: "cash", lines: [{itemId, quantity,
+        soldPriceCents: 1000}], ...extra}, uid);
+
+  let main;
+  let annex;
+  let depot;
+  let legacyA;
+  let legacyB;
+  let legacySale;
+
+  before(async () => {
+    await seedBusiness(SB, {
+      [OWN]: {role: "businessOwner", businessId: SB},
+      [HOME_A]: {role: "staff", businessId: SB,
+        businessPermissions: ["inventory"]},
+      [HOME_B]: {role: "staff", businessId: SB,
+        businessPermissions: ["inventory"]},
+      [ROVER]: {role: "staff", businessId: SB,
+        businessPermissions: ["inventory"]},
+      [NOHOME]: {role: "staff", businessId: SB,
+        businessPermissions: ["inventory"]},
+      [FOREIGN]: {role: "staff", businessId: BIZ_OFF,
+        businessPermissions: ["inventory"]},
+    });
+    main = `${SB}_main`;
+  });
+
+  describe("a single-store business is untouched", () => {
+    it("has no stores, no stock rows and no storeId anywhere", async () => {
+      legacyA = await mk({name: "Legacy A", quantity: 10, category: "Soap"});
+      legacyB = await mk({name: "Legacy B", quantity: 3});
+      const sale = await ring(legacyA, 1);
+      legacySale = sale.saleId;
+      assert.equal(sale.storeId, undefined);
+      assert.equal((await row(legacyA)).quantity, 9);
+      assert.equal((await row(legacyA)).storeStock, undefined);
+      assert.equal((await db.collection("inventoryStock")
+          .where("businessId", "==", SB).get()).size, 0);
+      assert.equal((await db.collection("inventoryStores")
+          .where("businessId", "==", SB).get()).size, 0);
+      assert.equal((await db.collection("inventoryConfig").doc(SB).get())
+          .exists, false);
+      const stored = (await db.collection("inventorySales").doc(legacySale)
+          .get()).data();
+      assert.equal("storeId" in stored, false);
+      const [move] = (await moves(legacyA)).slice(-1);
+      assert.equal("storeId" in move, false);
+      const adjusted = await s("adjustInventoryStock",
+          {itemId: legacyB, mode: "add", quantity: 2}, OWN);
+      assert.deepEqual(adjusted, {success: true, quantity: 5});
+      const summary = await s("getInventorySummary",
+          {range: "today", timeZone: "UTC"}, OWN);
+      assert.equal(summary.multiStore, false);
+      assert.deepEqual(summary.byStore, []);
+    });
+
+    it("refuses a store id and stock by store while there are no stores",
+        async () => {
+          await assert.rejects(ring(legacyA, 1, {storeId: "x"}),
+              refusal("store_not_found"));
+          await assert.rejects(s("adjustInventoryStock", {itemId: legacyA,
+            mode: "add", quantity: 1, storeId: "x"}, OWN),
+          refusal("store_not_found"));
+          await assert.rejects(s("createInventoryItem", {name: "n",
+            priceCents: 1, stock: {x: 1}}, OWN), refusal("store_not_found"));
+          await assert.rejects(s("transferInventoryStock", {itemId: legacyA,
+            fromStoreId: "a", toStoreId: "b", quantity: 1}, OWN),
+          refusal("store_not_found"));
+        });
+  });
+
+  describe("adding a second store", () => {
+    it("is for the owner only and names every problem", async () => {
+      await assert.rejects(s("createInventoryStore", {name: "Annex"}, HOME_A),
+          refusal("owner_only", "permission-denied"));
+      await assert.rejects(s("createInventoryStore", {name: " "}, OWN),
+          refusal("store_name_required", "invalid-argument"));
+      await assert.rejects(s("createInventoryStore", {name: "x".repeat(121)},
+          OWN), refusal("name_too_long"));
+      await assert.rejects(s("createInventoryStore",
+          {name: "Annex", phone: "9".repeat(41)}, OWN),
+      refusal("store_field_too_long"));
+      assert.equal((await db.collection("inventoryStores")
+          .where("businessId", "==", SB).get()).size, 0);
+    });
+
+    it("turns Main into a real store and keeps products and counts",
+        async () => {
+          const made = await s("createInventoryStore",
+              {name: "Annex", address: "12 Rue Neuve", phone: "555-0100"}, OWN);
+          annex = made.storeId;
+          assert.equal(made.mainStoreId, main);
+          const stores = (await db.collection("inventoryStores")
+              .where("businessId", "==", SB).get()).docs
+              .map((d) => ({id: d.id, ...d.data()}));
+          assert.deepEqual(stores.map((x) => [x.id, x.name, x.isMain,
+            x.archived]).sort(),
+          [[annex, "Annex", false, false], [main, "Main store", true, false]]
+              .sort());
+          const a = stores.find((x) => x.id === annex);
+          assert.deepEqual([a.address, a.phone, a.createdByStaffId],
+              ["12 Rue Neuve", "555-0100", OWN]);
+          const cfg = await config();
+          assert.deepEqual([cfg.storesConverted, cfg.mainStoreId,
+            cfg.multiStore, cfg.stockPending], [true, main, true, false]);
+          // Every existing product moved under Main, totals untouched.
+          assert.equal((await row(legacyA)).quantity, 9);
+          assert.equal((await stockAt(legacyA, main)).quantity, 9);
+          assert.equal((await stockAt(legacyB, main)).quantity, 5);
+          await assertInvariant(legacyA);
+          await assertInvariant(legacyB);
+          // Old documents were not rewritten.
+          const sale = (await db.collection("inventorySales").doc(legacySale)
+              .get()).data();
+          assert.equal("storeId" in sale, false);
+        });
+
+    it("adds a third store without converting again", async () => {
+      const made = await s("createInventoryStore", {name: "Depot"}, OWN);
+      depot = made.storeId;
+      assert.equal(made.mainStoreId, main);
+      assert.equal((await db.collection("inventoryStores")
+          .where("businessId", "==", SB).get()).size, 3);
+      assert.equal((await config()).mainStoreId, main);
+    });
+
+    it("renames and edits a store, owner only", async () => {
+      await assert.rejects(s("updateInventoryStore",
+          {storeId: annex, name: "X"}, HOME_A), refusal("owner_only"));
+      await assert.rejects(s("updateInventoryStore", {storeId: annex}, OWN),
+          refusal("nothing_to_update"));
+      await assert.rejects(s("updateInventoryStore",
+          {storeId: "nope", name: "X"}, OWN), refusal("store_not_found"));
+      await assert.rejects(s("updateInventoryStore",
+          {storeId: annex, name: ""}, OWN), refusal("store_name_required"));
+      const done = await s("updateInventoryStore",
+          {storeId: annex, name: "Annex Shop", phone: "555-0199"}, OWN);
+      assert.deepEqual(done.changed, ["name", "phone"]);
+      const doc = (await db.collection("inventoryStores").doc(annex).get())
+          .data();
+      assert.deepEqual([doc.name, doc.phone, doc.address],
+          ["Annex Shop", "555-0199", "12 Rue Neuve"]);
+      await s("updateInventoryStore", {storeId: main, name: "Main store"}, OWN);
+    });
+  });
+
+  describe("who may use which store", () => {
+    it("sets staff access, owner only", async () => {
+      await assert.rejects(s("setInventoryStaffAccess", {userId: HOME_A,
+        homeStoreId: annex, allStores: false}, HOME_B),
+      refusal("owner_only", "permission-denied"));
+      await assert.rejects(s("setInventoryStaffAccess", {userId: HOME_A,
+        homeStoreId: annex, allStores: "yes"}, OWN),
+      refusal("all_stores_invalid"));
+      await assert.rejects(s("setInventoryStaffAccess", {userId: HOME_A,
+        homeStoreId: "nope", allStores: false}, OWN),
+      refusal("store_not_found"));
+      await assert.rejects(s("setInventoryStaffAccess", {userId: FOREIGN,
+        homeStoreId: annex, allStores: false}, OWN),
+      refusal("user_not_found", "not-found"));
+      await assert.rejects(s("setInventoryStaffAccess", {userId: OWN,
+        homeStoreId: annex, allStores: false}, OWN),
+      refusal("user_not_found"));
+      await s("setInventoryStaffAccess",
+          {userId: HOME_A, homeStoreId: annex, allStores: false}, OWN);
+      await s("setInventoryStaffAccess",
+          {userId: HOME_B, homeStoreId: main, allStores: false}, OWN);
+      await s("setInventoryStaffAccess",
+          {userId: ROVER, homeStoreId: "", allStores: true}, OWN);
+      const a = (await db.collection("users").doc(HOME_A).get()).data();
+      assert.deepEqual([a.inventoryHomeStoreId, a.inventoryAllStores],
+          [annex, false]);
+      const r = (await db.collection("users").doc(ROVER).get()).data();
+      assert.deepEqual([r.inventoryHomeStoreId, r.inventoryAllStores],
+          ["", true]);
+    });
+
+    it("refuses selling and stocking for staff with no home store",
+        async () => {
+          const id = await mk({quantity: 4});
+          await assert.rejects(ring(id, 1, {}, NOHOME),
+              refusal("home_store_required", "failed-precondition"));
+          await assert.rejects(s("adjustInventoryStock", {itemId: id,
+            mode: "add", quantity: 1}, NOHOME), refusal("home_store_required"));
+          await assert.rejects(s("getInventorySummary", {range: "today"},
+              NOHOME), refusal("home_store_required"));
+          // Naming a store does not get around it.
+          await assert.rejects(ring(id, 1, {storeId: main}, NOHOME),
+              refusal("store_not_allowed", "permission-denied"));
+          assert.equal((await row(id)).quantity, 4);
+        });
+
+    it("puts a v1 payload on the caller's home store, the owner's on Main",
+        async () => {
+          const id = await mk({quantity: 6});
+          // Born at Main (the owner has no home store): 6 there.
+          assert.equal((await stockAt(id, main)).quantity, 6);
+          await s("adjustInventoryStock",
+              {itemId: id, mode: "add", quantity: 4}, HOME_A);
+          assert.equal((await stockAt(id, annex)).quantity, 4);
+          assert.equal((await stockAt(id, main)).quantity, 6);
+          assert.equal((await row(id)).quantity, 10);
+          // A v1 sale from Annex's clerk takes from Annex...
+          const sale = await ring(id, 3, {}, HOME_A);
+          assert.equal(sale.storeId, annex);
+          assert.equal((await stockAt(id, annex)).quantity, 1);
+          // ...and the owner's from Main, with no storeId sent.
+          const own = await ring(id, 2);
+          assert.equal(own.storeId, main);
+          assert.equal((await stockAt(id, main)).quantity, 4);
+          assert.equal((await row(id)).quantity, 5);
+          await assertInvariant(id);
+          const stored = (await db.collection("inventorySales")
+              .doc(sale.saleId).get()).data();
+          assert.deepEqual([stored.storeId, stored.storeName],
+              [annex, "Annex Shop"]);
+          const last = (await moves(id)).pop();
+          assert.equal(last.storeId, main);
+        });
+
+    it("keeps staff to their own store and lets all-stores staff roam",
+        async () => {
+          const id = await mk({stock: {[main]: 5, [annex]: 5}});
+          await assert.rejects(ring(id, 1, {storeId: main}, HOME_A),
+              refusal("store_not_allowed"));
+          await assert.rejects(s("adjustInventoryStock", {itemId: id,
+            mode: "add", quantity: 1, storeId: main}, HOME_A),
+          refusal("store_not_allowed"));
+          await assert.rejects(s("createInventoryItem", {name: "x",
+            priceCents: 5, stock: {[main]: 1}}, HOME_A),
+          refusal("store_not_allowed"));
+          await ring(id, 1, {storeId: annex}, HOME_A);
+          const roam = await ring(id, 1, {storeId: annex}, ROVER);
+          assert.equal(roam.storeId, annex);
+          // No storeId from an all-stores member without a home: Main.
+          assert.equal((await ring(id, 1, {}, ROVER)).storeId, main);
+          assert.equal((await stockAt(id, annex)).quantity, 3);
+          assert.equal((await stockAt(id, main)).quantity, 4);
+          await assertInvariant(id);
+          await assert.rejects(ring(id, 1, {storeId: "nope"}, OWN),
+              refusal("store_not_found", "not-found"));
+        });
+
+    it("starts a product in several stores with a `stock` map", async () => {
+      const made = await s("createInventoryItem", {
+        name: "Mapped", priceCents: 700, stock: {[main]: 2, [annex]: 3,
+          [depot]: 0}}, OWN);
+      const item = await row(made.itemId);
+      assert.equal(item.quantity, 5);
+      assert.equal(item.storeStock, true);
+      assert.deepEqual((await stockRows(made.itemId))
+          .map((x) => [x.storeId, x.quantity]).sort(),
+      [[annex, 3], [depot, 0], [main, 2]].sort());
+      const initial = (await moves(made.itemId)).filter(
+          (m) => m.type === "initial");
+      assert.deepEqual(initial.map((m) => [m.storeId, m.delta]).sort(),
+          [[annex, 3], [main, 2]].sort());
+      await assert.rejects(s("createInventoryItem", {name: "x", priceCents: 5,
+        stock: {[main]: -1}}, OWN), refusal("quantity_invalid"));
+      await assert.rejects(s("createInventoryItem", {name: "x", priceCents: 5,
+        stock: {}}, OWN), refusal("quantity_invalid"));
+      await assert.rejects(s("createInventoryItem", {name: "x", priceCents: 5,
+        stock: {nope: 1}}, OWN), refusal("store_not_found"));
+      // `quantity` plus a storeId puts the count in that store.
+      const at = await s("createInventoryItem", {name: "At depot",
+        priceCents: 5, quantity: 4, storeId: depot}, OWN);
+      assert.equal((await stockAt(at.itemId, depot)).quantity, 4);
+      assert.equal(await stockAt(at.itemId, main), null);
+    });
+  });
+
+  describe("selling per store", () => {
+    it("floors and flags the count of that store only", async () => {
+      const id = await mk({stock: {[main]: 10, [annex]: 1}});
+      const sale = await ring(id, 3, {storeId: annex}, OWN);
+      assert.deepEqual(sale.warnings, [{itemId: id, reason: "count_was_off"}]);
+      assert.equal((await stockAt(id, annex)).quantity, 0);
+      assert.equal((await stockAt(id, annex)).countWasOff, true);
+      assert.equal((await stockAt(id, main)).countWasOff, false);
+      assert.equal((await stockAt(id, main)).quantity, 10);
+      assert.equal((await row(id)).quantity, 10);
+      assert.equal((await row(id)).countWasOff, true);
+      await assertInvariant(id);
+      // Main selling is unaffected by Annex being off.
+      const fine = await ring(id, 2, {storeId: main}, OWN);
+      assert.deepEqual(fine.warnings, []);
+      // Setting the count at Annex clears its flag and the product's.
+      const set = await s("adjustInventoryStock", {itemId: id, mode: "set",
+        quantity: 4, storeId: annex}, OWN);
+      assert.deepEqual([set.quantity, set.totalQuantity, set.storeId],
+          [4, 12, annex]);
+      assert.equal((await stockAt(id, annex)).countWasOff, false);
+      assert.equal((await row(id)).countWasOff, false);
+      await assertInvariant(id);
+    });
+
+    it("lets two simultaneous last-piece sales on one store both through",
+        async () => {
+          const id = await mk({stock: {[main]: 5, [annex]: 1}});
+          const results = await Promise.all([
+            ring(id, 1, {storeId: annex}, HOME_A),
+            ring(id, 1, {storeId: annex}, ROVER)]);
+          assert.equal(results.length, 2);
+          assert.equal(results.filter((r) => r.warnings.length > 0).length, 1);
+          assert.equal((await stockAt(id, annex)).quantity, 0);
+          assert.equal((await stockAt(id, annex)).countWasOff, true);
+          assert.equal((await row(id)).quantity, 5);
+          await assertInvariant(id);
+          const sold = (await moves(id)).filter((m) => m.type === "sale");
+          assert.deepEqual(sold.map((m) => m.delta).sort(), [-1, 0]);
+        });
+
+    it("answers a retried sale with the same sale and stock once",
+        async () => {
+          const id = await mk({stock: {[annex]: 5}});
+          const key = requestId();
+          const first = await ring(id, 2, {clientRequestId: key,
+            storeId: annex}, HOME_A);
+          const again = await ring(id, 2, {clientRequestId: key}, HOME_A);
+          assert.equal(first.replayed, false);
+          assert.equal(again.replayed, true);
+          assert.equal(again.saleId, first.saleId);
+          assert.equal(again.storeId, annex);
+          assert.equal((await stockAt(id, annex)).quantity, 3);
+          await assertInvariant(id);
+        });
+
+    it("refuses an archived or foreign product and writes nothing",
+        async () => {
+          const id = await mk({quantity: 3});
+          await s("archiveInventoryItem", {itemId: id, archived: true}, OWN);
+          await assert.rejects(ring(id, 1), refusal("item_archived"));
+          await assert.rejects(ring("nope", 1), refusal("item_not_found"));
+          assert.equal((await stockAt(id, main)).quantity, 3);
+        });
+
+    it("serves an unmaterialised product from the Main store", async () => {
+      // A product the lazy rule has never touched: no rows, no marker.
+      const ref = await db.collection("inventoryItems").add({
+        businessId: SB, name: "Lazy", code: `IT-Z${++keys}`, priceCents: 1000,
+        costCents: null, quantity: 7, lowStockAt: null, category: "",
+        categoryId: "", photoUrl: "", archived: false, countWasOff: false});
+      const id = ref.id;
+      // A sale at Annex finds nothing there (0, flagged) and must not lose
+      // Main's 7: Main's row is written in the same transaction.
+      const odd = await ring(id, 1, {storeId: annex}, ROVER);
+      assert.equal(odd.warnings.length, 1);
+      assert.equal((await stockAt(id, main)).quantity, 7);
+      assert.equal((await stockAt(id, annex)).quantity, 0);
+      assert.equal((await row(id)).quantity, 7);
+      await assertInvariant(id);
+      // And a transfer out of Main on a second such product.
+      const two = (await db.collection("inventoryItems").add({
+        businessId: SB, name: "Lazy 2", code: `IT-Z${++keys}`,
+        priceCents: 1000, costCents: null, quantity: 7, lowStockAt: null,
+        category: "", categoryId: "", photoUrl: "", archived: false,
+        countWasOff: false})).id;
+      await s("transferInventoryStock", {itemId: two, fromStoreId: main,
+        toStoreId: annex, quantity: 3}, OWN);
+      assert.equal((await stockAt(two, main)).quantity, 4);
+      assert.equal((await stockAt(two, annex)).quantity, 3);
+      await assertInvariant(two);
+      // And a count set at Depot keeps Main's pieces too.
+      const three = (await db.collection("inventoryItems").add({
+        businessId: SB, name: "Lazy 3", code: `IT-Z${++keys}`,
+        priceCents: 1000, costCents: null, quantity: 7, lowStockAt: null,
+        category: "", categoryId: "", photoUrl: "", archived: false,
+        countWasOff: false})).id;
+      const set = await s("adjustInventoryStock", {itemId: three,
+        mode: "add", quantity: 2, storeId: depot}, OWN);
+      assert.deepEqual([set.quantity, set.totalQuantity], [2, 9]);
+      await assertInvariant(three);
+    });
+  });
+
+  describe("voiding restores to the store of the sale", () => {
+    it("puts stock back where it left, once", async () => {
+      const id = await mk({stock: {[main]: 5, [annex]: 5}});
+      const sale = await ring(id, 2, {storeId: annex}, HOME_A);
+      await assert.rejects(s("voidInventorySale", {saleId: sale.saleId},
+          HOME_B), refusal("store_not_allowed"));
+      assert.equal((await stockAt(id, annex)).quantity, 3);
+      await s("voidInventorySale", {saleId: sale.saleId}, HOME_A);
+      assert.equal((await stockAt(id, annex)).quantity, 5);
+      assert.equal((await stockAt(id, main)).quantity, 5);
+      assert.equal((await row(id)).quantity, 10);
+      await assertInvariant(id);
+      await assert.rejects(s("voidInventorySale", {saleId: sale.saleId}, OWN),
+          refusal("sale_voided"));
+      const back = (await moves(id)).filter((m) => m.type === "void");
+      assert.deepEqual(back.map((m) => [m.storeId, m.delta]),
+          [[annex, 2]]);
+    });
+
+    it("restores only what left a floored store", async () => {
+      const id = await mk({stock: {[main]: 5, [annex]: 1}});
+      const sale = await ring(id, 4, {storeId: annex}, OWN);
+      assert.equal((await stockAt(id, annex)).quantity, 0);
+      await s("voidInventorySale", {saleId: sale.saleId}, OWN);
+      assert.equal((await stockAt(id, annex)).quantity, 1);
+      assert.equal((await row(id)).quantity, 6);
+      await assertInvariant(id);
+    });
+
+    it("sends a sale from before the stores back to Main", async () => {
+      assert.equal((await stockAt(legacyA, main)).quantity, 9);
+      await s("voidInventorySale", {saleId: legacySale}, HOME_B);
+      assert.equal((await stockAt(legacyA, main)).quantity, 10);
+      assert.equal((await row(legacyA)).quantity, 10);
+      await assertInvariant(legacyA);
+      // Annex's clerk cannot touch what Main sold.
+      const other = await ring(legacyA, 1, {storeId: main}, OWN);
+      await assert.rejects(s("voidInventorySale", {saleId: other.saleId},
+          HOME_A), refusal("store_not_allowed"));
+    });
+  });
+
+  describe("transfers", () => {
+    it("moves pieces atomically, with one movement per side", async () => {
+      const id = await mk({stock: {[main]: 8, [annex]: 1}});
+      const done = await s("transferInventoryStock", {itemId: id,
+        fromStoreId: main, toStoreId: annex, quantity: 5, note: "restock"},
+      OWN);
+      assert.deepEqual([done.from, done.to],
+          [{storeId: main, quantity: 3}, {storeId: annex, quantity: 6}]);
+      assert.equal((await stockAt(id, main)).quantity, 3);
+      assert.equal((await stockAt(id, annex)).quantity, 6);
+      assert.equal((await row(id)).quantity, 9);
+      await assertInvariant(id);
+      const pair = (await moves(id)).filter((m) => m.transferId);
+      assert.equal(pair.length, 2);
+      assert.equal(pair[0].transferId, pair[1].transferId);
+      assert.equal(pair[0].transferId, done.transferId);
+      const out = pair.find((m) => m.type === "transfer_out");
+      const inn = pair.find((m) => m.type === "transfer_in");
+      assert.deepEqual([out.storeId, out.delta, out.quantityAfter, out.note],
+          [main, -5, 3, "restock"]);
+      assert.deepEqual([inn.storeId, inn.delta, inn.quantityAfter],
+          [annex, 5, 6]);
+    });
+
+    it("refuses the same store, too many pieces and bad numbers",
+        async () => {
+          const id = await mk({stock: {[main]: 2, [annex]: 0}});
+          const move = (extra) => s("transferInventoryStock", {itemId: id,
+            fromStoreId: main, toStoreId: annex, quantity: 1, ...extra}, OWN);
+          await assert.rejects(move({toStoreId: main}),
+              refusal("same_store", "invalid-argument"));
+          await assert.rejects(move({quantity: 3}),
+              refusal("insufficient_stock", "failed-precondition"));
+          await assert.rejects(move({fromStoreId: depot, quantity: 1}),
+              refusal("insufficient_stock"));
+          for (const bad of [0, -1, 1.5, "x", null]) {
+            await assert.rejects(move({quantity: bad}),
+                refusal("quantity_invalid"), String(bad));
+          }
+          await assert.rejects(move({toStoreId: "nope"}),
+              refusal("store_not_found"));
+          await assert.rejects(s("transferInventoryStock", {itemId: "nope",
+            fromStoreId: main, toStoreId: annex, quantity: 1}, OWN),
+          refusal("item_not_found"));
+          // Nothing moved, nothing logged.
+          assert.equal((await stockAt(id, main)).quantity, 2);
+          assert.equal((await stockAt(id, annex)).quantity, 0);
+          assert.equal((await moves(id)).filter((m) => m.transferId).length, 0);
+          // The exact count is fine and leaves zero, never negative.
+          await move({quantity: 2});
+          assert.equal((await stockAt(id, main)).quantity, 0);
+          await assertInvariant(id);
+        });
+
+    it("never overdraws when two transfers race for the same pieces",
+        async () => {
+          const id = await mk({stock: {[main]: 3, [annex]: 0}});
+          const attempt = () => s("transferInventoryStock", {itemId: id,
+            fromStoreId: main, toStoreId: annex, quantity: 2}, OWN)
+              .then(() => "ok", (error) => error.details?.reason);
+          const outcomes = await Promise.all([attempt(), attempt()]);
+          assert.deepEqual(outcomes.sort(), ["insufficient_stock", "ok"]);
+          assert.equal((await stockAt(id, main)).quantity, 1);
+          assert.equal((await stockAt(id, annex)).quantity, 2);
+          await assertInvariant(id);
+        });
+
+    it("is for the owner and all-stores staff only", async () => {
+      const id = await mk({stock: {[main]: 4, [annex]: 0}});
+      const move = (uid) => s("transferInventoryStock", {itemId: id,
+        fromStoreId: main, toStoreId: annex, quantity: 1}, uid);
+      await assert.rejects(move(HOME_B),
+          refusal("store_not_allowed", "permission-denied"));
+      await assert.rejects(move(HOME_A), refusal("store_not_allowed"));
+      await assert.rejects(move(NOHOME), refusal("store_not_allowed"));
+      await move(ROVER);
+      await move(OWN);
+      assert.equal((await stockAt(id, annex)).quantity, 2);
+      await assertInvariant(id);
+    });
+  });
+
+  describe("summary per store", () => {
+    it("judges low stock and counts per store and names the store",
+        async () => {
+          const id = await mk({name: "Per store", lowStockAt: 3,
+            stock: {[main]: 20, [annex]: 2, [depot]: 9}});
+          const odd = await mk({name: "Off count",
+            stock: {[main]: 5, [annex]: 0}});
+          await ring(odd, 1, {storeId: annex}, OWN);
+          const all = await s("getInventorySummary",
+              {range: "today", timeZone: "UTC"}, OWN);
+          assert.equal(all.multiStore, true);
+          const lowOf = (list, itemId) => list.filter((e) => e.itemId ===
+            itemId).map((e) => [e.storeId, e.storeName, e.quantity]);
+          assert.deepEqual(lowOf(all.low, id), [[annex, "Annex Shop", 2]]);
+          assert.deepEqual(lowOf(all.low, odd),
+              [[annex, "Annex Shop", 0]]);
+          assert.deepEqual(all.countWasOff.filter((e) => e.itemId === odd)
+              .map((e) => [e.storeId, e.storeName]), [[annex, "Annex Shop"]]);
+          assert.ok(all.lowCount >= 2 && all.countWasOffCount >= 1);
+          // One store: the owner's filter and the clerk's own view agree.
+          const only = await s("getInventorySummary",
+              {range: "today", timeZone: "UTC", storeId: annex}, OWN);
+          const mine = await s("getInventorySummary",
+              {range: "today", timeZone: "UTC"}, HOME_A);
+          for (const view of [only, mine]) {
+            assert.ok(view.low.every((e) => e.storeId === annex));
+            assert.equal(view.storeId, annex);
+            assert.equal(lowOf(view.low, id).length, 1);
+          }
+          assert.deepEqual(mine.byStore, []);
+          assert.equal(only.byStore.length, 1);
+        });
+
+    it("adds up sales per store, for all-store callers only", async () => {
+      const BS = "inv-store-numbers";
+      const o = "inv-store-numbers-owner";
+      const clerk = "inv-store-numbers-clerk";
+      const n = callIn(BS);
+      await seedBusiness(BS, {
+        [o]: {role: "businessOwner", businessId: BS},
+        [clerk]: {role: "staff", businessId: BS,
+          businessPermissions: ["inventory"]}});
+      const north = (await n("createInventoryStore", {name: "North"}, o))
+          .storeId;
+      const mainId = `${BS}_main`;
+      await n("setInventoryStaffAccess", {userId: clerk, homeStoreId: north,
+        allStores: false}, o);
+      const item = (await n("createInventoryItem", {name: "Goods",
+        priceCents: 1000, costCents: 400, stock: {[mainId]: 50, [north]: 50}},
+      o)).itemId;
+      const rung = (storeId, q, price, uid = o) => n("recordInventorySale",
+          {clientRequestId: requestId(), paymentMethod: "cash", storeId,
+            lines: [{itemId: item, quantity: q, soldPriceCents: price}]}, uid);
+      await rung(mainId, 2, 1000);
+      await rung(mainId, 1, 500);
+      await rung(north, 4, 900, clerk);
+      const gone = await rung(north, 10, 900, clerk);
+      await n("voidInventorySale", {saleId: gone.saleId}, o);
+      const all = await n("getInventorySummary", {range: "today"}, o);
+      assert.equal(all.multiStore, true);
+      assert.deepEqual(all.byStore, [
+        {storeId: north, name: "North", salesCount: 1, itemsSold: 4,
+          revenueCents: 3600, profitCents: 3600 - 1600},
+        {storeId: mainId, name: "Main store", salesCount: 2, itemsSold: 3,
+          revenueCents: 2500, profitCents: 2500 - 1200}]);
+      assert.equal(all.revenueCents, 6100);
+      assert.equal(all.salesCount, 3);
+      const north_ = await n("getInventorySummary",
+          {range: "today", storeId: north}, o);
+      assert.equal(north_.revenueCents, 3600);
+      assert.equal(north_.salesCount, 1);
+      const mine = await n("getInventorySummary", {range: "today"}, clerk);
+      assert.equal(mine.revenueCents, 3600);
+      assert.deepEqual(mine.byStore, []);
+      assert.equal(mine.storeId, north);
+      await assert.rejects(n("getInventorySummary",
+          {range: "today", storeId: mainId}, clerk),
+      refusal("store_not_allowed"));
+      await assert.rejects(n("getInventorySummary",
+          {range: "today", storeId: "nope"}, o), refusal("store_not_found"));
+      // The category report follows the same filter.
+      assert.equal(mine.byCategory.reduce((x, e) => x + e.revenueCents, 0),
+          3600);
+    });
+  });
+
+  describe("archiving a store", () => {
+    it("is owner only and refused while it holds stock", async () => {
+      const id = await mk({stock: {[depot]: 3}});
+      await assert.rejects(s("archiveInventoryStore",
+          {storeId: depot, archived: true}, HOME_A), refusal("owner_only"));
+      await assert.rejects(s("archiveInventoryStore",
+          {storeId: depot, archived: "yes"}, OWN), refusal("archived_invalid"));
+      await assert.rejects(s("archiveInventoryStore",
+          {storeId: "nope", archived: true}, OWN),
+      refusal("store_not_found"));
+      await assert.rejects(s("archiveInventoryStore",
+          {storeId: depot, archived: true}, OWN),
+      refusal("store_has_stock", "failed-precondition"));
+      assert.equal((await db.collection("inventoryStores").doc(depot).get())
+          .get("archived"), false);
+      // Empty it everywhere (every product with pieces there), then archive.
+      const held = await db.collection("inventoryStock")
+          .where("businessId", "==", SB).where("storeId", "==", depot)
+          .where("quantity", ">", 0).get();
+      for (const doc of held.docs) {
+        await s("transferInventoryStock", {itemId: doc.data().itemId,
+          fromStoreId: depot, toStoreId: annex,
+          quantity: doc.data().quantity}, OWN);
+      }
+      await s("archiveInventoryStore", {storeId: depot, archived: true}, OWN);
+      assert.equal((await db.collection("inventoryStores").doc(depot).get())
+          .get("archived"), true);
+      assert.equal((await config()).multiStore, true);
+      assert.ok(id);
+    });
+
+    it("keeps an archived store out of sales, stock and transfers",
+        async () => {
+          const id = await mk({stock: {[main]: 5}});
+          await assert.rejects(ring(id, 1, {storeId: depot}),
+              refusal("store_archived", "failed-precondition"));
+          await assert.rejects(s("adjustInventoryStock", {itemId: id,
+            mode: "add", quantity: 1, storeId: depot}, OWN),
+          refusal("store_archived"));
+          await assert.rejects(s("transferInventoryStock", {itemId: id,
+            fromStoreId: main, toStoreId: depot, quantity: 1}, OWN),
+          refusal("store_archived"));
+          await assert.rejects(s("setInventoryStaffAccess", {userId: HOME_A,
+            homeStoreId: depot, allStores: false}, OWN),
+          refusal("store_archived"));
+          await assert.rejects(s("createInventoryItem", {name: "n",
+            priceCents: 5, stock: {[depot]: 1}}, OWN),
+          refusal("store_archived"));
+        });
+
+    it("acts as a single store again with one active store left",
+        async () => {
+          await s("archiveInventoryStore", {storeId: annex, archived: true},
+              OWN).catch(async (error) => {
+            assert.equal(error.details.reason, "store_has_stock");
+            const held = await db.collection("inventoryStock")
+                .where("businessId", "==", SB)
+                .where("storeId", "==", annex).where("quantity", ">", 0).get();
+            for (const doc of held.docs) {
+              await s("transferInventoryStock", {itemId: doc.data().itemId,
+                fromStoreId: annex, toStoreId: main,
+                quantity: doc.data().quantity}, OWN);
+            }
+            await s("archiveInventoryStore",
+                {storeId: annex, archived: true}, OWN);
+          });
+          assert.equal((await config()).multiStore, false);
+          // The last active store cannot be archived.
+          await assert.rejects(s("archiveInventoryStore",
+              {storeId: main, archived: true}, OWN),
+          refusal("last_store_active"));
+          // Nobody needs a home store now, and stock still goes through rows.
+          const id = await mk({quantity: 5}, NOHOME);
+          const sale = await ring(id, 2, {}, NOHOME);
+          assert.equal(sale.storeId, main);
+          assert.equal((await stockAt(id, main)).quantity, 3);
+          assert.equal((await row(id)).quantity, 3);
+          await assertInvariant(id);
+          const summary = await s("getInventorySummary", {range: "today"},
+              NOHOME);
+          assert.equal(summary.multiStore, false);
+          assert.deepEqual(summary.byStore, []);
+          // Restoring a store brings the multi-store rules back.
+          await s("archiveInventoryStore", {storeId: annex, archived: false},
+              OWN);
+          assert.equal((await config()).multiStore, true);
+          await assert.rejects(ring(id, 1, {}, NOHOME),
+              refusal("home_store_required"));
+        });
+  });
+
+  describe("old clients and housekeeping", () => {
+    it("deletes a product's per-store rows with it", async () => {
+      const id = await mk({stock: {[main]: 2, [annex]: 2}});
+      assert.equal((await stockRows(id)).length, 2);
+      await s("deleteInventoryItem", {itemId: id, confirm: true}, OWN);
+      assert.equal((await stockRows(id)).length, 0);
+    });
+
+    it("finishes a pending move under Main on the next store call",
+        async () => {
+          const id = (await db.collection("inventoryItems").add({
+            businessId: SB, name: "Pending", code: `IT-P${++keys}`,
+            priceCents: 1000, costCents: null, quantity: 6, lowStockAt: null,
+            category: "", categoryId: "", photoUrl: "", archived: false,
+            countWasOff: false})).id;
+          await db.collection("inventoryConfig").doc(SB).update(
+              {stockPending: true});
+          await s("updateInventoryStore", {storeId: annex, phone: "555-0000"},
+              OWN);
+          assert.equal((await config()).stockPending, false);
+          assert.equal((await stockAt(id, main)).quantity, 6);
+          assert.equal((await row(id)).storeStock, true);
+          await assertInvariant(id);
+        });
+
+    it("keeps v1 request and answer shapes for the owner of a multi-store" +
+        " business", async () => {
+      const made = await s("createInventoryItem", {name: "V1 product",
+        priceCents: 1250, costCents: 500, quantity: 7, lowStockAt: 2,
+        category: "Legacy", photoUrl: "https://cdn.example.test/p.png"}, OWN);
+      assert.deepEqual(Object.keys(made).sort(),
+          ["categoryId", "code", "itemId", "success"]);
+      const item = await row(made.itemId);
+      assert.equal(item.quantity, 7);
+      assert.equal(item.category, "Legacy");
+      const sale = await s("recordInventorySale", {
+        clientRequestId: requestId(), paymentMethod: "cash",
+        lines: [{itemId: made.itemId, quantity: 1, soldPriceCents: 1250}]},
+      OWN);
+      for (const key of ["success", "saleId", "totalCents", "warnings",
+        "replayed"]) {
+        assert.ok(key in sale, key);
+      }
+      const adj = await s("adjustInventoryStock",
+          {itemId: made.itemId, mode: "set", quantity: 9}, OWN);
+      assert.equal(adj.success, true);
+      assert.equal(adj.quantity, 9);
+      assert.equal((await row(made.itemId)).quantity, 9);
+      const summary = await s("getInventorySummary",
+          {range: "today", timeZone: "America/New_York"}, OWN);
+      for (const key of ["salesCount", "itemsSold", "revenueCents",
+        "costCents", "profitCents", "discountCents", "best", "low",
+        "countWasOff", "range", "since", "timeZone", "linesWithoutCost",
+        "lowCount", "countWasOffCount", "truncated"]) {
+        assert.ok(key in summary, key);
+      }
+      assert.equal(await sumRows(made.itemId), 9);
+    });
+  });
+});
+
+describe("adding the second store while sales are being rung up", () => {
+  it("never loses a piece: the total always equals the stores' sum",
+      async () => {
+        const RB = "inv-race-biz";
+        const owner = "inv-race-owner";
+        const r = callIn(RB);
+        await seedBusiness(RB, {
+          [owner]: {role: "businessOwner", businessId: RB}});
+        const ids = [];
+        for (let i = 0; i < 6; i++) {
+          ids.push((await r("createInventoryItem", {name: `Race ${i}`,
+            priceCents: 1000, quantity: 20}, owner)).itemId);
+        }
+        const sales = ids.map((itemId) => r("recordInventorySale", {
+          clientRequestId: requestId(), paymentMethod: "cash",
+          lines: [{itemId, quantity: 3, soldPriceCents: 1000}]}, owner));
+        const [, ...done] = await Promise.all([
+          r("createInventoryStore", {name: "Second"}, owner), ...sales]);
+        assert.equal(done.length, 6);
+        for (const itemId of ids) {
+          const item = (await db.collection("inventoryItems").doc(itemId)
+              .get()).data();
+          const rows = (await db.collection("inventoryStock")
+              .where("businessId", "==", RB).where("itemId", "==", itemId)
+              .get()).docs.map((d) => d.data());
+          assert.equal(item.quantity, 17, "three pieces sold, once");
+          assert.equal(item.storeStock, true);
+          assert.equal(rows.reduce((n, x) => n + x.quantity, 0), 17);
+        }
+      });
 });

@@ -19353,6 +19353,18 @@ exports.getContainerDocumentUrl = onCall(
 
 const INVENTORY_SECTION = "inventory";
 const INVENTORY_SERVICE = "inventory";
+const INVENTORY_CONFIG = "inventoryConfig";
+// Moving a not-yet-converted business's products under its Main store, and
+// renaming a category on its products, run in bounded pages.
+const INVENTORY_EAGER_PAGE = 200;
+const INVENTORY_EAGER_PAGES = 200;
+const INVENTORY_EAGER_BUDGET_MS = 60 * 1000;
+const INVENTORY_RENAME_PAGE = 400;
+const INVENTORY_RENAME_PAGES = 25;
+// Typed categories of products from before the category list are matched
+// into it a little at a time (per summary call).
+const INVENTORY_LEGACY_CATEGORY_CAP = 30;
+const INVENTORY_LEGACY_ITEM_CAP = 300;
 
 /**
  * A refusal the screens can act on: the English message, `details.reason`
@@ -19375,10 +19387,12 @@ function inventoryRefusal(codes, extra = {}) {
  *
  * @param {string} uid The caller.
  * @param {string} businessId The business.
- * @return {Promise<object>} Firestore.
+ * @return {Promise<{db: object, user: object, access: object}>} Firestore,
+ *   the caller's profile and what they may do with stores.
  */
-async function requireInventoryAccess(uid, businessId) {
-  await requireBusinessPermission(uid, businessId, INVENTORY_SECTION);
+async function requireInventoryContext(uid, businessId) {
+  const user = await requireBusinessPermission(
+      uid, businessId, INVENTORY_SECTION);
   const db = admin.firestore();
   const business = businessId ?
     await db.collection("businesses").doc(businessId).get() : null;
@@ -19389,7 +19403,16 @@ async function requireInventoryAccess(uid, businessId) {
   if (!services.includes(INVENTORY_SERVICE)) {
     throw inventoryRefusal("service_disabled");
   }
-  return db;
+  return {db, user, access: inventory.storeAccessOf(user)};
+}
+
+/**
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} Firestore, once the caller passed the gate.
+ */
+async function requireInventoryAccess(uid, businessId) {
+  return (await requireInventoryContext(uid, businessId)).db;
 }
 
 /**
@@ -19401,6 +19424,15 @@ function inventoryIds(data) {
     businessId: String(data?.businessId || "").trim(),
     itemId: String(data?.itemId || "").trim(),
   };
+}
+
+/**
+ * @param {*} value A store / category / user id from a client.
+ * @return {string} It trimmed, "" when it is empty or holds a slash.
+ */
+function inventoryDocId(value) {
+  const id = String(value ?? "").trim();
+  return id.includes("/") ? "" : id.slice(0, 200);
 }
 
 /**
@@ -19432,36 +19464,585 @@ function inventoryItemAudit(businessId, itemId, action, uid, summary,
   });
 }
 
-exports.createInventoryItem = onCall(
+// Categories and stores are set-up, not news: their history rows are written
+// already acknowledged so they stay out of the "Needs attention" feed.
+function inventorySetupAudit(businessId, entityType, entityId, action, uid,
+    summary) {
+  return writeLotLedgerAudit({
+    businessId, entityType, entityId, action, byStaffId: uid, summary,
+    changes: [], acknowledged: true,
+  });
+}
+
+const inventoryConfigRef = (db, businessId) =>
+  db.collection(INVENTORY_CONFIG).doc(businessId);
+
+const inventoryStockRef = (db, itemId, storeId) =>
+  db.collection("inventoryStock").doc(inventory.stockDocId(itemId, storeId));
+
+/**
+ * What the business's stores look like, read inside a transaction (every
+ * stock transaction reads this first, so a conversion to stores and a stock
+ * change cannot run past each other).
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} {config, converted, stores, mainStoreId}.
+ */
+async function readInventoryStoreContext(tx, db, businessId) {
+  const doc = await tx.get(inventoryConfigRef(db, businessId));
+  const config = doc.exists ? doc.data() || {} : null;
+  const converted = config?.storesConverted === true;
+  let stores = [];
+  if (converted) {
+    const snap = await tx.get(db.collection("inventoryStores")
+        .where("businessId", "==", businessId));
+    stores = snap.docs.map((d) => ({id: d.id, ...d.data()}));
+  }
+  return {config, converted, stores,
+    mainStoreId: converted ? String(config.mainStoreId ||
+      inventory.mainStoreIdOf(businessId)) : ""};
+}
+
+/**
+ * The same, outside a transaction (a read-only answer).
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} {config, converted, stores, mainStoreId}.
+ */
+async function loadInventoryStoreContext(db, businessId) {
+  const doc = await inventoryConfigRef(db, businessId).get();
+  const config = doc.exists ? doc.data() || {} : null;
+  const converted = config?.storesConverted === true;
+  let stores = [];
+  if (converted) {
+    const snap = await db.collection("inventoryStores")
+        .where("businessId", "==", businessId).get();
+    stores = snap.docs.map((d) => ({id: d.id, ...d.data()}));
+  }
+  return {config, converted, stores,
+    mainStoreId: converted ? String(config.mainStoreId ||
+      inventory.mainStoreIdOf(businessId)) : ""};
+}
+
+/**
+ * The store a stock action is about, or a thrown refusal. Null for a business
+ * that has no stores yet (the existing path).
+ *
+ * @param {object} sctx The store context.
+ * @param {object} access What the caller may do with stores.
+ * @param {*} requestedStoreId The `storeId` the client sent, if any.
+ * @return {?object} The store ({id, name, ...}).
+ */
+function inventoryStoreFor(sctx, access, requestedStoreId) {
+  const resolved = inventory.resolveStore({
+    converted: sctx.converted, stores: sctx.stores,
+    mainStoreId: sctx.mainStoreId, access,
+    requestedStoreId: inventoryDocId(requestedStoreId),
+  });
+  if (resolved.code) throw inventoryRefusal(resolved.code);
+  return resolved.store;
+}
+
+function inventoryRowFields(businessId, itemId, storeId, quantity, countWasOff,
+    now) {
+  return {businessId, itemId, storeId, quantity, countWasOff, updatedAt: now};
+}
+
+/**
+ * The stock rows of one product, by store, read inside a transaction.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} itemId The product.
+ * @return {Promise<Map<string, object>>} Store id -> row.
+ */
+async function inventoryRowsOfItemIn(tx, db, businessId, itemId) {
+  const snap = await tx.get(db.collection("inventoryStock")
+      .where("businessId", "==", businessId).where("itemId", "==", itemId));
+  const rows = new Map();
+  snap.docs.forEach((d) => rows.set(String(d.data().storeId), d.data()));
+  return rows;
+}
+
+/**
+ * The stock row of each product at ONE store, read inside a transaction.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string[]} itemIds The products.
+ * @param {string} storeId The store.
+ * @return {Promise<Map<string, object>>} Product id -> row (absent: none).
+ */
+async function inventoryRowsAtStoreIn(tx, db, itemIds, storeId) {
+  const rows = new Map();
+  if (itemIds.length === 0) return rows;
+  const docs = await tx.getAll(
+      ...itemIds.map((id) => inventoryStockRef(db, id, storeId)));
+  docs.forEach((d) => {
+    if (d.exists) rows.set(String(d.data().itemId), d.data());
+  });
+  return rows;
+}
+
+/**
+ * Writes what a per-store plan decided for one product: its new total, the
+ * store's row and the Main row a not-yet-converted product gets.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, itemId, storeId, write, now}; `write`
+ *   carries rowQuantity, rowCountWasOff, totalAfter, itemCountWasOff?,
+ *   extraRows.
+ */
+function writeInventoryStoreStock(tx, db, {businessId, itemId, storeId, write,
+  now, itemExtra = {}}) {
+  const itemPatch = {quantity: write.totalAfter, storeStock: true,
+    updatedAt: now, ...itemExtra};
+  if (write.itemCountWasOff !== undefined) {
+    itemPatch.countWasOff = write.itemCountWasOff;
+  }
+  tx.update(db.collection("inventoryItems").doc(itemId), itemPatch);
+  tx.set(inventoryStockRef(db, itemId, storeId), inventoryRowFields(
+      businessId, itemId, storeId, write.rowQuantity, write.rowCountWasOff,
+      now));
+  for (const extra of write.extraRows || []) {
+    tx.set(inventoryStockRef(db, itemId, extra.storeId), inventoryRowFields(
+        businessId, itemId, extra.storeId, extra.quantity, extra.countWasOff,
+        now));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Categories.
+// ---------------------------------------------------------------------------
+
+/**
+ * Finds the category a product is being given, inside a transaction, and
+ * says what to write when it is applied: either an existing one (by id, or by
+ * typed name - an archived one of that name is brought back) or a new one
+ * created from the typed name. Same name = same category, whoever types it.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, uid, data, currentCategoryId}: `data`
+ *   may carry `categoryId` (wins; "" clears) or `category` (a name; "" clears).
+ * @return {Promise<?{value: {categoryId: string, name: string},
+ *   apply: Function}>} Null when neither field was sent.
+ */
+async function resolveInventoryCategoryIn(tx, db, {businessId, uid, data,
+  currentCategoryId = ""}) {
+  const none = () => {};
+  if (data.categoryId !== undefined) {
+    const id = String(data.categoryId ?? "").trim();
+    if (!id) return {value: {categoryId: "", name: ""}, apply: none};
+    if (id.includes("/")) throw inventoryRefusal("category_not_found");
+    const ref = db.collection("inventoryCategories").doc(id);
+    const doc = await tx.get(ref);
+    const row = doc.exists ? doc.data() || {} : null;
+    if (!row || String(row.businessId) !== businessId ||
+        (row.archived === true && id !== currentCategoryId)) {
+      throw inventoryRefusal("category_not_found");
+    }
+    return {value: {categoryId: id, name: String(row.name || "")},
+      apply: none};
+  }
+  if (data.category === undefined) return null;
+  const name = inventory.categoryDisplayName(data.category);
+  if (!name) return {value: {categoryId: "", name: ""}, apply: none};
+  const nameKey = inventory.categoryNameKey(name);
+  const lockRef = db.collection("inventoryCategoryKeys")
+      .doc(inventory.categoryKeyDocId(businessId, nameKey));
+  const lock = await tx.get(lockRef);
+  if (lock.exists && String(lock.data()?.businessId) === businessId) {
+    const catRef = db.collection("inventoryCategories")
+        .doc(String(lock.data().categoryId || "_"));
+    const cat = await tx.get(catRef);
+    if (cat.exists && String(cat.data()?.businessId) === businessId) {
+      const revive = cat.data().archived === true;
+      return {
+        value: {categoryId: catRef.id, name: String(cat.data().name || name)},
+        apply: (t) => {
+          if (revive) {
+            t.update(catRef, {archived: false,
+              updatedAt: FirestoreFieldValue.serverTimestamp()});
+          }
+        },
+      };
+    }
+  }
+  const catRef = db.collection("inventoryCategories").doc();
+  return {
+    value: {categoryId: catRef.id, name},
+    apply: (t) => {
+      const now = FirestoreFieldValue.serverTimestamp();
+      t.set(catRef, {businessId, name, nameKey, archived: false,
+        createdAt: now, updatedAt: now, createdByStaffId: uid});
+      t.set(lockRef, {businessId, categoryId: catRef.id, nameKey});
+    },
+  };
+}
+
+/**
+ * Gives products that still carry only a typed category (from before the
+ * category list) a place in the list: find-or-create by name, then stamp
+ * `categoryId` on them. Bounded and idempotent; each product is re-read and
+ * only stamped while it still has no category id.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} uid Who is looking (recorded on created categories).
+ * @param {object[]} items Products with `id` (mutated: categoryId / category).
+ * @param {object[]} categories The business's categories with `id`
+ *   (appended with the ones created here).
+ * @return {Promise<number>} How many products were stamped.
+ */
+async function convertLegacyInventoryCategories(db, businessId, uid, items,
+    categories) {
+  const legacy = items.filter((item) => !item.categoryId &&
+    inventory.categoryDisplayName(item.category));
+  if (legacy.length === 0) return 0;
+  const byKey = new Map();
+  for (const item of legacy.slice(0, INVENTORY_LEGACY_ITEM_CAP)) {
+    const key = inventory.categoryNameKey(item.category);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(item);
+  }
+  let stamped = 0;
+  let created = 0;
+  for (const [, group] of byKey) {
+    const name = inventory.categoryDisplayName(group[0].category);
+    const known = categories.some((c) =>
+      inventory.categoryNameKey(c.name) === inventory.categoryNameKey(name));
+    if (!known && created >= INVENTORY_LEGACY_CATEGORY_CAP) continue;
+    const found = await db.runTransaction(async (tx) => {
+      const lockRef = db.collection("inventoryCategoryKeys").doc(
+          inventory.categoryKeyDocId(businessId,
+              inventory.categoryNameKey(name)));
+      const lock = await tx.get(lockRef);
+      if (lock.exists && String(lock.data()?.businessId) === businessId) {
+        const cat = await tx.get(db.collection("inventoryCategories")
+            .doc(String(lock.data().categoryId || "_")));
+        if (cat.exists && String(cat.data()?.businessId) === businessId) {
+          return {id: cat.id, name: String(cat.data().name || name),
+            existing: true};
+        }
+      }
+      const catRef = db.collection("inventoryCategories").doc();
+      const now = FirestoreFieldValue.serverTimestamp();
+      tx.set(catRef, {businessId, name, nameKey:
+        inventory.categoryNameKey(name), archived: false, createdAt: now,
+      updatedAt: now, createdByStaffId: uid});
+      tx.set(lockRef, {businessId, categoryId: catRef.id,
+        nameKey: inventory.categoryNameKey(name)});
+      return {id: catRef.id, name, existing: false};
+    });
+    if (!found.existing) {
+      created += 1;
+      categories.push({id: found.id, name: found.name, archived: false});
+    } else if (!categories.some((c) => c.id === found.id)) {
+      categories.push({id: found.id, name: found.name});
+    }
+    for (let i = 0; i < group.length; i += 100) {
+      const chunk = group.slice(i, i + 100);
+      const ids = await db.runTransaction(async (tx) => {
+        const docs = await tx.getAll(...chunk.map(
+            (item) => db.collection("inventoryItems").doc(item.id)));
+        const done = [];
+        for (const doc of docs) {
+          const row = doc.exists ? doc.data() || {} : null;
+          if (!row || String(row.businessId) !== businessId ||
+              row.categoryId) continue;
+          if (inventory.categoryNameKey(row.category) !==
+              inventory.categoryNameKey(name)) continue;
+          tx.update(doc.ref, {categoryId: found.id, category: found.name});
+          done.push(doc.id);
+        }
+        return done;
+      });
+      for (const item of chunk) {
+        if (ids.includes(item.id)) {
+          item.categoryId = found.id;
+          item.category = found.name;
+        }
+      }
+      stamped += ids.length;
+    }
+  }
+  return stamped;
+}
+
+exports.createInventoryCategory = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
       const {businessId} = inventoryIds(data);
       const db = await requireInventoryAccess(uid, businessId);
+      const errors = inventory.validateCategoryName(data.name);
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      const name = inventory.categoryDisplayName(data.name);
+      const nameKey = inventory.categoryNameKey(name);
+      const lockRef = db.collection("inventoryCategoryKeys")
+          .doc(inventory.categoryKeyDocId(businessId, nameKey));
+      const catRef = db.collection("inventoryCategories").doc();
+      await db.runTransaction(async (tx) => {
+        const lock = await tx.get(lockRef);
+        if (lock.exists && String(lock.data()?.businessId) === businessId) {
+          const existing = await tx.get(db.collection("inventoryCategories")
+              .doc(String(lock.data().categoryId || "_")));
+          if (existing.exists &&
+              String(existing.data()?.businessId) === businessId) {
+            throw inventoryRefusal("category_name_taken",
+                {categoryId: existing.id,
+                  archived: existing.data().archived === true});
+          }
+        }
+        const now = FirestoreFieldValue.serverTimestamp();
+        tx.set(catRef, {businessId, name, nameKey, archived: false,
+          createdAt: now, updatedAt: now, createdByStaffId: uid});
+        tx.set(lockRef, {businessId, categoryId: catRef.id, nameKey});
+      });
+      await inventorySetupAudit(businessId, "inventory_category", catRef.id,
+          "created", uid, `Added the category ${name}`);
+      return {success: true, categoryId: catRef.id, name};
+    },
+);
+
+/**
+ * Puts a category's current name on its products' `category` snapshot, in
+ * bounded pages. Idempotent: pages are walked by id, only rows that differ
+ * are written.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} categoryId The category.
+ * @param {string} name Its name now.
+ * @return {Promise<{updated: number, complete: boolean}>} How many products
+ *   were changed, and whether every page was walked.
+ */
+async function syncInventoryCategoryName(db, businessId, categoryId, name) {
+  let last = null;
+  let updated = 0;
+  for (let page = 0; page < INVENTORY_RENAME_PAGES; page++) {
+    let query = db.collection("inventoryItems")
+        .where("businessId", "==", businessId)
+        .where("categoryId", "==", categoryId)
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .limit(INVENTORY_RENAME_PAGE);
+    if (last) query = query.startAfter(last);
+    const snap = await query.get();
+    const batch = db.batch();
+    let writes = 0;
+    for (const doc of snap.docs) {
+      if (doc.data().category !== name) {
+        batch.update(doc.ref, {category: name});
+        writes += 1;
+      }
+    }
+    if (writes > 0) await batch.commit();
+    updated += writes;
+    if (snap.size < INVENTORY_RENAME_PAGE) return {updated, complete: true};
+    last = snap.docs[snap.docs.length - 1].id;
+  }
+  return {updated, complete: false};
+}
+
+exports.renameInventoryCategory = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 120},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const categoryId = inventoryDocId(data.categoryId);
+      const errors = inventory.validateCategoryName(data.name);
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      if (!categoryId) throw inventoryRefusal("category_not_found");
+      const name = inventory.categoryDisplayName(data.name);
+      const nameKey = inventory.categoryNameKey(name);
+      const catRef = db.collection("inventoryCategories").doc(categoryId);
+      const newLock = db.collection("inventoryCategoryKeys")
+          .doc(inventory.categoryKeyDocId(businessId, nameKey));
+      const before = await db.runTransaction(async (tx) => {
+        const cat = await tx.get(catRef);
+        if (!cat.exists || String(cat.data()?.businessId) !== businessId) {
+          throw inventoryRefusal("category_not_found");
+        }
+        const row = cat.data() || {};
+        const oldKey = inventory.categoryNameKey(row.name);
+        const lock = await tx.get(newLock);
+        if (oldKey !== nameKey && lock.exists &&
+            String(lock.data()?.businessId) === businessId &&
+            String(lock.data()?.categoryId) !== categoryId) {
+          const holder = await tx.get(db.collection("inventoryCategories")
+              .doc(String(lock.data().categoryId || "_")));
+          if (holder.exists &&
+              String(holder.data()?.businessId) === businessId) {
+            throw inventoryRefusal("category_name_taken",
+                {categoryId: holder.id});
+          }
+        }
+        if (oldKey !== nameKey) {
+          tx.delete(db.collection("inventoryCategoryKeys")
+              .doc(inventory.categoryKeyDocId(businessId, oldKey)));
+        }
+        tx.set(newLock, {businessId, categoryId, nameKey});
+        tx.update(catRef, {name, nameKey,
+          updatedAt: FirestoreFieldValue.serverTimestamp()});
+        return row;
+      });
+      const sync = await syncInventoryCategoryName(db, businessId, categoryId,
+          name);
+      if (String(before.name) !== name) {
+        await inventorySetupAudit(businessId, "inventory_category",
+            categoryId, "renamed", uid,
+            `Renamed the category ${before.name} to ${name}`);
+      }
+      return {success: true, categoryId, name, itemsUpdated: sync.updated,
+        complete: sync.complete};
+    },
+);
+
+exports.archiveInventoryCategory = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      if (typeof data.archived !== "boolean") {
+        throw inventoryRefusal("archived_invalid");
+      }
+      const archived = data.archived;
+      const categoryId = inventoryDocId(data.categoryId);
+      if (!categoryId) throw inventoryRefusal("category_not_found");
+      const row = await db.runTransaction(async (tx) => {
+        const ref = db.collection("inventoryCategories").doc(categoryId);
+        const doc = await tx.get(ref);
+        if (!doc.exists || String(doc.data()?.businessId) !== businessId) {
+          throw inventoryRefusal("category_not_found");
+        }
+        if ((doc.data().archived === true) !== archived) {
+          tx.update(ref, {archived,
+            updatedAt: FirestoreFieldValue.serverTimestamp()});
+        }
+        return doc.data();
+      });
+      if ((row.archived === true) !== archived) {
+        await inventorySetupAudit(businessId, "inventory_category",
+            categoryId, archived ? "archived" : "restored", uid,
+            `${archived ? "Archived" : "Restored"} the category ${row.name}`);
+      }
+      return {success: true, archived};
+    },
+);
+
+exports.syncInventoryCategories = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 120},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const [itemsSnap, catsSnap] = await Promise.all([
+        db.collection("inventoryItems").where("businessId", "==", businessId)
+            .get(),
+        db.collection("inventoryCategories")
+            .where("businessId", "==", businessId).get(),
+      ]);
+      const items = itemsSnap.docs.map((d) => ({id: d.id, ...d.data()}));
+      const categories = catsSnap.docs.map((d) => ({id: d.id, ...d.data()}));
+      const converted = await convertLegacyInventoryCategories(
+          db, businessId, uid, items, categories);
+      const left = items.filter((item) => !item.categoryId &&
+        inventory.categoryDisplayName(item.category)).length;
+      return {success: true, converted, remaining: left};
+    },
+);
+
+// ---------------------------------------------------------------------------
+// Products.
+// ---------------------------------------------------------------------------
+
+exports.createInventoryItem = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
       const errors = inventory.validateItemCreate(data);
       if (errors.length > 0) throw inventoryRefusal(errors);
       // Minted before the write: finding a free code reads other products.
       const code = await generateTrackingCode(
           inventory.TAG_CODE_PREFIX, "inventoryItems", "code");
-      const record = inventory.itemCreateRecord(data, {businessId, code, uid});
       const ref = db.collection("inventoryItems").doc();
-      const now = FirestoreFieldValue.serverTimestamp();
-      const batch = db.batch();
-      batch.set(ref, {...record, createdAt: now, updatedAt: now});
-      if (record.quantity > 0) {
-        batch.set(db.collection("inventoryMovements").doc(),
-            {...inventory.movementRecord({
-              businessId, itemId: ref.id, type: "initial",
-              delta: record.quantity, quantityAfter: record.quantity, uid}),
-            createdAt: now});
-      }
-      await batch.commit();
+      const stockMap = data.stock !== undefined && data.stock !== null ?
+        inventory.parseStockMap(data.stock).entries : null;
+      const done = await db.runTransaction(async (tx) => {
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
+        const category = await resolveInventoryCategoryIn(
+            tx, db, {businessId, uid, data});
+        // Where the starting count goes: the stores named in `stock`, or the
+        // one store (the caller's home, or the only one) for `quantity`.
+        const placed = [];
+        if (stockMap) {
+          for (const [storeId, count] of stockMap) {
+            const store = inventoryStoreFor(sctx, access, storeId);
+            if (!placed.some((p) => p.store.id === store.id)) {
+              placed.push({store, count});
+            }
+          }
+        } else {
+          const store = inventoryStoreFor(sctx, access, data.storeId);
+          if (store) placed.push({store, count: Number(data.quantity)});
+        }
+        const total = stockMap ?
+          placed.reduce((sum, p) => sum + p.count, 0) :
+          Number(data.quantity);
+        if (total > inventory.MAX_QUANTITY) {
+          throw inventoryRefusal("quantity_invalid");
+        }
+        const record = inventory.itemCreateRecord(data, {
+          businessId, code, uid, quantity: total,
+          category: category?.value});
+        const now = FirestoreFieldValue.serverTimestamp();
+        if (category) category.apply(tx);
+        tx.set(ref, {...record, ...(sctx.converted ? {storeStock: true} : {}),
+          createdAt: now, updatedAt: now});
+        if (sctx.converted) {
+          for (const {store, count} of placed) {
+            tx.set(inventoryStockRef(db, ref.id, store.id),
+                inventoryRowFields(businessId, ref.id, store.id, count, false,
+                    now));
+            if (count > 0) {
+              tx.set(db.collection("inventoryMovements").doc(),
+                  {...inventory.movementRecord({
+                    businessId, itemId: ref.id, type: "initial", delta: count,
+                    quantityAfter: count, uid, storeId: store.id}),
+                  createdAt: now});
+            }
+          }
+        } else if (record.quantity > 0) {
+          tx.set(db.collection("inventoryMovements").doc(),
+              {...inventory.movementRecord({
+                businessId, itemId: ref.id, type: "initial",
+                delta: record.quantity, quantityAfter: record.quantity,
+                uid}), createdAt: now});
+        }
+        return {record};
+      });
+      const {record} = done;
       await inventoryItemAudit(businessId, ref.id, "created", uid,
           `Added ${record.name} (${code}) at ` +
           `${inventory.moneyText(record.priceCents)}, ` +
           `${record.quantity} in stock`);
-      return {success: true, itemId: ref.id, code};
+      return {success: true, itemId: ref.id, code,
+        ...(record.categoryId ? {categoryId: record.categoryId} : {})};
     },
 );
 
@@ -19478,8 +20059,18 @@ exports.updateInventoryItem = onCall(
       const done = await db.runTransaction(async (tx) => {
         const {ref, data: current} =
           await inventoryItemIn(tx, db, businessId, itemId);
+        const category = await resolveInventoryCategoryIn(tx, db, {
+          businessId, uid, data,
+          currentCategoryId: String(current.categoryId || "")});
+        if (category) {
+          patch.category = category.value.name;
+          patch.categoryId = category.value.categoryId;
+        }
         const changes = inventory.itemFieldDiff(current, patch);
-        if (changes.length > 0) {
+        const idChanged = category &&
+          String(current.categoryId || "") !== patch.categoryId;
+        if (changes.length > 0 || idChanged) {
+          if (category) category.apply(tx);
           tx.update(ref, {...patch, updatedByStaffId: uid,
             updatedAt: FirestoreFieldValue.serverTimestamp()});
         }
@@ -19505,35 +20096,67 @@ exports.adjustInventoryStock = onCall(
       const uid = requireAuth(request);
       const data = request.data || {};
       const {businessId, itemId} = inventoryIds(data);
-      const db = await requireInventoryAccess(uid, businessId);
+      const {db, access} = await requireInventoryContext(uid, businessId);
       const done = await db.runTransaction(async (tx) => {
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
         const {ref, data: current} =
           await inventoryItemIn(tx, db, businessId, itemId);
-        const plan = inventory.planStockAdjust(current, data);
-        if (plan.errors.length > 0) throw inventoryRefusal(plan.errors);
+        const store = inventoryStoreFor(sctx, access, data.storeId);
         const now = FirestoreFieldValue.serverTimestamp();
-        tx.update(ref, {
-          quantity: plan.quantityAfter,
-          countWasOff: plan.countWasOff,
-          updatedByStaffId: uid,
-          updatedAt: now,
-        });
+        if (!store) {
+          const plan = inventory.planStockAdjust(current, data);
+          if (plan.errors.length > 0) throw inventoryRefusal(plan.errors);
+          tx.update(ref, {
+            quantity: plan.quantityAfter,
+            countWasOff: plan.countWasOff,
+            updatedByStaffId: uid,
+            updatedAt: now,
+          });
+          tx.set(db.collection("inventoryMovements").doc(),
+              {...inventory.movementRecord({
+                businessId, itemId, type: plan.type, delta: plan.delta,
+                quantityAfter: plan.quantityAfter, uid, note: data.note}),
+              createdAt: now});
+          return {current, plan, before: Number(current.quantity) || 0,
+            storeQuantity: plan.quantityAfter,
+            totalQuantity: plan.quantityAfter, storeId: ""};
+        }
+        const rows = await inventoryRowsOfItemIn(tx, db, businessId, itemId);
+        const plan = inventory.planStoreAdjust(current, rows, store.id, data,
+            sctx.mainStoreId);
+        if (plan.errors.length > 0) throw inventoryRefusal(plan.errors);
+        const before = inventory.effectiveRow(current, rows.get(store.id),
+            store.id, sctx.mainStoreId).quantity;
+        writeInventoryStoreStock(tx, db, {
+          businessId, itemId, storeId: store.id, now,
+          write: {rowQuantity: plan.quantityAfter,
+            rowCountWasOff: plan.rowCountWasOff, totalAfter: plan.totalAfter,
+            itemCountWasOff: plan.itemCountWasOff,
+            extraRows: plan.extraRows},
+          itemExtra: {updatedByStaffId: uid}});
         tx.set(db.collection("inventoryMovements").doc(),
             {...inventory.movementRecord({
               businessId, itemId, type: plan.type, delta: plan.delta,
-              quantityAfter: plan.quantityAfter, uid, note: data.note}),
+              quantityAfter: plan.quantityAfter, uid, note: data.note,
+              storeId: store.id}),
             createdAt: now});
-        return {current, plan};
+        return {current, plan, before, storeQuantity: plan.quantityAfter,
+          totalQuantity: plan.totalAfter, storeId: store.id,
+          storeName: String(store.name || ""), multi:
+            inventory.isMultiStore(sctx.stores)};
       });
       const {current, plan} = done;
+      const where = done.multi ? ` at ${done.storeName}` : "";
       await inventoryItemAudit(businessId, itemId,
           plan.type === "add" ? "stock_added" : "stock_set", uid,
           plan.type === "add" ?
-            `Added ${plan.delta} to ${current.name} ` +
+            `Added ${plan.delta} to ${current.name}${where} ` +
               `(now ${plan.quantityAfter})` :
-            `Set the count of ${current.name} from ${current.quantity} ` +
+            `Set the count of ${current.name}${where} from ${done.before} ` +
               `to ${plan.quantityAfter}`);
-      return {success: true, quantity: plan.quantityAfter};
+      return {success: true, quantity: done.storeQuantity,
+        ...(done.storeId ? {totalQuantity: done.totalQuantity,
+          storeId: done.storeId} : {})};
     },
 );
 
@@ -19574,11 +20197,18 @@ exports.deleteInventoryItem = onCall(
       const {businessId, itemId} = inventoryIds(data);
       const db = await requireInventoryAccess(uid, businessId);
       if (data.confirm !== true) throw inventoryRefusal("confirm_required");
-      // Sales and stock rows stay: sales carry a snapshot of the product.
+      // Sales and movement rows stay: sales carry a snapshot of the product.
+      // The product's per-store counts go with it.
       const current = await db.runTransaction(async (tx) => {
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
         const {ref, data: row} =
           await inventoryItemIn(tx, db, businessId, itemId);
+        const rows = sctx.converted ?
+          await tx.get(db.collection("inventoryStock")
+              .where("businessId", "==", businessId)
+              .where("itemId", "==", itemId)) : null;
         tx.delete(ref);
+        if (rows) rows.docs.forEach((d) => tx.delete(d.ref));
         return row;
       });
       await inventoryItemAudit(businessId, itemId, "deleted", uid,
@@ -19587,13 +20217,51 @@ exports.deleteInventoryItem = onCall(
     },
 );
 
+// ---------------------------------------------------------------------------
+// Sales.
+// ---------------------------------------------------------------------------
+
+/**
+ * Products that still carry only a typed category get the id of the category
+ * it names, when the list has one (read-only: a sale never creates one), so
+ * the sale line's snapshot can be grouped by id.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {Map<string, object>} items The sale's products (replaced in place
+ *   by copies that carry the id).
+ */
+async function attachLegacyCategoryIdsIn(tx, db, businessId, items) {
+  const wanted = new Map();
+  for (const [itemId, item] of items) {
+    if (item.categoryId) continue;
+    const key = inventory.categoryNameKey(item.category);
+    if (!key) continue;
+    if (!wanted.has(key)) wanted.set(key, []);
+    wanted.get(key).push(itemId);
+  }
+  if (wanted.size === 0) return;
+  const keys = [...wanted.keys()];
+  const locks = await tx.getAll(...keys.map((key) =>
+    db.collection("inventoryCategoryKeys")
+        .doc(inventory.categoryKeyDocId(businessId, key))));
+  locks.forEach((lock, i) => {
+    if (!lock.exists || String(lock.data()?.businessId) !== businessId) return;
+    for (const itemId of wanted.get(keys[i])) {
+      items.set(itemId, {...items.get(itemId),
+        categoryId: String(lock.data().categoryId || "")});
+    }
+  });
+}
+
 exports.recordInventorySale = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
       const {businessId} = inventoryIds(data);
-      const db = await requireInventoryAccess(uid, businessId);
+      const {db, access} = await requireInventoryContext(uid, businessId);
       const {errors, lines} = inventory.cleanSaleInput(data);
       if (errors.length > 0) throw inventoryRefusal(errors);
       const clientRequestId =
@@ -19608,8 +20276,11 @@ exports.recordInventorySale = onCall(
         if (existing.exists) {
           const sale = existing.data() || {};
           return {replayed: true, totalCents: Number(sale.totalCents) || 0,
-            warnings: inventory.saleWarnings(sale)};
+            warnings: inventory.saleWarnings(sale),
+            storeId: String(sale.storeId || "")};
         }
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
+        const store = inventoryStoreFor(sctx, access, data.storeId);
         const docs = await tx.getAll(...itemIds.map(
             (id) => db.collection("inventoryItems").doc(id)));
         const items = new Map();
@@ -19622,12 +20293,12 @@ exports.recordInventorySale = onCall(
         if (refusal) {
           throw inventoryRefusal(refusal.reason, {itemIds: refusal.itemIds});
         }
-        const plan = inventory.planSale(lines, items);
+        await attachLegacyCategoryIdsIn(tx, db, businessId, items);
+        const rows = store ?
+          await inventoryRowsAtStoreIn(tx, db, itemIds, store.id) : null;
         const now = FirestoreFieldValue.serverTimestamp();
-        tx.set(saleRef, {
+        const sale = {
           businessId,
-          lines: plan.lines,
-          totalCents: plan.totalCents,
           paymentMethod,
           soldByStaffId: uid,
           clientRequestId,
@@ -19635,24 +20306,50 @@ exports.recordInventorySale = onCall(
           voidedByStaffId: "",
           voidedAt: null,
           createdAt: now,
-        });
-        for (const change of plan.items) {
-          tx.update(db.collection("inventoryItems").doc(change.itemId), {
-            quantity: change.quantityAfter,
-            countWasOff: change.countWasOff,
-            updatedAt: now,
-          });
+        };
+        if (!store) {
+          const plan = inventory.planSale(lines, items);
+          tx.set(saleRef, {...sale, lines: plan.lines,
+            totalCents: plan.totalCents});
+          for (const change of plan.items) {
+            tx.update(db.collection("inventoryItems").doc(change.itemId), {
+              quantity: change.quantityAfter,
+              countWasOff: change.countWasOff,
+              updatedAt: now,
+            });
+          }
+          for (const move of plan.movements) {
+            tx.set(db.collection("inventoryMovements").doc(),
+                {...inventory.movementRecord({
+                  businessId, itemId: move.itemId, type: "sale",
+                  delta: move.delta, quantityAfter: move.quantityAfter, uid,
+                  saleId: saleRef.id}),
+                createdAt: now});
+          }
+          return {replayed: false, totalCents: plan.totalCents,
+            warnings: plan.warnings, plan, storeId: ""};
+        }
+        const plan = inventory.planStoreSale(lines, items, rows,
+            {storeId: store.id, mainStoreId: sctx.mainStoreId});
+        tx.set(saleRef, {...sale, lines: plan.lines,
+          totalCents: plan.totalCents, storeId: store.id,
+          storeName: String(store.name || "")});
+        for (const write of plan.writes) {
+          writeInventoryStoreStock(tx, db, {
+            businessId, itemId: write.itemId, storeId: store.id, write, now});
         }
         for (const move of plan.movements) {
           tx.set(db.collection("inventoryMovements").doc(),
               {...inventory.movementRecord({
                 businessId, itemId: move.itemId, type: "sale",
                 delta: move.delta, quantityAfter: move.quantityAfter, uid,
-                saleId: saleRef.id}),
+                saleId: saleRef.id, storeId: store.id}),
               createdAt: now});
         }
         return {replayed: false, totalCents: plan.totalCents,
-          warnings: plan.warnings, plan};
+          warnings: plan.warnings, plan, storeId: store.id,
+          storeName: String(store.name || ""),
+          multi: inventory.isMultiStore(sctx.stores)};
       });
       if (!done.replayed) {
         const pieces = done.plan.lines.reduce((n, l) => n + l.quantity, 0);
@@ -19661,6 +20358,7 @@ exports.recordInventorySale = onCall(
           action: "sold", byStaffId: uid,
           summary: `Sold ${pieces} ${pieces === 1 ? "piece" : "pieces"} ` +
             `for ${inventory.moneyText(done.totalCents)} (${paymentMethod})` +
+            (done.multi ? ` at ${done.storeName}` : "") +
             (done.warnings.length > 0 ? " - a count was off" : ""),
           changes: [],
           // A counter sale is history, not news: it stays out of the
@@ -19669,7 +20367,8 @@ exports.recordInventorySale = onCall(
         });
       }
       return {success: true, saleId: saleRef.id, totalCents: done.totalCents,
-        warnings: done.warnings, replayed: done.replayed};
+        warnings: done.warnings, replayed: done.replayed,
+        ...(done.storeId ? {storeId: done.storeId} : {})};
     },
 );
 
@@ -19679,7 +20378,7 @@ exports.voidInventorySale = onCall(
       const uid = requireAuth(request);
       const data = request.data || {};
       const {businessId} = inventoryIds(data);
-      const db = await requireInventoryAccess(uid, businessId);
+      const {db, access} = await requireInventoryContext(uid, businessId);
       const saleId = String(data.saleId || "").trim();
       if (!saleId || saleId.includes("/")) {
         throw inventoryRefusal("sale_not_found");
@@ -19693,6 +20392,20 @@ exports.voidInventorySale = onCall(
           throw inventoryRefusal("sale_not_found");
         }
         if (sale.voided === true) throw inventoryRefusal("sale_voided");
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
+        // The stock goes back to the store the sale was rung up at (a sale
+        // from before the business had stores belongs to the Main store).
+        let store = null;
+        if (sctx.converted) {
+          const wanted = inventory.saleStoreId(sale, sctx.mainStoreId);
+          store = sctx.stores.find((s) => s.id === wanted);
+          if (!store) throw inventoryRefusal("store_not_found");
+          if (inventory.isMultiStore(sctx.stores) && !access.all &&
+              store.id !== access.homeStoreId) {
+            throw inventoryRefusal("store_not_allowed");
+          }
+          if (store.archived === true) throw inventoryRefusal("store_archived");
+        }
         const ids = [...new Set((sale.lines || []).map((l) => l.itemId))]
             .filter((id) => id && !String(id).includes("/"));
         const docs = ids.length === 0 ? [] : await tx.getAll(...ids.map(
@@ -19703,20 +20416,40 @@ exports.voidInventorySale = onCall(
             items.set(doc.id, doc.data() || {});
           }
         });
-        const plan = inventory.planVoid(sale, items);
+        const rows = store ?
+          await inventoryRowsAtStoreIn(tx, db, [...items.keys()], store.id) :
+          null;
         const now = FirestoreFieldValue.serverTimestamp();
         tx.update(saleRef, {voided: true, voidedByStaffId: uid,
           voidedAt: now, voidReason: reason});
-        for (const change of plan.items) {
-          tx.update(db.collection("inventoryItems").doc(change.itemId), {
-            quantity: change.quantityAfter, updatedAt: now});
+        if (!store) {
+          const plan = inventory.planVoid(sale, items);
+          for (const change of plan.items) {
+            tx.update(db.collection("inventoryItems").doc(change.itemId), {
+              quantity: change.quantityAfter, updatedAt: now});
+          }
+          for (const move of plan.movements) {
+            tx.set(db.collection("inventoryMovements").doc(),
+                {...inventory.movementRecord({
+                  businessId, itemId: move.itemId, type: "void",
+                  delta: move.delta, quantityAfter: move.quantityAfter, uid,
+                  note: reason, saleId}),
+                createdAt: now});
+          }
+          return {sale, plan};
+        }
+        const plan = inventory.planStoreVoid(sale, items, rows,
+            {storeId: store.id, mainStoreId: sctx.mainStoreId});
+        for (const write of plan.writes) {
+          writeInventoryStoreStock(tx, db, {
+            businessId, itemId: write.itemId, storeId: store.id, write, now});
         }
         for (const move of plan.movements) {
           tx.set(db.collection("inventoryMovements").doc(),
               {...inventory.movementRecord({
                 businessId, itemId: move.itemId, type: "void",
                 delta: move.delta, quantityAfter: move.quantityAfter, uid,
-                note: reason, saleId}),
+                note: reason, saleId, storeId: store.id}),
               createdAt: now});
         }
         return {sale, plan};
@@ -19729,6 +20462,335 @@ exports.voidInventorySale = onCall(
         changes: [],
       });
       return {success: true, skippedItemIds: done.plan.skipped};
+    },
+);
+
+// ---------------------------------------------------------------------------
+// Stores.
+// ---------------------------------------------------------------------------
+
+/**
+ * Moves every not-yet-converted product under the Main store (writes its
+ * Main row, sets `storeStock`) in bounded transactions, walking products by
+ * id. Idempotent: a product that already has `storeStock` is left alone.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} mainStoreId The Main store.
+ * @return {Promise<boolean>} True when every product was walked.
+ */
+async function materializeInventoryMainStock(db, businessId, mainStoreId) {
+  const deadline = Date.now() + INVENTORY_EAGER_BUDGET_MS;
+  let last = null;
+  for (let page = 0; page < INVENTORY_EAGER_PAGES; page++) {
+    if (Date.now() > deadline) return false;
+    const walked = await db.runTransaction(async (tx) => {
+      let query = db.collection("inventoryItems")
+          .where("businessId", "==", businessId)
+          .orderBy(admin.firestore.FieldPath.documentId())
+          .limit(INVENTORY_EAGER_PAGE);
+      if (last) query = query.startAfter(last);
+      const snap = await tx.get(query);
+      const now = FirestoreFieldValue.serverTimestamp();
+      for (const doc of snap.docs) {
+        const item = doc.data() || {};
+        if (item.storeStock === true) continue;
+        tx.set(inventoryStockRef(db, doc.id, mainStoreId),
+            inventoryRowFields(businessId, doc.id, mainStoreId,
+                Math.max(0, Math.round(Number(item.quantity) || 0)),
+                item.countWasOff === true, now));
+        tx.update(doc.ref, {storeStock: true});
+      }
+      return {size: snap.size,
+        lastId: snap.size > 0 ? snap.docs[snap.size - 1].id : null};
+    });
+    if (walked.size < INVENTORY_EAGER_PAGE) return true;
+    last = walked.lastId;
+  }
+  return false;
+}
+
+/**
+ * Finishes the move under the Main store when a previous call ran out of
+ * time, and records that it is done.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} config The business's inventoryConfig data.
+ * @return {Promise<boolean>} True when nothing is pending any more.
+ */
+async function finishInventoryMainStock(db, businessId, config) {
+  if (config?.stockPending !== true) return true;
+  const finished = await materializeInventoryMainStock(
+      db, businessId, String(config.mainStoreId));
+  if (finished) {
+    await inventoryConfigRef(db, businessId).update({stockPending: false,
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+  }
+  return finished;
+}
+
+/**
+ * Only the business owner (or a platform admin) may continue.
+ *
+ * @param {object} access The caller's store access.
+ */
+function requireInventoryOwner(access) {
+  if (!access.owner) throw inventoryRefusal("owner_only");
+}
+
+exports.createInventoryStore = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 120},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
+      requireInventoryOwner(access);
+      const {errors, fields} = inventory.cleanStoreInput(data, true);
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      const storeRef = db.collection("inventoryStores").doc();
+      const done = await db.runTransaction(async (tx) => {
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
+        const now = FirestoreFieldValue.serverTimestamp();
+        const store = {businessId, name: fields.name,
+          address: fields.address || "", phone: fields.phone || "",
+          archived: false, isMain: false, createdAt: now, updatedAt: now,
+          createdByStaffId: uid};
+        if (!sctx.converted) {
+          // The first time a second store appears, the Main store becomes a
+          // real one and the products' counts are moved under it.
+          const mainStoreId = inventory.mainStoreIdOf(businessId);
+          tx.set(db.collection("inventoryStores").doc(mainStoreId), {
+            businessId, name: inventory.MAIN_STORE_NAME, address: "",
+            phone: "", archived: false, isMain: true, createdAt: now,
+            updatedAt: now, createdByStaffId: uid});
+          tx.set(inventoryConfigRef(db, businessId), {
+            businessId, storesConverted: true, mainStoreId, multiStore: true,
+            stockPending: true, createdAt: now, updatedAt: now});
+          tx.set(storeRef, store);
+          return {converted: true, mainStoreId};
+        }
+        const active = inventory.activeStores(sctx.stores).length + 1;
+        tx.set(storeRef, store);
+        tx.update(inventoryConfigRef(db, businessId), {
+          multiStore: active >= 2, updatedAt: now});
+        return {converted: false, mainStoreId: sctx.mainStoreId,
+          config: sctx.config};
+      });
+      const config = done.converted ?
+        {stockPending: true, mainStoreId: done.mainStoreId} : done.config;
+      await finishInventoryMainStock(db, businessId, config);
+      await inventorySetupAudit(businessId, "inventory_store", storeRef.id,
+          "created", uid, `Added the store ${fields.name}`);
+      return {success: true, storeId: storeRef.id,
+        mainStoreId: done.mainStoreId};
+    },
+);
+
+exports.updateInventoryStore = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 120},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
+      requireInventoryOwner(access);
+      const storeId = inventoryDocId(data.storeId);
+      const {errors, fields} = inventory.cleanStoreInput(data, false);
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      if (!storeId) throw inventoryRefusal("store_not_found");
+      if (Object.keys(fields).length === 0) {
+        throw inventoryRefusal("nothing_to_update");
+      }
+      const done = await db.runTransaction(async (tx) => {
+        const ref = db.collection("inventoryStores").doc(storeId);
+        const doc = await tx.get(ref);
+        if (!doc.exists || String(doc.data()?.businessId) !== businessId) {
+          throw inventoryRefusal("store_not_found");
+        }
+        const cfg = await tx.get(inventoryConfigRef(db, businessId));
+        tx.update(ref, {...fields,
+          updatedAt: FirestoreFieldValue.serverTimestamp()});
+        return {before: doc.data(), config: cfg.exists ? cfg.data() : null};
+      });
+      await finishInventoryMainStock(db, businessId, done.config);
+      if (fields.name !== undefined && fields.name !== done.before.name) {
+        await inventorySetupAudit(businessId, "inventory_store", storeId,
+            "renamed", uid,
+            `Renamed the store ${done.before.name} to ${fields.name}`);
+      }
+      return {success: true, storeId, changed: Object.keys(fields)};
+    },
+);
+
+exports.archiveInventoryStore = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 120},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
+      requireInventoryOwner(access);
+      if (typeof data.archived !== "boolean") {
+        throw inventoryRefusal("archived_invalid");
+      }
+      const archived = data.archived;
+      const storeId = inventoryDocId(data.storeId);
+      if (!storeId) throw inventoryRefusal("store_not_found");
+      // A Main store whose products are still being moved under it cannot be
+      // judged empty yet.
+      const early = await loadInventoryStoreContext(db, businessId);
+      if (early.converted) {
+        await finishInventoryMainStock(db, businessId, early.config);
+      }
+      const done = await db.runTransaction(async (tx) => {
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
+        const store = sctx.stores.find((s) => s.id === storeId);
+        if (!sctx.converted || !store) {
+          throw inventoryRefusal("store_not_found");
+        }
+        if ((store.archived === true) === archived) {
+          return {store, changed: false};
+        }
+        const now = FirestoreFieldValue.serverTimestamp();
+        const active = inventory.activeStores(sctx.stores).length;
+        if (archived) {
+          if (active <= 1) throw inventoryRefusal("last_store_active");
+          if (storeId === sctx.mainStoreId &&
+              sctx.config?.stockPending === true) {
+            throw inventoryRefusal("store_has_stock");
+          }
+          const held = await tx.get(db.collection("inventoryStock")
+              .where("businessId", "==", businessId)
+              .where("storeId", "==", storeId)
+              .where("quantity", ">", 0).limit(1));
+          if (!held.empty) throw inventoryRefusal("store_has_stock");
+        }
+        tx.update(db.collection("inventoryStores").doc(storeId), {
+          archived, updatedAt: now});
+        tx.update(inventoryConfigRef(db, businessId), {
+          multiStore: (archived ? active - 1 : active + 1) >= 2,
+          updatedAt: now});
+        return {store, changed: true};
+      });
+      if (done.changed) {
+        await inventorySetupAudit(businessId, "inventory_store", storeId,
+            archived ? "archived" : "restored", uid,
+            `${archived ? "Archived" : "Restored"} the store ` +
+            `${done.store.name}`);
+      }
+      return {success: true, archived};
+    },
+);
+
+exports.setInventoryStaffAccess = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
+      requireInventoryOwner(access);
+      const userId = inventoryDocId(data.userId);
+      if (typeof data.allStores !== "boolean") {
+        throw inventoryRefusal("all_stores_invalid");
+      }
+      const homeStoreId = inventoryDocId(data.homeStoreId);
+      const target = userId ?
+        await db.collection("users").doc(userId).get() : null;
+      const row = target && target.exists ? target.data() || {} : null;
+      if (!row || row.role !== "staff" ||
+          String(row.businessId) !== businessId) {
+        throw inventoryRefusal("user_not_found");
+      }
+      if (homeStoreId) {
+        const sctx = await loadInventoryStoreContext(db, businessId);
+        const store = sctx.stores.find((s) => s.id === homeStoreId);
+        if (!store) throw inventoryRefusal("store_not_found");
+        if (store.archived === true) throw inventoryRefusal("store_archived");
+      }
+      await db.collection("users").doc(userId).update({
+        inventoryHomeStoreId: homeStoreId,
+        inventoryAllStores: data.allStores,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      await inventorySetupAudit(businessId, "inventory_store",
+          homeStoreId || userId, "staff_access_set", uid,
+          `Set store access for ${row.fullName || row.email || userId}: ` +
+          (data.allStores ? "all stores" :
+            (homeStoreId ? `home store ${homeStoreId}` : "no home store")));
+      return {success: true, userId, homeStoreId, allStores: data.allStores};
+    },
+);
+
+exports.transferInventoryStock = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId, itemId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
+      // Moving stock between stores is for people who see all of them.
+      if (!access.all) throw inventoryRefusal("store_not_allowed");
+      const fromStoreId = inventoryDocId(data.fromStoreId);
+      const toStoreId = inventoryDocId(data.toStoreId);
+      if (fromStoreId && fromStoreId === toStoreId) {
+        throw inventoryRefusal("same_store");
+      }
+      const transferId = crypto.randomUUID();
+      const done = await db.runTransaction(async (tx) => {
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
+        if (!sctx.converted) throw inventoryRefusal("store_not_found");
+        const find = (id) => {
+          const store = sctx.stores.find((s) => s.id === id);
+          if (!store) throw inventoryRefusal("store_not_found");
+          if (store.archived === true) throw inventoryRefusal("store_archived");
+          return store;
+        };
+        const from = find(fromStoreId);
+        const to = find(toStoreId);
+        const {ref, data: current} =
+          await inventoryItemIn(tx, db, businessId, itemId);
+        const rows = await inventoryRowsOfItemIn(tx, db, businessId, itemId);
+        const plan = inventory.planTransfer(current, rows,
+            {fromStoreId: from.id, toStoreId: to.id,
+              quantity: data.quantity}, sctx.mainStoreId);
+        if (plan.errors.length > 0) throw inventoryRefusal(plan.errors);
+        const now = FirestoreFieldValue.serverTimestamp();
+        tx.update(ref, {storeStock: true, updatedByStaffId: uid,
+          updatedAt: now});
+        tx.set(inventoryStockRef(db, itemId, from.id), inventoryRowFields(
+            businessId, itemId, from.id, plan.from.quantityAfter,
+            plan.from.countWasOff, now));
+        tx.set(inventoryStockRef(db, itemId, to.id), inventoryRowFields(
+            businessId, itemId, to.id, plan.to.quantityAfter,
+            plan.to.countWasOff, now));
+        for (const extra of plan.extraRows) {
+          tx.set(inventoryStockRef(db, itemId, extra.storeId),
+              inventoryRowFields(businessId, itemId, extra.storeId,
+                  extra.quantity, extra.countWasOff, now));
+        }
+        const note = data.note;
+        tx.set(db.collection("inventoryMovements").doc(),
+            {...inventory.movementRecord({
+              businessId, itemId, type: "transfer_out", delta: -plan.amount,
+              quantityAfter: plan.from.quantityAfter, uid, note,
+              storeId: from.id, transferId}), createdAt: now});
+        tx.set(db.collection("inventoryMovements").doc(),
+            {...inventory.movementRecord({
+              businessId, itemId, type: "transfer_in", delta: plan.amount,
+              quantityAfter: plan.to.quantityAfter, uid, note,
+              storeId: to.id, transferId}), createdAt: now});
+        return {current, plan, from, to};
+      });
+      await inventoryItemAudit(businessId, itemId, "stock_transferred", uid,
+          `Moved ${done.plan.amount} of ${done.current.name} from ` +
+          `${done.from.name} to ${done.to.name}`);
+      return {success: true, transferId,
+        from: {storeId: done.from.id, quantity: done.plan.from.quantityAfter},
+        to: {storeId: done.to.id, quantity: done.plan.to.quantityAfter},
+        quantity: done.plan.amount};
     },
 );
 
@@ -19800,11 +20862,18 @@ exports.getInventorySummary = onCall(
       const uid = requireAuth(request);
       const data = request.data || {};
       const {businessId} = inventoryIds(data);
-      const db = await requireInventoryAccess(uid, businessId);
+      const {db, access} = await requireInventoryContext(uid, businessId);
       const range = String(data.range || "").trim();
       if (!inventory.SUMMARY_RANGES.includes(range)) {
         throw inventoryRefusal("range_invalid");
       }
+      const sctx = await loadInventoryStoreContext(db, businessId);
+      // Which stores this caller is looking at: a staff member only ever
+      // gets their own, whatever they ask for.
+      const scope = inventory.resolveSummaryScope({
+        converted: sctx.converted, stores: sctx.stores, access,
+        requestedStoreId: inventoryDocId(data.storeId)});
+      if (scope.code) throw inventoryRefusal(scope.code);
       const bounds = inventory.rangeBounds(range, data.timeZone, new Date());
       const deadlineMs = Date.now() + INVENTORY_SUMMARY_BUDGET_MS;
       const readAll = async (query) => {
@@ -19823,7 +20892,7 @@ exports.getInventorySummary = onCall(
         });
         return {rows, complete: result.exhausted};
       };
-      const [sales, items] = await Promise.all([
+      const [sales, items, cats, stock] = await Promise.all([
         readAll(db.collection("inventorySales")
             .where("businessId", "==", businessId)
             .where("createdAt", ">=",
@@ -19831,15 +20900,50 @@ exports.getInventorySummary = onCall(
             .orderBy("createdAt", "desc")),
         readAll(db.collection("inventoryItems")
             .where("businessId", "==", businessId)),
+        readAll(db.collection("inventoryCategories")
+            .where("businessId", "==", businessId)),
+        scope.multi ? readAll(db.collection("inventoryStock")
+            .where("businessId", "==", businessId)) :
+          Promise.resolve({rows: [], complete: true}),
       ]);
+      // Products from before the category list are matched into it as they
+      // are seen (a little at a time, idempotent).
+      try {
+        await convertLegacyInventoryCategories(db, businessId, uid, items.rows,
+            cats.rows);
+      } catch (error) {
+        logger.warn("Legacy inventory categories not converted", {
+          businessId, error: String(error?.message || error)});
+      }
+      const wanted = scope.filterStoreId ?
+        sales.rows.filter((sale) => inventory.saleStoreId(
+            sale, sctx.mainStoreId) === scope.filterStoreId) : sales.rows;
+      const itemMap = new Map(items.rows.map((row) => [row.id, row]));
+      const shelf = scope.multi ?
+        inventory.summarizeShelfByStore({
+          items: items.rows, rows: stock.rows, stores: sctx.stores,
+          mainStoreId: sctx.mainStoreId,
+          visibleStoreIds: scope.filterStoreId ?
+            new Set([scope.filterStoreId]) : null}) :
+        inventory.summarizeShelf(items.rows);
+      const byStore = scope.allView ?
+        inventory.summarizeByStore(wanted, sctx.stores, sctx.mainStoreId)
+            .filter((row) => !scope.filterStoreId ||
+              row.storeId === scope.filterStoreId) : [];
       return {
         success: true,
         range,
         since: new Date(bounds.startMs).toISOString(),
         timeZone: bounds.zone,
-        ...inventory.summarizeSales(sales.rows),
-        ...inventory.summarizeShelf(items.rows),
-        truncated: !sales.complete || !items.complete,
+        ...inventory.summarizeSales(wanted),
+        ...shelf,
+        byCategory: inventory.summarizeByCategory(wanted,
+            {categories: cats.rows, items: itemMap}),
+        byStore,
+        multiStore: scope.multi,
+        storeId: scope.filterStoreId,
+        truncated: !sales.complete || !items.complete || !cats.complete ||
+          !stock.complete,
       };
     },
 );
@@ -22025,6 +23129,8 @@ function nonBusinessAuthorityCleanup() {
     businessName: FirestoreFieldValue.delete(),
     businessServices: FirestoreFieldValue.delete(),
     businessPermissions: FirestoreFieldValue.delete(),
+    inventoryHomeStoreId: FirestoreFieldValue.delete(),
+    inventoryAllStores: FirestoreFieldValue.delete(),
   };
 }
 
