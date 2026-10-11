@@ -86,6 +86,14 @@ before(async () => {
       put(`containerLines/${biz}-l1`, {businessId: biz,
         containerId: `${biz}-open`, kind: "car",
         vinNumber: "1HGCM82633A004352"});
+      put(`inventoryItems/${biz}-item`, {businessId: biz, name: "Shea",
+        code: "IT-K7M4P2", archived: false, priceCents: 1000, quantity: 5});
+      put(`inventoryItems/${biz}-old`, {businessId: biz, name: "Old stock",
+        code: "IT-OLD234", archived: true, priceCents: 500, quantity: 0});
+      put(`inventorySales/${biz}-sale`, {businessId: biz, voided: false,
+        totalCents: 1000, createdAt: ts("2026-09-01"), lines: []});
+      put(`inventoryMovements/${biz}-move`, {businessId: biz,
+        itemId: `${biz}-item`, type: "sale", createdAt: ts("2026-09-01")});
       put(`lotActivities/${biz}-1`, {businessId: biz, activityTypeId: "title",
         activityDate: ts("2026-09-03"), paymentStatus:
           "awaiting_direct_payment"});
@@ -159,6 +167,25 @@ const SHAPES = [
   ["lines of open containers", (db, b) =>
     db.collection("containerLines").where("businessId", "==", b)
         .where("containerId", "in", [`${b}-open`])],
+  ["inventory: products by name", (db, b) =>
+    db.collection("inventoryItems").where("businessId", "==", b)
+        .orderBy("name").limit(200)],
+  ["inventory: active products by name", (db, b) =>
+    db.collection("inventoryItems").where("businessId", "==", b)
+        .where("archived", "==", false).orderBy("name").limit(200)],
+  ["inventory: archived products", (db, b) =>
+    db.collection("inventoryItems").where("businessId", "==", b)
+        .where("archived", "==", true).limit(200)],
+  ["inventory: a scanned code", (db, b) =>
+    db.collection("inventoryItems").where("businessId", "==", b)
+        .where("code", "==", "IT-K7M4P2").limit(1)],
+  ["inventory: sales, newest first, paged", (db, b) =>
+    db.collection("inventorySales").where("businessId", "==", b)
+        .orderBy("createdAt", "desc").limit(50)],
+  ["inventory: a product's stock history", (db, b) =>
+    db.collection("inventoryMovements").where("businessId", "==", b)
+        .where("itemId", "==", `${b}-item`)
+        .orderBy("createdAt", "desc").limit(50)],
   ["activity list, ranged, typed, owed", (db, b) =>
     db.collection("lotActivities").where("businessId", "==", b)
         .where("activityTypeId", "==", "title")

@@ -684,6 +684,24 @@ service cloud.firestore {
     match /containerVinLocks/{lockId} {
       allow read, write: if false;
     }
+    // Inventory (docs/INVENTORY.md): products a shop sells, the sales staff
+    // ring up, and every stock change. Read by the business's managers (the
+    // same read as containers); every write goes through the inventory
+    // callables as admin, so a client cannot sell a product, change a count
+    // or rewrite a sale. A product's `documentToken` (the secret behind its
+    // tag-printing link) is readable by those managers only.
+    match /inventoryItems/{itemId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /inventorySales/{saleId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /inventoryMovements/{movementId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
     // Invoices and receipts the business writes by hand: read by the
     // business's managers, written only through the invoice callables.
     match /invoices/{invoiceId} {

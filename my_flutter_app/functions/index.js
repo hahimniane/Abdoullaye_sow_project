@@ -421,6 +421,8 @@ const {
   containerLabelsModel,
   renderContainerLabels,
 } = require("./container_labels");
+const inventory = require("./inventory");
+const {renderInventoryTags} = require("./inventory_tags");
 const {
   occupancyEndMs,
   occupancyPatch,
@@ -616,6 +618,7 @@ const VALID_BUSINESS_SERVICES = [
   "carSales",
   "carParking",
   "carTransport",
+  "inventory",
 ];
 // Every section a business console or the app can gate on. The web sidebar
 // (admin_web/src/lib/business-sidebar.ts) and the Flutter menu each check one
@@ -636,6 +639,7 @@ const VALID_BUSINESS_PERMISSIONS = [
   "support",
   "growth",
   "containers",
+  "inventory",
 ];
 const VALID_PLATFORM_ADMIN_ROLES = [
   "superAdmin",
@@ -700,7 +704,11 @@ const BLOCKED_ACCOUNT_STATUSES = new Set([
   "deleted",
 ]);
 const USER_DIRECTORY_PAGE_SIZE = 100;
-const DEFAULT_BUSINESS_SERVICES = [...VALID_BUSINESS_SERVICES];
+// What a business that never chose its services is given. "inventory" is the
+// exception: it is switched on per business by an admin, never by default
+// (docs/INVENTORY.md), so a business with no stored list does not have it.
+const DEFAULT_BUSINESS_SERVICES = VALID_BUSINESS_SERVICES.filter(
+    (service) => service !== "inventory");
 const DEFAULT_BUSINESS_ADVISOR_MODEL = "claude-fable-5";
 function requireAuth(request) {
   if (!request.auth) {
@@ -12021,7 +12029,8 @@ async function bumpPublicCatalogVersion() {
   }
 }
 
-async function generateTrackingCode(prefix, collectionPath) {
+async function generateTrackingCode(
+    prefix, collectionPath, field = "trackingCode") {
   const db = admin.firestore();
   // Short, human-readable codes (BS-K7M4P2). Existing long codes are left
   // untouched - they are printed on receipts - and still resolve on lookup.
@@ -12029,7 +12038,7 @@ async function generateTrackingCode(prefix, collectionPath) {
     const code = buildTrackingCode(prefix, (max) => crypto.randomInt(max));
     const existing = await db
         .collection(collectionPath)
-        .where("trackingCode", "==", code)
+        .where(field, "==", code)
         .limit(1)
         .get();
     if (existing.empty) return code;
@@ -13524,6 +13533,14 @@ exports.parkingDocument = onRequest(
       if (!token || token.length < 16) return notFound();
 
       const db = admin.firestore();
+      // A product's QR tags have a view of their own: only the item's own
+      // token opens them, and nothing else is looked up for that view.
+      if (String(req.query?.view || "") === "inventoryTags") {
+        const page = await inventoryTagsPage(db, req, token);
+        if (!page) return notFound();
+        res.set("Content-Type", "text/html; charset=utf-8");
+        return res.status(200).send(page);
+      }
       // Several packages' labels in one link: tokens joined with ".". It can
       // only be a line link, and is too long to ask the other collections
       // about as one value.
@@ -15275,7 +15292,10 @@ async function writeLotLedgerAudit(params) {
       byStaffId: String(params.byStaffId || ""),
       summary: String(params.summary || ""),
       changes: Array.isArray(params.changes) ? params.changes : [],
-      acknowledged: false,
+      // Routine events (a sale at the counter) are history, not something
+      // another person needs to look at, so they may be written already
+      // acknowledged and stay out of the "Needs attention" feed.
+      acknowledged: params.acknowledged === true,
       at: FirestoreFieldValue.serverTimestamp(),
     });
   } catch (error) {
@@ -19203,6 +19223,506 @@ exports.getContainerDocumentUrl = onCall(
         ...(code ? {code} : {}),
       });
       return {success: true, url: `${url}&${query.toString()}`};
+    },
+);
+
+// -------------------------------------------------------------------------
+// Inventory - products a shop sells, the QR tag on each, and the sales staff
+// ring up at the counter (docs/INVENTORY.md). Every write goes through here
+// as admin; the clients only read. The rules live in inventory.js. A sale is
+// its own record, never an invoice: nothing here charges anybody.
+// -------------------------------------------------------------------------
+
+const INVENTORY_SECTION = "inventory";
+const INVENTORY_SERVICE = "inventory";
+
+/**
+ * A refusal the screens can act on: the English message, `details.reason`
+ * (the first code) and `details.reasons` (every code), plus any extras.
+ *
+ * @param {string|string[]} codes One or more INVENTORY_MESSAGES codes.
+ * @param {object} extra More details (e.g. the product ids it is about).
+ * @return {HttpsError} The error to throw.
+ */
+function inventoryRefusal(codes, extra = {}) {
+  const list = Array.isArray(codes) ? codes : [codes];
+  return new HttpsError(inventory.refusalKind(list[0]),
+      inventory.inventoryMessage(list),
+      {reason: list[0], reasons: list, ...extra});
+}
+
+/**
+ * The gate every inventory callable passes: the caller manages this business
+ * and holds the inventory section, then the business has the service on.
+ *
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} Firestore.
+ */
+async function requireInventoryAccess(uid, businessId) {
+  await requireBusinessPermission(uid, businessId, INVENTORY_SECTION);
+  const db = admin.firestore();
+  const business = businessId ?
+    await db.collection("businesses").doc(businessId).get() : null;
+  if (!business || !business.exists) {
+    throw inventoryRefusal("business_not_found");
+  }
+  const services = normalizeBusinessServices(business.data()?.enabledServices);
+  if (!services.includes(INVENTORY_SERVICE)) {
+    throw inventoryRefusal("service_disabled");
+  }
+  return db;
+}
+
+/**
+ * @param {object} data A callable's data.
+ * @return {{businessId: string, itemId: string}} The ids, trimmed.
+ */
+function inventoryIds(data) {
+  return {
+    businessId: String(data?.businessId || "").trim(),
+    itemId: String(data?.itemId || "").trim(),
+  };
+}
+
+/**
+ * Reads a product of this business inside a transaction.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} itemId The product.
+ * @return {Promise<{ref: object, data: object}>} The product.
+ */
+async function inventoryItemIn(tx, db, businessId, itemId) {
+  if (!itemId || itemId.includes("/")) {
+    throw inventoryRefusal("item_not_found");
+  }
+  const ref = db.collection("inventoryItems").doc(itemId);
+  const doc = await tx.get(ref);
+  if (!doc.exists || String(doc.data()?.businessId) !== businessId) {
+    throw inventoryRefusal("item_not_found");
+  }
+  return {ref, data: doc.data() || {}};
+}
+
+function inventoryItemAudit(businessId, itemId, action, uid, summary,
+    changes = []) {
+  return writeLotLedgerAudit({
+    businessId, entityType: "inventory_item", entityId: itemId,
+    action, byStaffId: uid, summary, changes,
+  });
+}
+
+exports.createInventoryItem = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const errors = inventory.validateItemCreate(data);
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      // Minted before the write: finding a free code reads other products.
+      const code = await generateTrackingCode(
+          inventory.TAG_CODE_PREFIX, "inventoryItems", "code");
+      const record = inventory.itemCreateRecord(data, {businessId, code, uid});
+      const ref = db.collection("inventoryItems").doc();
+      const now = FirestoreFieldValue.serverTimestamp();
+      const batch = db.batch();
+      batch.set(ref, {...record, createdAt: now, updatedAt: now});
+      if (record.quantity > 0) {
+        batch.set(db.collection("inventoryMovements").doc(),
+            {...inventory.movementRecord({
+              businessId, itemId: ref.id, type: "initial",
+              delta: record.quantity, quantityAfter: record.quantity, uid}),
+            createdAt: now});
+      }
+      await batch.commit();
+      await inventoryItemAudit(businessId, ref.id, "created", uid,
+          `Added ${record.name} (${code}) at ` +
+          `${inventory.moneyText(record.priceCents)}, ` +
+          `${record.quantity} in stock`);
+      return {success: true, itemId: ref.id, code};
+    },
+);
+
+exports.updateInventoryItem = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId, itemId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const errors = inventory.validateItemUpdate(data);
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      const patch = inventory.itemUpdatePatch(data);
+      const done = await db.runTransaction(async (tx) => {
+        const {ref, data: current} =
+          await inventoryItemIn(tx, db, businessId, itemId);
+        const changes = inventory.itemFieldDiff(current, patch);
+        if (changes.length > 0) {
+          tx.update(ref, {...patch, updatedByStaffId: uid,
+            updatedAt: FirestoreFieldValue.serverTimestamp()});
+        }
+        return {current, changes};
+      });
+      if (done.changes.length > 0) {
+        const first = done.changes[0];
+        await inventoryItemAudit(businessId, itemId, "edited", uid,
+            `${done.current.name}: ${first.field} ${first.from} → ` +
+            `${first.to}` +
+            (done.changes.length > 1 ?
+              ` (+${done.changes.length - 1} more)` : ""),
+            done.changes);
+      }
+      return {success: true, itemId,
+        changed: done.changes.map((c) => c.field)};
+    },
+);
+
+exports.adjustInventoryStock = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId, itemId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const done = await db.runTransaction(async (tx) => {
+        const {ref, data: current} =
+          await inventoryItemIn(tx, db, businessId, itemId);
+        const plan = inventory.planStockAdjust(current, data);
+        if (plan.errors.length > 0) throw inventoryRefusal(plan.errors);
+        const now = FirestoreFieldValue.serverTimestamp();
+        tx.update(ref, {
+          quantity: plan.quantityAfter,
+          countWasOff: plan.countWasOff,
+          updatedByStaffId: uid,
+          updatedAt: now,
+        });
+        tx.set(db.collection("inventoryMovements").doc(),
+            {...inventory.movementRecord({
+              businessId, itemId, type: plan.type, delta: plan.delta,
+              quantityAfter: plan.quantityAfter, uid, note: data.note}),
+            createdAt: now});
+        return {current, plan};
+      });
+      const {current, plan} = done;
+      await inventoryItemAudit(businessId, itemId,
+          plan.type === "add" ? "stock_added" : "stock_set", uid,
+          plan.type === "add" ?
+            `Added ${plan.delta} to ${current.name} ` +
+              `(now ${plan.quantityAfter})` :
+            `Set the count of ${current.name} from ${current.quantity} ` +
+              `to ${plan.quantityAfter}`);
+      return {success: true, quantity: plan.quantityAfter};
+    },
+);
+
+exports.archiveInventoryItem = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId, itemId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      if (typeof data.archived !== "boolean") {
+        throw inventoryRefusal("archived_invalid");
+      }
+      const archived = data.archived;
+      const current = await db.runTransaction(async (tx) => {
+        const {ref, data: row} =
+          await inventoryItemIn(tx, db, businessId, itemId);
+        if ((row.archived === true) !== archived) {
+          tx.update(ref, {archived, updatedByStaffId: uid,
+            updatedAt: FirestoreFieldValue.serverTimestamp()});
+        }
+        return row;
+      });
+      if ((current.archived === true) !== archived) {
+        await inventoryItemAudit(businessId, itemId,
+            archived ? "archived" : "restored", uid,
+            `${archived ? "Archived" : "Restored"} ${current.name}`);
+      }
+      return {success: true, archived};
+    },
+);
+
+exports.deleteInventoryItem = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId, itemId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      if (data.confirm !== true) throw inventoryRefusal("confirm_required");
+      // Sales and stock rows stay: sales carry a snapshot of the product.
+      const current = await db.runTransaction(async (tx) => {
+        const {ref, data: row} =
+          await inventoryItemIn(tx, db, businessId, itemId);
+        tx.delete(ref);
+        return row;
+      });
+      await inventoryItemAudit(businessId, itemId, "deleted", uid,
+          `Deleted ${current.name} (${current.code})`);
+      return {success: true};
+    },
+);
+
+exports.recordInventorySale = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const {errors, lines} = inventory.cleanSaleInput(data);
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      const clientRequestId =
+        inventory.cleanClientRequestId(data.clientRequestId);
+      const paymentMethod = inventory.text(data.paymentMethod, 40);
+      const saleRef = db.collection("inventorySales")
+          .doc(inventory.saleDocId(businessId, clientRequestId));
+      const itemIds = [...new Set(lines.map((l) => l.itemId))];
+      const done = await db.runTransaction(async (tx) => {
+        // The same retry key is the same sale: answered, never rung up twice.
+        const existing = await tx.get(saleRef);
+        if (existing.exists) {
+          const sale = existing.data() || {};
+          return {replayed: true, totalCents: Number(sale.totalCents) || 0,
+            warnings: inventory.saleWarnings(sale)};
+        }
+        const docs = await tx.getAll(...itemIds.map(
+            (id) => db.collection("inventoryItems").doc(id)));
+        const items = new Map();
+        docs.forEach((doc) => {
+          if (doc.exists && String(doc.data()?.businessId) === businessId) {
+            items.set(doc.id, doc.data() || {});
+          }
+        });
+        const refusal = inventory.saleItemRefusal(lines, items);
+        if (refusal) {
+          throw inventoryRefusal(refusal.reason, {itemIds: refusal.itemIds});
+        }
+        const plan = inventory.planSale(lines, items);
+        const now = FirestoreFieldValue.serverTimestamp();
+        tx.set(saleRef, {
+          businessId,
+          lines: plan.lines,
+          totalCents: plan.totalCents,
+          paymentMethod,
+          soldByStaffId: uid,
+          clientRequestId,
+          voided: false,
+          voidedByStaffId: "",
+          voidedAt: null,
+          createdAt: now,
+        });
+        for (const change of plan.items) {
+          tx.update(db.collection("inventoryItems").doc(change.itemId), {
+            quantity: change.quantityAfter,
+            countWasOff: change.countWasOff,
+            updatedAt: now,
+          });
+        }
+        for (const move of plan.movements) {
+          tx.set(db.collection("inventoryMovements").doc(),
+              {...inventory.movementRecord({
+                businessId, itemId: move.itemId, type: "sale",
+                delta: move.delta, quantityAfter: move.quantityAfter, uid,
+                saleId: saleRef.id}),
+              createdAt: now});
+        }
+        return {replayed: false, totalCents: plan.totalCents,
+          warnings: plan.warnings, plan};
+      });
+      if (!done.replayed) {
+        const pieces = done.plan.lines.reduce((n, l) => n + l.quantity, 0);
+        await writeLotLedgerAudit({
+          businessId, entityType: "inventory_sale", entityId: saleRef.id,
+          action: "sold", byStaffId: uid,
+          summary: `Sold ${pieces} ${pieces === 1 ? "piece" : "pieces"} ` +
+            `for ${inventory.moneyText(done.totalCents)} (${paymentMethod})` +
+            (done.warnings.length > 0 ? " - a count was off" : ""),
+          changes: [],
+          // A counter sale is history, not news: it stays out of the
+          // "Needs attention" feed.
+          acknowledged: true,
+        });
+      }
+      return {success: true, saleId: saleRef.id, totalCents: done.totalCents,
+        warnings: done.warnings, replayed: done.replayed};
+    },
+);
+
+exports.voidInventorySale = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const saleId = String(data.saleId || "").trim();
+      if (!saleId || saleId.includes("/")) {
+        throw inventoryRefusal("sale_not_found");
+      }
+      const reason = inventory.text(data.reason, inventory.MAX_REASON);
+      const saleRef = db.collection("inventorySales").doc(saleId);
+      const done = await db.runTransaction(async (tx) => {
+        const saleDoc = await tx.get(saleRef);
+        const sale = saleDoc.exists ? saleDoc.data() || {} : null;
+        if (!sale || String(sale.businessId) !== businessId) {
+          throw inventoryRefusal("sale_not_found");
+        }
+        if (sale.voided === true) throw inventoryRefusal("sale_voided");
+        const ids = [...new Set((sale.lines || []).map((l) => l.itemId))]
+            .filter((id) => id && !String(id).includes("/"));
+        const docs = ids.length === 0 ? [] : await tx.getAll(...ids.map(
+            (id) => db.collection("inventoryItems").doc(id)));
+        const items = new Map();
+        docs.forEach((doc) => {
+          if (doc.exists && String(doc.data()?.businessId) === businessId) {
+            items.set(doc.id, doc.data() || {});
+          }
+        });
+        const plan = inventory.planVoid(sale, items);
+        const now = FirestoreFieldValue.serverTimestamp();
+        tx.update(saleRef, {voided: true, voidedByStaffId: uid,
+          voidedAt: now, voidReason: reason});
+        for (const change of plan.items) {
+          tx.update(db.collection("inventoryItems").doc(change.itemId), {
+            quantity: change.quantityAfter, updatedAt: now});
+        }
+        for (const move of plan.movements) {
+          tx.set(db.collection("inventoryMovements").doc(),
+              {...inventory.movementRecord({
+                businessId, itemId: move.itemId, type: "void",
+                delta: move.delta, quantityAfter: move.quantityAfter, uid,
+                note: reason, saleId}),
+              createdAt: now});
+        }
+        return {sale, plan};
+      });
+      await writeLotLedgerAudit({
+        businessId, entityType: "inventory_sale", entityId: saleId,
+        action: "voided", byStaffId: uid,
+        summary: `Voided a ${inventory.moneyText(done.sale.totalCents)} ` +
+          `sale${reason ? ` — ${reason}` : ""}`,
+        changes: [],
+      });
+      return {success: true, skippedItemIds: done.plan.skipped};
+    },
+);
+
+/**
+ * The page of tags for a product's token, or null when no product has it.
+ * The page shows the QR and nothing else.
+ *
+ * @param {object} db Firestore.
+ * @param {object} req The request ({copies}).
+ * @param {string} token The product's tag token.
+ * @return {Promise<string|null>} The page, or null.
+ */
+async function inventoryTagsPage(db, req, token) {
+  const found = await db.collection("inventoryItems")
+      .where("documentToken", "==", token).limit(1).get();
+  if (found.empty) return null;
+  const model = inventory.tagsModel({
+    item: found.docs[0].data() || {},
+    consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+    copies: req.query?.copies,
+  });
+  if (!model.code) return null;
+  const qrSvg = await QRCode.toString(model.link, {
+    type: "svg", errorCorrectionLevel: "H", margin: 1,
+  });
+  return renderInventoryTags(model, {qrSvg});
+}
+
+exports.getInventoryLabelsUrl = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId, itemId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const copies = inventory.tagCopies(data.copies);
+      if (copies === null) throw inventoryRefusal("copies_invalid");
+      const candidate = crypto.randomBytes(24).toString("base64url");
+      // Minted in a transaction that only fills an empty field: two first
+      // prints at once share one token instead of the second breaking the
+      // first's link.
+      const token = await db.runTransaction(async (tx) => {
+        const {ref, data: row} =
+          await inventoryItemIn(tx, db, businessId, itemId);
+        const {value, write} = keepExisting(row.documentToken, candidate);
+        if (write) tx.update(ref, {documentToken: value});
+        return value;
+      });
+      const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
+        "https://laawoldigital.com/d";
+      const query = new URLSearchParams({
+        t: token, view: "inventoryTags", labels: "tag",
+        copies: String(copies),
+      });
+      return {success: true, url: `${base}?${query.toString()}`};
+    },
+);
+
+// Sales are read newest first in pages and totalled here, so a screen never
+// loads the whole sales list to show a figure. Bounded: at most
+// INVENTORY_SUMMARY_PAGES pages of each collection, and `truncated` says so.
+const INVENTORY_SUMMARY_PAGE = 500;
+const INVENTORY_SUMMARY_PAGES = 40;
+const INVENTORY_SUMMARY_BUDGET_MS = 60 * 1000;
+
+exports.getInventorySummary = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 120},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const range = String(data.range || "").trim();
+      if (!inventory.SUMMARY_RANGES.includes(range)) {
+        throw inventoryRefusal("range_invalid");
+      }
+      const bounds = inventory.rangeBounds(range, data.timeZone, new Date());
+      const deadlineMs = Date.now() + INVENTORY_SUMMARY_BUDGET_MS;
+      const readAll = async (query) => {
+        const rows = [];
+        const result = await drainPages({
+          fetchPage: async (cursor) => {
+            const page = cursor ? query.startAfter(cursor) : query;
+            return (await page.limit(INVENTORY_SUMMARY_PAGE).get()).docs;
+          },
+          processPage: async (docs) => {
+            for (const doc of docs) rows.push({id: doc.id, ...doc.data()});
+          },
+          pageSize: INVENTORY_SUMMARY_PAGE,
+          deadlineMs,
+          maxPages: INVENTORY_SUMMARY_PAGES,
+        });
+        return {rows, complete: result.exhausted};
+      };
+      const [sales, items] = await Promise.all([
+        readAll(db.collection("inventorySales")
+            .where("businessId", "==", businessId)
+            .where("createdAt", ">=",
+                FirestoreTimestamp.fromMillis(bounds.startMs))
+            .orderBy("createdAt", "desc")),
+        readAll(db.collection("inventoryItems")
+            .where("businessId", "==", businessId)),
+      ]);
+      return {
+        success: true,
+        range,
+        since: new Date(bounds.startMs).toISOString(),
+        timeZone: bounds.zone,
+        ...inventory.summarizeSales(sales.rows),
+        ...inventory.summarizeShelf(items.rows),
+        truncated: !sales.complete || !items.complete,
+      };
     },
 );
 

@@ -1100,6 +1100,70 @@ describe("business dashboard Firestore rules", () => {
         `containerVinLocks/${lockId}`)));
   });
 
+  // Inventory (docs/INVENTORY.md): products, sales and stock movements are
+  // read by the business's own managers as `where businessId == mine`
+  // queries (a product also by code, a sale newest first, a product's
+  // movements by item) and written only by the callables. A client that
+  // could write a count or a sale could sell or restock for free.
+  it("lets the shop read its inventory by query, and never write it",
+      async () => {
+        const {query, collection, where, orderBy, getDocs, doc, setDoc,
+          updateDoc, deleteDoc} = require("firebase/firestore");
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+          const db = context.firestore();
+          await setDoc(doc(db, "inventoryItems/item_a"),
+              {businessId: "biz_a", name: "Shea butter", code: "IT-K7M4P2",
+                priceCents: 1000, quantity: 5, archived: false,
+                documentToken: "secret-token-of-the-tag-link"});
+          await setDoc(doc(db, "inventorySales/sale_a"),
+              {businessId: "biz_a", totalCents: 1000, voided: false,
+                createdAt: new Date("2026-10-10"), lines: []});
+          await setDoc(doc(db, "inventoryMovements/move_a"),
+              {businessId: "biz_a", itemId: "item_a", type: "sale",
+                delta: -1, quantityAfter: 4,
+                createdAt: new Date("2026-10-10")});
+        });
+        const owner = firestoreFor("owner-a");
+        const shapes = [
+          (db, b) => query(collection(db, "inventoryItems"),
+              where("businessId", "==", b)),
+          (db, b) => query(collection(db, "inventoryItems"),
+              where("businessId", "==", b), where("code", "==", "IT-K7M4P2")),
+          (db, b) => query(collection(db, "inventoryItems"),
+              where("businessId", "==", b), where("archived", "==", false)),
+          (db, b) => query(collection(db, "inventorySales"),
+              where("businessId", "==", b), orderBy("createdAt", "desc")),
+          (db, b) => query(collection(db, "inventoryMovements"),
+              where("businessId", "==", b), where("itemId", "==", "item_a")),
+        ];
+        for (const shape of shapes) {
+          await assertSucceeds(getDocs(shape(owner, "biz_a")));
+          await assertFails(getDocs(shape(owner, "biz_b")));
+          await assertFails(getDocs(shape(firestoreFor("owner-b"), "biz_a")));
+          await assertFails(getDocs(shape(firestoreFor(null), "biz_a")));
+        }
+        for (const name of ["inventoryItems", "inventorySales",
+          "inventoryMovements"]) {
+          await assertFails(getDocs(query(collection(owner, name))));
+        }
+        // Every write is a callable's.
+        await assertFails(setDoc(doc(owner, "inventoryItems/forged"),
+            {businessId: "biz_a", name: "Free", priceCents: 1, quantity: 99}));
+        await assertFails(updateDoc(doc(owner, "inventoryItems/item_a"),
+            {quantity: 999}));
+        await assertFails(deleteDoc(doc(owner, "inventoryItems/item_a")));
+        await assertFails(setDoc(doc(owner, "inventorySales/forged"),
+            {businessId: "biz_a", totalCents: 1, voided: false, lines: []}));
+        await assertFails(updateDoc(doc(owner, "inventorySales/sale_a"),
+            {voided: true}));
+        await assertFails(deleteDoc(doc(owner, "inventorySales/sale_a")));
+        await assertFails(setDoc(doc(owner, "inventoryMovements/forged"),
+            {businessId: "biz_a", itemId: "item_a", type: "add", delta: 99}));
+        await assertFails(updateDoc(doc(owner, "inventoryMovements/move_a"),
+            {delta: 5}));
+        await assertFails(deleteDoc(doc(owner, "inventoryMovements/move_a")));
+      });
+
   it("lets a business owner read their own private records only", async () => {
     const ownerDb = firestoreFor("owner-a");
 
