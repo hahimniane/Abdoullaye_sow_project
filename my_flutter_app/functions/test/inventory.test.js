@@ -1320,7 +1320,7 @@ describe("inventory v2: summaries per store", () => {
 });
 
 describe("the store conversion's id ordering", () => {
-  it("uses the standard FieldPath import, which the functions emulator provides", () => {
+  it("uses the standard FieldPath import (the emulator has it)", () => {
     // `admin.firestore.FieldPath` is undefined inside the functions emulator
     // (second store creation answered INTERNAL there); the modular import is
     // not. Keep the inventory code on the import.
