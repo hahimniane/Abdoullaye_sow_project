@@ -570,6 +570,56 @@ describe("ownerEditableServices", () => {
   });
 });
 
+describe("planInventoryService", () => {
+  const {planInventoryService} = require("../inventory");
+  const ORDER = ["barrelShipping", "freight", "parking", "inventory"];
+  it("adds inventory last and keeps the other services in order", () => {
+    const plan = planInventoryService(["freight", "barrelShipping"], true,
+        ORDER);
+    assert.deepEqual(plan, {valid: true, changed: true, enabled: true,
+      services: ["barrelShipping", "freight", "inventory"]});
+  });
+  it("removes only inventory", () => {
+    const plan = planInventoryService(["freight", "inventory", "parking"],
+        false, ORDER);
+    assert.equal(plan.changed, true);
+    assert.deepEqual(plan.services, ["freight", "parking"]);
+  });
+  it("changes nothing when it is already in that state", () => {
+    assert.equal(planInventoryService(["freight", "inventory"], true, ORDER)
+        .changed, false);
+    assert.equal(planInventoryService(["freight"], false, ORDER).changed,
+        false);
+    assert.equal(planInventoryService([], false, ORDER).changed, false);
+  });
+  it("drops unknown services and survives a missing list", () => {
+    assert.deepEqual(planInventoryService(["freight", "bogus"], true, ORDER)
+        .services, ["freight", "inventory"]);
+    assert.deepEqual(planInventoryService(undefined, true, ORDER).services,
+        ["inventory"]);
+  });
+  it("only accepts a real boolean", () => {
+    for (const bad of [undefined, null, "true", 1, 0, {}]) {
+      const plan = planInventoryService(["freight"], bad, ORDER);
+      assert.equal(plan.valid, false, String(bad));
+      assert.equal(plan.changed, false, String(bad));
+    }
+  });
+});
+
+describe("The admin Inventory switch is wired on the server", () => {
+  const src = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  const body = src.slice(src.indexOf("exports.setBusinessInventoryService"),
+      src.indexOf("exports.deleteAdminRecord"));
+  it("is a callable gated to the businesses capability, with an audit", () => {
+    assert.ok(body.length > 100);
+    assert.match(body,
+        /requireAdminCapability\(\s*adminUser,\s*"businesses"/);
+    assert.match(body, /setAdminAuditLog\(/);
+    assert.match(body, /not-found/);
+  });
+});
+
 describe("Inventory stays admin-only in the owner-facing callables", () => {
   it("filters the application and the profile update", () => {
     const src = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");

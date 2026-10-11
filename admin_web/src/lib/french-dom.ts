@@ -5281,7 +5281,19 @@ Object.assign(TEXT_TRANSLATIONS, {
   "what was taken at the counter": "ce qui a été encaissé au comptoir",
 });
 
+// The platform admin's Inventory switch on a business (docs/INVENTORY.md).
+Object.assign(TEXT_TRANSLATIONS, {
+  "Inventory service": "Service d’inventaire",
+  "Inventory is on": "L’inventaire est activé",
+  "Inventory is off": "L’inventaire est désactivé",
+  "Switch Inventory on": "Activer l’inventaire",
+  "Switch Inventory off": "Désactiver l’inventaire",
+  "Inventory switched on": "Inventaire activé",
+  "Inventory switched off": "Inventaire désactivé",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
+  "Inventory service": "Service d’inventaire",
   "17 characters": "17 caractères",
   "VIN, owner, make": "VIN, propriétaire, marque",
   "Filter parked cars": "Filtrer les voitures garées",

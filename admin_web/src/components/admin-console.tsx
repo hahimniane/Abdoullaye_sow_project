@@ -99,6 +99,10 @@ import {
   type VerificationStatus,
 } from "@/lib/business-verification";
 import {
+  businessHasInventory,
+  setBusinessInventoryRequest,
+} from "@/lib/inventory";
+import {
   SERVICE_FEE_KEYS,
   SERVICE_FEE_LABELS,
   SERVICE_PLATFORM_FEE_FIELD,
@@ -9685,6 +9689,16 @@ function BusinessWorkspace({
     });
   }
 
+  // Platform-admin only on the server (businesses capability). The row this
+  // reads from is the live business snapshot, so the pill follows the write.
+  const inventoryOn = businessHasInventory(business);
+  async function switchInventoryService(enabled: boolean) {
+    await httpsCallable(
+      functions,
+      "setBusinessInventoryService",
+    )(setBusinessInventoryRequest(business.id, enabled));
+  }
+
   async function reviewBusiness(
     action: "approve" | "request_changes",
     options: { platformDocumentBypass?: boolean } = {},
@@ -9776,6 +9790,41 @@ function BusinessWorkspace({
                 ))}
               </select>
             </label>
+          )}
+          {!inferred && (
+            <div
+              className="inventory-service-switch"
+              role="group"
+              aria-label="Inventory service"
+            >
+              <span>Inventory service</span>
+              <span
+                className={`status-pill compact ${inventoryOn ? "ok" : "muted"}`}
+              >
+                {inventoryOn ? "Inventory is on" : "Inventory is off"}
+              </span>
+              <button
+                className="secondary-button"
+                onClick={() =>
+                  runAction(
+                    inventoryOn ? "Inventory switched off" : "Inventory switched on",
+                    () => switchInventoryService(!inventoryOn),
+                    inventoryOn ?
+                      {
+                        confirm: `Switch Inventory off for ${text(business.name, business.id)}? Its owner and staff will lose the Inventory tab. Products and sales are kept.`,
+                        confirmFr: `Désactiver l’inventaire pour ${text(business.name, business.id)} ? Son propriétaire et son personnel perdront l’onglet Inventaire. Les produits et les ventes sont conservés.`,
+                      } :
+                      {
+                        confirm: `Switch Inventory on for ${text(business.name, business.id)}? Its owner and staff with the Inventory permission can then sell and track stock.`,
+                        confirmFr: `Activer l’inventaire pour ${text(business.name, business.id)} ? Son propriétaire et le personnel ayant l’autorisation Inventaire pourront alors vendre et suivre le stock.`,
+                      },
+                  )
+                }
+                type="button"
+              >
+                {inventoryOn ? "Switch Inventory off" : "Switch Inventory on"}
+              </button>
+            </div>
           )}
         </div>
       </header>

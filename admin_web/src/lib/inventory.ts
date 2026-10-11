@@ -518,6 +518,21 @@ export function inventoryDraftChanged(item: InventoryItem, draft: InventoryItemD
   );
 }
 
+/**
+ * Whether a business has Inventory on, read the way the server reads it: only
+ * the stored `enabledServices` list counts (a business that never stored one
+ * does not have it).
+ */
+export function businessHasInventory(row: Row | null | undefined): boolean {
+  const services = row?.enabledServices;
+  return Array.isArray(services) && services.some((service) => String(service) === "inventory");
+}
+
+/** What the admin console sends to `setBusinessInventoryService`. */
+export function setBusinessInventoryRequest(businessId: string, enabled: boolean) {
+  return { businessId: text(businessId), enabled: enabled === true };
+}
+
 export function archiveInventoryItemRequest(businessId: string, itemId: string, archived: boolean) {
   return { businessId: text(businessId), itemId: text(itemId), archived: archived === true };
 }

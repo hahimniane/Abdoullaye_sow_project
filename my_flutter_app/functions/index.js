@@ -11089,6 +11089,98 @@ exports.updateAdminRecordStatus = onCall(
     },
 );
 
+// A platform admin switches Inventory on or off for an existing business.
+// Owners cannot (ownerEditableServices keeps their saves from touching it), so
+// this is the one place it changes after the business is created.
+exports.setBusinessInventoryService = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireAdminCapability(
+          adminUser,
+          "businesses",
+          "Only platform admins can switch Inventory on or off",
+      );
+
+      const businessId = String(request.data?.businessId || "").trim();
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business ID is required");
+      }
+      if (typeof request.data?.enabled !== "boolean") {
+        throw new HttpsError(
+            "invalid-argument",
+            "Say whether Inventory should be on or off",
+        );
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      const plan = inventory.planInventoryService(
+          normalizeBusinessServices(business.enabledServices),
+          request.data.enabled,
+          VALID_BUSINESS_SERVICES,
+      );
+      if (!plan.changed) {
+        return {
+          success: true, businessId, enabled: plan.enabled,
+          changed: false, enabledServices: plan.services,
+        };
+      }
+
+      const batch = db.batch();
+      batch.update(businessRef, {
+        enabledServices: plan.services,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+        updatedBy: adminUid,
+      });
+      setAdminAuditLog(batch, {
+        action: plan.enabled ?
+          "inventory_service_enabled" : "inventory_service_disabled",
+        actorUid: adminUid,
+        actorRole: platformAdminRole(adminUser),
+        targetCollection: "businesses",
+        targetId: businessId,
+        targetLabel: adminRecordLabel("businesses", businessId, business),
+        previousValue: !plan.enabled,
+        nextValue: plan.enabled,
+        metadata: {service: "inventory", enabledServices: plan.services},
+      });
+      await batch.commit();
+
+      await propagateBusinessSnapshot({
+        businessId,
+        businessName: business.name || businessId,
+        businessStatus: business.status,
+        phone: business.phone,
+        email: business.email,
+        website: business.website,
+        profileImageUrl: business.profileImageUrl,
+        profileImagePath: business.profileImagePath,
+        enabledServices: plan.services,
+        serviceNote: business.serviceNote,
+        addressLine1: business.addressLine1,
+        city: business.city,
+        country: business.country,
+        state: business.state,
+        postalCode: business.postalCode,
+      });
+
+      return {
+        success: true, businessId, enabled: plan.enabled,
+        changed: true, enabledServices: plan.services,
+      };
+    },
+);
+
 exports.deleteAdminRecord = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,

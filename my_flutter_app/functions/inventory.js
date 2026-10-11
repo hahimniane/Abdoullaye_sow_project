@@ -805,8 +805,30 @@ function ownerEditableServices(requested, current, callerIsAdmin, validOrder) {
     had : requested.includes(service));
 }
 
+/**
+ * What a platform admin's Inventory switch does to a business's services:
+ * add or remove "inventory", keep every other service, and keep the
+ * canonical order. Switching to the state it is already in changes nothing.
+ * @param {string[]} current - The business's normalized enabledServices.
+ * @param {*} enabled - The requested state; only boolean true/false count.
+ * @param {string[]} validOrder - VALID_BUSINESS_SERVICES, to keep their order.
+ * @return {{valid: boolean, changed: boolean, services: string[],
+ *   enabled: boolean}} The plan; invalid when enabled is not a boolean.
+ */
+function planInventoryService(current, enabled, validOrder) {
+  const base = Array.isArray(current) ? current : [];
+  const had = base.includes("inventory");
+  if (typeof enabled !== "boolean") {
+    return {valid: false, changed: false, services: base, enabled: had};
+  }
+  const services = validOrder.filter((service) => service === "inventory" ?
+    enabled : base.includes(service));
+  return {valid: true, changed: had !== enabled, services, enabled};
+}
+
 module.exports = {
   ownerEditableServices,
+  planInventoryService,
   INVENTORY_PAYMENT_METHODS,
   INVENTORY_MESSAGES,
   MAX_CENTS,

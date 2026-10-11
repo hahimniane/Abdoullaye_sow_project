@@ -13,7 +13,7 @@
     "test:shared-barrel": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-shared-barrels \"node test/shared-barrel-callables.test.js\"",
     "test:support": "firebase emulators:exec --config ../firebase.json --only auth,firestore --project demo-laawol-support \"node test/support-case-callables.test.js\"",
     "test:containers": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-containers \"node test/container-callables.test.js\"",
-    "test:inventory": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-inventory \"node test/inventory-callables.test.js\"",
+    "test:inventory": "firebase emulators:exec --config ../firebase.json --only auth,firestore --project demo-laawol-inventory \"node test/inventory-callables.test.js\"",
     "test:console-query-rules": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-console-queries \"node test/console-query-rules.test.js\"",
     "test:rules": "firebase emulators:exec --config ../firebase.json --only firestore,storage --project demo-laawol-rules \"node test/firestore-rules.test.js\"",
     "seed:support-emulator": "node scripts/seed-support-emulator.js",

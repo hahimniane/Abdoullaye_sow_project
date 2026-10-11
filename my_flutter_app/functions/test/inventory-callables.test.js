@@ -803,3 +803,147 @@ describe("summary", () => {
         NO_INVENTORY), (error) => error.code === "permission-denied");
   });
 });
+
+describe("a platform admin switches Inventory on or off", () => {
+  const ADMIN = "inv-test-platform-admin";
+  const SUPPORT = "inv-test-support-admin";
+  const TARGET = "inv-test-switch-biz";
+  const toggle = (data, uid = ADMIN) => functions.setBusinessInventoryService
+      .run({auth: {uid, token: {}}, data});
+  const servicesOf = async (id = TARGET) => (await db.collection("businesses")
+      .doc(id).get()).data().enabledServices;
+  const auditsFor = async (id = TARGET) => (await db.collection(
+      "adminAuditLogs").where("targetId", "==", id).get()).docs
+      .map((d) => d.data()).filter((row) => row.metadata?.service ===
+        "inventory");
+
+  before(async () => {
+    // A platform admin's profile check reads the Auth account (it must have a
+    // verified email), so these two need real Auth emulator users.
+    await Promise.all([ADMIN, SUPPORT].map((uid) => admin.auth().createUser({
+      uid, email: `${uid}@example.test`, password: "InventoryAdmin-2026!",
+      emailVerified: true,
+    })));
+    await Promise.all([
+      db.collection("users").doc(ADMIN).set({
+        role: "admin", platformAdmin: true, adminRole: "superAdmin",
+        email: "inv-admin@example.test",
+      }),
+      db.collection("users").doc(SUPPORT).set({
+        role: "admin", platformAdmin: true, adminRole: "supportAdmin",
+        email: "inv-support@example.test",
+      }),
+      db.collection("businesses").doc(TARGET).set({
+        name: "Switch Shop", status: "approved",
+        enabledServices: ["barrelShipping", "freight"],
+      }),
+    ]);
+  });
+
+  it("enables it and keeps every other service", async () => {
+    const answer = await toggle({businessId: TARGET, enabled: true});
+    assert.equal(answer.enabled, true);
+    assert.equal(answer.changed, true);
+    const stored = await servicesOf();
+    assert.deepEqual(stored, answer.enabledServices);
+    assert.ok(stored.includes("inventory"));
+    assert.ok(stored.includes("barrelShipping"));
+    assert.ok(stored.includes("freight"));
+    assert.equal(stored.length, 3);
+    const audits = await auditsFor();
+    assert.equal(audits.length, 1);
+    assert.equal(audits[0].action, "inventory_service_enabled");
+    assert.equal(audits[0].actorUid, ADMIN);
+    assert.equal(audits[0].nextValue, true);
+  });
+
+  it("is a no-op, with no new audit row, when already on", async () => {
+    const before = await servicesOf();
+    const answer = await toggle({businessId: TARGET, enabled: true});
+    assert.equal(answer.changed, false);
+    assert.deepEqual(await servicesOf(), before);
+    assert.equal((await auditsFor()).length, 1);
+  });
+
+  it("disables it and keeps the others", async () => {
+    const answer = await toggle({businessId: TARGET, enabled: false});
+    assert.equal(answer.enabled, false);
+    assert.equal(answer.changed, true);
+    assert.deepEqual(await servicesOf(), ["barrelShipping", "freight"]);
+    const audits = await auditsFor();
+    assert.equal(audits.length, 2);
+    assert.ok(audits.some((row) =>
+      row.action === "inventory_service_disabled" &&
+      row.nextValue === false));
+  });
+
+  it("is a no-op when already off", async () => {
+    const answer = await toggle({businessId: TARGET, enabled: false});
+    assert.equal(answer.changed, false);
+    assert.deepEqual(await servicesOf(), ["barrelShipping", "freight"]);
+    assert.equal((await auditsFor()).length, 2);
+  });
+
+  it("lets the business use inventory only while it is on", async () => {
+    const create = () => functions.createInventoryItem.run({
+      auth: {uid: OFF_OWNER, token: {}},
+      data: {businessId: BIZ_OFF, name: "Soap", priceCents: 500, quantity: 1},
+    });
+    await toggle({businessId: BIZ_OFF, enabled: true});
+    assert.ok((await create()).itemId);
+    assert.ok((await servicesOf(BIZ_OFF)).includes("freight"));
+    await toggle({businessId: BIZ_OFF, enabled: false});
+    await assert.rejects(create(), refusal("service_disabled"));
+  });
+
+  it("turns it on for a business that never chose its services", async () => {
+    await toggle({businessId: BIZ_DEFAULT, enabled: true});
+    const stored = await servicesOf(BIZ_DEFAULT);
+    assert.ok(stored.includes("inventory"));
+    assert.ok(stored.length > 1, "the default services are kept");
+    await toggle({businessId: BIZ_DEFAULT, enabled: false});
+    assert.ok(!(await servicesOf(BIZ_DEFAULT)).includes("inventory"));
+  });
+
+  it("refuses a business owner, even of that business", async () => {
+    await assert.rejects(
+        toggle({businessId: BIZ, enabled: false}, OWNER),
+        (error) => error.code === "permission-denied");
+    await assert.rejects(
+        toggle({businessId: TARGET, enabled: true}, OFF_OWNER),
+        (error) => error.code === "permission-denied");
+    assert.ok((await servicesOf(BIZ)).includes("inventory"));
+    assert.ok(!(await servicesOf()).includes("inventory"));
+  });
+
+  it("refuses an admin role without the businesses capability", async () => {
+    await assert.rejects(
+        toggle({businessId: TARGET, enabled: true}, SUPPORT),
+        (error) => error.code === "permission-denied");
+    assert.ok(!(await servicesOf()).includes("inventory"));
+  });
+
+  it("refuses a signed-out caller", async () => {
+    await assert.rejects(functions.setBusinessInventoryService.run({
+      data: {businessId: TARGET, enabled: true},
+    }), (error) => error.code === "unauthenticated");
+  });
+
+  it("refuses an unknown business and does not create it", async () => {
+    await assert.rejects(
+        toggle({businessId: "inv-test-no-such-business", enabled: true}),
+        (error) => error.code === "not-found");
+    assert.equal((await db.collection("businesses")
+        .doc("inv-test-no-such-business").get()).exists, false);
+  });
+
+  it("refuses a missing business id or a non-boolean switch", async () => {
+    await assert.rejects(toggle({enabled: true}),
+        (error) => error.code === "invalid-argument");
+    for (const bad of [undefined, "true", 1, null]) {
+      await assert.rejects(toggle({businessId: TARGET, enabled: bad}),
+          (error) => error.code === "invalid-argument", String(bad));
+    }
+    assert.ok(!(await servicesOf()).includes("inventory"));
+  });
+});

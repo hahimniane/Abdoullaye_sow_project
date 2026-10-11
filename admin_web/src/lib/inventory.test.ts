@@ -54,6 +54,8 @@ import {
   voidConsequenceText,
   voidInventorySaleRequest,
   voidedByText,
+  businessHasInventory,
+  setBusinessInventoryRequest,
   type BasketLine,
   type InventoryItemDraft,
 } from "./inventory.ts";
@@ -565,4 +567,23 @@ test("count sentences are built per language", () => {
   assert.match(voidConsequenceText(3), /3 items sold goes back/);
   assert.match(voidConsequenceText(3, "fr"), /Le stock des 3 articles vendus revient/);
   assert.match(voidConsequenceText(1, "fr"), /Le stock de l’article vendu revient/);
+});
+
+test("a business has Inventory only when its stored services list says so", () => {
+  assert.equal(businessHasInventory({ enabledServices: ["freight", "inventory"] }), true);
+  assert.equal(businessHasInventory({ enabledServices: ["freight"] }), false);
+  assert.equal(businessHasInventory({ enabledServices: [] }), false);
+  // Never stored a list: the server does not give it Inventory either.
+  assert.equal(businessHasInventory({}), false);
+  assert.equal(businessHasInventory(null), false);
+  assert.equal(businessHasInventory(undefined), false);
+  // Only enabledServices counts, like the server.
+  assert.equal(businessHasInventory({ services: ["inventory"], businessServices: ["inventory"] }), false);
+  assert.equal(businessHasInventory({ enabledServices: "inventory" }), false);
+});
+
+test("the admin switch sends the business and a real boolean", () => {
+  assert.deepEqual(setBusinessInventoryRequest("biz-1", true), { businessId: "biz-1", enabled: true });
+  assert.deepEqual(setBusinessInventoryRequest("biz-1", false), { businessId: "biz-1", enabled: false });
+  assert.deepEqual(setBusinessInventoryRequest("  biz-1 ", "yes" as unknown as boolean), { businessId: "biz-1", enabled: false });
 });

@@ -274,6 +274,66 @@ test("a new business does not start with Inventory switched on", () => {
 });
 
 // ---------------------------------------------------------------------------
+// The platform admin's Inventory switch on an existing business.
+// ---------------------------------------------------------------------------
+
+test("the admin console's business view has an Inventory service switch that calls the callable through runAction", () => {
+  const admin = read("../components/admin-console.tsx");
+  const header = admin.slice(admin.indexOf('<div className="workspace-head-actions">'), admin.indexOf('<div className="workspace-kpis">'));
+  assert.ok(header.length > 200, "the business header was not found");
+  assert.match(header, /className="inventory-service-switch"/);
+  assert.match(header, /aria-label="Inventory service"/);
+  // It shows the live state and offers the opposite action.
+  assert.match(header, /inventoryOn \? "Inventory is on" : "Inventory is off"/);
+  assert.match(header, /inventoryOn \? "Switch Inventory off" : "Switch Inventory on"/);
+  // Through runAction, with a success message and an English + French confirmation.
+  assert.match(header, /runAction\(\s*inventoryOn \? "Inventory switched off" : "Inventory switched on"/);
+  assert.match(header, /switchInventoryService\(!inventoryOn\)/);
+  const switchBlock = header.slice(header.indexOf('className="inventory-service-switch"'));
+  assert.equal((switchBlock.match(/confirmFr:/g) ?? []).length, 2);
+  assert.equal((switchBlock.match(/confirm:/g) ?? []).length, 2);
+  // Not offered for a business that has no profile document to change.
+  assert.match(header, /\{!inferred && \(\s*<div\s+className="inventory-service-switch"/);
+  // The call itself, and the live row it reads from.
+  assert.match(admin, /const inventoryOn = businessHasInventory\(business\);/);
+  assert.match(admin, /httpsCallable\(\s*functions,\s*"setBusinessInventoryService",\s*\)\(setBusinessInventoryRequest\(business\.id, enabled\)\)/);
+});
+
+test("the switch is in the admin console only, and the owner's own console never calls it", () => {
+  const callers = [
+    ["../components/business-console.tsx", false],
+    ["../components/business/profile-support-people.tsx", false],
+    ["../components/business/inventory-panel.tsx", false],
+    ["../components/admin-console.tsx", true],
+  ] as const;
+  for (const [path, expected] of callers) {
+    assert.equal(read(path).includes("setBusinessInventoryService"), expected, path);
+  }
+  // The featured-business editor still hides the Inventory checkbox: this switch is the only way.
+  assert.match(read("../components/admin-console.tsx"), /businessServices\.filter\(\(service\) => service\.id !== "inventory"\)\.map/);
+});
+
+test("the Inventory switch sentences have their French", () => {
+  const strings = [
+    "Inventory service",
+    "Inventory is on",
+    "Inventory is off",
+    "Switch Inventory on",
+    "Switch Inventory off",
+    "Inventory switched on",
+    "Inventory switched off",
+  ];
+  assert.deepEqual(missingFrench(strings), []);
+  for (const english of strings) assert.notEqual(translateValue(english, "fr"), english, english);
+  // The aria-label is read as an attribute, so it is in that dictionary too.
+  assert.ok("Inventory service" in ATTRIBUTE_TRANSLATIONS);
+  // The confirmations carry their own French (confirmFr), so they are not dictionary entries.
+  const admin = read("../components/admin-console.tsx");
+  assert.match(admin, /confirmFr: `Désactiver l’inventaire pour /);
+  assert.match(admin, /confirmFr: `Activer l’inventaire pour /);
+});
+
+// ---------------------------------------------------------------------------
 // The public tag page.
 // ---------------------------------------------------------------------------
 

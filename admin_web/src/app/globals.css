@@ -3751,6 +3751,21 @@ html[data-lang-pending] body {
   font-size: 14px;
   margin: 3px 0 0;
 }
+.workspace-head-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+.inventory-service-switch {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--muted);
+}
 .field-inline {
   align-items: center;
   display: inline-flex;
