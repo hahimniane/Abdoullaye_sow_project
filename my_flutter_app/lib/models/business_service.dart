@@ -102,3 +102,11 @@ List<String> normalizeBusinessServices(dynamic raw) {
 bool hasBusinessService(Iterable<String> services, BusinessServiceKey key) {
   return services.contains(key.value);
 }
+
+/// The services an owner can tick for their own business. Inventory is left
+/// out: a platform admin switches it on, so it never shows as an owner choice
+/// (the server also keeps an owner's save from adding or dropping it).
+List<BusinessServiceDefinition> get ownerBusinessServiceCatalog =>
+    businessServiceCatalog
+        .where((service) => service.key != BusinessServiceKey.inventory)
+        .toList(growable: false);

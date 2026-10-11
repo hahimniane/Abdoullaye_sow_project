@@ -230,6 +230,51 @@ void main() {
       expect(source.codeLookups, isEmpty);
     });
 
+    testWidgets('leaving with items in the basket asks first; staying keeps it',
+        (tester) async {
+      final source = _FakeSource(items: [_soap, _oil]);
+      await _pump(
+        tester,
+        Builder(
+          builder: (context) => Center(
+            child: ElevatedButton(
+              key: const Key('open-sell'),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => _sell(source, _Calls(), scans),
+              )),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('open-sell')));
+      await tester.pumpAndSettle();
+
+      // Nothing in the basket: back leaves without a question.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('inv-basket-empty')), findsNothing);
+      expect(find.text('Leave without selling?'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('open-sell')));
+      await tester.pumpAndSettle();
+      await _scan(tester, scans, 'IT-K7M4P2');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Leave without selling?'), findsOneWidget);
+
+      await tester.tap(find.text('Stay'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('inv-line-i1')), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Empty the basket and leave'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('inv-line-i1')), findsNothing);
+      expect(find.byKey(const Key('open-sell')), findsOneWidget);
+    });
+
     testWidgets('a tag from another shop, an unknown tag, an archived product '
         'and a foreign QR each say so and add nothing', (tester) async {
       final source = _FakeSource(items: [_soap, _old, _foreign]);

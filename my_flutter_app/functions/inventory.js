@@ -788,7 +788,25 @@ function tagsModel({item, consoleUrl, copies}) {
   };
 }
 
+/**
+ * Inventory is switched on by a platform admin, not by the owner. An owner's
+ * own application or profile save can neither add it nor drop it: whether it
+ * is on stays what the business already had. A platform admin sets it freely.
+ * @param {string[]} requested - The normalized list the caller sent.
+ * @param {*} current - The business's stored enabledServices (may be absent).
+ * @param {boolean} callerIsAdmin - Whether a platform admin is saving.
+ * @param {string[]} validOrder - VALID_BUSINESS_SERVICES, to keep their order.
+ * @return {string[]} The services to store.
+ */
+function ownerEditableServices(requested, current, callerIsAdmin, validOrder) {
+  if (callerIsAdmin) return requested;
+  const had = Array.isArray(current) && current.includes("inventory");
+  return validOrder.filter((service) => service === "inventory" ?
+    had : requested.includes(service));
+}
+
 module.exports = {
+  ownerEditableServices,
   INVENTORY_PAYMENT_METHODS,
   INVENTORY_MESSAGES,
   MAX_CENTS,

@@ -11732,4 +11732,17 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get inventoryLowStockAtLabel => 'Stock bas à partir de';
+
+  @override
+  String get inventorySellDiscardTitle => 'Quitter sans vendre ?';
+
+  @override
+  String get inventorySellDiscardBody =>
+      'Les articles du panier n\'ont pas été vendus. Si vous quittez, le panier est vidé.';
+
+  @override
+  String get inventorySellDiscardKeep => 'Rester';
+
+  @override
+  String get inventorySellDiscardLeave => 'Vider le panier et quitter';
 }

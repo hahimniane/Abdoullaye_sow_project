@@ -10636,9 +10636,10 @@ exports.submitBusinessApplication = onCall(
       const normalizedBusinessWebsite = businessWebsite ?
         requireValidWebsite(businessWebsite) :
         "";
-      const normalizedServices = normalizeBusinessServices(
-          enabledServices,
-          [],
+      // An application can never switch Inventory on; an admin does that.
+      const normalizedServices = inventory.ownerEditableServices(
+          normalizeBusinessServices(enabledServices, []),
+          [], false, VALID_BUSINESS_SERVICES,
       );
       if (!normalizedServices.length) {
         throw new HttpsError(
@@ -11727,9 +11728,14 @@ exports.updateBusinessProfile = onCall(
       if (profile.website) {
         profile.website = requireValidWebsite(profile.website);
       }
-      const normalizedServices = normalizeBusinessServices(
-          enabledServices,
-          current.enabledServices || DEFAULT_BUSINESS_SERVICES,
+      // Whether Inventory is on stays as it is unless a platform admin saves.
+      const normalizedServices = inventory.ownerEditableServices(
+          normalizeBusinessServices(
+              enabledServices,
+              current.enabledServices || DEFAULT_BUSINESS_SERVICES,
+          ),
+          current.enabledServices, user.role === "admin",
+          VALID_BUSINESS_SERVICES,
       );
       const holdMode = carHoldPricingMode === "per_day" ? "per_day" : "flat";
       const holdFlatFee = numberOrFallback(carHoldFlatFee, 500);

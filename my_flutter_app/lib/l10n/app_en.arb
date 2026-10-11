@@ -5372,5 +5372,9 @@
     }
   },
   "inventorySaleCountOff": "count was off",
-  "inventoryLowStockAtLabel": "Low stock at"
+  "inventoryLowStockAtLabel": "Low stock at",
+  "inventorySellDiscardTitle": "Leave without selling?",
+  "inventorySellDiscardBody": "The items in the basket have not been sold. If you leave, the basket is emptied.",
+  "inventorySellDiscardKeep": "Stay",
+  "inventorySellDiscardLeave": "Empty the basket and leave"
 }

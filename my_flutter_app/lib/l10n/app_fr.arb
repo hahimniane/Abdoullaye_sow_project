@@ -5372,5 +5372,9 @@
     }
   },
   "inventorySaleCountOff": "comptage erroné",
-  "inventoryLowStockAtLabel": "Stock bas à partir de"
+  "inventoryLowStockAtLabel": "Stock bas à partir de",
+  "inventorySellDiscardTitle": "Quitter sans vendre ?",
+  "inventorySellDiscardBody": "Les articles du panier n'ont pas été vendus. Si vous quittez, le panier est vidé.",
+  "inventorySellDiscardKeep": "Rester",
+  "inventorySellDiscardLeave": "Vider le panier et quitter"
 }

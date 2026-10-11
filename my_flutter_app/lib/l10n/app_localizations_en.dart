@@ -11552,4 +11552,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inventoryLowStockAtLabel => 'Low stock at';
+
+  @override
+  String get inventorySellDiscardTitle => 'Leave without selling?';
+
+  @override
+  String get inventorySellDiscardBody =>
+      'The items in the basket have not been sold. If you leave, the basket is emptied.';
+
+  @override
+  String get inventorySellDiscardKeep => 'Stay';
+
+  @override
+  String get inventorySellDiscardLeave => 'Empty the basket and leave';
 }

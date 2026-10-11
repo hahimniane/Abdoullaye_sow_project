@@ -1,3 +1,4 @@
+import 'package:my_flutter_app/models/business_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/services/inventory.dart';
 import 'package:my_flutter_app/services/inventory_service.dart';
@@ -12,22 +13,22 @@ InventoryItem _item(
   bool countWasOff = false,
   String name = '',
   String category = '',
-}) =>
-    InventoryItem(
-      id: id,
-      businessId: 'b1',
-      name: name.isEmpty ? 'Item $id' : name,
-      code: 'IT-K7M4P2',
-      priceCents: price,
-      costCents: cost,
-      quantity: quantity,
-      lowStockAt: lowStockAt,
-      archived: archived,
-      countWasOff: countWasOff,
-      category: category,
-    );
+}) => InventoryItem(
+  id: id,
+  businessId: 'b1',
+  name: name.isEmpty ? 'Item $id' : name,
+  code: 'IT-K7M4P2',
+  priceCents: price,
+  costCents: cost,
+  quantity: quantity,
+  lowStockAt: lowStockAt,
+  archived: archived,
+  countWasOff: countWasOff,
+  category: category,
+);
 
 void main() {
+  ownerServiceListTests();
   group('tag codes', () {
     test('a typed code reads however it is written', () {
       expect(inventoryCodeFromScan('IT-K7M4P2'), 'IT-K7M4P2');
@@ -46,7 +47,8 @@ void main() {
       );
       expect(
         inventoryCodeFromLink(
-            Uri.parse('https://customer.laawoldigital.com/i/IT-K7M4P2/')),
+          Uri.parse('https://customer.laawoldigital.com/i/IT-K7M4P2/'),
+        ),
         'IT-K7M4P2',
       );
     });
@@ -62,7 +64,9 @@ void main() {
         isNull,
       );
       expect(
-        inventoryCodeFromScan('https://customer.laawoldigital.com/i/IT-K7M4P2/x'),
+        inventoryCodeFromScan(
+          'https://customer.laawoldigital.com/i/IT-K7M4P2/x',
+        ),
         isNull,
       );
       expect(inventoryCodeFromScan('CL-K7M4P2'), isNull);
@@ -70,7 +74,8 @@ void main() {
       expect(inventoryCodeFromLink(null), isNull);
       expect(
         inventoryCodeFromLink(
-            Uri.parse('ftp://customer.laawoldigital.com/i/IT-K7M4P2')),
+          Uri.parse('ftp://customer.laawoldigital.com/i/IT-K7M4P2'),
+        ),
         isNull,
       );
     });
@@ -89,14 +94,22 @@ void main() {
       final debounce = ScanDebouncer(cooldown: const Duration(seconds: 2));
       final t0 = DateTime(2026, 10, 10, 12);
       expect(debounce.accept('IT-K7M4P2', t0), isTrue);
-      expect(debounce.accept('IT-K7M4P2', t0.add(const Duration(milliseconds: 300))),
-          isFalse);
-      expect(debounce.accept('IT-BBBBBB', t0.add(const Duration(milliseconds: 400))),
-          isTrue);
-      expect(debounce.accept('IT-K7M4P2', t0.add(const Duration(milliseconds: 500))),
-          isTrue);
-      expect(debounce.accept('IT-K7M4P2', t0.add(const Duration(seconds: 3))),
-          isTrue);
+      expect(
+        debounce.accept('IT-K7M4P2', t0.add(const Duration(milliseconds: 300))),
+        isFalse,
+      );
+      expect(
+        debounce.accept('IT-BBBBBB', t0.add(const Duration(milliseconds: 400))),
+        isTrue,
+      );
+      expect(
+        debounce.accept('IT-K7M4P2', t0.add(const Duration(milliseconds: 500))),
+        isTrue,
+      );
+      expect(
+        debounce.accept('IT-K7M4P2', t0.add(const Duration(seconds: 3))),
+        isTrue,
+      );
     });
   });
 
@@ -104,22 +117,34 @@ void main() {
     test('both gates and a business are needed', () {
       expect(
         inventoryAvailable(
-            services: const ['inventory'], hasPermission: true, businessId: 'b1'),
+          services: const ['inventory'],
+          hasPermission: true,
+          businessId: 'b1',
+        ),
         isTrue,
       );
       expect(
         inventoryAvailable(
-            services: const ['freight'], hasPermission: true, businessId: 'b1'),
+          services: const ['freight'],
+          hasPermission: true,
+          businessId: 'b1',
+        ),
         isFalse,
       );
       expect(
         inventoryAvailable(
-            services: const ['inventory'], hasPermission: false, businessId: 'b1'),
+          services: const ['inventory'],
+          hasPermission: false,
+          businessId: 'b1',
+        ),
         isFalse,
       );
       expect(
         inventoryAvailable(
-            services: const ['inventory'], hasPermission: true, businessId: ' '),
+          services: const ['inventory'],
+          hasPermission: true,
+          businessId: ' ',
+        ),
         isFalse,
       );
     });
@@ -174,8 +199,10 @@ void main() {
     });
 
     test('the archived toggle shows only archived', () {
-      final names =
-          inventoryListing(items, showArchived: true).map((i) => i.name).toList();
+      final names = inventoryListing(
+        items,
+        showArchived: true,
+      ).map((i) => i.name).toList();
       expect(names, ['Old tin']);
     });
 
@@ -224,8 +251,10 @@ void main() {
       expect(basket.totalCents, 2250);
       expect(basket.withQuantity('soap', 0).lines.single.quantity, 1);
       expect(basket.withQuantity('soap', -4).lines.single.quantity, 1);
-      expect(basket.withQuantity('soap', 5000000).lines.single.quantity,
-          inventoryMaxSaleQuantity);
+      expect(
+        basket.withQuantity('soap', 5000000).lines.single.quantity,
+        inventoryMaxSaleQuantity,
+      );
       expect(basket.withQuantity('nope', 9), same(basket));
     });
 
@@ -241,19 +270,22 @@ void main() {
       expect(basket.discountCents, 100);
     });
 
-    test('a price above the list is not a discount; the list price clears it', () {
-      var basket = const Basket().addScan(soap).withPrice('soap', 500);
-      expect(basket.totalCents, 500);
-      expect(basket.discountCents, 0);
-      expect(basket.lines.single.priceChanged, isTrue);
-      basket = basket.withPrice('soap', 450);
-      expect(basket.lines.single.priceOverrideCents, isNull);
-      expect(basket.lines.single.priceChanged, isFalse);
-      // A giveaway is allowed.
-      final free = const Basket().addScan(soap).withPrice('soap', 0);
-      expect(free.totalCents, 0);
-      expect(free.discountCents, 450);
-    });
+    test(
+      'a price above the list is not a discount; the list price clears it',
+      () {
+        var basket = const Basket().addScan(soap).withPrice('soap', 500);
+        expect(basket.totalCents, 500);
+        expect(basket.discountCents, 0);
+        expect(basket.lines.single.priceChanged, isTrue);
+        basket = basket.withPrice('soap', 450);
+        expect(basket.lines.single.priceOverrideCents, isNull);
+        expect(basket.lines.single.priceChanged, isFalse);
+        // A giveaway is allowed.
+        final free = const Basket().addScan(soap).withPrice('soap', 0);
+        expect(free.totalCents, 0);
+        expect(free.discountCents, 450);
+      },
+    );
 
     test('removing a line, and a product that refreshes keeps its edits', () {
       var basket = const Basket().addScan(soap).addScan(oil);
@@ -333,34 +365,60 @@ void main() {
     test('each field is refused with its own code', () {
       List<String> check(InventoryItemDraft d, {bool creating = true}) =>
           validateInventoryItemDraft(d, creating: creating);
-      expect(check(const InventoryItemDraft(price: '1', quantity: '1')),
-          ['name_required']);
+      expect(check(const InventoryItemDraft(price: '1', quantity: '1')), [
+        'name_required',
+      ]);
       expect(
-          check(InventoryItemDraft(
-              name: 'x' * 121, price: '1', quantity: '1')),
-          ['name_too_long']);
-      expect(check(const InventoryItemDraft(name: 'a', quantity: '1')),
-          ['price_invalid']);
-      expect(check(const InventoryItemDraft(name: 'a', price: '0', quantity: '1')),
-          ['price_invalid']);
+        check(InventoryItemDraft(name: 'x' * 121, price: '1', quantity: '1')),
+        ['name_too_long'],
+      );
+      expect(check(const InventoryItemDraft(name: 'a', quantity: '1')), [
+        'price_invalid',
+      ]);
       expect(
-          check(const InventoryItemDraft(
-              name: 'a', price: '1', cost: 'abc', quantity: '1')),
-          ['cost_invalid']);
-      expect(check(const InventoryItemDraft(name: 'a', price: '1')),
-          ['quantity_invalid']);
+        check(const InventoryItemDraft(name: 'a', price: '0', quantity: '1')),
+        ['price_invalid'],
+      );
       expect(
-          check(const InventoryItemDraft(
-              name: 'a', price: '1', quantity: '2.5')),
-          ['quantity_invalid']);
+        check(
+          const InventoryItemDraft(
+            name: 'a',
+            price: '1',
+            cost: 'abc',
+            quantity: '1',
+          ),
+        ),
+        ['cost_invalid'],
+      );
+      expect(check(const InventoryItemDraft(name: 'a', price: '1')), [
+        'quantity_invalid',
+      ]);
       expect(
-          check(const InventoryItemDraft(
-              name: 'a', price: '1', quantity: '1', lowStockAt: 'x')),
-          ['low_stock_invalid']);
+        check(const InventoryItemDraft(name: 'a', price: '1', quantity: '2.5')),
+        ['quantity_invalid'],
+      );
       expect(
-          check(const InventoryItemDraft(
-              name: 'a', price: '1', quantity: '1', photoUrl: 'not a link')),
-          ['photo_invalid']);
+        check(
+          const InventoryItemDraft(
+            name: 'a',
+            price: '1',
+            quantity: '1',
+            lowStockAt: 'x',
+          ),
+        ),
+        ['low_stock_invalid'],
+      );
+      expect(
+        check(
+          const InventoryItemDraft(
+            name: 'a',
+            price: '1',
+            quantity: '1',
+            photoUrl: 'not a link',
+          ),
+        ),
+        ['photo_invalid'],
+      );
     });
 
     test('editing never asks for the count', () {
@@ -433,13 +491,23 @@ void main() {
         'b1',
         const InventoryItemDraft(name: 'a', price: '1', quantity: '0'),
       );
-      expect(bare.keys.toSet(),
-          {'businessId', 'name', 'priceCents', 'quantity'});
+      expect(bare.keys.toSet(), {
+        'businessId',
+        'name',
+        'priceCents',
+        'quantity',
+      });
     });
 
     test('updateInventoryItem sends only the changes and never the count', () {
-      final existing = _item('i1',
-          price: 1250, cost: 800, quantity: 24, lowStockAt: 5, name: 'Shea');
+      final existing = _item(
+        'i1',
+        price: 1250,
+        cost: 800,
+        quantity: 24,
+        lowStockAt: 5,
+        name: 'Shea',
+      );
       final same = InventoryItemDraft.fromItem(existing);
       final untouched = updateInventoryItemRequest('b1', existing, same);
       expect(inventoryUpdateIsEmpty(untouched), isTrue);
@@ -472,7 +540,12 @@ void main() {
     test('adjust, archive, delete, void, labels and summary payloads', () {
       expect(
         adjustInventoryStockRequest(
-            businessId: 'b1', itemId: 'i1', add: true, quantity: 5, note: ' box '),
+          businessId: 'b1',
+          itemId: 'i1',
+          add: true,
+          quantity: 5,
+          note: ' box ',
+        ),
         {
           'businessId': 'b1',
           'itemId': 'i1',
@@ -483,23 +556,42 @@ void main() {
       );
       expect(
         adjustInventoryStockRequest(
-            businessId: 'b1', itemId: 'i1', add: false, quantity: 0),
+          businessId: 'b1',
+          itemId: 'i1',
+          add: false,
+          quantity: 0,
+        ),
         {'businessId': 'b1', 'itemId': 'i1', 'mode': 'set', 'quantity': 0},
       );
-      expect(archiveInventoryItemRequest('b1', 'i1', archived: true),
-          {'businessId': 'b1', 'itemId': 'i1', 'archived': true});
+      expect(archiveInventoryItemRequest('b1', 'i1', archived: true), {
+        'businessId': 'b1',
+        'itemId': 'i1',
+        'archived': true,
+      });
       // Delete always carries the confirmation the server demands.
-      expect(deleteInventoryItemRequest('b1', 'i1'),
-          {'businessId': 'b1', 'itemId': 'i1', 'confirm': true});
-      expect(voidInventorySaleRequest('b1', 's1'),
-          {'businessId': 'b1', 'saleId': 's1'});
-      expect(voidInventorySaleRequest('b1', 's1', reason: 'mistake'),
-          {'businessId': 'b1', 'saleId': 's1', 'reason': 'mistake'});
+      expect(deleteInventoryItemRequest('b1', 'i1'), {
+        'businessId': 'b1',
+        'itemId': 'i1',
+        'confirm': true,
+      });
+      expect(voidInventorySaleRequest('b1', 's1'), {
+        'businessId': 'b1',
+        'saleId': 's1',
+      });
+      expect(voidInventorySaleRequest('b1', 's1', reason: 'mistake'), {
+        'businessId': 'b1',
+        'saleId': 's1',
+        'reason': 'mistake',
+      });
       expect(inventoryLabelsRequest('b1', 'i1', 0)['copies'], 1);
       expect(inventoryLabelsRequest('b1', 'i1', 12)['copies'], 12);
       expect(inventoryLabelsRequest('b1', 'i1', 9000)['copies'], 500);
       expect(
-        inventorySummaryRequest('b1', range: 'month', timeZone: 'America/New_York'),
+        inventorySummaryRequest(
+          'b1',
+          range: 'month',
+          timeZone: 'America/New_York',
+        ),
         {'businessId': 'b1', 'range': 'month', 'timeZone': 'America/New_York'},
       );
       expect(
@@ -508,41 +600,44 @@ void main() {
       );
     });
 
-    test('recordInventorySale sends one line per product at the sold price', () {
-      final soap = _item('soap', price: 450);
-      final oil = _item('oil', price: 1200);
-      final basket = const Basket()
-          .addScan(soap)
-          .addScan(soap)
-          .addScan(oil)
-          .withPrice('oil', 1000);
-      final request = recordInventorySaleRequest(
-        businessId: 'b1',
-        clientRequestId: 'req-1',
-        paymentMethod: 'zelle',
-        basket: basket,
-      );
-      expect(request, {
-        'businessId': 'b1',
-        'clientRequestId': 'req-1',
-        'paymentMethod': 'zelle',
-        'lines': [
-          {'itemId': 'soap', 'quantity': 2, 'soldPriceCents': 450},
-          {'itemId': 'oil', 'quantity': 1, 'soldPriceCents': 1000},
-        ],
-      });
-      // An unknown method falls back to the catch-all the server accepts.
-      expect(
-        recordInventorySaleRequest(
+    test(
+      'recordInventorySale sends one line per product at the sold price',
+      () {
+        final soap = _item('soap', price: 450);
+        final oil = _item('oil', price: 1200);
+        final basket = const Basket()
+            .addScan(soap)
+            .addScan(soap)
+            .addScan(oil)
+            .withPrice('oil', 1000);
+        final request = recordInventorySaleRequest(
           businessId: 'b1',
-          clientRequestId: 'r',
-          paymentMethod: 'bitcoin',
+          clientRequestId: 'req-1',
+          paymentMethod: 'zelle',
           basket: basket,
-        )['paymentMethod'],
-        'other',
-      );
-      expect(inventoryPaymentMethods, contains('card_in_person'));
-    });
+        );
+        expect(request, {
+          'businessId': 'b1',
+          'clientRequestId': 'req-1',
+          'paymentMethod': 'zelle',
+          'lines': [
+            {'itemId': 'soap', 'quantity': 2, 'soldPriceCents': 450},
+            {'itemId': 'oil', 'quantity': 1, 'soldPriceCents': 1000},
+          ],
+        });
+        // An unknown method falls back to the catch-all the server accepts.
+        expect(
+          recordInventorySaleRequest(
+            businessId: 'b1',
+            clientRequestId: 'r',
+            paymentMethod: 'bitcoin',
+            basket: basket,
+          )['paymentMethod'],
+          'other',
+        );
+        expect(inventoryPaymentMethods, contains('card_in_person'));
+      },
+    );
 
     test('the zone is named from the phone clock', () {
       expect(inventoryTimeZoneName(DateTime.utc(2026, 10, 10)), 'UTC');
@@ -566,50 +661,67 @@ void main() {
       expect(InventorySaleResult.fromCallable(null), isNull);
     });
 
-    test('the summary reads, and an unreadable answer is empty not a crash', () {
-      final summary = InventorySummary.fromCallable({
-        'salesCount': 3,
-        'itemsSold': 7,
-        'revenueCents': 5000,
-        'costCents': 2000,
-        'profitCents': 3000,
-        'discountCents': 150,
-        'best': [
-          {'itemId': 'i1', 'name': 'Soap', 'quantity': 4, 'revenueCents': 1800}
-        ],
-        'low': [
-          {'itemId': 'i2', 'name': 'Oil', 'quantity': 1, 'lowStockAt': 3}
-        ],
-        'countWasOff': [
-          {'itemId': 'i3', 'name': 'Tin'}
-        ],
-      });
-      expect(summary.salesCount, 3);
-      expect(summary.profitCents, 3000);
-      expect(summary.best.single.name, 'Soap');
-      expect(summary.low.single.lowStockAt, 3);
-      expect(summary.countWasOff.single.name, 'Tin');
-      final empty = InventorySummary.fromCallable('garbage');
-      expect(empty.salesCount, 0);
-      expect(empty.low, isEmpty);
-    });
+    test(
+      'the summary reads, and an unreadable answer is empty not a crash',
+      () {
+        final summary = InventorySummary.fromCallable({
+          'salesCount': 3,
+          'itemsSold': 7,
+          'revenueCents': 5000,
+          'costCents': 2000,
+          'profitCents': 3000,
+          'discountCents': 150,
+          'best': [
+            {
+              'itemId': 'i1',
+              'name': 'Soap',
+              'quantity': 4,
+              'revenueCents': 1800,
+            },
+          ],
+          'low': [
+            {'itemId': 'i2', 'name': 'Oil', 'quantity': 1, 'lowStockAt': 3},
+          ],
+          'countWasOff': [
+            {'itemId': 'i3', 'name': 'Tin'},
+          ],
+        });
+        expect(summary.salesCount, 3);
+        expect(summary.profitCents, 3000);
+        expect(summary.best.single.name, 'Soap');
+        expect(summary.low.single.lowStockAt, 3);
+        expect(summary.countWasOff.single.name, 'Tin');
+        final empty = InventorySummary.fromCallable('garbage');
+        expect(empty.salesCount, 0);
+        expect(empty.low, isEmpty);
+      },
+    );
 
     test('a failure reads from its reason and its code', () {
       InventoryFailure of(String code, {Object? details}) =>
           inventoryFailureOf(code: code, details: details);
-      expect(of('failed-precondition', details: {'reason': 'item_archived'}),
-          InventoryFailure.itemArchived);
-      expect(of('not-found', details: {'reason': 'item_not_found'}),
-          InventoryFailure.itemNotFound);
-      expect(of('failed-precondition', details: {'reason': 'sale_voided'}),
-          InventoryFailure.saleVoided);
+      expect(
+        of('failed-precondition', details: {'reason': 'item_archived'}),
+        InventoryFailure.itemArchived,
+      );
+      expect(
+        of('not-found', details: {'reason': 'item_not_found'}),
+        InventoryFailure.itemNotFound,
+      );
+      expect(
+        of('failed-precondition', details: {'reason': 'sale_voided'}),
+        InventoryFailure.saleVoided,
+      );
       expect(of('unavailable'), InventoryFailure.network);
       expect(of('deadline-exceeded'), InventoryFailure.network);
       expect(of('permission-denied'), InventoryFailure.noPermission);
       expect(of('invalid-argument'), InventoryFailure.invalid);
       expect(of('internal'), InventoryFailure.unknown);
       expect(inventoryFailureIsRetryable(InventoryFailure.network), isTrue);
-      expect(inventoryFailureIsRetryable(InventoryFailure.itemArchived), isFalse);
+      expect(
+        inventoryFailureIsRetryable(InventoryFailure.itemArchived),
+        isFalse,
+      );
     });
   });
 
@@ -637,8 +749,10 @@ void main() {
 
     test('the sales page needs the one composite index it documents', () {
       final index = inventorySalesSpec('b1', limit: 25).compositeIndex!;
-      expect(index.map((f) => f.toString()).toList(),
-          ['businessId ASCENDING', 'createdAt DESCENDING']);
+      expect(index.map((f) => f.toString()).toList(), [
+        'businessId ASCENDING',
+        'createdAt DESCENDING',
+      ]);
       // The others merge single-field indexes: nothing to deploy.
       expect(inventoryItemsSpec('b1').compositeIndex, isNull);
       expect(inventoryItemByCodeSpec('b1', 'IT-K7M4P2').compositeIndex, isNull);
@@ -647,42 +761,45 @@ void main() {
   });
 
   group('models from documents', () {
-    test('a sale and its lines read, with the discount and the voided mark', () {
-      final sale = InventorySale.fromMap('s1', {
-        'businessId': 'b1',
-        'totalCents': 1800,
-        'paymentMethod': 'cash',
-        'soldByStaffId': 'u1',
-        'voided': true,
-        'voidedByStaffId': 'u2',
-        'lines': [
-          {
-            'itemId': 'i1',
-            'name': 'Soap',
-            'code': 'IT-K7M4P2',
-            'quantity': 2,
-            'listPriceCents': 500,
-            'soldPriceCents': 400,
-            'costCents': 200,
-            'countWasOff': true,
-          },
-          {
-            'itemId': 'i2',
-            'name': 'Oil',
-            'quantity': 1,
-            'listPriceCents': 1000,
-            'soldPriceCents': 1000,
-          },
-        ],
-      });
-      expect(sale.lines.length, 2);
-      expect(sale.itemCount, 3);
-      expect(sale.discountCents, 200);
-      expect(sale.voided, isTrue);
-      expect(sale.hadCountWasOff, isTrue);
-      expect(sale.lines.first.priceChanged, isTrue);
-      expect(sale.lines.last.priceChanged, isFalse);
-    });
+    test(
+      'a sale and its lines read, with the discount and the voided mark',
+      () {
+        final sale = InventorySale.fromMap('s1', {
+          'businessId': 'b1',
+          'totalCents': 1800,
+          'paymentMethod': 'cash',
+          'soldByStaffId': 'u1',
+          'voided': true,
+          'voidedByStaffId': 'u2',
+          'lines': [
+            {
+              'itemId': 'i1',
+              'name': 'Soap',
+              'code': 'IT-K7M4P2',
+              'quantity': 2,
+              'listPriceCents': 500,
+              'soldPriceCents': 400,
+              'costCents': 200,
+              'countWasOff': true,
+            },
+            {
+              'itemId': 'i2',
+              'name': 'Oil',
+              'quantity': 1,
+              'listPriceCents': 1000,
+              'soldPriceCents': 1000,
+            },
+          ],
+        });
+        expect(sale.lines.length, 2);
+        expect(sale.itemCount, 3);
+        expect(sale.discountCents, 200);
+        expect(sale.voided, isTrue);
+        expect(sale.hadCountWasOff, isTrue);
+        expect(sale.lines.first.priceChanged, isTrue);
+        expect(sale.lines.last.priceChanged, isFalse);
+      },
+    );
 
     test('movements sort newest first', () {
       final moves = sortMovementsNewestFirst([
@@ -704,6 +821,29 @@ void main() {
       ]);
       expect(moves.map((m) => m.id).toList(), ['b', 'a', 'c']);
       expect(moves.first.delta, -1);
+    });
+  });
+}
+
+void ownerServiceListTests() {
+  group('owner-selectable services', () {
+    test('Inventory is in the catalog but never an owner choice', () {
+      expect(
+        businessServiceCatalog.any(
+          (s) => s.key == BusinessServiceKey.inventory,
+        ),
+        isTrue,
+      );
+      expect(
+        ownerBusinessServiceCatalog.any(
+          (s) => s.key == BusinessServiceKey.inventory,
+        ),
+        isFalse,
+      );
+      expect(
+        ownerBusinessServiceCatalog.length,
+        businessServiceCatalog.length - 1,
+      );
     });
   });
 }

@@ -20200,6 +20200,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Low stock at'**
   String get inventoryLowStockAtLabel;
+
+  /// No description provided for @inventorySellDiscardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave without selling?'**
+  String get inventorySellDiscardTitle;
+
+  /// No description provided for @inventorySellDiscardBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The items in the basket have not been sold. If you leave, the basket is emptied.'**
+  String get inventorySellDiscardBody;
+
+  /// No description provided for @inventorySellDiscardKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Stay'**
+  String get inventorySellDiscardKeep;
+
+  /// No description provided for @inventorySellDiscardLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty the basket and leave'**
+  String get inventorySellDiscardLeave;
 }
 
 class _AppLocalizationsDelegate

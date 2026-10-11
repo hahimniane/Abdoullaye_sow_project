@@ -1976,7 +1976,7 @@ class _BusinessForm extends StatelessWidget {
             subtitle: l10n.businessServicesSubtitle,
             errorText: sectionErrors[_BusinessProfileSectionKey.services],
             children: [
-              for (final service in businessServiceCatalog) ...[
+              for (final service in ownerBusinessServiceCatalog) ...[
                 _ServiceChoiceCard(
                   service: service,
                   selected: selectedServices.contains(service.key.value),
@@ -1991,7 +1991,7 @@ class _BusinessForm extends StatelessWidget {
                     onServiceChanged(service.key.value, value);
                   },
                 ),
-                if (service != businessServiceCatalog.last)
+                if (service != ownerBusinessServiceCatalog.last)
                   const SizedBox(height: 10),
               ],
             ],

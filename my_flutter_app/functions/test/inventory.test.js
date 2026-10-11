@@ -547,3 +547,34 @@ describe("inventory: wiring in index.js", () => {
     assert.match(source, /view \|\| ""\) === "inventoryTags"/);
   });
 });
+
+describe("ownerEditableServices", () => {
+  const {ownerEditableServices} = require("../inventory");
+  const ORDER = ["barrelShipping", "freight", "inventory"];
+  it("lets an owner neither add nor drop Inventory", () => {
+    assert.deepEqual(
+        ownerEditableServices(["freight", "inventory"], ["freight"], false,
+            ORDER), ["freight"]);
+    assert.deepEqual(
+        ownerEditableServices(["freight"], ["freight", "inventory"], false,
+            ORDER), ["freight", "inventory"]);
+    assert.deepEqual(ownerEditableServices(["inventory"], undefined, false,
+        ORDER), []);
+  });
+  it("lets a platform admin set it freely", () => {
+    assert.deepEqual(
+        ownerEditableServices(["freight", "inventory"], ["freight"], true,
+            ORDER), ["freight", "inventory"]);
+    assert.deepEqual(ownerEditableServices(["freight"], ["inventory"], true,
+        ORDER), ["freight"]);
+  });
+});
+
+describe("Inventory stays admin-only in the owner-facing callables", () => {
+  it("filters the application and the profile update", () => {
+    const src = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+    const uses = src.match(/inventory\.ownerEditableServices\(/g) || [];
+    assert.equal(uses.length, 2);
+  });
+});
+

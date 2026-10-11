@@ -294,6 +294,27 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
 
   // ----- building ------------------------------------------------------------
 
+  Future<bool?> _confirmDiscardBasket() {
+    final l10n = AppLocalizations.of(context)!;
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.inventorySellDiscardTitle),
+        content: Text(l10n.inventorySellDiscardBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.inventorySellDiscardKeep),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.inventorySellDiscardLeave),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -303,7 +324,17 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
         typedCode == null ? inventorySellSearch(_items, query) : const <InventoryItem>[];
     final showBar = _result == null && _basket.isNotEmpty;
 
-    return Scaffold(
+    return PopScope(
+      // Leaving with items in the basket asks first; a finished sale or an
+      // empty basket leaves straight away.
+      canPop: _basket.isEmpty || _result != null,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final navigator = Navigator.of(context);
+        final leave = await _confirmDiscardBasket();
+        if (leave == true) navigator.pop();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.cream,
       body: Column(
         children: [
@@ -408,6 +439,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
           if (showBar) _bottomBar(l10n),
         ],
       ),
+    ),
     );
   }
 

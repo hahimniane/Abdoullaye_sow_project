@@ -439,7 +439,7 @@ class _BusinessRegistrationScreenState
                               title: l10n.servicesYouOffer,
                               subtitle: l10n.servicesOfferSubtitle,
                               children: [
-                                for (final service in businessServiceCatalog)
+                                for (final service in ownerBusinessServiceCatalog)
                                   Padding(
                                     padding: const EdgeInsets.only(bottom: 10),
                                     child: _ServiceChoiceTile(
