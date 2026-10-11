@@ -11745,4 +11745,257 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get inventorySellDiscardLeave => 'Vider le panier et quitter';
+
+  @override
+  String get inventoryCategoryNone => 'Aucune catégorie';
+
+  @override
+  String get inventoryCategoryAddNew => 'Ajouter une catégorie';
+
+  @override
+  String get inventoryCategoryNameLabel => 'Nom de la catégorie';
+
+  @override
+  String get inventoryCategoryCreate => 'Ajouter la catégorie';
+
+  @override
+  String get inventoryCategoryAddedDone => 'Catégorie ajoutée.';
+
+  @override
+  String get inventoryCategoryPickTitle => 'Choisissez une catégorie';
+
+  @override
+  String get inventoryCategoryAll => 'Toutes les catégories';
+
+  @override
+  String get inventoryCategoriesTitle => 'Catégories';
+
+  @override
+  String get inventoryCategoriesEmpty =>
+      'Aucune catégorie pour le moment. Ajoutez-en une pour regrouper vos produits.';
+
+  @override
+  String get inventoryCategoryRename => 'Renommer';
+
+  @override
+  String get inventoryCategoryRenameTitle => 'Renommer la catégorie';
+
+  @override
+  String get inventoryCategoryRenamedDone => 'Catégorie renommée.';
+
+  @override
+  String get inventoryCategoryArchivedDone => 'Catégorie archivée.';
+
+  @override
+  String get inventoryCategoryRestoredDone => 'Catégorie restaurée.';
+
+  @override
+  String get inventoryCategoryUncategorized => 'Sans catégorie';
+
+  @override
+  String get inventoryByCategoryTitle => 'Par catégorie';
+
+  @override
+  String get inventoryErrCategoryName => 'Saisissez un nom de catégorie.';
+
+  @override
+  String get inventoryManageCategories => 'Gérer les catégories';
+
+  @override
+  String get inventoryStoreFilterAll => 'Tous les magasins';
+
+  @override
+  String get inventoryStoreLabel => 'Magasin';
+
+  @override
+  String get inventoryStoresTitle => 'Magasins';
+
+  @override
+  String get inventoryStoresIntro =>
+      'Votre boutique fonctionne comme un seul magasin. Ajoutez un deuxième magasin pour compter le stock séparément dans chacun.';
+
+  @override
+  String get inventoryStoreAdd => 'Ajouter un magasin';
+
+  @override
+  String get inventoryStoreEdit => 'Modifier le magasin';
+
+  @override
+  String get inventoryStoreName => 'Nom du magasin';
+
+  @override
+  String get inventoryStoreAddress => 'Adresse (facultatif)';
+
+  @override
+  String get inventoryStorePhone => 'Téléphone (facultatif)';
+
+  @override
+  String get inventoryStoreSave => 'Enregistrer le magasin';
+
+  @override
+  String get inventoryStoreSavedDone => 'Magasin enregistré.';
+
+  @override
+  String get inventoryStoreArchiveTitle => 'Archiver ce magasin ?';
+
+  @override
+  String get inventoryStoreArchiveMessage =>
+      'Il n\'est plus proposé pour la vente ni le stock. Un magasin qui contient encore du stock ne peut pas être archivé : déplacez d\'abord son stock vers un autre magasin.';
+
+  @override
+  String get inventoryStoreArchivedDone => 'Magasin archivé.';
+
+  @override
+  String get inventoryStoreRestoredDone => 'Magasin restauré.';
+
+  @override
+  String get inventoryErrStoreName => 'Saisissez un nom de magasin.';
+
+  @override
+  String get inventoryErrStoreRequired => 'Choisissez un magasin.';
+
+  @override
+  String inventoryStoreSellingFrom(String store) {
+    return 'Vente depuis $store';
+  }
+
+  @override
+  String get inventoryStoreSellPick => 'Vendre depuis';
+
+  @override
+  String get inventoryStoreHomeRequired =>
+      'Demandez au propriétaire de vous attribuer un magasin avant de vendre.';
+
+  @override
+  String get inventoryStoreHomeRequiredView =>
+      'Demandez au propriétaire de vous attribuer un magasin pour voir son stock.';
+
+  @override
+  String inventoryStoreLowAt(String store) {
+    return 'Bas à $store';
+  }
+
+  @override
+  String get inventoryStockTotalLabel => 'Total tous magasins';
+
+  @override
+  String get inventoryStockByStoreTitle => 'Stock par magasin';
+
+  @override
+  String get inventoryByStoreTitle => 'Par magasin';
+
+  @override
+  String inventoryYourStore(String store) {
+    return 'Votre magasin : $store';
+  }
+
+  @override
+  String inventoryStoreOf(String store) {
+    return 'Magasin : $store';
+  }
+
+  @override
+  String inventoryFieldQuantityAt(String store) {
+    return 'Quantité de départ à $store';
+  }
+
+  @override
+  String get inventoryMoveTransfer => 'Transfert';
+
+  @override
+  String inventoryMoveAtStore(String store) {
+    return 'à $store';
+  }
+
+  @override
+  String inventoryStockForStore(String store) {
+    return 'Comptage à $store';
+  }
+
+  @override
+  String get inventoryTransfer => 'Transférer du stock';
+
+  @override
+  String get inventoryTransferHelp =>
+      'Déplacez des unités d’un magasin à un autre. Le total reste le même.';
+
+  @override
+  String get inventoryTransferFrom => 'De';
+
+  @override
+  String get inventoryTransferTo => 'Vers';
+
+  @override
+  String get inventoryTransferGo => 'Déplacer le stock';
+
+  @override
+  String get inventoryTransferDone => 'Stock déplacé.';
+
+  @override
+  String get inventoryStaffAccessTitle => 'Magasins de l’inventaire';
+
+  @override
+  String get inventoryStaffAccessHelp =>
+      'Choisissez où cette personne vend et compte le stock.';
+
+  @override
+  String get inventoryHomeStore => 'Magasin d’attache';
+
+  @override
+  String get inventoryHomeStoreNone => 'Aucun magasin d’attache';
+
+  @override
+  String get inventoryAllStoresSwitch => 'Travaille dans tous les magasins';
+
+  @override
+  String get inventoryAllStoresHelp =>
+      'Elle voit tous les magasins, choisit le magasin lors d’une vente et peut déplacer du stock entre magasins.';
+
+  @override
+  String get inventoryStaffAccessSave => 'Enregistrer l’accès';
+
+  @override
+  String get inventoryStaffAccessSaved => 'Accès aux magasins enregistré.';
+
+  @override
+  String inventoryStaffAccessHome(String store) {
+    return 'Magasin : $store';
+  }
+
+  @override
+  String get inventoryStaffAccessUnset => 'Pas encore de magasin d’attache';
+
+  @override
+  String get inventoryFailCategoryNameTaken =>
+      'Vous avez déjà une catégorie portant ce nom.';
+
+  @override
+  String get inventoryFailCategoryNotFound =>
+      'Cette catégorie n’existe plus. Choisissez-en une autre.';
+
+  @override
+  String get inventoryFailStoreNotFound =>
+      'Ce magasin est introuvable. Revenez en arrière et réessayez.';
+
+  @override
+  String get inventoryFailStoreArchived =>
+      'Ce magasin est archivé. Choisissez un autre magasin.';
+
+  @override
+  String get inventoryFailStoreHasStock =>
+      'Ce magasin contient encore du stock. Déplacez-le d’abord vers un autre magasin, puis archivez-le.';
+
+  @override
+  String get inventoryFailStoreNotAllowed =>
+      'Vous ne pouvez pas utiliser ce magasin. Vos ventes et comptages vont dans votre propre magasin.';
+
+  @override
+  String get inventoryFailSameStore => 'Choisissez deux magasins différents.';
+
+  @override
+  String get inventoryFailInsufficientStock =>
+      'Le magasin d’origine n’en a pas autant. Réduisez le nombre ou ajoutez d’abord du stock.';
+
+  @override
+  String get inventoryFailOwnerOnly => 'Seul le propriétaire peut faire cela.';
 }

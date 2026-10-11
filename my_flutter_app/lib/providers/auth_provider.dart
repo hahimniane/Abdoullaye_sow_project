@@ -7,6 +7,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/notification_preferences.dart';
 import '../models/platform_access.dart';
+import '../services/inventory_stores.dart' show InventoryAccess;
 import '../services/notification_routing.dart';
 import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
@@ -103,6 +104,8 @@ class AuthProvider extends ChangeNotifier {
   String? _businessName;
   List<String> _businessServices = const [];
   List<String> _businessPermissions = const [];
+  String _inventoryHomeStoreId = '';
+  bool _inventoryAllStores = false;
   String? _userEmail;
   String? _customerName;
   String? _customerPhone;
@@ -135,6 +138,16 @@ class AuthProvider extends ChangeNotifier {
   List<String> get businessServices => List.unmodifiable(_businessServices);
   List<String> get businessPermissions =>
       List.unmodifiable(_businessPermissions);
+
+  /// Where this person works in the Inventory service, set only by the owner
+  /// (`setInventoryStaffAccess`): their home store, and "works in all stores".
+  /// The owner always has every store.
+  InventoryAccess get inventoryAccess => InventoryAccess(
+    isOwner: _isBusinessOwner,
+    allStores: _inventoryAllStores,
+    homeStoreId: _inventoryHomeStoreId,
+  );
+
   bool hasBusinessPermission(String permission) => canAccessBusinessPermission(
     isStaff: _isStaff,
     permissions: _businessPermissions,
@@ -328,6 +341,10 @@ class AuthProvider extends ChangeNotifier {
         _businessName = data?['businessName'] as String?;
         _businessServices = _stringList(data?['businessServices']);
         _businessPermissions = _stringList(data?['businessPermissions']);
+        _inventoryHomeStoreId = (data?['inventoryHomeStoreId'] ?? '')
+            .toString()
+            .trim();
+        _inventoryAllStores = data?['inventoryAllStores'] == true;
         _customerName = data?['fullName'] as String?;
         _customerPhone = data?['phone'] as String?;
         _normalizedPhone = data?['normalizedPhone'] as String?;
@@ -399,6 +416,8 @@ class AuthProvider extends ChangeNotifier {
     _businessName = null;
     _businessServices = const [];
     _businessPermissions = const [];
+    _inventoryHomeStoreId = '';
+    _inventoryAllStores = false;
     _customerName = null;
     _customerPhone = null;
     _normalizedPhone = null;

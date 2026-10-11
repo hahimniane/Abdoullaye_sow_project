@@ -20224,6 +20224,450 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Empty the basket and leave'**
   String get inventorySellDiscardLeave;
+
+  /// No description provided for @inventoryCategoryNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No category'**
+  String get inventoryCategoryNone;
+
+  /// No description provided for @inventoryCategoryAddNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a new category'**
+  String get inventoryCategoryAddNew;
+
+  /// No description provided for @inventoryCategoryNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category name'**
+  String get inventoryCategoryNameLabel;
+
+  /// No description provided for @inventoryCategoryCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Add category'**
+  String get inventoryCategoryCreate;
+
+  /// No description provided for @inventoryCategoryAddedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Category added.'**
+  String get inventoryCategoryAddedDone;
+
+  /// No description provided for @inventoryCategoryPickTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a category'**
+  String get inventoryCategoryPickTitle;
+
+  /// No description provided for @inventoryCategoryAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All categories'**
+  String get inventoryCategoryAll;
+
+  /// No description provided for @inventoryCategoriesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Categories'**
+  String get inventoryCategoriesTitle;
+
+  /// No description provided for @inventoryCategoriesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No categories yet. Add one to group your products.'**
+  String get inventoryCategoriesEmpty;
+
+  /// No description provided for @inventoryCategoryRename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get inventoryCategoryRename;
+
+  /// No description provided for @inventoryCategoryRenameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename category'**
+  String get inventoryCategoryRenameTitle;
+
+  /// No description provided for @inventoryCategoryRenamedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Category renamed.'**
+  String get inventoryCategoryRenamedDone;
+
+  /// No description provided for @inventoryCategoryArchivedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Category archived.'**
+  String get inventoryCategoryArchivedDone;
+
+  /// No description provided for @inventoryCategoryRestoredDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Category restored.'**
+  String get inventoryCategoryRestoredDone;
+
+  /// No description provided for @inventoryCategoryUncategorized.
+  ///
+  /// In en, this message translates to:
+  /// **'Uncategorized'**
+  String get inventoryCategoryUncategorized;
+
+  /// No description provided for @inventoryByCategoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'By category'**
+  String get inventoryByCategoryTitle;
+
+  /// No description provided for @inventoryErrCategoryName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a category name.'**
+  String get inventoryErrCategoryName;
+
+  /// No description provided for @inventoryManageCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage categories'**
+  String get inventoryManageCategories;
+
+  /// No description provided for @inventoryStoreFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All stores'**
+  String get inventoryStoreFilterAll;
+
+  /// No description provided for @inventoryStoreLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Store'**
+  String get inventoryStoreLabel;
+
+  /// No description provided for @inventoryStoresTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stores'**
+  String get inventoryStoresTitle;
+
+  /// No description provided for @inventoryStoresIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Your shop works as one store. Add a second store to count stock separately in each one.'**
+  String get inventoryStoresIntro;
+
+  /// No description provided for @inventoryStoreAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a store'**
+  String get inventoryStoreAdd;
+
+  /// No description provided for @inventoryStoreEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit store'**
+  String get inventoryStoreEdit;
+
+  /// No description provided for @inventoryStoreName.
+  ///
+  /// In en, this message translates to:
+  /// **'Store name'**
+  String get inventoryStoreName;
+
+  /// No description provided for @inventoryStoreAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Address (optional)'**
+  String get inventoryStoreAddress;
+
+  /// No description provided for @inventoryStorePhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone (optional)'**
+  String get inventoryStorePhone;
+
+  /// No description provided for @inventoryStoreSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save store'**
+  String get inventoryStoreSave;
+
+  /// No description provided for @inventoryStoreSavedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Store saved.'**
+  String get inventoryStoreSavedDone;
+
+  /// No description provided for @inventoryStoreArchiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive this store?'**
+  String get inventoryStoreArchiveTitle;
+
+  /// No description provided for @inventoryStoreArchiveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'It is no longer offered for selling or stock. A store that still holds stock cannot be archived: move its stock to another store first.'**
+  String get inventoryStoreArchiveMessage;
+
+  /// No description provided for @inventoryStoreArchivedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Store archived.'**
+  String get inventoryStoreArchivedDone;
+
+  /// No description provided for @inventoryStoreRestoredDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Store restored.'**
+  String get inventoryStoreRestoredDone;
+
+  /// No description provided for @inventoryErrStoreName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a store name.'**
+  String get inventoryErrStoreName;
+
+  /// No description provided for @inventoryErrStoreRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a store.'**
+  String get inventoryErrStoreRequired;
+
+  /// No description provided for @inventoryStoreSellingFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Selling from {store}'**
+  String inventoryStoreSellingFrom(String store);
+
+  /// No description provided for @inventoryStoreSellPick.
+  ///
+  /// In en, this message translates to:
+  /// **'Sell from'**
+  String get inventoryStoreSellPick;
+
+  /// No description provided for @inventoryStoreHomeRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the owner to assign your store before you sell.'**
+  String get inventoryStoreHomeRequired;
+
+  /// No description provided for @inventoryStoreHomeRequiredView.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the owner to assign your store to see its stock.'**
+  String get inventoryStoreHomeRequiredView;
+
+  /// No description provided for @inventoryStoreLowAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Low at {store}'**
+  String inventoryStoreLowAt(String store);
+
+  /// No description provided for @inventoryStockTotalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total across stores'**
+  String get inventoryStockTotalLabel;
+
+  /// No description provided for @inventoryStockByStoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock by store'**
+  String get inventoryStockByStoreTitle;
+
+  /// No description provided for @inventoryByStoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'By store'**
+  String get inventoryByStoreTitle;
+
+  /// No description provided for @inventoryYourStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Your store: {store}'**
+  String inventoryYourStore(String store);
+
+  /// No description provided for @inventoryStoreOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Store: {store}'**
+  String inventoryStoreOf(String store);
+
+  /// No description provided for @inventoryFieldQuantityAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting count in {store}'**
+  String inventoryFieldQuantityAt(String store);
+
+  /// No description provided for @inventoryMoveTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer'**
+  String get inventoryMoveTransfer;
+
+  /// No description provided for @inventoryMoveAtStore.
+  ///
+  /// In en, this message translates to:
+  /// **'at {store}'**
+  String inventoryMoveAtStore(String store);
+
+  /// No description provided for @inventoryStockForStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Counting in {store}'**
+  String inventoryStockForStore(String store);
+
+  /// No description provided for @inventoryTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer stock'**
+  String get inventoryTransfer;
+
+  /// No description provided for @inventoryTransferHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Move units from one store to another. The total stays the same.'**
+  String get inventoryTransferHelp;
+
+  /// No description provided for @inventoryTransferFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get inventoryTransferFrom;
+
+  /// No description provided for @inventoryTransferTo.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get inventoryTransferTo;
+
+  /// No description provided for @inventoryTransferGo.
+  ///
+  /// In en, this message translates to:
+  /// **'Move stock'**
+  String get inventoryTransferGo;
+
+  /// No description provided for @inventoryTransferDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock moved.'**
+  String get inventoryTransferDone;
+
+  /// No description provided for @inventoryStaffAccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Inventory stores'**
+  String get inventoryStaffAccessTitle;
+
+  /// No description provided for @inventoryStaffAccessHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose where this person sells and counts stock.'**
+  String get inventoryStaffAccessHelp;
+
+  /// No description provided for @inventoryHomeStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Home store'**
+  String get inventoryHomeStore;
+
+  /// No description provided for @inventoryHomeStoreNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No home store'**
+  String get inventoryHomeStoreNone;
+
+  /// No description provided for @inventoryAllStoresSwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Works in all stores'**
+  String get inventoryAllStoresSwitch;
+
+  /// No description provided for @inventoryAllStoresHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'They see every store, choose the store when selling and can move stock between stores.'**
+  String get inventoryAllStoresHelp;
+
+  /// No description provided for @inventoryStaffAccessSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save access'**
+  String get inventoryStaffAccessSave;
+
+  /// No description provided for @inventoryStaffAccessSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Store access saved.'**
+  String get inventoryStaffAccessSaved;
+
+  /// No description provided for @inventoryStaffAccessHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Home: {store}'**
+  String inventoryStaffAccessHome(String store);
+
+  /// No description provided for @inventoryStaffAccessUnset.
+  ///
+  /// In en, this message translates to:
+  /// **'No home store yet'**
+  String get inventoryStaffAccessUnset;
+
+  /// No description provided for @inventoryFailCategoryNameTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have a category with that name.'**
+  String get inventoryFailCategoryNameTaken;
+
+  /// No description provided for @inventoryFailCategoryNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That category no longer exists. Pick another one.'**
+  String get inventoryFailCategoryNotFound;
+
+  /// No description provided for @inventoryFailStoreNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That store was not found. Go back and try again.'**
+  String get inventoryFailStoreNotFound;
+
+  /// No description provided for @inventoryFailStoreArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'That store is archived. Pick another store.'**
+  String get inventoryFailStoreArchived;
+
+  /// No description provided for @inventoryFailStoreHasStock.
+  ///
+  /// In en, this message translates to:
+  /// **'This store still holds stock. Move it to another store first, then archive it.'**
+  String get inventoryFailStoreHasStock;
+
+  /// No description provided for @inventoryFailStoreNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot use that store. Your sales and counts go to your own store.'**
+  String get inventoryFailStoreNotAllowed;
+
+  /// No description provided for @inventoryFailSameStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose two different stores.'**
+  String get inventoryFailSameStore;
+
+  /// No description provided for @inventoryFailInsufficientStock.
+  ///
+  /// In en, this message translates to:
+  /// **'The store you are moving from does not have that many. Lower the number, or add stock first.'**
+  String get inventoryFailInsufficientStock;
+
+  /// No description provided for @inventoryFailOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the owner can do that.'**
+  String get inventoryFailOwnerOnly;
 }
 
 class _AppLocalizationsDelegate

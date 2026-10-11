@@ -5376,5 +5376,135 @@
   "inventorySellDiscardTitle": "Leave without selling?",
   "inventorySellDiscardBody": "The items in the basket have not been sold. If you leave, the basket is emptied.",
   "inventorySellDiscardKeep": "Stay",
-  "inventorySellDiscardLeave": "Empty the basket and leave"
+  "inventorySellDiscardLeave": "Empty the basket and leave",
+  "inventoryCategoryNone": "No category",
+  "inventoryCategoryAddNew": "Add a new category",
+  "inventoryCategoryNameLabel": "Category name",
+  "inventoryCategoryCreate": "Add category",
+  "inventoryCategoryAddedDone": "Category added.",
+  "inventoryCategoryPickTitle": "Choose a category",
+  "inventoryCategoryAll": "All categories",
+  "inventoryCategoriesTitle": "Categories",
+  "inventoryCategoriesEmpty": "No categories yet. Add one to group your products.",
+  "inventoryCategoryRename": "Rename",
+  "inventoryCategoryRenameTitle": "Rename category",
+  "inventoryCategoryRenamedDone": "Category renamed.",
+  "inventoryCategoryArchivedDone": "Category archived.",
+  "inventoryCategoryRestoredDone": "Category restored.",
+  "inventoryCategoryUncategorized": "Uncategorized",
+  "inventoryByCategoryTitle": "By category",
+  "inventoryErrCategoryName": "Enter a category name.",
+  "inventoryManageCategories": "Manage categories",
+  "inventoryStoreFilterAll": "All stores",
+  "inventoryStoreLabel": "Store",
+  "inventoryStoresTitle": "Stores",
+  "inventoryStoresIntro": "Your shop works as one store. Add a second store to count stock separately in each one.",
+  "inventoryStoreAdd": "Add a store",
+  "inventoryStoreEdit": "Edit store",
+  "inventoryStoreName": "Store name",
+  "inventoryStoreAddress": "Address (optional)",
+  "inventoryStorePhone": "Phone (optional)",
+  "inventoryStoreSave": "Save store",
+  "inventoryStoreSavedDone": "Store saved.",
+  "inventoryStoreArchiveTitle": "Archive this store?",
+  "inventoryStoreArchiveMessage": "It is no longer offered for selling or stock. A store that still holds stock cannot be archived: move its stock to another store first.",
+  "inventoryStoreArchivedDone": "Store archived.",
+  "inventoryStoreRestoredDone": "Store restored.",
+  "inventoryErrStoreName": "Enter a store name.",
+  "inventoryErrStoreRequired": "Choose a store.",
+  "inventoryStoreSellingFrom": "Selling from {store}",
+  "@inventoryStoreSellingFrom": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStoreSellPick": "Sell from",
+  "inventoryStoreHomeRequired": "Ask the owner to assign your store before you sell.",
+  "inventoryStoreHomeRequiredView": "Ask the owner to assign your store to see its stock.",
+  "inventoryStoreLowAt": "Low at {store}",
+  "@inventoryStoreLowAt": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStockTotalLabel": "Total across stores",
+  "inventoryStockByStoreTitle": "Stock by store",
+  "inventoryByStoreTitle": "By store",
+  "inventoryYourStore": "Your store: {store}",
+  "@inventoryYourStore": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStoreOf": "Store: {store}",
+  "@inventoryStoreOf": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryFieldQuantityAt": "Starting count in {store}",
+  "@inventoryFieldQuantityAt": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryMoveTransfer": "Transfer",
+  "inventoryMoveAtStore": "at {store}",
+  "@inventoryMoveAtStore": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStockForStore": "Counting in {store}",
+  "@inventoryStockForStore": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryTransfer": "Transfer stock",
+  "inventoryTransferHelp": "Move units from one store to another. The total stays the same.",
+  "inventoryTransferFrom": "From",
+  "inventoryTransferTo": "To",
+  "inventoryTransferGo": "Move stock",
+  "inventoryTransferDone": "Stock moved.",
+  "inventoryStaffAccessTitle": "Inventory stores",
+  "inventoryStaffAccessHelp": "Choose where this person sells and counts stock.",
+  "inventoryHomeStore": "Home store",
+  "inventoryHomeStoreNone": "No home store",
+  "inventoryAllStoresSwitch": "Works in all stores",
+  "inventoryAllStoresHelp": "They see every store, choose the store when selling and can move stock between stores.",
+  "inventoryStaffAccessSave": "Save access",
+  "inventoryStaffAccessSaved": "Store access saved.",
+  "inventoryStaffAccessHome": "Home: {store}",
+  "@inventoryStaffAccessHome": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStaffAccessUnset": "No home store yet",
+  "inventoryFailCategoryNameTaken": "You already have a category with that name.",
+  "inventoryFailCategoryNotFound": "That category no longer exists. Pick another one.",
+  "inventoryFailStoreNotFound": "That store was not found. Go back and try again.",
+  "inventoryFailStoreArchived": "That store is archived. Pick another store.",
+  "inventoryFailStoreHasStock": "This store still holds stock. Move it to another store first, then archive it.",
+  "inventoryFailStoreNotAllowed": "You cannot use that store. Your sales and counts go to your own store.",
+  "inventoryFailSameStore": "Choose two different stores.",
+  "inventoryFailInsufficientStock": "The store you are moving from does not have that many. Lower the number, or add stock first.",
+  "inventoryFailOwnerOnly": "Only the owner can do that."
 }

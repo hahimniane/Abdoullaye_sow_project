@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/models/business_service.dart';
+import 'package:my_flutter_app/services/inventory.dart'
+    show inventoryFailureReasons;
 import 'package:my_flutter_app/utils/business_permissions.dart';
 
 /// Inventory shipped to the server, the console and the app against one
@@ -31,6 +33,10 @@ void main() {
     'lib/screens/inventory_sales_screen.dart':
         read('lib/screens/inventory_sales_screen.dart'),
     'lib/screens/inventory_sell_screen.dart': sell,
+    'lib/screens/inventory_categories_screen.dart':
+        read('lib/screens/inventory_categories_screen.dart'),
+    'lib/screens/inventory_stores_screen.dart':
+        read('lib/screens/inventory_stores_screen.dart'),
     'lib/widgets/inventory_widgets.dart': read('lib/widgets/inventory_widgets.dart'),
   };
 
@@ -53,6 +59,15 @@ void main() {
       'voidInventorySale',
       'getInventoryLabelsUrl',
       'getInventorySummary',
+      // Categories and stores (v2).
+      'createInventoryCategory',
+      'renameInventoryCategory',
+      'archiveInventoryCategory',
+      'createInventoryStore',
+      'updateInventoryStore',
+      'archiveInventoryStore',
+      'setInventoryStaffAccess',
+      'transferInventoryStock',
     ]));
     final callers = '$service\n$pure';
     for (final name in contracted) {
@@ -62,6 +77,88 @@ void main() {
     // Every call goes through the one caller the tests replace.
     expect(service, contains('typedef InventoryCallableCaller'));
     expect(service, contains('callContainerCallable'));
+  });
+
+  group('categories and stores (v2)', () {
+    final v2 = doc.substring(doc.indexOf('# Categories and stores (v2)'));
+    final auth = read('lib/providers/auth_provider.dart');
+    final team = read('lib/screens/business_profile_screen.dart');
+    final stores = read('lib/services/inventory_stores.dart');
+    final context = read('lib/services/inventory_context.dart');
+
+    test('the app reads the collections the contract lists, business-scoped',
+        () {
+      for (final collection in [
+        'inventoryCategories',
+        'inventoryStores',
+        'inventoryStock',
+      ]) {
+        expect(v2, contains('`$collection`'));
+        expect(service, contains("collection: '$collection'"),
+            reason: '$collection is read by the app');
+      }
+      // Every read names the business, and the stock read can be narrowed to
+      // one store (what the rules allow staff to read).
+      expect(RegExp("QueryFilterSpec\\('businessId'").allMatches(service).length,
+          greaterThanOrEqualTo(7));
+      expect(service, contains("QueryFilterSpec('storeId'"));
+      // The reads of a store's stock wait for a multi-store business.
+      expect(context, contains('inventoryNeedsStock'));
+    });
+
+    test('every new refusal code in the contract has its own failure and words',
+        () {
+      final line = RegExp(r'new: ([a-z_, ]+)\.')
+          .firstMatch(v2)!
+          .group(1)!
+          .split(',')
+          .map((c) => c.trim())
+          .toSet();
+      expect(line, hasLength(12));
+      expect(inventoryFailureReasons.keys.toSet(), line);
+      final widgets = read('lib/widgets/inventory_widgets.dart');
+      final en = jsonDecode(read('lib/l10n/app_en.arb')) as Map<String, dynamic>;
+      final fr = jsonDecode(read('lib/l10n/app_fr.arb')) as Map<String, dynamic>;
+      for (final failure in inventoryFailureReasons.values) {
+        expect(widgets, contains('InventoryFailure.${failure.name} =>'),
+            reason: '${failure.name} has words');
+      }
+      final failureKeys = RegExp(r'InventoryFailure\.\w+ => l10n\.(\w+)')
+          .allMatches(widgets)
+          .map((m) => m.group(1)!);
+      for (final key in failureKeys) {
+        expect(en.containsKey(key), isTrue, reason: 'en $key');
+        expect(fr.containsKey(key), isTrue, reason: 'fr $key');
+      }
+    });
+
+    test('where the owner assigns stores, and what the app reads of the person',
+        () {
+      // The staff fields are the contract's names.
+      expect(v2, contains('`inventoryHomeStoreId`'));
+      expect(v2, contains('`inventoryAllStores`'));
+      expect(auth, contains("'inventoryHomeStoreId'"));
+      expect(auth, contains("'inventoryAllStores'"));
+      expect(team, contains('InventoryTeamAccess('));
+      expect(team, contains('auth.isBusinessOwner'));
+      // Every way into Inventory hands over what the person may do.
+      expect(home, contains('access: auth.inventoryAccess'));
+      expect(links, contains('access: auth.inventoryAccess'));
+      // The owner alone manages stores; the staff's own control sits in the
+      // service as a callable the server restricts to the owner.
+      expect(stores, contains('bool get canManageStores => isOwner'));
+      expect(screens['lib/screens/inventory_screen.dart'],
+          contains('widget.access.canManageStores'));
+    });
+
+    test('single-store shops and v1-shaped requests are unchanged', () {
+      // A store is sent only by someone who picked it.
+      expect(stores, contains('sell.mode != InventorySellStoreMode.pick'));
+      expect(pure, contains("if (storeId.isNotEmpty) 'storeId': storeId"));
+      // The sale waits for the stores to be known, and for a store to sell
+      // from, before anything is sent.
+      expect(sell, contains('!_sell.canSell || !_watcher.storesLoaded'));
+    });
   });
 
   test('the service key and the permission are the contract names', () {
@@ -190,6 +287,8 @@ void main() {
       'lib/screens/inventory_screen.dart',
       'lib/screens/inventory_sales_screen.dart',
       'lib/screens/inventory_item_screen.dart',
+      'lib/screens/inventory_categories_screen.dart',
+      'lib/screens/inventory_stores_screen.dart',
     ]) {
       expect(screens[path], contains('Timer('), reason: path);
     }

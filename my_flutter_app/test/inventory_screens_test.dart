@@ -4,13 +4,16 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
+import 'package:my_flutter_app/screens/inventory_categories_screen.dart';
 import 'package:my_flutter_app/screens/inventory_item_screen.dart';
 import 'package:my_flutter_app/screens/inventory_item_sheets.dart';
 import 'package:my_flutter_app/screens/inventory_sales_screen.dart';
 import 'package:my_flutter_app/screens/inventory_screen.dart';
 import 'package:my_flutter_app/screens/inventory_sell_screen.dart';
+import 'package:my_flutter_app/screens/inventory_stores_screen.dart';
 import 'package:my_flutter_app/services/inventory.dart';
 import 'package:my_flutter_app/services/inventory_service.dart';
+import 'package:my_flutter_app/services/inventory_stores.dart';
 import 'package:my_flutter_app/services/lot_ledger.dart' show LotStaff;
 import 'package:my_flutter_app/services/package_link_service.dart';
 import 'package:my_flutter_app/theme/app_theme.dart';
@@ -34,6 +37,7 @@ InventoryItem _item(
   bool countWasOff = false,
   String businessId = 'b1',
   String category = '',
+  String categoryId = '',
 }) =>
     InventoryItem(
       id: id,
@@ -46,6 +50,7 @@ InventoryItem _item(
       archived: archived,
       countWasOff: countWasOff,
       category: category,
+      categoryId: categoryId,
     );
 
 final _soap = _item('i1', 'IT-K7M4P2', name: 'Soap');
@@ -53,6 +58,22 @@ final _oil = _item('i2', 'IT-CCCCCC', name: 'Palm oil', price: 1200);
 final _old = _item('i3', 'IT-DDDDDD', name: 'Old tin', archived: true);
 final _foreign =
     _item('i9', 'IT-FFFFFF', name: 'Their stuff', businessId: 'other');
+
+const _mainStore = InventoryStore(id: 's-main', name: 'Main store');
+const _stores = [_mainStore, InventoryStore(id: 's-bk', name: 'Brooklyn')];
+const _staffBk = InventoryAccess(homeStoreId: 's-bk');
+const _categories = [
+  InventoryCategory(id: 'c1', name: 'Body'),
+  InventoryCategory(id: 'c2', name: 'Hair'),
+];
+
+/// Soap (i1): 8 in Main store, 2 in Brooklyn (10 in all). Palm oil (i2): 5 and 5.
+const _stockRows = [
+  InventoryStockRow(itemId: 'i1', storeId: 's-main', quantity: 8),
+  InventoryStockRow(itemId: 'i1', storeId: 's-bk', quantity: 2),
+  InventoryStockRow(itemId: 'i2', storeId: 's-main', quantity: 5),
+  InventoryStockRow(itemId: 'i2', storeId: 's-bk', quantity: 5),
+];
 
 String _link(String code) => 'https://customer.laawoldigital.com/i/$code';
 
@@ -63,6 +84,9 @@ class _FakeSource implements InventorySource {
     this.movements = const [],
     this.staff = const [],
     this.itemsFail = false,
+    this.categories = const [],
+    this.stores = const [],
+    this.stock = const [],
   });
 
   final List<InventoryItem> items;
@@ -70,7 +94,15 @@ class _FakeSource implements InventorySource {
   final List<InventoryMovement> movements;
   final List<LotStaff> staff;
   final bool itemsFail;
+  final List<InventoryCategory> categories;
+  final List<InventoryStore> stores;
+  final List<InventoryStockRow> stock;
   final List<String> codeLookups = [];
+
+  /// What the screens asked for, so a test can say who read what.
+  final List<String> salesStores = [];
+  final List<String> stockStores = [];
+  final List<String> movementStores = [];
 
   @override
   Stream<List<InventoryItem>> watchItems(String businessId) => itemsFail
@@ -90,16 +122,50 @@ class _FakeSource implements InventorySource {
   }
 
   @override
-  Stream<List<InventorySale>> watchSales(String businessId, {required int limit}) =>
-      Stream.value(sales);
+  Stream<List<InventorySale>> watchSales(
+    String businessId, {
+    required int limit,
+    String storeId = '',
+  }) {
+    salesStores.add(storeId);
+    return Stream.value([
+      for (final s in sales)
+        if (storeId.isEmpty || s.storeId == storeId) s,
+    ]);
+  }
 
   @override
   Stream<List<InventoryMovement>> watchMovements(
-          String businessId, String itemId) =>
-      Stream.value([
-        for (final m in movements)
-          if (m.itemId == itemId) m,
-      ]);
+    String businessId,
+    String itemId, {
+    String storeId = '',
+  }) {
+    movementStores.add(storeId);
+    return Stream.value([
+      for (final m in movements)
+        if (m.itemId == itemId && (storeId.isEmpty || m.storeId == storeId)) m,
+    ]);
+  }
+
+  @override
+  Stream<List<InventoryCategory>> watchCategories(String businessId) =>
+      Stream.value(categories);
+
+  @override
+  Stream<List<InventoryStore>> watchStores(String businessId) =>
+      Stream.value(stores);
+
+  @override
+  Stream<List<InventoryStockRow>> watchStock(
+    String businessId, {
+    String storeId = '',
+  }) {
+    stockStores.add(storeId);
+    return Stream.value([
+      for (final r in stock)
+        if (storeId.isEmpty || r.storeId == storeId) r,
+    ]);
+  }
 
   @override
   Stream<List<LotStaff>> watchStaff(String businessId) => Stream.value(staff);
@@ -173,9 +239,11 @@ Widget _sell(
   _Calls calls,
   StreamController<String> scans, {
   String initialCode = '',
+  InventoryAccess access = const InventoryAccess.owner(),
 }) {
   var n = 0;
   return InventorySellScreen(
+    access: access,
     businessId: 'b1',
     source: source,
     service: calls.service,
@@ -572,6 +640,8 @@ void main() {
       InventoryItem? existing,
       Locale locale = const Locale('en'),
       Size size = const Size(400, 2400),
+      List<InventoryCategory> categories = const [],
+      InventoryStoreContext? stores,
     }) =>
         _openSheet(
           tester,
@@ -580,6 +650,8 @@ void main() {
             businessId: 'b1',
             existing: existing,
             service: calls.service,
+            categories: categories,
+            stores: stores,
           ),
           locale: locale,
           size: size,
@@ -601,13 +673,20 @@ void main() {
         (tester) async {
       final calls = _Calls()
         ..respond = (name, payload) => {'itemId': 'new1', 'code': 'IT-HHHHHH'};
-      await openForm(tester, calls);
+      await openForm(tester, calls, categories: const [
+        InventoryCategory(id: 'c1', name: 'Body'),
+        InventoryCategory(id: 'c2', name: 'Hair'),
+      ]);
       await tester.enterText(find.byKey(const Key('inv-field-name')), 'Shea butter');
       await tester.enterText(find.byKey(const Key('inv-field-price')), '12,50');
       await tester.enterText(find.byKey(const Key('inv-field-cost')), '8');
       await tester.enterText(find.byKey(const Key('inv-field-quantity')), '24');
       await tester.enterText(find.byKey(const Key('inv-field-low')), '5');
-      await tester.enterText(find.byKey(const Key('inv-field-category')), 'Body');
+      await tester.ensureVisible(find.byKey(const Key('inv-field-category')));
+      await tester.tap(find.byKey(const Key('inv-field-category')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Body'));
+      await tester.pumpAndSettle();
       await tester.enterText(
           find.byKey(const Key('inv-field-photo')), 'https://example.com/a.jpg');
       await tester.tap(find.byKey(const Key('inv-form-save')));
@@ -620,7 +699,7 @@ void main() {
         'costCents': 800,
         'quantity': 24,
         'lowStockAt': 5,
-        'category': 'Body',
+        'categoryId': 'c1',
         'photoUrl': 'https://example.com/a.jpg',
       });
       // The sheet closed.
@@ -1193,6 +1272,1237 @@ void main() {
         const Offset(0, -200),
       );
       expect(find.text('Historique du stock'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('stores: the counter', () {
+    late _FakeSource source;
+    setUp(() => source = _FakeSource(
+          items: [_soap, _oil],
+          stores: _stores,
+          stock: _stockRows,
+        ));
+
+    testWidgets('staff with a home store sell from it: no picker, the count is '
+        'that store\'s, and the sale names no store', (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => {'saleId': 's1', 'totalCents': 1350, 'warnings': <Object>[]};
+      await _pump(tester, _sell(source, calls, scans, access: _staffBk));
+      expect(find.byKey(const Key('inv-sell-store')), findsNothing);
+      expect(find.text('Selling from Brooklyn'), findsOneWidget);
+
+      await _scan(tester, scans, 'IT-K7M4P2');
+      await _scan(tester, scans, 'IT-K7M4P2');
+      // Brooklyn holds 2 (the total says 10): two is not over.
+      expect(find.byKey(const Key('inv-exceeds-i1')), findsNothing);
+      await _scan(tester, scans, 'IT-K7M4P2');
+      expect(find.byKey(const Key('inv-exceeds-i1')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('inv-sold')));
+      await tester.pumpAndSettle();
+      final sale = calls.named('recordInventorySale').single.payload;
+      expect(sale.containsKey('storeId'), isFalse);
+      expect(sale['lines'], [
+        {'itemId': 'i1', 'quantity': 3, 'soldPriceCents': 450},
+      ]);
+      // Only their own store's counts were ever read.
+      expect(source.stockStores, ['s-bk']);
+      expect(find.text('Store: Brooklyn'), findsOneWidget);
+    });
+
+    testWidgets('an all-stores user sees the picker on their home store and the '
+        'sale carries the store they picked', (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => {'saleId': 's1', 'totalCents': 1350, 'warnings': <Object>[]};
+      await _pump(
+        tester,
+        _sell(source, calls, scans,
+            access: const InventoryAccess(allStores: true, homeStoreId: 's-main')),
+      );
+      final picker = find.byKey(const Key('inv-sell-store'));
+      expect(picker, findsOneWidget);
+      expect(find.descendant(of: picker, matching: find.text('Main store')),
+          findsOneWidget);
+
+      for (var i = 0; i < 3; i++) {
+        await _scan(tester, scans, 'IT-K7M4P2');
+      }
+      // Main holds 8: three is fine.
+      expect(find.byKey(const Key('inv-exceeds-i1')), findsNothing);
+
+      await tester.tap(picker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Brooklyn').last);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: picker, matching: find.text('Brooklyn')),
+          findsOneWidget);
+      // Brooklyn holds 2: three is now over, shown at once.
+      expect(find.byKey(const Key('inv-exceeds-i1')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('inv-sold')));
+      await tester.pumpAndSettle();
+      expect(calls.named('recordInventorySale').single.payload['storeId'], 's-bk');
+      expect(find.text('Store: Brooklyn'), findsOneWidget);
+    });
+
+    testWidgets('the owner with no home store starts on the first store and '
+        'sends it', (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => {'saleId': 's1', 'totalCents': 450, 'warnings': <Object>[]};
+      await _pump(tester, _sell(source, calls, scans));
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('inv-sell-store')),
+              matching: find.text('Brooklyn')),
+          findsOneWidget);
+      await _scan(tester, scans, 'IT-K7M4P2');
+      await tester.tap(find.byKey(const Key('inv-sold')));
+      await tester.pumpAndSettle();
+      expect(calls.named('recordInventorySale').single.payload['storeId'], 's-bk');
+    });
+
+    testWidgets('a retry after a lost connection sends the same id and store; '
+        'another store is another sale', (tester) async {
+      var fail = true;
+      final calls = _Calls()
+        ..respond = (n, p) {
+          if (fail) throw _offline();
+          return {'saleId': 's1', 'totalCents': 450, 'warnings': <Object>[]};
+        };
+      await _pump(tester, _sell(source, calls, scans));
+      await _scan(tester, scans, 'IT-K7M4P2');
+      await tester.tap(find.byKey(const Key('inv-sold')));
+      await tester.pumpAndSettle();
+      fail = false;
+      await tester.tap(find.byKey(const Key('inv-retry')));
+      await tester.pumpAndSettle();
+      final sent = calls.named('recordInventorySale');
+      expect([for (final c in sent) c.payload['clientRequestId']], ['req-1', 'req-1']);
+      expect([for (final c in sent) c.payload['storeId']], ['s-bk', 's-bk']);
+    });
+
+    testWidgets('staff with no home store are told to ask the owner and cannot '
+        'sell', (tester) async {
+      final calls = _Calls();
+      await _pump(tester, _sell(source, calls, scans, access: const InventoryAccess()));
+      expect(find.byKey(const Key('inv-home-store-required')), findsOneWidget);
+      expect(find.text('Ask the owner to assign your store before you sell.'),
+          findsOneWidget);
+      await _scan(tester, scans, 'IT-K7M4P2');
+      await tester.tap(find.byKey(const Key('inv-sold')));
+      await tester.pumpAndSettle();
+      expect(calls.log, isEmpty);
+      expect(source.stockStores, isNot(contains('')));
+    });
+
+    testWidgets('a refusal for a missing home store reads the same words',
+        (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => throw FirebaseFunctionsException(
+              message: 'no store',
+              code: 'failed-precondition',
+              details: {'reason': 'home_store_required'},
+            );
+      await _pump(tester, _sell(source, calls, scans, access: _staffBk));
+      await _scan(tester, scans, 'IT-K7M4P2');
+      await tester.tap(find.byKey(const Key('inv-sold')));
+      await tester.pumpAndSettle();
+      expect(find.text('Ask the owner to assign your store before you sell.'),
+          findsOneWidget);
+      expect(find.byKey(const Key('inv-retry')), findsNothing);
+    });
+
+    testWidgets('one active store is a single-store shop: nothing about stores',
+        (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => {'saleId': 's1', 'totalCents': 450, 'warnings': <Object>[]};
+      final single = _FakeSource(
+        items: [_soap],
+        stores: const [_mainStore, InventoryStore(id: 's-old', name: 'Old', archived: true)],
+      );
+      await _pump(tester, _sell(single, calls, scans, access: _staffBk));
+      expect(find.byKey(const Key('inv-sell-store')), findsNothing);
+      expect(find.byKey(const Key('inv-sell-store-home')), findsNothing);
+      expect(find.byKey(const Key('inv-home-store-required')), findsNothing);
+      await _scan(tester, scans, 'IT-K7M4P2');
+      await tester.tap(find.byKey(const Key('inv-sold')));
+      await tester.pumpAndSettle();
+      expect(calls.named('recordInventorySale').single.payload, {
+        'businessId': 'b1',
+        'clientRequestId': 'req-1',
+        'paymentMethod': 'cash',
+        'lines': [
+          {'itemId': 'i1', 'quantity': 1, 'soldPriceCents': 450},
+        ],
+      });
+      expect(single.stockStores, isEmpty);
+      expect(find.byKey(const Key('inv-sale-done-store')), findsNothing);
+    });
+
+    testWidgets('French at 320 wide: the picker and a long store name fit',
+        (tester) async {
+      final long = _FakeSource(
+        items: [_soap],
+        stores: const [
+          _mainStore,
+          InventoryStore(
+              id: 's-bk', name: 'Magasin de la rue Saint-Jacques, entrepôt nord'),
+        ],
+        stock: _stockRows,
+      );
+      await _pump(
+        tester,
+        _sell(long, _Calls(), scans),
+        locale: const Locale('fr'),
+        size: const Size(320, 700),
+      );
+      expect(find.text('Vendre depuis'), findsOneWidget);
+      await _scan(tester, scans, 'IT-K7M4P2');
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('stores and categories: the products list', () {
+    Map<String, Object?> summaryAnswer() => {
+          'salesCount': 3,
+          'itemsSold': 7,
+          'revenueCents': 6000,
+          'profitCents': 2000,
+          'discountCents': 0,
+          'low': [
+            {
+              'itemId': 'i1',
+              'name': 'Soap',
+              'quantity': 2,
+              'lowStockAt': 3,
+              'storeId': 's-bk',
+              'storeName': 'Brooklyn',
+            },
+          ],
+          'countWasOff': <Object>[],
+          'byCategory': [
+            {'categoryId': 'c1', 'name': 'Body', 'itemsSold': 2, 'revenueCents': 900, 'profitCents': 300},
+            {'categoryId': '', 'name': 'Uncategorized', 'itemsSold': 1, 'revenueCents': 5000, 'profitCents': 1000},
+            {'categoryId': 'c2', 'name': 'Hair', 'itemsSold': 4, 'revenueCents': 100, 'profitCents': 0},
+          ],
+          'byStore': [
+            {'storeId': 's-bk', 'name': 'Brooklyn', 'salesCount': 2, 'itemsSold': 3, 'revenueCents': 2500, 'profitCents': 800},
+            {'storeId': 's-main', 'name': 'Main store', 'salesCount': 1, 'itemsSold': 4, 'revenueCents': 3500, 'profitCents': 1200},
+          ],
+        };
+
+    final items = [
+      _item('i1', 'IT-K7M4P2', name: 'Soap', quantity: 10, lowStockAt: 3, category: 'Body'),
+      _item('i2', 'IT-CCCCCC', name: 'Palm oil', quantity: 10, categoryId: 'c2', category: 'Hair'),
+    ];
+
+    Widget list(_FakeSource source, _Calls calls,
+            {InventoryAccess access = const InventoryAccess.owner()}) =>
+        InventoryScreen(
+          businessId: 'b1',
+          source: source,
+          service: calls.service,
+          cameraEnabled: false,
+          access: access,
+        );
+
+    testWidgets('the owner sees the store filter, each store\'s count and where '
+        'it is low; the filter narrows counts and the numbers',
+        (tester) async {
+      final calls = _Calls()..respond = (n, p) => summaryAnswer();
+      await _pump(
+        tester,
+        list(_FakeSource(items: items, stores: _stores, stock: _stockRows, categories: _categories), calls),
+      );
+      expect(find.byKey(const Key('inv-store-filter-all')), findsOneWidget);
+      expect(find.byKey(const Key('inv-store-filter-s-bk')), findsOneWidget);
+      // The total, with each store's count under the name.
+      expect(find.text('10 in stock'), findsNWidgets(2));
+      String rowCount(String id) => (tester
+              .widget<Text>(find.descendant(
+                  of: find.byKey(ValueKey('inv-item-$id')),
+                  matching: find.textContaining(' in stock')))
+              .data!);
+      expect(find.byKey(const Key('inv-row-stores-i1')), findsOneWidget);
+      expect(
+          tester.widget<Text>(find.byKey(const Key('inv-row-stores-i1'))).data,
+          'Brooklyn 2 · Main store 8');
+      // 2 is at or under the one lowStockAt of 3: low at Brooklyn.
+      expect(find.byKey(const Key('inv-row-low-i1-s-bk')), findsOneWidget);
+      expect(find.text('Low at Brooklyn'), findsWidgets);
+      // The summary asked for every store, and shows By store.
+      expect(calls.named('getInventorySummary').single.payload.containsKey('storeId'),
+          isFalse);
+      expect(find.byKey(const ValueKey('inv-bystore-s-bk')), findsOneWidget);
+      expect(find.text('By store'), findsOneWidget);
+      // The low-stock row names its store.
+      expect(find.text('Soap · Brooklyn'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('inv-store-filter-s-bk')));
+      await tester.pumpAndSettle();
+      expect(rowCount('i1'), '2 in stock');
+      expect(rowCount('i2'), '5 in stock');
+      expect(find.byKey(const Key('inv-row-stores-i1')), findsNothing);
+      expect(calls.named('getInventorySummary').last.payload['storeId'], 's-bk');
+    });
+
+    testWidgets('staff see their own store\'s count only, no filter, no By '
+        'store, and the summary is not asked for another store', (tester) async {
+      final source = _FakeSource(items: items, stores: _stores, stock: _stockRows);
+      final calls = _Calls()..respond = (n, p) => summaryAnswer();
+      await _pump(tester, list(source, calls, access: _staffBk));
+      expect(find.byKey(const Key('inv-store-filter-all')), findsNothing);
+      expect(find.byKey(const Key('inv-row-stores-i1')), findsNothing);
+      String rowCount(String id) => (tester
+              .widget<Text>(find.descendant(
+                  of: find.byKey(ValueKey('inv-item-$id')),
+                  matching: find.textContaining(' in stock')))
+              .data!);
+      expect(rowCount('i1'), '2 in stock');
+      expect(rowCount('i2'), '5 in stock');
+      expect(find.byKey(const ValueKey('inv-bystore-s-bk')), findsNothing);
+      expect(find.byKey(const Key('inv-open-stores')), findsNothing);
+      expect(calls.named('getInventorySummary').single.payload.containsKey('storeId'),
+          isFalse);
+      expect(source.stockStores, ['s-bk']);
+    });
+
+    testWidgets('staff with no store are told, and see no counts', (tester) async {
+      final source = _FakeSource(items: items, stores: _stores, stock: _stockRows);
+      await _pump(
+        tester,
+        list(source, _Calls()..respond = (n, p) => <String, Object?>{},
+            access: const InventoryAccess()),
+      );
+      expect(find.byKey(const Key('inv-home-store-missing')), findsOneWidget);
+      expect(find.text('0 in stock'), findsNWidgets(2));
+      expect(source.stockStores, isEmpty);
+    });
+
+    testWidgets('a single-store shop shows no store anything', (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => {
+              'salesCount': 1,
+              'revenueCents': 450,
+              'low': <Object>[],
+              'countWasOff': <Object>[],
+            };
+      final source = _FakeSource(items: items, stores: const [_mainStore]);
+      await _pump(tester, list(source, calls, access: _staffBk));
+      expect(find.byKey(const Key('inv-store-filter-all')), findsNothing);
+      expect(find.byKey(const Key('inv-row-stores-i1')), findsNothing);
+      expect(find.byKey(const Key('inv-open-stores')), findsNothing);
+      expect(find.text('10 in stock'), findsNWidgets(2));
+      expect(find.text('By store'), findsNothing);
+      expect(source.stockStores, isEmpty);
+    });
+
+    testWidgets('the Today summary has a categories block, biggest money first, '
+        'with Uncategorized named', (tester) async {
+      final calls = _Calls()..respond = (n, p) => summaryAnswer();
+      await _pump(
+        tester,
+        list(_FakeSource(items: items, categories: _categories), calls),
+      );
+      expect(find.text('By category'), findsOneWidget);
+      double top(String id) =>
+          tester.getTopLeft(find.byKey(ValueKey('inv-bycat-$id'))).dy;
+      expect(top('none'), lessThan(top('c1')));
+      expect(top('c1'), lessThan(top('c2')));
+      expect(find.text('Uncategorized'), findsOneWidget);
+      expect(find.text(r'$50.00'), findsWidgets);
+      expect(find.text(r'2 items sold · Profit $3.00'), findsOneWidget);
+      // A single store: no By store block even though the server sent one.
+      expect(find.byKey(const ValueKey('inv-bystore-s-bk')), findsNothing);
+    });
+
+    testWidgets('a summary from a server with no categories shows no block',
+        (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => {
+              'salesCount': 1,
+              'itemsSold': 1,
+              'revenueCents': 450,
+              'profitCents': 100,
+              'low': <Object>[],
+              'countWasOff': <Object>[],
+            };
+      await _pump(tester, list(_FakeSource(items: items), calls));
+      expect(find.text('By category'), findsNothing);
+      expect(find.text('By store'), findsNothing);
+      expect(find.byKey(const Key('inv-summary-detail')), findsOneWidget);
+    });
+
+    testWidgets('the list filters by category', (tester) async {
+      await _pump(
+        tester,
+        list(
+          _FakeSource(items: items, categories: _categories),
+          _Calls()..respond = (n, p) => <String, Object?>{},
+        ),
+      );
+      expect(find.byKey(const Key('inv-category-filter-all')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-item-i1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-item-i2')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('inv-category-filter-c2')));
+      await tester.pumpAndSettle();
+      // i2 by id, i1 (typed "Body") is not in Hair.
+      expect(find.byKey(const ValueKey('inv-item-i2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-item-i1')), findsNothing);
+      // A product typed before categories is found under the category of the
+      // same name.
+      await tester.tap(find.byKey(const Key('inv-category-filter-c1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('inv-item-i1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-item-i2')), findsNothing);
+      await tester.tap(find.byKey(const Key('inv-category-filter-all')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('inv-item-i2')), findsOneWidget);
+    });
+
+    testWidgets('no categories, no category filter', (tester) async {
+      await _pump(
+        tester,
+        list(_FakeSource(items: items),
+            _Calls()..respond = (n, p) => <String, Object?>{}),
+      );
+      expect(find.byKey(const Key('inv-category-filter-all')), findsNothing);
+    });
+
+    testWidgets('French at 320 wide: filters, per-store line and blocks fit',
+        (tester) async {
+      final calls = _Calls()..respond = (n, p) => summaryAnswer();
+      await _pump(
+        tester,
+        list(_FakeSource(items: items, stores: _stores, stock: _stockRows, categories: _categories), calls),
+        locale: const Locale('fr'),
+        size: const Size(320, 900),
+      );
+      expect(find.text('Par catégorie'), findsOneWidget);
+      expect(find.text('Par magasin'), findsOneWidget);
+      expect(find.text('Tous les magasins'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('stores and categories: managers', () {
+    testWidgets('the owner adds a store; a single-store shop is told how',
+        (tester) async {
+      final calls = _Calls()..respond = (n, p) => {'storeId': 's2'};
+      await _pump(
+        tester,
+        InventoryStoresScreen(
+          businessId: 'b1',
+          source: _FakeSource(stores: const [_mainStore]),
+          service: calls.service,
+        ),
+      );
+      expect(find.byKey(const Key('inv-stores-intro')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('inv-stores-add')));
+      await tester.pumpAndSettle();
+      // Empty: refused at the field.
+      await tester.tap(find.byKey(const Key('inv-store-save')));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a store name.'), findsOneWidget);
+      expect(calls.log, isEmpty);
+      await tester.enterText(find.byKey(const Key('inv-store-name')), 'Brooklyn');
+      await tester.enterText(find.byKey(const Key('inv-store-address')), '1 Main St');
+      await tester.tap(find.byKey(const Key('inv-store-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('createInventoryStore').single.payload,
+          {'businessId': 'b1', 'name': 'Brooklyn', 'address': '1 Main St'});
+      expect(find.text('Store saved.'), findsOneWidget);
+    });
+
+    testWidgets('archiving asks first; a store with stock says to move it',
+        (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => throw FirebaseFunctionsException(
+              message: 'stock',
+              code: 'failed-precondition',
+              details: {'reason': 'store_has_stock'},
+            );
+      await _pump(
+        tester,
+        InventoryStoresScreen(
+          businessId: 'b1',
+          source: _FakeSource(stores: _stores),
+          service: calls.service,
+        ),
+      );
+      expect(find.byKey(const Key('inv-stores-intro')), findsNothing);
+      await tester.tap(find.byKey(const Key('inv-store-archive-s-bk')));
+      await tester.pumpAndSettle();
+      expect(find.text('Archive this store?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(calls.log, isEmpty);
+      await tester.tap(find.byKey(const Key('inv-store-archive-s-bk')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Archive'));
+      await tester.pumpAndSettle();
+      expect(calls.named('archiveInventoryStore').single.payload,
+          {'businessId': 'b1', 'storeId': 's-bk', 'archived': true});
+      expect(find.textContaining('still holds stock'), findsOneWidget);
+    });
+
+    testWidgets('editing a store sends only what changed', (tester) async {
+      final calls = _Calls();
+      await _pump(
+        tester,
+        InventoryStoresScreen(
+          businessId: 'b1',
+          source: _FakeSource(stores: _stores),
+          service: calls.service,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('inv-store-edit-s-bk')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-store-name')), 'Brooklyn 2');
+      await tester.tap(find.byKey(const Key('inv-store-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('updateInventoryStore').single.payload,
+          {'businessId': 'b1', 'storeId': 's-bk', 'name': 'Brooklyn 2'});
+    });
+
+    testWidgets('the owner sets a staff member\'s home store and all-stores',
+        (tester) async {
+      final calls = _Calls();
+      await _pump(
+        tester,
+        Scaffold(
+          body: InventoryTeamAccess(
+            businessId: 'b1',
+            source: _FakeSource(stores: _stores),
+            service: calls.service,
+            members: const [
+              InventoryTeamMember(userId: 'u1', name: 'Mariama'),
+              InventoryTeamMember(userId: 'u2', name: 'Ibrahima', allStores: true),
+            ],
+          ),
+        ),
+      );
+      expect(find.text('Inventory stores'), findsOneWidget);
+      expect(find.text('No home store yet'), findsOneWidget);
+      expect(find.text('Works in all stores'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('inv-access-u1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('inv-access-home')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Brooklyn').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('inv-access-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('setInventoryStaffAccess').single.payload, {
+        'businessId': 'b1',
+        'userId': 'u1',
+        'homeStoreId': 's-bk',
+        'allStores': false,
+      });
+      expect(find.text('Store access saved.'), findsOneWidget);
+    });
+
+    testWidgets('the all-stores switch is sent as set', (tester) async {
+      final calls = _Calls();
+      await _pump(
+        tester,
+        Scaffold(
+          body: InventoryTeamAccess(
+            businessId: 'b1',
+            source: _FakeSource(stores: _stores),
+            service: calls.service,
+            members: const [InventoryTeamMember(userId: 'u1', name: 'Mariama', homeStoreId: 's-main')],
+          ),
+        ),
+      );
+      expect(find.text('Home: Main store'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('inv-access-u1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('inv-access-all')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('inv-access-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('setInventoryStaffAccess').single.payload['allStores'], true);
+      expect(calls.named('setInventoryStaffAccess').single.payload['homeStoreId'], 's-main');
+    });
+
+    testWidgets('nothing to assign in a single-store shop', (tester) async {
+      await _pump(
+        tester,
+        Scaffold(
+          body: InventoryTeamAccess(
+            businessId: 'b1',
+            source: _FakeSource(stores: const [_mainStore]),
+            members: const [InventoryTeamMember(userId: 'u1', name: 'Mariama')],
+          ),
+        ),
+      );
+      expect(find.byKey(const Key('inv-team-access')), findsNothing);
+    });
+
+    testWidgets('categories: add, rename, archive and restore', (tester) async {
+      final calls = _Calls()..respond = (n, p) => {'categoryId': 'c9'};
+      await _pump(
+        tester,
+        InventoryCategoriesScreen(
+          businessId: 'b1',
+          source: _FakeSource(categories: _categories),
+          service: calls.service,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('inv-categories-add')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('inv-category-save')));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a category name.'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('inv-category-name')), 'Wax');
+      await tester.tap(find.byKey(const Key('inv-category-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('createInventoryCategory').single.payload,
+          {'businessId': 'b1', 'name': 'Wax'});
+
+      await tester.tap(find.byKey(const Key('inv-category-rename-c1')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-category-name')), 'Skin');
+      await tester.tap(find.byKey(const Key('inv-category-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('renameInventoryCategory').single.payload,
+          {'businessId': 'b1', 'categoryId': 'c1', 'name': 'Skin'});
+
+      await tester.tap(find.byKey(const Key('inv-category-archive-c2')));
+      await tester.pumpAndSettle();
+      expect(calls.named('archiveInventoryCategory').single.payload,
+          {'businessId': 'b1', 'categoryId': 'c2', 'archived': true});
+    });
+
+    testWidgets('a taken category name is said, not swallowed', (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => throw FirebaseFunctionsException(
+              message: 'taken',
+              code: 'failed-precondition',
+              details: {'reason': 'category_name_taken'},
+            );
+      await _pump(
+        tester,
+        InventoryCategoriesScreen(
+          businessId: 'b1',
+          source: _FakeSource(categories: _categories),
+          service: calls.service,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('inv-categories-add')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-category-name')), 'Body');
+      await tester.tap(find.byKey(const Key('inv-category-save')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('inv-category-error')), findsOneWidget);
+      expect(find.text('You already have a category with that name.'), findsOneWidget);
+    });
+
+    testWidgets('French at 320 wide: stores and categories managers fit',
+        (tester) async {
+      await _pump(
+        tester,
+        InventoryStoresScreen(
+          businessId: 'b1',
+          source: _FakeSource(stores: const [
+            _mainStore,
+            InventoryStore(
+                id: 's-bk',
+                name: 'Magasin de la rue Saint-Jacques, entrepôt nord',
+                address: '1234 Avenue de la République, Paris',
+                archived: true),
+          ]),
+          service: _Calls().service,
+        ),
+        locale: const Locale('fr'),
+        size: const Size(320, 700),
+      );
+      expect(find.text('Ajouter un magasin'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await _pump(
+        tester,
+        InventoryCategoriesScreen(
+          businessId: 'b1',
+          source: _FakeSource(categories: _categories),
+          service: _Calls().service,
+        ),
+        locale: const Locale('fr'),
+        size: const Size(320, 700),
+      );
+      expect(find.text('Ajouter une catégorie'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('stores and categories: the product form', () {
+    Future<void> openForm(
+      WidgetTester tester,
+      _Calls calls, {
+      InventoryItem? existing,
+      List<InventoryCategory> categories = const [],
+      InventoryStoreContext? stores,
+      Locale locale = const Locale('en'),
+      Size size = const Size(400, 2400),
+    }) =>
+        _openSheet(
+          tester,
+          (context) => showInventoryItemForm(
+            context,
+            businessId: 'b1',
+            existing: existing,
+            service: calls.service,
+            categories: categories,
+            stores: stores,
+          ),
+          locale: locale,
+          size: size,
+        );
+
+    Future<void> fillBasics(WidgetTester tester) async {
+      await tester.enterText(find.byKey(const Key('inv-field-name')), 'Wax');
+      await tester.enterText(find.byKey(const Key('inv-field-price')), '4');
+    }
+
+    testWidgets('adding a new category on the spot creates it and uses it',
+        (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) =>
+            n == 'createInventoryCategory' ? {'categoryId': 'c9'} : {'itemId': 'n', 'code': 'IT-HHHHHH'};
+      await openForm(tester, calls, categories: _categories);
+      await fillBasics(tester);
+      await tester.enterText(find.byKey(const Key('inv-field-quantity')), '3');
+      await tester.ensureVisible(find.byKey(const Key('inv-field-category')));
+      await tester.tap(find.byKey(const Key('inv-field-category')));
+      await tester.pumpAndSettle();
+      expect(find.text('No category'), findsWidgets);
+      await tester.tap(find.text('Add a new category'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-category-name')), 'Wax goods');
+      await tester.tap(find.byKey(const Key('inv-category-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('createInventoryCategory').single.payload,
+          {'businessId': 'b1', 'name': 'Wax goods'});
+      await tester.ensureVisible(find.byKey(const Key('inv-form-save')));
+      await tester.tap(find.byKey(const Key('inv-form-save')));
+      await tester.pumpAndSettle();
+      final create = calls.named('createInventoryItem').single.payload;
+      expect(create['categoryId'], 'c9');
+      expect(create.containsKey('category'), isFalse);
+      expect(create['quantity'], 3);
+    });
+
+    testWidgets('a server without categories keeps the typed name as plain text',
+        (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) {
+          if (n == 'createInventoryCategory') {
+            throw FirebaseFunctionsException(message: 'nf', code: 'not-found');
+          }
+          return {'itemId': 'n', 'code': 'IT-HHHHHH'};
+        };
+      await openForm(tester, calls);
+      await fillBasics(tester);
+      await tester.enterText(find.byKey(const Key('inv-field-quantity')), '3');
+      await tester.ensureVisible(find.byKey(const Key('inv-field-category')));
+      await tester.tap(find.byKey(const Key('inv-field-category')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add a new category'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-category-name')), 'Wax goods');
+      await tester.tap(find.byKey(const Key('inv-category-save')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('inv-form-save')));
+      await tester.tap(find.byKey(const Key('inv-form-save')));
+      await tester.pumpAndSettle();
+      final create = calls.named('createInventoryItem').single.payload;
+      expect(create['category'], 'Wax goods');
+      expect(create.containsKey('categoryId'), isFalse);
+    });
+
+    testWidgets('no category is sent when none is picked', (tester) async {
+      final calls = _Calls()..respond = (n, p) => {'itemId': 'n', 'code': 'IT-HHHHHH'};
+      await openForm(tester, calls, categories: _categories);
+      await fillBasics(tester);
+      await tester.enterText(find.byKey(const Key('inv-field-quantity')), '3');
+      await tester.ensureVisible(find.byKey(const Key('inv-form-save')));
+      await tester.tap(find.byKey(const Key('inv-form-save')));
+      await tester.pumpAndSettle();
+      final create = calls.named('createInventoryItem').single.payload;
+      expect(create.containsKey('category'), isFalse);
+      expect(create.containsKey('categoryId'), isFalse);
+    });
+
+    testWidgets('a product typed before categories shows its name and an edit '
+        'that leaves it sends nothing about it', (tester) async {
+      final calls = _Calls();
+      final legacy = _item('i1', 'IT-K7M4P2', name: 'Soap', category: 'Body');
+      await openForm(tester, calls, existing: legacy, categories: _categories);
+      await tester.ensureVisible(find.byKey(const Key('inv-field-category')));
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('inv-field-category')),
+              matching: find.text('Body')),
+          findsOneWidget);
+      await tester.enterText(find.byKey(const Key('inv-field-price')), '5');
+      await tester.ensureVisible(find.byKey(const Key('inv-form-save')));
+      await tester.tap(find.byKey(const Key('inv-form-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('updateInventoryItem').single.payload,
+          {'businessId': 'b1', 'itemId': 'i1', 'priceCents': 500});
+    });
+
+    testWidgets('picking another category on an edit sends its id',
+        (tester) async {
+      final calls = _Calls();
+      final existing =
+          _item('i1', 'IT-K7M4P2', name: 'Soap', category: 'Body');
+      await openForm(tester, calls, existing: existing, categories: _categories);
+      await tester.ensureVisible(find.byKey(const Key('inv-field-category')));
+      await tester.tap(find.byKey(const Key('inv-field-category')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hair'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('inv-form-save')));
+      await tester.tap(find.byKey(const Key('inv-form-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('updateInventoryItem').single.payload,
+          {'businessId': 'b1', 'itemId': 'i1', 'categoryId': 'c2'});
+    });
+
+    testWidgets('the owner of several stores types a starting count for each',
+        (tester) async {
+      final calls = _Calls()..respond = (n, p) => {'itemId': 'n', 'code': 'IT-HHHHHH'};
+      await openForm(tester, calls,
+          stores: InventoryStoreContext(stores: _stores));
+      expect(find.byKey(const Key('inv-field-quantity')), findsNothing);
+      await fillBasics(tester);
+      await tester.enterText(find.byKey(const Key('inv-field-quantity-s-main')), '7');
+      await tester.ensureVisible(find.byKey(const Key('inv-form-save')));
+      await tester.tap(find.byKey(const Key('inv-form-save')));
+      await tester.pumpAndSettle();
+      final create = calls.named('createInventoryItem').single.payload;
+      expect(create['stock'], {'s-bk': 0, 's-main': 7});
+      expect(create.containsKey('quantity'), isFalse);
+    });
+
+    testWidgets('staff of one store type one count, named for their store',
+        (tester) async {
+      final calls = _Calls()..respond = (n, p) => {'itemId': 'n', 'code': 'IT-HHHHHH'};
+      await openForm(tester, calls,
+          stores: InventoryStoreContext(stores: _stores, access: _staffBk));
+      expect(find.text('Starting count in Brooklyn'), findsOneWidget);
+      await fillBasics(tester);
+      await tester.enterText(find.byKey(const Key('inv-field-quantity')), '4');
+      await tester.ensureVisible(find.byKey(const Key('inv-form-save')));
+      await tester.tap(find.byKey(const Key('inv-form-save')));
+      await tester.pumpAndSettle();
+      final create = calls.named('createInventoryItem').single.payload;
+      expect(create['quantity'], 4);
+      expect(create.containsKey('stock'), isFalse);
+      expect(create.containsKey('storeId'), isFalse);
+    });
+
+    testWidgets('French at 320 wide: a form with the picker and store counts',
+        (tester) async {
+      await openForm(tester, _Calls(),
+          categories: _categories,
+          stores: InventoryStoreContext(stores: const [
+            _mainStore,
+            InventoryStore(
+                id: 's-bk', name: 'Magasin de la rue Saint-Jacques, entrepôt nord'),
+          ]),
+          locale: const Locale('fr'),
+          size: const Size(320, 900));
+      expect(find.text('Nouveau produit'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('inv-form-save')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('stores: a product page', () {
+    final soap = _item('i1', 'IT-K7M4P2',
+        name: 'Soap', quantity: 10, lowStockAt: 3, category: 'Body');
+    final moves = [
+      InventoryMovement(
+        id: 'm1',
+        itemId: 'i1',
+        type: 'transfer_out',
+        delta: -2,
+        quantityAfter: 8,
+        storeId: 's-main',
+        transferId: 't1',
+        createdAt: DateTime(2026, 10, 10, 15, 5),
+      ),
+      InventoryMovement(
+        id: 'm2',
+        itemId: 'i1',
+        type: 'transfer_in',
+        delta: 2,
+        quantityAfter: 2,
+        storeId: 's-bk',
+        transferId: 't1',
+        createdAt: DateTime(2026, 10, 10, 15, 5),
+      ),
+    ];
+
+    Widget page(_FakeSource source, _Calls calls,
+            {InventoryAccess access = const InventoryAccess.owner()}) =>
+        InventoryItemScreen(
+          businessId: 'b1',
+          itemId: 'i1',
+          source: source,
+          service: calls.service,
+          access: access,
+          tagOpener: ({required businessId, required itemId, required copies}) async {},
+        );
+
+    _FakeSource source() => _FakeSource(
+          items: [soap],
+          stores: _stores,
+          stock: _stockRows,
+          movements: moves,
+        );
+
+    testWidgets('the owner sees the total, each store\'s count, where it is low '
+        'and a store filter', (tester) async {
+      await _pump(tester, page(source(), _Calls()));
+      expect(tester.widget<Text>(find.byKey(const Key('inv-item-count'))).data, '10');
+      expect(find.byKey(const Key('inv-store-counts')), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const Key('inv-store-count-s-bk'))).data, '2');
+      expect(tester.widget<Text>(find.byKey(const Key('inv-store-count-s-main'))).data, '8');
+      expect(tester.widget<Text>(find.byKey(const Key('inv-store-total'))).data, '10');
+      expect(find.byKey(const Key('inv-low-at-s-bk')), findsOneWidget);
+
+      await tester.ensureVisible(find.byKey(const Key('inv-store-filter-s-main')));
+      await tester.tap(find.byKey(const Key('inv-store-filter-s-main')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.byKey(const Key('inv-item-count'))).data, '8');
+      expect(find.byKey(const Key('inv-low-at-s-bk')), findsNothing);
+      expect(find.byKey(const Key('inv-chip-ok')), findsOneWidget);
+    });
+
+    testWidgets('staff see their store\'s count only and cannot transfer; '
+        'only their store\'s history is asked for', (tester) async {
+      final src = source();
+      await _pump(tester, page(src, _Calls(), access: _staffBk));
+      expect(tester.widget<Text>(find.byKey(const Key('inv-item-count'))).data, '2');
+      expect(find.text('Your store: Brooklyn'), findsOneWidget);
+      expect(find.byKey(const Key('inv-store-counts')), findsNothing);
+      expect(find.byKey(const Key('inv-store-filter-all')), findsNothing);
+      expect(find.byKey(const Key('inv-act-transfer')), findsNothing);
+      expect(src.movementStores, ['s-bk']);
+      expect(find.byKey(const ValueKey('inv-move-m2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-move-m1')), findsNothing);
+      expect(find.textContaining('at Brooklyn'), findsOneWidget);
+      expect(find.text('Transfer'), findsOneWidget);
+    });
+
+    testWidgets('a single-store shop has none of it', (tester) async {
+      await _pump(
+        tester,
+        page(_FakeSource(items: [soap], stores: const [_mainStore], stock: _stockRows), _Calls()),
+      );
+      expect(tester.widget<Text>(find.byKey(const Key('inv-item-count'))).data, '10');
+      expect(find.byKey(const Key('inv-store-counts')), findsNothing);
+      expect(find.byKey(const Key('inv-act-transfer')), findsNothing);
+      expect(find.byKey(const Key('inv-store-filter-all')), findsNothing);
+    });
+
+    testWidgets('transfer: two different stores are required before anything '
+        'is sent', (tester) async {
+      final calls = _Calls();
+      await _pump(tester, page(source(), calls));
+      await tester.tap(find.byKey(const Key('inv-act-transfer')));
+      await tester.pumpAndSettle();
+      // From the store that holds the most, to the other.
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('inv-transfer-from')),
+              matching: find.text('Main store')),
+          findsOneWidget);
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('inv-transfer-to')),
+              matching: find.text('Brooklyn')),
+          findsOneWidget);
+      // Point "To" at the same store as "From".
+      await tester.tap(find.byKey(const Key('inv-transfer-to')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Main store').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-transfer-quantity')), '2');
+      await tester.tap(find.byKey(const Key('inv-transfer-save')));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose two different stores.'), findsOneWidget);
+      expect(calls.log, isEmpty);
+    });
+
+    testWidgets('transfer: sends the move and says so', (tester) async {
+      final calls = _Calls();
+      await _pump(tester, page(source(), calls));
+      await tester.tap(find.byKey(const Key('inv-act-transfer')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('inv-transfer-save')));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a whole number of at least 1.'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('inv-transfer-quantity')), '3');
+      await tester.enterText(find.byKey(const Key('inv-transfer-note')), 'restock');
+      await tester.tap(find.byKey(const Key('inv-transfer-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('transferInventoryStock').single.payload, {
+        'businessId': 'b1',
+        'itemId': 'i1',
+        'fromStoreId': 's-main',
+        'toStoreId': 's-bk',
+        'quantity': 3,
+        'note': 'restock',
+      });
+      expect(find.text('Stock moved.'), findsOneWidget);
+    });
+
+    testWidgets('transfer: more than the source holds is refused in words, '
+        'and the sheet stays', (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => throw FirebaseFunctionsException(
+              message: 'short',
+              code: 'failed-precondition',
+              details: {'reason': 'insufficient_stock'},
+            );
+      await _pump(tester, page(source(), calls));
+      await tester.tap(find.byKey(const Key('inv-act-transfer')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-transfer-quantity')), '99');
+      await tester.tap(find.byKey(const Key('inv-transfer-save')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('inv-transfer-error')), findsOneWidget);
+      expect(find.textContaining('does not have that many'), findsOneWidget);
+      expect(find.byKey(const Key('inv-transfer-save')), findsOneWidget);
+    });
+
+    testWidgets('transfer: the server\'s same-store refusal reads the same',
+        (tester) async {
+      final calls = _Calls()
+        ..respond = (n, p) => throw FirebaseFunctionsException(
+              message: 'same',
+              code: 'invalid-argument',
+              details: {'reason': 'same_store'},
+            );
+      await _pump(tester, page(source(), calls));
+      await tester.tap(find.byKey(const Key('inv-act-transfer')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-transfer-quantity')), '1');
+      await tester.tap(find.byKey(const Key('inv-transfer-save')));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose two different stores.'), findsOneWidget);
+    });
+
+    testWidgets('add stock: the owner picks the store and it is sent',
+        (tester) async {
+      final calls = _Calls();
+      await _pump(tester, page(source(), calls));
+      await tester.tap(find.byKey(const Key('inv-act-add')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('inv-stock-store')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Main store').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-stock-quantity')), '4');
+      await tester.tap(find.byKey(const Key('inv-stock-save')));
+      await tester.pumpAndSettle();
+      expect(calls.named('adjustInventoryStock').single.payload['storeId'], 's-main');
+    });
+
+    testWidgets('add stock: staff count in their own store and send none',
+        (tester) async {
+      final staffCalls = _Calls();
+      await _pump(tester, page(source(), staffCalls, access: _staffBk));
+      await tester.tap(find.byKey(const Key('inv-act-add')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('inv-stock-store')), findsNothing);
+      expect(find.text('Counting in Brooklyn'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('inv-stock-quantity')), '4');
+      await tester.tap(find.byKey(const Key('inv-stock-save')));
+      await tester.pumpAndSettle();
+      expect(staffCalls.named('adjustInventoryStock').single.payload.containsKey('storeId'),
+          isFalse);
+    });
+
+    testWidgets('set count starts from the chosen store\'s count', (tester) async {
+      final calls = _Calls();
+      await _pump(tester, page(source(), calls));
+      await tester.tap(find.byKey(const Key('inv-store-filter-s-bk')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('inv-act-set')));
+      await tester.pumpAndSettle();
+      String typed() => tester
+          .widget<TextField>(find.byKey(const Key('inv-stock-quantity')))
+          .controller!
+          .text;
+      expect(typed(), '2');
+      await tester.tap(find.byKey(const Key('inv-stock-store')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Main store').last);
+      await tester.pumpAndSettle();
+      expect(typed(), '8');
+      await tester.tap(find.byKey(const Key('inv-stock-save')));
+      await tester.pumpAndSettle();
+      final sent = calls.named('adjustInventoryStock').single.payload;
+      expect(sent['mode'], 'set');
+      expect(sent['storeId'], 's-main');
+      expect(sent['quantity'], 8);
+    });
+
+    testWidgets('French at 320 wide: counts, filter and transfer fit',
+        (tester) async {
+      await _pump(
+        tester,
+        page(
+          _FakeSource(
+            items: [soap],
+            stores: const [
+              _mainStore,
+              InventoryStore(
+                  id: 's-bk',
+                  name: 'Magasin de la rue Saint-Jacques, entrepôt nord'),
+            ],
+            stock: _stockRows,
+            movements: moves,
+          ),
+          _Calls(),
+        ),
+        locale: const Locale('fr'),
+        size: const Size(320, 900),
+      );
+      expect(find.text('Stock par magasin'), findsOneWidget);
+      await tester.scrollUntilVisible(
+          find.byKey(const Key('inv-act-transfer')), 200,
+          scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.byKey(const Key('inv-act-transfer')));
+      await tester.pumpAndSettle();
+      expect(find.text('Transférer du stock'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('stores: the sales list', () {
+    InventorySale sale(String id, String storeId, String storeName, int cents) =>
+        InventorySale(
+          id: id,
+          businessId: 'b1',
+          lines: const [
+            InventorySaleLine(
+              itemId: 'i1',
+              name: 'Soap',
+              code: 'IT-K7M4P2',
+              quantity: 1,
+              listPriceCents: 450,
+              soldPriceCents: 450,
+            ),
+          ],
+          totalCents: cents,
+          paymentMethod: 'cash',
+          soldByStaffId: 'u1',
+          storeId: storeId,
+          storeName: storeName,
+          createdAt: DateTime(2026, 10, 10, 15, id == 'a' ? 5 : 6),
+        );
+
+    final sales = [
+      sale('a', 's-main', 'Main store', 450),
+      sale('b', 's-bk', 'Brooklyn', 900),
+    ];
+
+    testWidgets('the owner sees the store on every sale and can filter',
+        (tester) async {
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: _FakeSource(sales: sales, stores: _stores),
+          service: _Calls().service,
+        ),
+      );
+      expect(find.text('Cash · Store: Main store'), findsOneWidget);
+      expect(find.text('Cash · Store: Brooklyn'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('inv-sales-store-s-bk')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('inv-sale-b')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-sale-a')), findsNothing);
+      await tester.tap(find.byKey(const Key('inv-sales-store-all')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('inv-sale-a')), findsOneWidget);
+    });
+
+    testWidgets('staff are given only their own store\'s sales, with no filter',
+        (tester) async {
+      final src = _FakeSource(sales: sales, stores: _stores);
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: src,
+          service: _Calls().service,
+          access: _staffBk,
+        ),
+      );
+      expect(src.salesStores, ['s-bk']);
+      expect(find.byKey(const ValueKey('inv-sale-b')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-sale-a')), findsNothing);
+      expect(find.byKey(const Key('inv-sales-store-all')), findsNothing);
+      expect(find.textContaining('Store:'), findsNothing);
+    });
+
+    testWidgets('staff with no store are told and nothing is read',
+        (tester) async {
+      final src = _FakeSource(sales: sales, stores: _stores);
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: src,
+          service: _Calls().service,
+          access: const InventoryAccess(),
+        ),
+      );
+      expect(src.salesStores, isEmpty);
+      expect(find.byKey(const Key('inv-home-store-missing')), findsOneWidget);
+      expect(find.byKey(const Key('inv-sales-empty')), findsOneWidget);
+    });
+
+    testWidgets('a single-store shop reads the old way and shows no store',
+        (tester) async {
+      final src = _FakeSource(sales: sales, stores: const [_mainStore]);
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: src,
+          service: _Calls().service,
+          access: _staffBk,
+        ),
+      );
+      expect(src.salesStores, ['']);
+      expect(find.textContaining('Store:'), findsNothing);
+      expect(find.byKey(const Key('inv-sales-store-all')), findsNothing);
+    });
+
+    testWidgets('French at 320 wide: store line and filter fit', (tester) async {
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: _FakeSource(sales: [
+            sale('a', 's-main', 'Magasin de la rue Saint-Jacques, entrepôt nord', 450),
+          ], stores: _stores),
+          service: _Calls().service,
+        ),
+        locale: const Locale('fr'),
+        size: const Size(320, 700),
+      );
+      expect(find.textContaining('Magasin :'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

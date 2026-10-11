@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../screens/package_payment_sheet.dart' show containerPaymentMethodLabel;
 import '../services/inventory.dart';
+import '../services/inventory_stores.dart';
 import '../services/lot_ledger.dart' show LotStaff;
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -25,6 +26,18 @@ String inventoryFailureText(AppLocalizations l10n, InventoryFailure failure) =>
       InventoryFailure.noPermission => l10n.inventoryFailNoPermission,
       InventoryFailure.invalid => l10n.inventoryFailInvalid,
       InventoryFailure.unknown => l10n.inventoryFailUnknown,
+      InventoryFailure.categoryNameRequired => l10n.inventoryErrCategoryName,
+      InventoryFailure.categoryNameTaken => l10n.inventoryFailCategoryNameTaken,
+      InventoryFailure.categoryNotFound => l10n.inventoryFailCategoryNotFound,
+      InventoryFailure.storeNameRequired => l10n.inventoryErrStoreName,
+      InventoryFailure.storeNotFound => l10n.inventoryFailStoreNotFound,
+      InventoryFailure.storeArchived => l10n.inventoryFailStoreArchived,
+      InventoryFailure.storeHasStock => l10n.inventoryFailStoreHasStock,
+      InventoryFailure.storeNotAllowed => l10n.inventoryFailStoreNotAllowed,
+      InventoryFailure.homeStoreRequired => l10n.inventoryStoreHomeRequired,
+      InventoryFailure.sameStore => l10n.inventoryFailSameStore,
+      InventoryFailure.insufficientStock => l10n.inventoryFailInsufficientStock,
+      InventoryFailure.ownerOnly => l10n.inventoryFailOwnerOnly,
     };
 
 /// The product form's refusal codes, in words.
@@ -37,6 +50,12 @@ String inventoryFieldErrorText(AppLocalizations l10n, String code) =>
       'quantity_invalid' => l10n.inventoryErrQuantity,
       'low_stock_invalid' => l10n.inventoryErrLowStock,
       'photo_invalid' => l10n.inventoryErrPhoto,
+      'category_name_required' => l10n.inventoryErrCategoryName,
+      'category_name_too_long' => l10n.inventoryErrNameTooLong,
+      'store_name_required' => l10n.inventoryErrStoreName,
+      'store_name_too_long' => l10n.inventoryErrNameTooLong,
+      'store_required' => l10n.inventoryErrStoreRequired,
+      'same_store' => l10n.inventoryFailSameStore,
       _ => l10n.inventoryFailInvalid,
     };
 
@@ -47,6 +66,12 @@ String inventoryMovementLabel(AppLocalizations l10n, String type) =>
       'set' => l10n.inventoryMoveSet,
       'sale' => l10n.inventoryMoveSale,
       'void' => l10n.inventoryMoveVoid,
+      'transfer' ||
+      'transfer_in' ||
+      'transfer_out' ||
+      'transferIn' ||
+      'transferOut' =>
+        l10n.inventoryMoveTransfer,
       _ => type,
     };
 
@@ -58,6 +83,58 @@ String inventoryStaffName(List<LotStaff> staff, String id) {
   }
   return '';
 }
+
+/// One choice of [InventoryChoiceChips]: [id] '' is the "all" choice.
+typedef InventoryChoice = ({String id, String label});
+
+/// A row of single-choice chips that scrolls sideways - a store filter, a
+/// category filter - so many choices never wrap into a wall on a narrow phone.
+/// Each chip is keyed `<keyPrefix>-<id>` (the "all" chip `<keyPrefix>-all`).
+class InventoryChoiceChips extends StatelessWidget {
+  const InventoryChoiceChips({
+    super.key,
+    required this.keyPrefix,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String keyPrefix;
+  final List<InventoryChoice> options;
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final option in options)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: ChoiceChip(
+                key: Key('$keyPrefix-${option.id.isEmpty ? 'all' : option.id}'),
+                label: Text(option.label),
+                selected: option.id == selected,
+                onSelected: (_) => onSelected(option.id),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "All stores" and then each active store, for a store filter.
+List<InventoryChoice> inventoryStoreChoices(
+  AppLocalizations l10n,
+  InventoryStoreContext context,
+) =>
+    [
+      (id: '', label: l10n.inventoryStoreFilterAll),
+      for (final store in context.active) (id: store.id, label: store.name),
+    ];
 
 /// "+5" / "-2" for a stock change.
 String inventoryDeltaText(int delta) => delta > 0 ? '+$delta' : '$delta';

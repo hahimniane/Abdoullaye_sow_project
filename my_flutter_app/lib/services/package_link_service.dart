@@ -205,8 +205,11 @@ class PackageLinkService {
       if (!eligible) return;
       navigator.push(
         MaterialPageRoute<void>(
-          builder: (_) =>
-              InventorySellScreen(businessId: businessId, initialCode: code),
+          builder: (_) => InventorySellScreen(
+            businessId: businessId,
+            initialCode: code,
+            access: auth.inventoryAccess,
+          ),
         ),
       );
     } finally {

@@ -20,6 +20,8 @@ import '../services/office_location_service.dart';
 import '../theme/app_colors.dart';
 import 'office_locations_screen.dart';
 import '../utils/auth_error_text.dart';
+import '../utils/business_permissions.dart';
+import 'inventory_stores_screen.dart' show InventoryTeamAccess, InventoryTeamMember;
 import '../utils/business_profile_validation.dart';
 import '../utils/money_input.dart';
 import '../utils/phone_number_validator.dart';
@@ -878,7 +880,15 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   ),
                 ],
                 const SizedBox(height: 18),
-                TeamPanel(businessId: business.id, canAddStaff: canEdit),
+                TeamPanel(
+                  businessId: business.id,
+                  canAddStaff: canEdit,
+                  // Only the owner assigns stores, and only when the
+                  // business has Inventory on.
+                  canManageInventoryAccess:
+                      auth.isBusinessOwner &&
+                      business.enabledServices.contains('inventory'),
+                ),
                 ],
               ),
             );
@@ -1207,10 +1217,15 @@ class TeamPanel extends StatelessWidget {
     super.key,
     required this.businessId,
     this.canAddStaff = true,
+    this.canManageInventoryAccess = false,
   });
 
   final String businessId;
   final bool canAddStaff;
+
+  /// The owner of a business that has Inventory on: staff who hold Inventory
+  /// get a home store and "works in all stores" control under the list.
+  final bool canManageInventoryAccess;
 
   @override
   Widget build(BuildContext context) {
@@ -1271,11 +1286,39 @@ class TeamPanel extends StatelessWidget {
                     ),
                   );
                 }),
+              if (canManageInventoryAccess)
+                InventoryTeamAccess(
+                  businessId: businessId,
+                  members: [
+                    for (final doc in users)
+                      if ((doc.data() as Map<String, dynamic>)['role'] ==
+                              'staff' &&
+                          ((doc.data() as Map<String, dynamic>)['businessPermissions']
+                                      as Iterable? ??
+                                  const [])
+                              .contains(BusinessPermission.inventory))
+                        InventoryTeamMember(
+                          userId: doc.id,
+                          name: _teamMemberName(
+                              doc.data() as Map<String, dynamic>),
+                          homeStoreId:
+                              '${(doc.data() as Map<String, dynamic>)['inventoryHomeStoreId'] ?? ''}',
+                          allStores: (doc.data()
+                                  as Map<String, dynamic>)['inventoryAllStores'] ==
+                              true,
+                        ),
+                  ],
+                ),
             ],
           );
         },
       ),
     );
+  }
+
+  static String _teamMemberName(Map<String, dynamic> data) {
+    final name = (data['fullName'] as String?)?.trim() ?? '';
+    return name.isEmpty ? '${data['email'] ?? ''}' : name;
   }
 }
 
