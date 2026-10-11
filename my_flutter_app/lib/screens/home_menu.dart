@@ -21,6 +21,7 @@ import '../services/business_activity_queries.dart';
 import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
 import '../services/container_manifest.dart';
+import '../services/inventory.dart';
 import '../services/firestore_query_spec.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
@@ -31,6 +32,7 @@ import 'business_assistant_screen.dart';
 import 'business_reviews_screen.dart';
 import 'business_transport_screen.dart';
 import 'containers_screen.dart';
+import 'inventory_screen.dart';
 import 'invoices_screen.dart';
 import 'parking_month_end_screen.dart';
 import 'office_locations_screen.dart';
@@ -1076,6 +1078,14 @@ class _ServicesSection extends StatelessWidget {
     final canUseContainers =
         auth.hasBusinessPermission(BusinessPermission.containers) &&
         ledgerBusinessId.isNotEmpty;
+    // Inventory needs both gates: the business has the service switched on
+    // (it is not in the default list, so a legacy business without a stored
+    // list never sees it) and this person holds the inventory permission.
+    final canUseInventory = inventoryAvailable(
+      services: auth.businessServices,
+      hasPermission: auth.hasBusinessPermission(BusinessPermission.inventory),
+      businessId: ledgerBusinessId,
+    );
     // Same two gates as the Car Transport tile itself: the business offers
     // transport and this person holds the transport permission. Everything
     // behind the button - `submitTransportQuote`, `withdrawTransportQuote`,
@@ -1219,7 +1229,10 @@ class _ServicesSection extends StatelessWidget {
           // they read as a list you can walk into rather than as two more
           // buttons competing with the one action above them. Each says what
           // is inside, because a name alone makes people guess.
-          if (canUseLotLedger || canUseContainers || canWorkTransport) ...[
+          if (canUseLotLedger ||
+              canUseContainers ||
+              canUseInventory ||
+              canWorkTransport) ...[
             const SizedBox(height: 12),
             _DestinationGroup(
               rows: [
@@ -1250,6 +1263,22 @@ class _ServicesSection extends StatelessWidget {
                         MaterialPageRoute<void>(
                           builder: (_) =>
                               ContainersScreen(businessId: ledgerBusinessId),
+                        ),
+                      );
+                    },
+                  ),
+                // Products, their QR tags, and counter sales by scanning.
+                if (canUseInventory)
+                  _Destination(
+                    rowKey: const Key('open-inventory'),
+                    icon: Icons.qr_code_scanner,
+                    title: l10n.inventoryTitle,
+                    subtitle: l10n.inventorySubtitle,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              InventoryScreen(businessId: ledgerBusinessId),
                         ),
                       );
                     },

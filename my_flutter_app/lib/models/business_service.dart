@@ -6,7 +6,8 @@ enum BusinessServiceKey {
   freight('freight'),
   carSales('carSales'),
   carParking('carParking'),
-  carTransport('carTransport');
+  carTransport('carTransport'),
+  inventory('inventory');
 
   const BusinessServiceKey(this.value);
 
@@ -70,6 +71,12 @@ const businessServiceCatalog = <BusinessServiceDefinition>[
     label: 'Car transport',
     description: 'Track car transport requests.',
     icon: Icons.car_rental_outlined,
+  ),
+  BusinessServiceDefinition(
+    key: BusinessServiceKey.inventory,
+    label: 'Inventory',
+    description: 'Keep a product list, print tags, and sell by scanning.',
+    icon: Icons.qr_code_scanner,
   ),
 ];
 

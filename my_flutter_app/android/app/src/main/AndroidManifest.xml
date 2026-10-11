@@ -42,6 +42,18 @@
                     android:host="customer.laawoldigital.com"
                     android:pathPrefix="/t/"/>
             </intent-filter>
+            <!-- Product tags (/i/IT-XXXXXX) open the app's Sell screen for
+                 shop staff; anyone else's phone shows a neutral page. Needs
+                 the /i/ path in assetlinks verification on the same host. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="customer.laawoldigital.com"
+                    android:pathPrefix="/i/"/>
+            </intent-filter>
             <!-- The app_links plugin handles those links; Flutter's own deep
                  linking would push the path as a named route. -->
             <meta-data

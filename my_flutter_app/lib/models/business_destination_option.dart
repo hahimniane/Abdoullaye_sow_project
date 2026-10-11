@@ -119,7 +119,9 @@ class BusinessDestinationOption {
       BusinessServiceKey.sharedBarrels => country.isBarrelShippingConfigured,
       BusinessServiceKey.freight => country.hasAnyFreightRate,
       BusinessServiceKey.carTransport => country.carTransportAvailable,
-      BusinessServiceKey.carSales || BusinessServiceKey.carParking => true,
+      BusinessServiceKey.carSales ||
+      BusinessServiceKey.carParking ||
+      BusinessServiceKey.inventory => true,
     };
   }
 

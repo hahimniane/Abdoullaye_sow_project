@@ -2008,9 +2008,15 @@
   "barrelOrderSummary": "{barrelCount, plural, =1{1 baril} other{{barrelCount} barils}} • {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}} • {businessCount, plural, =1{1 entreprise} other{{businessCount} entreprises}}",
   "@barrelOrderSummary": {
     "placeholders": {
-      "barrelCount": {"type": "int"},
-      "destinationCount": {"type": "int"},
-      "businessCount": {"type": "int"}
+      "barrelCount": {
+        "type": "int"
+      },
+      "destinationCount": {
+        "type": "int"
+      },
+      "businessCount": {
+        "type": "int"
+      }
     }
   },
   "clear": "Effacer",
@@ -5064,5 +5070,307 @@
   "dstMainCleared": "Destination principale retirée.",
   "dstSeedConfirmTitle": "Ajouter tous les pays ?",
   "dstSeedConfirmBody": "Cela ajoute une fiche pour chaque pays, environ 250 au total. Ceux que vous n'utilisez pas restent masqués dans cette liste, et vous pouvez toujours en ajouter un avec Ajouter un pays.",
-  "dstSeedConfirmAction": "Ajouter tous les pays"
+  "dstSeedConfirmAction": "Ajouter tous les pays",
+  "businessServiceInventory": "Inventaire",
+  "businessServiceInventoryHint": "Tenez une liste de produits, imprimez des étiquettes et vendez en les scannant.",
+  "inventoryTitle": "Inventaire",
+  "inventorySubtitle": "Produits, étiquettes et ventes au comptoir.",
+  "inventorySell": "Vendre",
+  "inventoryAddProduct": "Ajouter un produit",
+  "inventorySalesTitle": "Ventes",
+  "inventorySearchHint": "Rechercher par nom, catégorie ou code",
+  "inventoryShowArchived": "Voir les archivés",
+  "inventoryTodayTitle": "Aujourd'hui",
+  "inventorySummaryUnavailable": "Les chiffres du jour ne sont pas disponibles pour le moment.",
+  "inventorySalesCount": "{count, plural, =0{Aucune vente} =1{1 vente} other{{count} ventes}}",
+  "@inventorySalesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryItemsSoldCount": "{count, plural, =1{1 article vendu} other{{count} articles vendus}}",
+  "@inventoryItemsSoldCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryRevenue": "Recettes",
+  "inventoryProfit": "Bénéfice",
+  "inventoryDiscounts": "Remises accordées",
+  "inventoryLowStockTitle": "Stock bas",
+  "inventoryCountOffTitle": "Comptage erroné",
+  "inventoryNoProducts": "Aucun produit pour le moment",
+  "inventoryNoProductsHint": "Ajoutez un produit, imprimez son étiquette, puis scannez-la pour le vendre.",
+  "inventoryNoMatch": "Aucun produit ne correspond.",
+  "inventoryNoArchived": "Aucun produit archivé.",
+  "inventoryLoadFailed": "Impossible de charger les produits. Vérifiez votre connexion.",
+  "inventoryInStock": "En stock",
+  "inventoryLow": "Bas",
+  "inventoryOut": "Épuisé",
+  "inventoryArchivedChip": "Archivé",
+  "inventoryCountWasOff": "Comptage erroné",
+  "inventoryInStockCount": "{count} en stock",
+  "@inventoryInStockCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryNewProduct": "Nouveau produit",
+  "inventoryEditProduct": "Modifier le produit",
+  "inventoryFieldName": "Nom",
+  "inventoryFieldPrice": "Prix",
+  "inventoryFieldCost": "Coût (facultatif)",
+  "inventoryFieldQuantity": "Quantité en stock",
+  "inventoryFieldLowStock": "Stock bas à partir de (facultatif)",
+  "inventoryFieldCategory": "Catégorie (facultatif)",
+  "inventoryFieldPhoto": "Lien de la photo (facultatif)",
+  "inventoryLowStockHelp": "Signalé comme bas à ce nombre ou en dessous. Toujours bas à zéro.",
+  "inventoryQuantityHelpEdit": "Modifiez le comptage depuis la fiche du produit : ajoutez du stock ou fixez le comptage.",
+  "inventorySaveProduct": "Enregistrer le produit",
+  "inventorySaving": "Enregistrement…",
+  "inventoryProductAdded": "Produit ajouté.",
+  "inventoryProductSaved": "Produit enregistré.",
+  "inventoryErrNameRequired": "Saisissez un nom.",
+  "inventoryErrNameTooLong": "Ce nom est trop long.",
+  "inventoryErrPrice": "Saisissez un prix supérieur à zéro, par exemple 12,50.",
+  "inventoryErrCost": "Saisissez un coût comme 8,00, ou laissez vide.",
+  "inventoryErrQuantity": "Saisissez un nombre entier, zéro ou plus.",
+  "inventoryErrQuantityAdd": "Saisissez un nombre entier d'au moins 1.",
+  "inventoryErrLowStock": "Saisissez un nombre entier, ou laissez vide.",
+  "inventoryErrPhoto": "Saisissez un lien complet commençant par https://.",
+  "inventoryProductTitle": "Produit",
+  "inventoryAddStock": "Ajouter du stock",
+  "inventorySetCount": "Fixer le comptage",
+  "inventoryAddStockHelp": "Combien d'unités de plus sont arrivées ?",
+  "inventorySetCountHelp": "Comptez ce qui est en rayon. Cela remplace le nombre et efface « comptage erroné ».",
+  "inventoryNoteOptional": "Note (facultatif)",
+  "inventoryStockAdded": "Stock ajouté.",
+  "inventoryCountSet": "Comptage mis à jour.",
+  "inventoryPrintTags": "Imprimer les étiquettes",
+  "inventoryTagCopies": "Combien d'étiquettes ?",
+  "inventoryTagCopiesHelp": "Chaque étiquette porte le même code. De 1 à 500.",
+  "inventoryTagCopiesError": "Saisissez un nombre entier de 1 à 500.",
+  "inventoryTagsOpen": "Ouvrir les étiquettes",
+  "inventoryTagsOpening": "Ouverture…",
+  "inventoryTagsCouldNotOpen": "Impossible d'ouvrir les étiquettes. Réessayez dans un instant.",
+  "inventoryTagNote": "Une étiquette de 2 × 1 pouce avec le code QR seul. Réimprimer ne change jamais le code.",
+  "inventoryArchive": "Archiver",
+  "inventoryRestore": "Restaurer",
+  "inventoryArchiveTitle": "Archiver ce produit ?",
+  "inventoryArchiveMessage": "Il disparaît de la vente et de la liste. Son historique reste, et vous pouvez le restaurer.",
+  "inventoryArchivedDone": "Produit archivé.",
+  "inventoryRestoredDone": "Produit restauré.",
+  "inventoryDelete": "Supprimer",
+  "inventoryDeleteTitle": "Supprimer ce produit ?",
+  "inventoryDeleteMessage": "Cela supprime le produit définitivement. Les ventes passées gardent son nom et son prix. Pour le masquer en gardant son historique, archivez-le plutôt.",
+  "inventoryDeletedDone": "Produit supprimé.",
+  "inventoryHistoryTitle": "Historique du stock",
+  "inventoryNoHistory": "Aucun mouvement de stock pour le moment.",
+  "inventoryMoveInitial": "Comptage de départ",
+  "inventoryMoveAdd": "Stock ajouté",
+  "inventoryMoveSet": "Comptage fixé",
+  "inventoryMoveSale": "Vendu",
+  "inventoryMoveVoid": "Vente annulée",
+  "inventoryMoveNow": "Maintenant {count}",
+  "@inventoryMoveNow": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryByName": "par {name}",
+  "@inventoryByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryTagCode": "Code de l'étiquette",
+  "inventoryPrice": "Prix",
+  "inventoryCost": "Coût",
+  "inventoryCategory": "Catégorie",
+  "inventoryCountOffNote": "Une vente a dépassé le comptage. Comptez le rayon et fixez le comptage pour effacer ceci.",
+  "inventoryProductGone": "Ce produit n'existe plus.",
+  "inventorySellTitle": "Vendre",
+  "inventoryScanHint": "Visez une étiquette de produit",
+  "inventoryNotATag": "Ce code QR n'est pas une étiquette de produit Laawol.",
+  "inventoryCameraUnavailable": "La caméra est indisponible. Saisissez le code de l'étiquette, ou recherchez le nom du produit ci-dessous.",
+  "inventoryFindHint": "Code de l'étiquette ou nom du produit",
+  "inventoryAddCode": "Ajouter {code}",
+  "@inventoryAddCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryItemNotYours": "Cette étiquette n'est pas l'un de vos produits.",
+  "inventoryItemArchivedScan": "{name} est archivé. Restaurez-le pour le vendre.",
+  "@inventoryItemArchivedScan": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryLookupFailed": "Impossible de chercher cette étiquette. Vérifiez votre connexion et scannez à nouveau.",
+  "inventoryBasketEmpty": "Rien de scanné pour le moment",
+  "inventoryBasketEmptyHint": "Scannez une étiquette ou recherchez un produit ci-dessus. Scanner la même étiquette ajoute une unité.",
+  "inventoryAddedToBasket": "{name} ajouté",
+  "@inventoryAddedToBasket": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryListPrice": "Prix affiché {price}",
+  "@inventoryListPrice": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryLinePrice": "Prix unitaire",
+  "inventoryQty": "Qté",
+  "inventoryQuantityUp": "Une de plus",
+  "inventoryQuantityDown": "Une de moins",
+  "inventoryRemoveLine": "Retirer",
+  "inventoryLineTotal": "Total de la ligne",
+  "inventoryExceedsCount": "Le comptage indique {count}. Vous pouvez quand même le vendre ; le comptage sera marqué comme erroné.",
+  "@inventoryExceedsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryTotal": "Total",
+  "inventoryDiscountOff": "{amount} de remise sur les prix affichés",
+  "@inventoryDiscountOff": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryPieces": "{count, plural, =1{1 pièce} other{{count} pièces}}",
+  "@inventoryPieces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryPayment": "Paiement",
+  "inventoryPaymentHow": "Mode de paiement",
+  "inventorySold": "Vendu",
+  "inventorySelling": "Enregistrement…",
+  "inventorySaleDone": "Vente enregistrée",
+  "inventorySaleDoneTotal": "{total} enregistré.",
+  "@inventorySaleDoneTotal": {
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryNewSale": "Nouvelle vente",
+  "inventoryCountWasOffWarn": "Comptage erroné pour {name} : il y en avait moins que ce que vous avez vendu, le comptage est donc à zéro. Comptez le rayon et fixez le comptage.",
+  "@inventoryCountWasOffWarn": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryNetworkError": "Pas de connexion. Rien n'est perdu : votre panier est conservé. Réessayez.",
+  "inventoryFailArchived": "Un produit du panier est archivé. Retirez-le et réessayez.",
+  "inventoryFailNotFound": "Un produit du panier est introuvable. Retirez-le et réessayez.",
+  "inventoryFailVoided": "Cette vente a déjà été annulée.",
+  "inventoryFailNoPermission": "Vous n'avez pas le droit de faire cela pour cette boutique.",
+  "inventoryFailInvalid": "Cela n'a pas pu être accepté. Vérifiez les détails et réessayez.",
+  "inventoryFailUnknown": "Cela n'a pas abouti. Réessayez.",
+  "inventoryProblemArchived": "Un produit du panier est archivé. Retirez-le pour continuer.",
+  "inventoryProblemTooLarge": "Ce total est trop élevé pour être enregistré.",
+  "inventoryPriceInvalid": "Saisissez un prix comme 12,50.",
+  "inventoryTryAgain": "Réessayer",
+  "inventoryNoSales": "Aucune vente pour le moment",
+  "inventoryNoSalesHint": "Les ventes enregistrées depuis l'écran Vendre apparaissent ici.",
+  "inventorySalesLoadFailed": "Impossible de charger les ventes. Vérifiez votre connexion.",
+  "inventoryLoadMoreSales": "Voir plus",
+  "inventoryVoidedMark": "Annulée",
+  "inventoryVoidedBy": "Annulée par {name} · {when}",
+  "@inventoryVoidedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryVoidedWhen": "Annulée · {when}",
+  "@inventoryVoidedWhen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "inventorySoldBy": "Vendu par {name}",
+  "@inventorySoldBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryVoidSale": "Annuler la vente",
+  "inventoryVoidTitle": "Annuler cette vente ?",
+  "inventoryVoidMessage": "Le stock retourne en rayon et la vente reste dans la liste, marquée comme annulée. Cette action est irréversible.",
+  "inventoryVoidedDone": "Vente annulée.",
+  "inventorySaleLine": "{quantity} × {name} à {price}",
+  "@inventorySaleLine": {
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "inventorySaleLineChanged": "{quantity} × {name} à {price} (affiché {list})",
+  "@inventorySaleLineChanged": {
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      },
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "inventorySaleCountOff": "comptage erroné",
+  "inventoryLowStockAtLabel": "Stock bas à partir de"
 }

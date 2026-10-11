@@ -11012,4 +11012,544 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dstSeedConfirmAction => 'Add all countries';
+
+  @override
+  String get businessServiceInventory => 'Inventory';
+
+  @override
+  String get businessServiceInventoryHint =>
+      'Keep a product list, print tags, and sell by scanning.';
+
+  @override
+  String get inventoryTitle => 'Inventory';
+
+  @override
+  String get inventorySubtitle => 'Products, tags and counter sales.';
+
+  @override
+  String get inventorySell => 'Sell';
+
+  @override
+  String get inventoryAddProduct => 'Add product';
+
+  @override
+  String get inventorySalesTitle => 'Sales';
+
+  @override
+  String get inventorySearchHint => 'Search by name, category or code';
+
+  @override
+  String get inventoryShowArchived => 'Show archived';
+
+  @override
+  String get inventoryTodayTitle => 'Today';
+
+  @override
+  String get inventorySummaryUnavailable =>
+      'Today\'s numbers are not available right now.';
+
+  @override
+  String inventorySalesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sales',
+      one: '1 sale',
+      zero: 'No sales',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String inventoryItemsSoldCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items sold',
+      one: '1 item sold',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get inventoryRevenue => 'Revenue';
+
+  @override
+  String get inventoryProfit => 'Profit';
+
+  @override
+  String get inventoryDiscounts => 'Discounts given';
+
+  @override
+  String get inventoryLowStockTitle => 'Running low';
+
+  @override
+  String get inventoryCountOffTitle => 'Count was off';
+
+  @override
+  String get inventoryNoProducts => 'No products yet';
+
+  @override
+  String get inventoryNoProductsHint =>
+      'Add a product, print its tag, then scan the tag to sell it.';
+
+  @override
+  String get inventoryNoMatch => 'No product matches that.';
+
+  @override
+  String get inventoryNoArchived => 'Nothing is archived.';
+
+  @override
+  String get inventoryLoadFailed =>
+      'Could not load the products. Check your connection.';
+
+  @override
+  String get inventoryInStock => 'In stock';
+
+  @override
+  String get inventoryLow => 'Low';
+
+  @override
+  String get inventoryOut => 'Out';
+
+  @override
+  String get inventoryArchivedChip => 'Archived';
+
+  @override
+  String get inventoryCountWasOff => 'Count was off';
+
+  @override
+  String inventoryInStockCount(int count) {
+    return '$count in stock';
+  }
+
+  @override
+  String get inventoryNewProduct => 'New product';
+
+  @override
+  String get inventoryEditProduct => 'Edit product';
+
+  @override
+  String get inventoryFieldName => 'Name';
+
+  @override
+  String get inventoryFieldPrice => 'Price';
+
+  @override
+  String get inventoryFieldCost => 'Cost (optional)';
+
+  @override
+  String get inventoryFieldQuantity => 'Quantity on hand';
+
+  @override
+  String get inventoryFieldLowStock => 'Low stock at (optional)';
+
+  @override
+  String get inventoryFieldCategory => 'Category (optional)';
+
+  @override
+  String get inventoryFieldPhoto => 'Photo link (optional)';
+
+  @override
+  String get inventoryLowStockHelp =>
+      'Shown as low at or below this count. Always low at zero.';
+
+  @override
+  String get inventoryQuantityHelpEdit =>
+      'Change the count from the product page: add stock or set the count.';
+
+  @override
+  String get inventorySaveProduct => 'Save product';
+
+  @override
+  String get inventorySaving => 'Saving…';
+
+  @override
+  String get inventoryProductAdded => 'Product added.';
+
+  @override
+  String get inventoryProductSaved => 'Product saved.';
+
+  @override
+  String get inventoryErrNameRequired => 'Enter a name.';
+
+  @override
+  String get inventoryErrNameTooLong => 'That name is too long.';
+
+  @override
+  String get inventoryErrPrice => 'Enter a price above zero, like 12.50.';
+
+  @override
+  String get inventoryErrCost => 'Enter a cost like 8.00, or leave it blank.';
+
+  @override
+  String get inventoryErrQuantity => 'Enter a whole number, zero or more.';
+
+  @override
+  String get inventoryErrQuantityAdd => 'Enter a whole number of at least 1.';
+
+  @override
+  String get inventoryErrLowStock => 'Enter a whole number, or leave it blank.';
+
+  @override
+  String get inventoryErrPhoto => 'Enter a full link starting with https://.';
+
+  @override
+  String get inventoryProductTitle => 'Product';
+
+  @override
+  String get inventoryAddStock => 'Add stock';
+
+  @override
+  String get inventorySetCount => 'Set count';
+
+  @override
+  String get inventoryAddStockHelp => 'How many more arrived?';
+
+  @override
+  String get inventorySetCountHelp =>
+      'Count what is on the shelf. This replaces the number and clears “count was off”.';
+
+  @override
+  String get inventoryNoteOptional => 'Note (optional)';
+
+  @override
+  String get inventoryStockAdded => 'Stock added.';
+
+  @override
+  String get inventoryCountSet => 'Count updated.';
+
+  @override
+  String get inventoryPrintTags => 'Print tags';
+
+  @override
+  String get inventoryTagCopies => 'How many tags?';
+
+  @override
+  String get inventoryTagCopiesHelp =>
+      'Every tag carries the same code. From 1 to 500.';
+
+  @override
+  String get inventoryTagCopiesError => 'Enter a whole number from 1 to 500.';
+
+  @override
+  String get inventoryTagsOpen => 'Open tags';
+
+  @override
+  String get inventoryTagsOpening => 'Opening…';
+
+  @override
+  String get inventoryTagsCouldNotOpen =>
+      'The tags could not be opened. Try again in a moment.';
+
+  @override
+  String get inventoryTagNote =>
+      'A 2 × 1 inch tag with the QR code only. Reprinting never changes the code.';
+
+  @override
+  String get inventoryArchive => 'Archive';
+
+  @override
+  String get inventoryRestore => 'Restore';
+
+  @override
+  String get inventoryArchiveTitle => 'Archive this product?';
+
+  @override
+  String get inventoryArchiveMessage =>
+      'It disappears from selling and from the list. Its history stays, and you can restore it.';
+
+  @override
+  String get inventoryArchivedDone => 'Product archived.';
+
+  @override
+  String get inventoryRestoredDone => 'Product restored.';
+
+  @override
+  String get inventoryDelete => 'Delete';
+
+  @override
+  String get inventoryDeleteTitle => 'Delete this product?';
+
+  @override
+  String get inventoryDeleteMessage =>
+      'This removes the product for good. Past sales keep its name and price. To keep it out of sight and keep its history, archive it instead.';
+
+  @override
+  String get inventoryDeletedDone => 'Product deleted.';
+
+  @override
+  String get inventoryHistoryTitle => 'Stock history';
+
+  @override
+  String get inventoryNoHistory => 'No stock changes yet.';
+
+  @override
+  String get inventoryMoveInitial => 'Starting count';
+
+  @override
+  String get inventoryMoveAdd => 'Stock added';
+
+  @override
+  String get inventoryMoveSet => 'Count set';
+
+  @override
+  String get inventoryMoveSale => 'Sold';
+
+  @override
+  String get inventoryMoveVoid => 'Sale voided';
+
+  @override
+  String inventoryMoveNow(int count) {
+    return 'Now $count';
+  }
+
+  @override
+  String inventoryByName(String name) {
+    return 'by $name';
+  }
+
+  @override
+  String get inventoryTagCode => 'Tag code';
+
+  @override
+  String get inventoryPrice => 'Price';
+
+  @override
+  String get inventoryCost => 'Cost';
+
+  @override
+  String get inventoryCategory => 'Category';
+
+  @override
+  String get inventoryCountOffNote =>
+      'A sale sold more than the count had. Count the shelf and set the count to clear this.';
+
+  @override
+  String get inventoryProductGone => 'This product is no longer there.';
+
+  @override
+  String get inventorySellTitle => 'Sell';
+
+  @override
+  String get inventoryScanHint => 'Point at a product tag';
+
+  @override
+  String get inventoryNotATag => 'That QR code is not a Laawol product tag.';
+
+  @override
+  String get inventoryCameraUnavailable =>
+      'The camera is unavailable. Type the tag code, or search by product name below.';
+
+  @override
+  String get inventoryFindHint => 'Tag code or product name';
+
+  @override
+  String inventoryAddCode(String code) {
+    return 'Add $code';
+  }
+
+  @override
+  String get inventoryItemNotYours => 'That tag is not one of your products.';
+
+  @override
+  String inventoryItemArchivedScan(String name) {
+    return '$name is archived. Restore it to sell it.';
+  }
+
+  @override
+  String get inventoryLookupFailed =>
+      'Could not look that tag up. Check your connection and scan again.';
+
+  @override
+  String get inventoryBasketEmpty => 'Nothing scanned yet';
+
+  @override
+  String get inventoryBasketEmptyHint =>
+      'Scan a tag, or search for a product above. Scanning the same tag again adds one.';
+
+  @override
+  String inventoryAddedToBasket(String name) {
+    return 'Added $name';
+  }
+
+  @override
+  String inventoryListPrice(String price) {
+    return 'List $price';
+  }
+
+  @override
+  String get inventoryLinePrice => 'Price each';
+
+  @override
+  String get inventoryQty => 'Qty';
+
+  @override
+  String get inventoryQuantityUp => 'One more';
+
+  @override
+  String get inventoryQuantityDown => 'One less';
+
+  @override
+  String get inventoryRemoveLine => 'Remove';
+
+  @override
+  String get inventoryLineTotal => 'Line total';
+
+  @override
+  String inventoryExceedsCount(int count) {
+    return 'The count says $count. You can still sell it; the count will be marked as off.';
+  }
+
+  @override
+  String get inventoryTotal => 'Total';
+
+  @override
+  String inventoryDiscountOff(String amount) {
+    return '$amount off list prices';
+  }
+
+  @override
+  String inventoryPieces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces',
+      one: '1 piece',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get inventoryPayment => 'Payment';
+
+  @override
+  String get inventoryPaymentHow => 'How they paid';
+
+  @override
+  String get inventorySold => 'Sold';
+
+  @override
+  String get inventorySelling => 'Recording…';
+
+  @override
+  String get inventorySaleDone => 'Sale recorded';
+
+  @override
+  String inventorySaleDoneTotal(String total) {
+    return '$total recorded.';
+  }
+
+  @override
+  String get inventoryNewSale => 'New sale';
+
+  @override
+  String inventoryCountWasOffWarn(String name) {
+    return 'Count was off for $name: it had less than you sold, so the count is now zero. Count the shelf and set the count.';
+  }
+
+  @override
+  String get inventoryNetworkError =>
+      'No connection. Nothing was lost: your basket is kept. Try again.';
+
+  @override
+  String get inventoryFailArchived =>
+      'A product in the basket is archived. Remove it and try again.';
+
+  @override
+  String get inventoryFailNotFound =>
+      'A product in the basket was not found. Remove it and try again.';
+
+  @override
+  String get inventoryFailVoided => 'This sale was already voided.';
+
+  @override
+  String get inventoryFailNoPermission =>
+      'You are not allowed to do that for this shop.';
+
+  @override
+  String get inventoryFailInvalid =>
+      'That could not be accepted. Check the details and try again.';
+
+  @override
+  String get inventoryFailUnknown => 'That did not go through. Try again.';
+
+  @override
+  String get inventoryProblemArchived =>
+      'A product in the basket is archived. Remove it to continue.';
+
+  @override
+  String get inventoryProblemTooLarge => 'That total is too large to record.';
+
+  @override
+  String get inventoryPriceInvalid => 'Enter a price like 12.50.';
+
+  @override
+  String get inventoryTryAgain => 'Try again';
+
+  @override
+  String get inventoryNoSales => 'No sales yet';
+
+  @override
+  String get inventoryNoSalesHint =>
+      'Sales you record from the Sell screen appear here.';
+
+  @override
+  String get inventorySalesLoadFailed =>
+      'Could not load the sales. Check your connection.';
+
+  @override
+  String get inventoryLoadMoreSales => 'Load more';
+
+  @override
+  String get inventoryVoidedMark => 'Voided';
+
+  @override
+  String inventoryVoidedBy(String name, String when) {
+    return 'Voided by $name · $when';
+  }
+
+  @override
+  String inventoryVoidedWhen(String when) {
+    return 'Voided · $when';
+  }
+
+  @override
+  String inventorySoldBy(String name) {
+    return 'Sold by $name';
+  }
+
+  @override
+  String get inventoryVoidSale => 'Void sale';
+
+  @override
+  String get inventoryVoidTitle => 'Void this sale?';
+
+  @override
+  String get inventoryVoidMessage =>
+      'The stock goes back on the shelf and the sale stays in the list marked as voided. This cannot be undone.';
+
+  @override
+  String get inventoryVoidedDone => 'Sale voided.';
+
+  @override
+  String inventorySaleLine(int quantity, String name, String price) {
+    return '$quantity × $name at $price';
+  }
+
+  @override
+  String inventorySaleLineChanged(
+    int quantity,
+    String name,
+    String price,
+    String list,
+  ) {
+    return '$quantity × $name at $price (list $list)';
+  }
+
+  @override
+  String get inventorySaleCountOff => 'count was off';
+
+  @override
+  String get inventoryLowStockAtLabel => 'Low stock at';
 }

@@ -38,7 +38,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Laawol uses the camera to scan VIN numbers and package labels and capture photos for listings and service requests.</string>
+	<string>Laawol uses the camera to scan VIN numbers, package labels and product tags and capture photos for listings and service requests.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock your saved Laawol session.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

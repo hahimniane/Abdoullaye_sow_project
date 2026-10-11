@@ -2008,9 +2008,15 @@
   "barrelOrderSummary": "{barrelCount, plural, =1{1 barrel} other{{barrelCount} barrels}} • {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}} • {businessCount, plural, =1{1 business} other{{businessCount} businesses}}",
   "@barrelOrderSummary": {
     "placeholders": {
-      "barrelCount": {"type": "int"},
-      "destinationCount": {"type": "int"},
-      "businessCount": {"type": "int"}
+      "barrelCount": {
+        "type": "int"
+      },
+      "destinationCount": {
+        "type": "int"
+      },
+      "businessCount": {
+        "type": "int"
+      }
     }
   },
   "clear": "Clear",
@@ -5051,7 +5057,9 @@
   "dstListedCount": "{count, plural, =0{No destinations in use} =1{1 destination in use} other{{count} destinations in use}}",
   "@dstListedCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "dstEmptyInstruction": "You have no destinations yet. Tap Add country, pick where you ship to, and switch on the services you offer there.",
@@ -5062,5 +5070,307 @@
   "dstMainCleared": "Main destination cleared.",
   "dstSeedConfirmTitle": "Add every country?",
   "dstSeedConfirmBody": "This adds a record for every country, about 250 in all. The ones you do not use stay hidden from this list, and you can still bring any of them in with Add country.",
-  "dstSeedConfirmAction": "Add all countries"
+  "dstSeedConfirmAction": "Add all countries",
+  "businessServiceInventory": "Inventory",
+  "businessServiceInventoryHint": "Keep a product list, print tags, and sell by scanning.",
+  "inventoryTitle": "Inventory",
+  "inventorySubtitle": "Products, tags and counter sales.",
+  "inventorySell": "Sell",
+  "inventoryAddProduct": "Add product",
+  "inventorySalesTitle": "Sales",
+  "inventorySearchHint": "Search by name, category or code",
+  "inventoryShowArchived": "Show archived",
+  "inventoryTodayTitle": "Today",
+  "inventorySummaryUnavailable": "Today's numbers are not available right now.",
+  "inventorySalesCount": "{count, plural, =0{No sales} =1{1 sale} other{{count} sales}}",
+  "@inventorySalesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryItemsSoldCount": "{count, plural, =1{1 item sold} other{{count} items sold}}",
+  "@inventoryItemsSoldCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryRevenue": "Revenue",
+  "inventoryProfit": "Profit",
+  "inventoryDiscounts": "Discounts given",
+  "inventoryLowStockTitle": "Running low",
+  "inventoryCountOffTitle": "Count was off",
+  "inventoryNoProducts": "No products yet",
+  "inventoryNoProductsHint": "Add a product, print its tag, then scan the tag to sell it.",
+  "inventoryNoMatch": "No product matches that.",
+  "inventoryNoArchived": "Nothing is archived.",
+  "inventoryLoadFailed": "Could not load the products. Check your connection.",
+  "inventoryInStock": "In stock",
+  "inventoryLow": "Low",
+  "inventoryOut": "Out",
+  "inventoryArchivedChip": "Archived",
+  "inventoryCountWasOff": "Count was off",
+  "inventoryInStockCount": "{count} in stock",
+  "@inventoryInStockCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryNewProduct": "New product",
+  "inventoryEditProduct": "Edit product",
+  "inventoryFieldName": "Name",
+  "inventoryFieldPrice": "Price",
+  "inventoryFieldCost": "Cost (optional)",
+  "inventoryFieldQuantity": "Quantity on hand",
+  "inventoryFieldLowStock": "Low stock at (optional)",
+  "inventoryFieldCategory": "Category (optional)",
+  "inventoryFieldPhoto": "Photo link (optional)",
+  "inventoryLowStockHelp": "Shown as low at or below this count. Always low at zero.",
+  "inventoryQuantityHelpEdit": "Change the count from the product page: add stock or set the count.",
+  "inventorySaveProduct": "Save product",
+  "inventorySaving": "Saving…",
+  "inventoryProductAdded": "Product added.",
+  "inventoryProductSaved": "Product saved.",
+  "inventoryErrNameRequired": "Enter a name.",
+  "inventoryErrNameTooLong": "That name is too long.",
+  "inventoryErrPrice": "Enter a price above zero, like 12.50.",
+  "inventoryErrCost": "Enter a cost like 8.00, or leave it blank.",
+  "inventoryErrQuantity": "Enter a whole number, zero or more.",
+  "inventoryErrQuantityAdd": "Enter a whole number of at least 1.",
+  "inventoryErrLowStock": "Enter a whole number, or leave it blank.",
+  "inventoryErrPhoto": "Enter a full link starting with https://.",
+  "inventoryProductTitle": "Product",
+  "inventoryAddStock": "Add stock",
+  "inventorySetCount": "Set count",
+  "inventoryAddStockHelp": "How many more arrived?",
+  "inventorySetCountHelp": "Count what is on the shelf. This replaces the number and clears “count was off”.",
+  "inventoryNoteOptional": "Note (optional)",
+  "inventoryStockAdded": "Stock added.",
+  "inventoryCountSet": "Count updated.",
+  "inventoryPrintTags": "Print tags",
+  "inventoryTagCopies": "How many tags?",
+  "inventoryTagCopiesHelp": "Every tag carries the same code. From 1 to 500.",
+  "inventoryTagCopiesError": "Enter a whole number from 1 to 500.",
+  "inventoryTagsOpen": "Open tags",
+  "inventoryTagsOpening": "Opening…",
+  "inventoryTagsCouldNotOpen": "The tags could not be opened. Try again in a moment.",
+  "inventoryTagNote": "A 2 × 1 inch tag with the QR code only. Reprinting never changes the code.",
+  "inventoryArchive": "Archive",
+  "inventoryRestore": "Restore",
+  "inventoryArchiveTitle": "Archive this product?",
+  "inventoryArchiveMessage": "It disappears from selling and from the list. Its history stays, and you can restore it.",
+  "inventoryArchivedDone": "Product archived.",
+  "inventoryRestoredDone": "Product restored.",
+  "inventoryDelete": "Delete",
+  "inventoryDeleteTitle": "Delete this product?",
+  "inventoryDeleteMessage": "This removes the product for good. Past sales keep its name and price. To keep it out of sight and keep its history, archive it instead.",
+  "inventoryDeletedDone": "Product deleted.",
+  "inventoryHistoryTitle": "Stock history",
+  "inventoryNoHistory": "No stock changes yet.",
+  "inventoryMoveInitial": "Starting count",
+  "inventoryMoveAdd": "Stock added",
+  "inventoryMoveSet": "Count set",
+  "inventoryMoveSale": "Sold",
+  "inventoryMoveVoid": "Sale voided",
+  "inventoryMoveNow": "Now {count}",
+  "@inventoryMoveNow": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryByName": "by {name}",
+  "@inventoryByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryTagCode": "Tag code",
+  "inventoryPrice": "Price",
+  "inventoryCost": "Cost",
+  "inventoryCategory": "Category",
+  "inventoryCountOffNote": "A sale sold more than the count had. Count the shelf and set the count to clear this.",
+  "inventoryProductGone": "This product is no longer there.",
+  "inventorySellTitle": "Sell",
+  "inventoryScanHint": "Point at a product tag",
+  "inventoryNotATag": "That QR code is not a Laawol product tag.",
+  "inventoryCameraUnavailable": "The camera is unavailable. Type the tag code, or search by product name below.",
+  "inventoryFindHint": "Tag code or product name",
+  "inventoryAddCode": "Add {code}",
+  "@inventoryAddCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryItemNotYours": "That tag is not one of your products.",
+  "inventoryItemArchivedScan": "{name} is archived. Restore it to sell it.",
+  "@inventoryItemArchivedScan": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryLookupFailed": "Could not look that tag up. Check your connection and scan again.",
+  "inventoryBasketEmpty": "Nothing scanned yet",
+  "inventoryBasketEmptyHint": "Scan a tag, or search for a product above. Scanning the same tag again adds one.",
+  "inventoryAddedToBasket": "Added {name}",
+  "@inventoryAddedToBasket": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryListPrice": "List {price}",
+  "@inventoryListPrice": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryLinePrice": "Price each",
+  "inventoryQty": "Qty",
+  "inventoryQuantityUp": "One more",
+  "inventoryQuantityDown": "One less",
+  "inventoryRemoveLine": "Remove",
+  "inventoryLineTotal": "Line total",
+  "inventoryExceedsCount": "The count says {count}. You can still sell it; the count will be marked as off.",
+  "@inventoryExceedsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryTotal": "Total",
+  "inventoryDiscountOff": "{amount} off list prices",
+  "@inventoryDiscountOff": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryPieces": "{count, plural, =1{1 piece} other{{count} pieces}}",
+  "@inventoryPieces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inventoryPayment": "Payment",
+  "inventoryPaymentHow": "How they paid",
+  "inventorySold": "Sold",
+  "inventorySelling": "Recording…",
+  "inventorySaleDone": "Sale recorded",
+  "inventorySaleDoneTotal": "{total} recorded.",
+  "@inventorySaleDoneTotal": {
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryNewSale": "New sale",
+  "inventoryCountWasOffWarn": "Count was off for {name}: it had less than you sold, so the count is now zero. Count the shelf and set the count.",
+  "@inventoryCountWasOffWarn": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryNetworkError": "No connection. Nothing was lost: your basket is kept. Try again.",
+  "inventoryFailArchived": "A product in the basket is archived. Remove it and try again.",
+  "inventoryFailNotFound": "A product in the basket was not found. Remove it and try again.",
+  "inventoryFailVoided": "This sale was already voided.",
+  "inventoryFailNoPermission": "You are not allowed to do that for this shop.",
+  "inventoryFailInvalid": "That could not be accepted. Check the details and try again.",
+  "inventoryFailUnknown": "That did not go through. Try again.",
+  "inventoryProblemArchived": "A product in the basket is archived. Remove it to continue.",
+  "inventoryProblemTooLarge": "That total is too large to record.",
+  "inventoryPriceInvalid": "Enter a price like 12.50.",
+  "inventoryTryAgain": "Try again",
+  "inventoryNoSales": "No sales yet",
+  "inventoryNoSalesHint": "Sales you record from the Sell screen appear here.",
+  "inventorySalesLoadFailed": "Could not load the sales. Check your connection.",
+  "inventoryLoadMoreSales": "Load more",
+  "inventoryVoidedMark": "Voided",
+  "inventoryVoidedBy": "Voided by {name} · {when}",
+  "@inventoryVoidedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryVoidedWhen": "Voided · {when}",
+  "@inventoryVoidedWhen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "inventorySoldBy": "Sold by {name}",
+  "@inventorySoldBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryVoidSale": "Void sale",
+  "inventoryVoidTitle": "Void this sale?",
+  "inventoryVoidMessage": "The stock goes back on the shelf and the sale stays in the list marked as voided. This cannot be undone.",
+  "inventoryVoidedDone": "Sale voided.",
+  "inventorySaleLine": "{quantity} × {name} at {price}",
+  "@inventorySaleLine": {
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "inventorySaleLineChanged": "{quantity} × {name} at {price} (list {list})",
+  "@inventorySaleLineChanged": {
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      },
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "inventorySaleCountOff": "count was off",
+  "inventoryLowStockAtLabel": "Low stock at"
 }

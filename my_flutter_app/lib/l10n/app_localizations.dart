@@ -19289,6 +19289,917 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add all countries'**
   String get dstSeedConfirmAction;
+
+  /// No description provided for @businessServiceInventory.
+  ///
+  /// In en, this message translates to:
+  /// **'Inventory'**
+  String get businessServiceInventory;
+
+  /// No description provided for @businessServiceInventoryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep a product list, print tags, and sell by scanning.'**
+  String get businessServiceInventoryHint;
+
+  /// No description provided for @inventoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Inventory'**
+  String get inventoryTitle;
+
+  /// No description provided for @inventorySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Products, tags and counter sales.'**
+  String get inventorySubtitle;
+
+  /// No description provided for @inventorySell.
+  ///
+  /// In en, this message translates to:
+  /// **'Sell'**
+  String get inventorySell;
+
+  /// No description provided for @inventoryAddProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Add product'**
+  String get inventoryAddProduct;
+
+  /// No description provided for @inventorySalesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales'**
+  String get inventorySalesTitle;
+
+  /// No description provided for @inventorySearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name, category or code'**
+  String get inventorySearchHint;
+
+  /// No description provided for @inventoryShowArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Show archived'**
+  String get inventoryShowArchived;
+
+  /// No description provided for @inventoryTodayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get inventoryTodayTitle;
+
+  /// No description provided for @inventorySummaryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s numbers are not available right now.'**
+  String get inventorySummaryUnavailable;
+
+  /// No description provided for @inventorySalesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No sales} =1{1 sale} other{{count} sales}}'**
+  String inventorySalesCount(int count);
+
+  /// No description provided for @inventoryItemsSoldCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item sold} other{{count} items sold}}'**
+  String inventoryItemsSoldCount(int count);
+
+  /// No description provided for @inventoryRevenue.
+  ///
+  /// In en, this message translates to:
+  /// **'Revenue'**
+  String get inventoryRevenue;
+
+  /// No description provided for @inventoryProfit.
+  ///
+  /// In en, this message translates to:
+  /// **'Profit'**
+  String get inventoryProfit;
+
+  /// No description provided for @inventoryDiscounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Discounts given'**
+  String get inventoryDiscounts;
+
+  /// No description provided for @inventoryLowStockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Running low'**
+  String get inventoryLowStockTitle;
+
+  /// No description provided for @inventoryCountOffTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Count was off'**
+  String get inventoryCountOffTitle;
+
+  /// No description provided for @inventoryNoProducts.
+  ///
+  /// In en, this message translates to:
+  /// **'No products yet'**
+  String get inventoryNoProducts;
+
+  /// No description provided for @inventoryNoProductsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a product, print its tag, then scan the tag to sell it.'**
+  String get inventoryNoProductsHint;
+
+  /// No description provided for @inventoryNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No product matches that.'**
+  String get inventoryNoMatch;
+
+  /// No description provided for @inventoryNoArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is archived.'**
+  String get inventoryNoArchived;
+
+  /// No description provided for @inventoryLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the products. Check your connection.'**
+  String get inventoryLoadFailed;
+
+  /// No description provided for @inventoryInStock.
+  ///
+  /// In en, this message translates to:
+  /// **'In stock'**
+  String get inventoryInStock;
+
+  /// No description provided for @inventoryLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get inventoryLow;
+
+  /// No description provided for @inventoryOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Out'**
+  String get inventoryOut;
+
+  /// No description provided for @inventoryArchivedChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived'**
+  String get inventoryArchivedChip;
+
+  /// No description provided for @inventoryCountWasOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Count was off'**
+  String get inventoryCountWasOff;
+
+  /// No description provided for @inventoryInStockCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} in stock'**
+  String inventoryInStockCount(int count);
+
+  /// No description provided for @inventoryNewProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'New product'**
+  String get inventoryNewProduct;
+
+  /// No description provided for @inventoryEditProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit product'**
+  String get inventoryEditProduct;
+
+  /// No description provided for @inventoryFieldName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get inventoryFieldName;
+
+  /// No description provided for @inventoryFieldPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Price'**
+  String get inventoryFieldPrice;
+
+  /// No description provided for @inventoryFieldCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost (optional)'**
+  String get inventoryFieldCost;
+
+  /// No description provided for @inventoryFieldQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Quantity on hand'**
+  String get inventoryFieldQuantity;
+
+  /// No description provided for @inventoryFieldLowStock.
+  ///
+  /// In en, this message translates to:
+  /// **'Low stock at (optional)'**
+  String get inventoryFieldLowStock;
+
+  /// No description provided for @inventoryFieldCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Category (optional)'**
+  String get inventoryFieldCategory;
+
+  /// No description provided for @inventoryFieldPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo link (optional)'**
+  String get inventoryFieldPhoto;
+
+  /// No description provided for @inventoryLowStockHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown as low at or below this count. Always low at zero.'**
+  String get inventoryLowStockHelp;
+
+  /// No description provided for @inventoryQuantityHelpEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the count from the product page: add stock or set the count.'**
+  String get inventoryQuantityHelpEdit;
+
+  /// No description provided for @inventorySaveProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Save product'**
+  String get inventorySaveProduct;
+
+  /// No description provided for @inventorySaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get inventorySaving;
+
+  /// No description provided for @inventoryProductAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Product added.'**
+  String get inventoryProductAdded;
+
+  /// No description provided for @inventoryProductSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Product saved.'**
+  String get inventoryProductSaved;
+
+  /// No description provided for @inventoryErrNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a name.'**
+  String get inventoryErrNameRequired;
+
+  /// No description provided for @inventoryErrNameTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That name is too long.'**
+  String get inventoryErrNameTooLong;
+
+  /// No description provided for @inventoryErrPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a price above zero, like 12.50.'**
+  String get inventoryErrPrice;
+
+  /// No description provided for @inventoryErrCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a cost like 8.00, or leave it blank.'**
+  String get inventoryErrCost;
+
+  /// No description provided for @inventoryErrQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number, zero or more.'**
+  String get inventoryErrQuantity;
+
+  /// No description provided for @inventoryErrQuantityAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number of at least 1.'**
+  String get inventoryErrQuantityAdd;
+
+  /// No description provided for @inventoryErrLowStock.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number, or leave it blank.'**
+  String get inventoryErrLowStock;
+
+  /// No description provided for @inventoryErrPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a full link starting with https://.'**
+  String get inventoryErrPhoto;
+
+  /// No description provided for @inventoryProductTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Product'**
+  String get inventoryProductTitle;
+
+  /// No description provided for @inventoryAddStock.
+  ///
+  /// In en, this message translates to:
+  /// **'Add stock'**
+  String get inventoryAddStock;
+
+  /// No description provided for @inventorySetCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Set count'**
+  String get inventorySetCount;
+
+  /// No description provided for @inventoryAddStockHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'How many more arrived?'**
+  String get inventoryAddStockHelp;
+
+  /// No description provided for @inventorySetCountHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Count what is on the shelf. This replaces the number and clears “count was off”.'**
+  String get inventorySetCountHelp;
+
+  /// No description provided for @inventoryNoteOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get inventoryNoteOptional;
+
+  /// No description provided for @inventoryStockAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock added.'**
+  String get inventoryStockAdded;
+
+  /// No description provided for @inventoryCountSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Count updated.'**
+  String get inventoryCountSet;
+
+  /// No description provided for @inventoryPrintTags.
+  ///
+  /// In en, this message translates to:
+  /// **'Print tags'**
+  String get inventoryPrintTags;
+
+  /// No description provided for @inventoryTagCopies.
+  ///
+  /// In en, this message translates to:
+  /// **'How many tags?'**
+  String get inventoryTagCopies;
+
+  /// No description provided for @inventoryTagCopiesHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Every tag carries the same code. From 1 to 500.'**
+  String get inventoryTagCopiesHelp;
+
+  /// No description provided for @inventoryTagCopiesError.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number from 1 to 500.'**
+  String get inventoryTagCopiesError;
+
+  /// No description provided for @inventoryTagsOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open tags'**
+  String get inventoryTagsOpen;
+
+  /// No description provided for @inventoryTagsOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening…'**
+  String get inventoryTagsOpening;
+
+  /// No description provided for @inventoryTagsCouldNotOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'The tags could not be opened. Try again in a moment.'**
+  String get inventoryTagsCouldNotOpen;
+
+  /// No description provided for @inventoryTagNote.
+  ///
+  /// In en, this message translates to:
+  /// **'A 2 × 1 inch tag with the QR code only. Reprinting never changes the code.'**
+  String get inventoryTagNote;
+
+  /// No description provided for @inventoryArchive.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get inventoryArchive;
+
+  /// No description provided for @inventoryRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get inventoryRestore;
+
+  /// No description provided for @inventoryArchiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive this product?'**
+  String get inventoryArchiveTitle;
+
+  /// No description provided for @inventoryArchiveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'It disappears from selling and from the list. Its history stays, and you can restore it.'**
+  String get inventoryArchiveMessage;
+
+  /// No description provided for @inventoryArchivedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Product archived.'**
+  String get inventoryArchivedDone;
+
+  /// No description provided for @inventoryRestoredDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Product restored.'**
+  String get inventoryRestoredDone;
+
+  /// No description provided for @inventoryDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get inventoryDelete;
+
+  /// No description provided for @inventoryDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this product?'**
+  String get inventoryDeleteTitle;
+
+  /// No description provided for @inventoryDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the product for good. Past sales keep its name and price. To keep it out of sight and keep its history, archive it instead.'**
+  String get inventoryDeleteMessage;
+
+  /// No description provided for @inventoryDeletedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Product deleted.'**
+  String get inventoryDeletedDone;
+
+  /// No description provided for @inventoryHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock history'**
+  String get inventoryHistoryTitle;
+
+  /// No description provided for @inventoryNoHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'No stock changes yet.'**
+  String get inventoryNoHistory;
+
+  /// No description provided for @inventoryMoveInitial.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting count'**
+  String get inventoryMoveInitial;
+
+  /// No description provided for @inventoryMoveAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock added'**
+  String get inventoryMoveAdd;
+
+  /// No description provided for @inventoryMoveSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Count set'**
+  String get inventoryMoveSet;
+
+  /// No description provided for @inventoryMoveSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold'**
+  String get inventoryMoveSale;
+
+  /// No description provided for @inventoryMoveVoid.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale voided'**
+  String get inventoryMoveVoid;
+
+  /// No description provided for @inventoryMoveNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Now {count}'**
+  String inventoryMoveNow(int count);
+
+  /// No description provided for @inventoryByName.
+  ///
+  /// In en, this message translates to:
+  /// **'by {name}'**
+  String inventoryByName(String name);
+
+  /// No description provided for @inventoryTagCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Tag code'**
+  String get inventoryTagCode;
+
+  /// No description provided for @inventoryPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Price'**
+  String get inventoryPrice;
+
+  /// No description provided for @inventoryCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost'**
+  String get inventoryCost;
+
+  /// No description provided for @inventoryCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get inventoryCategory;
+
+  /// No description provided for @inventoryCountOffNote.
+  ///
+  /// In en, this message translates to:
+  /// **'A sale sold more than the count had. Count the shelf and set the count to clear this.'**
+  String get inventoryCountOffNote;
+
+  /// No description provided for @inventoryProductGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This product is no longer there.'**
+  String get inventoryProductGone;
+
+  /// No description provided for @inventorySellTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sell'**
+  String get inventorySellTitle;
+
+  /// No description provided for @inventoryScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Point at a product tag'**
+  String get inventoryScanHint;
+
+  /// No description provided for @inventoryNotATag.
+  ///
+  /// In en, this message translates to:
+  /// **'That QR code is not a Laawol product tag.'**
+  String get inventoryNotATag;
+
+  /// No description provided for @inventoryCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The camera is unavailable. Type the tag code, or search by product name below.'**
+  String get inventoryCameraUnavailable;
+
+  /// No description provided for @inventoryFindHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tag code or product name'**
+  String get inventoryFindHint;
+
+  /// No description provided for @inventoryAddCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Add {code}'**
+  String inventoryAddCode(String code);
+
+  /// No description provided for @inventoryItemNotYours.
+  ///
+  /// In en, this message translates to:
+  /// **'That tag is not one of your products.'**
+  String get inventoryItemNotYours;
+
+  /// No description provided for @inventoryItemArchivedScan.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is archived. Restore it to sell it.'**
+  String inventoryItemArchivedScan(String name);
+
+  /// No description provided for @inventoryLookupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not look that tag up. Check your connection and scan again.'**
+  String get inventoryLookupFailed;
+
+  /// No description provided for @inventoryBasketEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing scanned yet'**
+  String get inventoryBasketEmpty;
+
+  /// No description provided for @inventoryBasketEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan a tag, or search for a product above. Scanning the same tag again adds one.'**
+  String get inventoryBasketEmptyHint;
+
+  /// No description provided for @inventoryAddedToBasket.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {name}'**
+  String inventoryAddedToBasket(String name);
+
+  /// No description provided for @inventoryListPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'List {price}'**
+  String inventoryListPrice(String price);
+
+  /// No description provided for @inventoryLinePrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Price each'**
+  String get inventoryLinePrice;
+
+  /// No description provided for @inventoryQty.
+  ///
+  /// In en, this message translates to:
+  /// **'Qty'**
+  String get inventoryQty;
+
+  /// No description provided for @inventoryQuantityUp.
+  ///
+  /// In en, this message translates to:
+  /// **'One more'**
+  String get inventoryQuantityUp;
+
+  /// No description provided for @inventoryQuantityDown.
+  ///
+  /// In en, this message translates to:
+  /// **'One less'**
+  String get inventoryQuantityDown;
+
+  /// No description provided for @inventoryRemoveLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get inventoryRemoveLine;
+
+  /// No description provided for @inventoryLineTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Line total'**
+  String get inventoryLineTotal;
+
+  /// No description provided for @inventoryExceedsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'The count says {count}. You can still sell it; the count will be marked as off.'**
+  String inventoryExceedsCount(int count);
+
+  /// No description provided for @inventoryTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get inventoryTotal;
+
+  /// No description provided for @inventoryDiscountOff.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} off list prices'**
+  String inventoryDiscountOff(String amount);
+
+  /// No description provided for @inventoryPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece} other{{count} pieces}}'**
+  String inventoryPieces(int count);
+
+  /// No description provided for @inventoryPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get inventoryPayment;
+
+  /// No description provided for @inventoryPaymentHow.
+  ///
+  /// In en, this message translates to:
+  /// **'How they paid'**
+  String get inventoryPaymentHow;
+
+  /// No description provided for @inventorySold.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold'**
+  String get inventorySold;
+
+  /// No description provided for @inventorySelling.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording…'**
+  String get inventorySelling;
+
+  /// No description provided for @inventorySaleDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale recorded'**
+  String get inventorySaleDone;
+
+  /// No description provided for @inventorySaleDoneTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{total} recorded.'**
+  String inventorySaleDoneTotal(String total);
+
+  /// No description provided for @inventoryNewSale.
+  ///
+  /// In en, this message translates to:
+  /// **'New sale'**
+  String get inventoryNewSale;
+
+  /// No description provided for @inventoryCountWasOffWarn.
+  ///
+  /// In en, this message translates to:
+  /// **'Count was off for {name}: it had less than you sold, so the count is now zero. Count the shelf and set the count.'**
+  String inventoryCountWasOffWarn(String name);
+
+  /// No description provided for @inventoryNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Nothing was lost: your basket is kept. Try again.'**
+  String get inventoryNetworkError;
+
+  /// No description provided for @inventoryFailArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'A product in the basket is archived. Remove it and try again.'**
+  String get inventoryFailArchived;
+
+  /// No description provided for @inventoryFailNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'A product in the basket was not found. Remove it and try again.'**
+  String get inventoryFailNotFound;
+
+  /// No description provided for @inventoryFailVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale was already voided.'**
+  String get inventoryFailVoided;
+
+  /// No description provided for @inventoryFailNoPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not allowed to do that for this shop.'**
+  String get inventoryFailNoPermission;
+
+  /// No description provided for @inventoryFailInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That could not be accepted. Check the details and try again.'**
+  String get inventoryFailInvalid;
+
+  /// No description provided for @inventoryFailUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'That did not go through. Try again.'**
+  String get inventoryFailUnknown;
+
+  /// No description provided for @inventoryProblemArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'A product in the basket is archived. Remove it to continue.'**
+  String get inventoryProblemArchived;
+
+  /// No description provided for @inventoryProblemTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That total is too large to record.'**
+  String get inventoryProblemTooLarge;
+
+  /// No description provided for @inventoryPriceInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a price like 12.50.'**
+  String get inventoryPriceInvalid;
+
+  /// No description provided for @inventoryTryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get inventoryTryAgain;
+
+  /// No description provided for @inventoryNoSales.
+  ///
+  /// In en, this message translates to:
+  /// **'No sales yet'**
+  String get inventoryNoSales;
+
+  /// No description provided for @inventoryNoSalesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales you record from the Sell screen appear here.'**
+  String get inventoryNoSalesHint;
+
+  /// No description provided for @inventorySalesLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the sales. Check your connection.'**
+  String get inventorySalesLoadFailed;
+
+  /// No description provided for @inventoryLoadMoreSales.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get inventoryLoadMoreSales;
+
+  /// No description provided for @inventoryVoidedMark.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get inventoryVoidedMark;
+
+  /// No description provided for @inventoryVoidedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided by {name} · {when}'**
+  String inventoryVoidedBy(String name, String when);
+
+  /// No description provided for @inventoryVoidedWhen.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided · {when}'**
+  String inventoryVoidedWhen(String when);
+
+  /// No description provided for @inventorySoldBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold by {name}'**
+  String inventorySoldBy(String name);
+
+  /// No description provided for @inventoryVoidSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Void sale'**
+  String get inventoryVoidSale;
+
+  /// No description provided for @inventoryVoidTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this sale?'**
+  String get inventoryVoidTitle;
+
+  /// No description provided for @inventoryVoidMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The stock goes back on the shelf and the sale stays in the list marked as voided. This cannot be undone.'**
+  String get inventoryVoidMessage;
+
+  /// No description provided for @inventoryVoidedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale voided.'**
+  String get inventoryVoidedDone;
+
+  /// No description provided for @inventorySaleLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{quantity} × {name} at {price}'**
+  String inventorySaleLine(int quantity, String name, String price);
+
+  /// No description provided for @inventorySaleLineChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'{quantity} × {name} at {price} (list {list})'**
+  String inventorySaleLineChanged(
+    int quantity,
+    String name,
+    String price,
+    String list,
+  );
+
+  /// No description provided for @inventorySaleCountOff.
+  ///
+  /// In en, this message translates to:
+  /// **'count was off'**
+  String get inventorySaleCountOff;
+
+  /// No description provided for @inventoryLowStockAtLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Low stock at'**
+  String get inventoryLowStockAtLabel;
 }
 
 class _AppLocalizationsDelegate
