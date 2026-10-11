@@ -7,7 +7,9 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart' show invoiceCentsToInput;
 import '../services/inventory.dart';
+import '../services/inventory_context.dart';
 import '../services/inventory_service.dart';
+import '../services/inventory_stores.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -38,9 +40,15 @@ class InventorySellScreen extends StatefulWidget {
     this.newRequestId = newInventoryRequestId,
     this.cameraEnabled = true,
     this.scans,
+    this.access = const InventoryAccess.owner(),
   });
 
   final String businessId;
+
+  /// What the signed-in person may do across stores. In a business with
+  /// several stores it decides where the sale goes: staff sell from their home
+  /// store without being asked; the owner and "works in all stores" staff pick.
+  final InventoryAccess access;
 
   /// A tag the screen opens with - an app link the person tapped.
   final String initialCode;
@@ -71,7 +79,25 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
 
   MobileScannerController? _camera;
 
+  late final InventoryContextWatcher _watcher = InventoryContextWatcher(
+    source: _source,
+    businessId: widget.businessId,
+    access: widget.access,
+    watchCategories: false,
+    onChange: () {
+      if (!mounted) return;
+      setState(_refreshView);
+    },
+  );
+
+  /// The store a person who picks has chosen ('' = their default).
+  String _pickedStore = '';
+
+  /// The products as stored, and as sold from the store in use (its own count
+  /// in place of the total, in a business with several stores).
+  List<InventoryItem> _rawItems = const [];
   List<InventoryItem> _items = const [];
+  String _soldStoreName = '';
   Basket _basket = const Basket();
   String _payment = 'cash';
 
@@ -95,11 +121,12 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
     if (widget.cameraEnabled) {
       _camera = MobileScannerController(formats: const [BarcodeFormat.qrCode]);
     }
+    _watcher.start();
     _subs.add(_source.watchItems(widget.businessId).listen((items) {
       if (!mounted) return;
       setState(() {
-        _items = items;
-        _basket = _basket.refreshed(items);
+        _rawItems = items;
+        _refreshView();
       });
     }, onError: (_) {}));
     final feed = widget.scans;
@@ -112,8 +139,31 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
     }
   }
 
+  /// Where this sale goes, for this person.
+  InventorySellStore get _sell => inventorySellStore(_watcher.context);
+
+  /// The store whose counts the basket is checked against ('' for none).
+  String get _countStoreId {
+    final sell = _sell;
+    return sell.mode == InventorySellStoreMode.pick
+        ? (_pickedStore.isNotEmpty ? _pickedStore : sell.defaultStoreId)
+        : '';
+  }
+
+  /// Recomputes what the screen sells from; call inside setState.
+  void _refreshView() {
+    _items = inventoryViewItems(
+      _rawItems,
+      _watcher.context,
+      _watcher.stock,
+      storeFilter: _countStoreId,
+    );
+    _basket = _basket.refreshed(_items);
+  }
+
   @override
   void dispose() {
+    _watcher.dispose();
     for (final s in _subs) {
       s.cancel();
     }
@@ -177,7 +227,9 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
       setState(() => _note = (text: l10n.inventoryItemNotYours, error: true));
       return;
     }
-    _addItem(item);
+    _addItem(inventoryViewItems([item], _watcher.context, _watcher.stock,
+            storeFilter: _countStoreId)
+        .first);
   }
 
   void _addItem(InventoryItem item) {
@@ -246,8 +298,30 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
 
   // ----- selling -------------------------------------------------------------
 
+  Future<void> _pickStore() async {
+    final l10n = AppLocalizations.of(context)!;
+    final stores = _watcher.context;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.inventoryStoreSellPick,
+      selected: _countStoreId,
+      options: [
+        for (final store in stores.active) LotOption(store.id, store.name),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _pickedStore = picked;
+      _failure = null;
+      _refreshView();
+    });
+  }
+
   Future<void> _sold() async {
     if (_busy || _basket.isEmpty || _badPrices.isNotEmpty) return;
+    // A staff member of a business with several stores cannot sell until the
+    // owner gives them a store; the stores are known before anything is sent.
+    if (!_sell.canSell || !_watcher.storesLoaded) return;
     if (_basket.problems.isNotEmpty) {
       AppHaptics.refuse();
       setState(() {});
@@ -258,18 +332,25 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
       _failure = null;
     });
     final basket = _basket;
+    // Only someone who picks a store sends one; staff with a home store leave
+    // it to the server, and a single-store business sends none at all.
+    final storeId = inventoryRequestStoreId(_sell, _pickedStore);
+    final storeName = _watcher.context.storeName(
+        _sell.mode == InventorySellStoreMode.home ? _sell.defaultStoreId : storeId);
     try {
       final result = await widget.service.recordSale(
         businessId: widget.businessId,
-        clientRequestId: _attempt.idFor(basket, _payment),
+        clientRequestId: _attempt.idFor(basket, _payment, storeId: storeId),
         paymentMethod: _payment,
         basket: basket,
+        storeId: storeId,
       );
       if (!mounted) return;
       AppHaptics.commit();
       _attempt.clear();
       setState(() {
         _result = result;
+        _soldStoreName = storeName;
         _soldLines = basket.lines;
         _basket = const Basket();
         _badPrices.clear();
@@ -323,6 +404,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
     final hits =
         typedCode == null ? inventorySellSearch(_items, query) : const <InventoryItem>[];
     final showBar = _result == null && _basket.isNotEmpty;
+    final sell = _sell;
 
     return PopScope(
       // Leaving with items in the basket asks first; a finished sale or an
@@ -350,6 +432,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
               children: [
+                ..._storeBlock(l10n, sell),
                 if (_camera != null) ...[
                   _cameraBox(l10n),
                   const SizedBox(height: AppSpacing.md),
@@ -441,6 +524,46 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
       ),
     ),
     );
+  }
+
+  /// Where the sale goes. Nothing at all in a single-store business; a plain
+  /// line for staff who sell from their own store; a picker for the owner and
+  /// "works in all stores" staff; and a clear message for staff with no store.
+  List<Widget> _storeBlock(AppLocalizations l10n, InventorySellStore sell) {
+    final stores = _watcher.context;
+    switch (sell.mode) {
+      case InventorySellStoreMode.single:
+        return const [];
+      case InventorySellStoreMode.home:
+        return [
+          Text(
+            l10n.inventoryStoreSellingFrom(stores.storeName(sell.defaultStoreId)),
+            key: const Key('inv-sell-store-home'),
+            style: const TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ];
+      case InventorySellStoreMode.pick:
+        return [
+          LotPickerField(
+            key: const Key('inv-sell-store'),
+            label: l10n.inventoryStoreSellPick,
+            value: stores.storeName(_countStoreId),
+            placeholder: l10n.inventoryStoreLabel,
+            onTap: _busy ? () {} : _pickStore,
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ];
+      case InventorySellStoreMode.missing:
+        return [
+          InventoryNote(
+            key: const Key('inv-home-store-required'),
+            text: l10n.inventoryStoreHomeRequired,
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ];
+    }
   }
 
   Widget _cameraBox(AppLocalizations l10n) => ClipRRect(
@@ -536,6 +659,12 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
             key: const Key('inv-sale-done-total'),
             style: const TextStyle(fontSize: 14, color: AppColors.muted),
           ),
+          if (_soldStoreName.isNotEmpty)
+            Text(
+              l10n.inventoryStoreOf(_soldStoreName),
+              key: const Key('inv-sale-done-store'),
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
           const SizedBox(height: AppSpacing.md),
           for (final line in _soldLines)
             Padding(
@@ -578,7 +707,10 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
       problem = l10n.inventoryProblemTooLarge;
     }
     final failure = _failure;
-    final blocked = _badPrices.isNotEmpty || problems.isNotEmpty;
+    final blocked = _badPrices.isNotEmpty ||
+        problems.isNotEmpty ||
+        !_sell.canSell ||
+        !_watcher.storesLoaded;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.paper,

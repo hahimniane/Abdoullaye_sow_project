@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../utils/callable_data.dart';
 import 'firestore_query_spec.dart';
 import 'inventory.dart';
+import 'inventory_stores.dart';
 import 'lot_ledger.dart' show LotStaff;
 import 'waiting_package_service.dart';
 
@@ -36,6 +37,12 @@ InventoryFailure inventoryFailureFromError(Object error) {
   if (error is TimeoutException) return InventoryFailure.network;
   return InventoryFailure.unknown;
 }
+
+/// Whether [error] says the server has no `createInventoryCategory` (an older
+/// server): the typed name is then kept as the product's plain category text.
+bool inventoryCategoryCreateUnsupported(Object error) =>
+    error is FirebaseFunctionsException &&
+    inventoryCategoryCallableMissing(code: error.code, details: error.details);
 
 /// A fresh, hard-to-collide id for one sale attempt (`clientRequestId`).
 /// Retries of the same sale reuse it; the server answers with the same sale.
@@ -71,10 +78,22 @@ FirestoreQuerySpec inventoryItemByCodeSpec(String businessId, String code) =>
 
 /// The newest [limit] sales, by time: one growing page at a time. Needs the
 /// composite index `inventorySales (businessId ASC, createdAt DESC)`.
-FirestoreQuerySpec inventorySalesSpec(String businessId, {required int limit}) =>
+///
+/// A person who works in one store only reads that store's sales
+/// ([storeId]; the rules allow nothing wider), which needs the composite index
+/// `inventorySales (businessId ASC, storeId ASC, createdAt DESC)`.
+FirestoreQuerySpec inventorySalesSpec(
+  String businessId, {
+  required int limit,
+  String storeId = '',
+}) =>
     FirestoreQuerySpec(
       collection: 'inventorySales',
-      filters: [QueryFilterSpec('businessId', QueryFilterOp.equal, businessId)],
+      filters: [
+        QueryFilterSpec('businessId', QueryFilterOp.equal, businessId),
+        if (storeId.isNotEmpty)
+          QueryFilterSpec('storeId', QueryFilterOp.equal, storeId),
+      ],
       orderBy: 'createdAt',
       descending: true,
       limit: limit,
@@ -82,12 +101,43 @@ FirestoreQuerySpec inventorySalesSpec(String businessId, {required int limit}) =
 
 /// One product's stock history. Equalities only (no composite index); the
 /// rows are sorted on the phone.
-FirestoreQuerySpec inventoryMovementsSpec(String businessId, String itemId) =>
+FirestoreQuerySpec inventoryMovementsSpec(
+  String businessId,
+  String itemId, {
+  String storeId = '',
+}) =>
     FirestoreQuerySpec(
       collection: 'inventoryMovements',
       filters: [
         QueryFilterSpec('businessId', QueryFilterOp.equal, businessId),
         QueryFilterSpec('itemId', QueryFilterOp.equal, itemId),
+        if (storeId.isNotEmpty)
+          QueryFilterSpec('storeId', QueryFilterOp.equal, storeId),
+      ],
+    );
+
+/// The business's categories. Equality on `businessId` only.
+FirestoreQuerySpec inventoryCategoriesSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'inventoryCategories',
+      filters: [QueryFilterSpec('businessId', QueryFilterOp.equal, businessId)],
+    );
+
+/// The business's stores. Equality on `businessId` only.
+FirestoreQuerySpec inventoryStoresSpec(String businessId) => FirestoreQuerySpec(
+      collection: 'inventoryStores',
+      filters: [QueryFilterSpec('businessId', QueryFilterOp.equal, businessId)],
+    );
+
+/// The per-store counts: every store's (owner, all-stores staff), or one
+/// store's ([storeId] - what the rules allow everyone else to read).
+FirestoreQuerySpec inventoryStockSpec(String businessId, {String storeId = ''}) =>
+    FirestoreQuerySpec(
+      collection: 'inventoryStock',
+      filters: [
+        QueryFilterSpec('businessId', QueryFilterOp.equal, businessId),
+        if (storeId.isNotEmpty)
+          QueryFilterSpec('storeId', QueryFilterOp.equal, storeId),
       ],
     );
 
@@ -105,14 +155,32 @@ abstract interface class InventorySource {
   /// tag from another shop).
   Future<InventoryItem?> findItemByCode(String businessId, String code);
 
-  /// The newest [limit] sales.
-  Stream<List<InventorySale>> watchSales(String businessId, {required int limit});
+  /// The newest [limit] sales ([storeId]: one store's only).
+  Stream<List<InventorySale>> watchSales(
+    String businessId, {
+    required int limit,
+    String storeId = '',
+  });
 
-  /// One product's stock history, newest first.
+  /// One product's stock history, newest first ([storeId]: one store's only).
   Stream<List<InventoryMovement>> watchMovements(
     String businessId,
-    String itemId,
-  );
+    String itemId, {
+    String storeId = '',
+  });
+
+  /// The business's categories (empty before it has any, and on a server
+  /// that has none).
+  Stream<List<InventoryCategory>> watchCategories(String businessId);
+
+  /// The business's stores (empty or one: a single-store business).
+  Stream<List<InventoryStore>> watchStores(String businessId);
+
+  /// The per-store counts the person may read ([storeId]: one store's only).
+  Stream<List<InventoryStockRow>> watchStock(
+    String businessId, {
+    String storeId = '',
+  });
 
   /// The team's names, for "sold by" and "who changed it". Empty when the
   /// person may not read the team (the names then stay blank).
@@ -144,8 +212,9 @@ class FirestoreInventorySource implements InventorySource {
   Stream<List<InventorySale>> watchSales(
     String businessId, {
     required int limit,
+    String storeId = '',
   }) =>
-      inventorySalesSpec(businessId, limit: limit)
+      inventorySalesSpec(businessId, limit: limit, storeId: storeId)
           .build(_db)
           .snapshots()
           .map((snap) => [
@@ -155,15 +224,47 @@ class FirestoreInventorySource implements InventorySource {
   @override
   Stream<List<InventoryMovement>> watchMovements(
     String businessId,
-    String itemId,
-  ) =>
-      inventoryMovementsSpec(businessId, itemId)
+    String itemId, {
+    String storeId = '',
+  }) =>
+      inventoryMovementsSpec(businessId, itemId, storeId: storeId)
           .build(_db)
           .snapshots()
           .map((snap) => sortMovementsNewestFirst([
                 for (final d in snap.docs)
                   InventoryMovement.fromMap(d.id, d.data()),
               ]));
+
+  @override
+  Stream<List<InventoryCategory>> watchCategories(String businessId) =>
+      inventoryCategoriesSpec(businessId)
+          .build(_db)
+          .snapshots()
+          .map((snap) => [
+                for (final d in snap.docs)
+                  InventoryCategory.fromMap(d.id, d.data()),
+              ]);
+
+  @override
+  Stream<List<InventoryStore>> watchStores(String businessId) =>
+      inventoryStoresSpec(businessId)
+          .build(_db)
+          .snapshots()
+          .map((snap) => [
+                for (final d in snap.docs) InventoryStore.fromMap(d.id, d.data()),
+              ]);
+
+  @override
+  Stream<List<InventoryStockRow>> watchStock(
+    String businessId, {
+    String storeId = '',
+  }) =>
+      inventoryStockSpec(businessId, storeId: storeId)
+          .build(_db)
+          .snapshots()
+          .map((snap) => [
+                for (final d in snap.docs) InventoryStockRow.fromMap(d.data()),
+              ]);
 
   @override
   Stream<List<LotStaff>> watchStaff(String businessId) => _db
@@ -219,6 +320,8 @@ class InventoryService {
 
   final InventoryCallableCaller caller;
 
+  /// Creates a product. [InventoryItemDraft.stock] carries a business with
+  /// several stores' starting counts; without it the count is `quantity`.
   Future<({String itemId, String code})> createItem(
     String businessId,
     InventoryItemDraft draft,
@@ -251,6 +354,7 @@ class InventoryService {
     required bool add,
     required int quantity,
     String note = '',
+    String storeId = '',
   }) async {
     final data = callableMap(await caller(
       'adjustInventoryStock',
@@ -260,6 +364,7 @@ class InventoryService {
         add: add,
         quantity: quantity,
         note: note,
+        storeId: storeId,
       ),
     ));
     return data.containsKey('quantity') ? callableInt(data['quantity']) : null;
@@ -287,6 +392,7 @@ class InventoryService {
     required String clientRequestId,
     required String paymentMethod,
     required Basket basket,
+    String storeId = '',
   }) async {
     final result = InventorySaleResult.fromCallable(await caller(
       'recordInventorySale',
@@ -295,6 +401,7 @@ class InventoryService {
         clientRequestId: clientRequestId,
         paymentMethod: paymentMethod,
         basket: basket,
+        storeId: storeId,
       ),
     ));
     if (result == null) throw StateError('sale not recorded');
@@ -312,6 +419,7 @@ class InventoryService {
     String businessId, {
     String range = 'today',
     DateTime? now,
+    String storeId = '',
   }) async =>
       InventorySummary.fromCallable(await caller(
         'getInventorySummary',
@@ -319,6 +427,101 @@ class InventoryService {
           businessId,
           range: range,
           timeZone: inventoryTimeZoneName(now ?? DateTime.now()),
+          storeId: storeId,
         ),
       ));
+
+  // ----- categories ----------------------------------------------------------
+
+  /// Adds a category to the business's list; answers its id.
+  Future<String> createCategory(String businessId, String name) async {
+    final data = callableMap(await caller(
+      'createInventoryCategory',
+      createInventoryCategoryRequest(businessId, name),
+    ));
+    return callableString(data['categoryId']);
+  }
+
+  Future<void> renameCategory(
+    String businessId,
+    String categoryId,
+    String name,
+  ) =>
+      caller(
+        'renameInventoryCategory',
+        renameInventoryCategoryRequest(businessId, categoryId, name),
+      );
+
+  /// Categories are archived, never deleted; products keep their category.
+  Future<void> setCategoryArchived(
+    String businessId,
+    String categoryId, {
+    required bool archived,
+  }) =>
+      caller(
+        'archiveInventoryCategory',
+        archiveInventoryCategoryRequest(businessId, categoryId,
+            archived: archived),
+      );
+
+  // ----- stores (owner only, except the transfer) ----------------------------
+
+  Future<String> createStore(String businessId, InventoryStoreDraft draft) async {
+    final data = callableMap(await caller(
+      'createInventoryStore',
+      createInventoryStoreRequest(businessId, draft),
+    ));
+    return callableString(data['storeId']);
+  }
+
+  /// Saves what changed; nothing is sent when nothing did.
+  Future<void> updateStore(
+    String businessId,
+    InventoryStore existing,
+    InventoryStoreDraft draft,
+  ) async {
+    final request = updateInventoryStoreRequest(businessId, existing, draft);
+    if (inventoryStoreUpdateIsEmpty(request)) return;
+    await caller('updateInventoryStore', request);
+  }
+
+  /// A store with stock cannot be archived (`store_has_stock`): move it first.
+  Future<void> setStoreArchived(
+    String businessId,
+    String storeId, {
+    required bool archived,
+  }) =>
+      caller(
+        'archiveInventoryStore',
+        archiveInventoryStoreRequest(businessId, storeId, archived: archived),
+      );
+
+  /// A staff member's home store ('' for none) and "works in all stores".
+  Future<void> setStaffAccess({
+    required String businessId,
+    required String userId,
+    required String homeStoreId,
+    required bool allStores,
+  }) =>
+      caller(
+        'setInventoryStaffAccess',
+        setInventoryStaffAccessRequest(
+          businessId: businessId,
+          userId: userId,
+          homeStoreId: homeStoreId,
+          allStores: allStores,
+        ),
+      );
+
+  /// Moves [InventoryTransferDraft.quantity] of a product between two stores
+  /// (owner and all-stores staff). Totals do not change.
+  Future<void> transfer(
+    String businessId,
+    String itemId,
+    InventoryTransferDraft draft,
+  ) =>
+      caller(
+        'transferInventoryStock',
+        transferInventoryStockRequest(businessId, itemId, draft),
+      );
 }

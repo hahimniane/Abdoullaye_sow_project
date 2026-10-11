@@ -174,6 +174,7 @@ class InventoryItem {
     this.quantity = 0,
     this.lowStockAt,
     this.category = '',
+    this.categoryId = '',
     this.photoUrl = '',
     this.archived = false,
     this.countWasOff = false,
@@ -193,6 +194,7 @@ class InventoryItem {
         quantity: _int(data['quantity']) < 0 ? 0 : _int(data['quantity']),
         lowStockAt: _optionalInt(data['lowStockAt']),
         category: _text(data['category'], inventoryMaxCategory),
+        categoryId: _text(data['categoryId'], 128),
         photoUrl: _text(data['photoUrl'], inventoryMaxPhotoUrl),
         archived: data['archived'] == true,
         countWasOff: data['countWasOff'] == true,
@@ -207,15 +209,44 @@ class InventoryItem {
   final String code;
   final int priceCents;
   final int? costCents;
+
+  /// The count across every store (what a single-store business and an old
+  /// app read). A store's own count lives in `inventoryStock`.
   final int quantity;
   final int? lowStockAt;
+
+  /// The category's name as it was when chosen (a snapshot), and its id when
+  /// the product was linked to the business's category list. A product typed
+  /// before categories existed has the name only.
   final String category;
+  final String categoryId;
   final String photoUrl;
   final bool archived;
   final bool countWasOff;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String createdByStaffId;
+
+  /// The same product showing [quantity] - one store's count in place of the
+  /// total - for the screens that sell or list from a single store.
+  InventoryItem withQuantity(int quantity, {bool? countWasOff}) => InventoryItem(
+        id: id,
+        businessId: businessId,
+        name: name,
+        code: code,
+        priceCents: priceCents,
+        costCents: costCents,
+        quantity: quantity < 0 ? 0 : quantity,
+        lowStockAt: lowStockAt,
+        category: category,
+        categoryId: categoryId,
+        photoUrl: photoUrl,
+        archived: archived,
+        countWasOff: countWasOff ?? this.countWasOff,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+        createdByStaffId: createdByStaffId,
+      );
 
   InventoryStock get stock =>
       stockStatus(quantity: quantity, lowStockAt: lowStockAt);
@@ -284,6 +315,8 @@ class InventorySale {
     this.voidedByStaffId = '',
     this.voidedAt,
     this.createdAt,
+    this.storeId = '',
+    this.storeName = '',
   });
 
   factory InventorySale.fromMap(String id, Map<String, dynamic> data) {
@@ -305,6 +338,8 @@ class InventorySale {
       voidedByStaffId: _text(data['voidedByStaffId'], 128),
       voidedAt: lotDateOf(data['voidedAt']),
       createdAt: lotDateOf(data['createdAt']),
+      storeId: _text(data['storeId'], 128),
+      storeName: _text(data['storeName'], inventoryMaxName),
     );
   }
 
@@ -319,6 +354,11 @@ class InventorySale {
   final String voidedByStaffId;
   final DateTime? voidedAt;
   final DateTime? createdAt;
+
+  /// The store the sale was made from, and its name when it was made. Blank
+  /// on a sale from before stores existed (the business's only store then).
+  final String storeId;
+  final String storeName;
 
   int get itemCount => lines.fold(0, (sum, line) => sum + line.quantity);
   int get discountCents =>
@@ -340,6 +380,8 @@ class InventoryMovement {
     this.note = '',
     this.saleId = '',
     this.createdAt,
+    this.storeId = '',
+    this.transferId = '',
   });
 
   factory InventoryMovement.fromMap(String id, Map<String, dynamic> data) =>
@@ -353,6 +395,8 @@ class InventoryMovement {
         note: _text(data['note'], inventoryMaxNote),
         saleId: _text(data['saleId'], 128),
         createdAt: lotDateOf(data['createdAt']),
+        storeId: _text(data['storeId'], 128),
+        transferId: _text(data['transferId'], 128),
       );
 
   final String id;
@@ -364,6 +408,13 @@ class InventoryMovement {
   final String note;
   final String saleId;
   final DateTime? createdAt;
+
+  /// The store whose count moved (blank before stores existed), and the
+  /// transfer both sides of a move share.
+  final String storeId;
+  final String transferId;
+
+  bool get isTransfer => transferId.isNotEmpty || type.startsWith('transfer');
 }
 
 /// Newest first; movements with no time sink to the end.
@@ -396,14 +447,22 @@ List<InventorySale> sortSalesNewestFirst(Iterable<InventorySale> sales) =>
 /// What the products list shows: the active products, or - with
 /// [showArchived] - only the archived ones. Low stock and counts that were off
 /// come first, then by name.
+///
+/// [categoryId] narrows the list to one category (blank: every category); a
+/// product typed before categories existed is matched by its category name,
+/// given as [categoryName].
 List<InventoryItem> inventoryListing(
   Iterable<InventoryItem> items, {
   String query = '',
   bool showArchived = false,
+  String categoryId = '',
+  String categoryName = '',
 }) {
   final matched = [
     for (final item in items)
-      if (item.archived == showArchived && inventoryItemMatches(item, query))
+      if (item.archived == showArchived &&
+          inventoryItemMatches(item, query) &&
+          inventoryItemInCategory(item, categoryId, categoryName))
         item,
   ];
   matched.sort((a, b) {
@@ -413,6 +472,21 @@ List<InventoryItem> inventoryListing(
     return a.name.toLowerCase().compareTo(b.name.toLowerCase());
   });
   return matched;
+}
+
+/// Whether [item] belongs to the category [categoryId] (named [categoryName]):
+/// by id, or - for a product typed before categories existed - by the same
+/// name. A blank [categoryId] matches every product.
+bool inventoryItemInCategory(
+  InventoryItem item,
+  String categoryId,
+  String categoryName,
+) {
+  if (categoryId.isEmpty) return true;
+  if (item.categoryId == categoryId) return true;
+  return item.categoryId.isEmpty &&
+      categoryName.trim().isNotEmpty &&
+      item.category.trim().toLowerCase() == categoryName.trim().toLowerCase();
 }
 
 /// Name, category or code (the code with or without its dash, any case).
@@ -605,9 +679,10 @@ class SaleAttempt {
   String _signature = '';
   String _id = '';
 
-  /// The id to send for [basket] paid by [paymentMethod].
-  String idFor(Basket basket, String paymentMethod) {
-    final signature = '${basket.signature}#$paymentMethod';
+  /// The id to send for [basket] paid by [paymentMethod] from [storeId]
+  /// (another store is another sale).
+  String idFor(Basket basket, String paymentMethod, {String storeId = ''}) {
+    final signature = '${basket.signature}#$paymentMethod#$storeId';
     if (_id.isEmpty || signature != _signature) {
       _id = newId();
       _signature = signature;
@@ -635,7 +710,9 @@ class InventoryItemDraft {
     this.quantity = '',
     this.lowStockAt = '',
     this.category = '',
+    this.categoryId = '',
     this.photoUrl = '',
+    this.stock = const {},
   });
 
   factory InventoryItemDraft.fromItem(InventoryItem item) => InventoryItemDraft(
@@ -645,6 +722,7 @@ class InventoryItemDraft {
         quantity: '${item.quantity}',
         lowStockAt: item.lowStockAt == null ? '' : '${item.lowStockAt}',
         category: item.category,
+        categoryId: item.categoryId,
         photoUrl: item.photoUrl,
       );
 
@@ -653,8 +731,17 @@ class InventoryItemDraft {
   final String cost;
   final String quantity;
   final String lowStockAt;
+
+  /// The category's name (what a v1 server reads) and its id when it was
+  /// picked from the business's list.
   final String category;
+  final String categoryId;
   final String photoUrl;
+
+  /// Starting counts per store (store id to what was typed), for a business
+  /// with more than one store. Empty: [quantity] is the count, as in a
+  /// single-store business.
+  final Map<String, String> stock;
 }
 
 final RegExp _wholeNumber = RegExp(r'^\d+$');
@@ -701,9 +788,21 @@ List<String> validateInventoryItemDraft(
     }
   }
   if (creating) {
-    final quantity = readWholeNumber(draft.quantity);
-    if (quantity == null || quantity > inventoryMaxStock) {
-      codes.add('quantity_invalid');
+    if (draft.stock.isEmpty) {
+      final quantity = readWholeNumber(draft.quantity);
+      if (quantity == null || quantity > inventoryMaxStock) {
+        codes.add('quantity_invalid');
+      }
+    } else {
+      // One count per store; a store left blank starts at zero.
+      for (final typed in draft.stock.values) {
+        if (typed.trim().isEmpty) continue;
+        final quantity = readWholeNumber(typed);
+        if (quantity == null || quantity > inventoryMaxStock) {
+          codes.add('quantity_invalid');
+          break;
+        }
+      }
     }
   }
   if (draft.lowStockAt.trim().isNotEmpty) {
@@ -750,15 +849,29 @@ Map<String, Object?> createInventoryItemRequest(
   final cost = readMoneyInput(draft.cost).cents;
   final low = readWholeNumber(draft.lowStockAt);
   final category = draft.category.trim();
+  final categoryId = draft.categoryId.trim();
   final photo = draft.photoUrl.trim();
   return {
     'businessId': businessId,
     'name': draft.name.trim(),
     'priceCents': readMoneyInput(draft.price).cents ?? 0,
     'costCents': ?cost,
-    'quantity': readWholeNumber(draft.quantity) ?? 0,
+    // A single-store business (and a v1 request) sends `quantity`; a
+    // business with several stores sends the starting count of each.
+    if (draft.stock.isEmpty)
+      'quantity': readWholeNumber(draft.quantity) ?? 0
+    else
+      'stock': {
+        for (final entry in draft.stock.entries)
+          entry.key: readWholeNumber(entry.value) ?? 0,
+      },
     'lowStockAt': ?low,
-    if (category.isNotEmpty) 'category': category,
+    // A category picked from the list goes by id; one typed (an old
+    // product, an old server) goes by name and the server finds or makes it.
+    if (categoryId.isNotEmpty)
+      'categoryId': categoryId
+    else if (category.isNotEmpty)
+      'category': category,
     if (photo.isNotEmpty) 'photoUrl': photo,
   };
 }
@@ -779,7 +892,13 @@ Map<String, Object?> updateInventoryItemRequest(
       : readWholeNumber(draft.lowStockAt);
   final name = draft.name.trim();
   final category = draft.category.trim();
+  final categoryId = draft.categoryId.trim();
   final photo = draft.photoUrl.trim();
+  // A picked category changes by id; a cleared one (or an old product's typed
+  // name) by name, "" clearing it - the shape a v1 server reads.
+  final categoryChanged = categoryId.isNotEmpty
+      ? categoryId != existing.categoryId
+      : category != existing.category;
   return {
     'businessId': businessId,
     'itemId': existing.id,
@@ -787,7 +906,8 @@ Map<String, Object?> updateInventoryItemRequest(
     if (price != existing.priceCents) 'priceCents': price,
     if (cost != existing.costCents) 'costCents': cost,
     if (low != existing.lowStockAt) 'lowStockAt': low,
-    if (category != existing.category) 'category': category,
+    if (categoryChanged)
+      if (categoryId.isNotEmpty) 'categoryId': categoryId else 'category': category,
     if (photo != existing.photoUrl) 'photoUrl': photo,
   };
 }
@@ -804,6 +924,7 @@ Map<String, Object?> adjustInventoryStockRequest({
   required bool add,
   required int quantity,
   String note = '',
+  String storeId = '',
 }) {
   final cleanNote = note.trim();
   return {
@@ -811,6 +932,8 @@ Map<String, Object?> adjustInventoryStockRequest({
     'itemId': itemId,
     'mode': add ? 'add' : 'set',
     'quantity': quantity,
+    // Left out, the server counts it in the caller's own (or the only) store.
+    if (storeId.isNotEmpty) 'storeId': storeId,
     if (cleanNote.isNotEmpty)
       'note': cleanNote.length > inventoryMaxNote
           ? cleanNote.substring(0, inventoryMaxNote)
@@ -839,10 +962,14 @@ Map<String, Object?> recordInventorySaleRequest({
   required String clientRequestId,
   required String paymentMethod,
   required Basket basket,
+  String storeId = '',
 }) =>
     {
       'businessId': businessId,
       'clientRequestId': clientRequestId,
+      // Only a person who chose a store sends one; left out, the server sells
+      // from the caller's home store (the only store of a single-store shop).
+      if (storeId.isNotEmpty) 'storeId': storeId,
       'paymentMethod': inventoryPaymentMethods.contains(paymentMethod)
           ? paymentMethod
           : 'other',
@@ -900,11 +1027,15 @@ Map<String, Object?> inventorySummaryRequest(
   String businessId, {
   String range = 'today',
   required String timeZone,
+  String storeId = '',
 }) =>
     {
       'businessId': businessId,
       'range': range == 'month' ? 'month' : 'today',
       'timeZone': timeZone,
+      // Blank means every store, and only an owner or an all-stores person may
+      // ask for that; everyone else always gets their own store.
+      if (storeId.isNotEmpty) 'storeId': storeId,
     };
 
 /// An IANA zone name for the phone's clock. Dart reports an abbreviation and
@@ -1013,13 +1144,69 @@ class InventoryLowStock {
     required this.name,
     required this.quantity,
     this.lowStockAt,
+    this.storeId = '',
+    this.storeName = '',
   });
 
   final String itemId;
   final String name;
   final int quantity;
   final int? lowStockAt;
+
+  /// The store this count is low in (blank for a single-store business).
+  final String storeId;
+  final String storeName;
 }
+
+/// One line of the "By category" block: what a category sold.
+class InventoryCategorySummary {
+  const InventoryCategorySummary({
+    required this.categoryId,
+    required this.name,
+    this.itemsSold = 0,
+    this.revenueCents = 0,
+    this.profitCents = 0,
+  });
+
+  /// Blank for the "Uncategorized" line.
+  final String categoryId;
+  final String name;
+  final int itemsSold;
+  final int revenueCents;
+  final int profitCents;
+}
+
+/// One line of the "By store" block: what a store sold.
+class InventoryStoreSummary {
+  const InventoryStoreSummary({
+    required this.storeId,
+    required this.name,
+    this.salesCount = 0,
+    this.itemsSold = 0,
+    this.revenueCents = 0,
+    this.profitCents = 0,
+  });
+
+  final String storeId;
+  final String name;
+  final int salesCount;
+  final int itemsSold;
+  final int revenueCents;
+  final int profitCents;
+}
+
+/// Categories by what they brought in, biggest first (ties by name), so the
+/// block reads the same whatever order the server answered in.
+List<InventoryCategorySummary> sortCategoriesByRevenue(
+  Iterable<InventoryCategorySummary> rows,
+) =>
+    rows.toList()
+      ..sort((a, b) {
+        final byMoney = b.revenueCents.compareTo(a.revenueCents);
+        return byMoney != 0
+            ? byMoney
+            : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
 
 class InventorySummary {
   const InventorySummary({
@@ -1032,6 +1219,8 @@ class InventorySummary {
     this.best = const [],
     this.low = const [],
     this.countWasOff = const [],
+    this.byCategory = const [],
+    this.byStore = const [],
   });
 
   /// Reads `getInventorySummary`'s answer; an unreadable answer is an empty
@@ -1070,11 +1259,35 @@ class InventorySummary {
             name: _text(row['name'], inventoryMaxName),
             quantity: _int(row['quantity']),
             lowStockAt: _optionalInt(row['lowStockAt']),
+            storeId: _text(row['storeId'], 128),
+            storeName: _text(row['storeName'], inventoryMaxName),
           ),
       ],
       countWasOff: [
         for (final row in rows('countWasOff'))
           (itemId: _text(row['itemId'], 128), name: _text(row['name'], inventoryMaxName)),
+      ],
+      // Absent from a v1 answer: no blocks, nothing else changes.
+      byCategory: sortCategoriesByRevenue([
+        for (final row in rows('byCategory'))
+          InventoryCategorySummary(
+            categoryId: _text(row['categoryId'], 128),
+            name: _text(row['name'], inventoryMaxName),
+            itemsSold: _int(row['itemsSold']),
+            revenueCents: _int(row['revenueCents']),
+            profitCents: _int(row['profitCents']),
+          ),
+      ]),
+      byStore: [
+        for (final row in rows('byStore'))
+          InventoryStoreSummary(
+            storeId: _text(row['storeId'], 128),
+            name: _text(row['name'], inventoryMaxName),
+            salesCount: _int(row['salesCount']),
+            itemsSold: _int(row['itemsSold']),
+            revenueCents: _int(row['revenueCents']),
+            profitCents: _int(row['profitCents']),
+          ),
       ],
     );
   }
@@ -1088,6 +1301,11 @@ class InventorySummary {
   final List<InventoryBestSeller> best;
   final List<InventoryLowStock> low;
   final List<({String itemId, String name})> countWasOff;
+
+  /// What each category sold, biggest first (voided sales left out), and what
+  /// each store sold (only for someone who sees every store).
+  final List<InventoryCategorySummary> byCategory;
+  final List<InventoryStoreSummary> byStore;
 }
 
 // ---------------------------------------------------------------------------
@@ -1105,7 +1323,37 @@ enum InventoryFailure {
   noPermission,
   invalid,
   unknown,
+
+  // Categories and stores (v2).
+  categoryNameRequired,
+  categoryNameTaken,
+  categoryNotFound,
+  storeNameRequired,
+  storeNotFound,
+  storeArchived,
+  storeHasStock,
+  storeNotAllowed,
+  homeStoreRequired,
+  sameStore,
+  insufficientStock,
+  ownerOnly,
 }
+
+/// The v2 refusal codes (`details.reason`) and the failure each one is.
+const inventoryFailureReasons = <String, InventoryFailure>{
+  'category_name_required': InventoryFailure.categoryNameRequired,
+  'category_name_taken': InventoryFailure.categoryNameTaken,
+  'category_not_found': InventoryFailure.categoryNotFound,
+  'store_name_required': InventoryFailure.storeNameRequired,
+  'store_not_found': InventoryFailure.storeNotFound,
+  'store_archived': InventoryFailure.storeArchived,
+  'store_has_stock': InventoryFailure.storeHasStock,
+  'store_not_allowed': InventoryFailure.storeNotAllowed,
+  'home_store_required': InventoryFailure.homeStoreRequired,
+  'same_store': InventoryFailure.sameStore,
+  'insufficient_stock': InventoryFailure.insufficientStock,
+  'owner_only': InventoryFailure.ownerOnly,
+};
 
 /// Reads a failure from the parts of a `FirebaseFunctionsException`: its
 /// [code], `details.reason` (the codes the callables send) and [message].
@@ -1123,6 +1371,16 @@ InventoryFailure inventoryFailureOf({
       return InventoryFailure.itemNotFound;
     case 'sale_voided':
       return InventoryFailure.saleVoided;
+  }
+  final v2 = inventoryFailureReasons[reason];
+  if (v2 != null) return v2;
+  // A refusal can carry several codes; any of ours names the failure.
+  final all = details is Map ? details['reasons'] : null;
+  if (all is Iterable) {
+    for (final code in all) {
+      final found = inventoryFailureReasons['$code'];
+      if (found != null) return found;
+    }
   }
   switch (code) {
     case 'unavailable':

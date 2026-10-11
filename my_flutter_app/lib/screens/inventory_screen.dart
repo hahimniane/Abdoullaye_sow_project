@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/inventory.dart';
+import '../services/inventory_context.dart';
 import '../services/inventory_service.dart';
+import '../services/inventory_stores.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -13,14 +15,22 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import 'containers_screen.dart' show ContainerActionButton;
+import 'inventory_categories_screen.dart';
 import 'inventory_item_screen.dart';
 import 'inventory_item_sheets.dart';
 import 'inventory_sales_screen.dart';
 import 'inventory_sell_screen.dart';
+import 'inventory_stores_screen.dart';
 
 /// The shop's inventory: today's numbers, what is running low, and the
 /// products with search - low stock first. From here staff add a product, open
 /// one (stock, tags, history), start a sale, or see the sales.
+///
+/// Products can be filtered by category, and the Today numbers carry a
+/// "By category" block. In a business with several stores the counts are per
+/// store: staff see their own store, the owner and "works in all stores" staff
+/// see a store filter and a "By store" block - and the owner reaches the
+/// stores manager from the header. A single-store business shows none of it.
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({
     super.key,
@@ -29,9 +39,14 @@ class InventoryScreen extends StatefulWidget {
     this.service = const InventoryService(),
     this.tagOpener = openInventoryTags,
     this.cameraEnabled = true,
+    this.access = const InventoryAccess.owner(),
   });
 
   final String businessId;
+
+  /// What the signed-in person may do across stores (the owner by default,
+  /// which is what a single-store business always sees).
+  final InventoryAccess access;
   final InventorySource? source;
   final InventoryService service;
   final InventoryTagOpener tagOpener;
@@ -49,11 +64,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
   final List<StreamSubscription<Object?>> _subs = [];
   final TextEditingController _search = TextEditingController();
   Timer? _safety;
+  late final InventoryContextWatcher _watcher = InventoryContextWatcher(
+    source: _source,
+    businessId: widget.businessId,
+    access: widget.access,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+  );
 
   List<InventoryItem> _items = const [];
   bool _loaded = false;
   bool _failed = false;
   bool _showArchived = false;
+
+  /// The category and (for someone who sees every store) the store being
+  /// looked at; '' is "all".
+  String _categoryFilter = '';
+  String _storeFilter = '';
 
   InventorySummary? _summary;
   bool _summaryLoading = true;
@@ -66,6 +94,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     _safety = Timer(const Duration(seconds: 15), () {
       if (mounted && !_loaded) setState(() => _loaded = true);
     });
+    _watcher.start();
     _subs.add(_source.watchItems(widget.businessId).listen((items) {
       if (!mounted) return;
       _safety?.cancel();
@@ -88,6 +117,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   void dispose() {
     _safety?.cancel();
+    _watcher.dispose();
     for (final s in _subs) {
       s.cancel();
     }
@@ -104,7 +134,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
     try {
       final summary = await widget.service
-          .summary(widget.businessId)
+          .summary(
+            widget.businessId,
+            // "All stores" is blank, and only someone who sees every store
+            // may ask for it; a store is asked for by id.
+            storeId: widget.access.seesAllStores ? _storeFilter : '',
+          )
           .timeout(const Duration(seconds: 20));
       if (!mounted) return;
       setState(() {
@@ -132,7 +167,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
         source: _source,
         service: widget.service,
         tagOpener: widget.tagOpener,
+        access: widget.access,
       ));
+
+  void _setStoreFilter(String id) {
+    setState(() => _storeFilter = id);
+    unawaited(_loadSummary());
+  }
 
   Future<void> _add() async {
     final l10n = AppLocalizations.of(context)!;
@@ -140,6 +181,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
       context,
       businessId: widget.businessId,
       service: widget.service,
+      categories: _watcher.categories,
+      stores: _watcher.context,
     );
     if (saved == true && mounted) {
       showSuccessSnackBar(context, l10n.inventoryProductAdded);
@@ -150,17 +193,60 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final shown = inventoryListing(
+    final stores = _watcher.context;
+    final categories = inventoryActiveCategories(_watcher.categories);
+    final category = inventoryCategoryById(categories, _categoryFilter);
+    // One store's count in place of the total, for staff tied to a store and
+    // for anyone who has narrowed to one store.
+    final viewItems = inventoryViewItems(
       _items,
+      stores,
+      _watcher.stock,
+      storeFilter: _storeFilter,
+    );
+    final shown = inventoryListing(
+      viewItems,
       query: _search.text,
       showArchived: _showArchived,
+      categoryId: category?.id ?? '',
+      categoryName: category?.name ?? '',
     );
     final searching = _search.text.trim().isNotEmpty;
+    // The stored products by id (their total counts), once per build, for the
+    // per-store line of someone who sees every store.
+    final rawById = stores.viewerSeesAll && _storeFilter.isEmpty
+        ? {for (final i in _items) i.id: i}
+        : const <String, InventoryItem>{};
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: Column(
         children: [
-          InventoryHeader(title: l10n.inventoryTitle),
+          InventoryHeader(
+            title: l10n.inventoryTitle,
+            actions: [
+              IconButton(
+                key: const Key('inv-open-categories'),
+                tooltip: l10n.inventoryManageCategories,
+                icon: const Icon(Icons.category_outlined),
+                onPressed: () => _push(InventoryCategoriesScreen(
+                  businessId: widget.businessId,
+                  source: _source,
+                  service: widget.service,
+                )),
+              ),
+              if (widget.access.canManageStores)
+                IconButton(
+                  key: const Key('inv-open-stores'),
+                  tooltip: l10n.inventoryStoresTitle,
+                  icon: const Icon(Icons.storefront_outlined),
+                  onPressed: () => _push(InventoryStoresScreen(
+                    businessId: widget.businessId,
+                    source: _source,
+                    service: widget.service,
+                  )),
+                ),
+            ],
+          ),
           Expanded(
             child: ListView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -177,6 +263,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     source: _source,
                     service: widget.service,
                     cameraEnabled: widget.cameraEnabled,
+                    access: widget.access,
                   )),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -200,13 +287,31 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           businessId: widget.businessId,
                           source: _source,
                           service: widget.service,
+                          access: widget.access,
                         )),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                _summaryCard(l10n),
+                if (stores.viewerSeesAll) ...[
+                  InventoryChoiceChips(
+                    keyPrefix: 'inv-store-filter',
+                    options: inventoryStoreChoices(l10n, stores),
+                    selected: _storeFilter,
+                    onSelected: _setStoreFilter,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                if (stores.homeStoreMissing) ...[
+                  InventoryNote(
+                    key: const Key('inv-home-store-missing'),
+                    error: false,
+                    text: l10n.inventoryStoreHomeRequiredView,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                _summaryCard(l10n, stores),
                 const SizedBox(height: AppSpacing.lg),
                 TextField(
                   key: const Key('inv-search'),
@@ -228,6 +333,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
+                if (categories.isNotEmpty) ...[
+                  InventoryChoiceChips(
+                    keyPrefix: 'inv-category-filter',
+                    options: [
+                      (id: '', label: l10n.inventoryCategoryAll),
+                      for (final c in categories) (id: c.id, label: c.name),
+                    ],
+                    selected: category?.id ?? '',
+                    onSelected: (id) => setState(() => _categoryFilter = id),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
                 Align(
                   alignment: Alignment.centerLeft,
                   child: FilterChip(
@@ -266,6 +383,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     _ItemRow(
                       key: ValueKey('inv-item-${item.id}'),
                       item: item,
+                      stores: stores,
+                      allStores: rawById[item.id] == null
+                          ? null
+                          : inventoryStockView(
+                              rawById[item.id]!,
+                              stores,
+                              _watcher.stock,
+                            ),
                       onTap: () => _openItem(item.id),
                     ),
               ],
@@ -276,7 +401,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _summaryCard(AppLocalizations l10n) {
+  Widget _summaryCard(AppLocalizations l10n, InventoryStoreContext stores) {
     final summary = _summary;
     return Container(
       key: const Key('inv-summary'),
@@ -356,13 +481,44 @@ class _InventoryScreenState extends State<InventoryScreen> {
               key: const Key('inv-summary-detail'),
               style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
             ),
+            if (summary.byCategory.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              _sectionLabel(l10n.inventoryByCategoryTitle),
+              for (final row in summary.byCategory)
+                _MoneyRow(
+                  key: ValueKey('inv-bycat-${row.categoryId.isEmpty ? 'none' : row.categoryId}'),
+                  name: row.name.isEmpty
+                      ? l10n.inventoryCategoryUncategorized
+                      : row.name,
+                  money: formatLotCents(row.revenueCents),
+                  detail: [
+                    l10n.inventoryItemsSoldCount(row.itemsSold),
+                    '${l10n.inventoryProfit} ${formatLotCents(row.profitCents)}',
+                  ].join(' · '),
+                ),
+            ],
+            if (stores.viewerSeesAll && summary.byStore.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              _sectionLabel(l10n.inventoryByStoreTitle),
+              for (final row in summary.byStore)
+                _MoneyRow(
+                  key: ValueKey('inv-bystore-${row.storeId}'),
+                  name: row.name.isEmpty ? stores.storeName(row.storeId) : row.name,
+                  money: formatLotCents(row.revenueCents),
+                  detail: [
+                    l10n.inventorySalesCount(row.salesCount),
+                    l10n.inventoryItemsSoldCount(row.itemsSold),
+                    '${l10n.inventoryProfit} ${formatLotCents(row.profitCents)}',
+                  ].join(' · '),
+                ),
+            ],
             if (summary.low.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               _sectionLabel(l10n.inventoryLowStockTitle),
               for (final row in summary.low)
                 _AttentionRow(
-                  key: ValueKey('inv-low-${row.itemId}'),
-                  name: row.name,
+                  key: ValueKey('inv-low-${row.itemId}${row.storeId.isEmpty ? '' : '-${row.storeId}'}'),
+                  name: _lowName(stores, row),
                   trailing: l10n.inventoryInStockCount(row.quantity),
                   color: row.quantity <= 0 ? AppColors.errorRed : AppColors.warn,
                   onTap: () => _openItem(row.itemId),
@@ -384,6 +540,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ],
       ),
     );
+  }
+
+  /// A low-stock row's name, with its store when the business has several.
+  String _lowName(InventoryStoreContext stores, InventoryLowStock row) {
+    if (!stores.multi) return row.name;
+    final store =
+        row.storeName.isNotEmpty ? row.storeName : stores.storeName(row.storeId);
+    return store.isEmpty ? row.name : '${row.name} · $store';
   }
 
   Widget _sectionLabel(String text) => Padding(
@@ -447,15 +611,86 @@ class _AttentionRow extends StatelessWidget {
   }
 }
 
-class _ItemRow extends StatelessWidget {
-  const _ItemRow({super.key, required this.item, required this.onTap});
+/// A line of a money block: a name, what it brought in, and a small detail.
+class _MoneyRow extends StatelessWidget {
+  const _MoneyRow({
+    super.key,
+    required this.name,
+    required this.money,
+    required this.detail,
+  });
 
+  final String name;
+  final String money;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
+                ),
+                Text(
+                  detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            money,
+            style: const TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemRow extends StatelessWidget {
+  const _ItemRow({
+    super.key,
+    required this.item,
+    required this.stores,
+    required this.onTap,
+    this.allStores,
+  });
+
+  /// The product as this person reads it (one store's count in place of the
+  /// total when they work in one store).
   final InventoryItem item;
+  final InventoryStoreContext stores;
+
+  /// For someone who sees every store: each store's count and where it is low.
+  final InventoryItemStockView? allStores;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final perStore = allStores != null && stores.viewerSeesAll
+        ? [
+            for (final row in allStores!.perStore)
+              '${stores.storeName(row.storeId)} ${row.quantity}',
+          ].join(' · ')
+        : '';
+    final lowAt = allStores?.lowStoreIds ?? const <String>[];
     return PressableScale(
       onTap: onTap,
       scale: 0.985,
@@ -500,6 +735,34 @@ class _ItemRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   InventoryStatusChips(item: item),
+                  if (lowAt.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          for (final id in lowAt)
+                            InventoryChip(
+                              key: Key('inv-row-low-${item.id}-$id'),
+                              label: l10n.inventoryStoreLowAt(stores.storeName(id)),
+                              color: AppColors.warn,
+                            ),
+                        ],
+                      ),
+                    ),
+                  if (perStore.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        perStore,
+                        key: Key('inv-row-stores-${item.id}'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.muted),
+                      ),
+                    ),
                 ],
               ),
             ),

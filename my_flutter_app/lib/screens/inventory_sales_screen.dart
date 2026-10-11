@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/inventory.dart';
+import '../services/inventory_context.dart';
 import '../services/inventory_service.dart';
+import '../services/inventory_stores.dart';
 import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -19,17 +21,23 @@ import '../widgets/lot_sheets.dart';
 /// shows what was sold, at what price, how it was paid and by whom. A sale is
 /// undone only as a whole: Void puts the stock back and keeps the sale in the
 /// list marked voided - who and when - so nothing is ever erased.
+///
+/// In a business with several stores, staff see only their own store's sales;
+/// the owner and "works in all stores" staff see every sale with a store line
+/// on each and a store filter.
 class InventorySalesScreen extends StatefulWidget {
   const InventorySalesScreen({
     super.key,
     required this.businessId,
     this.source,
     this.service = const InventoryService(),
+    this.access = const InventoryAccess.owner(),
   });
 
   final String businessId;
   final InventorySource? source;
   final InventoryService service;
+  final InventoryAccess access;
 
   @override
   State<InventorySalesScreen> createState() => _InventorySalesScreenState();
@@ -40,6 +48,21 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
   final List<StreamSubscription<Object?>> _subs = [];
   StreamSubscription<Object?>? _salesSub;
   Timer? _safety;
+  String? _salesKey;
+  late final InventoryContextWatcher _watcher = InventoryContextWatcher(
+    source: _source,
+    businessId: widget.businessId,
+    access: widget.access,
+    watchCategories: false,
+    onChange: () {
+      if (!mounted) return;
+      setState(() {});
+      _listenSales();
+    },
+  );
+
+  /// The store being looked at ('' = all), for someone who sees every store.
+  String _storeFilter = '';
 
   List<InventorySale> _sales = const [];
   List<LotStaff> _staff = const [];
@@ -52,6 +75,7 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
   @override
   void initState() {
     super.initState();
+    _watcher.start();
     _listenSales();
     _subs.add(_source.watchStaff(widget.businessId).listen((staff) {
       if (mounted) setState(() => _staff = staff);
@@ -62,6 +86,7 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
   void dispose() {
     _safety?.cancel();
     _salesSub?.cancel();
+    _watcher.dispose();
     for (final s in _subs) {
       s.cancel();
     }
@@ -70,14 +95,39 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
 
   int get _limit => inventorySalesPageSize * _pages;
 
-  void _listenSales() {
+  /// Listens to the newest sales: everyone's, or - for staff of a business with
+  /// several stores - only their own store's (waiting until the stores are
+  /// known, so nobody asks for more than they may read). Listening again for
+  /// the same store and page does nothing.
+  void _listenSales({bool force = false}) {
+    if (!widget.access.seesAllStores && !_watcher.storesLoaded) {
+      _safety ??= Timer(const Duration(seconds: 15), () {
+        if (mounted && !_loaded) setState(() => _loaded = true);
+      });
+      return;
+    }
+    final ctx = _watcher.context;
+    final store = ctx.ownStoreId;
+    final key = '${ctx.homeStoreMissing ? '!' : store}#$_pages';
+    if (!force && key == _salesKey) return;
+    _salesKey = key;
     _safety?.cancel();
     // A list that never answers is a spinner that never stops.
     _safety = Timer(const Duration(seconds: 15), () {
       if (mounted && !_loaded) setState(() => _loaded = true);
     });
     _salesSub?.cancel();
-    _salesSub = _source.watchSales(widget.businessId, limit: _limit).listen(
+    if (ctx.homeStoreMissing) {
+      // No store, no sales to read.
+      _salesSub = null;
+      _safety?.cancel();
+      _sales = const [];
+      _loaded = true;
+      return;
+    }
+    _salesSub = _source
+        .watchSales(widget.businessId, limit: _limit, storeId: store)
+        .listen(
       (sales) {
         if (!mounted) return;
         _safety?.cancel();
@@ -142,11 +192,36 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final locale = dateLocaleOf(context);
+    final stores = _watcher.context;
+    final shown = stores.viewerSeesAll
+        ? inventorySalesForStore(_sales, _storeFilter)
+        : _sales;
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: Column(
         children: [
           InventoryHeader(title: l10n.inventorySalesTitle),
+          if (stores.homeStoreMissing)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
+              child: InventoryNote(
+                key: const Key('inv-home-store-missing'),
+                error: false,
+                text: l10n.inventoryStoreHomeRequiredView,
+              ),
+            ),
+          if (stores.viewerSeesAll)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
+              child: InventoryChoiceChips(
+                keyPrefix: 'inv-sales-store',
+                options: inventoryStoreChoices(l10n, stores),
+                selected: _storeFilter,
+                onSelected: (id) => setState(() => _storeFilter = id),
+              ),
+            ),
           Expanded(
             child: !_loaded
                 ? const Center(child: CircularProgressIndicator())
@@ -165,7 +240,7 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
                                     _loaded = false;
                                     _failed = false;
                                   });
-                                  _listenSales();
+                                  _listenSales(force: true);
                                 },
                                 child: Text(l10n.retry),
                               ),
@@ -173,7 +248,7 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
                           ],
                         ),
                       )
-                    : _sales.isEmpty
+                    : shown.isEmpty
                         ? LotEmptyState(
                             key: const Key('inv-sales-empty'),
                             icon: Icons.receipt_long_outlined,
@@ -187,12 +262,17 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
                                 AppSpacing.lg,
                                 AppSpacing.xl),
                             children: [
-                              for (final sale in _sales)
+                              for (final sale in shown)
                                 InventorySaleCard(
                                   key: ValueKey('inv-sale-${sale.id}'),
                                   sale: sale,
                                   locale: locale,
                                   staff: _staff,
+                                  storeName: stores.viewerSeesAll
+                                      ? (sale.storeName.isNotEmpty
+                                          ? sale.storeName
+                                          : stores.storeName(sale.storeId))
+                                      : '',
                                   voiding: _voiding == sale.id,
                                   canVoid: _voiding.isEmpty,
                                   onVoid: () => _void(sale),
@@ -232,6 +312,7 @@ class InventorySaleCard extends StatelessWidget {
     required this.onVoid,
     this.voiding = false,
     this.canVoid = true,
+    this.storeName = '',
   });
 
   final InventorySale sale;
@@ -240,6 +321,10 @@ class InventorySaleCard extends StatelessWidget {
   final VoidCallback onVoid;
   final bool voiding;
   final bool canVoid;
+
+  /// The store the sale was made from; blank (and not shown) unless the
+  /// viewer sees every store of a multi-store business.
+  final String storeName;
 
   @override
   Widget build(BuildContext context) {
@@ -322,7 +407,9 @@ class InventorySaleCard extends StatelessWidget {
             [
               inventoryPaymentLabel(l10n, sale.paymentMethod),
               if (soldBy.isNotEmpty) l10n.inventorySoldBy(soldBy),
+              if (storeName.isNotEmpty) l10n.inventoryStoreOf(storeName),
             ].join(' · '),
+            key: Key('inv-sale-meta-${sale.id}'),
             style: const TextStyle(fontSize: 12, color: AppColors.muted),
           ),
           if (sale.voided)

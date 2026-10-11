@@ -5376,5 +5376,135 @@
   "inventorySellDiscardTitle": "Quitter sans vendre ?",
   "inventorySellDiscardBody": "Les articles du panier n'ont pas été vendus. Si vous quittez, le panier est vidé.",
   "inventorySellDiscardKeep": "Rester",
-  "inventorySellDiscardLeave": "Vider le panier et quitter"
+  "inventorySellDiscardLeave": "Vider le panier et quitter",
+  "inventoryCategoryNone": "Aucune catégorie",
+  "inventoryCategoryAddNew": "Ajouter une catégorie",
+  "inventoryCategoryNameLabel": "Nom de la catégorie",
+  "inventoryCategoryCreate": "Ajouter la catégorie",
+  "inventoryCategoryAddedDone": "Catégorie ajoutée.",
+  "inventoryCategoryPickTitle": "Choisissez une catégorie",
+  "inventoryCategoryAll": "Toutes les catégories",
+  "inventoryCategoriesTitle": "Catégories",
+  "inventoryCategoriesEmpty": "Aucune catégorie pour le moment. Ajoutez-en une pour regrouper vos produits.",
+  "inventoryCategoryRename": "Renommer",
+  "inventoryCategoryRenameTitle": "Renommer la catégorie",
+  "inventoryCategoryRenamedDone": "Catégorie renommée.",
+  "inventoryCategoryArchivedDone": "Catégorie archivée.",
+  "inventoryCategoryRestoredDone": "Catégorie restaurée.",
+  "inventoryCategoryUncategorized": "Sans catégorie",
+  "inventoryByCategoryTitle": "Par catégorie",
+  "inventoryErrCategoryName": "Saisissez un nom de catégorie.",
+  "inventoryManageCategories": "Gérer les catégories",
+  "inventoryStoreFilterAll": "Tous les magasins",
+  "inventoryStoreLabel": "Magasin",
+  "inventoryStoresTitle": "Magasins",
+  "inventoryStoresIntro": "Votre boutique fonctionne comme un seul magasin. Ajoutez un deuxième magasin pour compter le stock séparément dans chacun.",
+  "inventoryStoreAdd": "Ajouter un magasin",
+  "inventoryStoreEdit": "Modifier le magasin",
+  "inventoryStoreName": "Nom du magasin",
+  "inventoryStoreAddress": "Adresse (facultatif)",
+  "inventoryStorePhone": "Téléphone (facultatif)",
+  "inventoryStoreSave": "Enregistrer le magasin",
+  "inventoryStoreSavedDone": "Magasin enregistré.",
+  "inventoryStoreArchiveTitle": "Archiver ce magasin ?",
+  "inventoryStoreArchiveMessage": "Il n'est plus proposé pour la vente ni le stock. Un magasin qui contient encore du stock ne peut pas être archivé : déplacez d'abord son stock vers un autre magasin.",
+  "inventoryStoreArchivedDone": "Magasin archivé.",
+  "inventoryStoreRestoredDone": "Magasin restauré.",
+  "inventoryErrStoreName": "Saisissez un nom de magasin.",
+  "inventoryErrStoreRequired": "Choisissez un magasin.",
+  "inventoryStoreSellingFrom": "Vente depuis {store}",
+  "@inventoryStoreSellingFrom": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStoreSellPick": "Vendre depuis",
+  "inventoryStoreHomeRequired": "Demandez au propriétaire de vous attribuer un magasin avant de vendre.",
+  "inventoryStoreHomeRequiredView": "Demandez au propriétaire de vous attribuer un magasin pour voir son stock.",
+  "inventoryStoreLowAt": "Bas à {store}",
+  "@inventoryStoreLowAt": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStockTotalLabel": "Total tous magasins",
+  "inventoryStockByStoreTitle": "Stock par magasin",
+  "inventoryByStoreTitle": "Par magasin",
+  "inventoryYourStore": "Votre magasin : {store}",
+  "@inventoryYourStore": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStoreOf": "Magasin : {store}",
+  "@inventoryStoreOf": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryFieldQuantityAt": "Quantité de départ à {store}",
+  "@inventoryFieldQuantityAt": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryMoveTransfer": "Transfert",
+  "inventoryMoveAtStore": "à {store}",
+  "@inventoryMoveAtStore": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStockForStore": "Comptage à {store}",
+  "@inventoryStockForStore": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryTransfer": "Transférer du stock",
+  "inventoryTransferHelp": "Déplacez des unités d’un magasin à un autre. Le total reste le même.",
+  "inventoryTransferFrom": "De",
+  "inventoryTransferTo": "Vers",
+  "inventoryTransferGo": "Déplacer le stock",
+  "inventoryTransferDone": "Stock déplacé.",
+  "inventoryStaffAccessTitle": "Magasins de l’inventaire",
+  "inventoryStaffAccessHelp": "Choisissez où cette personne vend et compte le stock.",
+  "inventoryHomeStore": "Magasin d’attache",
+  "inventoryHomeStoreNone": "Aucun magasin d’attache",
+  "inventoryAllStoresSwitch": "Travaille dans tous les magasins",
+  "inventoryAllStoresHelp": "Elle voit tous les magasins, choisit le magasin lors d’une vente et peut déplacer du stock entre magasins.",
+  "inventoryStaffAccessSave": "Enregistrer l’accès",
+  "inventoryStaffAccessSaved": "Accès aux magasins enregistré.",
+  "inventoryStaffAccessHome": "Magasin : {store}",
+  "@inventoryStaffAccessHome": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "inventoryStaffAccessUnset": "Pas encore de magasin d’attache",
+  "inventoryFailCategoryNameTaken": "Vous avez déjà une catégorie portant ce nom.",
+  "inventoryFailCategoryNotFound": "Cette catégorie n’existe plus. Choisissez-en une autre.",
+  "inventoryFailStoreNotFound": "Ce magasin est introuvable. Revenez en arrière et réessayez.",
+  "inventoryFailStoreArchived": "Ce magasin est archivé. Choisissez un autre magasin.",
+  "inventoryFailStoreHasStock": "Ce magasin contient encore du stock. Déplacez-le d’abord vers un autre magasin, puis archivez-le.",
+  "inventoryFailStoreNotAllowed": "Vous ne pouvez pas utiliser ce magasin. Vos ventes et comptages vont dans votre propre magasin.",
+  "inventoryFailSameStore": "Choisissez deux magasins différents.",
+  "inventoryFailInsufficientStock": "Le magasin d’origine n’en a pas autant. Réduisez le nombre ou ajoutez d’abord du stock.",
+  "inventoryFailOwnerOnly": "Seul le propriétaire peut faire cela."
 }

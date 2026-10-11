@@ -1277,8 +1277,10 @@ class _ServicesSection extends StatelessWidget {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) =>
-                              InventoryScreen(businessId: ledgerBusinessId),
+                          builder: (_) => InventoryScreen(
+                            businessId: ledgerBusinessId,
+                            access: auth.inventoryAccess,
+                          ),
                         ),
                       );
                     },
