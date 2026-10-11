@@ -17,6 +17,7 @@ String businessServiceLabel(AppLocalizations l10n, BusinessServiceKey key) =>
       BusinessServiceKey.carSales => l10n.businessServiceCarSales,
       BusinessServiceKey.carParking => l10n.businessServiceCarParking,
       BusinessServiceKey.carTransport => l10n.businessServiceCarTransport,
+      BusinessServiceKey.inventory => l10n.businessServiceInventory,
     };
 
 String businessServiceDescription(
@@ -29,6 +30,7 @@ String businessServiceDescription(
   BusinessServiceKey.carSales => l10n.businessServiceCarSalesHint,
   BusinessServiceKey.carParking => l10n.businessServiceCarParkingHint,
   BusinessServiceKey.carTransport => l10n.businessServiceCarTransportHint,
+  BusinessServiceKey.inventory => l10n.businessServiceInventoryHint,
 };
 
 /// A customer service's name in the navbar picker. An id the catalog does

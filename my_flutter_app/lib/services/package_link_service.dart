@@ -7,10 +7,12 @@ import 'package:provider/provider.dart';
 import '../navigation/app_launch_gate.dart';
 import '../navigation/app_navigator.dart';
 import '../providers/auth_provider.dart';
+import '../screens/inventory_sell_screen.dart';
 import '../screens/package_result_screen.dart';
 import '../utils/business_permissions.dart';
 import '../widgets/guest_tracking_lookup.dart';
 import 'container_packages.dart';
+import 'inventory.dart';
 import 'package_codes.dart';
 
 /// Tracking links that open the app: `https://customer.laawoldigital.com/t/
@@ -23,6 +25,11 @@ import 'package_codes.dart';
 /// permission whose business holds the line get the package view; everyone
 /// else gets the public tracking lookup with the code filled in. The
 /// decision itself is the pure [packageLinkDestination].
+///
+/// Product tag links (`/i/IT-XXXXXX`) ride the same pipe: shop staff whose
+/// business has Inventory on and who hold the inventory permission land on the
+/// Sell screen with that tag already in the basket; for anyone else the link
+/// does nothing in the app (the website shows its neutral page).
 class PackageLinkService {
   PackageLinkService._();
 
@@ -30,6 +37,7 @@ class PackageLinkService {
 
   StreamSubscription<Uri>? _sub;
   String? _pendingCode;
+  String? _pendingInventoryCode;
   bool _appReady = false;
   bool _routing = false;
 
@@ -53,6 +61,15 @@ class PackageLinkService {
   /// Takes one incoming link. Anything that is not a package tracking link
   /// is ignored.
   void handleLink(Uri uri) {
+    final tag = inventoryCodeFromLink(uri);
+    if (tag != null) {
+      if (!_appReady || rootNavigatorKey.currentState == null) {
+        _pendingInventoryCode = tag;
+        return;
+      }
+      unawaited(_routeInventory(tag));
+      return;
+    }
     final code = packageCodeFromLink(uri);
     if (code == null) return;
     if (!_appReady || rootNavigatorKey.currentState == null) {
@@ -70,16 +87,23 @@ class PackageLinkService {
     final code = _pendingCode;
     _pendingCode = null;
     if (code != null) unawaited(_route(code));
+    final tag = _pendingInventoryCode;
+    _pendingInventoryCode = null;
+    if (tag != null) unawaited(_routeInventory(tag));
   }
 
   @visibleForTesting
   String? get pendingCode => _pendingCode;
 
   @visibleForTesting
+  String? get pendingInventoryCode => _pendingInventoryCode;
+
+  @visibleForTesting
   void resetForTesting() {
     _sub?.cancel();
     _sub = null;
     _pendingCode = null;
+    _pendingInventoryCode = null;
     _appReady = false;
     _routing = false;
   }
@@ -142,9 +166,61 @@ class PackageLinkService {
     } finally {
       _routing = false;
       final next = _pendingCode;
+      final nextTag = _pendingInventoryCode;
       if (next != null && _appReady) {
         _pendingCode = null;
         unawaited(_route(next));
+      } else if (nextTag != null && _appReady) {
+        _pendingInventoryCode = null;
+        unawaited(_routeInventory(nextTag));
+      }
+    }
+  }
+
+  Future<void> _routeInventory(String code) async {
+    if (_routing) {
+      _pendingInventoryCode = code;
+      return;
+    }
+    final navigator = rootNavigatorKey.currentState;
+    final context = rootNavigatorKey.currentContext;
+    if (navigator == null || context == null) {
+      _pendingInventoryCode = code;
+      return;
+    }
+    _routing = true;
+    try {
+      final auth = context.read<AuthProvider>();
+      await _settled(auth);
+      final businessId = auth.businessId ?? '';
+      final eligible = auth.isAuthenticated &&
+          !(auth.user?.isAnonymous ?? false) &&
+          auth.hasBusinessDashboardAccess &&
+          inventoryAvailable(
+            services: auth.businessServices,
+            hasPermission:
+                auth.hasBusinessPermission(BusinessPermission.inventory),
+            businessId: businessId,
+          );
+      if (!eligible) return;
+      navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              InventorySellScreen(businessId: businessId, initialCode: code),
+        ),
+      );
+    } finally {
+      _routing = false;
+      final next = _pendingCode;
+      final nextTag = _pendingInventoryCode;
+      if (_appReady) {
+        if (next != null) {
+          _pendingCode = null;
+          unawaited(_route(next));
+        } else if (nextTag != null) {
+          _pendingInventoryCode = null;
+          unawaited(_routeInventory(nextTag));
+        }
       }
     }
   }

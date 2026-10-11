@@ -11181,4 +11181,555 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get dstSeedConfirmAction => 'Ajouter tous les pays';
+
+  @override
+  String get businessServiceInventory => 'Inventaire';
+
+  @override
+  String get businessServiceInventoryHint =>
+      'Tenez une liste de produits, imprimez des étiquettes et vendez en les scannant.';
+
+  @override
+  String get inventoryTitle => 'Inventaire';
+
+  @override
+  String get inventorySubtitle => 'Produits, étiquettes et ventes au comptoir.';
+
+  @override
+  String get inventorySell => 'Vendre';
+
+  @override
+  String get inventoryAddProduct => 'Ajouter un produit';
+
+  @override
+  String get inventorySalesTitle => 'Ventes';
+
+  @override
+  String get inventorySearchHint => 'Rechercher par nom, catégorie ou code';
+
+  @override
+  String get inventoryShowArchived => 'Voir les archivés';
+
+  @override
+  String get inventoryTodayTitle => 'Aujourd\'hui';
+
+  @override
+  String get inventorySummaryUnavailable =>
+      'Les chiffres du jour ne sont pas disponibles pour le moment.';
+
+  @override
+  String inventorySalesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ventes',
+      one: '1 vente',
+      zero: 'Aucune vente',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String inventoryItemsSoldCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count articles vendus',
+      one: '1 article vendu',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get inventoryRevenue => 'Recettes';
+
+  @override
+  String get inventoryProfit => 'Bénéfice';
+
+  @override
+  String get inventoryDiscounts => 'Remises accordées';
+
+  @override
+  String get inventoryLowStockTitle => 'Stock bas';
+
+  @override
+  String get inventoryCountOffTitle => 'Comptage erroné';
+
+  @override
+  String get inventoryNoProducts => 'Aucun produit pour le moment';
+
+  @override
+  String get inventoryNoProductsHint =>
+      'Ajoutez un produit, imprimez son étiquette, puis scannez-la pour le vendre.';
+
+  @override
+  String get inventoryNoMatch => 'Aucun produit ne correspond.';
+
+  @override
+  String get inventoryNoArchived => 'Aucun produit archivé.';
+
+  @override
+  String get inventoryLoadFailed =>
+      'Impossible de charger les produits. Vérifiez votre connexion.';
+
+  @override
+  String get inventoryInStock => 'En stock';
+
+  @override
+  String get inventoryLow => 'Bas';
+
+  @override
+  String get inventoryOut => 'Épuisé';
+
+  @override
+  String get inventoryArchivedChip => 'Archivé';
+
+  @override
+  String get inventoryCountWasOff => 'Comptage erroné';
+
+  @override
+  String inventoryInStockCount(int count) {
+    return '$count en stock';
+  }
+
+  @override
+  String get inventoryNewProduct => 'Nouveau produit';
+
+  @override
+  String get inventoryEditProduct => 'Modifier le produit';
+
+  @override
+  String get inventoryFieldName => 'Nom';
+
+  @override
+  String get inventoryFieldPrice => 'Prix';
+
+  @override
+  String get inventoryFieldCost => 'Coût (facultatif)';
+
+  @override
+  String get inventoryFieldQuantity => 'Quantité en stock';
+
+  @override
+  String get inventoryFieldLowStock => 'Stock bas à partir de (facultatif)';
+
+  @override
+  String get inventoryFieldCategory => 'Catégorie (facultatif)';
+
+  @override
+  String get inventoryFieldPhoto => 'Lien de la photo (facultatif)';
+
+  @override
+  String get inventoryLowStockHelp =>
+      'Signalé comme bas à ce nombre ou en dessous. Toujours bas à zéro.';
+
+  @override
+  String get inventoryQuantityHelpEdit =>
+      'Modifiez le comptage depuis la fiche du produit : ajoutez du stock ou fixez le comptage.';
+
+  @override
+  String get inventorySaveProduct => 'Enregistrer le produit';
+
+  @override
+  String get inventorySaving => 'Enregistrement…';
+
+  @override
+  String get inventoryProductAdded => 'Produit ajouté.';
+
+  @override
+  String get inventoryProductSaved => 'Produit enregistré.';
+
+  @override
+  String get inventoryErrNameRequired => 'Saisissez un nom.';
+
+  @override
+  String get inventoryErrNameTooLong => 'Ce nom est trop long.';
+
+  @override
+  String get inventoryErrPrice =>
+      'Saisissez un prix supérieur à zéro, par exemple 12,50.';
+
+  @override
+  String get inventoryErrCost =>
+      'Saisissez un coût comme 8,00, ou laissez vide.';
+
+  @override
+  String get inventoryErrQuantity =>
+      'Saisissez un nombre entier, zéro ou plus.';
+
+  @override
+  String get inventoryErrQuantityAdd =>
+      'Saisissez un nombre entier d\'au moins 1.';
+
+  @override
+  String get inventoryErrLowStock =>
+      'Saisissez un nombre entier, ou laissez vide.';
+
+  @override
+  String get inventoryErrPhoto =>
+      'Saisissez un lien complet commençant par https://.';
+
+  @override
+  String get inventoryProductTitle => 'Produit';
+
+  @override
+  String get inventoryAddStock => 'Ajouter du stock';
+
+  @override
+  String get inventorySetCount => 'Fixer le comptage';
+
+  @override
+  String get inventoryAddStockHelp =>
+      'Combien d\'unités de plus sont arrivées ?';
+
+  @override
+  String get inventorySetCountHelp =>
+      'Comptez ce qui est en rayon. Cela remplace le nombre et efface « comptage erroné ».';
+
+  @override
+  String get inventoryNoteOptional => 'Note (facultatif)';
+
+  @override
+  String get inventoryStockAdded => 'Stock ajouté.';
+
+  @override
+  String get inventoryCountSet => 'Comptage mis à jour.';
+
+  @override
+  String get inventoryPrintTags => 'Imprimer les étiquettes';
+
+  @override
+  String get inventoryTagCopies => 'Combien d\'étiquettes ?';
+
+  @override
+  String get inventoryTagCopiesHelp =>
+      'Chaque étiquette porte le même code. De 1 à 500.';
+
+  @override
+  String get inventoryTagCopiesError =>
+      'Saisissez un nombre entier de 1 à 500.';
+
+  @override
+  String get inventoryTagsOpen => 'Ouvrir les étiquettes';
+
+  @override
+  String get inventoryTagsOpening => 'Ouverture…';
+
+  @override
+  String get inventoryTagsCouldNotOpen =>
+      'Impossible d\'ouvrir les étiquettes. Réessayez dans un instant.';
+
+  @override
+  String get inventoryTagNote =>
+      'Une étiquette de 2 × 1 pouce avec le code QR seul. Réimprimer ne change jamais le code.';
+
+  @override
+  String get inventoryArchive => 'Archiver';
+
+  @override
+  String get inventoryRestore => 'Restaurer';
+
+  @override
+  String get inventoryArchiveTitle => 'Archiver ce produit ?';
+
+  @override
+  String get inventoryArchiveMessage =>
+      'Il disparaît de la vente et de la liste. Son historique reste, et vous pouvez le restaurer.';
+
+  @override
+  String get inventoryArchivedDone => 'Produit archivé.';
+
+  @override
+  String get inventoryRestoredDone => 'Produit restauré.';
+
+  @override
+  String get inventoryDelete => 'Supprimer';
+
+  @override
+  String get inventoryDeleteTitle => 'Supprimer ce produit ?';
+
+  @override
+  String get inventoryDeleteMessage =>
+      'Cela supprime le produit définitivement. Les ventes passées gardent son nom et son prix. Pour le masquer en gardant son historique, archivez-le plutôt.';
+
+  @override
+  String get inventoryDeletedDone => 'Produit supprimé.';
+
+  @override
+  String get inventoryHistoryTitle => 'Historique du stock';
+
+  @override
+  String get inventoryNoHistory => 'Aucun mouvement de stock pour le moment.';
+
+  @override
+  String get inventoryMoveInitial => 'Comptage de départ';
+
+  @override
+  String get inventoryMoveAdd => 'Stock ajouté';
+
+  @override
+  String get inventoryMoveSet => 'Comptage fixé';
+
+  @override
+  String get inventoryMoveSale => 'Vendu';
+
+  @override
+  String get inventoryMoveVoid => 'Vente annulée';
+
+  @override
+  String inventoryMoveNow(int count) {
+    return 'Maintenant $count';
+  }
+
+  @override
+  String inventoryByName(String name) {
+    return 'par $name';
+  }
+
+  @override
+  String get inventoryTagCode => 'Code de l\'étiquette';
+
+  @override
+  String get inventoryPrice => 'Prix';
+
+  @override
+  String get inventoryCost => 'Coût';
+
+  @override
+  String get inventoryCategory => 'Catégorie';
+
+  @override
+  String get inventoryCountOffNote =>
+      'Une vente a dépassé le comptage. Comptez le rayon et fixez le comptage pour effacer ceci.';
+
+  @override
+  String get inventoryProductGone => 'Ce produit n\'existe plus.';
+
+  @override
+  String get inventorySellTitle => 'Vendre';
+
+  @override
+  String get inventoryScanHint => 'Visez une étiquette de produit';
+
+  @override
+  String get inventoryNotATag =>
+      'Ce code QR n\'est pas une étiquette de produit Laawol.';
+
+  @override
+  String get inventoryCameraUnavailable =>
+      'La caméra est indisponible. Saisissez le code de l\'étiquette, ou recherchez le nom du produit ci-dessous.';
+
+  @override
+  String get inventoryFindHint => 'Code de l\'étiquette ou nom du produit';
+
+  @override
+  String inventoryAddCode(String code) {
+    return 'Ajouter $code';
+  }
+
+  @override
+  String get inventoryItemNotYours =>
+      'Cette étiquette n\'est pas l\'un de vos produits.';
+
+  @override
+  String inventoryItemArchivedScan(String name) {
+    return '$name est archivé. Restaurez-le pour le vendre.';
+  }
+
+  @override
+  String get inventoryLookupFailed =>
+      'Impossible de chercher cette étiquette. Vérifiez votre connexion et scannez à nouveau.';
+
+  @override
+  String get inventoryBasketEmpty => 'Rien de scanné pour le moment';
+
+  @override
+  String get inventoryBasketEmptyHint =>
+      'Scannez une étiquette ou recherchez un produit ci-dessus. Scanner la même étiquette ajoute une unité.';
+
+  @override
+  String inventoryAddedToBasket(String name) {
+    return '$name ajouté';
+  }
+
+  @override
+  String inventoryListPrice(String price) {
+    return 'Prix affiché $price';
+  }
+
+  @override
+  String get inventoryLinePrice => 'Prix unitaire';
+
+  @override
+  String get inventoryQty => 'Qté';
+
+  @override
+  String get inventoryQuantityUp => 'Une de plus';
+
+  @override
+  String get inventoryQuantityDown => 'Une de moins';
+
+  @override
+  String get inventoryRemoveLine => 'Retirer';
+
+  @override
+  String get inventoryLineTotal => 'Total de la ligne';
+
+  @override
+  String inventoryExceedsCount(int count) {
+    return 'Le comptage indique $count. Vous pouvez quand même le vendre ; le comptage sera marqué comme erroné.';
+  }
+
+  @override
+  String get inventoryTotal => 'Total';
+
+  @override
+  String inventoryDiscountOff(String amount) {
+    return '$amount de remise sur les prix affichés';
+  }
+
+  @override
+  String inventoryPieces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pièces',
+      one: '1 pièce',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get inventoryPayment => 'Paiement';
+
+  @override
+  String get inventoryPaymentHow => 'Mode de paiement';
+
+  @override
+  String get inventorySold => 'Vendu';
+
+  @override
+  String get inventorySelling => 'Enregistrement…';
+
+  @override
+  String get inventorySaleDone => 'Vente enregistrée';
+
+  @override
+  String inventorySaleDoneTotal(String total) {
+    return '$total enregistré.';
+  }
+
+  @override
+  String get inventoryNewSale => 'Nouvelle vente';
+
+  @override
+  String inventoryCountWasOffWarn(String name) {
+    return 'Comptage erroné pour $name : il y en avait moins que ce que vous avez vendu, le comptage est donc à zéro. Comptez le rayon et fixez le comptage.';
+  }
+
+  @override
+  String get inventoryNetworkError =>
+      'Pas de connexion. Rien n\'est perdu : votre panier est conservé. Réessayez.';
+
+  @override
+  String get inventoryFailArchived =>
+      'Un produit du panier est archivé. Retirez-le et réessayez.';
+
+  @override
+  String get inventoryFailNotFound =>
+      'Un produit du panier est introuvable. Retirez-le et réessayez.';
+
+  @override
+  String get inventoryFailVoided => 'Cette vente a déjà été annulée.';
+
+  @override
+  String get inventoryFailNoPermission =>
+      'Vous n\'avez pas le droit de faire cela pour cette boutique.';
+
+  @override
+  String get inventoryFailInvalid =>
+      'Cela n\'a pas pu être accepté. Vérifiez les détails et réessayez.';
+
+  @override
+  String get inventoryFailUnknown => 'Cela n\'a pas abouti. Réessayez.';
+
+  @override
+  String get inventoryProblemArchived =>
+      'Un produit du panier est archivé. Retirez-le pour continuer.';
+
+  @override
+  String get inventoryProblemTooLarge =>
+      'Ce total est trop élevé pour être enregistré.';
+
+  @override
+  String get inventoryPriceInvalid => 'Saisissez un prix comme 12,50.';
+
+  @override
+  String get inventoryTryAgain => 'Réessayer';
+
+  @override
+  String get inventoryNoSales => 'Aucune vente pour le moment';
+
+  @override
+  String get inventoryNoSalesHint =>
+      'Les ventes enregistrées depuis l\'écran Vendre apparaissent ici.';
+
+  @override
+  String get inventorySalesLoadFailed =>
+      'Impossible de charger les ventes. Vérifiez votre connexion.';
+
+  @override
+  String get inventoryLoadMoreSales => 'Voir plus';
+
+  @override
+  String get inventoryVoidedMark => 'Annulée';
+
+  @override
+  String inventoryVoidedBy(String name, String when) {
+    return 'Annulée par $name · $when';
+  }
+
+  @override
+  String inventoryVoidedWhen(String when) {
+    return 'Annulée · $when';
+  }
+
+  @override
+  String inventorySoldBy(String name) {
+    return 'Vendu par $name';
+  }
+
+  @override
+  String get inventoryVoidSale => 'Annuler la vente';
+
+  @override
+  String get inventoryVoidTitle => 'Annuler cette vente ?';
+
+  @override
+  String get inventoryVoidMessage =>
+      'Le stock retourne en rayon et la vente reste dans la liste, marquée comme annulée. Cette action est irréversible.';
+
+  @override
+  String get inventoryVoidedDone => 'Vente annulée.';
+
+  @override
+  String inventorySaleLine(int quantity, String name, String price) {
+    return '$quantity × $name à $price';
+  }
+
+  @override
+  String inventorySaleLineChanged(
+    int quantity,
+    String name,
+    String price,
+    String list,
+  ) {
+    return '$quantity × $name à $price (affiché $list)';
+  }
+
+  @override
+  String get inventorySaleCountOff => 'comptage erroné';
+
+  @override
+  String get inventoryLowStockAtLabel => 'Stock bas à partir de';
 }
