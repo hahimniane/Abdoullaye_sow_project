@@ -19854,6 +19854,12 @@ abstract class AppLocalizations {
   /// **'Sell'**
   String get inventorySellTitle;
 
+  /// No description provided for @inventoryScanAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan another product'**
+  String get inventoryScanAnother;
+
   /// No description provided for @inventoryScanHint.
   ///
   /// In en, this message translates to:
@@ -20434,6 +20440,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose a store.'**
   String get inventoryErrStoreRequired;
+
+  /// No description provided for @inventoryStoreShowing.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing {store}'**
+  String inventoryStoreShowing(String store);
 
   /// No description provided for @inventoryStoreSellingFrom.
   ///

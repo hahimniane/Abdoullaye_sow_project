@@ -59,6 +59,7 @@ class InventoryStore {
     this.address = '',
     this.phone = '',
     this.archived = false,
+    this.isMain = false,
   });
 
   factory InventoryStore.fromMap(String id, Map<String, dynamic> data) =>
@@ -72,6 +73,7 @@ class InventoryStore {
         ),
         phone: _clip(callableString(data['phone']), inventoryMaxStorePhone),
         archived: data['archived'] == true,
+        isMain: data['isMain'] == true,
       );
 
   final String id;
@@ -80,6 +82,10 @@ class InventoryStore {
   final String address;
   final String phone;
   final bool archived;
+
+  /// The store made when the business first added a second one: it holds the
+  /// whole count of any product the server has not yet counted per store.
+  final bool isMain;
 }
 
 /// One product's count in one store: `inventoryStock/{itemId}__{storeId}`.
@@ -231,6 +237,35 @@ class InventoryStoreContext {
     return active.isEmpty ? '' : active.first.id;
   }
 
+  /// The Main store's id, '' when none is marked.
+  String get mainStoreId {
+    for (final store in stores) {
+      if (store.isMain) return store.id;
+    }
+    return '';
+  }
+
+  /// What [storeId] holds of [item]: its row, or - for a product the server
+  /// has not yet counted per store - the whole count at the Main store and 0
+  /// anywhere else (docs/INVENTORY.md, stock rows).
+  InventoryStockRow? countAt(
+    InventoryItem item,
+    InventoryStockIndex stock,
+    String storeId,
+  ) {
+    final row = stock.row(item.id, storeId);
+    if (row != null) return row;
+    if (!item.storeStock && storeId.isNotEmpty && storeId == mainStoreId) {
+      return InventoryStockRow(
+        itemId: item.id,
+        storeId: storeId,
+        quantity: item.quantity,
+        countWasOff: item.countWasOff,
+      );
+    }
+    return null;
+  }
+
   /// A store's name by id, '' when unknown.
   String storeName(String id) {
     if (id.isEmpty) return '';
@@ -365,7 +400,7 @@ InventoryItemStockView inventoryStockView(
     storeId = storeFilter;
   }
   if (storeId.isNotEmpty) {
-    final row = stock.row(item.id, storeId);
+    final row = context.countAt(item, stock, storeId);
     final quantity = row?.quantity ?? 0;
     return InventoryItemStockView(
       quantity: quantity,
@@ -385,10 +420,13 @@ InventoryItemStockView inventoryStockView(
   final low = <String>[];
   final perStore = <({String storeId, int quantity})>[];
   for (final store in context.active) {
-    final row = stock.row(item.id, store.id);
+    // Flagged low only on a count the server recorded there, never on the
+    // implied Main-store count of a product not yet counted per store.
+    final recorded = stock.row(item.id, store.id);
+    final row = recorded ?? context.countAt(item, stock, store.id);
     perStore.add((storeId: store.id, quantity: row?.quantity ?? 0));
-    if (row != null &&
-        stockStatus(quantity: row.quantity, lowStockAt: item.lowStockAt) !=
+    if (recorded != null &&
+        stockStatus(quantity: recorded.quantity, lowStockAt: item.lowStockAt) !=
             InventoryStock.ok) {
       low.add(store.id);
     }

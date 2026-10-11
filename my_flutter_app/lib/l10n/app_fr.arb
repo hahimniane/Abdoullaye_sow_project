@@ -5413,6 +5413,8 @@
   "inventoryStoreRestoredDone": "Magasin restauré.",
   "inventoryErrStoreName": "Saisissez un nom de magasin.",
   "inventoryErrStoreRequired": "Choisissez un magasin.",
+  "inventoryStoreShowing": "Affichage de {store}",
+  "@inventoryStoreShowing": {"placeholders": {"store": {"type": "String"}}},
   "inventoryStoreSellingFrom": "Vente depuis {store}",
   "@inventoryStoreSellingFrom": {
     "placeholders": {

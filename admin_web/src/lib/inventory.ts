@@ -128,6 +128,8 @@ export type InventoryItem = {
   photoUrl: string;
   archived: boolean;
   countWasOff: boolean;
+  /** True once the server counts this product per store; until then its whole `quantity` sits at the Main store. */
+  storeStock: boolean;
   createdByStaffId: string;
   createdAt: unknown;
   updatedAt: unknown;
@@ -150,6 +152,7 @@ export function inventoryItemFromRow(row: unknown): InventoryItem {
     photoUrl: text(r.photoUrl, MAX_URL),
     archived: r.archived === true,
     countWasOff: r.countWasOff === true,
+    storeStock: r.storeStock === true,
     createdByStaffId: text(r.createdByStaffId),
     createdAt: r.createdAt ?? null,
     updatedAt: r.updatedAt ?? null,
@@ -1446,6 +1449,8 @@ export type InventoryStore = {
   address: string;
   phone: string;
   archived: boolean;
+  /** The store made when the business first added a second one: it holds the whole count of any product not yet counted per store. */
+  isMain: boolean;
   createdAt: unknown;
 };
 
@@ -1457,6 +1462,7 @@ export function inventoryStoreFromRow(row: unknown): InventoryStore {
     address: text(r.address, MAX_STORE_ADDRESS),
     phone: text(r.phone, MAX_STORE_PHONE),
     archived: r.archived === true,
+    isMain: r.isMain === true,
     createdAt: r.createdAt ?? null,
   };
 }
@@ -1720,7 +1726,10 @@ export function itemStockView(item: InventoryItem, scope: Pick<InventoryListScop
   const only = scope.storeId ? stores.filter((store) => store.id === scope.storeId) : stores;
   const cells: StoreStockCell[] = only.map((store) => {
     const row = scope.stock?.get(item.id)?.get(store.id);
-    const quantity = row?.quantity ?? 0;
+    // A product the server has not yet counted per store sits whole at the
+    // Main store (docs/INVENTORY.md, stock rows); it is not flagged low there.
+    const implied = row === undefined && store.isMain && !item.storeStock;
+    const quantity = row?.quantity ?? (implied ? item.quantity : 0);
     const stocked = row !== undefined;
     const belowLimit = item.lowStockAt !== null && quantity <= item.lowStockAt;
     return {
@@ -1729,7 +1738,7 @@ export function itemStockView(item: InventoryItem, scope: Pick<InventoryListScop
       quantity,
       stocked,
       low: !item.archived && stocked && (quantity <= 0 || belowLimit),
-      countWasOff: row?.countWasOff === true,
+      countWasOff: row?.countWasOff === true || (implied && item.countWasOff),
     };
   });
   const lowCells = cells.filter((cell) => cell.low);

@@ -190,10 +190,39 @@ class AuthProvider extends ChangeNotifier {
     _auth.authStateChanges().listen(_onAuthStateChanged);
   }
 
+  /// The signed-in person's own profile, watched for the Inventory store
+  /// access the owner can change at any time (home store, all stores). Read
+  /// once at sign-in, a staff member kept seeing 0 of everything until they
+  /// restarted the app after being assigned a store.
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _profileWatch;
+
+  void _watchInventoryAccess(String uid) {
+    _profileWatch?.cancel();
+    _profileWatch = _firestore.collection('users').doc(uid).snapshots().listen((
+      snapshot,
+    ) {
+      if (_user?.uid != uid) return;
+      final data = snapshot.data();
+      final homeStoreId = (data?['inventoryHomeStoreId'] ?? '')
+          .toString()
+          .trim();
+      final allStores = data?['inventoryAllStores'] == true;
+      if (homeStoreId == _inventoryHomeStoreId &&
+          allStores == _inventoryAllStores) {
+        return;
+      }
+      _inventoryHomeStoreId = homeStoreId;
+      _inventoryAllStores = allStores;
+      notifyListeners();
+    }, onError: (Object _) {});
+  }
+
   Future<void> _onAuthStateChanged(User? user) async {
     final event = ++_authEventGeneration;
     _user = user;
     _initializationIssue = null;
+    _profileWatch?.cancel();
+    _profileWatch = null;
     if (user != null) {
       _clearProfileState();
       _userEmail = user.email;
@@ -201,6 +230,7 @@ class AuthProvider extends ChangeNotifier {
       // Signed out, or another account signed in, while the role loaded: the
       // newer event owns the state now.
       if (event != _authEventGeneration) return;
+      if (_isStaff || _isBusinessOwner) _watchInventoryAccess(user.uid);
       // Covers the restored-session cold start, which never runs authenticate()
       // and so never re-registered a rotated FCM token. Does not prompt.
       unawaited(_refreshPushRegistrationIfPossible());
@@ -795,6 +825,7 @@ class AuthProvider extends ChangeNotifier {
     required double parkingWeeklyRate,
     required double parkingMonthlyRate,
     required int parkingMinimumDays,
+
     /// The lot's alternative price cards, already shaped for the
     /// callable. Omitted means "leave them as they are" — the server
     /// keeps the current cards when the field is absent, so a screen

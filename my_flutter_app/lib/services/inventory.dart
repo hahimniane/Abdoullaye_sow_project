@@ -49,8 +49,9 @@ const inventoryCodePrefix = 'IT';
 /// The path a product tag's link lives under: `/i/<code>`.
 const inventoryLinkSegment = 'i';
 
-final RegExp _itemCode =
-    RegExp('^$inventoryCodePrefix([$packageTrackingAlphabet]{6})\$');
+final RegExp _itemCode = RegExp(
+  '^$inventoryCodePrefix([$packageTrackingAlphabet]{6})\$',
+);
 
 /// [raw] - a QR payload, a typed code, a pasted link - as "IT-XXXXXX", or
 /// null when it holds no product code.
@@ -178,6 +179,7 @@ class InventoryItem {
     this.photoUrl = '',
     this.archived = false,
     this.countWasOff = false,
+    this.storeStock = false,
     this.createdAt,
     this.updatedAt,
     this.createdByStaffId = '',
@@ -198,6 +200,7 @@ class InventoryItem {
         photoUrl: _text(data['photoUrl'], inventoryMaxPhotoUrl),
         archived: data['archived'] == true,
         countWasOff: data['countWasOff'] == true,
+        storeStock: data['storeStock'] == true,
         createdAt: lotDateOf(data['createdAt']),
         updatedAt: lotDateOf(data['updatedAt']),
         createdByStaffId: _text(data['createdByStaffId'], 128),
@@ -223,13 +226,18 @@ class InventoryItem {
   final String photoUrl;
   final bool archived;
   final bool countWasOff;
+
+  /// True once the server counts this product per store; until then its
+  /// whole [quantity] sits at the Main store.
+  final bool storeStock;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String createdByStaffId;
 
   /// The same product showing [quantity] - one store's count in place of the
   /// total - for the screens that sell or list from a single store.
-  InventoryItem withQuantity(int quantity, {bool? countWasOff}) => InventoryItem(
+  InventoryItem withQuantity(int quantity, {bool? countWasOff}) =>
+      InventoryItem(
         id: id,
         businessId: businessId,
         name: name,
@@ -243,6 +251,7 @@ class InventoryItem {
         photoUrl: photoUrl,
         archived: archived,
         countWasOff: countWasOff ?? this.countWasOff,
+        storeStock: storeStock,
         createdAt: createdAt,
         updatedAt: updatedAt,
         createdByStaffId: createdByStaffId,
@@ -420,25 +429,23 @@ class InventoryMovement {
 /// Newest first; movements with no time sink to the end.
 List<InventoryMovement> sortMovementsNewestFirst(
   Iterable<InventoryMovement> movements,
-) =>
-    movements.toList()
-      ..sort((a, b) {
-        final x = a.createdAt, y = b.createdAt;
-        if (x == null && y == null) return 0;
-        if (x == null) return 1;
-        if (y == null) return -1;
-        return y.compareTo(x);
-      });
+) => movements.toList()
+  ..sort((a, b) {
+    final x = a.createdAt, y = b.createdAt;
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return y.compareTo(x);
+  });
 
 List<InventorySale> sortSalesNewestFirst(Iterable<InventorySale> sales) =>
-    sales.toList()
-      ..sort((a, b) {
-        final x = a.createdAt, y = b.createdAt;
-        if (x == null && y == null) return 0;
-        if (x == null) return 1;
-        if (y == null) return -1;
-        return y.compareTo(x);
-      });
+    sales.toList()..sort((a, b) {
+      final x = a.createdAt, y = b.createdAt;
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return y.compareTo(x);
+    });
 
 // ---------------------------------------------------------------------------
 // Listing: low stock first, search, archived.
@@ -509,9 +516,10 @@ List<InventoryItem> inventorySellSearch(
   int limit = 8,
 }) {
   if (query.trim().length < 2) return const [];
-  final hits = inventoryListing(items, query: query)
-      .where((item) => !item.archived)
-      .toList();
+  final hits = inventoryListing(
+    items,
+    query: query,
+  ).where((item) => !item.archived).toList();
   return hits.length > limit ? hits.sublist(0, limit) : hits;
 }
 
@@ -553,13 +561,13 @@ class BasketLine {
     int? quantity,
     int? priceOverrideCents,
     bool clearPrice = false,
-  }) =>
-      BasketLine(
-        item: item ?? this.item,
-        quantity: quantity ?? this.quantity,
-        priceOverrideCents:
-            clearPrice ? null : (priceOverrideCents ?? this.priceOverrideCents),
-      );
+  }) => BasketLine(
+    item: item ?? this.item,
+    quantity: quantity ?? this.quantity,
+    priceOverrideCents: clearPrice
+        ? null
+        : (priceOverrideCents ?? this.priceOverrideCents),
+  );
 }
 
 /// What is about to be sold. Immutable: every change answers a new basket.
@@ -619,8 +627,10 @@ class Basket {
     return _replace(itemId, line.copyWith(priceOverrideCents: cents));
   }
 
-  Basket withoutLine(String itemId) =>
-      Basket([for (final line in lines) if (line.item.id != itemId) line]);
+  Basket withoutLine(String itemId) => Basket([
+    for (final line in lines)
+      if (line.item.id != itemId) line,
+  ]);
 
   /// The same basket with each product replaced by its newest snapshot.
   Basket refreshed(Iterable<InventoryItem> items) {
@@ -633,9 +643,8 @@ class Basket {
     ]);
   }
 
-  Basket _replace(String itemId, BasketLine next) => Basket([
-        for (final line in lines) line.item.id == itemId ? next : line,
-      ]);
+  Basket _replace(String itemId, BasketLine next) =>
+      Basket([for (final line in lines) line.item.id == itemId ? next : line]);
 
   /// Why this basket cannot be sold yet, as codes: `basket_empty`,
   /// `item_archived`, `price_too_large`, `total_too_large`.
@@ -643,8 +652,10 @@ class Basket {
     final codes = <String>[];
     if (lines.isEmpty) codes.add('basket_empty');
     if (lines.any((line) => line.item.archived)) codes.add('item_archived');
-    if (lines.any((line) =>
-        line.soldPriceCents < 0 || line.soldPriceCents > inventoryMaxCents)) {
+    if (lines.any(
+      (line) =>
+          line.soldPriceCents < 0 || line.soldPriceCents > inventoryMaxCents,
+    )) {
       codes.add('price_too_large');
     }
     if (lines.any((line) => line.totalCents > inventoryMaxCents) ||
@@ -657,16 +668,16 @@ class Basket {
   /// What identifies this sale for retry safety: the same lines, quantities,
   /// prices and nothing else give the same signature.
   String get signature => [
-        for (final line in lines)
-          '${line.item.id}x${line.quantity}@${line.soldPriceCents}',
-      ].join('|');
+    for (final line in lines)
+      '${line.item.id}x${line.quantity}@${line.soldPriceCents}',
+  ].join('|');
 }
 
 int _clampQuantity(int quantity) => quantity < 1
     ? 1
     : (quantity > inventoryMaxSaleQuantity
-        ? inventoryMaxSaleQuantity
-        : quantity);
+          ? inventoryMaxSaleQuantity
+          : quantity);
 
 /// Keeps one `clientRequestId` for as long as a sale being retried is the
 /// same sale: a network failure retries with the same id (the server then
@@ -716,15 +727,15 @@ class InventoryItemDraft {
   });
 
   factory InventoryItemDraft.fromItem(InventoryItem item) => InventoryItemDraft(
-        name: item.name,
-        price: invoiceCentsToInput(item.priceCents),
-        cost: item.costCents == null ? '' : invoiceCentsToInput(item.costCents!),
-        quantity: '${item.quantity}',
-        lowStockAt: item.lowStockAt == null ? '' : '${item.lowStockAt}',
-        category: item.category,
-        categoryId: item.categoryId,
-        photoUrl: item.photoUrl,
-      );
+    name: item.name,
+    price: invoiceCentsToInput(item.priceCents),
+    cost: item.costCents == null ? '' : invoiceCentsToInput(item.costCents!),
+    quantity: '${item.quantity}',
+    lowStockAt: item.lowStockAt == null ? '' : '${item.lowStockAt}',
+    category: item.category,
+    categoryId: item.categoryId,
+    photoUrl: item.photoUrl,
+  );
 
   final String name;
   final String price;
@@ -907,7 +918,10 @@ Map<String, Object?> updateInventoryItemRequest(
     if (cost != existing.costCents) 'costCents': cost,
     if (low != existing.lowStockAt) 'lowStockAt': low,
     if (categoryChanged)
-      if (categoryId.isNotEmpty) 'categoryId': categoryId else 'category': category,
+      if (categoryId.isNotEmpty)
+        'categoryId': categoryId
+      else
+        'category': category,
     if (photo != existing.photoUrl) 'photoUrl': photo,
   };
 }
@@ -945,16 +959,14 @@ Map<String, Object?> archiveInventoryItemRequest(
   String businessId,
   String itemId, {
   required bool archived,
-}) =>
-    {'businessId': businessId, 'itemId': itemId, 'archived': archived};
+}) => {'businessId': businessId, 'itemId': itemId, 'archived': archived};
 
 /// `deleteInventoryItem` refuses without `confirm: true`; the screen only
 /// builds this after the person has confirmed.
 Map<String, Object?> deleteInventoryItemRequest(
   String businessId,
   String itemId,
-) =>
-    {'businessId': businessId, 'itemId': itemId, 'confirm': true};
+) => {'businessId': businessId, 'itemId': itemId, 'confirm': true};
 
 /// `recordInventorySale`: one line per product, the price actually charged.
 Map<String, Object?> recordInventorySaleRequest({
@@ -963,25 +975,24 @@ Map<String, Object?> recordInventorySaleRequest({
   required String paymentMethod,
   required Basket basket,
   String storeId = '',
-}) =>
-    {
-      'businessId': businessId,
-      'clientRequestId': clientRequestId,
-      // Only a person who chose a store sends one; left out, the server sells
-      // from the caller's home store (the only store of a single-store shop).
-      if (storeId.isNotEmpty) 'storeId': storeId,
-      'paymentMethod': inventoryPaymentMethods.contains(paymentMethod)
-          ? paymentMethod
-          : 'other',
-      'lines': [
-        for (final line in basket.lines)
-          {
-            'itemId': line.item.id,
-            'quantity': line.quantity,
-            'soldPriceCents': line.soldPriceCents,
-          },
-      ],
-    };
+}) => {
+  'businessId': businessId,
+  'clientRequestId': clientRequestId,
+  // Only a person who chose a store sends one; left out, the server sells
+  // from the caller's home store (the only store of a single-store shop).
+  if (storeId.isNotEmpty) 'storeId': storeId,
+  'paymentMethod': inventoryPaymentMethods.contains(paymentMethod)
+      ? paymentMethod
+      : 'other',
+  'lines': [
+    for (final line in basket.lines)
+      {
+        'itemId': line.item.id,
+        'quantity': line.quantity,
+        'soldPriceCents': line.soldPriceCents,
+      },
+  ],
+};
 
 Map<String, Object?> voidInventorySaleRequest(
   String businessId,
@@ -1001,14 +1012,13 @@ Map<String, Object?> inventoryLabelsRequest(
   String businessId,
   String itemId,
   int copies,
-) =>
-    {
-      'businessId': businessId,
-      'itemId': itemId,
-      'copies': copies < inventoryMinTagCopies
-          ? inventoryMinTagCopies
-          : (copies > inventoryMaxTagCopies ? inventoryMaxTagCopies : copies),
-    };
+) => {
+  'businessId': businessId,
+  'itemId': itemId,
+  'copies': copies < inventoryMinTagCopies
+      ? inventoryMinTagCopies
+      : (copies > inventoryMaxTagCopies ? inventoryMaxTagCopies : copies),
+};
 
 /// A tag-copies entry: a whole number from 1 to 500, else null.
 int? readTagCopies(String raw) {
@@ -1028,15 +1038,14 @@ Map<String, Object?> inventorySummaryRequest(
   String range = 'today',
   required String timeZone,
   String storeId = '',
-}) =>
-    {
-      'businessId': businessId,
-      'range': range == 'month' ? 'month' : 'today',
-      'timeZone': timeZone,
-      // Blank means every store, and only an owner or an all-stores person may
-      // ask for that; everyone else always gets their own store.
-      if (storeId.isNotEmpty) 'storeId': storeId,
-    };
+}) => {
+  'businessId': businessId,
+  'range': range == 'month' ? 'month' : 'today',
+  'timeZone': timeZone,
+  // Blank means every store, and only an owner or an all-stores person may
+  // ask for that; everyone else always gets their own store.
+  if (storeId.isNotEmpty) 'storeId': storeId,
+};
 
 /// An IANA zone name for the phone's clock. Dart reports an abbreviation and
 /// an offset, not the zone, so the US zones are named from their
@@ -1119,9 +1128,9 @@ class InventorySaleResult {
 
   /// The products whose count a sale found wrong.
   List<String> get countWasOffItemIds => [
-        for (final w in warnings)
-          if (w.isCountWasOff) w.itemId,
-      ];
+    for (final w in warnings)
+      if (w.isCountWasOff) w.itemId,
+  ];
 }
 
 class InventoryBestSeller {
@@ -1199,14 +1208,13 @@ class InventoryStoreSummary {
 /// block reads the same whatever order the server answered in.
 List<InventoryCategorySummary> sortCategoriesByRevenue(
   Iterable<InventoryCategorySummary> rows,
-) =>
-    rows.toList()
-      ..sort((a, b) {
-        final byMoney = b.revenueCents.compareTo(a.revenueCents);
-        return byMoney != 0
-            ? byMoney
-            : a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
+) => rows.toList()
+  ..sort((a, b) {
+    final byMoney = b.revenueCents.compareTo(a.revenueCents);
+    return byMoney != 0
+        ? byMoney
+        : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  });
 
 class InventorySummary {
   const InventorySummary({
@@ -1265,7 +1273,10 @@ class InventorySummary {
       ],
       countWasOff: [
         for (final row in rows('countWasOff'))
-          (itemId: _text(row['itemId'], 128), name: _text(row['name'], inventoryMaxName)),
+          (
+            itemId: _text(row['itemId'], 128),
+            name: _text(row['name'], inventoryMaxName),
+          ),
       ],
       // Absent from a v1 answer: no blocks, nothing else changes.
       byCategory: sortCategoriesByRevenue([
@@ -1362,8 +1373,9 @@ InventoryFailure inventoryFailureOf({
   Object? details,
   String? message,
 }) {
-  final reason =
-      details is Map ? _text(details['reason'] ?? details['code'], 60) : '';
+  final reason = details is Map
+      ? _text(details['reason'] ?? details['code'], 60)
+      : '';
   switch (reason) {
     case 'item_archived':
       return InventoryFailure.itemArchived;

@@ -655,7 +655,7 @@ const categoryRows = [
 const categories = inventoryCategories(categoryRows, true);
 
 const storeRows = [
-  { id: "s-main", name: "Main store", createdAt: { seconds: 100 } },
+  { id: "s-main", name: "Main store", isMain: true, createdAt: { seconds: 100 } },
   { id: "s-down", name: "Downtown", createdAt: { seconds: 200 } },
   { id: "s-gone", name: "Closed", archived: true, createdAt: { seconds: 300 } },
 ];
@@ -872,6 +872,24 @@ test("single-store display is exactly what it always was", () => {
       assert.deepEqual(view.cells, []);
     }
   }
+});
+
+test("multi-store: a product not yet counted per store sits whole at the Main store", () => {
+  const none = buildStockIndex([]);
+  const it = item({ quantity: 48, countWasOff: true, lowStockAt: 60 });
+  const main = itemStockView(it, { stores: twoStores, stock: none, storeId: "s-main" });
+  // Shown whole, flagged by the product's own count-was-off, never low (nothing recorded there yet).
+  assert.deepEqual([main.shown, main.status, main.countWasOff, main.lowStoreNames], [48, "ok", true, []]);
+  const down = itemStockView(it, { stores: twoStores, stock: none, storeId: "s-down" });
+  assert.deepEqual([down.shown, down.status], [0, "ok"]);
+  const all = itemStockView(it, { stores: twoStores, stock: none });
+  assert.deepEqual(all.cells.map((c) => [c.storeName, c.quantity]), [["Main store", 48], ["Downtown", 0]]);
+  // Once counted per store, a missing Main row really is 0.
+  const counted = itemStockView(item({ quantity: 48, storeStock: true }), { stores: twoStores, stock: none, storeId: "s-main" });
+  assert.equal(counted.shown, 0);
+  // A store list without a Main flag reads as before.
+  const unflagged = inventoryStores([{ id: "s-main", name: "Main store" }, { id: "s-down", name: "Downtown" }]);
+  assert.equal(itemStockView(it, { stores: unflagged, stock: none, storeId: "s-main" }).shown, 0);
 });
 
 test("multi-store: the total, each store's count, and low per store with the store named", () => {

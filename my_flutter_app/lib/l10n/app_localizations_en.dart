@@ -11332,6 +11332,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inventorySellTitle => 'Sell';
 
   @override
+  String get inventoryScanAnother => 'Scan another product';
+
+  @override
   String get inventoryScanHint => 'Point at a product tag';
 
   @override
@@ -11673,6 +11676,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inventoryErrStoreRequired => 'Choose a store.';
+
+  @override
+  String inventoryStoreShowing(String store) {
+    return 'Showing $store';
+  }
 
   @override
   String inventoryStoreSellingFrom(String store) {

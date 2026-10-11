@@ -60,7 +60,8 @@ class InventoryScreen extends StatefulWidget {
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
-  late final InventorySource _source = widget.source ?? FirestoreInventorySource();
+  late final InventorySource _source =
+      widget.source ?? FirestoreInventorySource();
   final List<StreamSubscription<Object?>> _subs = [];
   final TextEditingController _search = TextEditingController();
   Timer? _safety;
@@ -95,22 +96,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
       if (mounted && !_loaded) setState(() => _loaded = true);
     });
     _watcher.start();
-    _subs.add(_source.watchItems(widget.businessId).listen((items) {
-      if (!mounted) return;
-      _safety?.cancel();
-      setState(() {
-        _items = items;
-        _loaded = true;
-        _failed = false;
-      });
-    }, onError: (_) {
-      if (!mounted) return;
-      _safety?.cancel();
-      setState(() {
-        _loaded = true;
-        _failed = true;
-      });
-    }));
+    _subs.add(
+      _source
+          .watchItems(widget.businessId)
+          .listen(
+            (items) {
+              if (!mounted) return;
+              _safety?.cancel();
+              setState(() {
+                _items = items;
+                _loaded = true;
+                _failed = false;
+              });
+            },
+            onError: (_) {
+              if (!mounted) return;
+              _safety?.cancel();
+              setState(() {
+                _loaded = true;
+                _failed = true;
+              });
+            },
+          ),
+    );
     unawaited(_loadSummary());
   }
 
@@ -156,19 +164,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _push(Widget screen) async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => screen));
     // A sale, a void or a stock change moved today's numbers.
     if (mounted) unawaited(_loadSummary());
   }
 
-  void _openItem(String itemId) => _push(InventoryItemScreen(
-        businessId: widget.businessId,
-        itemId: itemId,
-        source: _source,
-        service: widget.service,
-        tagOpener: widget.tagOpener,
-        access: widget.access,
-      ));
+  void _openItem(String itemId) => _push(
+    InventoryItemScreen(
+      businessId: widget.businessId,
+      itemId: itemId,
+      source: _source,
+      service: widget.service,
+      tagOpener: widget.tagOpener,
+      access: widget.access,
+    ),
+  );
 
   void _setStoreFilter(String id) {
     setState(() => _storeFilter = id);
@@ -228,22 +240,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 key: const Key('inv-open-categories'),
                 tooltip: l10n.inventoryManageCategories,
                 icon: const Icon(Icons.category_outlined),
-                onPressed: () => _push(InventoryCategoriesScreen(
-                  businessId: widget.businessId,
-                  source: _source,
-                  service: widget.service,
-                )),
+                onPressed: () => _push(
+                  InventoryCategoriesScreen(
+                    businessId: widget.businessId,
+                    source: _source,
+                    service: widget.service,
+                  ),
+                ),
               ),
               if (widget.access.canManageStores)
                 IconButton(
                   key: const Key('inv-open-stores'),
                   tooltip: l10n.inventoryStoresTitle,
                   icon: const Icon(Icons.storefront_outlined),
-                  onPressed: () => _push(InventoryStoresScreen(
-                    businessId: widget.businessId,
-                    source: _source,
-                    service: widget.service,
-                  )),
+                  onPressed: () => _push(
+                    InventoryStoresScreen(
+                      businessId: widget.businessId,
+                      source: _source,
+                      service: widget.service,
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -251,20 +267,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
             child: ListView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.xl,
+              ),
               children: [
                 ContainerActionButton(
                   key: const Key('inv-open-sell'),
                   icon: Icons.qr_code_scanner,
                   label: l10n.inventorySell,
                   primary: true,
-                  onTap: () => _push(InventorySellScreen(
-                    businessId: widget.businessId,
-                    source: _source,
-                    service: widget.service,
-                    cameraEnabled: widget.cameraEnabled,
-                    access: widget.access,
-                  )),
+                  onTap: () => _push(
+                    InventorySellScreen(
+                      businessId: widget.businessId,
+                      source: _source,
+                      service: widget.service,
+                      cameraEnabled: widget.cameraEnabled,
+                      access: widget.access,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Row(
@@ -283,12 +305,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         key: const Key('inv-open-sales'),
                         icon: Icons.receipt_long_outlined,
                         label: l10n.inventorySalesTitle,
-                        onTap: () => _push(InventorySalesScreen(
-                          businessId: widget.businessId,
-                          source: _source,
-                          service: widget.service,
-                          access: widget.access,
-                        )),
+                        onTap: () => _push(
+                          InventorySalesScreen(
+                            businessId: widget.businessId,
+                            source: _source,
+                            service: widget.service,
+                            access: widget.access,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -300,6 +324,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     options: inventoryStoreChoices(l10n, stores),
                     selected: _storeFilter,
                     onSelected: _setStoreFilter,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                if (stores.ownStoreId.isNotEmpty) ...[
+                  Text(
+                    l10n.inventoryStoreShowing(
+                      stores.storeName(stores.ownStoreId),
+                    ),
+                    key: const Key('inv-list-store-home'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
@@ -321,8 +359,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     hintText: l10n.inventorySearchHint,
-                    prefixIcon: const Icon(Icons.search,
-                        size: 20, color: AppColors.muted),
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      size: 20,
+                      color: AppColors.muted,
+                    ),
                     suffixIcon: _search.text.isEmpty
                         ? null
                         : IconButton(
@@ -372,8 +413,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     title: searching
                         ? l10n.inventoryNoMatch
                         : (_showArchived
-                            ? l10n.inventoryNoArchived
-                            : l10n.inventoryNoProducts),
+                              ? l10n.inventoryNoArchived
+                              : l10n.inventoryNoProducts),
                     hint: searching || _showArchived
                         ? null
                         : l10n.inventoryNoProductsHint,
@@ -486,7 +527,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
               _sectionLabel(l10n.inventoryByCategoryTitle),
               for (final row in summary.byCategory)
                 _MoneyRow(
-                  key: ValueKey('inv-bycat-${row.categoryId.isEmpty ? 'none' : row.categoryId}'),
+                  key: ValueKey(
+                    'inv-bycat-${row.categoryId.isEmpty ? 'none' : row.categoryId}',
+                  ),
                   name: row.name.isEmpty
                       ? l10n.inventoryCategoryUncategorized
                       : row.name,
@@ -503,7 +546,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
               for (final row in summary.byStore)
                 _MoneyRow(
                   key: ValueKey('inv-bystore-${row.storeId}'),
-                  name: row.name.isEmpty ? stores.storeName(row.storeId) : row.name,
+                  name: row.name.isEmpty
+                      ? stores.storeName(row.storeId)
+                      : row.name,
                   money: formatLotCents(row.revenueCents),
                   detail: [
                     l10n.inventorySalesCount(row.salesCount),
@@ -517,10 +562,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
               _sectionLabel(l10n.inventoryLowStockTitle),
               for (final row in summary.low)
                 _AttentionRow(
-                  key: ValueKey('inv-low-${row.itemId}${row.storeId.isEmpty ? '' : '-${row.storeId}'}'),
+                  key: ValueKey(
+                    'inv-low-${row.itemId}${row.storeId.isEmpty ? '' : '-${row.storeId}'}',
+                  ),
                   name: _lowName(stores, row),
                   trailing: l10n.inventoryInStockCount(row.quantity),
-                  color: row.quantity <= 0 ? AppColors.errorRed : AppColors.warn,
+                  color: row.quantity <= 0
+                      ? AppColors.errorRed
+                      : AppColors.warn,
                   onTap: () => _openItem(row.itemId),
                 ),
             ],
@@ -545,23 +594,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
   /// A low-stock row's name, with its store when the business has several.
   String _lowName(InventoryStoreContext stores, InventoryLowStock row) {
     if (!stores.multi) return row.name;
-    final store =
-        row.storeName.isNotEmpty ? row.storeName : stores.storeName(row.storeId);
+    final store = row.storeName.isNotEmpty
+        ? row.storeName
+        : stores.storeName(row.storeId);
     return store.isEmpty ? row.name : '${row.name} · $store';
   }
 
   Widget _sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-            color: AppColors.muted,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.4,
+        color: AppColors.muted,
+      ),
+    ),
+  );
 }
 
 class _AttentionRow extends StatelessWidget {
@@ -599,9 +649,14 @@ class _AttentionRow extends StatelessWidget {
             ),
             if (trailing.isNotEmpty) ...[
               const SizedBox(width: AppSpacing.sm),
-              Text(trailing,
-                  style: TextStyle(
-                      fontSize: 12.5, fontWeight: FontWeight.w600, color: color)),
+              Text(
+                trailing,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
             ],
             const Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
           ],
@@ -640,7 +695,10 @@ class _MoneyRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
                 ),
                 Text(
                   detail,
@@ -655,7 +713,10 @@ class _MoneyRow extends StatelessWidget {
           Text(
             money,
             style: const TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
           ),
         ],
       ),
@@ -731,7 +792,10 @@ class _ItemRow extends StatelessWidget {
                     ].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.muted,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   InventoryStatusChips(item: item),
@@ -745,7 +809,9 @@ class _ItemRow extends StatelessWidget {
                           for (final id in lowAt)
                             InventoryChip(
                               key: Key('inv-row-low-${item.id}-$id'),
-                              label: l10n.inventoryStoreLowAt(stores.storeName(id)),
+                              label: l10n.inventoryStoreLowAt(
+                                stores.storeName(id),
+                              ),
                               color: AppColors.warn,
                             ),
                         ],
@@ -760,7 +826,9 @@ class _ItemRow extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 12, color: AppColors.muted),
+                          fontSize: 12,
+                          color: AppColors.muted,
+                        ),
                       ),
                     ),
                 ],

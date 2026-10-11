@@ -11509,6 +11509,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get inventorySellTitle => 'Vendre';
 
   @override
+  String get inventoryScanAnother => 'Scanner un autre produit';
+
+  @override
   String get inventoryScanHint => 'Visez une étiquette de produit';
 
   @override
@@ -11853,6 +11856,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get inventoryErrStoreRequired => 'Choisissez un magasin.';
+
+  @override
+  String inventoryStoreShowing(String store) {
+    return 'Affichage de $store';
+  }
 
   @override
   String inventoryStoreSellingFrom(String store) {
