@@ -41,9 +41,13 @@ void main() {
   };
 
   test('the app calls every callable the contract lists', () {
-    // The platform admin's switch lives in the admin console only; the app
-    // never calls it.
-    const adminConsoleOnly = {'setBusinessInventoryService'};
+    // Callables the app never calls: the platform admin's switch lives in the
+    // admin console only, and the category clean-up is server-side.
+    const adminConsoleOnly = {
+      'setBusinessInventoryService',
+      // A one-off server clean-up of legacy typed categories; no screen calls it.
+      'syncInventoryCategories',
+    };
     final contracted = RegExp(r'`(\w+Inventory\w*|\w*Inventory\w+)\s*[\{\(]')
         .allMatches(doc)
         .map((m) => m.group(1)!)
