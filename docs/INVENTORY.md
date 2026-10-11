@@ -80,3 +80,11 @@ Everything above stands. These are the exact details clients can rely on, and th
 **Rules and indexes** (`firestore.rules`, `firestore.indexes.json`): `inventoryItems`, `inventorySales`, `inventoryMovements`: read `lotLedgerRead(resource.data.businessId)`, write false. Composite indexes: items (businessId, code), (businessId, archived), (businessId, name), (businessId, archived, name); sales (businessId, createdAt desc); movements (businessId, itemId), (businessId, itemId, createdAt desc). Clients must always include `where businessId == mine`; the `console-query-rules` test pins the shapes in the "Client reads" line above plus ordered-by-name and archived filters.
 
 **Tests**: `test/inventory.test.js` (pure), `test/inventory-callables.test.js` (`npm run test:inventory`, Firestore emulator), plus inventory cases in `test/firestore-rules.test.js` and `test/console-query-rules.test.js`.
+
+## Console notes (admin_web: what the web client assumes of the callables)
+- `updateInventoryItem`: a cleared cost or low-stock number is sent as `null` (and only when the product had one); category and photoUrl clear with `""`. The count is never sent.
+- `createInventoryItem` answers `{itemId, code}`; the console opens the tags dialog on it for "Save & print tags".
+- Failure reasons the console words itself (`details.reason`): `item_archived`, `item_not_found`, `sale_not_found`, `sale_voided`, `confirm_required`, `service_not_enabled`, plus the validation codes `name_required`, `price_invalid`, `cost_invalid`, `quantity_invalid`, `low_stock_invalid`, `photo_url_invalid`, `copies_invalid`, `payment_method_invalid`. Any other reason falls back to the server's own message.
+- Reads needing composite indexes in `firestore.indexes.json`: `inventorySales` (businessId ASC, createdAt DESC) and `inventoryMovements` (businessId ASC, itemId ASC, createdAt DESC). `inventoryItems` uses `businessId ==` + `archived ==` only (no composite).
+- A voided sale may carry `voidReason`; the console shows it when present.
+- Public tag page: `/i/<CODE>` is rewritten by `admin_web/public/.htaccess` to `/?service=item-tag` (the code is dropped); the page is also recognised from a bare `/i/<CODE>` path. `apple-app-site-association` lists `/i/*`; the Android intent filter (`AndroidManifest.xml`, `pathPrefix="/i/"`) is the app's to add.

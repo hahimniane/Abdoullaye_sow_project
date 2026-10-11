@@ -207,12 +207,14 @@ const businessStaffPermissionOptions = [
   "support",
   "growth",
   "containers",
+  "inventory",
 ] as const;
 
 function businessPermissionLabel(permission: string) {
   if (permission === "carSales") return "Car sales";
   if (permission === "ledger") return "Lot ledger";
   if (permission === "containers") return "Containers";
+  if (permission === "inventory") return "Inventory";
   return permission.charAt(0).toUpperCase() + permission.slice(1);
 }
 
@@ -228,6 +230,7 @@ const businessPermissionRequiredService: Partial<Record<string, string>> = {
   ledger: "carParking",
   listings: "carSales",
   purchases: "carSales",
+  inventory: "inventory",
 };
 
 function businessOffersService(
@@ -434,7 +437,14 @@ const businessServices = [
   { id: "carSales", label: "Car sales" },
   { id: "carParking", label: "Car parking" },
   { id: "carTransport", label: "Car transport" },
+  { id: "inventory", label: "Inventory" },
 ];
+// What a business opens with when an admin adds it, or when its record names
+// no services: the shipping and vehicle services. Inventory is a shop's own
+// tool, switched on per business by an admin, so it is never on by default.
+const defaultBusinessServiceIds = businessServices
+  .filter((service) => service.id !== "inventory")
+  .map((service) => service.id);
 
 const statusLabels = {
   other: "Other",
@@ -7436,7 +7446,7 @@ function WebsiteView({
             </label>
             <fieldset className="wide-field service-checks">
               <legend>Services</legend>
-              {businessServices.map((service) => (
+              {businessServices.filter((service) => service.id !== "inventory").map((service) => (
                 <label className="switch-line" key={service.id}>
                   <input
                     checked={servicesFromText(
@@ -8346,7 +8356,7 @@ function BusinessesView({
   const [state, setState] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [enabledServices, setEnabledServices] = useState<string[]>(
-    businessServices.map((service) => service.id),
+    defaultBusinessServiceIds,
   );
   const [search, setSearch] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
@@ -8408,7 +8418,7 @@ function BusinessesView({
     setCountry("");
     setState("");
     setPostalCode("");
-    setEnabledServices(businessServices.map((service) => service.id));
+    setEnabledServices(defaultBusinessServiceIds);
   }
 
   async function updateMembership({
@@ -8443,7 +8453,7 @@ function BusinessesView({
       status: text(business.businessStatus, "approved"),
       enabledServices: Array.isArray(business.enabledServices)
         ? business.enabledServices
-        : businessServices.map((service) => service.id),
+        : defaultBusinessServiceIds,
     });
   }
 

@@ -4,7 +4,8 @@
       {
         "appIDs": ["GRKB7BXVZK.com.laawoldigital.app"],
         "components": [
-          {"/": "/t/*", "comment": "Package and shipment tracking links (labels, WhatsApp updates)"}
+          {"/": "/t/*", "comment": "Package and shipment tracking links (labels, WhatsApp updates)"},
+          {"/": "/i/*", "comment": "Inventory tag links (the QR on a shop's product tags)"}
         ]
       }
     ]

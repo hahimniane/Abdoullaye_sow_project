@@ -180,6 +180,9 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "query", what: "useBusinessHasRecords probe (limit 1)", shapes: [raw("cars", [eq("businessId")])] },
   { file: L("business-data.ts"), kind: "query", what: "useBusinessCountsByValue", shapes: [raw("lotActivities", [eq("businessId"), eq("activityTypeId")])] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useWaitingPackages", shapes: [bc("containerLines", { pageSize: null, where: [["containerStatus", "==", "waiting"]] })] },
+  { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryItems on sale and archived", shapes: [true, false].map((archived) => bc("inventoryItems", { pageSize: null, where: [["archived", "==", archived]] })) },
+  { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventorySales newest first", shapes: [bc("inventorySales", {})] },
+  { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryMovements of one product", shapes: [bc("inventoryMovements", { where: [eq("itemId")] })] },
   { file: L("business-data.ts"), kind: "useDocsWhereIn", what: "open container lines", shapes: [raw("containerLines", [eq("businessId"), ["containerId", "in", ["a"]]])] },
   // --- lib/use-paged-query.ts: the generic hooks themselves -----------------
   { file: L("use-paged-query.ts"), kind: "query", what: "usePagedQuery window (generic)", shapes: [] },

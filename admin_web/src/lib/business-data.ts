@@ -223,6 +223,33 @@ export function useWaitingPackages(businessId: string, enabled: boolean): Busine
 }
 
 /**
+ * A shop's products, live: the ones on sale (`archived == false`) or the ones
+ * put away (`archived == true`), whole - a shop's catalogue is bounded the way
+ * its team is. Two equalities, so no composite index; the list orders itself
+ * by name. Never the sales or stock history, which only grow.
+ */
+export function useInventoryItems(businessId: string, archived: boolean, enabled: boolean): BusinessRowsResult {
+  return useBusinessCollection("inventoryItems", businessId, enabled, {
+    pageSize: null,
+    where: [["archived", "==", archived]],
+    sort: "query",
+  });
+}
+
+/** A shop's counter sales, newest first, a page at a time (the history only grows). */
+export function useInventorySales(businessId: string, enabled: boolean): BusinessRowsResult {
+  return useBusinessCollection("inventorySales", businessId, enabled, { sort: "query" });
+}
+
+/** One product's stock history, newest first, a page at a time. */
+export function useInventoryMovements(businessId: string, itemId: string, enabled: boolean): BusinessRowsResult {
+  return useBusinessCollection("inventoryMovements", businessId, enabled && Boolean(itemId), {
+    where: [["itemId", "==", itemId]],
+    sort: "query",
+  });
+}
+
+/**
  * What one month's parking bills are built from, live: the four narrow reads
  * of parkingMonthQueryPlan (the server's month-end notice makes the same
  * ones), each complete and bounded by the month. A payment recorded on a car

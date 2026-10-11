@@ -25,6 +25,26 @@ describe("business sidebar navigation", () => {
     );
   });
 
+  it("lists Inventory under Manage, gated on its own service and permission", () => {
+    const groups = buildBusinessSidebarGroups(businessSidebarTabs, [], "");
+    const manage = groups.find((group) => group.id === "manage");
+    assert.deepEqual(
+      manage?.tabs.map((tab) => tab.id),
+      ["invoices", "inventory", "reviews", "cases", "growth"],
+    );
+    const entry = businessSidebarTabs.find((tab) => tab.id === "inventory");
+    assert.equal(entry?.service, "inventory");
+    assert.equal(entry?.permission, "inventory");
+    // The sidebar filter finds it by name and by its service.
+    for (const needle of ["inventory", "counter"]) {
+      assert.deepEqual(
+        buildBusinessSidebarGroups(businessSidebarTabs, [], needle).flatMap((group) => group.tabs.map((tab) => tab.id)),
+        ["inventory"],
+        needle,
+      );
+    }
+  });
+
   it("keeps pinned sections on top and out of their source group", () => {
     const groups = buildBusinessSidebarGroups(businessSidebarTabs, ["destinations"], "");
 

@@ -16,12 +16,16 @@ export function resolveConsoleKind(role: Role | string | null | undefined): Cons
  * lands on `?service=tracking&code=CL-...`, and staff scanning one want that
  * package (their staff view sits above the public result there), not their
  * console's home. Every other service link keeps them in their console.
+ * An inventory tag's page (`item-tag`) opens for everyone with a console.
  */
 export function serviceEntryApplies(
   service: string | null | undefined,
   kind: ConsoleKind | null,
 ): boolean {
   if (!service) return false;
+  // An inventory tag's page says the same to everyone, signed in or not: a
+  // staff member's browser must not swap it for their console.
+  if (service === "item-tag") return kind !== "unsupported";
   if (kind === null || kind === "customer") return true;
   return service === "tracking" && (kind === "business" || kind === "admin");
 }

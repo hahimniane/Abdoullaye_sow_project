@@ -10,6 +10,7 @@ import {
   BarChart3,
   Banknote,
   BookOpen,
+  Boxes,
   Building2,
   CalendarClock,
   Car,
@@ -34,6 +35,7 @@ import {
 import {AssistantWidget} from "@/components/business/assistant-widget";
 import {ContainersPanel} from "@/components/business/containers-panel";
 import {containerDeepLinkFromSearch, type ContainerDeepLink} from "@/lib/package-staff";
+import {InventoryPanel} from "@/components/business/inventory-panel";
 import {InvoicesPanel} from "@/components/business/invoices-panel";
 import {GrowthPanel} from "@/components/business/growth-panel";
 import {
@@ -118,6 +120,7 @@ const serviceLabels: Record<string, string> = {
   carSales: "Car sales",
   carTransport: "Car transport",
   carParking: "Car parking",
+  inventory: "Inventory",
 };
 
 const businessSidebarStorageKey = "laawol:business-sidebar-pins";
@@ -689,6 +692,13 @@ export function BusinessConsole({
             <InvoicesPanel
               businessId={businessId}
               businessName={businessName}
+              business={business}
+              previewMode={previewMode}
+            />
+          )}
+          {activeTab === "inventory" && (
+            <InventoryPanel
+              businessId={businessId}
               business={business}
               previewMode={previewMode}
             />
@@ -1668,6 +1678,7 @@ function tabIcon(tab: BusinessTab) {
     ledger: <BookOpen {...props} />,
     containers: <Container {...props} />,
     invoices: <Receipt {...props} />,
+    inventory: <Boxes {...props} />,
     destinations: <MapPinned {...props} />,
     people: <UserCog {...props} />,
     reviews: <Star {...props} />,

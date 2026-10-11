@@ -26,6 +26,14 @@ test("service links open the guest service page for guests and customers, as bef
   assert.equal(serviceEntryApplies("", "customer"), false);
 });
 
+test("an inventory tag's page opens for everyone who has a console, and for guests", () => {
+  for (const kind of [null, "customer", "business", "admin"] as const) {
+    assert.equal(serviceEntryApplies("item-tag", kind), true, `item-tag for ${kind}`);
+  }
+  // An unsupported role still fails closed to the router's own handling.
+  assert.equal(serviceEntryApplies("item-tag", "unsupported"), false);
+});
+
 test("a package label's tracking link opens the tracking page for business and admin accounts too", () => {
   assert.equal(serviceEntryApplies("tracking", "business"), true);
   assert.equal(serviceEntryApplies("tracking", "admin"), true);

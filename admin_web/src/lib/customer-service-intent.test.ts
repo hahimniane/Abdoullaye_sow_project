@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  customerServiceFromLocation,
   customerServiceFromSearch,
   customerServiceUrl,
 } from "./customer-service-intent.ts";
@@ -16,6 +17,7 @@ test("public customer service links select every supported customer journey", ()
   assert.equal(customerServiceFromSearch("?service=shared-barrels"), "shared-barrels");
   assert.equal(customerServiceFromSearch("?service=cars"), "cars");
   assert.equal(customerServiceFromSearch("?service=tracking"), "tracking");
+  assert.equal(customerServiceFromSearch("?service=item-tag"), "item-tag");
   assert.equal(customerServiceFromSearch("?service=unknown"), null);
   assert.equal(customerServiceUrl("freight"), "https://customer.laawoldigital.com/?service=freight");
 });
@@ -60,7 +62,7 @@ test("guest service entry gates only final submission and preserves the mounted 
   assert.match(shipping, /ensureGuestOrAccount/);
   assert.match(entry, /askHowToContinue/);
   assert.match(entry, /finishContinuation\(true\)/);
-  assert.match(router, /customerServiceFromSearch/);
+  assert.match(router, /customerServiceFromLocation/);
   assert.match(router, /user\.isAnonymous/);
   assert.match(router, /!firebaseUser\.isAnonymous/);
 });
@@ -176,4 +178,16 @@ test("guest service forms keep their header copy readable on narrow screens", ()
     styles,
     /@media \(max-width: 480px\)\s*\{[\s\S]*\.customer-entry-header\s*\{[\s\S]*display: grid;[\s\S]*\.customer-entry-header-actions \.secondary-button\s*\{[\s\S]*width: 100%;/,
   );
+});
+
+test("an inventory tag's link is recognised as a path or as the rewritten service link", () => {
+  assert.equal(customerServiceFromLocation("/i/IT-K7M4P2", ""), "item-tag");
+  assert.equal(customerServiceFromLocation("/i/IT-K7M4P2/", ""), "item-tag");
+  assert.equal(customerServiceFromLocation("/", "?service=item-tag"), "item-tag");
+  // Other paths are not tags, and a service link still wins.
+  assert.equal(customerServiceFromLocation("/", ""), null);
+  assert.equal(customerServiceFromLocation("/i/", ""), null);
+  assert.equal(customerServiceFromLocation("/t/CL-K7M4P2", ""), null);
+  assert.equal(customerServiceFromLocation("/index.html", "?service=tracking&code=CL-K7M4P2"), "tracking");
+  assert.equal(customerServiceFromLocation("/i/a/b", ""), null);
 });
