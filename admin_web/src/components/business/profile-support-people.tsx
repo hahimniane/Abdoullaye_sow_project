@@ -99,10 +99,23 @@ import {
   MAX_ITEM_FLAT_PRICE,
   STANDARD_FREIGHT_ITEMS,
 } from "@/lib/freight-payback";
+import { useInventoryStores } from "@/lib/business-data";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
+import {
+  businessHasInventory,
+  inventoryCallableFailure,
+  inventoryMessage,
+  inventoryStaffAccessFromRow,
+  inventoryStores as activeInventoryStores,
+  setInventoryStaffAccessRequest,
+  staffAccessChanged,
+  validateStaffAccess,
+  type InventoryStore,
+  type StaffStoreAccess,
+} from "@/lib/inventory";
 import { currentWebLanguage } from "@/lib/language";
 import { CITIES_BY_STATE, US_STATE_NAMES } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
@@ -2568,6 +2581,10 @@ export function BusinessPeoplePanel({
   const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
   const businessName = text(business?.name, businessId || "this business");
   const invitations = useBusinessInvitations(businessId);
+  // Which store a person works in is the owner's to set, and only matters once there are two stores.
+  const storesRead = useInventoryStores(businessId, canManageStaff && businessHasInventory(business));
+  const inventoryStoreList = useMemo(() => activeInventoryStores(storesRead.rows), [storesRead.rows]);
+  const storeAccessStores = inventoryStoreList.length >= 2 ? inventoryStoreList : [];
 
   function update(patch: Partial<StaffDraft>) {
     setDraft((current) => ({...current, ...patch}));
@@ -2659,6 +2676,29 @@ export function BusinessPeoplePanel({
     );
   }
 
+  async function saveInventoryAccess(row: FirestoreRow, access: StaffStoreAccess) {
+    await run(
+      "Store access saved",
+      async () => {
+        const problems = validateStaffAccess(access, storeAccessStores);
+        if (problems.length) throw new Error(inventoryMessage(problems));
+        try {
+          await httpsCallable(functions, "setInventoryStaffAccess")(
+            setInventoryStaffAccessRequest(businessId, row.id, access),
+          );
+        } catch (failure) {
+          throw new Error(inventoryCallableFailure(failure).message);
+        }
+      },
+      {
+        confirm:
+          `Save store access for ${text(row.fullName ?? row.email, row.id)}?`,
+        confirmFr:
+          `Enregistrer l’accès aux magasins de ${text(row.fullName ?? row.email, row.id)} ?`,
+      },
+    );
+  }
+
   return (
     <section className="lst">
       <header className="lst-head">
@@ -2720,6 +2760,8 @@ export function BusinessPeoplePanel({
             saving={busy}
             savePermissions={saveStaffPermissions}
             setPermissions={(permissions) => { row.businessPermissions = permissions; }}
+            inventoryStores={storeAccessStores}
+            saveInventoryAccess={saveInventoryAccess}
           />
         ))}
       </div>
@@ -2926,6 +2968,8 @@ function StaffRow({
   saving,
   setPermissions,
   savePermissions,
+  inventoryStores = [],
+  saveInventoryAccess,
 }: {
   row: FirestoreRow;
   business?: FirestoreRow | null;
@@ -2933,13 +2977,20 @@ function StaffRow({
   saving: boolean;
   setPermissions: (permissions: string[]) => void;
   savePermissions: (row: FirestoreRow) => Promise<void>;
+  /** The active stores, only when the business has two or more (else the controls stay away). */
+  inventoryStores?: InventoryStore[];
+  saveInventoryAccess?: (row: FirestoreRow, access: StaffStoreAccess) => Promise<void>;
 }) {
   const [permissions, setLocalPermissions] = useState<string[]>(() =>
     rowPermissions(row),
   );
+  const [storeAccess, setStoreAccess] = useState<StaffStoreAccess>(() =>
+    inventoryStaffAccessFromRow(row),
+  );
 
   useEffect(() => {
     setLocalPermissions(rowPermissions(row));
+    setStoreAccess(inventoryStaffAccessFromRow(row));
   }, [row]);
 
   function toggle(id: string, checked: boolean) {
@@ -2994,6 +3045,47 @@ function StaffRow({
                 {saving ? "Saving..." : "Save permissions"}
               </button>
             </div>
+          )}
+          {canManageStaff && saveInventoryAccess && inventoryStores.length >= 2 && permissions.includes("inventory") && (
+            <>
+              <div className="lst-form-section">Inventory stores</div>
+              <div className="lst-form-grid ivt-staff-access">
+                <label className="lst-field"><span>Home store</span>
+                  <select
+                    value={storeAccess.homeStoreId}
+                    onChange={(e) => setStoreAccess((current) => ({ ...current, homeStoreId: e.target.value }))}
+                    disabled={saving}
+                    aria-label="Home store"
+                  >
+                    <option value="">No home store</option>
+                    {inventoryStores.map((store) => (
+                      <option key={store.id} value={store.id} data-no-translate>{store.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="lst-check">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={storeAccess.allStores}
+                    onChange={(e) => setStoreAccess((current) => ({ ...current, allStores: e.target.checked }))}
+                    disabled={saving}
+                  />
+                  <span>Works in all stores</span>
+                </label>
+              </div>
+              <div className="pur-actions">
+                <button
+                  className="lst-btn"
+                  type="button"
+                  disabled={saving || !staffAccessChanged(row, storeAccess)}
+                  onClick={() => saveInventoryAccess(row, storeAccess)}
+                >
+                  {saving ? <RefreshCw className="spin" size={14} /> : <Save size={14} />}
+                  {saving ? "Saving..." : "Save store access"}
+                </button>
+              </div>
+            </>
           )}
         </>
       ) : (

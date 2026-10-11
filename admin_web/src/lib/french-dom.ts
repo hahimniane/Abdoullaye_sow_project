@@ -5293,6 +5293,114 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Requested Inventory": "Inventaire demandé",
 });
 
+// Inventory v2 (docs/INVENTORY.md, "Categories and stores (v2)"): the
+// categories manager and breakdown, the stores manager, per-store stock,
+// transfers, the owner's store access on People, and the refusals the server
+// raises for them. Short words ("Store", "Stores") are exact keys; the regex
+// only reaches them inside text that has no entry of its own.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Categories": "Catégories",
+  "Uncategorized": "Sans catégorie",
+  "All categories": "Toutes les catégories",
+  "Filter by category": "Filtrer par catégorie",
+  "No category": "Aucune catégorie",
+  "Add a new category": "Ajouter une nouvelle catégorie",
+  "New category name": "Nom de la nouvelle catégorie",
+  "Archived categories": "Catégories archivées",
+  "Save the name": "Enregistrer le nom",
+  "Rename": "Renommer",
+  "Restore": "Restaurer",
+  "Group your products. The same list is used in every store. A category is archived, never deleted: its products keep it.":
+    "Regroupez vos produits. La même liste sert dans tous les magasins. Une catégorie est archivée, jamais supprimée : ses produits la gardent.",
+  "No categories yet. Add the first one above, or add one while you create a product.":
+    "Aucune catégorie pour l’instant. Ajoutez la première ci-dessus, ou ajoutez-en une en créant un produit.",
+  "Category added.": "Catégorie ajoutée.",
+  "Category renamed.": "Catégorie renommée.",
+  "Category archived. Its products keep it.": "Catégorie archivée. Ses produits la gardent.",
+  "Category restored.": "Catégorie restaurée.",
+  "Items sold": "Articles vendus",
+  "Stores": "Magasins",
+  "Store": "Magasin",
+  "By store": "Par magasin",
+  "All stores": "Tous les magasins",
+  "Filter by store": "Filtrer par magasin",
+  "No store": "Aucun magasin",
+  "New store": "Nouveau magasin",
+  "Edit store": "Modifier le magasin",
+  "Store name": "Nom du magasin",
+  "Add a store": "Ajouter un magasin",
+  "Add store": "Ajouter le magasin",
+  "Archived stores": "Magasins archivés",
+  "Your products and counts are in one store today. Add another store to count the stock of each one separately.":
+    "Vos produits et vos quantités sont dans un seul magasin aujourd’hui. Ajoutez un autre magasin pour compter le stock de chacun séparément.",
+  "Stock is counted in each store. Staff work in their home store; you can let someone work in all of them from People.":
+    "Le stock est compté dans chaque magasin. Le personnel travaille dans son magasin d’attache ; vous pouvez autoriser quelqu’un à travailler dans tous depuis Équipe.",
+  "No store added yet. Your products stay in your main store until you add one.":
+    "Aucun magasin ajouté pour l’instant. Vos produits restent dans votre magasin principal tant que vous n’en ajoutez pas.",
+  "Store added.": "Magasin ajouté.",
+  "Store updated.": "Magasin mis à jour.",
+  "Store archived.": "Magasin archivé.",
+  "Store restored.": "Magasin restauré.",
+  "How many in stock in each store": "Quantité en stock dans chaque magasin",
+  "Flagged as low in a store at or below this number, and always at 0.":
+    "Signalé comme bas dans un magasin à ce nombre ou en dessous, et toujours à 0.",
+  "You have no home store yet. Ask the owner to assign one before adding stock.":
+    "Vous n’avez pas encore de magasin d’attache. Demandez au propriétaire de vous en attribuer un avant d’ajouter du stock.",
+  "You have no home store yet. Ask the owner to assign one in People, then the products and sales of your store appear here.":
+    "Vous n’avez pas encore de magasin d’attache. Demandez au propriétaire de vous en attribuer un dans Équipe : les produits et les ventes de votre magasin apparaîtront ensuite ici.",
+  "No sales from this store in the sales loaded so far.":
+    "Aucune vente de ce magasin parmi les ventes chargées jusqu’ici.",
+  "Move stock": "Déplacer du stock",
+  "Move stock between stores": "Déplacer du stock entre magasins",
+  "The total does not change: what leaves one store arrives in the other.":
+    "Le total ne change pas : ce qui sort d’un magasin arrive dans l’autre.",
+  "Choose a product": "Choisir un produit",
+  "From store": "Du magasin",
+  "To store": "Vers le magasin",
+  "Choose a store": "Choisir un magasin",
+  "How many to move": "Quantité à déplacer",
+  "After this": "Après ce déplacement",
+  "Stock moved": "Stock déplacé",
+  "Stock moved.": "Stock déplacé.",
+  "Moved in from another store": "Reçu d’un autre magasin",
+  "Moved out to another store": "Envoyé vers un autre magasin",
+  "Inventory stores": "Magasins de l’inventaire",
+  "Home store": "Magasin d’attache",
+  "No home store": "Aucun magasin d’attache",
+  "Works in all stores": "Travaille dans tous les magasins",
+  "Save store access": "Enregistrer l’accès aux magasins",
+  "Store access saved": "Accès aux magasins enregistré",
+  // The server's refusals for categories and stores, and the checks made before the call.
+  "Enter a whole number from 0 for each store, or leave it empty.":
+    "Saisissez un nombre entier à partir de 0 pour chaque magasin, ou laissez le champ vide.",
+  "Choose which store.": "Choisissez le magasin.",
+  "Choose the product to move.": "Choisissez le produit à déplacer.",
+  "Choose the store it leaves and the store it goes to.":
+    "Choisissez le magasin d’où il part et celui où il arrive.",
+  "Enter how many to move, a whole number above zero.":
+    "Saisissez la quantité à déplacer, un nombre entier supérieur à zéro.",
+  "The store's name is too long.": "Le nom du magasin est trop long.",
+  "The address or phone number is too long.":
+    "L’adresse ou le numéro de téléphone est trop long.",
+  "Choose a home store, or let this person work in all stores.":
+    "Choisissez un magasin d’attache, ou autorisez cette personne à travailler dans tous les magasins.",
+  "Enter the category's name.": "Saisissez le nom de la catégorie.",
+  "You already have a category with that name.": "Vous avez déjà une catégorie portant ce nom.",
+  "That category no longer exists.": "Cette catégorie n’existe plus.",
+  "Enter the store's name.": "Saisissez le nom du magasin.",
+  "That store no longer exists.": "Ce magasin n’existe plus.",
+  "That store is archived. Restore it first.": "Ce magasin est archivé. Restaurez-le d’abord.",
+  "That store still has stock. Move it to another store first.":
+    "Ce magasin a encore du stock. Déplacez-le d’abord vers un autre magasin.",
+  "You can only work in your own store.": "Vous ne pouvez travailler que dans votre propre magasin.",
+  "You have no home store yet. Ask the owner to assign one.":
+    "Vous n’avez pas encore de magasin d’attache. Demandez au propriétaire de vous en attribuer un.",
+  "Choose two different stores.": "Choisissez deux magasins différents.",
+  "There are not enough in the store it leaves to move that many.":
+    "Il n’y en a pas assez dans le magasin d’où il part pour en déplacer autant.",
+  "Only the owner can do this.": "Seul le propriétaire peut faire cela.",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Inventory service": "Service d’inventaire",
   "17 characters": "17 caractères",

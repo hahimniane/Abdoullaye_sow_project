@@ -14293,3 +14293,45 @@ html[data-lang-pending] body {
 .item-tag-notice p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
 .item-tag-notice .guest-tracking-upsell-actions { justify-content: center; flex-wrap: wrap; margin-top: 6px; }
 .ivt-panel .panel-tools input[type="search"] { flex: 1 1 200px; min-width: 0; }
+
+/* Inventory v2: categories and stores. Nothing below applies to a single-store
+   business except the Categories block and the category picker. */
+.ivt-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.ivt-summary-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ivt-summary .ivt-summary-bar .service-segments { margin-top: 12px; }
+.ivt-summary-bar .panel-tools { margin-top: 12px; }
+.ivt-breakdowns { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin: 10px 0 6px; }
+.ivt-breakdown { overflow-x: auto; min-width: 0; }
+.ivt-breakdown h4 { margin: 0 0 6px; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ivt-money-table td, .ivt-money-table th { text-align: right; }
+.ivt-money-table td:first-child, .ivt-money-table th:first-child { text-align: left; }
+.ivt-with-store.ivt-sales-table .mini-table-head,
+.ivt-with-store.ivt-sales-table .mini-table-row {
+  grid-template-columns:
+    minmax(150px, 1.3fr)
+    minmax(150px, 1.5fr)
+    minmax(100px, 0.9fr)
+    minmax(100px, 0.9fr)
+    minmax(110px, 1fr)
+    minmax(56px, 0.4fr);
+}
+.ivt-store-stock-table .mini-table-head,
+.ivt-store-stock-table .mini-table-row { grid-template-columns: minmax(160px, 2fr) minmax(160px, 2fr); }
+.ivt-store-stock-table .ivt-total-row { border-top: 2px solid var(--rule, #e5e7eb); }
+.ivt-inline-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.ivt-inline-add input { flex: 1 1 180px; min-width: 0; padding: 10px 12px; border: 1.5px solid var(--rule); border-radius: 12px; font: inherit; font-size: 14.5px; background: #fff; color: var(--ink); }
+.ivt-stock-stores { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.ivt-stock-stores legend { grid-column: 1 / -1; }
+.ivt-manage-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; }
+.ivt-manage-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--rule, #e5e7eb); min-width: 0; }
+.ivt-manage-row:last-child { border-bottom: 0; }
+.ivt-manage-row > strong, .ivt-manage-main { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ivt-manage-row input { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 1.5px solid var(--rule); border-radius: 10px; font: inherit; }
+.ivt-manage-main { display: flex; flex-direction: column; gap: 1px; }
+.ivt-manage-main small { color: var(--muted); font-size: 12px; }
+.ivt-manage-actions { display: inline-flex; gap: 4px; flex: 0 0 auto; }
+.ivt-manage-sub { margin: 16px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ivt-staff-access { margin-bottom: 8px; }
+@media (max-width: 640px) {
+  .ivt-summary-bar { align-items: stretch; }
+}

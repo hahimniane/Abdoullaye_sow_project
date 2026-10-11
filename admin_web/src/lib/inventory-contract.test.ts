@@ -36,6 +36,10 @@ const screens = {
   "the sales list": B + "inventory-sales-list.tsx",
   "the summary card": B + "inventory-summary-card.tsx",
   "the product detail": B + "inventory-item-detail.tsx",
+  "the categories manager": B + "inventory-categories-dialog.tsx",
+  "the stores manager": B + "inventory-stores-dialog.tsx",
+  "the transfer dialog": B + "inventory-transfer-dialog.tsx",
+  "the store filter": B + "inventory-store-filter.tsx",
   "the public tag page": "../components/item-tag-page.tsx",
 } as const;
 const sources = Object.fromEntries(Object.entries(screens).map(([name, path]) => [name, read(path)])) as Record<keyof typeof screens, string>;
@@ -185,12 +189,12 @@ test("every callable the inventory screens use is called through httpsCallable, 
 
 test("products, sales and stock history are read through the shared business hooks", () => {
   assert.match(businessDataSource, /export function useInventoryItems\(businessId: string, archived: boolean, enabled: boolean\): BusinessRowsResult \{\s*return useBusinessCollection\("inventoryItems", businessId, enabled, \{\s*pageSize: null,\s*where: \[\["archived", "==", archived\]\],/);
-  assert.match(businessDataSource, /return useBusinessCollection\("inventorySales", businessId, enabled, \{ sort: "query" \}\);/);
+  assert.match(businessDataSource, /return useBusinessCollection\("inventorySales", businessId, enabled, \{\s*\.\.\.\(store \? \{ where: \[\["storeId", "==", store\]\] \} : \{\}\),\s*sort: "query",\s*\}\);/);
   assert.match(businessDataSource, /return useBusinessCollection\("inventoryMovements", businessId, enabled && Boolean\(itemId\), \{\s*where: \[\["itemId", "==", itemId\]\],/);
   assert.doesNotMatch(allSource, /useBusinessCollection\(|query\(/, "screens read through the named hooks");
   assert.match(sources["the inventory panel"], /useInventoryItems\(businessId, false, enabled\)/);
   assert.match(sources["the inventory panel"], /useInventoryItems\(businessId, true, enabled && filter === "archived"\)/);
-  assert.match(sources["the sales list"], /useInventorySales\(businessId, enabled\)/);
+  assert.match(sources["the sales list"], /useInventorySales\(businessId, enabled && !access\.needsHomeStore, access\.scopedStoreId\)/);
   assert.match(sources["the product detail"], /useInventoryMovements\(businessId, item\.id, enabled\)/);
 });
 

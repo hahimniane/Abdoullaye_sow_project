@@ -236,9 +236,42 @@ export function useInventoryItems(businessId: string, archived: boolean, enabled
   });
 }
 
-/** A shop's counter sales, newest first, a page at a time (the history only grows). */
-export function useInventorySales(businessId: string, enabled: boolean): BusinessRowsResult {
-  return useBusinessCollection("inventorySales", businessId, enabled, { sort: "query" });
+/**
+ * A shop's counter sales, newest first, a page at a time (the history only
+ * grows). Staff who work in one store only are asked for that store's sales
+ * (`storeId`), which is what the rules let them read; everyone else reads
+ * them all and narrows by store on screen.
+ */
+export function useInventorySales(businessId: string, enabled: boolean, storeId = ""): BusinessRowsResult {
+  const store = storeId.trim();
+  return useBusinessCollection("inventorySales", businessId, enabled, {
+    ...(store ? { where: [["storeId", "==", store]] } : {}),
+    sort: "query",
+  });
+}
+
+/** A business's product categories, whole (a short list), archived ones included. */
+export function useInventoryCategories(businessId: string, enabled: boolean): BusinessRowsResult {
+  return useBusinessCollection("inventoryCategories", businessId, enabled, { pageSize: null, sort: "query" });
+}
+
+/** A business's stores, whole (a handful), archived ones included. */
+export function useInventoryStores(businessId: string, enabled: boolean): BusinessRowsResult {
+  return useBusinessCollection("inventoryStores", businessId, enabled, { pageSize: null, sort: "query" });
+}
+
+/**
+ * The per-store counts, whole: one row per product and store that holds a
+ * count. Staff who work in one store only are asked for that store's rows
+ * (`storeId`), the only ones the rules let them read.
+ */
+export function useInventoryStock(businessId: string, enabled: boolean, storeId = ""): BusinessRowsResult {
+  const store = storeId.trim();
+  return useBusinessCollection("inventoryStock", businessId, enabled, {
+    pageSize: null,
+    ...(store ? { where: [["storeId", "==", store]] } : {}),
+    sort: "query",
+  });
 }
 
 /** One product's stock history, newest first, a page at a time. */
