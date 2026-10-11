@@ -528,6 +528,15 @@ export function businessHasInventory(row: Row | null | undefined): boolean {
   return Array.isArray(services) && services.some((service) => String(service) === "inventory");
 }
 
+/**
+ * Whether a business asked for Inventory on its application and an admin has
+ * not switched it on yet. `requestedInventory` is only a request: it never
+ * turns the service on, and the server clears it when an admin does.
+ */
+export function businessRequestedInventory(row: Row | null | undefined): boolean {
+  return row?.requestedInventory === true && !businessHasInventory(row);
+}
+
 /** What the admin console sends to `setBusinessInventoryService`. */
 export function setBusinessInventoryRequest(businessId: string, enabled: boolean) {
   return { businessId: text(businessId), enabled: enabled === true };

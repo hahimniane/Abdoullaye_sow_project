@@ -331,6 +331,8 @@
     "The business provides the service while Laawol keeps payment, tracking, and support organized.": "L’entreprise fournit le service pendant que Laawol organise le paiement, le suivi et l’assistance.",
     "This is what the platform reviews. Customers only see approved businesses.": "Voici ce que la plateforme examine. Les clients ne voient que les entreprises approuvées.",
     "Track vehicle transport requests.": "Suivre les demandes de transport de véhicules.",
+    "Inventory": "Inventaire",
+    "Track stock and sell at the counter. Switched on by our team after approval.": "Suivez votre stock et vendez au comptoir. Activé par notre équipe après approbation.",
     "Use Laawol to find registered providers, compare service details, and stay connected.": "Utilisez Laawol pour trouver des prestataires inscrits, comparer les détails de service et rester connecté.",
     "By submitting, you create a Laawol business account and agree to platform review. You can set up your dashboard immediately; customers see you after approval.": "En envoyant, vous créez un compte entreprise Laawol et acceptez l’examen par la plateforme. Vous pouvez configurer votre tableau de bord immédiatement; les clients vous verront après approbation.",
     "We are very Happy with Laawol Digital": "Nous sommes très satisfaits de Laawol Digital",

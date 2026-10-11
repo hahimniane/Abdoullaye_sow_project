@@ -213,6 +213,28 @@ assert(
   "partner.html must populate business countries from country-catalog.js instead of a partial hardcoded list",
 );
 
+// Inventory is requested, never self-enabled: its own card sends a separate
+// requestInventory boolean, stays out of enabledServices, and does not count
+// toward "choose at least one service". Both languages translate it.
+assertIncludes(partner, 'id="requestInventory"', "partner.html Inventory request card");
+assertIncludes(partner, "requestInventory: inventoryRequested()", "partner.html submit payload");
+assertIncludes(partner, 'input[value]:checked', "partner.html selectedServices must skip the Inventory request box");
+assert(
+  !/key:\s*"inventory"/.test(partner) && !/enabledServices:\s*\[[^\]]*inventory/i.test(partner),
+  "partner.html must never put inventory in the SERVICES catalog or enabledServices",
+);
+assert(
+  !/<input[^>]+id="requestInventory"[^>]*checked/i.test(partner) &&
+    !partner.includes('id="requestInventory" checked'),
+  "the Inventory request card must start unchecked",
+);
+assertIncludes(i18n, '"Inventory": "Inventaire"', "i18n.js Inventory label");
+assertIncludes(
+  i18n,
+  '"Track stock and sell at the counter. Switched on by our team after approval."',
+  "i18n.js Inventory description",
+);
+
 // Every App Store link goes to the real listing. They pointed at
 // contact.html while the iOS app was unpublished, and stayed that way after.
 const APP_STORE_URL = "https://apps.apple.com/app/laawol/id6791795025";

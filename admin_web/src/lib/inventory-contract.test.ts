@@ -12,6 +12,7 @@ import {
   INVENTORY_MOVEMENT_LABELS,
   INVENTORY_RANGE_LABELS,
   INVENTORY_STATUS_LABELS,
+  businessRequestedInventory,
 } from "./inventory.ts";
 import { BUSINESS_SERVICE_IDS } from "./business-service-settings.ts";
 import { businessSidebarTabs } from "./business-sidebar.ts";
@@ -311,6 +312,33 @@ test("the switch is in the admin console only, and the owner's own console never
   }
   // The featured-business editor still hides the Inventory checkbox: this switch is the only way.
   assert.match(read("../components/admin-console.tsx"), /businessServices\.filter\(\(service\) => service\.id !== "inventory"\)\.map/);
+});
+
+test("a business that asked for Inventory shows a Requested Inventory badge until it is on", () => {
+  // The helper: only a literal true counts, and only while the service is still off.
+  assert.equal(businessRequestedInventory({ requestedInventory: true, enabledServices: ["freight"] }), true);
+  assert.equal(businessRequestedInventory({ requestedInventory: true }), true);
+  assert.equal(businessRequestedInventory({ requestedInventory: true, enabledServices: ["freight", "inventory"] }), false);
+  assert.equal(businessRequestedInventory({ requestedInventory: false, enabledServices: ["freight"] }), false);
+  assert.equal(businessRequestedInventory({ enabledServices: ["freight"] }), false);
+  for (const bad of ["true", 1, "yes", {}, null]) {
+    assert.equal(businessRequestedInventory({ requestedInventory: bad }), false, String(bad));
+  }
+  assert.equal(businessRequestedInventory(null), false);
+  assert.equal(businessRequestedInventory(undefined), false);
+
+  // Shown in the businesses list and next to the switch in the business detail.
+  const admin = read("../components/admin-console.tsx");
+  assert.equal((admin.match(/businessRequestedInventory\(business\)/g) ?? []).length, 2);
+  const list = admin.slice(admin.indexOf("className={`master-row "), admin.indexOf("{open > 0 &&"));
+  assert.match(list, /businessRequestedInventory\(business\)[\s\S]*Requested Inventory/);
+  const header = admin.slice(admin.indexOf('className="inventory-service-switch"'));
+  assert.match(header.slice(0, header.indexOf("Switch Inventory off")), /businessRequestedInventory\(business\)[\s\S]*Requested Inventory/);
+  // It is a read-only badge: the console never writes the flag or adds the service from it.
+  assert.equal(/requestedInventory\s*:/.test(admin), false);
+  // The French for it.
+  assert.deepEqual(missingFrench(["Requested Inventory"]), []);
+  assert.equal(translateValue("Requested Inventory", "fr"), "Inventaire demandé");
 });
 
 test("the Inventory switch sentences have their French", () => {

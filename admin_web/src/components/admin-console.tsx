@@ -100,6 +100,7 @@ import {
 } from "@/lib/business-verification";
 import {
   businessHasInventory,
+  businessRequestedInventory,
   setBusinessInventoryRequest,
 } from "@/lib/inventory";
 import {
@@ -8744,6 +8745,11 @@ function BusinessesView({
                   <span className="master-row-main">
                     <strong data-no-translate>{text(business.name, business.id)}</strong>
                     <small>{businessStatusLabel(business)}</small>
+                    {businessRequestedInventory(business) && (
+                      <span className="status-pill compact warning">
+                        Requested Inventory
+                      </span>
+                    )}
                   </span>
                   {open > 0 && <span className="master-badge">{open}</span>}
                 </button>
@@ -9803,6 +9809,11 @@ function BusinessWorkspace({
               >
                 {inventoryOn ? "Inventory is on" : "Inventory is off"}
               </span>
+              {businessRequestedInventory(business) && (
+                <span className="status-pill compact warning">
+                  Requested Inventory
+                </span>
+              )}
               <button
                 className="secondary-button"
                 onClick={() =>

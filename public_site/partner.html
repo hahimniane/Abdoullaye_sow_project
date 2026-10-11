@@ -233,7 +233,7 @@
   <script src="assets/mailto.js?v=2" defer></script>
   <script src="assets/motion.js?v=10" defer></script>
   <script src="assets/chat.js?v=4" defer></script>
-  <script src="assets/i18n.js?v=11"></script>
+  <script src="assets/i18n.js?v=13"></script>
   <script src="assets/country-catalog.js?v=1"></script>
   <script src="assets/content.js?v=10"></script>
 
@@ -289,6 +289,9 @@
       { key: "carParking",     label: "Car parking", desc: "Manage parked cars and parking receipts." },
       { key: "carTransport",   label: "Car transport", desc: "Track vehicle transport requests." },
     ];
+
+    // Not a real service key: a request the platform team reviews.
+    const INVENTORY_REQUEST = { label: "Inventory", desc: "Track stock and sell at the counter. Switched on by our team after approval." };
 
     const $ = (id) => document.getElementById(id);
     const form = $("applyForm");
@@ -399,8 +402,21 @@
       cb.addEventListener("change", () => lab.classList.toggle("on", cb.checked));
       svcList.appendChild(lab);
     });
+    // Inventory is never self-served: the platform team switches it on after
+    // approval. This card only REQUESTS it (sent as requestInventory, never
+    // inside enabledServices), starts unchecked, and does not count toward
+    // the "choose at least one service" rule.
+    const inventoryLabel = document.createElement("label");
+    inventoryLabel.className = "partner-service-choice";
+    inventoryLabel.innerHTML =
+      '<input type="checkbox" id="requestInventory" />' +
+      '<span class="partner-service-text"><b>' + INVENTORY_REQUEST.label + '</b><span>' + INVENTORY_REQUEST.desc + '</span></span>';
+    const inventoryBox = inventoryLabel.querySelector("input");
+    inventoryBox.addEventListener("change", () => inventoryLabel.classList.toggle("on", inventoryBox.checked));
+    svcList.appendChild(inventoryLabel);
     const selectedServices = () =>
-      Array.from(svcList.querySelectorAll("input:checked")).map((c) => c.value);
+      Array.from(svcList.querySelectorAll("input[value]:checked")).map((c) => c.value);
+    const inventoryRequested = () => inventoryBox.checked === true;
     const reducedMotion = window.matchMedia &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const scrollToPanel = (node) => {
@@ -544,6 +560,7 @@
           businessEmail: businessEmail || (currentUser && currentUser.email) || email,
           businessWebsite,
           enabledServices: services,
+          requestInventory: inventoryRequested(),
           serviceNote,
           addressLine1: selectedStreet,
           city: selectedCity,

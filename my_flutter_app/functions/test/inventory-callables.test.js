@@ -804,6 +804,116 @@ describe("summary", () => {
   });
 });
 
+describe("a shop asks for Inventory on its application", () => {
+  let applicants = 0;
+  const apply = async (extra = {}, name = `Request Shop ${++applicants}`) => {
+    const uid = `inv-test-applicant-${applicants}`;
+    await admin.auth().createUser({
+      uid, email: `${uid}@example.test`, password: "InventoryApply-2026!",
+    });
+    const answer = await functions.submitBusinessApplication.run({
+      auth: {uid, token: {}},
+      data: {
+        ownerName: "Applicant", ownerPhone: "+224620000077",
+        businessName: name, enabledServices: ["freight"],
+        addressLine1: "1 Test Road", city: "Conakry", country: "Guinea",
+        ...extra,
+      },
+    });
+    const business = (await db.collection("businesses")
+        .doc(answer.businessId).get()).data();
+    const application = (await db.collection("businessApplications")
+        .where("businessId", "==", answer.businessId).get()).docs[0].data();
+    return {answer, business, application};
+  };
+
+  it("stores the request and still leaves Inventory off", async () => {
+    const {answer, business, application} =
+      await apply({requestInventory: true});
+    assert.equal(business.requestedInventory, true);
+    assert.equal(application.requestedInventory, true);
+    assert.equal(answer.requestedInventory, true);
+    for (const list of [business.enabledServices, application.enabledServices,
+      answer.enabledServices]) {
+      assert.deepEqual(list, ["freight"]);
+    }
+  });
+
+  it("never lets enabledServices carry inventory, requested or not",
+      async () => {
+        const {business, application} = await apply({
+          requestInventory: true, enabledServices: ["freight", "inventory"],
+        });
+        assert.ok(!business.enabledServices.includes("inventory"));
+        assert.ok(!application.enabledServices.includes("inventory"));
+        assert.equal(business.requestedInventory, true);
+      });
+
+  it("records false when it is false or missing", async () => {
+    const off = await apply({requestInventory: false});
+    assert.equal(off.business.requestedInventory, false);
+    assert.equal(off.application.requestedInventory, false);
+    const missing = await apply();
+    assert.equal(missing.business.requestedInventory, false);
+    assert.equal(missing.application.requestedInventory, false);
+  });
+
+  it("ignores a value that is not the boolean true", async () => {
+    for (const bad of ["true", 1, "yes", {}, ["inventory"], null]) {
+      const {business, application} = await apply({requestInventory: bad});
+      assert.equal(business.requestedInventory, false, String(bad));
+      assert.equal(application.requestedInventory, false, String(bad));
+    }
+  });
+
+  it("clears the request when an admin switches Inventory on", async () => {
+    const ADMIN = "inv-test-request-admin";
+    await admin.auth().createUser({
+      uid: ADMIN, email: `${ADMIN}@example.test`,
+      password: "InventoryAdmin-2026!", emailVerified: true,
+    });
+    await db.collection("users").doc(ADMIN).set({
+      role: "admin", platformAdmin: true, adminRole: "superAdmin",
+      email: "inv-request-admin@example.test",
+    });
+    const {answer} = await apply({requestInventory: true});
+    const id = answer.businessId;
+    const read = async () => (await db.collection("businesses").doc(id)
+        .get()).data();
+    const toggle = (enabled) => functions.setBusinessInventoryService.run({
+      auth: {uid: ADMIN, token: {}}, data: {businessId: id, enabled},
+    });
+    assert.equal((await read()).requestedInventory, true);
+    await toggle(true);
+    const on = await read();
+    assert.ok(on.enabledServices.includes("inventory"));
+    assert.equal(on.requestedInventory, false);
+    // Switching it off later does not resurrect the old request.
+    await toggle(false);
+    const off = await read();
+    assert.ok(!off.enabledServices.includes("inventory"));
+    assert.equal(off.requestedInventory, false);
+  });
+
+  it("clears a stale request even when Inventory was already on",
+      async () => {
+        const ADMIN = "inv-test-request-admin";
+        await db.collection("businesses").doc("inv-test-stale-request").set({
+          name: "Stale", status: "approved",
+          enabledServices: ["freight", "inventory"], requestedInventory: true,
+        });
+        const answer = await functions.setBusinessInventoryService.run({
+          auth: {uid: ADMIN, token: {}},
+          data: {businessId: "inv-test-stale-request", enabled: true},
+        });
+        assert.equal(answer.changed, false);
+        const stored = (await db.collection("businesses")
+            .doc("inv-test-stale-request").get()).data();
+        assert.equal(stored.requestedInventory, false);
+        assert.ok(stored.enabledServices.includes("inventory"));
+      });
+});
+
 describe("a platform admin switches Inventory on or off", () => {
   const ADMIN = "inv-test-platform-admin";
   const SUPPORT = "inv-test-support-admin";

@@ -10647,6 +10647,10 @@ exports.submitBusinessApplication = onCall(
             "Choose at least one business service",
         );
       }
+      // Asking for Inventory is only a request the admin sees; it is a
+      // separate flag and never part of enabledServices. Anything that is not
+      // the boolean true counts as "not requested".
+      const requestedInventory = request.data?.requestInventory === true;
 
       const userRecord = await admin.auth().getUser(applicantUid);
       const db = admin.firestore();
@@ -10699,6 +10703,9 @@ exports.submitBusinessApplication = onCall(
           ownerPhone: String(ownerPhone).trim(),
           ownerEmail: userRecord.email || "",
           enabledServices: normalizedServices,
+          requestedInventory: requestedInventory &&
+            !(businessDoc.data()?.enabledServices || [])
+                .includes("inventory"),
           applicationStatus: status === "approved" ? "approved" : "pending",
           createdAt: businessDoc.exists ?
             businessDoc.data().createdAt || now :
@@ -10729,6 +10736,7 @@ exports.submitBusinessApplication = onCall(
           updatedAt: now,
           profile,
           enabledServices: normalizedServices,
+          requestedInventory,
           ...(marketplaceEvidence ? {
             marketplaceDisclosure: {
               ...marketplaceEvidence,
@@ -10747,6 +10755,7 @@ exports.submitBusinessApplication = onCall(
             title: "New business application",
             message: `${profile.name} is waiting for platform approval.`,
             enabledServices: normalizedServices,
+            requestedInventory,
             createdAt: now,
             updatedAt: now,
           });
@@ -10773,6 +10782,7 @@ exports.submitBusinessApplication = onCall(
         businessId,
         businessName: profile.name,
         enabledServices: normalizedServices,
+        requestedInventory,
         status: responseStatus,
       };
     },
@@ -11129,7 +11139,16 @@ exports.setBusinessInventoryService = onCall(
           request.data.enabled,
           VALID_BUSINESS_SERVICES,
       );
+      // Once Inventory is on, a leftover "requested" badge is stale.
+      const clearRequest = plan.enabled && business.requestedInventory === true;
       if (!plan.changed) {
+        if (clearRequest) {
+          await businessRef.update({
+            requestedInventory: false,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+            updatedBy: adminUid,
+          });
+        }
         return {
           success: true, businessId, enabled: plan.enabled,
           changed: false, enabledServices: plan.services,
@@ -11139,6 +11158,7 @@ exports.setBusinessInventoryService = onCall(
       const batch = db.batch();
       batch.update(businessRef, {
         enabledServices: plan.services,
+        ...(clearRequest ? {requestedInventory: false} : {}),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
         updatedBy: adminUid,
       });

@@ -5290,6 +5290,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Switch Inventory off": "Désactiver l’inventaire",
   "Inventory switched on": "Inventaire activé",
   "Inventory switched off": "Inventaire désactivé",
+  "Requested Inventory": "Inventaire demandé",
 });
 
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

@@ -628,3 +628,27 @@ describe("Inventory stays admin-only in the owner-facing callables", () => {
   });
 });
 
+
+describe("Asking for Inventory is a flag, not a service", () => {
+  const src = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  const apply = src.slice(src.indexOf("exports.submitBusinessApplication"),
+      src.indexOf("exports.createAdminBusiness"));
+  const toggle = src.slice(src.indexOf("exports.setBusinessInventoryService"),
+      src.indexOf("exports.deleteAdminRecord"));
+  it("reads requestInventory as a strict boolean, apart from the services",
+      () => {
+        assert.match(apply,
+            /requestedInventory = request\.data\?\.requestInventory === true/);
+        // Services still go through the owner filter; the flag never feeds it.
+        assert.match(apply, /inventory\.ownerEditableServices\(/);
+        assert.doesNotMatch(apply, /enabledServices:[^,\n]*requestedInventory/);
+        assert.doesNotMatch(apply, /\.push\(\s*"inventory"/);
+      });
+  it("stores the flag on the business and the application", () => {
+    assert.ok((apply.match(/requestedInventory/g) || []).length >= 5);
+  });
+  it("is cleared by the admin switch when Inventory goes on", () => {
+    assert.match(toggle, /requestedInventory: false/);
+    assert.match(toggle, /plan\.enabled && business\.requestedInventory/);
+  });
+});

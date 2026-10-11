@@ -3672,6 +3672,9 @@ html[data-lang-pending] body {
   display: block;
   font-size: 12.5px;
 }
+.master-row-main .status-pill {
+  margin-top: 3px;
+}
 .master-row.active .master-row-main small {
   color: var(--brand-strong);
 }
