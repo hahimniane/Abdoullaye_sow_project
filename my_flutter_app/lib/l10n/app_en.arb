@@ -5200,6 +5200,7 @@
   "inventoryCountOffNote": "A sale sold more than the count had. Count the shelf and set the count to clear this.",
   "inventoryProductGone": "This product is no longer there.",
   "inventorySellTitle": "Sell",
+  "inventoryScanAnother": "Scan another product",
   "inventoryScanHint": "Point at a product tag",
   "inventoryNotATag": "That QR code is not a Laawol product tag.",
   "inventoryCameraUnavailable": "The camera is unavailable. Type the tag code, or search by product name below.",

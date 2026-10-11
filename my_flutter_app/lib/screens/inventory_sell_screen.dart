@@ -79,6 +79,11 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
 
   MobileScannerController? _camera;
 
+  /// Whether the camera is open. It closes after every tag it reads, so a
+  /// camera drifting over the shelf cannot keep adding things; the person
+  /// opens it again for the next product.
+  bool _scanning = true;
+
   late final InventoryContextWatcher _watcher = InventoryContextWatcher(
     source: _source,
     businessId: widget.businessId,
@@ -184,9 +189,24 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
         continue;
       }
       if (!_debouncer.accept(code, DateTime.now())) return;
+      _closeScanner();
       _addRaw(code);
       return;
     }
+  }
+
+  void _closeScanner() {
+    if (!_scanning) return;
+    setState(() => _scanning = false);
+    _camera?.stop().catchError((Object _) {});
+  }
+
+  void _openScanner() {
+    if (_scanning) return;
+    setState(() {
+      _scanning = true;
+      _foreignQr = false;
+    });
   }
 
   Future<void> _addRaw(String raw) async {
@@ -367,6 +387,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
   }
 
   void _newSale() => setState(() {
+        _scanning = true;
         _result = null;
         _soldLines = const [];
         _note = null;
@@ -566,7 +587,20 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
     }
   }
 
-  Widget _cameraBox(AppLocalizations l10n) => ClipRRect(
+  Widget _cameraBox(AppLocalizations l10n) => _scanning
+      ? _liveCamera(l10n)
+      : OutlinedButton.icon(
+          key: const Key('inv-scan-another'),
+          onPressed: _openScanner,
+          icon: const Icon(Icons.qr_code_scanner),
+          label: Text(l10n.inventoryScanAnother),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+            foregroundColor: AppColors.ink,
+          ),
+        );
+
+  Widget _liveCamera(AppLocalizations l10n) => ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: SizedBox(
           height: 190,

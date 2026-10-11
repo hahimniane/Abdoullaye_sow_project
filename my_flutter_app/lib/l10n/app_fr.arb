@@ -5200,6 +5200,7 @@
   "inventoryCountOffNote": "Une vente a dépassé le comptage. Comptez le rayon et fixez le comptage pour effacer ceci.",
   "inventoryProductGone": "Ce produit n'existe plus.",
   "inventorySellTitle": "Vendre",
+  "inventoryScanAnother": "Scanner un autre produit",
   "inventoryScanHint": "Visez une étiquette de produit",
   "inventoryNotATag": "Ce code QR n'est pas une étiquette de produit Laawol.",
   "inventoryCameraUnavailable": "La caméra est indisponible. Saisissez le code de l'étiquette, ou recherchez le nom du produit ci-dessous.",
