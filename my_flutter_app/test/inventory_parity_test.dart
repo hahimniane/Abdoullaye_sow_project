@@ -35,9 +35,13 @@ void main() {
   };
 
   test('the app calls every callable the contract lists', () {
+    // The platform admin's switch lives in the admin console only; the app
+    // never calls it.
+    const adminConsoleOnly = {'setBusinessInventoryService'};
     final contracted = RegExp(r'`(\w+Inventory\w*|\w*Inventory\w+)\s*[\{\(]')
         .allMatches(doc)
         .map((m) => m.group(1)!)
+        .where((name) => !adminConsoleOnly.contains(name))
         .toSet();
     expect(contracted, containsAll(<String>[
       'createInventoryItem',
