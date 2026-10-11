@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, RefreshCw, Undo2 } from "lucide-react";
 
+import { InventoryStoreFilter } from "@/components/business/inventory-store-filter";
 import { LoadMoreButton } from "@/components/show-more";
 import { useInventorySales } from "@/lib/business-data";
 import { currentLanguage, formatDateTime } from "@/lib/format";
@@ -11,9 +12,13 @@ import {
   inventorySaleFromRow,
   itemCountText,
   saleLinesSummary,
+  saleStoreId,
+  salesInStore,
   soldByText,
+  storeNameIndex,
   voidedByText,
   type InventorySale,
+  type StoreAccess,
 } from "@/lib/inventory";
 import { statusPillClass } from "@/lib/status-pill";
 
@@ -22,37 +27,62 @@ import { statusPillClass } from "@/lib/status-pill";
  * lines: the product's list price next to the price it sold at (a markdown is
  * visible at a glance), who sold it, how the customer paid. The one action is
  * Void - the sale stays in the list, marked, so nothing is ever erased.
+ *
+ * A business with several stores gets a Store column; whoever sees every
+ * store also gets a store filter. Staff of one store read only that store's
+ * sales (the query is theirs), and have neither.
  */
 export function InventorySalesList({
   businessId,
   enabled,
   staffName,
   busy,
+  access,
+  storeFilter,
+  onStoreFilter,
   onVoid,
 }: {
   businessId: string;
   enabled: boolean;
   staffName: (id: string) => string;
   busy: boolean;
+  access: StoreAccess;
+  /** "" = all stores. */
+  storeFilter: string;
+  onStoreFilter: (storeId: string) => void;
   onVoid: (sale: InventorySale) => void;
 }) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
-  const sales = useInventorySales(businessId, enabled);
+  const sales = useInventorySales(businessId, enabled && !access.needsHomeStore, access.scopedStoreId);
   const [openId, setOpenId] = useState("");
-  const list = useMemo(() => sales.rows.map(inventorySaleFromRow).filter((sale) => sale.id), [sales.rows]);
+  const all = useMemo(() => sales.rows.map(inventorySaleFromRow).filter((sale) => sale.id), [sales.rows]);
+  const storeNames = useMemo(() => storeNameIndex(access.stores), [access.stores]);
+  const narrowed = access.multi && access.canSeeAll && storeFilter !== "";
+  const list = useMemo(() => (narrowed ? salesInStore(all, storeFilter, access.stores) : all), [all, narrowed, storeFilter, access.stores]);
+  const nameOfStore = (sale: InventorySale) => sale.storeName || storeNames.get(saleStoreId(sale, access.stores)) || "";
 
   return (
     <>
       {sales.error && <div className="lst-form-error" role="alert">{sales.error}</div>}
       <p className="panel-lede">Every sale rung up at the counter in the Laawol app. Open one to see what each product was listed at and what it sold for. Voiding a sale puts its stock back and keeps it here, marked.</p>
-      {sales.loading && list.length === 0 ? (
+      {access.multi && access.canSeeAll && (
+        <div className="panel-tools">
+          <InventoryStoreFilter stores={access.stores} value={storeFilter} onChange={onStoreFilter} />
+        </div>
+      )}
+      {sales.loading && all.length === 0 ? (
         <div className="empty-state"><RefreshCw className="spin" size={16} /> Loading…</div>
-      ) : list.length === 0 ? (
+      ) : all.length === 0 ? (
         <div className="empty-state">No sales yet. They appear here once staff sell a product in the app.</div>
+      ) : list.length === 0 ? (
+        <div className="empty-state">
+          No sales from this store in the sales loaded so far.
+          {sales.hasMore && <> <LoadMoreButton hasMore={sales.hasMore} loading={sales.loadingMore} onLoadMore={sales.loadMore} /></>}
+        </div>
       ) : (
         <div className="mini-table">
-          <div className="ctn-table ivt-sales-table">
-            <div className="mini-table-head"><span>Sale</span><span>Products</span><span>Paid with</span><span>Total</span><span aria-hidden="true"></span></div>
+          <div className={`ctn-table ivt-sales-table${access.multi ? " ivt-with-store" : ""}`}>
+            <div className="mini-table-head"><span>Sale</span><span>Products</span>{access.multi && <span>Store</span>}<span>Paid with</span><span>Total</span><span aria-hidden="true"></span></div>
             {list.map((sale) => {
               const open = openId === sale.id;
               const summary = saleLinesSummary(sale);
@@ -76,6 +106,9 @@ export function InventorySalesList({
                       <strong data-no-translate>{summary.names.join(", ")}{summary.more > 0 ? ` +${summary.more}` : ""}</strong>
                       <small data-no-translate>{itemCountText(sale.itemCount, lang)}</small>
                     </span>
+                    {access.multi && (
+                      <span><strong data-no-translate>{nameOfStore(sale) || "—"}</strong></span>
+                    )}
                     <span>
                       <strong>{sale.methodLabel}</strong>
                       {sale.anyCountWasOff && <small className="ctn-wa-warn">Count was off</small>}

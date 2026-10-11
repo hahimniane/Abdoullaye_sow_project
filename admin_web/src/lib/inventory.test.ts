@@ -587,3 +587,574 @@ test("the admin switch sends the business and a real boolean", () => {
   assert.deepEqual(setBusinessInventoryRequest("biz-1", false), { businessId: "biz-1", enabled: false });
   assert.deepEqual(setBusinessInventoryRequest("  biz-1 ", "yes" as unknown as boolean), { businessId: "biz-1", enabled: false });
 });
+
+// ===========================================================================
+// v2: categories and stores.
+// ===========================================================================
+
+import {
+  UNCATEGORIZED_FILTER,
+  archiveInventoryCategoryRequest,
+  archiveInventoryStoreRequest,
+  archivedNameText,
+  availableInStoreText,
+  buildStockIndex,
+  categoryCountText,
+  categoryForItem,
+  categoryKey,
+  categoryOptions,
+  categoryResolver,
+  countChangeText,
+  createInventoryCategoryRequest,
+  createInventoryStoreRequest,
+  emptyStoreDraft,
+  emptyTransferDraft,
+  inventoryCategories,
+  inventoryStaffAccessFromRow,
+  inventoryStockRowFromRow,
+  inventoryStores,
+  inventoryViewerFromProfile,
+  isMultiStore,
+  itemCategoryName,
+  itemInCategory,
+  itemStockView,
+  legacyStoreId,
+  lowInStoresText,
+  readCreatedCategoryId,
+  readCreatedStoreId,
+  readStartingStock,
+  renameInventoryCategoryRequest,
+  resolveStoreAccess,
+  saleStoreId,
+  salesInStore,
+  setInventoryStaffAccessRequest,
+  staffAccessChanged,
+  staffHasInventoryPermission,
+  stockCountFor,
+  storeCountText,
+  storeDraftChanges,
+  storeDraftFromStore,
+  storeNameIndex,
+  transferAfter,
+  transferInventoryStockRequest,
+  updateInventoryStoreRequest,
+  validateCategoryName,
+  validateStaffAccess,
+  validateStoreDraft,
+  validateTransferDraft,
+  type InventoryCategory,
+  type InventoryListScope,
+  type InventoryRefusal,
+} from "./inventory.ts";
+
+const categoryRows = [
+  { id: "c-care", name: "Care", nameKey: "care", archived: false },
+  { id: "c-hair", name: "Hair", nameKey: "hair", archived: false },
+  { id: "c-old", name: "Old line", nameKey: "old line", archived: true },
+];
+const categories = inventoryCategories(categoryRows, true);
+
+const storeRows = [
+  { id: "s-main", name: "Main store", createdAt: { seconds: 100 } },
+  { id: "s-down", name: "Downtown", createdAt: { seconds: 200 } },
+  { id: "s-gone", name: "Closed", archived: true, createdAt: { seconds: 300 } },
+];
+const stores = inventoryStores(storeRows);
+const twoStores = stores.filter((s) => !s.archived);
+
+const stockRows = [
+  { id: "i1__s-main", itemId: "i1", storeId: "s-main", quantity: 7 },
+  { id: "i1__s-down", itemId: "i1", storeId: "s-down", quantity: 3 },
+];
+
+// ---------------------------------------------------------------------------
+// Categories.
+// ---------------------------------------------------------------------------
+
+test("the category list is the business's own: by name, archived ones only when asked for", () => {
+  assert.deepEqual(inventoryCategories(categoryRows).map((c) => c.name), ["Care", "Hair"]);
+  assert.deepEqual(inventoryCategories(categoryRows, true).map((c) => c.name), ["Care", "Hair", "Old line"]);
+  // A row with no name or no id is not a category; the key is derived when the row lacks one.
+  assert.deepEqual(inventoryCategories([{ id: "x" }, { name: "No id" }, { id: "y", name: " Soap " }]).map((c) => [c.id, c.name, c.nameKey]), [["y", "Soap", "soap"]]);
+  assert.equal(categoryKey("  Hair CARE "), "hair care");
+});
+
+test("a product's category is found by its id, else by name (a legacy typed one), and a rename shows at once", () => {
+  const byId = categoryForItem({ categoryId: "c-care", category: "Care (old name)" }, categories);
+  assert.equal(byId?.id, "c-care");
+  const legacy = categoryForItem({ categoryId: "", category: "  hair " }, categories);
+  assert.equal(legacy?.id, "c-hair");
+  assert.equal(categoryForItem({ categoryId: "", category: "Never listed" }, categories), null);
+  assert.equal(categoryForItem({ categoryId: "", category: "" }, categories), null);
+  // The list's current name wins over the snapshot the product was saved with.
+  assert.equal(itemCategoryName({ categoryId: "c-care", category: "Skin" }, categories), "Care");
+  assert.equal(itemCategoryName({ categoryId: "", category: "Never listed" }, categories), "Never listed");
+  // An active category takes a name an archived one also has.
+  const twins: InventoryCategory[] = [
+    { id: "a", name: "Soap", nameKey: "soap", archived: true },
+    { id: "b", name: "Soap", nameKey: "soap", archived: false },
+  ];
+  assert.equal(categoryResolver(twins)({ categoryId: "", category: "soap" })?.id, "b");
+});
+
+test("the category filter: everything, one category, or the products with none", () => {
+  const care = item({ categoryId: "c-care", category: "Care" });
+  const legacy = item({ id: "i2", categoryId: "", category: "Hair" });
+  const typedOnly = item({ id: "i3", categoryId: "", category: "Not in the list" });
+  const none = item({ id: "i4", categoryId: "", category: "" });
+  assert.equal(itemInCategory(care, categories, ""), true);
+  assert.equal(itemInCategory(care, categories, "c-care"), true);
+  assert.equal(itemInCategory(care, categories, "c-hair"), false);
+  assert.equal(itemInCategory(legacy, categories, "c-hair"), true);
+  assert.equal(itemInCategory(none, categories, UNCATEGORIZED_FILTER), true);
+  assert.equal(itemInCategory(care, categories, UNCATEGORIZED_FILTER), false);
+  // A typed category the list does not hold yet is neither in a listed category nor "none".
+  assert.equal(itemInCategory(typedOnly, categories, UNCATEGORIZED_FILTER), false);
+  assert.equal(itemInCategory(typedOnly, categories, "c-care"), false);
+  const rows = [care, legacy, typedOnly, none].map((i) => ({ ...i }));
+  assert.deepEqual(filterInventoryItems(rows, "all", "", { categories, categoryId: "c-hair" }).map((i) => i.id), ["i2"]);
+  assert.deepEqual(filterInventoryItems(rows, "all", "", { categories, categoryId: UNCATEGORIZED_FILTER }).map((i) => i.id), ["i4"]);
+  assert.equal(filterInventoryItems(rows, "all", "", { categories }).length, 4);
+  // A search by category reads the list's current name.
+  assert.deepEqual(filterInventoryItems([{ ...care, category: "Skin" }], "all", "care", { categories }).map((i) => i.id), ["i1"]);
+});
+
+test("the dropdown offers the active categories, and the product's own even when archived", () => {
+  assert.deepEqual(categoryOptions(categories).map((c) => c.id), ["c-care", "c-hair"]);
+  assert.deepEqual(categoryOptions(categories, "c-old").map((c) => c.id), ["c-care", "c-hair", "c-old"]);
+});
+
+test("a category name is checked before the call: required, 60 characters, and unique per business", () => {
+  assert.deepEqual(validateCategoryName("", categories), ["category_name_required"]);
+  assert.deepEqual(validateCategoryName("   ", categories), ["category_name_required"]);
+  assert.deepEqual(validateCategoryName("x".repeat(61), categories), ["category_too_long"]);
+  assert.deepEqual(validateCategoryName("Skin", categories), []);
+  assert.deepEqual(validateCategoryName("  hair ", categories), ["category_name_taken"]);
+  // Archived categories still own their name, as on the server.
+  assert.deepEqual(validateCategoryName("OLD LINE", categories), ["category_name_taken"]);
+  // Renaming keeps its own name, or changes its case.
+  assert.deepEqual(validateCategoryName("Hair", categories, "c-hair"), []);
+  assert.deepEqual(validateCategoryName("hair", categories, "c-hair"), []);
+  assert.deepEqual(validateCategoryName("Care", categories, "c-hair"), ["category_name_taken"]);
+});
+
+test("the category requests carry the business and trimmed values", () => {
+  assert.deepEqual(createInventoryCategoryRequest(" b1 ", " Skin "), { businessId: "b1", name: "Skin" });
+  assert.deepEqual(renameInventoryCategoryRequest("b1", "c1", " Hair care "), { businessId: "b1", categoryId: "c1", name: "Hair care" });
+  assert.deepEqual(archiveInventoryCategoryRequest("b1", "c1", true), { businessId: "b1", categoryId: "c1", archived: true });
+  assert.deepEqual(archiveInventoryCategoryRequest("b1", "c1", "yes" as unknown as boolean), { businessId: "b1", categoryId: "c1", archived: false });
+  assert.equal(readCreatedCategoryId({ success: true, categoryId: "c9" }), "c9");
+  assert.equal(readCreatedCategoryId(null), "");
+});
+
+test("the product form turns a chosen category into an id, a typed one stays text, and clearing clears both", () => {
+  // The form opened on a legacy product: matched by name, not changed by the match.
+  const legacy = item({ categoryId: "", category: "hair" });
+  const opened = inventoryDraftFromItem(legacy, categories);
+  assert.equal(opened.categoryId, "c-hair");
+  assert.equal(opened.category, "Hair");
+  assert.equal(inventoryDraftChanged(legacy, opened, categories), false);
+  // Not in the list: stays as typed text.
+  const typed = inventoryDraftFromItem(item({ categoryId: "", category: "Brand new" }), categories);
+  assert.equal(typed.categoryId, "");
+  assert.equal(typed.category, "Brand new");
+
+  // Create: an id when one was chosen, the v1 text otherwise, nothing when empty.
+  assert.equal(createInventoryItemRequest("b1", draft({ categoryId: "c-care", category: "Care" })).categoryId, "c-care");
+  assert.equal("category" in createInventoryItemRequest("b1", draft({ categoryId: "c-care", category: "Care" })), false);
+  const v1 = createInventoryItemRequest("b1", draft({ category: "Care" }));
+  assert.equal(v1.category, "Care");
+  assert.equal("categoryId" in v1, false);
+  const bare = createInventoryItemRequest("b1", draft());
+  assert.equal("category" in bare || "categoryId" in bare, false);
+
+  // Update: id when chosen; text as in v1; clearing sends "" (and clears the id the product had).
+  const base = item({ categoryId: "c-care", category: "Care" });
+  assert.deepEqual(pick(updateInventoryItemRequest("b1", base, draft({ categoryId: "c-hair", category: "Hair" })), ["category", "categoryId"]), { categoryId: "c-hair" });
+  assert.deepEqual(pick(updateInventoryItemRequest("b1", base, draft({ category: "Typed" })), ["category", "categoryId"]), { category: "Typed" });
+  assert.deepEqual(pick(updateInventoryItemRequest("b1", base, draft({ category: "" })), ["category", "categoryId"]), { category: "", categoryId: "" });
+  assert.deepEqual(pick(updateInventoryItemRequest("b1", item({ categoryId: "", category: "Old" }), draft({ category: "" })), ["category", "categoryId"]), { category: "" });
+  // Moving to another category counts as a change.
+  assert.equal(inventoryDraftChanged(base, { ...inventoryDraftFromItem(base, categories), categoryId: "c-hair", category: "Hair" }, categories), true);
+});
+
+function pick(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  return Object.fromEntries(keys.filter((key) => key in source).map((key) => [key, source[key]]));
+}
+
+// ---------------------------------------------------------------------------
+// Stores: single-store mode, access, and per-store stock.
+// ---------------------------------------------------------------------------
+
+test("a business is multi-store only with two or more active stores", () => {
+  assert.equal(isMultiStore([]), false);
+  assert.equal(isMultiStore(inventoryStores([storeRows[0]])), false);
+  assert.equal(isMultiStore(twoStores), true);
+  // An archived store does not count, so archiving back to one store is single-store again.
+  assert.equal(isMultiStore(inventoryStores(storeRows, true).filter((s) => s.id !== "s-down")), false);
+  assert.deepEqual(stores.map((s) => s.id), ["s-main", "s-down"]);
+  assert.deepEqual(inventoryStores(storeRows, true).map((s) => s.id), ["s-main", "s-down", "s-gone"]);
+  assert.equal(legacyStoreId(stores), "s-main");
+  assert.equal(legacyStoreId([]), "");
+  assert.equal(storeNameIndex(stores).get("s-down"), "Downtown");
+});
+
+test("who sees which stores: the owner and all-stores staff everything, staff their home store only", () => {
+  const owner = { isOwner: true, homeStoreId: "", allStores: false };
+  const anyStaff = { isOwner: false, homeStoreId: "s-down", allStores: false };
+  const roaming = { isOwner: false, homeStoreId: "", allStores: true };
+  const homeless = { isOwner: false, homeStoreId: "", allStores: false };
+  const stale = { isOwner: false, homeStoreId: "s-gone", allStores: false };
+
+  const a = resolveStoreAccess(owner, storeRows);
+  assert.deepEqual([a.multi, a.canSeeAll, a.scopedStoreId, a.needsHomeStore, a.canTransfer, a.canManageStores], [true, true, "", false, true, true]);
+  const b = resolveStoreAccess(anyStaff, storeRows);
+  assert.deepEqual([b.multi, b.canSeeAll, b.scopedStoreId, b.needsHomeStore, b.canTransfer, b.canManageStores], [true, false, "s-down", false, false, false]);
+  assert.equal(b.defaultStoreId, "s-down");
+  const c = resolveStoreAccess(roaming, storeRows);
+  assert.deepEqual([c.canSeeAll, c.scopedStoreId, c.canTransfer, c.canManageStores], [true, "", true, false]);
+  // No (valid) home store in a multi-store business: nothing to see until one is assigned.
+  assert.equal(resolveStoreAccess(homeless, storeRows).needsHomeStore, true);
+  assert.equal(resolveStoreAccess(stale, storeRows).needsHomeStore, true);
+
+  // A single store: nothing about stores, for anyone; the owner alone can add one.
+  const single = inventoryStores([storeRows[0]]);
+  for (const viewer of [owner, anyStaff, homeless]) {
+    const s = resolveStoreAccess(viewer, single);
+    assert.deepEqual([s.multi, s.needsHomeStore, s.canTransfer, s.scopedStoreId], [false, false, false, ""]);
+  }
+  assert.equal(resolveStoreAccess(owner, []).canManageStores, true);
+  assert.equal(resolveStoreAccess(anyStaff, []).canManageStores, false);
+
+  assert.deepEqual(inventoryViewerFromProfile({ role: "businessOwner" }), { isOwner: true, homeStoreId: "", allStores: false });
+  assert.deepEqual(inventoryViewerFromProfile({ role: "staff", inventoryHomeStoreId: " s-down ", inventoryAllStores: true }), { isOwner: false, homeStoreId: "s-down", allStores: true });
+  assert.deepEqual(inventoryViewerFromProfile(null), { isOwner: false, homeStoreId: "", allStores: false });
+});
+
+test("a store's draft is checked and sent as the contract says: blank address and phone are left out, an edit sends what changed", () => {
+  assert.deepEqual(validateStoreDraft(emptyStoreDraft), ["store_name_required"]);
+  assert.deepEqual(validateStoreDraft({ name: "x".repeat(81), address: "", phone: "" }), ["store_name_too_long"]);
+  assert.deepEqual(validateStoreDraft({ name: "Uptown", address: "a".repeat(201), phone: "" }), ["store_detail_too_long"]);
+  assert.deepEqual(validateStoreDraft({ name: "Uptown", address: "12 Main St", phone: "212-555-0100" }), []);
+  assert.deepEqual(createInventoryStoreRequest(" b1 ", { name: " Uptown ", address: "", phone: "  " }), { businessId: "b1", name: "Uptown" });
+  assert.deepEqual(createInventoryStoreRequest("b1", { name: "Uptown", address: "12 Main St", phone: "212" }), { businessId: "b1", name: "Uptown", address: "12 Main St", phone: "212" });
+  const store = inventoryStores([{ id: "s1", name: "Uptown", address: "12 Main St", phone: "212" }])[0];
+  assert.deepEqual(storeDraftChanges(store, storeDraftFromStore(store)), {});
+  assert.deepEqual(updateInventoryStoreRequest("b1", store, { name: "Uptown", address: "", phone: "212" }), { businessId: "b1", storeId: "s1", address: "" });
+  assert.deepEqual(updateInventoryStoreRequest("b1", store, { name: "Up", address: "12 Main St", phone: "212" }), { businessId: "b1", storeId: "s1", name: "Up" });
+  assert.deepEqual(archiveInventoryStoreRequest("b1", "s1", true), { businessId: "b1", storeId: "s1", archived: true });
+  assert.equal(readCreatedStoreId({ storeId: "s2" }), "s2");
+});
+
+test("per-store counts are indexed once and read by product and store; a store that never held it reads 0", () => {
+  const index = buildStockIndex([...stockRows, { id: "i2__s-main", quantity: 4 }, { id: "bad" }, { itemId: "i3" }]);
+  assert.equal(stockCountFor(index, "i1", "s-main"), 7);
+  assert.equal(stockCountFor(index, "i1", "s-down"), 3);
+  // The id carries both halves when the fields are missing.
+  assert.equal(stockCountFor(index, "i2", "s-main"), 4);
+  assert.equal(stockCountFor(index, "i1", "s-nowhere"), 0);
+  assert.equal(stockCountFor(undefined, "i1", "s-main"), 0);
+  assert.equal(index.has("i3"), false);
+  assert.deepEqual(inventoryStockRowFromRow({ id: "a__b", quantity: -3, countWasOff: true }), { itemId: "a", storeId: "b", quantity: 0, countWasOff: true });
+});
+
+test("single-store display is exactly what it always was", () => {
+  const stock = buildStockIndex(stockRows);
+  for (const scope of [{}, { stores: [] }, { stores: twoStores.slice(0, 1) }, { stores: twoStores.slice(0, 1), stock, storeId: "s-main" }] as InventoryListScope[]) {
+    for (const over of [{}, { quantity: 0 }, { quantity: 2 }, { archived: true }, { countWasOff: true }]) {
+      const it = item(over);
+      const view = itemStockView(it, scope);
+      assert.equal(view.multi, false);
+      assert.equal(view.status, inventoryStatus(it));
+      assert.equal(view.low, inventoryIsLow(it));
+      assert.equal(view.shown, it.quantity);
+      assert.equal(view.countWasOff, it.countWasOff);
+      assert.deepEqual(view.cells, []);
+    }
+  }
+});
+
+test("multi-store: the total, each store's count, and low per store with the store named", () => {
+  const stock = buildStockIndex(stockRows);
+  const it = item({ quantity: 10, lowStockAt: 3 });
+  const all = itemStockView(it, { stores: twoStores, stock });
+  assert.equal(all.multi, true);
+  assert.equal(all.total, 10);
+  assert.equal(all.shown, 10);
+  assert.deepEqual(all.cells.map((c) => [c.storeName, c.quantity]), [["Main store", 7], ["Downtown", 3]]);
+  // Downtown holds 3, at the threshold: low there, not in the Main store.
+  assert.deepEqual(all.lowStoreNames, ["Downtown"]);
+  assert.equal(all.status, "low");
+  assert.equal(all.low, true);
+  assert.equal(lowInStoresText(all.lowStoreNames), "Low in Downtown");
+  assert.equal(lowInStoresText(["A", "B"], "fr"), "Bas dans A, B");
+
+  const main = itemStockView(it, { stores: twoStores, stock, storeId: "s-main" });
+  assert.deepEqual([main.shown, main.status, main.low, main.lowStoreNames], [7, "ok", false, []]);
+  const down = itemStockView(it, { stores: twoStores, stock, storeId: "s-down" });
+  assert.deepEqual([down.shown, down.status, down.low, down.lowStoreNames], [3, "low", true, ["Downtown"]]);
+
+  // Zero after a count was recorded is low (out in that store); the product as a whole is not out.
+  const drained = buildStockIndex([{ itemId: "i1", storeId: "s-main", quantity: 5 }, { itemId: "i1", storeId: "s-down", quantity: 0 }]);
+  const empty = itemStockView(it, { stores: twoStores, stock: drained, storeId: "s-down" });
+  assert.deepEqual([empty.status, empty.low], ["out", true]);
+  assert.equal(itemStockView(item({ quantity: 5, lowStockAt: null }), { stores: twoStores, stock: drained }).status, "low");
+  // Nothing anywhere: out of stock.
+  assert.equal(itemStockView(item({ quantity: 0 }), { stores: twoStores, stock: drained }).status, "out");
+});
+
+test("a store that never held a product is not flagged low there (adding a store must not flag every product)", () => {
+  const onlyMain = buildStockIndex([{ itemId: "i1", storeId: "s-main", quantity: 9 }]);
+  const it = item({ quantity: 9, lowStockAt: 3 });
+  const all = itemStockView(it, { stores: twoStores, stock: onlyMain });
+  assert.deepEqual(all.cells.map((c) => [c.storeId, c.stocked, c.low]), [["s-main", true, false], ["s-down", false, false]]);
+  assert.equal(all.status, "ok");
+  const down = itemStockView(it, { stores: twoStores, stock: onlyMain, storeId: "s-down" });
+  assert.deepEqual([down.shown, down.status, down.low], [0, "ok", false]);
+});
+
+test("archived products are never low, in any store; count-was-off is read per store when one is chosen", () => {
+  const stock = buildStockIndex([
+    { itemId: "i1", storeId: "s-main", quantity: 0 },
+    { itemId: "i1", storeId: "s-down", quantity: 4, countWasOff: true },
+  ]);
+  const archivedItem = item({ archived: true, quantity: 4 });
+  assert.deepEqual([itemStockView(archivedItem, { stores: twoStores, stock }).status, itemStockView(archivedItem, { stores: twoStores, stock }).low], ["archived", false]);
+  const it = item({ quantity: 4, countWasOff: true });
+  assert.equal(itemStockView(it, { stores: twoStores, stock }).countWasOff, true);
+  assert.equal(itemStockView(it, { stores: twoStores, stock, storeId: "s-main" }).countWasOff, false);
+  assert.equal(itemStockView(it, { stores: twoStores, stock, storeId: "s-down" }).countWasOff, true);
+});
+
+test("the products list narrows to a store's low stock and the chips count the same way", () => {
+  const stock = buildStockIndex([
+    { itemId: "a", storeId: "s-main", quantity: 9 },
+    { itemId: "a", storeId: "s-down", quantity: 1 },
+    { itemId: "b", storeId: "s-main", quantity: 1 },
+    { itemId: "b", storeId: "s-down", quantity: 8 },
+    { itemId: "c", storeId: "s-main", quantity: 6 },
+    { itemId: "c", storeId: "s-down", quantity: 6 },
+  ]);
+  const rows = [
+    { id: "a", name: "A", quantity: 10, lowStockAt: 2 },
+    { id: "b", name: "B", quantity: 9, lowStockAt: 2 },
+    { id: "c", name: "C", quantity: 12, lowStockAt: 2 },
+  ];
+  const ids = (scope: InventoryListScope) => filterInventoryItems(rows, "low", "", scope).map((i) => i.id);
+  assert.deepEqual(ids({ stores: twoStores, stock }), ["a", "b"]);
+  assert.deepEqual(ids({ stores: twoStores, stock, storeId: "s-down" }), ["a"]);
+  assert.deepEqual(ids({ stores: twoStores, stock, storeId: "s-main" }), ["b"]);
+  assert.equal(inventoryCounts(rows, { stores: twoStores, stock }).low, 2);
+  assert.equal(inventoryCounts(rows, { stores: twoStores, stock, storeId: "s-down" }).low, 1);
+  // Without a scope, the v1 count: the product's own total against its own threshold.
+  assert.equal(inventoryCounts(rows).low, 0);
+  assert.equal(inventoryCounts(rows).onSale, 3);
+});
+
+// ---------------------------------------------------------------------------
+// The product form and the stock dialog with stores.
+// ---------------------------------------------------------------------------
+
+test("a multi-store product takes a starting count per store; a single-store one still takes the one number", () => {
+  assert.deepEqual(readStartingStock({ "s-main": "5", "s-down": "", x: "0" }), { stock: { "s-main": 5 }, invalid: false });
+  assert.equal(readStartingStock({ "s-main": "-1" }).invalid, true);
+  assert.equal(readStartingStock({ "s-main": "2.5" }).invalid, true);
+  assert.deepEqual(readStartingStock(undefined), { stock: {}, invalid: false });
+
+  const multi = createInventoryItemRequest("b1", draft({ quantity: "99", stock: { "s-main": "5", "s-down": "3" } }), { multiStore: true });
+  assert.deepEqual(multi.stock, { "s-main": 5, "s-down": 3 });
+  assert.equal("quantity" in multi, false);
+  assert.deepEqual(createInventoryItemRequest("b1", draft({ stock: { "s-main": "" } }), { multiStore: true }).stock, {});
+  // The v1 shape is unchanged for a single-store business.
+  const single = createInventoryItemRequest("b1", draft({ stock: { "s-main": "5" } }));
+  assert.equal(single.quantity, 4);
+  assert.equal("stock" in single, false);
+
+  assert.deepEqual(validateInventoryItemDraft(draft({ quantity: "abc" }), true), ["quantity_invalid"]);
+  // In a multi-store business the single number is not asked for; the per-store ones are checked.
+  assert.deepEqual(validateInventoryItemDraft(draft({ quantity: "abc", stock: { "s-main": "3" } }), true, { multiStore: true }), []);
+  assert.deepEqual(validateInventoryItemDraft(draft({ stock: { "s-main": "x" } }), true, { multiStore: true }), ["stock_store_invalid"]);
+  assert.deepEqual(validateInventoryItemDraft(draft({ stock: { "s-main": "x" } }), false, { multiStore: true }), []);
+});
+
+test("add stock and set count name the store only when there are several", () => {
+  const stockDraft = { mode: "add" as const, quantity: "3", note: "" };
+  assert.deepEqual(adjustInventoryStockRequest("b1", "i1", stockDraft), { businessId: "b1", itemId: "i1", mode: "add", quantity: 3 });
+  assert.deepEqual(adjustInventoryStockRequest("b1", "i1", stockDraft, "s-down"), { businessId: "b1", itemId: "i1", mode: "add", quantity: 3, storeId: "s-down" });
+  assert.deepEqual(adjustInventoryStockRequest("b1", "i1", { mode: "set", quantity: "0", note: " recount " }, " s-main "), { businessId: "b1", itemId: "i1", mode: "set", quantity: 0, storeId: "s-main", note: "recount" });
+  // The "stock after" preview works on the store's count.
+  assert.equal(stockAfter(7, stockDraft), 10);
+});
+
+// ---------------------------------------------------------------------------
+// Transfers.
+// ---------------------------------------------------------------------------
+
+test("a transfer needs a product, two different stores and a quantity the source holds", () => {
+  const ok = { itemId: "i1", fromStoreId: "s-main", toStoreId: "s-down", quantity: "3", note: "" };
+  assert.deepEqual(validateTransferDraft(ok, 7), []);
+  assert.deepEqual(validateTransferDraft(ok, null), []);
+  assert.deepEqual(validateTransferDraft(emptyTransferDraft), ["transfer_item_required", "transfer_store_required", "transfer_quantity_invalid"]);
+  assert.deepEqual(validateTransferDraft({ ...ok, toStoreId: "s-main" }, 7), ["same_store"]);
+  assert.deepEqual(validateTransferDraft({ ...ok, toStoreId: "" }, 7), ["transfer_store_required"]);
+  assert.deepEqual(validateTransferDraft({ ...ok, quantity: "0" }, 7), ["transfer_quantity_invalid"]);
+  assert.deepEqual(validateTransferDraft({ ...ok, quantity: "2.5" }, 7), ["transfer_quantity_invalid"]);
+  assert.deepEqual(validateTransferDraft({ ...ok, quantity: "8" }, 7), ["insufficient_stock"]);
+  assert.deepEqual(validateTransferDraft({ ...ok, quantity: "7" }, 7), []);
+  assert.deepEqual(validateTransferDraft({ ...ok, note: "n".repeat(201) }, 7), ["note_too_long"]);
+  // Every refusal reads as a sentence.
+  for (const code of ["same_store", "insufficient_stock", "transfer_item_required", "transfer_store_required", "transfer_quantity_invalid"] as InventoryRefusal[]) {
+    assert.ok(INVENTORY_MESSAGES[code].endsWith("."), code);
+  }
+});
+
+test("the transfer request and its preview", () => {
+  assert.deepEqual(
+    transferInventoryStockRequest(" b1 ", { itemId: "i1", fromStoreId: "s-main", toStoreId: "s-down", quantity: "3", note: "" }),
+    { businessId: "b1", itemId: "i1", fromStoreId: "s-main", toStoreId: "s-down", quantity: 3 },
+  );
+  assert.equal(
+    transferInventoryStockRequest("b1", { itemId: "i1", fromStoreId: "s-main", toStoreId: "s-down", quantity: "3", note: " shelf restock " }).note,
+    "shelf restock",
+  );
+  assert.deepEqual(transferAfter(7, 3, "2"), { from: 5, to: 5 });
+  assert.equal(transferAfter(7, 3, "8"), null);
+  assert.equal(transferAfter(7, 3, ""), null);
+  assert.equal(transferAfter(7, 3, "0"), null);
+  assert.equal(countChangeText("Main store", 7, 5), "Main store 7 → 5");
+  assert.equal(availableInStoreText(7, "Main store"), "7 available in Main store");
+  assert.equal(availableInStoreText(1, "Main store", "fr"), "1 disponible dans Main store");
+});
+
+// ---------------------------------------------------------------------------
+// Staff store access.
+// ---------------------------------------------------------------------------
+
+test("a team member's store access is read, checked and sent as the owner set it", () => {
+  assert.deepEqual(inventoryStaffAccessFromRow({ inventoryHomeStoreId: "s-down", inventoryAllStores: true }), { homeStoreId: "s-down", allStores: true });
+  assert.deepEqual(inventoryStaffAccessFromRow({}), { homeStoreId: "", allStores: false });
+  assert.deepEqual(inventoryStaffAccessFromRow({ inventoryAllStores: "true" }), { homeStoreId: "", allStores: false });
+  assert.deepEqual(validateStaffAccess({ homeStoreId: "", allStores: false }, twoStores), ["staff_store_required"]);
+  assert.deepEqual(validateStaffAccess({ homeStoreId: "s-gone", allStores: false }, twoStores), ["staff_store_required"]);
+  assert.deepEqual(validateStaffAccess({ homeStoreId: "s-down", allStores: false }, twoStores), []);
+  assert.deepEqual(validateStaffAccess({ homeStoreId: "", allStores: true }, twoStores), []);
+  assert.deepEqual(
+    setInventoryStaffAccessRequest(" b1 ", " u1 ", { homeStoreId: " s-down ", allStores: true }),
+    { businessId: "b1", userId: "u1", homeStoreId: "s-down", allStores: true },
+  );
+  assert.deepEqual(
+    setInventoryStaffAccessRequest("b1", "u1", { homeStoreId: "s-down", allStores: "yes" as unknown as boolean }),
+    { businessId: "b1", userId: "u1", homeStoreId: "s-down", allStores: false },
+  );
+  assert.equal(staffAccessChanged({ inventoryHomeStoreId: "s-down" }, { homeStoreId: "s-down", allStores: false }), false);
+  assert.equal(staffAccessChanged({ inventoryHomeStoreId: "s-down" }, { homeStoreId: "s-main", allStores: false }), true);
+  assert.equal(staffAccessChanged({}, { homeStoreId: "", allStores: true }), true);
+  // The controls are for staff who hold the Inventory permission.
+  assert.equal(staffHasInventoryPermission({ businessPermissions: ["people", "inventory"] }), true);
+  assert.equal(staffHasInventoryPermission({ businessPermissions: ["people"] }), false);
+  assert.equal(staffHasInventoryPermission({}), true);
+});
+
+// ---------------------------------------------------------------------------
+// The summary, sales and history with stores and categories.
+// ---------------------------------------------------------------------------
+
+test("the summary request names a store only when one is chosen", () => {
+  assert.deepEqual(inventorySummaryRequest("b1", "today", "America/New_York"), { businessId: "b1", range: "today", timeZone: "America/New_York" });
+  assert.deepEqual(inventorySummaryRequest("b1", "month", "UTC", ""), { businessId: "b1", range: "month", timeZone: "UTC" });
+  assert.deepEqual(inventorySummaryRequest("b1", "month", "UTC", " s-down "), { businessId: "b1", range: "month", timeZone: "UTC", storeId: "s-down" });
+});
+
+test("the summary's category and store blocks are read tolerantly and sorted by money", () => {
+  const read = readInventorySummary({
+    salesCount: 3,
+    byCategory: [
+      { categoryId: "c-hair", name: "Hair", itemsSold: 2, revenueCents: 2500, profitCents: 900 },
+      { categoryId: "", name: "Uncategorized", itemsSold: 1, revenueCents: 9000, profitCents: 0 },
+      { categoryId: "c-care", name: "Care", itemsSold: 4, revenueCents: 2500, profitCents: -100 },
+      { categoryId: "c-none", name: "Nothing sold" },
+    ],
+    byStore: [
+      { storeId: "s-down", name: "Downtown", salesCount: 1, itemsSold: 1, revenueCents: 500, profitCents: 200 },
+      { storeId: "s-main", name: "Main store", salesCount: 2, itemsSold: 3, revenueCents: 8000, profitCents: 3000 },
+    ],
+    low: [{ itemId: "i1", name: "Shea", quantity: 1, lowStockAt: 3, storeId: "s-down", storeName: "Downtown" }, { itemId: "i2", name: "Soap", quantity: 0 }],
+  });
+  assert.ok(read);
+  // Most money first; equal money by name; voided sales are the server's to leave out.
+  assert.deepEqual(read.byCategory.map((c) => c.categoryId), ["", "c-care", "c-hair", "c-none"]);
+  assert.deepEqual(read.byCategory[1], { categoryId: "c-care", name: "Care", itemsSold: 4, revenueCents: 2500, profitCents: -100 });
+  assert.deepEqual(read.byCategory[3], { categoryId: "c-none", name: "Nothing sold", itemsSold: 0, revenueCents: 0, profitCents: 0 });
+  assert.deepEqual(read.byStore.map((s) => s.storeId), ["s-main", "s-down"]);
+  assert.deepEqual([read.low[0].storeId, read.low[0].storeName, read.low[1].storeId, read.low[1].storeName], ["s-down", "Downtown", "", ""]);
+  // An answer from a v1 server has neither block.
+  const old = readInventorySummary({ salesCount: 1 });
+  assert.deepEqual([old?.byCategory, old?.byStore], [[], []]);
+});
+
+test("a sale knows its store; one from before stores counts under the Main store", () => {
+  const sale = (over: Record<string, unknown>) => inventorySaleFromRow({ id: "x", lines: [], totalCents: 0, ...over });
+  assert.deepEqual([sale({ storeId: "s-down", storeName: "Downtown" }).storeId, sale({ storeId: "s-down", storeName: "Downtown" }).storeName], ["s-down", "Downtown"]);
+  assert.deepEqual([sale({}).storeId, sale({}).storeName], ["", ""]);
+  const mixed = [sale({ id: "a", storeId: "s-down" }), sale({ id: "b" }), sale({ id: "c", storeId: "s-main" })];
+  assert.deepEqual(salesInStore(mixed, "", stores).map((s) => s.id), ["a", "b", "c"]);
+  assert.deepEqual(salesInStore(mixed, "s-main", stores).map((s) => s.id), ["b", "c"]);
+  assert.deepEqual(salesInStore(mixed, "s-down", stores).map((s) => s.id), ["a"]);
+  assert.equal(saleStoreId(mixed[1], stores), "s-main");
+  assert.equal(saleStoreId(mixed[0], stores), "s-down");
+});
+
+test("the counter's sale request names a store only when asked to (old builds send none)", () => {
+  const lines: BasketLine[] = [basketLineFromItem(item())];
+  assert.equal("storeId" in recordInventorySaleRequest("b1", "web-1", "cash", lines), false);
+  assert.equal(recordInventorySaleRequest("b1", "web-1", "cash", lines, " s-down ").storeId, "s-down");
+});
+
+test("stock history reads the store and tells a transfer's two sides", () => {
+  const entries = inventoryMovementEntries([
+    { id: "m1", type: "transfer_out", delta: -2, quantityAfter: 5, storeId: "s-main", transferId: "t1", createdAt: { seconds: 20 } },
+    { id: "m2", type: "transfer_in", delta: 2, quantityAfter: 5, storeId: "s-down", transferId: "t1", createdAt: { seconds: 20 } },
+    { id: "m3", type: "something_new", delta: 1, quantityAfter: 1, transferId: "t2", createdAt: { seconds: 10 } },
+    { id: "m4", type: "add", delta: 3, quantityAfter: 3, createdAt: { seconds: 5 } },
+  ]);
+  const by = Object.fromEntries(entries.map((e) => [e.id, e]));
+  assert.deepEqual([by.m1.label, by.m1.storeId, by.m1.transferId, by.m1.deltaText], ["Moved out to another store", "s-main", "t1", "-2"]);
+  assert.equal(by.m2.label, "Moved in from another store");
+  // An unknown type that carries a transfer id is still a transfer, in words.
+  assert.equal(by.m3.label, "Stock moved");
+  assert.deepEqual([by.m4.label, by.m4.storeId, by.m4.transferId], ["Stock added", "", ""]);
+});
+
+// ---------------------------------------------------------------------------
+// Refusals.
+// ---------------------------------------------------------------------------
+
+test("every new server refusal reads as a friendly sentence, not the server's words", () => {
+  const codes = [
+    "category_name_required", "category_name_taken", "category_not_found",
+    "store_name_required", "store_not_found", "store_archived", "store_has_stock", "store_not_allowed",
+    "home_store_required", "same_store", "insufficient_stock", "owner_only",
+  ] as const;
+  for (const reason of codes) {
+    const failure = inventoryCallableFailure({ code: "functions/failed-precondition", message: "raw server words", details: { reason, reasons: [reason] } });
+    assert.equal(failure.reason, reason);
+    assert.equal(failure.message, INVENTORY_MESSAGES[reason]);
+    assert.notEqual(failure.message, "raw server words");
+    assert.match(failure.message, /^[A-Z].*\.$/);
+  }
+  assert.match(INVENTORY_MESSAGES.store_has_stock, /Move it to another store first/);
+  assert.match(INVENTORY_MESSAGES.owner_only, /owner/);
+  // An unknown code still falls back to the server's readable message.
+  assert.equal(inventoryCallableFailure({ code: "functions/not-found", message: "Something specific.", details: { reason: "brand_new_code" } }).message, "Something specific.");
+});
+
+test("sentences with a count or a name are built per language", () => {
+  assert.equal(storeCountText(1), "1 store");
+  assert.equal(storeCountText(3), "3 stores");
+  assert.equal(storeCountText(2, "fr"), "2 magasins");
+  assert.equal(categoryCountText(1, "fr"), "1 catégorie");
+  assert.equal(categoryCountText(4), "4 categories");
+  assert.equal(archivedNameText("Hair", "en", true), "Hair (archived)");
+  assert.equal(archivedNameText("Hair", "fr", true), "Hair (archivée)");
+  assert.equal(archivedNameText("Downtown", "fr"), "Downtown (archivé)");
+});

@@ -31,6 +31,10 @@ type Row = Record<string, unknown>;
 const MAX_NAME = 120;
 const MAX_CATEGORY = 60;
 const MAX_NOTE = 200;
+/** Console-side caps for a store's details (the contract names none; the server decides). */
+const MAX_STORE_NAME = 80;
+const MAX_STORE_ADDRESS = 200;
+const MAX_STORE_PHONE = 40;
 const MAX_URL = 1000;
 const MAX_ID = 200;
 /** A count past this is a typo (assumption: the contract names no cap). */
@@ -117,7 +121,10 @@ export type InventoryItem = {
   costCents: number | null;
   quantity: number;
   lowStockAt: number | null;
+  /** The name of the category the product was saved with (a snapshot; the list's name wins once renamed). */
   category: string;
+  /** The category's id; "" for a legacy product whose typed category is not in the list yet. */
+  categoryId: string;
   photoUrl: string;
   archived: boolean;
   countWasOff: boolean;
@@ -139,6 +146,7 @@ export function inventoryItemFromRow(row: unknown): InventoryItem {
     quantity: nonNegativeInt(r.quantity),
     lowStockAt: low === null ? null : Math.max(0, low),
     category: text(r.category, MAX_CATEGORY),
+    categoryId: text(r.categoryId),
     photoUrl: text(r.photoUrl, MAX_URL),
     archived: r.archived === true,
     countWasOff: r.countWasOff === true,
@@ -201,20 +209,30 @@ function searchKey(value: string): string {
  * is every product still on sale; Archived is the ones put away. A search
  * matches name, category and code (the code with or without its dash, or a
  * pasted tag link), every typed word having to match.
+ *
+ * `scope` is the v2 part (categories and stores). Left out, this is exactly
+ * the single-store list: no category filter, and "low" / "count was off" read
+ * the product's own total.
  */
 export function filterInventoryItems(
   rows: readonly unknown[],
   filter: InventoryFilter,
   query: string,
+  scope: InventoryListScope = {},
 ): InventoryItem[] {
   const items = (Array.isArray(rows) ? rows : []).map(inventoryItemFromRow).filter((item) => item.id);
+  const categories = scope.categories ?? [];
+  // Built once for the whole list, then read per product.
+  const resolve = categoryResolver(categories);
   const inFilter = items.filter((item) => {
+    if (!itemInCategory(item, resolve, scope.categoryId ?? "")) return false;
     if (filter === "archived") return item.archived;
     if (item.archived) return false;
-    if (filter === "low") return inventoryIsLow(item);
-    if (filter === "countOff") return item.countWasOff;
+    if (filter === "low") return itemStockView(item, scope).low;
+    if (filter === "countOff") return itemStockView(item, scope).countWasOff;
     return true;
   });
+  const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
   // A pasted tag link or a whole code finds that product alone.
   const scanned = inventoryCodeFrom(query);
   const words = searchKey(text(query, 120)).split(/\s+/).filter(Boolean);
@@ -223,7 +241,8 @@ export function filterInventoryItems(
     : words.length === 0
     ? inFilter
     : inFilter.filter((item) => {
-      const haystack = [searchKey(`${item.name} ${item.category} ${item.code}`), item.code.replace(/-/g, "").toLowerCase()].join(" ");
+      const category = categoryNames.get(item.categoryId) ?? item.category;
+      const haystack = [searchKey(`${item.name} ${category} ${item.code}`), item.code.replace(/-/g, "").toLowerCase()].join(" ");
       return words.every((word) => haystack.includes(word.replace(/-/g, "")) || haystack.includes(word));
     });
   return [...hits].sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
@@ -231,15 +250,19 @@ export function filterInventoryItems(
 
 export type InventoryCounts = { onSale: number; low: number; countOff: number };
 
-/** What the filter chips show beside their names; one pass. */
-export function inventoryCounts(rows: readonly unknown[]): InventoryCounts {
+/**
+ * What the filter chips show beside their names; one pass. In a multi-store
+ * business `scope` says whose stock is counted (one store, or all of them).
+ */
+export function inventoryCounts(rows: readonly unknown[], scope: InventoryListScope = {}): InventoryCounts {
   const counts: InventoryCounts = { onSale: 0, low: 0, countOff: 0 };
   for (const row of Array.isArray(rows) ? rows : []) {
     const item = inventoryItemFromRow(row);
     if (!item.id || item.archived) continue;
     counts.onSale += 1;
-    if (inventoryIsLow(item)) counts.low += 1;
-    if (item.countWasOff) counts.countOff += 1;
+    const view = itemStockView(item, scope);
+    if (view.low) counts.low += 1;
+    if (view.countWasOff) counts.countOff += 1;
   }
   return counts;
 }
@@ -268,6 +291,27 @@ export type InventoryRefusal =
   | "sale_total_too_large"
   | "payment_method_invalid"
   | "delete_not_confirmed"
+  | "stock_store_invalid"
+  | "store_required"
+  | "transfer_item_required"
+  | "transfer_store_required"
+  | "transfer_quantity_invalid"
+  | "store_name_too_long"
+  | "store_detail_too_long"
+  | "staff_store_required"
+  // The server's v2 codes (categories and stores), also raised here before the call where the form can tell.
+  | "category_name_required"
+  | "category_name_taken"
+  | "category_not_found"
+  | "store_name_required"
+  | "store_not_found"
+  | "store_archived"
+  | "store_has_stock"
+  | "store_not_allowed"
+  | "home_store_required"
+  | "same_store"
+  | "insufficient_stock"
+  | "owner_only"
   // The server's `details.reason` codes (the ones the contract names, and the ones a form can cause).
   | "item_archived"
   | "item_not_found"
@@ -298,6 +342,26 @@ export const INVENTORY_MESSAGES: Record<InventoryRefusal, string> = {
   sale_total_too_large: "That sale is larger than the system can record.",
   payment_method_invalid: "Say how the customer paid.",
   delete_not_confirmed: "Type the product's code to confirm the deletion.",
+  stock_store_invalid: "Enter a whole number from 0 for each store, or leave it empty.",
+  store_required: "Choose which store.",
+  transfer_item_required: "Choose the product to move.",
+  transfer_store_required: "Choose the store it leaves and the store it goes to.",
+  transfer_quantity_invalid: "Enter how many to move, a whole number above zero.",
+  store_name_too_long: "The store's name is too long.",
+  store_detail_too_long: "The address or phone number is too long.",
+  staff_store_required: "Choose a home store, or let this person work in all stores.",
+  category_name_required: "Enter the category's name.",
+  category_name_taken: "You already have a category with that name.",
+  category_not_found: "That category no longer exists.",
+  store_name_required: "Enter the store's name.",
+  store_not_found: "That store no longer exists.",
+  store_archived: "That store is archived. Restore it first.",
+  store_has_stock: "That store still has stock. Move it to another store first.",
+  store_not_allowed: "You can only work in your own store.",
+  home_store_required: "You have no home store yet. Ask the owner to assign one.",
+  same_store: "Choose two different stores.",
+  insufficient_stock: "There are not enough in the store it leaves to move that many.",
+  owner_only: "Only the owner can do this.",
   item_archived: "That product is archived. Unarchive it before selling it.",
   item_not_found: "That product no longer exists.",
   sale_not_found: "That sale no longer exists.",
@@ -393,7 +457,19 @@ export type InventoryItemDraft = {
   quantity: string;
   /** As typed; blank is "never flag it as low (only at zero)". */
   lowStockAt: string;
+  /**
+   * The category's name: the chosen one's, or - for a legacy product whose
+   * typed category is not in the list yet, or a business whose list could not
+   * be read - the typed text the server turns into a category.
+   */
   category: string;
+  /** The chosen category's id; "" for none (or for the typed text above). Left out in the v1 shape. */
+  categoryId?: string;
+  /**
+   * Multi-store only: the starting count typed for each store, by store id.
+   * Left out (or ignored) in a single-store business, where `quantity` is the count.
+   */
+  stock?: Record<string, string>;
   photoUrl: string;
 };
 
@@ -404,18 +480,27 @@ export const emptyInventoryItemDraft: InventoryItemDraft = {
   quantity: "0",
   lowStockAt: "",
   category: "",
+  categoryId: "",
+  stock: {},
   photoUrl: "",
 };
 
-/** A stored product back into the form, so the same form edits it. */
-export function inventoryDraftFromItem(item: InventoryItem): InventoryItemDraft {
+/**
+ * A stored product back into the form, so the same form edits it. With the
+ * business's categories the product's category is matched to the list (by id,
+ * else by name); one that is not in the list yet stays as typed text.
+ */
+export function inventoryDraftFromItem(item: InventoryItem, categories: readonly InventoryCategory[] = []): InventoryItemDraft {
+  const match = categoryForItem(item, categories);
   return {
     name: item.name,
     price: item.priceCents > 0 ? centsToInput(item.priceCents) : "",
     cost: item.costCents === null ? "" : centsToInput(item.costCents),
     quantity: String(item.quantity),
     lowStockAt: item.lowStockAt === null ? "" : String(item.lowStockAt),
-    category: item.category,
+    category: match ? match.name : item.category,
+    categoryId: match ? match.id : "",
+    stock: {},
     photoUrl: item.photoUrl,
   };
 }
@@ -448,36 +533,97 @@ export function photoUrlOk(value: unknown): boolean {
   }
 }
 
-/** Every problem at once; `creating` also checks the starting count. */
-export function validateInventoryItemDraft(draft: InventoryItemDraft, creating: boolean): InventoryRefusal[] {
+/** The stores a product form asks a starting count for: none in a single-store business. */
+export type ItemFormStores = { multiStore: boolean };
+
+/**
+ * The starting count per store: the stores with a number above zero, as
+ * `{storeId: quantity}`. A blank box is nothing; anything that is not a whole
+ * number is `invalid`.
+ */
+export function readStartingStock(stock: Record<string, string> | undefined): { stock: Record<string, number>; invalid: boolean } {
+  const out: Record<string, number> = {};
+  let invalid = false;
+  for (const [storeId, raw] of Object.entries(stock ?? {})) {
+    const n = readWholeNumber(raw);
+    if (n === null) continue;
+    if (Number.isNaN(n)) invalid = true;
+    else if (n > 0 && storeId) out[storeId] = n;
+  }
+  return { stock: out, invalid };
+}
+
+/**
+ * Every problem at once; `creating` also checks the starting count - the one
+ * number of a single-store business, or each store's own in a multi-store one.
+ */
+export function validateInventoryItemDraft(
+  draft: InventoryItemDraft,
+  creating: boolean,
+  form: ItemFormStores = { multiStore: false },
+): InventoryRefusal[] {
   const errors: InventoryRefusal[] = [];
   const name = text(draft.name, MAX_NAME + 1);
   if (!name) errors.push("name_required");
   else if (name.length > MAX_NAME) errors.push("name_too_long");
   if (readInventoryPrice(draft.price) === null) errors.push("price_invalid");
   if (readInventoryCost(draft.cost).error) errors.push("cost_invalid");
-  const count = readWholeNumber(draft.quantity);
-  if (creating && (count === null || Number.isNaN(count))) errors.push("quantity_invalid");
+  if (creating && form.multiStore) {
+    if (readStartingStock(draft.stock).invalid) errors.push("stock_store_invalid");
+  } else {
+    const count = readWholeNumber(draft.quantity);
+    if (creating && (count === null || Number.isNaN(count))) errors.push("quantity_invalid");
+  }
   if (Number.isNaN(readWholeNumber(draft.lowStockAt) ?? 0)) errors.push("low_stock_invalid");
   if (text(draft.category, MAX_CATEGORY + 1).length > MAX_CATEGORY) errors.push("category_too_long");
   if (!photoUrlOk(draft.photoUrl)) errors.push("photo_url_invalid");
   return errors;
 }
 
-/** The `createInventoryItem` request; blank optional fields are left out. */
-export function createInventoryItemRequest(businessId: string, draft: InventoryItemDraft) {
+/**
+ * The category part of a product request: the chosen category's id, or - with
+ * no id - the typed name (a legacy product, or a list that could not be read),
+ * which the server finds or creates. Exactly the v1 shape in the second case.
+ */
+function categoryFields(draft: InventoryItemDraft): { categoryId?: string; category?: string } {
+  const categoryId = text(draft.categoryId);
+  if (categoryId) return { categoryId };
+  const category = text(draft.category, MAX_CATEGORY);
+  return category ? { category } : {};
+}
+
+/**
+ * The `createInventoryItem` request; blank optional fields are left out. A
+ * single-store business sends the one `quantity` (the v1 shape, which every
+ * business still accepts); a multi-store one sends `stock: {storeId: n}`.
+ */
+export function createInventoryItemRequest(
+  businessId: string,
+  draft: InventoryItemDraft,
+  form: ItemFormStores = { multiStore: false },
+): {
+  businessId: string;
+  name: string;
+  priceCents: number;
+  quantity?: number;
+  stock?: Record<string, number>;
+  costCents?: number;
+  lowStockAt?: number;
+  categoryId?: string;
+  category?: string;
+  photoUrl?: string;
+} {
   const cost = readInventoryCost(draft.cost).cents;
   const low = readWholeNumber(draft.lowStockAt);
-  const category = text(draft.category, MAX_CATEGORY);
   const photoUrl = text(draft.photoUrl, MAX_URL);
   return {
     businessId: text(businessId),
     name: text(draft.name, MAX_NAME),
     priceCents: readInventoryPrice(draft.price) ?? 0,
-    quantity: readWholeNumber(draft.quantity) ?? 0,
+    ...(form.multiStore ? { stock: readStartingStock(draft.stock).stock } : { quantity: readWholeNumber(draft.quantity) ?? 0 }),
     ...(cost !== null ? { costCents: cost } : {}),
     ...(low !== null && !Number.isNaN(low) ? { lowStockAt: low } : {}),
-    ...(category ? { category } : {}),
+    ...categoryFields(draft),
     ...(photoUrl ? { photoUrl } : {}),
   };
 }
@@ -498,14 +644,34 @@ export function updateInventoryItemRequest(businessId: string, item: InventoryIt
     priceCents: readInventoryPrice(draft.price) ?? 0,
     ...(cost !== null ? { costCents: cost } : item.costCents !== null ? { costCents: null } : {}),
     ...(lowValue !== null ? { lowStockAt: lowValue } : item.lowStockAt !== null ? { lowStockAt: null } : {}),
-    category: text(draft.category, MAX_CATEGORY),
+    ...updateCategoryFields(item, draft),
     photoUrl: text(draft.photoUrl, MAX_URL),
   };
 }
 
-/** Whether saving an edit changes anything the server stores (an unchanged form is not sent). */
-export function inventoryDraftChanged(item: InventoryItem, draft: InventoryItemDraft): boolean {
-  const before = inventoryDraftFromItem(item);
+/**
+ * A chosen category is sent by id. Otherwise the typed name goes as in v1,
+ * and "" clears it; a product that had a category id also clears the id.
+ */
+function updateCategoryFields(item: InventoryItem, draft: InventoryItemDraft): { categoryId?: string; category?: string } {
+  const chosen = text(draft.categoryId);
+  if (chosen) return { categoryId: chosen };
+  const category = text(draft.category, MAX_CATEGORY);
+  if (category) return { category };
+  return item.categoryId ? { category: "", categoryId: "" } : { category: "" };
+}
+
+/**
+ * Whether saving an edit changes anything the server stores (an unchanged
+ * form is not sent). `categories` is the list the form was opened with, so a
+ * legacy product matched to a category by name is not "changed" by the match.
+ */
+export function inventoryDraftChanged(
+  item: InventoryItem,
+  draft: InventoryItemDraft,
+  categories: readonly InventoryCategory[] = [],
+): boolean {
+  const before = inventoryDraftFromItem(item, categories);
   const same = (a: string, b: string) => a.trim() === b.trim();
   const sameMoney = (a: string, b: string) => readMoneyInput(a).cents === readMoneyInput(b).cents;
   return !(
@@ -513,7 +679,8 @@ export function inventoryDraftChanged(item: InventoryItem, draft: InventoryItemD
     sameMoney(before.price, draft.price) &&
     sameMoney(before.cost, draft.cost) &&
     readWholeNumber(before.lowStockAt) === readWholeNumber(draft.lowStockAt) &&
-    same(before.category, draft.category) &&
+    same(before.categoryId ?? "", draft.categoryId ?? "") &&
+    (text(draft.categoryId) !== "" || same(before.category, draft.category)) &&
     same(before.photoUrl, draft.photoUrl)
   );
 }
@@ -595,14 +762,20 @@ export function stockAfter(currentQuantity: number, draft: StockDraft): number |
   return draft.mode === "add" ? Math.max(0, currentQuantity) + n : n;
 }
 
-/** The `adjustInventoryStock` request. */
-export function adjustInventoryStockRequest(businessId: string, itemId: string, draft: StockDraft) {
+/**
+ * The `adjustInventoryStock` request. A multi-store business names the store
+ * whose count changes (`storeId`); a single-store one sends none, the v1 shape
+ * every business still accepts.
+ */
+export function adjustInventoryStockRequest(businessId: string, itemId: string, draft: StockDraft, storeId = "") {
   const note = text(draft.note, MAX_NOTE);
+  const store = text(storeId);
   return {
     businessId: text(businessId),
     itemId: text(itemId),
     mode: draft.mode === "set" ? ("set" as const) : ("add" as const),
     quantity: readWholeNumber(draft.quantity, draft.mode === "add" ? 1 : 0) ?? 0,
+    ...(store ? { storeId: store } : {}),
     ...(note ? { note } : {}),
   };
 }
@@ -749,11 +922,15 @@ export function recordInventorySaleRequest(
   clientRequestId: string,
   paymentMethod: string,
   lines: readonly BasketLine[],
+  storeId = "",
 ) {
+  const store = text(storeId);
   return {
     businessId: text(businessId),
     clientRequestId: text(clientRequestId, 100),
     paymentMethod: text(paymentMethod, 40),
+    // Left out, the server sells from the caller's home store (the v1 shape).
+    ...(store ? { storeId: store } : {}),
     lines: lines.map((line) => ({
       itemId: text(line.itemId),
       quantity: readWholeNumber(line.quantity, 1) ?? 0,
@@ -821,6 +998,10 @@ export type InventorySale = {
   paymentMethod: string;
   methodLabel: string;
   soldByStaffId: string;
+  /** The store it was sold in; "" for a sale from before the business had stores. */
+  storeId: string;
+  /** The store's name when it was sold (a snapshot). */
+  storeName: string;
   voided: boolean;
   voidedByStaffId: string;
   voidedAt: unknown;
@@ -870,6 +1051,8 @@ export function inventorySaleFromRow(row: unknown): InventorySale {
     paymentMethod: text(r.paymentMethod, 40),
     methodLabel: inventoryMethodLabel(r.paymentMethod),
     soldByStaffId: text(r.soldByStaffId),
+    storeId: text(r.storeId),
+    storeName: text(r.storeName, MAX_STORE_NAME),
     voided: r.voided === true,
     voidedByStaffId: text(r.voidedByStaffId),
     voidedAt: r.voidedAt ?? null,
@@ -899,7 +1082,7 @@ export function validateVoidReason(reason: unknown): InventoryRefusal[] {
 // Stock history.
 // ---------------------------------------------------------------------------
 
-export type InventoryMovementType = "initial" | "add" | "set" | "sale" | "void";
+export type InventoryMovementType = "initial" | "add" | "set" | "sale" | "void" | "transfer" | "transfer_in" | "transfer_out";
 
 export const INVENTORY_MOVEMENT_LABELS: Record<InventoryMovementType, string> = {
   initial: "Starting count",
@@ -907,6 +1090,9 @@ export const INVENTORY_MOVEMENT_LABELS: Record<InventoryMovementType, string> = 
   set: "Count set",
   sale: "Sold",
   void: "Sale voided",
+  transfer: "Stock moved",
+  transfer_in: "Moved in from another store",
+  transfer_out: "Moved out to another store",
 };
 
 export type InventoryMovement = {
@@ -920,6 +1106,10 @@ export type InventoryMovement = {
   byStaffId: string;
   note: string;
   saleId: string;
+  /** The store whose count this line changed; "" when it predates stores. */
+  storeId: string;
+  /** Both sides of a transfer share this. */
+  transferId: string;
   at: unknown;
 };
 
@@ -936,16 +1126,22 @@ export function inventoryMovementEntries(rows: readonly unknown[]): InventoryMov
     .map((row) => {
       const type = text(row.type, 20);
       const delta = wholeCents(row.delta) ?? 0;
+      const transferId = text(row.transferId);
       return {
         id: text(row.id),
         type,
-        label: type in INVENTORY_MOVEMENT_LABELS ? INVENTORY_MOVEMENT_LABELS[type as InventoryMovementType] : type,
+        // An unknown type that carries a transfer id is still a transfer, in words.
+        label: type in INVENTORY_MOVEMENT_LABELS
+          ? INVENTORY_MOVEMENT_LABELS[type as InventoryMovementType]
+          : transferId ? INVENTORY_MOVEMENT_LABELS.transfer : type,
         delta,
         deltaText: signedCount(delta),
         quantityAfter: nonNegativeInt(row.quantityAfter),
         byStaffId: text(row.byStaffId),
         note: text(row.note, MAX_NOTE),
         saleId: text(row.saleId),
+        storeId: text(row.storeId),
+        transferId,
         at: row.createdAt ?? null,
       };
     })
@@ -963,14 +1159,38 @@ export const INVENTORY_RANGE_LABELS: Record<InventorySummaryRange, string> = {
   month: "This month",
 };
 
-/** The `getInventorySummary` request. */
-export function inventorySummaryRequest(businessId: string, range: InventorySummaryRange, timeZone: string) {
+/**
+ * The `getInventorySummary` request. `storeId` narrows it to one store: left
+ * out (or "") is every store the caller may see, the v1 shape.
+ */
+export function inventorySummaryRequest(businessId: string, range: InventorySummaryRange, timeZone: string, storeId = "") {
+  const store = text(storeId);
   return {
     businessId: text(businessId),
     range: range === "month" ? ("month" as const) : ("today" as const),
     timeZone: text(timeZone, 80),
+    ...(store ? { storeId: store } : {}),
   };
 }
+
+/** One category's line in the summary. An empty `categoryId` is the "Uncategorized" row. */
+export type InventoryCategorySales = {
+  categoryId: string;
+  name: string;
+  itemsSold: number;
+  revenueCents: number;
+  profitCents: number;
+};
+
+/** One store's line in the summary (all-store callers of a multi-store business only). */
+export type InventoryStoreSales = {
+  storeId: string;
+  name: string;
+  salesCount: number;
+  itemsSold: number;
+  revenueCents: number;
+  profitCents: number;
+};
 
 export type InventorySummary = {
   salesCount: number;
@@ -981,9 +1201,19 @@ export type InventorySummary = {
   profitCents: number;
   discountCents: number;
   best: Array<{ itemId: string; name: string; quantity: number; revenueCents: number }>;
-  low: Array<{ itemId: string; name: string; quantity: number; lowStockAt: number | null }>;
+  /** In a multi-store business a low row also names the store it is low in. */
+  low: Array<{ itemId: string; name: string; quantity: number; lowStockAt: number | null; storeId: string; storeName: string }>;
   countWasOff: Array<{ itemId: string; name: string }>;
+  /** Every category, most money first; voided sales are not in it. */
+  byCategory: InventoryCategorySales[];
+  /** Per store, most money first; empty unless the server sent it. */
+  byStore: InventoryStoreSales[];
 };
+
+/** Most money first; equal money by name, so the order never jitters between answers. */
+function byMoneyThenName<T extends { revenueCents: number; name: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => b.revenueCents - a.revenueCents || a.name.localeCompare(b.name));
+}
 
 function signedInt(value: unknown): number {
   return wholeCents(value) ?? 0;
@@ -1012,8 +1242,25 @@ export function readInventorySummary(data: unknown): InventorySummary | null {
       name: text(b.name, MAX_NAME),
       quantity: nonNegativeInt(b.quantity),
       lowStockAt: b.lowStockAt === null || b.lowStockAt === undefined || b.lowStockAt === "" ? null : nonNegativeInt(b.lowStockAt),
+      storeId: text(b.storeId),
+      storeName: text(b.storeName ?? b.store, MAX_STORE_NAME),
     })),
     countWasOff: list(r.countWasOff).map((b) => ({ itemId: text(b.itemId), name: text(b.name, MAX_NAME) })),
+    byCategory: byMoneyThenName(list(r.byCategory).map((c) => ({
+      categoryId: text(c.categoryId),
+      name: text(c.name, MAX_CATEGORY),
+      itemsSold: nonNegativeInt(c.itemsSold),
+      revenueCents: signedInt(c.revenueCents),
+      profitCents: signedInt(c.profitCents),
+    }))),
+    byStore: byMoneyThenName(list(r.byStore).map((s) => ({
+      storeId: text(s.storeId),
+      name: text(s.name, MAX_STORE_NAME),
+      salesCount: nonNegativeInt(s.salesCount),
+      itemsSold: nonNegativeInt(s.itemsSold),
+      revenueCents: signedInt(s.revenueCents),
+      profitCents: signedInt(s.profitCents),
+    }))),
   };
 }
 
@@ -1068,4 +1315,582 @@ export function voidConsequenceText(itemCount: number, lang: Lang = "en"): strin
     return `Le stock ${itemCount === 1 ? "de l’article vendu revient" : `des ${itemCount} articles vendus revient`}. La vente reste dans l’historique, marquée comme annulée.`;
   }
   return `Stock for ${itemCount === 1 ? "the 1 item sold" : `the ${itemCount} items sold`} goes back. The sale stays in the history, marked voided.`;
+}
+
+// ===========================================================================
+// v2: categories and stores (docs/INVENTORY.md, "Categories and stores (v2)").
+//
+// Everything below is optional on top of the v1 pieces above: a single-store
+// business with no categories reads, validates and sends exactly what it did.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Categories: one list per business, shared by every store.
+// ---------------------------------------------------------------------------
+
+export type InventoryCategory = {
+  id: string;
+  name: string;
+  /** Lowercased trimmed name: what "already used" is decided on. */
+  nameKey: string;
+  archived: boolean;
+};
+
+/** The server's `nameKey`: the trimmed name, lowercased. */
+export function categoryKey(name: unknown): string {
+  return text(name, MAX_CATEGORY * 4).toLowerCase();
+}
+
+export function inventoryCategoryFromRow(row: unknown): InventoryCategory {
+  const r = asRow(row);
+  const name = text(r.name, MAX_CATEGORY);
+  return { id: text(r.id), name, nameKey: text(r.nameKey, MAX_CATEGORY * 4) || categoryKey(name), archived: r.archived === true };
+}
+
+/** The business's categories by name; archived ones only when asked for. */
+export function inventoryCategories(rows: readonly unknown[], includeArchived = false): InventoryCategory[] {
+  return (Array.isArray(rows) ? rows : [])
+    .map(inventoryCategoryFromRow)
+    .filter((category) => category.id && category.name && (includeArchived || !category.archived))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
+/** "Everything" is "", a product with no category is this, anything else is a category's id. */
+export const UNCATEGORIZED_FILTER = "__none__";
+
+export type CategoryResolver = (item: Pick<InventoryItem, "categoryId" | "category">) => InventoryCategory | null;
+
+/**
+ * Which category of the list a product belongs to: by its id, else (a legacy
+ * product whose typed category the server has not converted yet) by name.
+ * Built once per list, then read per product.
+ */
+export function categoryResolver(categories: readonly InventoryCategory[]): CategoryResolver {
+  const byId = new Map<string, InventoryCategory>();
+  const byKey = new Map<string, InventoryCategory>();
+  for (const category of categories) {
+    byId.set(category.id, category);
+    // Archived categories keep their products; an active one wins a name both share.
+    if (!byKey.has(category.nameKey) || !category.archived) byKey.set(category.nameKey, category);
+  }
+  return (item) => {
+    const byItsId = item.categoryId ? byId.get(item.categoryId) : undefined;
+    if (byItsId) return byItsId;
+    const key = categoryKey(item.category);
+    return key ? byKey.get(key) ?? null : null;
+  };
+}
+
+export function categoryForItem(item: Pick<InventoryItem, "categoryId" | "category">, categories: readonly InventoryCategory[]): InventoryCategory | null {
+  return categoryResolver(categories)(item);
+}
+
+/** The name a product shows: its category's current name (so a rename shows at once), else the snapshot it was saved with. */
+export function itemCategoryName(item: Pick<InventoryItem, "categoryId" | "category">, categories: readonly InventoryCategory[]): string {
+  return categoryForItem(item, categories)?.name ?? text(item.category, MAX_CATEGORY);
+}
+
+/** Whether a product is under the category filter ("" = any, UNCATEGORIZED_FILTER = none, else an id). */
+export function itemInCategory(
+  item: Pick<InventoryItem, "categoryId" | "category">,
+  categories: readonly InventoryCategory[] | CategoryResolver,
+  filter: string,
+): boolean {
+  if (!filter) return true;
+  const match = (typeof categories === "function" ? categories : categoryResolver(categories))(item);
+  if (filter === UNCATEGORIZED_FILTER) return match === null && !text(item.category) && !text(item.categoryId);
+  return match?.id === filter;
+}
+
+/** The choices of a category dropdown: the active categories, plus the product's own when it is archived. */
+export function categoryOptions(categories: readonly InventoryCategory[], selectedId = ""): InventoryCategory[] {
+  return categories
+    .filter((category) => !category.archived || category.id === selectedId)
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
+/** Every problem with a category's name; `exceptId` is the one being renamed. */
+export function validateCategoryName(name: unknown, categories: readonly InventoryCategory[], exceptId = ""): InventoryRefusal[] {
+  const value = text(name, MAX_CATEGORY + 1);
+  if (!value) return ["category_name_required"];
+  if (value.length > MAX_CATEGORY) return ["category_too_long"];
+  const key = categoryKey(value);
+  return categories.some((category) => category.id !== exceptId && category.nameKey === key) ? ["category_name_taken"] : [];
+}
+
+export function createInventoryCategoryRequest(businessId: string, name: unknown) {
+  return { businessId: text(businessId), name: text(name, MAX_CATEGORY) };
+}
+
+export function renameInventoryCategoryRequest(businessId: string, categoryId: string, name: unknown) {
+  return { businessId: text(businessId), categoryId: text(categoryId), name: text(name, MAX_CATEGORY) };
+}
+
+export function archiveInventoryCategoryRequest(businessId: string, categoryId: string, archived: boolean) {
+  return { businessId: text(businessId), categoryId: text(categoryId), archived: archived === true };
+}
+
+/** The new category's id out of `createInventoryCategory`'s answer, "" when it gave none. */
+export function readCreatedCategoryId(data: unknown): string {
+  return text(asRow(data).categoryId);
+}
+
+// ---------------------------------------------------------------------------
+// Stores. A business with zero or one active store is "single store": nothing
+// about stores shows. With two or more, stock is counted per store.
+// ---------------------------------------------------------------------------
+
+export type InventoryStore = {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  archived: boolean;
+  createdAt: unknown;
+};
+
+export function inventoryStoreFromRow(row: unknown): InventoryStore {
+  const r = asRow(row);
+  return {
+    id: text(r.id),
+    name: text(r.name, MAX_STORE_NAME),
+    address: text(r.address, MAX_STORE_ADDRESS),
+    phone: text(r.phone, MAX_STORE_PHONE),
+    archived: r.archived === true,
+    createdAt: r.createdAt ?? null,
+  };
+}
+
+/** Oldest first (the Main store comes first), then by name. */
+function compareStores(a: InventoryStore, b: InventoryStore): number {
+  return millis(a.createdAt) - millis(b.createdAt) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+}
+
+/** The business's stores, archived ones only when asked for. */
+export function inventoryStores(rows: readonly unknown[], includeArchived = false): InventoryStore[] {
+  return (Array.isArray(rows) ? rows : [])
+    .map(inventoryStoreFromRow)
+    .filter((store) => store.id && (includeArchived || !store.archived))
+    .sort(compareStores);
+}
+
+/** Two or more active stores: stock is per store and the store pickers, columns and filters appear. */
+export function isMultiStore(stores: readonly Pick<InventoryStore, "archived">[]): boolean {
+  return stores.filter((store) => !store.archived).length >= 2;
+}
+
+export function storeNameIndex(stores: readonly InventoryStore[]): Map<string, string> {
+  return new Map(stores.map((store) => [store.id, store.name]));
+}
+
+/**
+ * The store a record from before the business had stores belongs to: the
+ * Main store, the oldest one. "" when there are no stores.
+ */
+export function legacyStoreId(stores: readonly InventoryStore[]): string {
+  return [...stores].sort(compareStores)[0]?.id ?? "";
+}
+
+export type StoreDraft = { name: string; address: string; phone: string };
+
+export const emptyStoreDraft: StoreDraft = { name: "", address: "", phone: "" };
+
+export function storeDraftFromStore(store: InventoryStore): StoreDraft {
+  return { name: store.name, address: store.address, phone: store.phone };
+}
+
+export function validateStoreDraft(draft: StoreDraft): InventoryRefusal[] {
+  const errors: InventoryRefusal[] = [];
+  const name = text(draft.name, MAX_STORE_NAME + 1);
+  if (!name) errors.push("store_name_required");
+  else if (name.length > MAX_STORE_NAME) errors.push("store_name_too_long");
+  if (text(draft.address, MAX_STORE_ADDRESS + 1).length > MAX_STORE_ADDRESS || text(draft.phone, MAX_STORE_PHONE + 1).length > MAX_STORE_PHONE) {
+    errors.push("store_detail_too_long");
+  }
+  return errors;
+}
+
+/** The `createInventoryStore` request; a blank address or phone is left out. */
+export function createInventoryStoreRequest(businessId: string, draft: StoreDraft) {
+  const address = text(draft.address, MAX_STORE_ADDRESS);
+  const phone = text(draft.phone, MAX_STORE_PHONE);
+  return {
+    businessId: text(businessId),
+    name: text(draft.name, MAX_STORE_NAME),
+    ...(address ? { address } : {}),
+    ...(phone ? { phone } : {}),
+  };
+}
+
+/** What an edit changes; the three fields are compared as trimmed text. */
+export function storeDraftChanges(store: InventoryStore, draft: StoreDraft): Partial<StoreDraft> {
+  const changes: Partial<StoreDraft> = {};
+  if (text(draft.name, MAX_STORE_NAME) !== store.name) changes.name = text(draft.name, MAX_STORE_NAME);
+  if (text(draft.address, MAX_STORE_ADDRESS) !== store.address) changes.address = text(draft.address, MAX_STORE_ADDRESS);
+  if (text(draft.phone, MAX_STORE_PHONE) !== store.phone) changes.phone = text(draft.phone, MAX_STORE_PHONE);
+  return changes;
+}
+
+/** The `updateInventoryStore` request: only what changed (a cleared address or phone is ""). */
+export function updateInventoryStoreRequest(businessId: string, store: InventoryStore, draft: StoreDraft) {
+  return { businessId: text(businessId), storeId: store.id, ...storeDraftChanges(store, draft) };
+}
+
+export function archiveInventoryStoreRequest(businessId: string, storeId: string, archived: boolean) {
+  return { businessId: text(businessId), storeId: text(storeId), archived: archived === true };
+}
+
+/** The new store's id out of `createInventoryStore`'s answer. */
+export function readCreatedStoreId(data: unknown): string {
+  return text(asRow(data).storeId);
+}
+
+// ---------------------------------------------------------------------------
+// Who may see and do what across stores.
+// ---------------------------------------------------------------------------
+
+export type InventoryViewer = {
+  /** The business owner: every store, and the only one who manages stores. */
+  isOwner: boolean;
+  /** Staff: the store they work in ("" until the owner assigns one). */
+  homeStoreId: string;
+  /** Staff the owner let work in every store. */
+  allStores: boolean;
+};
+
+/** The signed-in person's store access, from their profile (`users/{uid}`). */
+export function inventoryViewerFromProfile(profile: Row | null | undefined): InventoryViewer {
+  return {
+    isOwner: profile?.role === "businessOwner",
+    homeStoreId: text(profile?.inventoryHomeStoreId),
+    allStores: profile?.inventoryAllStores === true,
+  };
+}
+
+export type StoreAccess = {
+  /** Two or more active stores. */
+  multi: boolean;
+  /** The active stores, oldest first. */
+  stores: InventoryStore[];
+  /** Owner or all-stores staff: sees every store and may pick one as a filter. */
+  canSeeAll: boolean;
+  /** Staff without all-stores: their one store ("" for a viewer who sees all, or has no valid home store). */
+  scopedStoreId: string;
+  /** Multi-store staff with no (valid) home store: nothing to show until the owner assigns one. */
+  needsHomeStore: boolean;
+  /** The owner and all-stores staff move stock between stores. */
+  canTransfer: boolean;
+  /**
+   * Only the owner. Offered even while there is a single store: it is how a
+   * second store is added, which is what turns multi-store mode on.
+   */
+  canManageStores: boolean;
+  /** The store a dialog starts on: the person's own, else the first. */
+  defaultStoreId: string;
+};
+
+export function resolveStoreAccess(viewer: InventoryViewer, storeRows: readonly unknown[]): StoreAccess {
+  const stores = inventoryStores(storeRows);
+  const multi = stores.length >= 2;
+  const canSeeAll = !multi || viewer.isOwner || viewer.allStores;
+  const homeValid = stores.some((store) => store.id === viewer.homeStoreId);
+  const scopedStoreId = multi && !canSeeAll && homeValid ? viewer.homeStoreId : "";
+  return {
+    multi,
+    stores,
+    canSeeAll,
+    scopedStoreId,
+    needsHomeStore: multi && !canSeeAll && !homeValid,
+    canTransfer: multi && canSeeAll,
+    canManageStores: viewer.isOwner,
+    defaultStoreId: scopedStoreId || (homeValid ? viewer.homeStoreId : stores[0]?.id ?? ""),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Stock per store: `inventoryStock/{itemId}__{storeId}`.
+// ---------------------------------------------------------------------------
+
+export type InventoryStockRow = {
+  itemId: string;
+  storeId: string;
+  quantity: number;
+  countWasOff: boolean;
+};
+
+export function inventoryStockRowFromRow(row: unknown): InventoryStockRow {
+  const r = asRow(row);
+  let itemId = text(r.itemId);
+  let storeId = text(r.storeId);
+  const id = text(r.id, 420);
+  if ((!itemId || !storeId) && id.includes("__")) {
+    const at = id.indexOf("__");
+    itemId = itemId || id.slice(0, at);
+    storeId = storeId || id.slice(at + 2);
+  }
+  return { itemId, storeId, quantity: nonNegativeInt(r.quantity), countWasOff: r.countWasOff === true };
+}
+
+/** itemId -> storeId -> row. Built once per read, then looked up per product. */
+export type StockIndex = Map<string, Map<string, InventoryStockRow>>;
+
+export function buildStockIndex(rows: readonly unknown[]): StockIndex {
+  const index: StockIndex = new Map();
+  for (const raw of Array.isArray(rows) ? rows : []) {
+    const row = inventoryStockRowFromRow(raw);
+    if (!row.itemId || !row.storeId) continue;
+    let byStore = index.get(row.itemId);
+    if (!byStore) {
+      byStore = new Map();
+      index.set(row.itemId, byStore);
+    }
+    byStore.set(row.storeId, row);
+  }
+  return index;
+}
+
+/** What one store holds of a product: 0 when it never had any. */
+export function stockCountFor(index: StockIndex | undefined, itemId: string, storeId: string): number {
+  return index?.get(itemId)?.get(storeId)?.quantity ?? 0;
+}
+
+/** What the products list is scoped to; left empty it is the single-store list. */
+export type InventoryListScope = {
+  categories?: readonly InventoryCategory[];
+  /** "" = every category, UNCATEGORIZED_FILTER, or a category id. */
+  categoryId?: string;
+  /** The active stores; two or more switch the list to per-store stock. */
+  stores?: readonly InventoryStore[];
+  /** "" = all stores. */
+  storeId?: string;
+  stock?: StockIndex;
+};
+
+export type StoreStockCell = {
+  storeId: string;
+  storeName: string;
+  quantity: number;
+  /** A count was ever recorded for this product in this store. A store it never held shows 0 and is not "low". */
+  stocked: boolean;
+  low: boolean;
+  countWasOff: boolean;
+};
+
+export type ItemStockView = {
+  /** Per-store stock applies (two or more active stores). */
+  multi: boolean;
+  /** The product's total across stores (its own `quantity`). */
+  total: number;
+  /** One cell per store in scope, oldest store first. */
+  cells: StoreStockCell[];
+  /** The count the row leads with: the chosen store's, else the total. */
+  shown: number;
+  status: InventoryStatus;
+  /** Low or out of stock, in the scope looked at. */
+  low: boolean;
+  /** The names of the stores it is low in (several when looking at all stores). */
+  lowStoreNames: string[];
+  countWasOff: boolean;
+};
+
+/**
+ * Where a product stands. Single-store: its own total, exactly as before.
+ * Multi-store: the low-stock number applies per store (a store's count at or
+ * below it, or zero, is low for that store), and a row can name the stores.
+ *
+ * DECISION: a store that never had a count for the product (no stock row)
+ * reads 0 but is not flagged low - otherwise adding a second store would flag
+ * every product as low there at once. Zero after a count was recorded is low,
+ * as the contract says.
+ */
+export function itemStockView(item: InventoryItem, scope: Pick<InventoryListScope, "stores" | "storeId" | "stock"> = {}): ItemStockView {
+  const stores = scope.stores ?? [];
+  if (stores.length < 2) {
+    return {
+      multi: false,
+      total: item.quantity,
+      cells: [],
+      shown: item.quantity,
+      status: inventoryStatus(item),
+      low: inventoryIsLow(item),
+      lowStoreNames: [],
+      countWasOff: item.countWasOff,
+    };
+  }
+  const only = scope.storeId ? stores.filter((store) => store.id === scope.storeId) : stores;
+  const cells: StoreStockCell[] = only.map((store) => {
+    const row = scope.stock?.get(item.id)?.get(store.id);
+    const quantity = row?.quantity ?? 0;
+    const stocked = row !== undefined;
+    const belowLimit = item.lowStockAt !== null && quantity <= item.lowStockAt;
+    return {
+      storeId: store.id,
+      storeName: store.name,
+      quantity,
+      stocked,
+      low: !item.archived && stocked && (quantity <= 0 || belowLimit),
+      countWasOff: row?.countWasOff === true,
+    };
+  });
+  const lowCells = cells.filter((cell) => cell.low);
+  const single = scope.storeId ? cells[0] : undefined;
+  let status: InventoryStatus;
+  if (item.archived) status = "archived";
+  else if (single) status = !single.stocked ? "ok" : single.quantity <= 0 ? "out" : single.low ? "low" : "ok";
+  else status = item.quantity <= 0 ? "out" : lowCells.length > 0 ? "low" : "ok";
+  return {
+    multi: true,
+    total: item.quantity,
+    cells,
+    shown: single ? single.quantity : item.quantity,
+    status,
+    low: status === "low" || status === "out",
+    lowStoreNames: lowCells.map((cell) => cell.storeName),
+    countWasOff: single ? single.countWasOff : item.countWasOff || cells.some((cell) => cell.countWasOff),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Moving stock between stores.
+// ---------------------------------------------------------------------------
+
+export type TransferDraft = {
+  itemId: string;
+  fromStoreId: string;
+  toStoreId: string;
+  quantity: string;
+  note: string;
+};
+
+export const emptyTransferDraft: TransferDraft = { itemId: "", fromStoreId: "", toStoreId: "", quantity: "", note: "" };
+
+/**
+ * Every problem with a transfer. `available` is what the source store holds
+ * when that is known (null = unknown, the server decides): asking for more is
+ * `insufficient_stock` before the round trip.
+ */
+export function validateTransferDraft(draft: TransferDraft, available: number | null = null): InventoryRefusal[] {
+  const errors: InventoryRefusal[] = [];
+  if (!text(draft.itemId)) errors.push("transfer_item_required");
+  const from = text(draft.fromStoreId);
+  const to = text(draft.toStoreId);
+  if (!from || !to) errors.push("transfer_store_required");
+  else if (from === to) errors.push("same_store");
+  const n = readWholeNumber(draft.quantity, 1);
+  if (n === null || Number.isNaN(n)) errors.push("transfer_quantity_invalid");
+  else if (available !== null && n > available) errors.push("insufficient_stock");
+  if (text(draft.note, MAX_NOTE + 1).length > MAX_NOTE) errors.push("note_too_long");
+  return errors;
+}
+
+/** The `transferInventoryStock` request. */
+export function transferInventoryStockRequest(businessId: string, draft: TransferDraft) {
+  const note = text(draft.note, MAX_NOTE);
+  return {
+    businessId: text(businessId),
+    itemId: text(draft.itemId),
+    fromStoreId: text(draft.fromStoreId),
+    toStoreId: text(draft.toStoreId),
+    quantity: readWholeNumber(draft.quantity, 1) ?? 0,
+    ...(note ? { note } : {}),
+  };
+}
+
+/** Both counts after a transfer; null while the quantity is unusable. The total never changes. */
+export function transferAfter(fromCount: number, toCount: number, quantity: unknown): { from: number; to: number } | null {
+  const n = readWholeNumber(quantity, 1);
+  if (n === null || Number.isNaN(n) || n > fromCount) return null;
+  return { from: fromCount - n, to: toCount + n };
+}
+
+// ---------------------------------------------------------------------------
+// Staff store access (the owner's People controls).
+// ---------------------------------------------------------------------------
+
+export type StaffStoreAccess = { homeStoreId: string; allStores: boolean };
+
+/** What a team member's record says: their home store and whether they work in all stores. */
+export function inventoryStaffAccessFromRow(row: Row | null | undefined): StaffStoreAccess {
+  return { homeStoreId: text(row?.inventoryHomeStoreId), allStores: row?.inventoryAllStores === true };
+}
+
+/** A person who does not work in all stores needs a home store, or they cannot sell. */
+export function validateStaffAccess(access: StaffStoreAccess, stores: readonly InventoryStore[]): InventoryRefusal[] {
+  if (access.allStores) return [];
+  return stores.some((store) => store.id === access.homeStoreId && !store.archived) ? [] : ["staff_store_required"];
+}
+
+export function staffAccessChanged(row: Row | null | undefined, next: StaffStoreAccess): boolean {
+  const before = inventoryStaffAccessFromRow(row);
+  return before.homeStoreId !== text(next.homeStoreId) || before.allStores !== (next.allStores === true);
+}
+
+/** The `setInventoryStaffAccess` request (owner only). */
+export function setInventoryStaffAccessRequest(businessId: string, userId: string, access: StaffStoreAccess) {
+  return {
+    businessId: text(businessId),
+    userId: text(userId),
+    homeStoreId: text(access.homeStoreId),
+    allStores: access.allStores === true,
+  };
+}
+
+/** Whether a team member holds the Inventory permission (a staff record without a list holds them all). */
+export function staffHasInventoryPermission(row: Row | null | undefined): boolean {
+  const list = row?.businessPermissions;
+  return Array.isArray(list) ? list.some((permission) => String(permission) === "inventory") : true;
+}
+
+// ---------------------------------------------------------------------------
+// Sales by store.
+// ---------------------------------------------------------------------------
+
+/** The store a sale counts under: its own, else - a sale from before stores - the Main store. */
+export function saleStoreId(sale: Pick<InventorySale, "storeId">, stores: readonly InventoryStore[]): string {
+  return sale.storeId || legacyStoreId(stores);
+}
+
+/** The sales of one store ("" = all of them). The list is a page at a time: this narrows what is loaded. */
+export function salesInStore(sales: readonly InventorySale[], storeId: string, stores: readonly InventoryStore[]): InventorySale[] {
+  if (!storeId) return [...sales];
+  const main = legacyStoreId(stores);
+  return sales.filter((sale) => (sale.storeId || main) === storeId);
+}
+
+// ---------------------------------------------------------------------------
+// v2 sentences with names or numbers in them, built per language.
+// ---------------------------------------------------------------------------
+
+/** "2 stores" / "2 magasins". */
+export function storeCountText(count: number, lang: Lang = "en"): string {
+  if (lang === "fr") return `${count} ${count === 1 ? "magasin" : "magasins"}`;
+  return `${count} ${count === 1 ? "store" : "stores"}`;
+}
+
+/** "Low in Main store, Downtown" / "Bas dans Main store, Downtown". */
+export function lowInStoresText(names: readonly string[], lang: Lang = "en"): string {
+  return `${lang === "fr" ? "Bas dans" : "Low in"} ${names.join(", ")}`;
+}
+
+/** "5 available in Downtown" / "5 disponibles dans Downtown". */
+export function availableInStoreText(count: number, storeName: string, lang: Lang = "en"): string {
+  if (lang === "fr") return `${count} ${count === 1 ? "disponible" : "disponibles"} dans ${storeName}`;
+  return `${count} available in ${storeName}`;
+}
+
+/** "Anna (archived)" / "Anna (archivé)"; categories are feminine in French. */
+export function archivedNameText(name: string, lang: Lang = "en", feminine = false): string {
+  if (lang === "fr") return `${name} (${feminine ? "archivée" : "archivé"})`;
+  return `${name} (archived)`;
+}
+
+/** "Main store 5 → 2": a store's count before and after a move. */
+export function countChangeText(name: string, before: number, after: number): string {
+  return `${name} ${before} → ${after}`;
+}
+
+/** "3 categories" / "3 catégories". */
+export function categoryCountText(count: number, lang: Lang = "en"): string {
+  if (lang === "fr") return `${count} ${count === 1 ? "catégorie" : "catégories"}`;
+  return `${count} ${count === 1 ? "category" : "categories"}`;
 }

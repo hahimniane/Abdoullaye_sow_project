@@ -85,6 +85,7 @@ import {
 import { buildBusinessVerificationChecklist } from "@/lib/business-verification";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
+import { inventoryViewerFromProfile } from "@/lib/inventory";
 import {
   resolveBusinessPayoutStatus,
   type BusinessPayoutStatus,
@@ -701,6 +702,7 @@ export function BusinessConsole({
               businessId={businessId}
               business={business}
               previewMode={previewMode}
+              viewer={inventoryViewerFromProfile(profile)}
             />
           )}
           {activeTab === "destinations" && (
