@@ -5583,5 +5583,151 @@
   "shopHomeMoreTitle": "Plus",
   "shopHomePendingNote": "En attente d’approbation · Vous pouvez déjà vendre",
   "shopHomeChangesNote": "Modifications demandées · Vous pouvez toujours vendre",
-  "shopHomeNoInventoryAccess": "Cette entreprise vend avec l’Inventaire. Demandez au propriétaire l’autorisation Inventaire."
+  "shopHomeNoInventoryAccess": "Cette entreprise vend avec l’Inventaire. Demandez au propriétaire l’autorisation Inventaire.",
+  "printTagsSizeLabel": "Taille de l’étiquette",
+  "printTagsSize2x1": "2 × 1 po",
+  "printTagsSize40x30": "40 × 30 mm",
+  "printTagsSize50x30": "50 × 30 mm",
+  "printTagsSizeCustom": "Personnalisée",
+  "printTagsCustomWidth": "Largeur (mm)",
+  "printTagsCustomHeight": "Hauteur (mm)",
+  "printTagsCustomError": "Saisissez une largeur de 15 à 72 mm et une hauteur de 15 à 100 mm.",
+  "printTagsNote": "Le code QR uniquement. Chaque copie porte le même code ; une réimpression ne le change jamais.",
+  "printTagsToPrinter": "Imprimer sur l’imprimante",
+  "printTagsConnecting": "Connexion à l’imprimante…",
+  "printTagsProgress": "Impression {done} sur {total}…",
+  "@printTagsProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "printTagsStop": "Arrêter",
+  "printTagsStopping": "Arrêt après cette étiquette…",
+  "printTagsDone": "{count, plural, =1{1 étiquette imprimée.} other{{count} étiquettes imprimées.}}",
+  "@printTagsDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "printTagsStopped": "Arrêté après {printed} sur {total}.",
+  "@printTagsStopped": {
+    "placeholders": {
+      "printed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "printTagsPartial": "{printed} sur {total} imprimées avant le problème.",
+  "@printTagsPartial": {
+    "placeholders": {
+      "printed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "printTagsSharePdf": "Partager en PDF",
+  "printTagsSharing": "Préparation du PDF…",
+  "printTagsShareHint": "La page du PDF fait exactement la taille de l’étiquette. Dans l’app de votre imprimante, imprimez-la à 100 % (taille réelle).",
+  "printTagsPdfFailed": "Le PDF n’a pas pu être créé. Réessayez.",
+  "printTagsOpenPage": "Ouvrir la page des étiquettes",
+  "printTagsPrinterLine": "Imprimante : {name}",
+  "@printTagsPrinterLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "printTagsNoPrinter": "Aucune imprimante choisie pour l’instant.",
+  "printTagsPrinterSettings": "Réglages de l’imprimante",
+  "inventoryPrintTagAction": "Imprimer l’étiquette",
+  "labelPrinterTitle": "Imprimante d’étiquettes",
+  "labelPrinterSubtitle": "Phomemo M221 en Bluetooth",
+  "labelPrinterSectionPrinter": "Imprimante",
+  "labelPrinterNone": "Aucune imprimante choisie. Recherchez-la ci-dessous.",
+  "labelPrinterScan": "Rechercher les imprimantes",
+  "labelPrinterScanning": "Recherche des imprimantes…",
+  "labelPrinterScanHint": "Allumez l’imprimante et fermez d’abord l’app Print Master. L’imprimante apparaît avec un nom comme Q2….",
+  "labelPrinterNoneFound": "Aucune imprimante trouvée à proximité.",
+  "labelPrinterSignal": "Signal {rssi} dBm",
+  "@labelPrinterSignal": {
+    "placeholders": {
+      "rssi": {
+        "type": "int"
+      }
+    }
+  },
+  "labelPrinterUse": "Utiliser",
+  "labelPrinterInUse": "Utilisée",
+  "labelPrinterForget": "Oublier",
+  "labelPrinterConnected": "Connectée",
+  "labelPrinterDisconnect": "Déconnecter",
+  "labelPrinterBattery": "Batterie {percent} %",
+  "@labelPrinterBattery": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "labelPrinterSectionLabel": "Étiquette",
+  "labelPrinterDensity": "Noirceur",
+  "labelPrinterDensityHelp": "1 est le plus clair, 8 le plus foncé.",
+  "labelPrinterSpeed": "Vitesse",
+  "labelPrinterSpeedHelp": "1 est le plus lent et le plus net, 5 le plus rapide.",
+  "labelPrinterSectionPosition": "Position sur l’étiquette",
+  "labelPrinterPositionHelp": "Imprimez le cadre de test, puis déplacez-le jusqu’à ce que la bordure tombe sur les bords de l’étiquette. 8 points = 1 mm.",
+  "labelPrinterXOffset": "Gauche / droite",
+  "labelPrinterYOffset": "Haut / bas",
+  "labelPrinterDots": "{dots} points",
+  "@labelPrinterDots": {
+    "placeholders": {
+      "dots": {
+        "type": "int"
+      }
+    }
+  },
+  "labelPrinterLess": "Moins",
+  "labelPrinterMore": "Plus",
+  "labelPrinterTestFrame": "Imprimer le cadre de test",
+  "labelPrinterTestTag": "Imprimer une étiquette de test",
+  "labelPrinterCheckStatus": "Vérifier l’imprimante",
+  "labelPrinterChecking": "Vérification…",
+  "labelPrinterSent": "Imprimé.",
+  "labelPrinterStatusDone": "Imprimante vérifiée. Les réponses sont dans le journal d’impression.",
+  "labelPrinterSectionLog": "Journal d’impression",
+  "labelPrinterLogHelp": "En cas de problème, copiez le journal et envoyez-le au développeur.",
+  "labelPrinterCopyLog": "Copier le journal",
+  "labelPrinterLogCopied": "Journal d’impression copié.",
+  "labelPrinterClearLog": "Effacer",
+  "labelPrinterLogEmpty": "Rien pour l’instant.",
+  "labelPrinterPermissionTitle": "Bluetooth",
+  "labelPrinterPermissionBody": "Laawol utilise le Bluetooth uniquement pour trouver votre imprimante d’étiquettes et y imprimer. Votre téléphone va vous demander l’autorisation.",
+  "labelPrinterPermissionContinue": "Continuer",
+  "labelPrinterErrorBluetoothOff": "Le Bluetooth est désactivé. Activez-le dans les réglages du téléphone, puis réessayez.",
+  "labelPrinterErrorUnsupported": "Ce téléphone ne peut pas utiliser d’imprimante Bluetooth.",
+  "labelPrinterErrorPermission": "Laawol n’est pas autorisé à utiliser le Bluetooth. Autorisez-le dans les Réglages du téléphone pour Laawol, puis réessayez.",
+  "labelPrinterErrorLocation": "Activez la localisation : ce téléphone Android en a besoin pour trouver les imprimantes Bluetooth.",
+  "labelPrinterErrorNoPrinter": "Choisissez d’abord votre imprimante dans les réglages de l’imprimante d’étiquettes.",
+  "labelPrinterErrorNotFound": "Imprimante introuvable. Est-elle allumée et à proximité ? Fermez l’app Print Master : l’imprimante n’accepte qu’une connexion.",
+  "labelPrinterErrorConnect": "Connexion à l’imprimante impossible. Fermez Print Master, éteignez puis rallumez l’imprimante, et réessayez.",
+  "labelPrinterErrorNotAPrinter": "Cet appareil n’est pas une imprimante d’étiquettes utilisable par l’app.",
+  "labelPrinterErrorLost": "La connexion à l’imprimante a été perdue. Gardez le téléphone près d’elle et réessayez.",
+  "labelPrinterErrorNoCompletion": "L’imprimante n’a pas confirmé l’étiquette. Vérifiez les étiquettes et que le capot est fermé, puis réessayez. Si cela continue, copiez le journal d’impression et envoyez-le au développeur.",
+  "labelPrinterErrorOutOfPaper": "L’imprimante n’a plus d’étiquettes. Chargez un rouleau et réessayez.",
+  "labelPrinterErrorWrite": "L’envoi vers l’imprimante a échoué. Réessayez.",
+  "labelPrinterErrorBusy": "L’imprimante est occupée par une autre tâche."
 }

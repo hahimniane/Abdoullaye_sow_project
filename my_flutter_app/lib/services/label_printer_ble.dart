@@ -191,8 +191,7 @@ class BlePrinterTransport implements PrinterTransport {
 class _BlePrinterLink implements PrinterLink {
   _BlePrinterLink(this._device, this._write, this._notify) {
     _state = _device.connectionState.listen((s) {
-      if (s == BluetoothConnectionState.disconnected &&
-          !_lost.isCompleted) {
+      if (s == BluetoothConnectionState.disconnected && !_lost.isCompleted) {
         _lost.complete();
       }
     });

@@ -11990,4 +11990,290 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get shopHomeNoInventoryAccess =>
       'This business sells with Inventory. Ask the owner to give you the Inventory permission.';
+
+  @override
+  String get printTagsSizeLabel => 'Label size';
+
+  @override
+  String get printTagsSize2x1 => '2 × 1 in';
+
+  @override
+  String get printTagsSize40x30 => '40 × 30 mm';
+
+  @override
+  String get printTagsSize50x30 => '50 × 30 mm';
+
+  @override
+  String get printTagsSizeCustom => 'Custom';
+
+  @override
+  String get printTagsCustomWidth => 'Width (mm)';
+
+  @override
+  String get printTagsCustomHeight => 'Height (mm)';
+
+  @override
+  String get printTagsCustomError =>
+      'Enter a width from 15 to 72 mm and a height from 15 to 100 mm.';
+
+  @override
+  String get printTagsNote =>
+      'The QR code only. Every copy carries the same code; reprinting never changes it.';
+
+  @override
+  String get printTagsToPrinter => 'Print to printer';
+
+  @override
+  String get printTagsConnecting => 'Connecting to the printer…';
+
+  @override
+  String printTagsProgress(int done, int total) {
+    return 'Printing $done of $total…';
+  }
+
+  @override
+  String get printTagsStop => 'Stop';
+
+  @override
+  String get printTagsStopping => 'Stopping after this tag…';
+
+  @override
+  String printTagsDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count tags printed.',
+      one: '1 tag printed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String printTagsStopped(int printed, int total) {
+    return 'Stopped after $printed of $total.';
+  }
+
+  @override
+  String printTagsPartial(int printed, int total) {
+    return '$printed of $total printed before the problem.';
+  }
+
+  @override
+  String get printTagsSharePdf => 'Share as PDF';
+
+  @override
+  String get printTagsSharing => 'Preparing the PDF…';
+
+  @override
+  String get printTagsShareHint =>
+      'The PDF page is exactly the label. In your printer app, print it at 100 % (actual size).';
+
+  @override
+  String get printTagsPdfFailed => 'The PDF could not be made. Try again.';
+
+  @override
+  String get printTagsOpenPage => 'Open tag page';
+
+  @override
+  String printTagsPrinterLine(String name) {
+    return 'Printer: $name';
+  }
+
+  @override
+  String get printTagsNoPrinter => 'No printer chosen yet.';
+
+  @override
+  String get printTagsPrinterSettings => 'Printer settings';
+
+  @override
+  String get inventoryPrintTagAction => 'Print tag';
+
+  @override
+  String get labelPrinterTitle => 'Label printer';
+
+  @override
+  String get labelPrinterSubtitle => 'Phomemo M221 over Bluetooth';
+
+  @override
+  String get labelPrinterSectionPrinter => 'Printer';
+
+  @override
+  String get labelPrinterNone => 'No printer chosen yet. Find it below.';
+
+  @override
+  String get labelPrinterScan => 'Find printers';
+
+  @override
+  String get labelPrinterScanning => 'Looking for printers…';
+
+  @override
+  String get labelPrinterScanHint =>
+      'Turn the printer on and close the Print Master app first. The printer shows up with a name such as Q2….';
+
+  @override
+  String get labelPrinterNoneFound => 'No printer found nearby.';
+
+  @override
+  String labelPrinterSignal(int rssi) {
+    return 'Signal $rssi dBm';
+  }
+
+  @override
+  String get labelPrinterUse => 'Use';
+
+  @override
+  String get labelPrinterInUse => 'In use';
+
+  @override
+  String get labelPrinterForget => 'Forget';
+
+  @override
+  String get labelPrinterConnected => 'Connected';
+
+  @override
+  String get labelPrinterDisconnect => 'Disconnect';
+
+  @override
+  String labelPrinterBattery(int percent) {
+    return 'Battery $percent%';
+  }
+
+  @override
+  String get labelPrinterSectionLabel => 'Label';
+
+  @override
+  String get labelPrinterDensity => 'Darkness';
+
+  @override
+  String get labelPrinterDensityHelp => '1 is the lightest, 8 the darkest.';
+
+  @override
+  String get labelPrinterSpeed => 'Speed';
+
+  @override
+  String get labelPrinterSpeedHelp =>
+      '1 is the slowest and crispest, 5 the fastest.';
+
+  @override
+  String get labelPrinterSectionPosition => 'Position on the label';
+
+  @override
+  String get labelPrinterPositionHelp =>
+      'Print the test frame, then move it until the border sits on the label’s edges. 8 dots = 1 mm.';
+
+  @override
+  String get labelPrinterXOffset => 'Left / right';
+
+  @override
+  String get labelPrinterYOffset => 'Up / down';
+
+  @override
+  String labelPrinterDots(int dots) {
+    return '$dots dots';
+  }
+
+  @override
+  String get labelPrinterLess => 'Less';
+
+  @override
+  String get labelPrinterMore => 'More';
+
+  @override
+  String get labelPrinterTestFrame => 'Print test frame';
+
+  @override
+  String get labelPrinterTestTag => 'Print test tag';
+
+  @override
+  String get labelPrinterCheckStatus => 'Check the printer';
+
+  @override
+  String get labelPrinterChecking => 'Checking…';
+
+  @override
+  String get labelPrinterSent => 'Printed.';
+
+  @override
+  String get labelPrinterStatusDone =>
+      'Printer checked. The replies are in the print log.';
+
+  @override
+  String get labelPrinterSectionLog => 'Print log';
+
+  @override
+  String get labelPrinterLogHelp =>
+      'If something goes wrong, copy the log and send it to the developer.';
+
+  @override
+  String get labelPrinterCopyLog => 'Copy log';
+
+  @override
+  String get labelPrinterLogCopied => 'Print log copied.';
+
+  @override
+  String get labelPrinterClearLog => 'Clear';
+
+  @override
+  String get labelPrinterLogEmpty => 'Nothing yet.';
+
+  @override
+  String get labelPrinterPermissionTitle => 'Bluetooth';
+
+  @override
+  String get labelPrinterPermissionBody =>
+      'Laawol uses Bluetooth only to find your label printer and print tags on it. Your phone will ask for permission next.';
+
+  @override
+  String get labelPrinterPermissionContinue => 'Continue';
+
+  @override
+  String get labelPrinterErrorBluetoothOff =>
+      'Bluetooth is off. Turn it on in the phone’s settings, then try again.';
+
+  @override
+  String get labelPrinterErrorUnsupported =>
+      'This phone cannot use Bluetooth printers.';
+
+  @override
+  String get labelPrinterErrorPermission =>
+      'Laawol is not allowed to use Bluetooth. Allow it in the phone’s Settings for Laawol, then try again.';
+
+  @override
+  String get labelPrinterErrorLocation =>
+      'Turn on Location: this Android phone needs it to find Bluetooth printers.';
+
+  @override
+  String get labelPrinterErrorNoPrinter =>
+      'Choose your printer first in the label printer settings.';
+
+  @override
+  String get labelPrinterErrorNotFound =>
+      'Printer not found. Is it on and close by? Close the Print Master app: the printer takes only one connection.';
+
+  @override
+  String get labelPrinterErrorConnect =>
+      'Could not connect to the printer. Close Print Master, turn the printer off and on, then try again.';
+
+  @override
+  String get labelPrinterErrorNotAPrinter =>
+      'That device is not a label printer this app can use.';
+
+  @override
+  String get labelPrinterErrorLost =>
+      'The connection to the printer was lost. Keep the phone close to it and try again.';
+
+  @override
+  String get labelPrinterErrorNoCompletion =>
+      'The printer did not confirm the tag. Check the labels and that the cover is closed, then try again. If it keeps happening, copy the print log and send it to the developer.';
+
+  @override
+  String get labelPrinterErrorOutOfPaper =>
+      'The printer is out of labels. Load a roll and try again.';
+
+  @override
+  String get labelPrinterErrorWrite =>
+      'Sending to the printer failed. Try again.';
+
+  @override
+  String get labelPrinterErrorBusy => 'The printer is busy with another job.';
 }

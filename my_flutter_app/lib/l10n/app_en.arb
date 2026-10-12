@@ -5583,5 +5583,151 @@
   "shopHomeMoreTitle": "More",
   "shopHomePendingNote": "Pending approval · You can already sell",
   "shopHomeChangesNote": "Changes requested · You can still sell",
-  "shopHomeNoInventoryAccess": "This business sells with Inventory. Ask the owner to give you the Inventory permission."
+  "shopHomeNoInventoryAccess": "This business sells with Inventory. Ask the owner to give you the Inventory permission.",
+  "printTagsSizeLabel": "Label size",
+  "printTagsSize2x1": "2 × 1 in",
+  "printTagsSize40x30": "40 × 30 mm",
+  "printTagsSize50x30": "50 × 30 mm",
+  "printTagsSizeCustom": "Custom",
+  "printTagsCustomWidth": "Width (mm)",
+  "printTagsCustomHeight": "Height (mm)",
+  "printTagsCustomError": "Enter a width from 15 to 72 mm and a height from 15 to 100 mm.",
+  "printTagsNote": "The QR code only. Every copy carries the same code; reprinting never changes it.",
+  "printTagsToPrinter": "Print to printer",
+  "printTagsConnecting": "Connecting to the printer…",
+  "printTagsProgress": "Printing {done} of {total}…",
+  "@printTagsProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "printTagsStop": "Stop",
+  "printTagsStopping": "Stopping after this tag…",
+  "printTagsDone": "{count, plural, =1{1 tag printed.} other{{count} tags printed.}}",
+  "@printTagsDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "printTagsStopped": "Stopped after {printed} of {total}.",
+  "@printTagsStopped": {
+    "placeholders": {
+      "printed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "printTagsPartial": "{printed} of {total} printed before the problem.",
+  "@printTagsPartial": {
+    "placeholders": {
+      "printed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "printTagsSharePdf": "Share as PDF",
+  "printTagsSharing": "Preparing the PDF…",
+  "printTagsShareHint": "The PDF page is exactly the label. In your printer app, print it at 100 % (actual size).",
+  "printTagsPdfFailed": "The PDF could not be made. Try again.",
+  "printTagsOpenPage": "Open tag page",
+  "printTagsPrinterLine": "Printer: {name}",
+  "@printTagsPrinterLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "printTagsNoPrinter": "No printer chosen yet.",
+  "printTagsPrinterSettings": "Printer settings",
+  "inventoryPrintTagAction": "Print tag",
+  "labelPrinterTitle": "Label printer",
+  "labelPrinterSubtitle": "Phomemo M221 over Bluetooth",
+  "labelPrinterSectionPrinter": "Printer",
+  "labelPrinterNone": "No printer chosen yet. Find it below.",
+  "labelPrinterScan": "Find printers",
+  "labelPrinterScanning": "Looking for printers…",
+  "labelPrinterScanHint": "Turn the printer on and close the Print Master app first. The printer shows up with a name such as Q2….",
+  "labelPrinterNoneFound": "No printer found nearby.",
+  "labelPrinterSignal": "Signal {rssi} dBm",
+  "@labelPrinterSignal": {
+    "placeholders": {
+      "rssi": {
+        "type": "int"
+      }
+    }
+  },
+  "labelPrinterUse": "Use",
+  "labelPrinterInUse": "In use",
+  "labelPrinterForget": "Forget",
+  "labelPrinterConnected": "Connected",
+  "labelPrinterDisconnect": "Disconnect",
+  "labelPrinterBattery": "Battery {percent}%",
+  "@labelPrinterBattery": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "labelPrinterSectionLabel": "Label",
+  "labelPrinterDensity": "Darkness",
+  "labelPrinterDensityHelp": "1 is the lightest, 8 the darkest.",
+  "labelPrinterSpeed": "Speed",
+  "labelPrinterSpeedHelp": "1 is the slowest and crispest, 5 the fastest.",
+  "labelPrinterSectionPosition": "Position on the label",
+  "labelPrinterPositionHelp": "Print the test frame, then move it until the border sits on the label’s edges. 8 dots = 1 mm.",
+  "labelPrinterXOffset": "Left / right",
+  "labelPrinterYOffset": "Up / down",
+  "labelPrinterDots": "{dots} dots",
+  "@labelPrinterDots": {
+    "placeholders": {
+      "dots": {
+        "type": "int"
+      }
+    }
+  },
+  "labelPrinterLess": "Less",
+  "labelPrinterMore": "More",
+  "labelPrinterTestFrame": "Print test frame",
+  "labelPrinterTestTag": "Print test tag",
+  "labelPrinterCheckStatus": "Check the printer",
+  "labelPrinterChecking": "Checking…",
+  "labelPrinterSent": "Printed.",
+  "labelPrinterStatusDone": "Printer checked. The replies are in the print log.",
+  "labelPrinterSectionLog": "Print log",
+  "labelPrinterLogHelp": "If something goes wrong, copy the log and send it to the developer.",
+  "labelPrinterCopyLog": "Copy log",
+  "labelPrinterLogCopied": "Print log copied.",
+  "labelPrinterClearLog": "Clear",
+  "labelPrinterLogEmpty": "Nothing yet.",
+  "labelPrinterPermissionTitle": "Bluetooth",
+  "labelPrinterPermissionBody": "Laawol uses Bluetooth only to find your label printer and print tags on it. Your phone will ask for permission next.",
+  "labelPrinterPermissionContinue": "Continue",
+  "labelPrinterErrorBluetoothOff": "Bluetooth is off. Turn it on in the phone’s settings, then try again.",
+  "labelPrinterErrorUnsupported": "This phone cannot use Bluetooth printers.",
+  "labelPrinterErrorPermission": "Laawol is not allowed to use Bluetooth. Allow it in the phone’s Settings for Laawol, then try again.",
+  "labelPrinterErrorLocation": "Turn on Location: this Android phone needs it to find Bluetooth printers.",
+  "labelPrinterErrorNoPrinter": "Choose your printer first in the label printer settings.",
+  "labelPrinterErrorNotFound": "Printer not found. Is it on and close by? Close the Print Master app: the printer takes only one connection.",
+  "labelPrinterErrorConnect": "Could not connect to the printer. Close Print Master, turn the printer off and on, then try again.",
+  "labelPrinterErrorNotAPrinter": "That device is not a label printer this app can use.",
+  "labelPrinterErrorLost": "The connection to the printer was lost. Keep the phone close to it and try again.",
+  "labelPrinterErrorNoCompletion": "The printer did not confirm the tag. Check the labels and that the cover is closed, then try again. If it keeps happening, copy the print log and send it to the developer.",
+  "labelPrinterErrorOutOfPaper": "The printer is out of labels. Load a roll and try again.",
+  "labelPrinterErrorWrite": "Sending to the printer failed. Try again.",
+  "labelPrinterErrorBusy": "The printer is busy with another job."
 }

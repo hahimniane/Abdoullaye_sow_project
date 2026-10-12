@@ -130,8 +130,7 @@ class LabelPrinterSettings {
       deviceId: text('deviceId'),
       deviceName: text('deviceName'),
       sizeId:
-          size == tagSizeCustom ||
-              TagLabelSize.presets.any((p) => p.id == size)
+          size == tagSizeCustom || TagLabelSize.presets.any((p) => p.id == size)
           ? size
           : tagSize2x1in,
       customWidthMm: number('customWidthMm')?.toDouble(),
@@ -159,7 +158,10 @@ class LabelPrinterStore {
 
   Future<LabelPrinterSettings> load() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      // Never let a stuck storage read keep a screen on its spinner.
+      final prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 3),
+      );
       final raw = prefs.getString(labelPrinterSettingsKey);
       if (raw == null || raw.isEmpty) return const LabelPrinterSettings();
       final decoded = jsonDecode(raw);
@@ -387,8 +389,8 @@ class LabelPrinterController extends ChangeNotifier {
   LabelPrinterSettings get settings => _settings;
   bool get loaded => _loaded;
   PrinterStatus get status => _status;
-  bool get busy => _status != PrinterStatus.idle &&
-      _status != PrinterStatus.connected;
+  bool get busy =>
+      _status != PrinterStatus.idle && _status != PrinterStatus.connected;
   bool get isConnected => _link?.isConnected ?? false;
   bool get cancelRequested => _cancel;
   int get progressDone => _progressDone;

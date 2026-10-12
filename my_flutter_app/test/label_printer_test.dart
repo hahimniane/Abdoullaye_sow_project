@@ -13,11 +13,12 @@ LabelBitmap _tag() => renderTagBitmap(
 );
 
 /// The bytes of one label exactly as the protocol lays them out.
-List<int> _oneLabel(LabelPrinterSettings s, LabelBitmap image) => m221LabelSteps(
-  packRaster(image, s.xOffset, s.yOffset),
-  density: s.density,
-  speed: s.speed,
-).expand((step) => step.bytes).toList();
+List<int> _oneLabel(LabelPrinterSettings s, LabelBitmap image) =>
+    m221LabelSteps(
+      packRaster(image, s.xOffset, s.yOffset),
+      density: s.density,
+      speed: s.speed,
+    ).expand((step) => step.bytes).toList();
 
 void main() {
   group('a print job over a fake printer', () {
@@ -26,51 +27,57 @@ void main() {
       final c = fakeController(printer);
       final outcome = await c.printLabels(image: _tag());
       expect(outcome.ok, isTrue);
-      final firstWrite = printer.events.indexWhere((e) => e.startsWith('write'));
+      final firstWrite = printer.events.indexWhere(
+        (e) => e.startsWith('write'),
+      );
       final subscribe = printer.events.indexOf('subscribe');
       expect(subscribe, greaterThanOrEqualTo(0));
       expect(subscribe, lessThan(firstWrite));
       expect(printer.events.first, 'connect AA:BB:CC:DD:EE:01');
     });
 
-    test('sends speed, density, media, header, raster, footer in order',
-        () async {
-      final printer = FakePrinterTransport();
-      final c = fakeController(
-        printer,
-        settings: const LabelPrinterSettings(
-          deviceId: 'AA:BB:CC:DD:EE:01',
-          density: 3,
-          speed: 4,
-          xOffset: 9,
-          yOffset: 4,
-        ),
-      );
-      final image = _tag();
-      await c.printLabels(image: image);
-      expect(printer.writes[0], [0x1B, 0x4E, 0x0D, 4]);
-      expect(printer.writes[1], [0x1B, 0x4E, 0x04, 9]);
-      expect(printer.writes[2], [0x1F, 0x11, 0x0A]);
-      expect(printer.writes[3], [0x1D, 0x76, 0x30, 0x00, 72, 0x00, 207, 0]);
-      expect(printer.writes.last, m221Footer);
-      expect(printer.allBytes, _oneLabel(c.settings, image));
-    });
-
-    test('never writes more than 128 bytes, nor more than the link allows',
-        () async {
-      for (final max in [182, 100, 20]) {
-        final printer = FakePrinterTransport(maxWrite: max);
-        final c = fakeController(printer);
-        await c.printLabels(image: _tag());
-        final limit = max < 128 ? max : 128;
-        expect(
-          printer.writes.every((w) => w.length <= limit),
-          isTrue,
-          reason: 'max $max',
+    test(
+      'sends speed, density, media, header, raster, footer in order',
+      () async {
+        final printer = FakePrinterTransport();
+        final c = fakeController(
+          printer,
+          settings: const LabelPrinterSettings(
+            deviceId: 'AA:BB:CC:DD:EE:01',
+            density: 3,
+            speed: 4,
+            xOffset: 9,
+            yOffset: 4,
+          ),
         );
-        expect(printer.writes.map((w) => w.length), contains(limit));
-      }
-    });
+        final image = _tag();
+        await c.printLabels(image: image);
+        expect(printer.writes[0], [0x1B, 0x4E, 0x0D, 4]);
+        expect(printer.writes[1], [0x1B, 0x4E, 0x04, 9]);
+        expect(printer.writes[2], [0x1F, 0x11, 0x0A]);
+        expect(printer.writes[3], [0x1D, 0x76, 0x30, 0x00, 72, 0x00, 207, 0]);
+        expect(printer.writes.last, m221Footer);
+        expect(printer.allBytes, _oneLabel(c.settings, image));
+      },
+    );
+
+    test(
+      'never writes more than 128 bytes, nor more than the link allows',
+      () async {
+        for (final max in [182, 100, 20]) {
+          final printer = FakePrinterTransport(maxWrite: max);
+          final c = fakeController(printer);
+          await c.printLabels(image: _tag());
+          final limit = max < 128 ? max : 128;
+          expect(
+            printer.writes.every((w) => w.length <= limit),
+            isTrue,
+            reason: 'max $max',
+          );
+          expect(printer.writes.map((w) => w.length), contains(limit));
+        }
+      },
+    );
 
     test('prints each copy in turn, the same label every time', () async {
       final printer = FakePrinterTransport();
@@ -101,16 +108,18 @@ void main() {
       expect(c.status, isNot(PrinterStatus.printing));
     });
 
-    test('a printer that says it has no labels reads as out of paper',
-        () async {
-      final printer = FakePrinterTransport(
-        answerDone: false,
-        paperReply: [0x1A, 0x06, 0x88],
-      );
-      final c = fakeController(printer);
-      final outcome = await c.printLabels(image: _tag());
-      expect(outcome.failure, PrintFailure.outOfPaper);
-    });
+    test(
+      'a printer that says it has no labels reads as out of paper',
+      () async {
+        final printer = FakePrinterTransport(
+          answerDone: false,
+          paperReply: [0x1A, 0x06, 0x88],
+        );
+        final c = fakeController(printer);
+        final outcome = await c.printLabels(image: _tag());
+        expect(outcome.failure, PrintFailure.outOfPaper);
+      },
+    );
 
     test('stops after the current label when cancelled', () async {
       final printer = FakePrinterTransport();
@@ -129,8 +138,7 @@ void main() {
       expect(c.busy, isFalse);
     });
 
-    test('reconnects once when the connection drops during a label',
-        () async {
+    test('reconnects once when the connection drops during a label', () async {
       final printer = FakePrinterTransport()..dropOnWrite = 10;
       final c = fakeController(printer);
       final outcome = await c.printLabels(image: _tag(), copies: 2);
@@ -141,8 +149,7 @@ void main() {
       expect(printer.events[second + 1], 'subscribe');
     });
 
-    test('a connection that keeps dropping fails as connection lost',
-        () async {
+    test('a connection that keeps dropping fails as connection lost', () async {
       final printer = FakePrinterTransport()..dropOnWrite = 10;
       final c = fakeController(printer);
       final first = await c.printLabels(image: _tag());
@@ -157,8 +164,10 @@ void main() {
     test('Bluetooth off', () async {
       final printer = FakePrinterTransport(adapter: PrinterAdapterState.off);
       final c = fakeController(printer);
-      expect((await c.printLabels(image: _tag())).failure,
-          PrintFailure.bluetoothOff);
+      expect(
+        (await c.printLabels(image: _tag())).failure,
+        PrintFailure.bluetoothOff,
+      );
       expect(await c.scan(), PrintFailure.bluetoothOff);
       expect(printer.writes, isEmpty);
     });
@@ -235,8 +244,7 @@ void main() {
       expect(c.log.text(), contains('scan: found "Q2NEAR"'));
     });
 
-    test('a status check logs the raw replies and reads the battery',
-        () async {
+    test('a status check logs the raw replies and reads the battery', () async {
       final printer = FakePrinterTransport(paperReply: [0x1A, 0x06, 0x89]);
       final c = fakeController(printer);
       expect(await c.checkStatus(), isNull);
@@ -286,20 +294,22 @@ void main() {
       expect(await store.load(), s);
     });
 
-    test('the log keeps the last 60 events and its report names the setup',
-        () async {
-      final printer = FakePrinterTransport();
-      final c = fakeController(printer);
-      for (var i = 0; i < 80; i++) {
-        c.log.add('event $i');
-      }
-      expect(c.log.entries.length, 60);
-      expect(c.log.entries.first.message, 'event 20');
-      final report = c.logReport(app: '1.0.12');
-      expect(report, contains('label: 2x1in 50.8 × 25.4 mm = 406x203 dots'));
-      expect(report, contains('density 6, speed 5, x 0, y 0'));
-      expect(report, contains('event 79'));
-    });
+    test(
+      'the log keeps the last 60 events and its report names the setup',
+      () async {
+        final printer = FakePrinterTransport();
+        final c = fakeController(printer);
+        for (var i = 0; i < 80; i++) {
+          c.log.add('event $i');
+        }
+        expect(c.log.entries.length, 60);
+        expect(c.log.entries.first.message, 'event 20');
+        final report = c.logReport(app: '1.0.12');
+        expect(report, contains('label: 2x1in 50.8 × 25.4 mm = 406x203 dots'));
+        expect(report, contains('density 6, speed 5, x 0, y 0'));
+        expect(report, contains('event 79'));
+      },
+    );
   });
 }
 

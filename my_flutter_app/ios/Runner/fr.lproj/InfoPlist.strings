@@ -1,3 +1,4 @@
+"NSBluetoothAlwaysUsageDescription" = "Laawol utilise le Bluetooth pour trouver votre imprimante d’étiquettes et y imprimer les étiquettes de produits.";
 "NSCameraUsageDescription" = "Laawol utilise l’appareil photo pour scanner les numéros VIN, les étiquettes de colis et les étiquettes de produits, et ajouter des photos aux annonces et aux demandes de service.";
 "NSFaceIDUsageDescription" = "Utilisez Face ID pour déverrouiller votre session Laawol enregistrée.";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "Laawol utilise votre position pour aider à remplir les adresses de collecte et de livraison de vos demandes.";

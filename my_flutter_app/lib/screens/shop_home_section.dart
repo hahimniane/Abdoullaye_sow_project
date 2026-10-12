@@ -21,6 +21,7 @@ import 'inventory_item_sheets.dart';
 import 'inventory_sales_screen.dart';
 import 'inventory_screen.dart';
 import 'inventory_sell_screen.dart';
+import 'print_tags_sheet.dart';
 
 /// The top of the business home for someone who sells at a counter.
 ///
@@ -320,6 +321,7 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
   Future<void> _addProduct() async {
     final l10n = AppLocalizations.of(context)!;
     final watcher = _watcher;
+    InventoryCreatedItem? created;
     final saved = await showInventoryItemForm(
       context,
       businessId: widget.businessId,
@@ -327,9 +329,30 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
       categories: watcher?.categories ?? const [],
       brands: watcher?.brands ?? const [],
       stores: _stores,
+      onCreated: (item) => created = item,
     );
     if (saved == true && mounted) {
-      showSuccessSnackBar(context, l10n.inventoryProductAdded);
+      final last = created;
+      showSuccessSnackBar(
+        context,
+        l10n.inventoryProductAdded,
+        actionLabel: last == null ? null : l10n.inventoryPrintTagAction,
+        onAction: last == null
+            ? null
+            : () {
+                if (!mounted) return;
+                unawaited(
+                  showPrintTagsSheet(
+                    context,
+                    businessId: widget.businessId,
+                    itemId: last.itemId,
+                    code: last.code,
+                    title: last.title,
+                    opener: widget.tagOpener,
+                  ),
+                );
+              },
+      );
       unawaited(_loadSummary());
     }
   }

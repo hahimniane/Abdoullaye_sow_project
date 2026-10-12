@@ -160,8 +160,7 @@ final List<int> _log = () {
   return t;
 }();
 
-int _mul(int a, int b) =>
-    a == 0 || b == 0 ? 0 : _exp[_log[a] + _log[b]];
+int _mul(int a, int b) => a == 0 || b == 0 ? 0 : _exp[_log[a] + _log[b]];
 
 /// Every syndrome S_j = c(alpha^j), j = 0..ecLen-1, is zero for a codeword
 /// with no errors (generator roots alpha^0..alpha^(ecLen-1)).

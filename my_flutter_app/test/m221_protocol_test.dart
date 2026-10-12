@@ -53,8 +53,7 @@ void main() {
   });
 
   group('the QR', () {
-    test('the test reader reads codes from an independent encoder (segno)',
-        () {
+    test('the test reader reads codes from an independent encoder (segno)', () {
       final matrices = fixture['matrices'] as Map<String, Object?>;
       expect(matrices.length, greaterThanOrEqualTo(4));
       for (final link in matrices.keys) {
@@ -120,27 +119,41 @@ void main() {
 
   group('commands', () {
     test('density follows round(5 + d * 1.25) as Python rounds', () {
-      expect([for (var d = 1; d <= 8; d++) m221DensityByte(d)], [
-        6, 8, 9, 10, 11, 12, 14, 15, //
-      ]);
+      expect(
+        [for (var d = 1; d <= 8; d++) m221DensityByte(d)],
+        [
+          6, 8, 9, 10, 11, 12, 14, 15, //
+        ],
+      );
       expect(m221DensityByte(0), 6);
       expect(m221DensityByte(99), 15);
     });
 
-    test('the label sequence is speed, density, media, header, data, footer',
-        () {
-      final raster = packRaster(LabelBitmap(406, 203), 0, 0);
-      final steps = m221LabelSteps(raster, density: 6, speed: 5);
-      expect(steps.map((s) => s.name), [
-        'speed', 'density', 'media', 'header', 'raster', 'footer', //
-      ]);
-      expect(steps[0].bytes, [0x1B, 0x4E, 0x0D, 5]);
-      expect(steps[1].bytes, [0x1B, 0x4E, 0x04, 12]);
-      expect(steps[2].bytes, [0x1F, 0x11, 0x0A]);
-      expect(steps[3].bytes, [0x1D, 0x76, 0x30, 0x00, 72, 0x00, 203, 0]);
-      expect(steps[4].bytes.length, 72 * 203);
-      expect(steps[5].bytes, [0x1F, 0xF0, 0x05, 0x00, 0x1F, 0xF0, 0x03, 0x00]);
-    });
+    test(
+      'the label sequence is speed, density, media, header, data, footer',
+      () {
+        final raster = packRaster(LabelBitmap(406, 203), 0, 0);
+        final steps = m221LabelSteps(raster, density: 6, speed: 5);
+        expect(steps.map((s) => s.name), [
+          'speed', 'density', 'media', 'header', 'raster', 'footer', //
+        ]);
+        expect(steps[0].bytes, [0x1B, 0x4E, 0x0D, 5]);
+        expect(steps[1].bytes, [0x1B, 0x4E, 0x04, 12]);
+        expect(steps[2].bytes, [0x1F, 0x11, 0x0A]);
+        expect(steps[3].bytes, [0x1D, 0x76, 0x30, 0x00, 72, 0x00, 203, 0]);
+        expect(steps[4].bytes.length, 72 * 203);
+        expect(steps[5].bytes, [
+          0x1F,
+          0xF0,
+          0x05,
+          0x00,
+          0x1F,
+          0xF0,
+          0x03,
+          0x00,
+        ]);
+      },
+    );
 
     test('a tall raster carries its row count in two bytes', () {
       expect(m221RasterHeader(72, 300), [0x1D, 0x76, 0x30, 0, 72, 0, 44, 1]);

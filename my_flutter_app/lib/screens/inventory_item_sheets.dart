@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../services/inventory.dart';
 import '../services/inventory_service.dart';
 import '../services/inventory_stores.dart';
+import '../services/label_printer.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -12,6 +13,7 @@ import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import 'inventory_brands_screen.dart';
 import 'inventory_categories_screen.dart';
+import 'print_tags_sheet.dart';
 
 /// The product form: create a product, or edit one. Money and counts are read
 /// by the same readers the server's limits mirror, so a bad entry is refused
@@ -25,7 +27,9 @@ import 'inventory_categories_screen.dart';
 /// types a starting count for each store; everyone else types one count.
 ///
 /// Answers true when something was saved (also when the form was closed after
-/// one or more "save and add another").
+/// one or more "save and add another"). [onCreated] hears of each new
+/// product (its id, code and display name), so the caller can offer to
+/// print its tag.
 Future<bool?> showInventoryItemForm(
   BuildContext context, {
   required String businessId,
@@ -34,6 +38,7 @@ Future<bool?> showInventoryItemForm(
   List<InventoryCategory> categories = const [],
   List<InventoryBrand> brands = const [],
   InventoryStoreContext? stores,
+  ValueChanged<InventoryCreatedItem>? onCreated,
 }) async {
   var savedAny = false;
   final closed = await showLotSheet<bool>(
@@ -46,10 +51,14 @@ Future<bool?> showInventoryItemForm(
       brands: brands,
       stores: stores ?? InventoryStoreContext.single,
       onSaved: () => savedAny = true,
+      onCreated: onCreated,
     ),
   );
   return savedAny || closed == true ? true : closed;
 }
+
+/// A product just created: enough to print its tag.
+typedef InventoryCreatedItem = ({String itemId, String code, String title});
 
 class InventoryItemFormSheet extends StatefulWidget {
   const InventoryItemFormSheet({
@@ -61,6 +70,7 @@ class InventoryItemFormSheet extends StatefulWidget {
     this.brands = const [],
     this.stores,
     this.onSaved,
+    this.onCreated,
   });
 
   final String businessId;
@@ -73,6 +83,9 @@ class InventoryItemFormSheet extends StatefulWidget {
   /// Called after every successful save, including each "save and add
   /// another" (the sheet stays open then).
   final VoidCallback? onSaved;
+
+  /// Called after each new product is created.
+  final ValueChanged<InventoryCreatedItem>? onCreated;
 
   @override
   State<InventoryItemFormSheet> createState() => _InventoryItemFormSheetState();
@@ -102,18 +115,19 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
   /// The categories on offer: the business's, plus any added in this sheet.
   late final List<InventoryCategory> _categories = [...widget.categories];
   late String _categoryId = widget.existing?.categoryId ?? '';
-  late String _categoryName = inventoryCategoryById(
-          widget.categories, widget.existing?.categoryId ?? '')
-      ?.name ??
+  late String _categoryName =
+      inventoryCategoryById(
+        widget.categories,
+        widget.existing?.categoryId ?? '',
+      )?.name ??
       widget.existing?.category ??
       '';
 
   /// The brands on offer: the business's, plus any added in this sheet.
   late final List<InventoryBrand> _brands = [...widget.brands];
   late String _brandId = widget.existing?.brandId ?? '';
-  late String _brandName = inventoryBrandById(
-          widget.brands, widget.existing?.brandId ?? '')
-      ?.name ??
+  late String _brandName =
+      inventoryBrandById(widget.brands, widget.existing?.brandId ?? '')?.name ??
       widget.existing?.brand ??
       '';
 
@@ -141,20 +155,18 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
   }
 
   InventoryItemDraft get _draft => InventoryItemDraft(
-        name: _name.text,
-        price: _price.text,
-        cost: _cost.text,
-        quantity: _quantity.text,
-        lowStockAt: _lowStock.text,
-        category: _categoryName,
-        categoryId: _categoryId,
-        brand: _brandName,
-        brandId: _brandId,
-        photoUrl: _photo.text,
-        stock: {
-          for (final entry in _stock.entries) entry.key: entry.value.text,
-        },
-      );
+    name: _name.text,
+    price: _price.text,
+    cost: _cost.text,
+    quantity: _quantity.text,
+    lowStockAt: _lowStock.text,
+    category: _categoryName,
+    categoryId: _categoryId,
+    brand: _brandName,
+    brandId: _brandId,
+    photoUrl: _photo.text,
+    stock: {for (final entry in _stock.entries) entry.key: entry.value.text},
+  );
 
   static const _addCategory = '__add__';
   static const _addBrand = '__add_brand__';
@@ -204,7 +216,9 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
       title: l10n.inventoryCategoryPickTitle,
       // A product typed before categories existed has a name but no id: no
       // option is its own.
-      selected: _categoryId.isEmpty && _categoryName.isNotEmpty ? null : _categoryId,
+      selected: _categoryId.isEmpty && _categoryName.isNotEmpty
+          ? null
+          : _categoryId,
       options: [
         LotOption('', l10n.inventoryCategoryNone),
         for (final category in inventoryActiveCategories(_categories))
@@ -231,8 +245,7 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
     }
     setState(() {
       _categoryId = picked;
-      _categoryName =
-          inventoryCategoryById(_categories, picked)?.name ?? '';
+      _categoryName = inventoryCategoryById(_categories, picked)?.name ?? '';
     });
   }
 
@@ -240,7 +253,11 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
       ? validateInventoryItemDraft(_draft, creating: _creating)
       : const [];
 
-  String? _errorFor(AppLocalizations l10n, List<String> codes, List<String> own) {
+  String? _errorFor(
+    AppLocalizations l10n,
+    List<String> codes,
+    List<String> own,
+  ) {
     for (final code in own) {
       if (codes.contains(code)) return inventoryFieldErrorText(l10n, code);
     }
@@ -287,7 +304,17 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
     try {
       final existing = widget.existing;
       if (existing == null) {
-        await widget.service.createItem(widget.businessId, draft);
+        final created = await widget.service.createItem(
+          widget.businessId,
+          draft,
+        );
+        if (created.itemId.isNotEmpty && created.code.isNotEmpty) {
+          widget.onCreated?.call((
+            itemId: created.itemId,
+            code: created.code,
+            title: inventoryDisplayName(draft.brand, draft.name),
+          ));
+        }
       } else {
         await widget.service.updateItem(widget.businessId, existing, draft);
       }
@@ -305,8 +332,12 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
     } catch (error) {
       if (!mounted) return;
       AppHaptics.refuse();
-      setState(() => _serverNote =
-          inventoryFailureText(l10n, inventoryFailureFromError(error)));
+      setState(
+        () => _serverNote = inventoryFailureText(
+          l10n,
+          inventoryFailureFromError(error),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -355,7 +386,10 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
                 maxLines: 2,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -388,7 +422,10 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
             onChanged: changed,
             decoration: InputDecoration(
               labelText: l10n.inventoryFieldName,
-              errorText: _errorFor(l10n, errors, ['name_required', 'name_too_long']),
+              errorText: _errorFor(l10n, errors, [
+                'name_required',
+                'name_too_long',
+              ]),
               errorMaxLines: 3,
             ),
           ),
@@ -450,7 +487,8 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
                 labelText: _stores.ownStoreId.isEmpty
                     ? l10n.inventoryFieldQuantity
                     : l10n.inventoryFieldQuantityAt(
-                        _stores.storeName(_stores.ownStoreId)),
+                        _stores.storeName(_stores.ownStoreId),
+                      ),
                 errorText: _errorFor(l10n, errors, ['quantity_invalid']),
                 errorMaxLines: 3,
               ),
@@ -459,7 +497,11 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
             Text(
               l10n.inventoryQuantityHelpEdit,
               key: const Key('inv-quantity-help'),
-              style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.muted),
+              style: const TextStyle(
+                fontSize: 12.5,
+                height: 1.4,
+                color: AppColors.muted,
+              ),
             ),
           const SizedBox(height: AppSpacing.md),
           TextField(
@@ -515,7 +557,9 @@ class _AddedNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: AppColors.sage.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
@@ -524,13 +568,20 @@ class _AddedNote extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.check_circle_outline, size: 16, color: AppColors.sage),
+          const Icon(
+            Icons.check_circle_outline,
+            size: 16,
+            color: AppColors.sage,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               text,
               style: const TextStyle(
-                  fontSize: 13, height: 1.35, color: AppColors.ink),
+                fontSize: 13,
+                height: 1.35,
+                color: AppColors.ink,
+              ),
             ),
           ),
         ],
@@ -552,19 +603,18 @@ Future<bool?> showInventoryStockSheet(
   InventoryStoreContext? stores,
   InventoryStockIndex? stock,
   String initialStoreId = '',
-}) =>
-    showLotSheet<bool>(
-      context,
-      InventoryStockSheet(
-        businessId: businessId,
-        item: item,
-        add: add,
-        service: service,
-        stores: stores ?? InventoryStoreContext.single,
-        stock: stock ?? InventoryStockIndex.empty,
-        initialStoreId: initialStoreId,
-      ),
-    );
+}) => showLotSheet<bool>(
+  context,
+  InventoryStockSheet(
+    businessId: businessId,
+    item: item,
+    add: add,
+    service: service,
+    stores: stores ?? InventoryStoreContext.single,
+    stock: stock ?? InventoryStockIndex.empty,
+    initialStoreId: initialStoreId,
+  ),
+);
 
 class InventoryStockSheet extends StatefulWidget {
   const InventoryStockSheet({
@@ -603,8 +653,8 @@ class _InventoryStockSheetState extends State<InventoryStockSheet> {
   late String _storeId = !_picks
       ? ''
       : (_stores.active.any((s) => s.id == widget.initialStoreId)
-          ? widget.initialStoreId
-          : _stores.defaultStoreId);
+            ? widget.initialStoreId
+            : _stores.defaultStoreId);
 
   /// The count of this product in the store being counted.
   int _countIn(String storeId) {
@@ -615,8 +665,9 @@ class _InventoryStockSheetState extends State<InventoryStockSheet> {
     return widget.item.quantity;
   }
 
-  late final _quantity =
-      TextEditingController(text: widget.add ? '' : '${_countIn(_storeId)}');
+  late final _quantity = TextEditingController(
+    text: widget.add ? '' : '${_countIn(_storeId)}',
+  );
   bool _quantityTouched = false;
   final _note = TextEditingController();
   bool _busy = false;
@@ -631,8 +682,11 @@ class _InventoryStockSheetState extends State<InventoryStockSheet> {
       selected: _storeId,
       options: [
         for (final store in _stores.active)
-          LotOption(store.id, store.name,
-              detail: l10n.inventoryInStockCount(_countIn(store.id))),
+          LotOption(
+            store.id,
+            store.name,
+            detail: l10n.inventoryInStockCount(_countIn(store.id)),
+          ),
       ],
     );
     if (picked == null || !mounted) return;
@@ -656,7 +710,10 @@ class _InventoryStockSheetState extends State<InventoryStockSheet> {
   Future<void> _save() async {
     if (_busy) return;
     final l10n = AppLocalizations.of(context)!;
-    if (validateStockAdjustment(_quantity.text, adding: widget.add).isNotEmpty) {
+    if (validateStockAdjustment(
+      _quantity.text,
+      adding: widget.add,
+    ).isNotEmpty) {
       AppHaptics.refuse();
       setState(() => _invalid = true);
       return;
@@ -681,8 +738,12 @@ class _InventoryStockSheetState extends State<InventoryStockSheet> {
     } catch (error) {
       if (!mounted) return;
       AppHaptics.refuse();
-      setState(() => _serverNote =
-          inventoryFailureText(l10n, inventoryFailureFromError(error)));
+      setState(
+        () => _serverNote = inventoryFailureText(
+          l10n,
+          inventoryFailureFromError(error),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -715,8 +776,14 @@ class _InventoryStockSheetState extends State<InventoryStockSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            widget.add ? l10n.inventoryAddStockHelp : l10n.inventorySetCountHelp,
-            style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.muted),
+            widget.add
+                ? l10n.inventoryAddStockHelp
+                : l10n.inventorySetCountHelp,
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: AppColors.muted,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           if (_picks) ...[
@@ -730,10 +797,15 @@ class _InventoryStockSheetState extends State<InventoryStockSheet> {
             const SizedBox(height: AppSpacing.md),
           ] else if (_stores.ownStoreId.isNotEmpty) ...[
             Text(
-              l10n.inventoryStockForStore(_stores.storeName(_stores.ownStoreId)),
+              l10n.inventoryStockForStore(
+                _stores.storeName(_stores.ownStoreId),
+              ),
               key: const Key('inv-stock-own-store'),
               style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.ink,
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
           ],
@@ -752,8 +824,8 @@ class _InventoryStockSheetState extends State<InventoryStockSheet> {
               labelText: l10n.inventoryQty,
               errorText: _invalid
                   ? (widget.add
-                      ? l10n.inventoryErrQuantityAdd
-                      : l10n.inventoryErrQuantity)
+                        ? l10n.inventoryErrQuantityAdd
+                        : l10n.inventoryErrQuantity)
                   : null,
               errorMaxLines: 3,
             ),
@@ -786,18 +858,17 @@ Future<bool?> showInventoryTransferSheet(
   InventoryStockIndex? stock,
   InventoryService service = const InventoryService(),
   String initialFromStoreId = '',
-}) =>
-    showLotSheet<bool>(
-      context,
-      InventoryTransferSheet(
-        businessId: businessId,
-        item: item,
-        stores: stores,
-        stock: stock ?? InventoryStockIndex.empty,
-        service: service,
-        initialFromStoreId: initialFromStoreId,
-      ),
-    );
+}) => showLotSheet<bool>(
+  context,
+  InventoryTransferSheet(
+    businessId: businessId,
+    item: item,
+    stores: stores,
+    stock: stock ?? InventoryStockIndex.empty,
+    service: service,
+    initialFromStoreId: initialFromStoreId,
+  ),
+);
 
 class InventoryTransferSheet extends StatefulWidget {
   const InventoryTransferSheet({
@@ -862,11 +933,11 @@ class _InventoryTransferSheetState extends State<InventoryTransferSheet> {
   }
 
   InventoryTransferDraft get _draft => InventoryTransferDraft(
-        fromStoreId: _from,
-        toStoreId: _to,
-        quantity: _quantity.text,
-        note: _note.text,
-      );
+    fromStoreId: _from,
+    toStoreId: _to,
+    quantity: _quantity.text,
+    note: _note.text,
+  );
 
   Future<void> _pick({required bool from}) async {
     final l10n = AppLocalizations.of(context)!;
@@ -876,9 +947,13 @@ class _InventoryTransferSheetState extends State<InventoryTransferSheet> {
       selected: from ? _from : _to,
       options: [
         for (final store in widget.stores.active)
-          LotOption(store.id, store.name,
-              detail: l10n.inventoryInStockCount(
-                  widget.stock.at(widget.item.id, store.id))),
+          LotOption(
+            store.id,
+            store.name,
+            detail: l10n.inventoryInStockCount(
+              widget.stock.at(widget.item.id, store.id),
+            ),
+          ),
       ],
     );
     if (picked == null || !mounted) return;
@@ -905,8 +980,12 @@ class _InventoryTransferSheetState extends State<InventoryTransferSheet> {
     } catch (error) {
       if (!mounted) return;
       AppHaptics.refuse();
-      setState(() => _serverNote =
-          inventoryFailureText(l10n, inventoryFailureFromError(error)));
+      setState(
+        () => _serverNote = inventoryFailureText(
+          l10n,
+          inventoryFailureFromError(error),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -915,13 +994,14 @@ class _InventoryTransferSheetState extends State<InventoryTransferSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final problems =
-        _submitted ? validateInventoryTransfer(_draft) : const <String>[];
+    final problems = _submitted
+        ? validateInventoryTransfer(_draft)
+        : const <String>[];
     final sideError = problems.contains('same_store')
         ? inventoryFieldErrorText(l10n, 'same_store')
         : (problems.contains('store_required')
-            ? inventoryFieldErrorText(l10n, 'store_required')
-            : null);
+              ? inventoryFieldErrorText(l10n, 'store_required')
+              : null);
     return LotSheetShell(
       title: l10n.inventoryTransfer,
       subtitle: widget.item.displayName,
@@ -930,7 +1010,10 @@ class _InventoryTransferSheetState extends State<InventoryTransferSheet> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_serverNote.isNotEmpty) ...[
-            InventoryNote(key: const Key('inv-transfer-error'), text: _serverNote),
+            InventoryNote(
+              key: const Key('inv-transfer-error'),
+              text: _serverNote,
+            ),
             const SizedBox(height: AppSpacing.sm),
           ],
           LotSheetButton(
@@ -947,7 +1030,11 @@ class _InventoryTransferSheetState extends State<InventoryTransferSheet> {
         children: [
           Text(
             l10n.inventoryTransferHelp,
-            style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.muted),
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: AppColors.muted,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
@@ -1002,131 +1089,23 @@ class _InventoryTransferSheetState extends State<InventoryTransferSheet> {
   }
 }
 
-/// Print tags for a product: N copies of the same code, opened as a page in
-/// the browser where the print dialog takes over.
-Future<bool?> showInventoryTagSheet(
+/// Print tags for a product: N copies of its one code, straight to the
+/// shop's label printer, as an exact-size PDF to share, or as the tag page
+/// in the browser (see `print_tags_sheet.dart`).
+Future<void> showInventoryTagSheet(
   BuildContext context, {
   required String businessId,
   required InventoryItem item,
   InventoryTagOpener opener = openInventoryTags,
-}) =>
-    showLotSheet<bool>(
-      context,
-      InventoryTagSheet(businessId: businessId, item: item, opener: opener),
-    );
-
-class InventoryTagSheet extends StatefulWidget {
-  const InventoryTagSheet({
-    super.key,
-    required this.businessId,
-    required this.item,
-    this.opener = openInventoryTags,
-  });
-
-  final String businessId;
-  final InventoryItem item;
-  final InventoryTagOpener opener;
-
-  @override
-  State<InventoryTagSheet> createState() => _InventoryTagSheetState();
-}
-
-class _InventoryTagSheetState extends State<InventoryTagSheet> {
-  final _copies = TextEditingController(text: '1');
-  bool _busy = false;
-  bool _invalid = false;
-  bool _failed = false;
-
-  @override
-  void dispose() {
-    _copies.dispose();
-    super.dispose();
-  }
-
-  Future<void> _open() async {
-    if (_busy) return;
-    final copies = readTagCopies(_copies.text);
-    if (copies == null) {
-      AppHaptics.refuse();
-      setState(() => _invalid = true);
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _invalid = false;
-      _failed = false;
-    });
-    try {
-      await widget.opener(
-        businessId: widget.businessId,
-        itemId: widget.item.id,
-        copies: copies,
-      );
-      if (!mounted) return;
-      AppHaptics.commit();
-      Navigator.of(context).pop(true);
-    } catch (_) {
-      if (!mounted) return;
-      AppHaptics.refuse();
-      setState(() => _failed = true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return LotSheetShell(
-      title: l10n.inventoryPrintTags,
-      subtitle: '${widget.item.displayName} · ${widget.item.code}',
-      footer: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_failed) ...[
-            InventoryNote(
-              key: const Key('inv-tags-error'),
-              text: l10n.inventoryTagsCouldNotOpen,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
-          LotSheetButton(
-            key: const Key('inv-tags-open'),
-            label: l10n.inventoryTagsOpen,
-            busy: _busy,
-            busyLabel: l10n.inventoryTagsOpening,
-            onTap: _open,
-          ),
-        ],
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.inventoryTagNote,
-            style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.muted),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            key: const Key('inv-tags-copies'),
-            controller: _copies,
-            enabled: !_busy,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: (_) {
-              if (_invalid) setState(() => _invalid = false);
-            },
-            decoration: InputDecoration(
-              labelText: l10n.inventoryTagCopies,
-              helperText: l10n.inventoryTagCopiesHelp,
-              helperMaxLines: 3,
-              errorText: _invalid ? l10n.inventoryTagCopiesError : null,
-              errorMaxLines: 3,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+  LabelPrinterController? printer,
+  TagPdfSharer sharer = shareTagPdf,
+}) => showPrintTagsSheet(
+  context,
+  businessId: businessId,
+  itemId: item.id,
+  code: item.code,
+  title: item.displayName,
+  opener: opener,
+  printer: printer,
+  sharer: sharer,
+);

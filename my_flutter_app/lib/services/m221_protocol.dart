@@ -57,8 +57,7 @@ const m221QueryCover = [0x1F, 0x11, 0x12];
 
 /// A 1-bit picture: [width] x [height] dots, row-major, 1 = black.
 class LabelBitmap {
-  LabelBitmap(this.width, this.height)
-    : pixels = Uint8List(width * height);
+  LabelBitmap(this.width, this.height) : pixels = Uint8List(width * height);
 
   final int width;
   final int height;
@@ -259,11 +258,7 @@ List<M221Step> m221LabelSteps(
   int speed = m221DefaultSpeed,
 }) => [
   M221Step('speed', m221SpeedCommand(speed), pauseAfter: m221CommandGap),
-  M221Step(
-    'density',
-    m221DensityCommand(density),
-    pauseAfter: m221CommandGap,
-  ),
+  M221Step('density', m221DensityCommand(density), pauseAfter: m221CommandGap),
   const M221Step('media', m221GapMediaCommand, pauseAfter: m221CommandGap),
   M221Step('header', m221RasterHeader(raster.widthBytes, raster.rows)),
   M221Step('raster', raster.data, pauseAfter: m221AfterRasterGap),

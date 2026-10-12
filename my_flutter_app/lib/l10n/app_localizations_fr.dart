@@ -12174,4 +12174,292 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get shopHomeNoInventoryAccess =>
       'Cette entreprise vend avec l’Inventaire. Demandez au propriétaire l’autorisation Inventaire.';
+
+  @override
+  String get printTagsSizeLabel => 'Taille de l’étiquette';
+
+  @override
+  String get printTagsSize2x1 => '2 × 1 po';
+
+  @override
+  String get printTagsSize40x30 => '40 × 30 mm';
+
+  @override
+  String get printTagsSize50x30 => '50 × 30 mm';
+
+  @override
+  String get printTagsSizeCustom => 'Personnalisée';
+
+  @override
+  String get printTagsCustomWidth => 'Largeur (mm)';
+
+  @override
+  String get printTagsCustomHeight => 'Hauteur (mm)';
+
+  @override
+  String get printTagsCustomError =>
+      'Saisissez une largeur de 15 à 72 mm et une hauteur de 15 à 100 mm.';
+
+  @override
+  String get printTagsNote =>
+      'Le code QR uniquement. Chaque copie porte le même code ; une réimpression ne le change jamais.';
+
+  @override
+  String get printTagsToPrinter => 'Imprimer sur l’imprimante';
+
+  @override
+  String get printTagsConnecting => 'Connexion à l’imprimante…';
+
+  @override
+  String printTagsProgress(int done, int total) {
+    return 'Impression $done sur $total…';
+  }
+
+  @override
+  String get printTagsStop => 'Arrêter';
+
+  @override
+  String get printTagsStopping => 'Arrêt après cette étiquette…';
+
+  @override
+  String printTagsDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count étiquettes imprimées.',
+      one: '1 étiquette imprimée.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String printTagsStopped(int printed, int total) {
+    return 'Arrêté après $printed sur $total.';
+  }
+
+  @override
+  String printTagsPartial(int printed, int total) {
+    return '$printed sur $total imprimées avant le problème.';
+  }
+
+  @override
+  String get printTagsSharePdf => 'Partager en PDF';
+
+  @override
+  String get printTagsSharing => 'Préparation du PDF…';
+
+  @override
+  String get printTagsShareHint =>
+      'La page du PDF fait exactement la taille de l’étiquette. Dans l’app de votre imprimante, imprimez-la à 100 % (taille réelle).';
+
+  @override
+  String get printTagsPdfFailed => 'Le PDF n’a pas pu être créé. Réessayez.';
+
+  @override
+  String get printTagsOpenPage => 'Ouvrir la page des étiquettes';
+
+  @override
+  String printTagsPrinterLine(String name) {
+    return 'Imprimante : $name';
+  }
+
+  @override
+  String get printTagsNoPrinter => 'Aucune imprimante choisie pour l’instant.';
+
+  @override
+  String get printTagsPrinterSettings => 'Réglages de l’imprimante';
+
+  @override
+  String get inventoryPrintTagAction => 'Imprimer l’étiquette';
+
+  @override
+  String get labelPrinterTitle => 'Imprimante d’étiquettes';
+
+  @override
+  String get labelPrinterSubtitle => 'Phomemo M221 en Bluetooth';
+
+  @override
+  String get labelPrinterSectionPrinter => 'Imprimante';
+
+  @override
+  String get labelPrinterNone =>
+      'Aucune imprimante choisie. Recherchez-la ci-dessous.';
+
+  @override
+  String get labelPrinterScan => 'Rechercher les imprimantes';
+
+  @override
+  String get labelPrinterScanning => 'Recherche des imprimantes…';
+
+  @override
+  String get labelPrinterScanHint =>
+      'Allumez l’imprimante et fermez d’abord l’app Print Master. L’imprimante apparaît avec un nom comme Q2….';
+
+  @override
+  String get labelPrinterNoneFound => 'Aucune imprimante trouvée à proximité.';
+
+  @override
+  String labelPrinterSignal(int rssi) {
+    return 'Signal $rssi dBm';
+  }
+
+  @override
+  String get labelPrinterUse => 'Utiliser';
+
+  @override
+  String get labelPrinterInUse => 'Utilisée';
+
+  @override
+  String get labelPrinterForget => 'Oublier';
+
+  @override
+  String get labelPrinterConnected => 'Connectée';
+
+  @override
+  String get labelPrinterDisconnect => 'Déconnecter';
+
+  @override
+  String labelPrinterBattery(int percent) {
+    return 'Batterie $percent %';
+  }
+
+  @override
+  String get labelPrinterSectionLabel => 'Étiquette';
+
+  @override
+  String get labelPrinterDensity => 'Noirceur';
+
+  @override
+  String get labelPrinterDensityHelp => '1 est le plus clair, 8 le plus foncé.';
+
+  @override
+  String get labelPrinterSpeed => 'Vitesse';
+
+  @override
+  String get labelPrinterSpeedHelp =>
+      '1 est le plus lent et le plus net, 5 le plus rapide.';
+
+  @override
+  String get labelPrinterSectionPosition => 'Position sur l’étiquette';
+
+  @override
+  String get labelPrinterPositionHelp =>
+      'Imprimez le cadre de test, puis déplacez-le jusqu’à ce que la bordure tombe sur les bords de l’étiquette. 8 points = 1 mm.';
+
+  @override
+  String get labelPrinterXOffset => 'Gauche / droite';
+
+  @override
+  String get labelPrinterYOffset => 'Haut / bas';
+
+  @override
+  String labelPrinterDots(int dots) {
+    return '$dots points';
+  }
+
+  @override
+  String get labelPrinterLess => 'Moins';
+
+  @override
+  String get labelPrinterMore => 'Plus';
+
+  @override
+  String get labelPrinterTestFrame => 'Imprimer le cadre de test';
+
+  @override
+  String get labelPrinterTestTag => 'Imprimer une étiquette de test';
+
+  @override
+  String get labelPrinterCheckStatus => 'Vérifier l’imprimante';
+
+  @override
+  String get labelPrinterChecking => 'Vérification…';
+
+  @override
+  String get labelPrinterSent => 'Imprimé.';
+
+  @override
+  String get labelPrinterStatusDone =>
+      'Imprimante vérifiée. Les réponses sont dans le journal d’impression.';
+
+  @override
+  String get labelPrinterSectionLog => 'Journal d’impression';
+
+  @override
+  String get labelPrinterLogHelp =>
+      'En cas de problème, copiez le journal et envoyez-le au développeur.';
+
+  @override
+  String get labelPrinterCopyLog => 'Copier le journal';
+
+  @override
+  String get labelPrinterLogCopied => 'Journal d’impression copié.';
+
+  @override
+  String get labelPrinterClearLog => 'Effacer';
+
+  @override
+  String get labelPrinterLogEmpty => 'Rien pour l’instant.';
+
+  @override
+  String get labelPrinterPermissionTitle => 'Bluetooth';
+
+  @override
+  String get labelPrinterPermissionBody =>
+      'Laawol utilise le Bluetooth uniquement pour trouver votre imprimante d’étiquettes et y imprimer. Votre téléphone va vous demander l’autorisation.';
+
+  @override
+  String get labelPrinterPermissionContinue => 'Continuer';
+
+  @override
+  String get labelPrinterErrorBluetoothOff =>
+      'Le Bluetooth est désactivé. Activez-le dans les réglages du téléphone, puis réessayez.';
+
+  @override
+  String get labelPrinterErrorUnsupported =>
+      'Ce téléphone ne peut pas utiliser d’imprimante Bluetooth.';
+
+  @override
+  String get labelPrinterErrorPermission =>
+      'Laawol n’est pas autorisé à utiliser le Bluetooth. Autorisez-le dans les Réglages du téléphone pour Laawol, puis réessayez.';
+
+  @override
+  String get labelPrinterErrorLocation =>
+      'Activez la localisation : ce téléphone Android en a besoin pour trouver les imprimantes Bluetooth.';
+
+  @override
+  String get labelPrinterErrorNoPrinter =>
+      'Choisissez d’abord votre imprimante dans les réglages de l’imprimante d’étiquettes.';
+
+  @override
+  String get labelPrinterErrorNotFound =>
+      'Imprimante introuvable. Est-elle allumée et à proximité ? Fermez l’app Print Master : l’imprimante n’accepte qu’une connexion.';
+
+  @override
+  String get labelPrinterErrorConnect =>
+      'Connexion à l’imprimante impossible. Fermez Print Master, éteignez puis rallumez l’imprimante, et réessayez.';
+
+  @override
+  String get labelPrinterErrorNotAPrinter =>
+      'Cet appareil n’est pas une imprimante d’étiquettes utilisable par l’app.';
+
+  @override
+  String get labelPrinterErrorLost =>
+      'La connexion à l’imprimante a été perdue. Gardez le téléphone près d’elle et réessayez.';
+
+  @override
+  String get labelPrinterErrorNoCompletion =>
+      'L’imprimante n’a pas confirmé l’étiquette. Vérifiez les étiquettes et que le capot est fermé, puis réessayez. Si cela continue, copiez le journal d’impression et envoyez-le au développeur.';
+
+  @override
+  String get labelPrinterErrorOutOfPaper =>
+      'L’imprimante n’a plus d’étiquettes. Chargez un rouleau et réessayez.';
+
+  @override
+  String get labelPrinterErrorWrite =>
+      'L’envoi vers l’imprimante a échoué. Réessayez.';
+
+  @override
+  String get labelPrinterErrorBusy =>
+      'L’imprimante est occupée par une autre tâche.';
 }

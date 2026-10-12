@@ -227,6 +227,7 @@ Future<Uint8List> buildTagPdf({
   required String link,
   required TagLabelSize size,
   int copies = 1,
+  bool compress = true,
 }) async {
   final qr = tagQrMatrix(link);
   final layout = TagPdfLayout.of(size, qr.size);
@@ -235,7 +236,11 @@ Future<Uint8List> buildTagPdf({
   final doc = pw.Document(
     title: link,
     creator: 'Laawol',
-    compress: true,
+    compress: compress,
+    // PDF 1.4: a plain cross-reference table and no object streams, like
+    // the reference file that printed right in Print Master. Only the
+    // drawing itself is compressed.
+    version: PdfVersion.pdf_1_4,
   );
   final pages = copies < 1 ? 1 : copies;
   for (var i = 0; i < pages; i++) {

@@ -1,3 +1,4 @@
+"NSBluetoothAlwaysUsageDescription" = "Laawol uses Bluetooth to find your label printer and print product tags on it.";
 "NSCameraUsageDescription" = "Laawol uses the camera to scan VIN numbers, package labels and product tags and capture photos for listings and service requests.";
 "NSFaceIDUsageDescription" = "Use Face ID to unlock your saved Laawol session.";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "Laawol uses your location to help fill pickup and delivery addresses for your service requests.";

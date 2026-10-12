@@ -37,6 +37,8 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Laawol uses Bluetooth to find your label printer and print product tags on it.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Laawol uses the camera to scan VIN numbers, package labels and product tags and capture photos for listings and service requests.</string>
 	<key>NSFaceIDUsageDescription</key>

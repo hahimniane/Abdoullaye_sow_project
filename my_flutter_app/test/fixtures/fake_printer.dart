@@ -19,7 +19,9 @@ class FakePrinterTransport implements PrinterTransport {
     this.connectError,
   }) : devices =
            devices ??
-           const [PrinterDevice(id: 'AA:BB:CC:DD:EE:01', name: 'Q2A1', rssi: -55)];
+           const [
+             PrinterDevice(id: 'AA:BB:CC:DD:EE:01', name: 'Q2A1', rssi: -55),
+           ];
 
   PrinterAdapterState adapter;
   List<PrinterDevice> devices;
@@ -32,8 +34,8 @@ class FakePrinterTransport implements PrinterTransport {
   /// Drop the connection on the Nth write (1-based), once.
   int? dropOnWrite;
 
-  /// Everything that happened, in order: 'scan', 'connect <id>',
-  /// 'subscribe', 'write <n bytes>', 'disconnect'.
+  /// Everything that happened, in order: `scan`, `connect ID`,
+  /// `subscribe`, `write N` (N bytes), `disconnect`.
   final List<String> events = [];
 
   /// Every write, as sent.
@@ -59,7 +61,10 @@ class FakePrinterTransport implements PrinterTransport {
   Future<void> stopScan() async {}
 
   @override
-  Future<PrinterLink> connect(String deviceId, {required Duration timeout}) async {
+  Future<PrinterLink> connect(
+    String deviceId, {
+    required Duration timeout,
+  }) async {
     events.add('connect $deviceId');
     connects++;
     final error = connectError;
@@ -169,11 +174,11 @@ LabelPrinterController fakeController(
     deviceId: 'AA:BB:CC:DD:EE:01',
     deviceName: 'Q2A1',
   ),
-  LabelPrinterStore store = const MemoryPrinterStore(),
+  LabelPrinterStore? store,
 }) {
   final c = LabelPrinterController(
     transport: transport,
-    store: store,
+    store: store ?? MemoryPrinterStore(settings),
     pause: (_) async {},
     doneTimeout: doneTimeout,
     idleDisconnect: Duration.zero,
@@ -184,11 +189,13 @@ LabelPrinterController fakeController(
 
 /// Settings kept in memory only.
 class MemoryPrinterStore extends LabelPrinterStore {
-  const MemoryPrinterStore();
+  MemoryPrinterStore([this.value = const LabelPrinterSettings()]);
+
+  LabelPrinterSettings value;
 
   @override
-  Future<LabelPrinterSettings> load() async => const LabelPrinterSettings();
+  Future<LabelPrinterSettings> load() async => value;
 
   @override
-  Future<void> save(LabelPrinterSettings settings) async {}
+  Future<void> save(LabelPrinterSettings settings) async => value = settings;
 }

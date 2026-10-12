@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/screens/inventory_brands_screen.dart';
 import 'package:my_flutter_app/screens/inventory_categories_screen.dart';
@@ -290,7 +291,11 @@ String _totalText(WidgetTester tester) =>
 void main() {
   late StreamController<String> scans;
 
-  setUp(() => scans = StreamController<String>.broadcast());
+  setUp(() {
+    scans = StreamController<String>.broadcast();
+    // The print-tags sheet reads the label printer settings from the phone.
+    SharedPreferences.setMockInitialValues({});
+  });
   tearDown(() => scans.close());
 
   group('sell screen', () {
@@ -1286,6 +1291,53 @@ void main() {
       await tester.tap(find.byKey(const Key('inv-open-sales')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('inv-sales-empty')), findsOneWidget);
+    });
+
+    testWidgets('a saved product offers to print its tag', (tester) async {
+      final calls = _Calls()
+        ..respond = (name, payload) => name == 'createInventoryItem'
+            ? {'itemId': 'new1', 'code': 'IT-HHHHHH'}
+            : <String, Object?>{};
+      await _pump(
+        tester,
+        InventoryScreen(
+          businessId: 'b1',
+          source: _FakeSource(items: items),
+          service: calls.service,
+          cameraEnabled: false,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('inv-open-add')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('inv-field-name')), 'Shea');
+      await tester.enterText(find.byKey(const Key('inv-field-price')), '5');
+      await tester.enterText(find.byKey(const Key('inv-field-quantity')), '3');
+      await tester.ensureVisible(find.byKey(const Key('inv-form-save')));
+      await tester.tap(find.byKey(const Key('inv-form-save')));
+      await tester.pumpAndSettle();
+      expect(find.text('Product added.'), findsOneWidget);
+      await tester.tap(find.text('Print tag'));
+      await tester.pumpAndSettle();
+      expect(find.text('Shea · IT-HHHHHH'), findsOneWidget);
+      expect(find.byKey(const Key('inv-tags-print')), findsOneWidget);
+    });
+
+    testWidgets('the label printer settings open from the header', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        InventoryScreen(
+          businessId: 'b1',
+          source: _FakeSource(items: items),
+          service: (_Calls()..respond = (n, p) => <String, Object?>{}).service,
+          cameraEnabled: false,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('inv-open-label-printer')));
+      await tester.pumpAndSettle();
+      expect(find.text('Label printer'), findsOneWidget);
+      expect(find.byKey(const Key('label-printer-scan')), findsOneWidget);
     });
   });
 
@@ -3316,7 +3368,11 @@ void main() {
           source: _FakeSource(items: [shoe], brands: brands),
           service: _Calls().service,
           tagOpener:
-              ({required businessId, required itemId, required copies}) async {},
+              ({
+                required businessId,
+                required itemId,
+                required copies,
+              }) async {},
         ),
       );
       expect(find.text('Jordan 11'), findsOneWidget);
@@ -3417,10 +3473,7 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('inv-brands-add')));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('inv-brand-name')),
-        'x' * 61,
-      );
+      await tester.enterText(find.byKey(const Key('inv-brand-name')), 'x' * 61);
       await tester.tap(find.byKey(const Key('inv-brand-save')));
       await tester.pumpAndSettle();
       expect(calls.named('createInventoryBrand'), isEmpty);
@@ -3451,7 +3504,8 @@ void main() {
             brands: const [
               InventoryBrand(
                 id: 'br1',
-                name: 'Une marque au nom vraiment très long pour un écran étroit',
+                name:
+                    'Une marque au nom vraiment très long pour un écran étroit',
                 archived: true,
               ),
             ],
@@ -3592,32 +3646,40 @@ void main() {
       expect(create.containsKey('brand'), isFalse);
     });
 
-    testWidgets('a server without brands keeps the typed name for the product',
-        (tester) async {
-      final calls = _Calls()
-        ..respond = (n, p) {
-          if (n == 'createInventoryBrand') {
-            throw FirebaseFunctionsException(message: 'nf', code: 'not-found');
-          }
-          return {'itemId': 'n', 'code': 'IT-HHHHHH'};
-        };
-      await openForm(tester, calls);
-      await fill(tester);
-      await tester.enterText(find.byKey(const Key('inv-field-quantity')), '3');
-      await tester.ensureVisible(find.byKey(const Key('inv-field-brand')));
-      await tester.tap(find.byKey(const Key('inv-field-brand')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Add a new brand'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const Key('inv-brand-name')), 'Puma');
-      await tester.tap(find.byKey(const Key('inv-brand-save')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('inv-form-save')));
-      await tester.pumpAndSettle();
-      final create = calls.named('createInventoryItem').single.payload;
-      expect(create['brand'], 'Puma');
-      expect(create.containsKey('brandId'), isFalse);
-    });
+    testWidgets(
+      'a server without brands keeps the typed name for the product',
+      (tester) async {
+        final calls = _Calls()
+          ..respond = (n, p) {
+            if (n == 'createInventoryBrand') {
+              throw FirebaseFunctionsException(
+                message: 'nf',
+                code: 'not-found',
+              );
+            }
+            return {'itemId': 'n', 'code': 'IT-HHHHHH'};
+          };
+        await openForm(tester, calls);
+        await fill(tester);
+        await tester.enterText(
+          find.byKey(const Key('inv-field-quantity')),
+          '3',
+        );
+        await tester.ensureVisible(find.byKey(const Key('inv-field-brand')));
+        await tester.tap(find.byKey(const Key('inv-field-brand')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Add a new brand'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('inv-brand-name')), 'Puma');
+        await tester.tap(find.byKey(const Key('inv-brand-save')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('inv-form-save')));
+        await tester.pumpAndSettle();
+        final create = calls.named('createInventoryItem').single.payload;
+        expect(create['brand'], 'Puma');
+        expect(create.containsKey('brandId'), isFalse);
+      },
+    );
 
     testWidgets('no brand picked sends no brand field at all', (tester) async {
       final calls = _Calls()

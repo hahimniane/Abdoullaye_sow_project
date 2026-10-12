@@ -22,6 +22,8 @@ import 'inventory_item_sheets.dart';
 import 'inventory_sales_screen.dart';
 import 'inventory_sell_screen.dart';
 import 'inventory_stores_screen.dart';
+import 'label_printer_settings_screen.dart';
+import 'print_tags_sheet.dart';
 
 /// The shop's inventory: today's numbers, what is running low, and the
 /// products with search - low stock first. From here staff add a product, open
@@ -195,6 +197,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Future<void> _add() async {
     final l10n = AppLocalizations.of(context)!;
+    InventoryCreatedItem? created;
     final saved = await showInventoryItemForm(
       context,
       businessId: widget.businessId,
@@ -202,11 +205,36 @@ class _InventoryScreenState extends State<InventoryScreen> {
       categories: _watcher.categories,
       brands: _watcher.brands,
       stores: _watcher.context,
+      onCreated: (item) => created = item,
     );
     if (saved == true && mounted) {
-      showSuccessSnackBar(context, l10n.inventoryProductAdded);
+      _confirmAdded(l10n, created);
       unawaited(_loadSummary());
     }
+  }
+
+  /// "Product added." with a "Print tag" action for the last new product.
+  void _confirmAdded(AppLocalizations l10n, InventoryCreatedItem? created) {
+    showSuccessSnackBar(
+      context,
+      l10n.inventoryProductAdded,
+      actionLabel: created == null ? null : l10n.inventoryPrintTagAction,
+      onAction: created == null
+          ? null
+          : () {
+              if (!mounted) return;
+              unawaited(
+                showPrintTagsSheet(
+                  context,
+                  businessId: widget.businessId,
+                  itemId: created.itemId,
+                  code: created.code,
+                  title: created.title,
+                  opener: widget.tagOpener,
+                ),
+              );
+            },
+    );
   }
 
   @override
@@ -274,6 +302,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     service: widget.service,
                   ),
                 ),
+              ),
+              IconButton(
+                key: const Key('inv-open-label-printer'),
+                tooltip: l10n.labelPrinterTitle,
+                icon: const Icon(Icons.print_outlined),
+                onPressed: () => _push(const LabelPrinterSettingsScreen()),
               ),
               if (widget.access.canManageStores)
                 IconButton(

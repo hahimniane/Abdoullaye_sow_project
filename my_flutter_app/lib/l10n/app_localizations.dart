@@ -20938,6 +20938,492 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This business sells with Inventory. Ask the owner to give you the Inventory permission.'**
   String get shopHomeNoInventoryAccess;
+
+  /// No description provided for @printTagsSizeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Label size'**
+  String get printTagsSizeLabel;
+
+  /// No description provided for @printTagsSize2x1.
+  ///
+  /// In en, this message translates to:
+  /// **'2 × 1 in'**
+  String get printTagsSize2x1;
+
+  /// No description provided for @printTagsSize40x30.
+  ///
+  /// In en, this message translates to:
+  /// **'40 × 30 mm'**
+  String get printTagsSize40x30;
+
+  /// No description provided for @printTagsSize50x30.
+  ///
+  /// In en, this message translates to:
+  /// **'50 × 30 mm'**
+  String get printTagsSize50x30;
+
+  /// No description provided for @printTagsSizeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get printTagsSizeCustom;
+
+  /// No description provided for @printTagsCustomWidth.
+  ///
+  /// In en, this message translates to:
+  /// **'Width (mm)'**
+  String get printTagsCustomWidth;
+
+  /// No description provided for @printTagsCustomHeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Height (mm)'**
+  String get printTagsCustomHeight;
+
+  /// No description provided for @printTagsCustomError.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a width from 15 to 72 mm and a height from 15 to 100 mm.'**
+  String get printTagsCustomError;
+
+  /// No description provided for @printTagsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The QR code only. Every copy carries the same code; reprinting never changes it.'**
+  String get printTagsNote;
+
+  /// No description provided for @printTagsToPrinter.
+  ///
+  /// In en, this message translates to:
+  /// **'Print to printer'**
+  String get printTagsToPrinter;
+
+  /// No description provided for @printTagsConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to the printer…'**
+  String get printTagsConnecting;
+
+  /// No description provided for @printTagsProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Printing {done} of {total}…'**
+  String printTagsProgress(int done, int total);
+
+  /// No description provided for @printTagsStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get printTagsStop;
+
+  /// No description provided for @printTagsStopping.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopping after this tag…'**
+  String get printTagsStopping;
+
+  /// No description provided for @printTagsDone.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 tag printed.} other{{count} tags printed.}}'**
+  String printTagsDone(int count);
+
+  /// No description provided for @printTagsStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped after {printed} of {total}.'**
+  String printTagsStopped(int printed, int total);
+
+  /// No description provided for @printTagsPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'{printed} of {total} printed before the problem.'**
+  String printTagsPartial(int printed, int total);
+
+  /// No description provided for @printTagsSharePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Share as PDF'**
+  String get printTagsSharePdf;
+
+  /// No description provided for @printTagsSharing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing the PDF…'**
+  String get printTagsSharing;
+
+  /// No description provided for @printTagsShareHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The PDF page is exactly the label. In your printer app, print it at 100 % (actual size).'**
+  String get printTagsShareHint;
+
+  /// No description provided for @printTagsPdfFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The PDF could not be made. Try again.'**
+  String get printTagsPdfFailed;
+
+  /// No description provided for @printTagsOpenPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Open tag page'**
+  String get printTagsOpenPage;
+
+  /// No description provided for @printTagsPrinterLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer: {name}'**
+  String printTagsPrinterLine(String name);
+
+  /// No description provided for @printTagsNoPrinter.
+  ///
+  /// In en, this message translates to:
+  /// **'No printer chosen yet.'**
+  String get printTagsNoPrinter;
+
+  /// No description provided for @printTagsPrinterSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer settings'**
+  String get printTagsPrinterSettings;
+
+  /// No description provided for @inventoryPrintTagAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Print tag'**
+  String get inventoryPrintTagAction;
+
+  /// No description provided for @labelPrinterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Label printer'**
+  String get labelPrinterTitle;
+
+  /// No description provided for @labelPrinterSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Phomemo M221 over Bluetooth'**
+  String get labelPrinterSubtitle;
+
+  /// No description provided for @labelPrinterSectionPrinter.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer'**
+  String get labelPrinterSectionPrinter;
+
+  /// No description provided for @labelPrinterNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No printer chosen yet. Find it below.'**
+  String get labelPrinterNone;
+
+  /// No description provided for @labelPrinterScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Find printers'**
+  String get labelPrinterScan;
+
+  /// No description provided for @labelPrinterScanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for printers…'**
+  String get labelPrinterScanning;
+
+  /// No description provided for @labelPrinterScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn the printer on and close the Print Master app first. The printer shows up with a name such as Q2….'**
+  String get labelPrinterScanHint;
+
+  /// No description provided for @labelPrinterNoneFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No printer found nearby.'**
+  String get labelPrinterNoneFound;
+
+  /// No description provided for @labelPrinterSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal {rssi} dBm'**
+  String labelPrinterSignal(int rssi);
+
+  /// No description provided for @labelPrinterUse.
+  ///
+  /// In en, this message translates to:
+  /// **'Use'**
+  String get labelPrinterUse;
+
+  /// No description provided for @labelPrinterInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'In use'**
+  String get labelPrinterInUse;
+
+  /// No description provided for @labelPrinterForget.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget'**
+  String get labelPrinterForget;
+
+  /// No description provided for @labelPrinterConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get labelPrinterConnected;
+
+  /// No description provided for @labelPrinterDisconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get labelPrinterDisconnect;
+
+  /// No description provided for @labelPrinterBattery.
+  ///
+  /// In en, this message translates to:
+  /// **'Battery {percent}%'**
+  String labelPrinterBattery(int percent);
+
+  /// No description provided for @labelPrinterSectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Label'**
+  String get labelPrinterSectionLabel;
+
+  /// No description provided for @labelPrinterDensity.
+  ///
+  /// In en, this message translates to:
+  /// **'Darkness'**
+  String get labelPrinterDensity;
+
+  /// No description provided for @labelPrinterDensityHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'1 is the lightest, 8 the darkest.'**
+  String get labelPrinterDensityHelp;
+
+  /// No description provided for @labelPrinterSpeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get labelPrinterSpeed;
+
+  /// No description provided for @labelPrinterSpeedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'1 is the slowest and crispest, 5 the fastest.'**
+  String get labelPrinterSpeedHelp;
+
+  /// No description provided for @labelPrinterSectionPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Position on the label'**
+  String get labelPrinterSectionPosition;
+
+  /// No description provided for @labelPrinterPositionHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Print the test frame, then move it until the border sits on the label’s edges. 8 dots = 1 mm.'**
+  String get labelPrinterPositionHelp;
+
+  /// No description provided for @labelPrinterXOffset.
+  ///
+  /// In en, this message translates to:
+  /// **'Left / right'**
+  String get labelPrinterXOffset;
+
+  /// No description provided for @labelPrinterYOffset.
+  ///
+  /// In en, this message translates to:
+  /// **'Up / down'**
+  String get labelPrinterYOffset;
+
+  /// No description provided for @labelPrinterDots.
+  ///
+  /// In en, this message translates to:
+  /// **'{dots} dots'**
+  String labelPrinterDots(int dots);
+
+  /// No description provided for @labelPrinterLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Less'**
+  String get labelPrinterLess;
+
+  /// No description provided for @labelPrinterMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get labelPrinterMore;
+
+  /// No description provided for @labelPrinterTestFrame.
+  ///
+  /// In en, this message translates to:
+  /// **'Print test frame'**
+  String get labelPrinterTestFrame;
+
+  /// No description provided for @labelPrinterTestTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Print test tag'**
+  String get labelPrinterTestTag;
+
+  /// No description provided for @labelPrinterCheckStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the printer'**
+  String get labelPrinterCheckStatus;
+
+  /// No description provided for @labelPrinterChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get labelPrinterChecking;
+
+  /// No description provided for @labelPrinterSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Printed.'**
+  String get labelPrinterSent;
+
+  /// No description provided for @labelPrinterStatusDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer checked. The replies are in the print log.'**
+  String get labelPrinterStatusDone;
+
+  /// No description provided for @labelPrinterSectionLog.
+  ///
+  /// In en, this message translates to:
+  /// **'Print log'**
+  String get labelPrinterSectionLog;
+
+  /// No description provided for @labelPrinterLogHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'If something goes wrong, copy the log and send it to the developer.'**
+  String get labelPrinterLogHelp;
+
+  /// No description provided for @labelPrinterCopyLog.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy log'**
+  String get labelPrinterCopyLog;
+
+  /// No description provided for @labelPrinterLogCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Print log copied.'**
+  String get labelPrinterLogCopied;
+
+  /// No description provided for @labelPrinterClearLog.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get labelPrinterClearLog;
+
+  /// No description provided for @labelPrinterLogEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing yet.'**
+  String get labelPrinterLogEmpty;
+
+  /// No description provided for @labelPrinterPermissionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get labelPrinterPermissionTitle;
+
+  /// No description provided for @labelPrinterPermissionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol uses Bluetooth only to find your label printer and print tags on it. Your phone will ask for permission next.'**
+  String get labelPrinterPermissionBody;
+
+  /// No description provided for @labelPrinterPermissionContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get labelPrinterPermissionContinue;
+
+  /// No description provided for @labelPrinterErrorBluetoothOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth is off. Turn it on in the phone’s settings, then try again.'**
+  String get labelPrinterErrorBluetoothOff;
+
+  /// No description provided for @labelPrinterErrorUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone cannot use Bluetooth printers.'**
+  String get labelPrinterErrorUnsupported;
+
+  /// No description provided for @labelPrinterErrorPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol is not allowed to use Bluetooth. Allow it in the phone’s Settings for Laawol, then try again.'**
+  String get labelPrinterErrorPermission;
+
+  /// No description provided for @labelPrinterErrorLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on Location: this Android phone needs it to find Bluetooth printers.'**
+  String get labelPrinterErrorLocation;
+
+  /// No description provided for @labelPrinterErrorNoPrinter.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your printer first in the label printer settings.'**
+  String get labelPrinterErrorNoPrinter;
+
+  /// No description provided for @labelPrinterErrorNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer not found. Is it on and close by? Close the Print Master app: the printer takes only one connection.'**
+  String get labelPrinterErrorNotFound;
+
+  /// No description provided for @labelPrinterErrorConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect to the printer. Close Print Master, turn the printer off and on, then try again.'**
+  String get labelPrinterErrorConnect;
+
+  /// No description provided for @labelPrinterErrorNotAPrinter.
+  ///
+  /// In en, this message translates to:
+  /// **'That device is not a label printer this app can use.'**
+  String get labelPrinterErrorNotAPrinter;
+
+  /// No description provided for @labelPrinterErrorLost.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection to the printer was lost. Keep the phone close to it and try again.'**
+  String get labelPrinterErrorLost;
+
+  /// No description provided for @labelPrinterErrorNoCompletion.
+  ///
+  /// In en, this message translates to:
+  /// **'The printer did not confirm the tag. Check the labels and that the cover is closed, then try again. If it keeps happening, copy the print log and send it to the developer.'**
+  String get labelPrinterErrorNoCompletion;
+
+  /// No description provided for @labelPrinterErrorOutOfPaper.
+  ///
+  /// In en, this message translates to:
+  /// **'The printer is out of labels. Load a roll and try again.'**
+  String get labelPrinterErrorOutOfPaper;
+
+  /// No description provided for @labelPrinterErrorWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending to the printer failed. Try again.'**
+  String get labelPrinterErrorWrite;
+
+  /// No description provided for @labelPrinterErrorBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'The printer is busy with another job.'**
+  String get labelPrinterErrorBusy;
 }
 
 class _AppLocalizationsDelegate
