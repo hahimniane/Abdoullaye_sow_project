@@ -50,6 +50,30 @@ class InventoryCategory {
   final bool archived;
 }
 
+/// A brand the business keeps for its products ("Jordan", "Nike"), shared by
+/// all stores. Optional on a product.
+class InventoryBrand {
+  const InventoryBrand({
+    required this.id,
+    required this.name,
+    this.businessId = '',
+    this.archived = false,
+  });
+
+  factory InventoryBrand.fromMap(String id, Map<String, dynamic> data) =>
+      InventoryBrand(
+        id: id,
+        businessId: callableString(data['businessId']),
+        name: _clip(callableString(data['name']), inventoryMaxBrand),
+        archived: data['archived'] == true,
+      );
+
+  final String id;
+  final String businessId;
+  final String name;
+  final bool archived;
+}
+
 /// A place the business keeps stock and sells from.
 class InventoryStore {
   const InventoryStore({
@@ -149,6 +173,22 @@ InventoryCategory? inventoryCategoryOfItem(
   if (name.isEmpty || item.categoryId.isNotEmpty) return null;
   for (final category in categories) {
     if (category.name.trim().toLowerCase() == name) return category;
+  }
+  return null;
+}
+
+/// Brands by name, the active ones (an archived brand is kept for the products
+/// already carrying it, but is not offered to a new one).
+List<InventoryBrand> inventoryActiveBrands(Iterable<InventoryBrand> brands) => [
+  for (final brand in brands)
+    if (!brand.archived) brand,
+]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+/// The brand with [id], or null.
+InventoryBrand? inventoryBrandById(Iterable<InventoryBrand> brands, String id) {
+  if (id.isEmpty) return null;
+  for (final brand in brands) {
+    if (brand.id == id) return brand;
   }
   return null;
 }
@@ -508,6 +548,31 @@ List<String> validateInventoryCategoryName(String raw) {
   return const [];
 }
 
+/// Brand names: 1..[inventoryMaxBrand] characters.
+List<String> validateInventoryBrandName(String raw) {
+  final name = raw.trim();
+  if (name.isEmpty) return const ['brand_name_required'];
+  if (name.length > inventoryMaxBrand) return const ['brand_too_long'];
+  return const [];
+}
+
+Map<String, Object?> createInventoryBrandRequest(
+  String businessId,
+  String name,
+) => {'businessId': businessId, 'name': name.trim()};
+
+Map<String, Object?> renameInventoryBrandRequest(
+  String businessId,
+  String brandId,
+  String name,
+) => {'businessId': businessId, 'brandId': brandId, 'name': name.trim()};
+
+Map<String, Object?> archiveInventoryBrandRequest(
+  String businessId,
+  String brandId, {
+  required bool archived,
+}) => {'businessId': businessId, 'brandId': brandId, 'archived': archived};
+
 Map<String, Object?> createInventoryCategoryRequest(
   String businessId,
   String name,
@@ -673,6 +738,12 @@ Map<String, Object?> transferInventoryStockRequest(
           : note,
   };
 }
+
+/// Whether a failed `createInventoryBrand` means the server has no such
+/// callable (a server from before brands): the product is then saved without
+/// the brand rather than refused.
+bool inventoryBrandCallableMissing({String? code, Object? details}) =>
+    inventoryCategoryCallableMissing(code: code, details: details);
 
 /// Whether a failed `createInventoryCategory` means the server has no such
 /// callable (an older server): the typed name is then kept as the product's

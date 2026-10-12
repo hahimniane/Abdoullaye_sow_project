@@ -19335,7 +19335,7 @@ abstract class AppLocalizations {
   /// No description provided for @inventorySearchHint.
   ///
   /// In en, this message translates to:
-  /// **'Search by name, category or code'**
+  /// **'Search by brand, name, category or code'**
   String get inventorySearchHint;
 
   /// No description provided for @inventoryShowArchived.
@@ -20338,6 +20338,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Manage categories'**
   String get inventoryManageCategories;
+
+  /// No description provided for @inventoryBrand.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand'**
+  String get inventoryBrand;
+
+  /// No description provided for @inventoryFieldBrand.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand (optional)'**
+  String get inventoryFieldBrand;
+
+  /// No description provided for @inventoryBrandNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No brand'**
+  String get inventoryBrandNone;
+
+  /// No description provided for @inventoryBrandAddNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a new brand'**
+  String get inventoryBrandAddNew;
+
+  /// No description provided for @inventoryBrandNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand name'**
+  String get inventoryBrandNameLabel;
+
+  /// No description provided for @inventoryBrandCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Add brand'**
+  String get inventoryBrandCreate;
+
+  /// No description provided for @inventoryBrandAddedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand added.'**
+  String get inventoryBrandAddedDone;
+
+  /// No description provided for @inventoryBrandPickTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a brand'**
+  String get inventoryBrandPickTitle;
+
+  /// No description provided for @inventoryBrandAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All brands'**
+  String get inventoryBrandAll;
+
+  /// No description provided for @inventoryBrandsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Brands'**
+  String get inventoryBrandsTitle;
+
+  /// No description provided for @inventoryBrandsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No brands yet. Add one for the makers you stock, like Jordan or Nike.'**
+  String get inventoryBrandsEmpty;
+
+  /// No description provided for @inventoryBrandRename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get inventoryBrandRename;
+
+  /// No description provided for @inventoryBrandRenameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename brand'**
+  String get inventoryBrandRenameTitle;
+
+  /// No description provided for @inventoryBrandRenamedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand renamed.'**
+  String get inventoryBrandRenamedDone;
+
+  /// No description provided for @inventoryBrandArchivedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand archived.'**
+  String get inventoryBrandArchivedDone;
+
+  /// No description provided for @inventoryBrandRestoredDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand restored.'**
+  String get inventoryBrandRestoredDone;
+
+  /// No description provided for @inventoryByBrandTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'By brand'**
+  String get inventoryByBrandTitle;
+
+  /// No description provided for @inventoryErrBrandName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a brand name.'**
+  String get inventoryErrBrandName;
+
+  /// No description provided for @inventoryManageBrands.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage brands'**
+  String get inventoryManageBrands;
+
+  /// No description provided for @inventoryFailBrandNameTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have a brand with that name.'**
+  String get inventoryFailBrandNameTaken;
+
+  /// No description provided for @inventoryFailBrandNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That brand no longer exists. Pick another one.'**
+  String get inventoryFailBrandNotFound;
+
+  /// No description provided for @inventoryFailBrandTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That brand name is too long. Use 60 characters or fewer.'**
+  String get inventoryFailBrandTooLong;
+
+  /// No description provided for @inventorySaveAndAddAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and add another like it'**
+  String get inventorySaveAndAddAnother;
+
+  /// No description provided for @inventoryProductAddedNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {name}. Ready for the next one.'**
+  String inventoryProductAddedNext(String name);
 
   /// No description provided for @inventoryStoreFilterAll.
   ///

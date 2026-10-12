@@ -10,6 +10,7 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import 'inventory_brands_screen.dart';
 import 'inventory_categories_screen.dart';
 
 /// The product form: create a product, or edit one. Money and counts are read
@@ -17,29 +18,38 @@ import 'inventory_categories_screen.dart';
 /// at the field before the round trip. The count is asked for only when
 /// creating; afterwards it changes through stock adjustments, never by editing.
 ///
-/// The category is picked from the business's [categories] (or added on the
-/// spot). In a business with several stores, someone who works in every store
+/// The category and the brand are picked from the business's [categories] and
+/// [brands] (or added on the spot). A new product also offers "Save and add
+/// another like it": it saves, then the form starts again empty with only the
+/// brand and the category kept. In a business with several stores, someone who works in every store
 /// types a starting count for each store; everyone else types one count.
 ///
-/// Answers true when something was saved.
+/// Answers true when something was saved (also when the form was closed after
+/// one or more "save and add another").
 Future<bool?> showInventoryItemForm(
   BuildContext context, {
   required String businessId,
   InventoryItem? existing,
   InventoryService service = const InventoryService(),
   List<InventoryCategory> categories = const [],
+  List<InventoryBrand> brands = const [],
   InventoryStoreContext? stores,
-}) =>
-    showLotSheet<bool>(
-      context,
-      InventoryItemFormSheet(
-        businessId: businessId,
-        existing: existing,
-        service: service,
-        categories: categories,
-        stores: stores ?? InventoryStoreContext.single,
-      ),
-    );
+}) async {
+  var savedAny = false;
+  final closed = await showLotSheet<bool>(
+    context,
+    InventoryItemFormSheet(
+      businessId: businessId,
+      existing: existing,
+      service: service,
+      categories: categories,
+      brands: brands,
+      stores: stores ?? InventoryStoreContext.single,
+      onSaved: () => savedAny = true,
+    ),
+  );
+  return savedAny || closed == true ? true : closed;
+}
 
 class InventoryItemFormSheet extends StatefulWidget {
   const InventoryItemFormSheet({
@@ -48,14 +58,21 @@ class InventoryItemFormSheet extends StatefulWidget {
     this.existing,
     this.service = const InventoryService(),
     this.categories = const [],
+    this.brands = const [],
     this.stores,
+    this.onSaved,
   });
 
   final String businessId;
   final InventoryItem? existing;
   final InventoryService service;
   final List<InventoryCategory> categories;
+  final List<InventoryBrand> brands;
   final InventoryStoreContext? stores;
+
+  /// Called after every successful save, including each "save and add
+  /// another" (the sheet stays open then).
+  final VoidCallback? onSaved;
 
   @override
   State<InventoryItemFormSheet> createState() => _InventoryItemFormSheetState();
@@ -91,9 +108,23 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
       widget.existing?.category ??
       '';
 
+  /// The brands on offer: the business's, plus any added in this sheet.
+  late final List<InventoryBrand> _brands = [...widget.brands];
+  late String _brandId = widget.existing?.brandId ?? '';
+  late String _brandName = inventoryBrandById(
+          widget.brands, widget.existing?.brandId ?? '')
+      ?.name ??
+      widget.existing?.brand ??
+      '';
+
+  final _nameFocus = FocusNode();
+
   bool _busy = false;
   bool _submitted = false;
   String _serverNote = '';
+
+  /// What the last "save and add another" saved, shown until the next save.
+  String _justAdded = '';
 
   bool get _creating => widget.existing == null;
 
@@ -105,6 +136,7 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
     for (final c in _stock.values) {
       c.dispose();
     }
+    _nameFocus.dispose();
     super.dispose();
   }
 
@@ -116,6 +148,8 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
         lowStockAt: _lowStock.text,
         category: _categoryName,
         categoryId: _categoryId,
+        brand: _brandName,
+        brandId: _brandId,
         photoUrl: _photo.text,
         stock: {
           for (final entry in _stock.entries) entry.key: entry.value.text,
@@ -123,6 +157,45 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
       );
 
   static const _addCategory = '__add__';
+  static const _addBrand = '__add_brand__';
+
+  Future<void> _pickBrand() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.inventoryBrandPickTitle,
+      // A brand kept as plain text (a server with no brand list) has a name
+      // but no id: no option is its own.
+      selected: _brandId.isEmpty && _brandName.isNotEmpty ? null : _brandId,
+      options: [
+        LotOption('', l10n.inventoryBrandNone),
+        for (final brand in inventoryActiveBrands(_brands))
+          LotOption(brand.id, brand.name),
+        LotOption(_addBrand, l10n.inventoryBrandAddNew),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    if (picked == _addBrand) {
+      final made = await showInventoryBrandSheet(
+        context,
+        businessId: widget.businessId,
+        service: widget.service,
+      );
+      if (made == null || !mounted) return;
+      setState(() {
+        if (made.id.isNotEmpty) {
+          _brands.add(InventoryBrand(id: made.id, name: made.name));
+        }
+        _brandId = made.id;
+        _brandName = made.name;
+      });
+      return;
+    }
+    setState(() {
+      _brandId = picked;
+      _brandName = inventoryBrandById(_brands, picked)?.name ?? '';
+    });
+  }
 
   Future<void> _pickCategory() async {
     final l10n = AppLocalizations.of(context)!;
@@ -174,7 +247,27 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
     return null;
   }
 
-  Future<void> _save() async {
+  /// The form again, empty, with only the brand and the category kept.
+  void _startNext() {
+    for (final c in [_name, _price, _cost, _quantity, _lowStock, _photo]) {
+      c.clear();
+    }
+    for (final c in _stock.values) {
+      c.clear();
+    }
+    _submitted = false;
+    _nameFocus.requestFocus();
+    // The sheet may have been scrolled down to the buttons: bring the name
+    // back into view.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _nameFocus.context;
+      if (ctx != null && ctx.mounted) {
+        Scrollable.ensureVisible(ctx, duration: Duration.zero);
+      }
+    });
+  }
+
+  Future<void> _save({bool another = false}) async {
     if (_busy) return;
     final l10n = AppLocalizations.of(context)!;
     final draft = _draft;
@@ -198,8 +291,16 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
       } else {
         await widget.service.updateItem(widget.businessId, existing, draft);
       }
+      widget.onSaved?.call();
       if (!mounted) return;
       AppHaptics.commit();
+      if (another && existing == null) {
+        setState(() {
+          _justAdded = inventoryDisplayName(draft.brand, draft.name);
+          _startNext();
+        });
+        return;
+      }
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
@@ -236,14 +337,52 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
             busyLabel: l10n.inventorySaving,
             onTap: _save,
           ),
+          if (_creating) ...[
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton(
+              key: const Key('inv-form-save-another'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+                foregroundColor: AppColors.cobalt,
+                side: const BorderSide(color: AppColors.cobalt),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+              ),
+              onPressed: _busy ? null : () => _save(another: true),
+              child: Text(
+                l10n.inventorySaveAndAddAnother,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
         ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_justAdded.isNotEmpty) ...[
+            _AddedNote(
+              key: const Key('inv-form-added'),
+              text: l10n.inventoryProductAddedNext(_justAdded),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          LotPickerField(
+            key: const Key('inv-field-brand'),
+            label: l10n.inventoryFieldBrand,
+            value: _brandName,
+            placeholder: l10n.inventoryBrandNone,
+            onTap: _busy ? () {} : _pickBrand,
+          ),
+          const SizedBox(height: AppSpacing.md),
           TextField(
             key: const Key('inv-field-name'),
             controller: _name,
+            focusNode: _nameFocus,
             enabled: !_busy,
             textCapitalization: TextCapitalization.sentences,
             onChanged: changed,
@@ -358,6 +497,40 @@ class _InventoryItemFormSheetState extends State<InventoryItemFormSheet> {
               labelText: l10n.inventoryFieldPhoto,
               errorText: _errorFor(l10n, errors, ['photo_invalid']),
               errorMaxLines: 3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The line under a "save and add another": what was just saved.
+class _AddedNote extends StatelessWidget {
+  const _AddedNote({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.sage.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: AppColors.sage.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle_outline, size: 16, color: AppColors.sage),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                  fontSize: 13, height: 1.35, color: AppColors.ink),
             ),
           ),
         ],
@@ -520,7 +693,7 @@ class _InventoryStockSheetState extends State<InventoryStockSheet> {
     final l10n = AppLocalizations.of(context)!;
     return LotSheetShell(
       title: widget.add ? l10n.inventoryAddStock : l10n.inventorySetCount,
-      subtitle: widget.item.name,
+      subtitle: widget.item.displayName,
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -751,7 +924,7 @@ class _InventoryTransferSheetState extends State<InventoryTransferSheet> {
             : null);
     return LotSheetShell(
       title: l10n.inventoryTransfer,
-      subtitle: widget.item.name,
+      subtitle: widget.item.displayName,
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -906,7 +1079,7 @@ class _InventoryTagSheetState extends State<InventoryTagSheet> {
     final l10n = AppLocalizations.of(context)!;
     return LotSheetShell(
       title: l10n.inventoryPrintTags,
-      subtitle: '${widget.item.name} · ${widget.item.code}',
+      subtitle: '${widget.item.displayName} · ${widget.item.code}',
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,

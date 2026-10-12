@@ -29,6 +29,7 @@ const inventoryMaxStock = 1000000;
 const inventoryMaxSaleQuantity = 9999;
 const inventoryMaxName = 120;
 const inventoryMaxCategory = 60;
+const inventoryMaxBrand = 60;
 const inventoryMaxPhotoUrl = 500;
 const inventoryMaxNote = 200;
 const inventoryMinTagCopies = 1;
@@ -164,6 +165,16 @@ InventoryStock stockStatus({required int quantity, int? lowStockAt}) {
   return InventoryStock.ok;
 }
 
+/// "Brand name" when there is a brand, else the name alone. The `name` field
+/// of a branded product holds only the part after the brand.
+String inventoryDisplayName(String brand, String name) {
+  final b = brand.trim();
+  final n = name.trim();
+  if (b.isEmpty) return n;
+  if (n.isEmpty) return b;
+  return '$b $n';
+}
+
 class InventoryItem {
   const InventoryItem({
     required this.id,
@@ -176,6 +187,8 @@ class InventoryItem {
     this.lowStockAt,
     this.category = '',
     this.categoryId = '',
+    this.brand = '',
+    this.brandId = '',
     this.photoUrl = '',
     this.archived = false,
     this.countWasOff = false,
@@ -197,6 +210,8 @@ class InventoryItem {
         lowStockAt: _optionalInt(data['lowStockAt']),
         category: _text(data['category'], inventoryMaxCategory),
         categoryId: _text(data['categoryId'], 128),
+        brand: _text(data['brand'], inventoryMaxBrand),
+        brandId: _text(data['brandId'], 128),
         photoUrl: _text(data['photoUrl'], inventoryMaxPhotoUrl),
         archived: data['archived'] == true,
         countWasOff: data['countWasOff'] == true,
@@ -223,6 +238,12 @@ class InventoryItem {
   /// before categories existed has the name only.
   final String category;
   final String categoryId;
+
+  /// The brand's name as it was when chosen (a snapshot) and its id when the
+  /// product was linked to the business's brand list. Both blank: no brand.
+  /// An old server sends neither, which reads as no brand.
+  final String brand;
+  final String brandId;
   final String photoUrl;
   final bool archived;
   final bool countWasOff;
@@ -248,6 +269,8 @@ class InventoryItem {
         lowStockAt: lowStockAt,
         category: category,
         categoryId: categoryId,
+        brand: brand,
+        brandId: brandId,
         photoUrl: photoUrl,
         archived: archived,
         countWasOff: countWasOff ?? this.countWasOff,
@@ -256,6 +279,10 @@ class InventoryItem {
         updatedAt: updatedAt,
         createdByStaffId: createdByStaffId,
       );
+
+  /// What the product is called everywhere it is shown: the brand in front
+  /// ("Jordan 11"), or just the name when it has no brand.
+  String get displayName => inventoryDisplayName(brand, name);
 
   InventoryStock get stock =>
       stockStatus(quantity: quantity, lowStockAt: lowStockAt);
@@ -277,6 +304,8 @@ class InventorySaleLine {
     required this.soldPriceCents,
     this.costCents,
     this.countWasOff = false,
+    this.brand = '',
+    this.brandId = '',
   });
 
   factory InventorySaleLine.fromMap(Map<String, dynamic> data) =>
@@ -289,6 +318,8 @@ class InventorySaleLine {
         soldPriceCents: _int(data['soldPriceCents']),
         costCents: _optionalInt(data['costCents']),
         countWasOff: data['countWasOff'] == true,
+        brand: _text(data['brand'], inventoryMaxBrand),
+        brandId: _text(data['brandId'], 128),
       );
 
   final String itemId;
@@ -299,6 +330,14 @@ class InventorySaleLine {
   final int soldPriceCents;
   final int? costCents;
   final bool countWasOff;
+
+  /// The brand as it was at sale time (blank: none, or a sale from before
+  /// brands existed).
+  final String brand;
+  final String brandId;
+
+  /// "Brand name", the way the product reads on the shelf.
+  String get displayName => inventoryDisplayName(brand, name);
 
   int get totalCents => quantity * soldPriceCents;
 
@@ -464,21 +503,37 @@ List<InventoryItem> inventoryListing(
   bool showArchived = false,
   String categoryId = '',
   String categoryName = '',
+  String brandId = '',
 }) {
   final matched = [
     for (final item in items)
       if (item.archived == showArchived &&
           inventoryItemMatches(item, query) &&
-          inventoryItemInCategory(item, categoryId, categoryName))
+          inventoryItemInCategory(item, categoryId, categoryName) &&
+          inventoryItemInBrand(item, brandId))
         item,
   ];
   matched.sort((a, b) {
     if (a.needsAttention != b.needsAttention) {
       return a.needsAttention ? -1 : 1;
     }
-    return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
   });
   return matched;
+}
+
+/// The brand filter's "No brand" choice (a real brand id is never this).
+const inventoryNoBrandFilter = '__none__';
+
+/// Whether [item] passes the brand filter [brandId]: blank is every brand,
+/// [inventoryNoBrandFilter] the products with no brand, anything else that
+/// brand's id.
+bool inventoryItemInBrand(InventoryItem item, String brandId) {
+  if (brandId.isEmpty) return true;
+  if (brandId == inventoryNoBrandFilter) {
+    return item.brandId.isEmpty && item.brand.trim().isEmpty;
+  }
+  return item.brandId == brandId;
 }
 
 /// Whether [item] belongs to the category [categoryId] (named [categoryName]):
@@ -496,12 +551,15 @@ bool inventoryItemInCategory(
       item.category.trim().toLowerCase() == categoryName.trim().toLowerCase();
 }
 
-/// Name, category or code (the code with or without its dash, any case).
+/// Brand, name ("Jordan 11" matches as typed), category or code (the code with
+/// or without its dash, any case).
 bool inventoryItemMatches(InventoryItem item, String query) {
   final text = query.trim().toLowerCase();
   if (text.isEmpty) return true;
   final compact = text.replaceAll(RegExp('[^a-z0-9]'), '');
   return item.name.toLowerCase().contains(text) ||
+      item.brand.toLowerCase().contains(text) ||
+      item.displayName.toLowerCase().contains(text) ||
       item.category.toLowerCase().contains(text) ||
       item.code.toLowerCase().contains(text) ||
       (compact.length >= 2 &&
@@ -722,6 +780,8 @@ class InventoryItemDraft {
     this.lowStockAt = '',
     this.category = '',
     this.categoryId = '',
+    this.brand = '',
+    this.brandId = '',
     this.photoUrl = '',
     this.stock = const {},
   });
@@ -734,7 +794,19 @@ class InventoryItemDraft {
     lowStockAt: item.lowStockAt == null ? '' : '${item.lowStockAt}',
     category: item.category,
     categoryId: item.categoryId,
+    brand: item.brand,
+    brandId: item.brandId,
     photoUrl: item.photoUrl,
+  );
+
+  /// The same form with only the brand and the category kept: what "Save and
+  /// add another like it" reopens with. Name, price, cost, counts, low-stock
+  /// number and photo start empty.
+  InventoryItemDraft keepingBrandAndCategory() => InventoryItemDraft(
+    category: category,
+    categoryId: categoryId,
+    brand: brand,
+    brandId: brandId,
   );
 
   final String name;
@@ -747,6 +819,11 @@ class InventoryItemDraft {
   /// picked from the business's list.
   final String category;
   final String categoryId;
+
+  /// The brand's name and its id when it was picked from the business's list
+  /// (both blank: no brand).
+  final String brand;
+  final String brandId;
   final String photoUrl;
 
   /// Starting counts per store (store id to what was typed), for a business
@@ -861,6 +938,8 @@ Map<String, Object?> createInventoryItemRequest(
   final low = readWholeNumber(draft.lowStockAt);
   final category = draft.category.trim();
   final categoryId = draft.categoryId.trim();
+  final brand = draft.brand.trim();
+  final brandId = draft.brandId.trim();
   final photo = draft.photoUrl.trim();
   return {
     'businessId': businessId,
@@ -883,6 +962,13 @@ Map<String, Object?> createInventoryItemRequest(
       'categoryId': categoryId
     else if (category.isNotEmpty)
       'category': category,
+    // Same for a brand: by id from the list, by name when typed new, and
+    // nothing at all when there is none (a request without brand fields is
+    // exactly the v2 request).
+    if (brandId.isNotEmpty)
+      'brandId': brandId
+    else if (brand.isNotEmpty)
+      'brand': brand,
     if (photo.isNotEmpty) 'photoUrl': photo,
   };
 }
@@ -904,7 +990,16 @@ Map<String, Object?> updateInventoryItemRequest(
   final name = draft.name.trim();
   final category = draft.category.trim();
   final categoryId = draft.categoryId.trim();
+  final brand = draft.brand.trim();
+  final brandId = draft.brandId.trim();
   final photo = draft.photoUrl.trim();
+  // A picked brand changes by id, a typed one by name, a cleared one sends
+  // both fields empty. Nothing is sent while it is unchanged.
+  final brandChanged = brandId.isNotEmpty
+      ? brandId != existing.brandId
+      : brand.isNotEmpty
+      ? brand != existing.brand
+      : existing.brandId.isNotEmpty || existing.brand.isNotEmpty;
   // A picked category changes by id; a cleared one (or an old product's typed
   // name) by name, "" clearing it - the shape a v1 server reads.
   final categoryChanged = categoryId.isNotEmpty
@@ -922,6 +1017,12 @@ Map<String, Object?> updateInventoryItemRequest(
         'categoryId': categoryId
       else
         'category': category,
+    if (brandChanged)
+      if (brandId.isNotEmpty)
+        'brandId': brandId
+      else if (brand.isNotEmpty)
+        'brand': brand
+      else ...{'brand': '', 'brandId': ''},
     if (photo != existing.photoUrl) 'photoUrl': photo,
   };
 }
@@ -1185,6 +1286,24 @@ class InventoryCategorySummary {
   final int profitCents;
 }
 
+/// One line of the "By brand" block: what a brand sold.
+class InventoryBrandSummary {
+  const InventoryBrandSummary({
+    required this.brandId,
+    required this.name,
+    this.itemsSold = 0,
+    this.revenueCents = 0,
+    this.profitCents = 0,
+  });
+
+  /// Blank for the "No brand" line.
+  final String brandId;
+  final String name;
+  final int itemsSold;
+  final int revenueCents;
+  final int profitCents;
+}
+
 /// One line of the "By store" block: what a store sold.
 class InventoryStoreSummary {
   const InventoryStoreSummary({
@@ -1216,6 +1335,17 @@ List<InventoryCategorySummary> sortCategoriesByRevenue(
         : a.name.toLowerCase().compareTo(b.name.toLowerCase());
   });
 
+/// Brands by what they brought in, biggest first (ties by name).
+List<InventoryBrandSummary> sortBrandsByRevenue(
+  Iterable<InventoryBrandSummary> rows,
+) => rows.toList()
+  ..sort((a, b) {
+    final byMoney = b.revenueCents.compareTo(a.revenueCents);
+    return byMoney != 0
+        ? byMoney
+        : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  });
+
 class InventorySummary {
   const InventorySummary({
     this.salesCount = 0,
@@ -1228,6 +1358,7 @@ class InventorySummary {
     this.low = const [],
     this.countWasOff = const [],
     this.byCategory = const [],
+    this.byBrand = const [],
     this.byStore = const [],
   });
 
@@ -1289,6 +1420,17 @@ class InventorySummary {
             profitCents: _int(row['profitCents']),
           ),
       ]),
+      // Absent from a v2 answer: no "By brand" block.
+      byBrand: sortBrandsByRevenue([
+        for (final row in rows('byBrand'))
+          InventoryBrandSummary(
+            brandId: _text(row['brandId'], 128),
+            name: _text(row['name'], inventoryMaxName),
+            itemsSold: _int(row['itemsSold']),
+            revenueCents: _int(row['revenueCents']),
+            profitCents: _int(row['profitCents']),
+          ),
+      ]),
       byStore: [
         for (final row in rows('byStore'))
           InventoryStoreSummary(
@@ -1316,6 +1458,9 @@ class InventorySummary {
   /// What each category sold, biggest first (voided sales left out), and what
   /// each store sold (only for someone who sees every store).
   final List<InventoryCategorySummary> byCategory;
+
+  /// What each brand sold, biggest first; the "No brand" line has a blank id.
+  final List<InventoryBrandSummary> byBrand;
   final List<InventoryStoreSummary> byStore;
 }
 
@@ -1348,9 +1493,15 @@ enum InventoryFailure {
   sameStore,
   insufficientStock,
   ownerOnly,
+
+  // Brands (v3).
+  brandNameRequired,
+  brandNameTaken,
+  brandNotFound,
+  brandTooLong,
 }
 
-/// The v2 refusal codes (`details.reason`) and the failure each one is.
+/// The v2 and v3 refusal codes (`details.reason`) and the failure each one is.
 const inventoryFailureReasons = <String, InventoryFailure>{
   'category_name_required': InventoryFailure.categoryNameRequired,
   'category_name_taken': InventoryFailure.categoryNameTaken,
@@ -1364,6 +1515,10 @@ const inventoryFailureReasons = <String, InventoryFailure>{
   'same_store': InventoryFailure.sameStore,
   'insufficient_stock': InventoryFailure.insufficientStock,
   'owner_only': InventoryFailure.ownerOnly,
+  'brand_name_required': InventoryFailure.brandNameRequired,
+  'brand_name_taken': InventoryFailure.brandNameTaken,
+  'brand_not_found': InventoryFailure.brandNotFound,
+  'brand_too_long': InventoryFailure.brandTooLong,
 };
 
 /// Reads a failure from the parts of a `FirebaseFunctionsException`: its

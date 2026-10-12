@@ -89,6 +89,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
     businessId: widget.businessId,
     access: widget.access,
     watchCategories: false,
+    watchBrands: false,
     onChange: () {
       if (!mounted) return;
       setState(_refreshView);
@@ -257,7 +258,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
     if (item.archived) {
       AppHaptics.refuse();
       setState(() => _note =
-          (text: l10n.inventoryItemArchivedScan(item.name), error: true));
+          (text: l10n.inventoryItemArchivedScan(item.displayName), error: true));
       return;
     }
     AppHaptics.commit();
@@ -270,7 +271,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
       _basket = _basket.addScan(item);
       _failure = null;
       _foreignQr = false;
-      _note = (text: l10n.inventoryAddedToBasket(item.name), error: false);
+      _note = (text: l10n.inventoryAddedToBasket(item.displayName), error: false);
     });
   }
 
@@ -659,7 +660,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
       );
 
   Widget _saleDone(AppLocalizations l10n, InventorySaleResult result) {
-    final names = {for (final l in _soldLines) l.item.id: l.item.name};
+    final names = {for (final l in _soldLines) l.item.id: l.item.displayName};
     return Container(
       key: const Key('inv-sale-done'),
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -706,7 +707,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
               child: Text(
                 l10n.inventorySaleLine(
                   line.quantity,
-                  line.item.name,
+                  line.item.displayName,
                   formatLotCents(line.soldPriceCents),
                 ),
                 style: const TextStyle(fontSize: 13, color: AppColors.ink),
@@ -942,7 +943,7 @@ class _HitRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.name,
+                    item.displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -1074,7 +1075,7 @@ class _BasketLineTileState extends State<_BasketLineTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      line.item.name,
+                      line.item.displayName,
                       key: Key('inv-line-name-$id'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

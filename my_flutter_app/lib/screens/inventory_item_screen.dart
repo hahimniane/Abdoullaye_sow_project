@@ -66,6 +66,7 @@ class _InventoryItemScreenState extends State<InventoryItemScreen> {
     businessId: widget.businessId,
     access: widget.access,
     watchCategories: true,
+    watchBrands: true,
     onChange: () {
       if (!mounted) return;
       setState(() {});
@@ -198,6 +199,7 @@ class _InventoryItemScreenState extends State<InventoryItemScreen> {
       existing: item,
       service: widget.service,
       categories: _watcher.categories,
+      brands: _watcher.brands,
       stores: _watcher.context,
     );
     if (saved == true && mounted) {
@@ -282,7 +284,7 @@ class _InventoryItemScreenState extends State<InventoryItemScreen> {
       body: Column(
         children: [
           InventoryHeader(
-            title: item?.name ?? l10n.inventoryProductTitle,
+            title: item?.displayName ?? l10n.inventoryProductTitle,
             subtitle: item?.code,
           ),
           Expanded(
@@ -405,6 +407,9 @@ class _InventoryItemScreenState extends State<InventoryItemScreen> {
               if (item.costCents != null)
                 _fact(l10n.inventoryCost, formatLotCents(item.costCents!)),
               _fact(l10n.inventoryTagCode, item.code),
+              if (item.brand.isNotEmpty)
+                _fact(l10n.inventoryBrand, item.brand,
+                    key: const Key('inv-item-brand')),
               if (item.category.isNotEmpty || category != null)
                 _fact(l10n.inventoryCategory,
                     category?.name ?? item.category),

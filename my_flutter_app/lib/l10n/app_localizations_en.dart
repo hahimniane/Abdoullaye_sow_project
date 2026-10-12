@@ -11036,7 +11036,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inventorySalesTitle => 'Sales';
 
   @override
-  String get inventorySearchHint => 'Search by name, category or code';
+  String get inventorySearchHint => 'Search by brand, name, category or code';
 
   @override
   String get inventoryShowArchived => 'Show archived';
@@ -11623,6 +11623,84 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inventoryManageCategories => 'Manage categories';
+
+  @override
+  String get inventoryBrand => 'Brand';
+
+  @override
+  String get inventoryFieldBrand => 'Brand (optional)';
+
+  @override
+  String get inventoryBrandNone => 'No brand';
+
+  @override
+  String get inventoryBrandAddNew => 'Add a new brand';
+
+  @override
+  String get inventoryBrandNameLabel => 'Brand name';
+
+  @override
+  String get inventoryBrandCreate => 'Add brand';
+
+  @override
+  String get inventoryBrandAddedDone => 'Brand added.';
+
+  @override
+  String get inventoryBrandPickTitle => 'Choose a brand';
+
+  @override
+  String get inventoryBrandAll => 'All brands';
+
+  @override
+  String get inventoryBrandsTitle => 'Brands';
+
+  @override
+  String get inventoryBrandsEmpty =>
+      'No brands yet. Add one for the makers you stock, like Jordan or Nike.';
+
+  @override
+  String get inventoryBrandRename => 'Rename';
+
+  @override
+  String get inventoryBrandRenameTitle => 'Rename brand';
+
+  @override
+  String get inventoryBrandRenamedDone => 'Brand renamed.';
+
+  @override
+  String get inventoryBrandArchivedDone => 'Brand archived.';
+
+  @override
+  String get inventoryBrandRestoredDone => 'Brand restored.';
+
+  @override
+  String get inventoryByBrandTitle => 'By brand';
+
+  @override
+  String get inventoryErrBrandName => 'Enter a brand name.';
+
+  @override
+  String get inventoryManageBrands => 'Manage brands';
+
+  @override
+  String get inventoryFailBrandNameTaken =>
+      'You already have a brand with that name.';
+
+  @override
+  String get inventoryFailBrandNotFound =>
+      'That brand no longer exists. Pick another one.';
+
+  @override
+  String get inventoryFailBrandTooLong =>
+      'That brand name is too long. Use 60 characters or fewer.';
+
+  @override
+  String get inventorySaveAndAddAnother => 'Save and add another like it';
+
+  @override
+  String inventoryProductAddedNext(String name) {
+    return 'Added $name. Ready for the next one.';
+  }
 
   @override
   String get inventoryStoreFilterAll => 'All stores';

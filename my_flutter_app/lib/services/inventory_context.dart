@@ -4,7 +4,7 @@ import 'inventory_service.dart';
 import 'inventory_stores.dart';
 
 /// What every inventory screen needs to know beyond the products: the
-/// business's categories and stores, and - only once there are several stores
+/// business's categories, brands and stores, and - only once there are several stores
 /// - the per-store counts the person may read.
 ///
 /// One small owner of those subscriptions, so each screen opens them in
@@ -20,6 +20,7 @@ class InventoryContextWatcher {
     required this.onChange,
     this.access = const InventoryAccess.owner(),
     this.watchCategories = true,
+    this.watchBrands = true,
     this.safety = const Duration(seconds: 8),
   });
 
@@ -28,11 +29,13 @@ class InventoryContextWatcher {
   final InventoryAccess access;
   final void Function() onChange;
   final bool watchCategories;
+  final bool watchBrands;
 
   /// How long to wait for the stores before treating them as answered.
   final Duration safety;
 
   List<InventoryCategory> categories = const [];
+  List<InventoryBrand> brands = const [];
   List<InventoryStore> stores = const [];
   InventoryStockIndex stock = InventoryStockIndex.empty;
 
@@ -41,6 +44,7 @@ class InventoryContextWatcher {
   bool storesLoaded = false;
 
   StreamSubscription<Object?>? _categoriesSub;
+  StreamSubscription<Object?>? _brandsSub;
   StreamSubscription<Object?>? _storesSub;
   StreamSubscription<Object?>? _stockSub;
   String? _stockKey;
@@ -60,6 +64,15 @@ class InventoryContextWatcher {
       _categoriesSub = source.watchCategories(businessId).listen((rows) {
         if (_disposed) return;
         categories = rows;
+        onChange();
+      }, onError: (_) {});
+    }
+    if (watchBrands) {
+      // A server from before brands (or a read the rules refuse) leaves the
+      // list empty: no brand row, no brand picker choices.
+      _brandsSub = source.watchBrands(businessId).listen((rows) {
+        if (_disposed) return;
+        brands = rows;
         onChange();
       }, onError: (_) {});
     }
@@ -109,6 +122,7 @@ class InventoryContextWatcher {
     _disposed = true;
     _timer?.cancel();
     _categoriesSub?.cancel();
+    _brandsSub?.cancel();
     _storesSub?.cancel();
     _stockSub?.cancel();
   }

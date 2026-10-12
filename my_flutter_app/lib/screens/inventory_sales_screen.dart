@@ -54,6 +54,7 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     businessId: widget.businessId,
     access: widget.access,
     watchCategories: false,
+    watchBrands: false,
     onChange: () {
       if (!mounted) return;
       setState(() {});
@@ -387,13 +388,13 @@ class InventorySaleCard extends StatelessWidget {
                   line.priceChanged
                       ? l10n.inventorySaleLineChanged(
                           line.quantity,
-                          line.name,
+                          line.displayName,
                           formatLotCents(line.soldPriceCents),
                           formatLotCents(line.listPriceCents),
                         )
                       : l10n.inventorySaleLine(
                           line.quantity,
-                          line.name,
+                          line.displayName,
                           formatLotCents(line.soldPriceCents),
                         ),
                   if (line.countWasOff) l10n.inventorySaleCountOff,

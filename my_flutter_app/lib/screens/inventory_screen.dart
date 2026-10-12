@@ -15,6 +15,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import 'containers_screen.dart' show ContainerActionButton;
+import 'inventory_brands_screen.dart';
 import 'inventory_categories_screen.dart';
 import 'inventory_item_screen.dart';
 import 'inventory_item_sheets.dart';
@@ -26,8 +27,9 @@ import 'inventory_stores_screen.dart';
 /// products with search - low stock first. From here staff add a product, open
 /// one (stock, tags, history), start a sale, or see the sales.
 ///
-/// Products can be filtered by category, and the Today numbers carry a
-/// "By category" block. In a business with several stores the counts are per
+/// Products can be filtered by category and by brand, and the Today numbers
+/// carry a "By category" and a "By brand" block. A product reads "Brand name"
+/// everywhere in the list. In a business with several stores the counts are per
 /// store: staff see their own store, the owner and "works in all stores" staff
 /// see a store filter and a "By store" block - and the owner reaches the
 /// stores manager from the header. A single-store business shows none of it.
@@ -83,6 +85,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
   /// looked at; '' is "all".
   String _categoryFilter = '';
   String _storeFilter = '';
+
+  /// The brand being looked at: '' is every brand, [inventoryNoBrandFilter]
+  /// the products with none, anything else a brand id.
+  String _brandFilter = '';
 
   InventorySummary? _summary;
   bool _summaryLoading = true;
@@ -194,6 +200,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       businessId: widget.businessId,
       service: widget.service,
       categories: _watcher.categories,
+      brands: _watcher.brands,
       stores: _watcher.context,
     );
     if (saved == true && mounted) {
@@ -208,6 +215,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final stores = _watcher.context;
     final categories = inventoryActiveCategories(_watcher.categories);
     final category = inventoryCategoryById(categories, _categoryFilter);
+    final brands = inventoryActiveBrands(_watcher.brands);
+    // A filter on a brand that was archived (or is gone) falls back to all.
+    final brandFilter =
+        _brandFilter == inventoryNoBrandFilter ||
+            inventoryBrandById(brands, _brandFilter) != null
+        ? _brandFilter
+        : '';
     // One store's count in place of the total, for staff tied to a store and
     // for anyone who has narrowed to one store.
     final viewItems = inventoryViewItems(
@@ -222,6 +236,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       showArchived: _showArchived,
       categoryId: category?.id ?? '',
       categoryName: category?.name ?? '',
+      brandId: brandFilter,
     );
     final searching = _search.text.trim().isNotEmpty;
     // The stored products by id (their total counts), once per build, for the
@@ -242,6 +257,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 icon: const Icon(Icons.category_outlined),
                 onPressed: () => _push(
                   InventoryCategoriesScreen(
+                    businessId: widget.businessId,
+                    source: _source,
+                    service: widget.service,
+                  ),
+                ),
+              ),
+              IconButton(
+                key: const Key('inv-open-brands'),
+                tooltip: l10n.inventoryManageBrands,
+                icon: const Icon(Icons.sell_outlined),
+                onPressed: () => _push(
+                  InventoryBrandsScreen(
                     businessId: widget.businessId,
                     source: _source,
                     service: widget.service,
@@ -383,6 +410,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ],
                     selected: category?.id ?? '',
                     onSelected: (id) => setState(() => _categoryFilter = id),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+                if (brands.isNotEmpty) ...[
+                  InventoryChoiceChips(
+                    keyPrefix: 'inv-brand-filter',
+                    options: [
+                      (id: '', label: l10n.inventoryBrandAll),
+                      (
+                        id: inventoryNoBrandFilter,
+                        label: l10n.inventoryBrandNone,
+                      ),
+                      for (final b in brands) (id: b.id, label: b.name),
+                    ],
+                    selected: brandFilter,
+                    onSelected: (id) => setState(() => _brandFilter = id),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                 ],
@@ -540,6 +583,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ].join(' · '),
                 ),
             ],
+            if (summary.byBrand.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              _sectionLabel(l10n.inventoryByBrandTitle),
+              for (final row in summary.byBrand)
+                _MoneyRow(
+                  key: ValueKey(
+                    'inv-bybrand-${row.brandId.isEmpty ? 'none' : row.brandId}',
+                  ),
+                  name: row.brandId.isEmpty || row.name.isEmpty
+                      ? l10n.inventoryBrandNone
+                      : row.name,
+                  money: formatLotCents(row.revenueCents),
+                  detail: [
+                    l10n.inventoryItemsSoldCount(row.itemsSold),
+                    '${l10n.inventoryProfit} ${formatLotCents(row.profitCents)}',
+                  ].join(' · '),
+                ),
+            ],
             if (stores.viewerSeesAll && summary.byStore.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               _sectionLabel(l10n.inventoryByStoreTitle),
@@ -579,7 +640,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               for (final row in summary.countWasOff)
                 _AttentionRow(
                   key: ValueKey('inv-off-${row.itemId}'),
-                  name: row.name,
+                  name: _nameOf(row.itemId, row.name),
                   trailing: '',
                   color: AppColors.warn,
                   onTap: () => _openItem(row.itemId),
@@ -593,11 +654,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   /// A low-stock row's name, with its store when the business has several.
   String _lowName(InventoryStoreContext stores, InventoryLowStock row) {
-    if (!stores.multi) return row.name;
+    final name = _nameOf(row.itemId, row.name);
+    if (!stores.multi) return name;
     final store = row.storeName.isNotEmpty
         ? row.storeName
         : stores.storeName(row.storeId);
-    return store.isEmpty ? row.name : '${row.name} · $store';
+    return store.isEmpty ? name : '$name · $store';
+  }
+
+  /// A product as the shop says it ("Jordan 11"): the summary sends the name
+  /// alone, so the brand comes from the product itself when it is loaded.
+  String _nameOf(String itemId, String fallback) {
+    for (final item in _items) {
+      if (item.id == itemId) return item.displayName;
+    }
+    return fallback;
   }
 
   Widget _sectionLabel(String text) => Padding(
@@ -776,7 +847,7 @@ class _ItemRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.name,
+                    item.displayName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
