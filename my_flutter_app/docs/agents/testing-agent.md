@@ -451,3 +451,17 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   counts, a month's parking bills) - add every new query shape there.
   `test/scaling_source_contract_test.dart` forbids raw record-collection
   listeners and streams built inside `build` in the audited widgets.
+- Label printing (Phomemo M221): raster packing is pinned byte for byte to
+  the developer's reference tool via `test/fixtures/m221_pack_fixture.json`
+  (regenerate only from `laawol-deploy-logs/m221/m221.py`, never from the
+  Dart code). QR codes are verified by reading them back with the
+  independent reader `test/fixtures/qr_reader.dart` (format BCH, unmasking,
+  Reed-Solomon syndromes), not by comparing to another encoder's matrix:
+  valid encoders legitimately pick different masks. The whole print
+  sequence (subscribe before write, order, chunk sizes, done-frame waits,
+  copies, cancel, reconnect) runs against `FakePrinterTransport`; real
+  printing still needs the shop's printer and is not covered by CI.
+- Anything that reads `SharedPreferences` with a safety timeout leaves a
+  pending timer in widget tests unless the test calls
+  `SharedPreferences.setMockInitialValues` first.
+

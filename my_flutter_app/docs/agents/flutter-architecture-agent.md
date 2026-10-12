@@ -293,3 +293,12 @@ Add future project conventions and repeated architectural decisions here.
   as offline. iOS Simulator 26.x reports `none` on cold start while the
   network works. `AppGateProvider.localEmulator()` stays a full bypass for
   Maestro only — do not disable the gate for a physically offline device.
+- Bluetooth LE goes through `flutter_blue_plus` pinned to 1.36.8, the last
+  BSD-3 release: 2.x needs a paid commercial licence for for-profit use and
+  pings a licence server at build time. Do not bump it without the owner's
+  decision. Keep radio code behind `PrinterTransport` (`label_printer.dart`)
+  so everything else is testable with `test/fixtures/fake_printer.dart`.
+- `SnackBar` with an `action` persists until tapped (Flutter's `persist`
+  defaults to true then); `showSuccessSnackBar(actionLabel:, onAction:)`
+  passes `persist: false` and a longer duration.
+
