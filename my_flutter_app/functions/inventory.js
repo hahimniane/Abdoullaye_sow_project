@@ -25,6 +25,7 @@ const INVENTORY_PAYMENT_METHODS = INVOICE_PAYMENT_METHODS;
 
 const MAX_NAME = 120;
 const MAX_CATEGORY = 60;
+const MAX_BRAND = 60;
 const MAX_PHOTO_URL = 1000;
 const MAX_NOTE = 200;
 const MAX_REASON = 300;
@@ -40,6 +41,7 @@ const MAX_PHONE = 40;
 /** The name the implicit first store gets when the owner adds a second one. */
 const MAIN_STORE_NAME = "Main store";
 const UNCATEGORIZED = "Uncategorized";
+const NO_BRAND = "No brand";
 
 const MOVEMENT_TYPES = Object.freeze(
     ["initial", "add", "set", "sale", "void", "transfer_out", "transfer_in"]);
@@ -91,6 +93,10 @@ const INVENTORY_MESSAGES = Object.freeze({
   category_name_required: "Give the category a name.",
   category_name_taken: "A category with that name already exists.",
   category_not_found: "That category was not found.",
+  brand_name_required: "Give the brand a name.",
+  brand_name_taken: "A brand with that name already exists.",
+  brand_not_found: "That brand was not found.",
+  brand_too_long: `A brand can be at most ${MAX_BRAND} characters.`,
   store_name_required: "Give the store a name.",
   store_field_too_long: `A store address can be at most ${MAX_ADDRESS} ` +
     `characters and a phone number at most ${MAX_PHONE}.`,
@@ -113,13 +119,15 @@ const INVENTORY_MESSAGES = Object.freeze({
 /** Codes answered as `not-found`; the rest of the state refusals below. */
 const NOT_FOUND_CODES = Object.freeze(
     ["business_not_found", "item_not_found", "sale_not_found",
-      "category_not_found", "store_not_found", "user_not_found"]);
+      "category_not_found", "brand_not_found", "store_not_found",
+      "user_not_found"]);
 const PRECONDITION_CODES = Object.freeze(
     ["service_disabled", "item_archived", "sale_voided", "store_archived",
       "store_has_stock", "last_store_active", "home_store_required",
       "insufficient_stock"]);
 const PERMISSION_CODES = Object.freeze(["store_not_allowed", "owner_only"]);
-const ALREADY_EXISTS_CODES = Object.freeze(["category_name_taken"]);
+const ALREADY_EXISTS_CODES = Object.freeze(
+    ["category_name_taken", "brand_name_taken"]);
 
 /**
  * @param {string} code A refusal code.
@@ -224,6 +232,13 @@ function itemFieldErrors(data, requireAll) {
       typeof row.categoryId !== "string") {
     errors.push("category_not_found");
   }
+  if (String(row.brand ?? "").trim().length > MAX_BRAND) {
+    errors.push("brand_too_long");
+  }
+  if (row.brandId !== undefined && row.brandId !== null &&
+      typeof row.brandId !== "string") {
+    errors.push("brand_not_found");
+  }
   if (!photoUrlOk(row.photoUrl)) errors.push("photo_url_invalid");
   return errors;
 }
@@ -283,7 +298,7 @@ function validateItemUpdate(data) {
     return ["quantity_not_editable"];
   }
   const fields = ["name", "priceCents", "costCents", "lowStockAt", "category",
-    "categoryId", "photoUrl"];
+    "categoryId", "brand", "brandId", "photoUrl"];
   if (!fields.some((key) => row[key] !== undefined)) {
     return ["nothing_to_update"];
   }
@@ -295,12 +310,15 @@ function validateItemUpdate(data) {
  * minted, `documentToken`).
  *
  * @param {object} data Validated createInventoryItem data.
- * @param {object} extra {businessId, code, uid, quantity?, category?}:
- *   `quantity` (the total, when it comes from a per-store map) and
- *   `category` ({categoryId, name}, once resolved) replace the raw fields.
+ * @param {object} extra {businessId, code, uid, quantity?, category?, brand?}:
+ *   `quantity` (the total, when it comes from a per-store map),
+ *   `category` ({categoryId, name}) and `brand` ({brandId, name}), once
+ *   resolved, replace the raw fields. A product made without a brand stores
+ *   `brandId: ""` and `brand: ""`.
  * @return {object} The stored fields.
  */
-function itemCreateRecord(data, {businessId, code, uid, quantity, category}) {
+function itemCreateRecord(data, {businessId, code, uid, quantity, category,
+  brand}) {
   return {
     businessId,
     name: text(data.name, MAX_NAME),
@@ -313,6 +331,8 @@ function itemCreateRecord(data, {businessId, code, uid, quantity, category}) {
     category: category ? text(category.name, MAX_CATEGORY) :
       text(data.category, MAX_CATEGORY),
     categoryId: category ? text(category.categoryId, 200) : "",
+    brandId: brand ? text(brand.brandId, 200) : "",
+    brand: brand ? text(brand.name, MAX_BRAND) : "",
     photoUrl: text(data.photoUrl, MAX_PHOTO_URL),
     archived: false,
     countWasOff: false,
@@ -356,6 +376,7 @@ const FIELD_LABELS = Object.freeze({
   costCents: {label: "Cost", money: true},
   lowStockAt: {label: "Low-stock level"},
   category: {label: "Category"},
+  brand: {label: "Brand"},
   photoUrl: {label: "Photo"},
 });
 
@@ -597,6 +618,9 @@ function planSale(lines, items) {
       // even if the product moves to another category later.
       categoryId: text(item.categoryId, 200),
       category: text(item.category, MAX_CATEGORY),
+      // Same for the brand (v3): the report reads what the line sold under.
+      brandId: text(item.brandId, 200),
+      brand: text(item.brand, MAX_BRAND),
       listPriceCents: Number(item.priceCents) || 0,
       soldPriceCents: line.soldPriceCents,
       costCents: item.costCents === null || item.costCents === undefined ?
@@ -958,6 +982,61 @@ function categoryKeyDocId(businessId, nameKey) {
 }
 
 // ---------------------------------------------------------------------------
+// Brands (v3): the same list-plus-lock design as categories.
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {*} name A brand name as typed.
+ * @return {string} Its key (same rule as a category's): two names with the
+ *   same key are the same brand.
+ */
+function brandNameKey(name) {
+  return categoryNameKey(name);
+}
+
+/**
+ * @param {*} name A brand name as typed.
+ * @return {string} The name as stored: trimmed, inner spaces collapsed.
+ */
+function brandDisplayName(name) {
+  return categoryDisplayName(name);
+}
+
+/**
+ * @param {*} name A brand name as typed.
+ * @return {string[]} Refusal codes.
+ */
+function validateBrandName(name) {
+  const clean = brandDisplayName(name);
+  if (!clean) return ["brand_name_required"];
+  if (clean.length > MAX_BRAND) return ["brand_too_long"];
+  return [];
+}
+
+/**
+ * The lock document that keeps one brand per name in a business.
+ *
+ * @param {string} businessId The business.
+ * @param {string} nameKey brandNameKey of the name.
+ * @return {string} A 40-character id.
+ */
+function brandKeyDocId(businessId, nameKey) {
+  return categoryKeyDocId(businessId, nameKey);
+}
+
+/**
+ * How a product reads in a list: brand in front, then the name.
+ *
+ * @param {object} item A product (or sale line) with `name` and `brand`.
+ * @return {string} "Jordan 11", or just the name without a brand.
+ */
+function itemDisplayName(item) {
+  const brand = text(item?.brand, MAX_BRAND);
+  const name = text(item?.name, MAX_NAME);
+  return brand ? `${brand} ${name}`.trim() : name;
+}
+
+// ---------------------------------------------------------------------------
 // Stores and who may use them (v2).
 // ---------------------------------------------------------------------------
 
@@ -1315,41 +1394,50 @@ function lineIsLegacyCategory(line) {
 }
 
 /**
- * The sales figures per category, voided sales left out, all categories that
- * sold (not capped), biggest revenue first.
+ * Whether a sale's line lacks the brand it was sold under (written before
+ * v3). Such a line is read through the product's current brand instead.
+ *
+ * @param {object} line A stored sale line.
+ * @return {boolean} True for a line written without a snapshot.
+ */
+function lineIsLegacyBrand(line) {
+  return !line || (!("brandId" in line) && !("brand" in line));
+}
+
+/**
+ * The sales figures grouped by one label (category or brand), voided sales
+ * left out, everything that sold (not capped), biggest revenue first.
  *
  * @param {object[]} sales Stored sales.
- * @param {object} ctx {categories: Array<{id, name}>, items: Map<string,
- *   object>}: the business's categories and its products (for lines with no
- *   snapshot).
- * @return {object[]} [{categoryId, name, itemsSold, revenueCents,
- *   profitCents}]; categoryId "" is "Uncategorized".
+ * @param {object} cfg {idField, nameField, max, empty, isLegacy, lists, items}
+ * @return {object[]} [{<idField>, name, itemsSold, revenueCents,
+ *   profitCents}]; id "" is the `empty` label.
  */
-function summarizeByCategory(sales, {categories = [], items = new Map()}) {
+function summarizeByLabel(sales, cfg) {
+  const {idField, nameField, max, empty, isLegacy, lists, items} = cfg;
   const names = new Map();
   const keyToId = new Map();
-  for (const category of categories) {
-    names.set(category.id, category.name);
-    keyToId.set(categoryNameKey(category.name), category.id);
+  for (const entry of lists) {
+    names.set(entry.id, entry.name);
+    keyToId.set(categoryNameKey(entry.name), entry.id);
   }
   const groups = new Map();
   for (const sale of Array.isArray(sales) ? sales : []) {
     if (!sale || sale.voided === true) continue;
     for (const line of Array.isArray(sale.lines) ? sale.lines : []) {
-      let id = text(line.categoryId, 200);
-      let name = text(line.category, MAX_CATEGORY);
-      if (lineIsLegacyCategory(line)) {
+      let id = text(line[idField], 200);
+      let name = text(line[nameField], max);
+      if (isLegacy(line)) {
         const item = items.get(line.itemId);
-        id = text(item?.categoryId, 200);
-        name = text(item?.category, MAX_CATEGORY);
+        id = text(item?.[idField], 200);
+        name = text(item?.[nameField], max);
       }
       if (!id && name) id = keyToId.get(categoryNameKey(name)) || "";
       const key = id || (name ? `text:${categoryNameKey(name)}` : "");
-      const label = id ? (names.get(id) || name || UNCATEGORIZED) :
-        (name || UNCATEGORIZED);
+      const label = id ? (names.get(id) || name || empty) : (name || empty);
       const quantity = Number(line.quantity) || 0;
       const revenue = quantity * (Number(line.soldPriceCents) || 0);
-      const entry = groups.get(key) || {categoryId: id, name: label,
+      const entry = groups.get(key) || {id, name: label,
         itemsSold: 0, revenueCents: 0, knownRevenue: 0, costCents: 0};
       entry.itemsSold += quantity;
       entry.revenueCents += revenue;
@@ -1361,11 +1449,45 @@ function summarizeByCategory(sales, {categories = [], items = new Map()}) {
     }
   }
   return [...groups.values()]
-      .map((e) => ({categoryId: e.categoryId, name: e.name,
+      .map((e) => ({[idField]: e.id, name: e.name,
         itemsSold: e.itemsSold, revenueCents: e.revenueCents,
         profitCents: e.knownRevenue - e.costCents}))
       .sort((a, b) => b.revenueCents - a.revenueCents ||
         a.name.localeCompare(b.name));
+}
+
+/**
+ * The sales figures per category, voided sales left out, all categories that
+ * sold (not capped), biggest revenue first.
+ *
+ * @param {object[]} sales Stored sales.
+ * @param {object} ctx {categories: Array<{id, name}>, items: Map<string,
+ *   object>}: the business's categories and its products (for lines with no
+ *   snapshot).
+ * @return {object[]} [{categoryId, name, itemsSold, revenueCents,
+ *   profitCents}]; categoryId "" is "Uncategorized".
+ */
+function summarizeByCategory(sales, {categories = [], items = new Map()}) {
+  return summarizeByLabel(sales, {
+    idField: "categoryId", nameField: "category", max: MAX_CATEGORY,
+    empty: UNCATEGORIZED, isLegacy: lineIsLegacyCategory,
+    lists: categories, items});
+}
+
+/**
+ * The sales figures per brand (v3): the same rules as per category.
+ *
+ * @param {object[]} sales Stored sales.
+ * @param {object} ctx {brands: Array<{id, name}>, items: Map<string,
+ *   object>}: the business's brands and its products (for lines written
+ *   before brands existed).
+ * @return {object[]} [{brandId, name, itemsSold, revenueCents,
+ *   profitCents}]; brandId "" is "No brand".
+ */
+function summarizeByBrand(sales, {brands = [], items = new Map()}) {
+  return summarizeByLabel(sales, {
+    idField: "brandId", nameField: "brand", max: MAX_BRAND,
+    empty: NO_BRAND, isLegacy: lineIsLegacyBrand, lists: brands, items});
 }
 
 /**
@@ -1529,6 +1651,8 @@ module.exports = {
   MAX_PHONE,
   MAIN_STORE_NAME,
   UNCATEGORIZED,
+  NO_BRAND,
+  MAX_BRAND,
   MOVEMENT_TYPES,
   SUMMARY_RANGES,
   TAG_CODE_PREFIX,
@@ -1561,6 +1685,11 @@ module.exports = {
   categoryDisplayName,
   validateCategoryName,
   categoryKeyDocId,
+  brandNameKey,
+  brandDisplayName,
+  validateBrandName,
+  brandKeyDocId,
+  itemDisplayName,
   mainStoreIdOf,
   stockDocId,
   storeAccessOf,
@@ -1577,6 +1706,8 @@ module.exports = {
   saleStoreId,
   lineIsLegacyCategory,
   summarizeByCategory,
+  lineIsLegacyBrand,
+  summarizeByBrand,
   summarizeByStore,
   summarizeShelfByStore,
   resolveSummaryScope,

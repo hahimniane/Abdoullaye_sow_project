@@ -1199,6 +1199,10 @@ describe("business dashboard Firestore rules", () => {
             categoryId: "cat_a"}),
           put("inventoryCategories/cat_a", {businessId: "biz_a",
             name: "Skin", nameKey: "skin", archived: false}),
+          put("inventoryBrandKeys/lock1", {businessId: "biz_a",
+            brandId: "brand_a"}),
+          put("inventoryBrands/brand_a", {businessId: "biz_a",
+            name: "Jordan", nameKey: "jordan", archived: false}),
           put("inventoryStores/store_main", {businessId: "biz_a",
             name: "Main store", isMain: true, archived: false}),
           put("inventoryStores/store_annex", {businessId: "biz_a",
@@ -1330,10 +1334,11 @@ describe("business dashboard Firestore rules", () => {
           .size, 1);
     });
 
-    it("lets managers list categories and stores, and nobody write them",
+    it("lets managers list categories, brands and stores, nobody write",
         async () => {
           await seedStores({multiStore: true});
-          for (const name of ["inventoryCategories", "inventoryStores"]) {
+          for (const name of ["inventoryCategories", "inventoryBrands",
+            "inventoryStores"]) {
             const list = (db, b) => getDocs(query(collection(db, name),
                 where("businessId", "==", b)));
             for (const uid of ["owner-a", "inv-clerk-none",
@@ -1348,12 +1353,14 @@ describe("business dashboard Firestore rules", () => {
           const owner = firestoreFor("owner-a");
           const writes = [
             ["inventoryCategories/forged", {businessId: "biz_a", name: "X"}],
+            ["inventoryBrands/forged", {businessId: "biz_a", name: "X"}],
             ["inventoryStores/forged", {businessId: "biz_a", name: "X"}],
             ["inventoryStock/forged", {businessId: "biz_a", itemId: "i",
               storeId: "store_main", quantity: 99}],
             ["inventoryConfig/forged", {businessId: "biz_a",
               multiStore: false}],
             ["inventoryCategoryKeys/forged", {businessId: "biz_a"}],
+            ["inventoryBrandKeys/forged", {businessId: "biz_a"}],
           ];
           for (const [path, data] of writes) {
             await assertFails(setDoc(doc(owner, path), data));
@@ -1366,6 +1373,12 @@ describe("business dashboard Firestore rules", () => {
               "inventoryStores/store_main"), {archived: true}));
           await assertFails(updateDoc(doc(owner,
               "inventoryCategories/cat_a"), {name: "Renamed"}));
+          await assertFails(updateDoc(doc(owner,
+              "inventoryBrands/brand_a"), {name: "Renamed"}));
+          await assertFails(deleteDoc(doc(owner,
+              "inventoryBrands/brand_a")));
+          await assertFails(deleteDoc(doc(owner,
+              "inventoryBrandKeys/lock1")));
           await assertFails(deleteDoc(doc(owner,
               "inventoryStores/store_main")));
         });
@@ -1377,6 +1390,7 @@ describe("business dashboard Firestore rules", () => {
             const db = firestoreFor(uid);
             await assertFails(getDoc(doc(db, "inventoryConfig/biz_a")));
             await assertFails(getDoc(doc(db, "inventoryCategoryKeys/lock1")));
+            await assertFails(getDoc(doc(db, "inventoryBrandKeys/lock1")));
           }
         });
 

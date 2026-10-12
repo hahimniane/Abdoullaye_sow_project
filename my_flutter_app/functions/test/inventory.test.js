@@ -81,7 +81,8 @@ describe("inventory: a product", () => {
     assert.deepEqual(record, {
       businessId: "biz", name: "Shea butter", code: "IT-K7M4P2",
       priceCents: 1000, costCents: null, quantity: 5, lowStockAt: null,
-      category: "Care", categoryId: "", photoUrl: "", archived: false,
+      category: "Care", categoryId: "", brandId: "", brand: "",
+      photoUrl: "", archived: false,
       countWasOff: false, createdByStaffId: "staff",
       updatedByStaffId: "staff",
     });
@@ -259,7 +260,7 @@ describe("inventory: what a sale does", () => {
         items({a: item({quantity: 5})}));
     assert.deepEqual(plan.lines, [{
       itemId: "a", name: "Shea butter", code: "IT-K7M4P2", quantity: 2,
-      categoryId: "", category: "",
+      categoryId: "", category: "", brandId: "", brand: "",
       listPriceCents: 1000, soldPriceCents: 800, costCents: 400,
       countWasOff: false, stockDeducted: 2,
     }]);
@@ -1330,5 +1331,200 @@ describe("the store conversion's id ordering", () => {
     const body = src.slice(start, end);
     assert.match(body, /FirestoreFieldPath\.documentId\(\)/);
     assert.doesNotMatch(body, /admin\.firestore\.FieldPath/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Brands (v3): the pure rules.
+// ---------------------------------------------------------------------------
+
+describe("inventory v3: brand refusal kinds and messages", () => {
+  it("maps the brand codes to the right error kind", () => {
+    assert.equal(inv.refusalKind("brand_name_taken"), "already-exists");
+    assert.equal(inv.refusalKind("brand_not_found"), "not-found");
+    assert.equal(inv.refusalKind("brand_name_required"), "invalid-argument");
+    assert.equal(inv.refusalKind("brand_too_long"), "invalid-argument");
+    // The category kinds are unchanged.
+    assert.equal(inv.refusalKind("category_name_taken"), "already-exists");
+    assert.equal(inv.refusalKind("category_not_found"), "not-found");
+  });
+
+  it("has an English message for every brand code", () => {
+    for (const code of ["brand_name_required", "brand_name_taken",
+      "brand_not_found", "brand_too_long"]) {
+      assert.ok(inv.INVENTORY_MESSAGES[code], code);
+    }
+  });
+});
+
+describe("inventory v3: brands", () => {
+  it("keys and spells a name like a category", () => {
+    assert.equal(inv.brandNameKey("  Air   JORDAN "), "air jordan");
+    assert.equal(inv.brandNameKey(null), "");
+    assert.equal(inv.brandDisplayName("  Air   Jordan "), "Air Jordan");
+  });
+
+  it("validates a name", () => {
+    assert.deepEqual(inv.validateBrandName("Jordan"), []);
+    assert.deepEqual(inv.validateBrandName("   "), ["brand_name_required"]);
+    assert.deepEqual(inv.validateBrandName(undefined),
+        ["brand_name_required"]);
+    assert.deepEqual(inv.validateBrandName("x".repeat(61)),
+        ["brand_too_long"]);
+    assert.deepEqual(inv.validateBrandName("x".repeat(60)), []);
+  });
+
+  it("gives one lock id per business and name", () => {
+    const a = inv.brandKeyDocId("biz", "jordan");
+    assert.match(a, /^[0-9a-f]{40}$/);
+    assert.equal(a, inv.brandKeyDocId("biz", "jordan"));
+    assert.notEqual(a, inv.brandKeyDocId("other", "jordan"));
+    assert.notEqual(a, inv.brandKeyDocId("biz", "nike"));
+  });
+
+  it("reads a product as brand, space, name", () => {
+    assert.equal(inv.itemDisplayName({brand: "Jordan", name: "11"}),
+        "Jordan 11");
+    assert.equal(inv.itemDisplayName({brand: "", name: "Soap"}), "Soap");
+    assert.equal(inv.itemDisplayName({name: "Soap"}), "Soap");
+  });
+
+  it("takes brand and brandId as update fields", () => {
+    assert.deepEqual(inv.validateItemUpdate({brandId: ""}), []);
+    assert.deepEqual(inv.validateItemUpdate({brand: ""}), []);
+    assert.deepEqual(inv.validateItemUpdate({brand: "Jordan"}), []);
+    assert.deepEqual(inv.validateItemUpdate({brandId: 5}),
+        ["brand_not_found"]);
+    assert.deepEqual(inv.validateItemUpdate({brand: "x".repeat(61)}),
+        ["brand_too_long"]);
+    assert.deepEqual(inv.validateItemUpdate({stock: {a: 1}, brand: "A"}),
+        ["quantity_not_editable"]);
+  });
+
+  it("checks brand fields on create, and keeps v2 requests valid", () => {
+    const valid = {name: "11", priceCents: 9000, quantity: 1};
+    assert.deepEqual(inv.validateItemCreate(valid), []);
+    assert.deepEqual(inv.validateItemCreate({...valid, brand: "Jordan"}), []);
+    assert.deepEqual(inv.validateItemCreate({...valid, brandId: ""}), []);
+    assert.deepEqual(inv.validateItemCreate({...valid, brand: "x".repeat(61)}),
+        ["brand_too_long"]);
+    assert.deepEqual(inv.validateItemCreate({...valid, brandId: 7}),
+        ["brand_not_found"]);
+  });
+
+  it("stores the resolved brand on a new product", () => {
+    const record = inv.itemCreateRecord(
+        {name: "11", priceCents: 500, quantity: 2, brand: "ignored"},
+        {businessId: "biz", code: "IT-K7M4P2", uid: "u",
+          brand: {brandId: "b1", name: "Jordan"}});
+    assert.equal(record.brand, "Jordan");
+    assert.equal(record.brandId, "b1");
+  });
+
+  it("stores no brand when none was resolved", () => {
+    const record = inv.itemCreateRecord(
+        {name: "11", priceCents: 500, quantity: 2, brand: "ignored"},
+        {businessId: "biz", code: "IT-K7M4P2", uid: "u"});
+    assert.equal(record.brand, "");
+    assert.equal(record.brandId, "");
+  });
+
+  it("shows a brand change in the product history", () => {
+    const changes = inv.itemFieldDiff({brand: ""}, {brand: "Jordan",
+      brandId: "b1"});
+    assert.deepEqual(changes, [{field: "Brand", from: "—", to: "Jordan"}]);
+  });
+
+  it("snapshots the brand on a sale line, empty without one", () => {
+    const sold = (extra) => inv.planSale(
+        [{itemId: "a", quantity: 1, soldPriceCents: 800}],
+        items({a: item(extra)})).lines[0];
+    const branded = sold({brandId: "b1", brand: "Jordan"});
+    assert.equal(branded.brandId, "b1");
+    assert.equal(branded.brand, "Jordan");
+    const plain = sold({});
+    assert.equal(plain.brandId, "");
+    assert.equal(plain.brand, "");
+  });
+
+  it("keeps the QR tags free of any product text", () => {
+    const html = renderInventoryTags(
+        {code: "IT-K7M4P2", link: "https://x.test/t", copies: 1,
+          name: "11", brand: "Jordan"}, {qrSvg: "<svg></svg>"});
+    assert.doesNotMatch(html, /Jordan/);
+  });
+
+  describe("byBrand", () => {
+    const line = (extra) => ({itemId: "a", quantity: 1, soldPriceCents: 1000,
+      costCents: 400, brandId: "", brand: "", ...extra});
+    const brands = [{id: "b1", name: "Jordan"}, {id: "b2", name: "Nike"}];
+
+    it("groups, sorts by revenue, leaves voided sales out", () => {
+      const out = inv.summarizeByBrand([
+        {voided: false, lines: [
+          line({brandId: "b1", brand: "Jordan", quantity: 2}),
+          line({brandId: "b2", brand: "Nike", quantity: 1,
+            soldPriceCents: 5000, costCents: null}),
+          line({})]},
+        {voided: true, lines: [line({brandId: "b1", quantity: 99})]},
+      ], {brands});
+      assert.deepEqual(out, [
+        {brandId: "b2", name: "Nike", itemsSold: 1, revenueCents: 5000,
+          profitCents: 0},
+        {brandId: "b1", name: "Jordan", itemsSold: 2, revenueCents: 2000,
+          profitCents: 2000 - 800},
+        {brandId: "", name: "No brand", itemsSold: 1,
+          revenueCents: 1000, profitCents: 600}]);
+    });
+
+    it("lists only brands that sold", () => {
+      const out = inv.summarizeByBrand([{voided: false, lines: [
+        line({brandId: "b1", brand: "Jordan"})]}], {brands});
+      assert.deepEqual(out.map((e) => e.brandId), ["b1"]);
+    });
+
+    it("shows a brand's current name, not the one at sale time", () => {
+      const out = inv.summarizeByBrand([{voided: false, lines: [
+        line({brandId: "b1", brand: "Old name"})]}], {brands});
+      assert.equal(out[0].name, "Jordan");
+    });
+
+    it("breaks revenue ties by name", () => {
+      const out = inv.summarizeByBrand([{voided: false, lines: [
+        line({brandId: "b2", brand: "Nike"}),
+        line({brandId: "b1", brand: "Jordan"})]}], {brands});
+      assert.deepEqual(out.map((e) => e.name), ["Jordan", "Nike"]);
+    });
+
+    it("reads a line with no snapshot through the product's brand", () => {
+      const legacy = {itemId: "a", quantity: 1, soldPriceCents: 700};
+      assert.equal(inv.lineIsLegacyBrand(legacy), true);
+      assert.equal(inv.lineIsLegacyBrand(line({})), false);
+      const out = inv.summarizeByBrand(
+          [{voided: false, lines: [legacy, {...legacy, itemId: "gone"}]}],
+          {brands, items: new Map([["a", {brandId: "b2", brand: "Nike"}]])});
+      assert.deepEqual(out.map((e) => [e.brandId, e.name, e.revenueCents]),
+          [["b2", "Nike", 700], ["", "No brand", 700]]);
+    });
+
+    it("matches typed text with no id to the list by name", () => {
+      const out = inv.summarizeByBrand([{voided: false, lines: [
+        line({brand: " jordan "}), line({brand: "Odd one"})]}], {brands});
+      assert.deepEqual(out.map((e) => [e.brandId, e.name]).sort(),
+          [["", "Odd one"], ["b1", "Jordan"]].sort());
+    });
+
+    it("is empty without sales", () => {
+      assert.deepEqual(inv.summarizeByBrand([], {brands}), []);
+    });
+
+    it("leaves byCategory exactly as before", () => {
+      const out = inv.summarizeByCategory([{voided: false, lines: [
+        {itemId: "a", quantity: 1, soldPriceCents: 10, costCents: 5,
+          categoryId: "c1", category: "Skin", brandId: "b1",
+          brand: "Jordan"}]}], {categories: [{id: "c1", name: "Skin"}]});
+      assert.deepEqual(out, [{categoryId: "c1", name: "Skin", itemsSold: 1,
+        revenueCents: 10, profitCents: 5}]);
+    });
   });
 });

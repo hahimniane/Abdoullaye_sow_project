@@ -234,3 +234,36 @@ Client reads: `inventoryBrands` where businessId (whole list, read by every memb
 3. Rules and indexes for `inventoryBrands` ship with the same change; the new client read has its index and a test in console-query-indexes / console-query-rules.
 4. Every new string in English and French.
 5. Server, console and app ship together in the next app release (1.0.11); the server deploy must keep old apps (1.0.9, 1.0.10) working unchanged.
+
+---
+
+# Backend as built (v3)
+
+Server files: `my_flutter_app/functions/inventory.js` (pure rules), `index.js` (callables), `firestore.rules`, `firestore.indexes.json`. Brands are built as a copy of the category design; the v2 section above describes the mechanics (find-or-create under a lock document, bounded rename, archive).
+
+## Data model
+- `inventoryBrands/{id}`: `businessId, name, nameKey, archived, createdAt, updatedAt, createdByStaffId`. Server-only lock documents `inventoryBrandKeys/{sha256(businessId NUL nameKey) first 40 hex}` -> `{businessId, brandId, nameKey}`. The key rule is the category one (lower case, spaces collapsed); name limit 60.
+- A product carries `brandId` + `brand` (the list's spelling). New products always store both ("" when none); products from before v3 simply lack the fields and read as no brand. A sale line carries `brandId` + `brand` (always written, "" for a plain product).
+- Rules: `inventoryBrands` read = `lotLedgerRead(businessId)` (same as categories), write false; `inventoryBrandKeys` no read or write. Indexes: `inventoryBrands (businessId, nameKey)` and `(businessId, archived, nameKey)`.
+
+## Callables as built (v3)
+All take `businessId`, pass the v1 gate (inventory permission, service on; any staff with the inventory permission may use them, like the category ones) and refuse with `HttpsError` + `details.reason`.
+- `createInventoryBrand {name}` -> `{success: true, brandId, name}` (name trimmed, spaces collapsed). Duplicate (any case): `brand_name_taken` (`already-exists`, `details.brandId`, `details.archived`). Empty `brand_name_required`, over 60 `brand_too_long` (both `invalid-argument`).
+- `renameInventoryBrand {brandId, name}` -> `{success: true, brandId, name, itemsUpdated, complete}`. Moves the name lock, then rewrites the `brand` snapshot on the products in pages of 400 (at most 25 pages); `complete: false` means more remain and the same call can be repeated (idempotent). Sale lines are never touched. Refusals: `brand_not_found` (`not-found`, also for a brand of another business or a missing id), `brand_name_taken` (another brand has that name; changing only the case of its own name is fine), `brand_name_required`, `brand_too_long`.
+- `archiveInventoryBrand {brandId, archived}` -> `{success: true, archived}`. `archived_invalid` unless a boolean, `brand_not_found`. Products keep their brand; an archived brand cannot be picked by id (`brand_not_found`) except on a product that already has it; typing its name brings it back (un-archives it).
+- `createInventoryItem` / `updateInventoryItem`: `brandId` wins over `brand` text; `brandId: ""` or `brand: ""` clears both; typed text is find-or-create in the same transaction (race-safe, list spelling stored). Create answer: `{success, itemId, code}` plus `brandId` when set (next to `categoryId`). Update answer unchanged (`{success, itemId, changed}`); a brand change shows as "Brand" in `changed` and in the product history. `brand_too_long` (text over 60), `brand_not_found` (unknown id, id with a slash, non-string id, archived, other business). A request without brand fields behaves exactly as in v2.
+- `recordInventorySale`: each line also stores `brandId` + `brand` (single-store and per-store paths). Answer unchanged.
+- `getInventorySummary`: new `byBrand: [{brandId, name, itemsSold, revenueCents, profitCents}]`, same rules as `byCategory` (only brands that sold, revenue desc then name, `{brandId: "", name: "No brand"}` for unbranded lines, voided excluded, profit only on lines with a known cost, a brand's current name shown on past sales, follows the `storeId` filter). Lines written before v3 (neither `brandId` nor `brand` on the line) are read through the product's current brand from the already-bounded product read. `truncated` also covers the brand read.
+
+## Refusal kinds
+`brand_name_taken` = `already-exists`; `brand_not_found` = `not-found`; `brand_name_required`, `brand_too_long` = `invalid-argument`.
+
+## Deviations from the contract
+1. `businessId` is an argument of every new callable (as in v2).
+2. Sale-line `name` stays the product's own `name` ("11"); the "Jordan 11" reading is composed by the client from the line's `brand` + `name` (`itemDisplayName` in `inventory.js` does the same for the history rows; the audit summary of a new product reads "Added Jordan 11 (IT-...)"). Tags are QR-only (no product text), so nothing changed there; a unit test pins that.
+3. Nothing converts legacy data: there is no `syncInventoryBrands` (the contract says there is no legacy brand field).
+4. Existing v2 tests that compared a whole product record or sale line were updated for the two new fields (`brandId: ""`, `brand: ""`), as v2 did for the category fields.
+5. The console-query-indexes test lives in `admin_web/src/lib` (the console agent's scope); the server side registers the new client read in `test/console-query-rules.test.js` (whole list, by `nameKey`, active by `nameKey`, and the staff-readable shared list).
+
+## Tests
+`test/inventory.test.js` (v3 sections at the end: refusal kinds, names/keys/lock ids, create/update validation, resolved brand on a record, sale-line snapshot, history label, `byBrand`, QR tags), `test/inventory-callables.test.js` (`npm run test:inventory`, block "brands": gate, create/duplicate/validation, pick by id, find-or-create race, id-wins and clearing, v2-shaped requests, history, rename incl. 405-product paging, archive/revive, sale snapshot, `byBrand` with voided and legacy lines, multi-store sale), `test/firestore-rules.test.js` and `test/console-query-rules.test.js`.

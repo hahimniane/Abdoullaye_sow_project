@@ -19966,6 +19966,241 @@ exports.syncInventoryCategories = onCall(
 );
 
 // ---------------------------------------------------------------------------
+// Brands (v3): the same shape as categories (list + server-only name locks,
+// find-or-create by name, bounded rename of product snapshots, archive).
+// ---------------------------------------------------------------------------
+
+/**
+ * Finds the brand a product is being given, inside a transaction, and says
+ * what to write when it is applied: an existing one (by id, or by typed name -
+ * an archived one of that name is brought back) or a new one created from the
+ * typed name. `brandId` wins over `brand`; "" clears both.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, uid, data, currentBrandId}.
+ * @return {Promise<?{value: {brandId: string, name: string},
+ *   apply: Function}>} Null when neither field was sent.
+ */
+async function resolveInventoryBrandIn(tx, db, {businessId, uid, data,
+  currentBrandId = ""}) {
+  const none = () => {};
+  if (data.brandId !== undefined) {
+    const id = String(data.brandId ?? "").trim();
+    if (!id) return {value: {brandId: "", name: ""}, apply: none};
+    if (id.includes("/")) throw inventoryRefusal("brand_not_found");
+    const ref = db.collection("inventoryBrands").doc(id);
+    const doc = await tx.get(ref);
+    const row = doc.exists ? doc.data() || {} : null;
+    if (!row || String(row.businessId) !== businessId ||
+        (row.archived === true && id !== currentBrandId)) {
+      throw inventoryRefusal("brand_not_found");
+    }
+    return {value: {brandId: id, name: String(row.name || "")},
+      apply: none};
+  }
+  if (data.brand === undefined) return null;
+  const name = inventory.brandDisplayName(data.brand);
+  if (!name) return {value: {brandId: "", name: ""}, apply: none};
+  const nameKey = inventory.brandNameKey(name);
+  const lockRef = db.collection("inventoryBrandKeys")
+      .doc(inventory.brandKeyDocId(businessId, nameKey));
+  const lock = await tx.get(lockRef);
+  if (lock.exists && String(lock.data()?.businessId) === businessId) {
+    const brandRef = db.collection("inventoryBrands")
+        .doc(String(lock.data().brandId || "_"));
+    const brand = await tx.get(brandRef);
+    if (brand.exists && String(brand.data()?.businessId) === businessId) {
+      const revive = brand.data().archived === true;
+      return {
+        value: {brandId: brandRef.id, name: String(brand.data().name || name)},
+        apply: (t) => {
+          if (revive) {
+            t.update(brandRef, {archived: false,
+              updatedAt: FirestoreFieldValue.serverTimestamp()});
+          }
+        },
+      };
+    }
+  }
+  const brandRef = db.collection("inventoryBrands").doc();
+  return {
+    value: {brandId: brandRef.id, name},
+    apply: (t) => {
+      const now = FirestoreFieldValue.serverTimestamp();
+      t.set(brandRef, {businessId, name, nameKey, archived: false,
+        createdAt: now, updatedAt: now, createdByStaffId: uid});
+      t.set(lockRef, {businessId, brandId: brandRef.id, nameKey});
+    },
+  };
+}
+
+exports.createInventoryBrand = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const errors = inventory.validateBrandName(data.name);
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      const name = inventory.brandDisplayName(data.name);
+      const nameKey = inventory.brandNameKey(name);
+      const lockRef = db.collection("inventoryBrandKeys")
+          .doc(inventory.brandKeyDocId(businessId, nameKey));
+      const brandRef = db.collection("inventoryBrands").doc();
+      await db.runTransaction(async (tx) => {
+        const lock = await tx.get(lockRef);
+        if (lock.exists && String(lock.data()?.businessId) === businessId) {
+          const existing = await tx.get(db.collection("inventoryBrands")
+              .doc(String(lock.data().brandId || "_")));
+          if (existing.exists &&
+              String(existing.data()?.businessId) === businessId) {
+            throw inventoryRefusal("brand_name_taken",
+                {brandId: existing.id,
+                  archived: existing.data().archived === true});
+          }
+        }
+        const now = FirestoreFieldValue.serverTimestamp();
+        tx.set(brandRef, {businessId, name, nameKey, archived: false,
+          createdAt: now, updatedAt: now, createdByStaffId: uid});
+        tx.set(lockRef, {businessId, brandId: brandRef.id, nameKey});
+      });
+      await inventorySetupAudit(businessId, "inventory_brand", brandRef.id,
+          "created", uid, `Added the brand ${name}`);
+      return {success: true, brandId: brandRef.id, name};
+    },
+);
+
+/**
+ * Puts a brand's current name on its products' `brand` snapshot, in bounded
+ * pages. Idempotent: pages are walked by id, only rows that differ are
+ * written.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} brandId The brand.
+ * @param {string} name Its name now.
+ * @return {Promise<{updated: number, complete: boolean}>} How many products
+ *   were changed, and whether every page was walked.
+ */
+async function syncInventoryBrandName(db, businessId, brandId, name) {
+  let last = null;
+  let updated = 0;
+  for (let page = 0; page < INVENTORY_RENAME_PAGES; page++) {
+    let query = db.collection("inventoryItems")
+        .where("businessId", "==", businessId)
+        .where("brandId", "==", brandId)
+        .orderBy(FirestoreFieldPath.documentId())
+        .limit(INVENTORY_RENAME_PAGE);
+    if (last) query = query.startAfter(last);
+    const snap = await query.get();
+    const batch = db.batch();
+    let writes = 0;
+    for (const doc of snap.docs) {
+      if (doc.data().brand !== name) {
+        batch.update(doc.ref, {brand: name});
+        writes += 1;
+      }
+    }
+    if (writes > 0) await batch.commit();
+    updated += writes;
+    if (snap.size < INVENTORY_RENAME_PAGE) return {updated, complete: true};
+    last = snap.docs[snap.docs.length - 1].id;
+  }
+  return {updated, complete: false};
+}
+
+exports.renameInventoryBrand = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 120},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      const brandId = inventoryDocId(data.brandId);
+      const errors = inventory.validateBrandName(data.name);
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      if (!brandId) throw inventoryRefusal("brand_not_found");
+      const name = inventory.brandDisplayName(data.name);
+      const nameKey = inventory.brandNameKey(name);
+      const brandRef = db.collection("inventoryBrands").doc(brandId);
+      const newLock = db.collection("inventoryBrandKeys")
+          .doc(inventory.brandKeyDocId(businessId, nameKey));
+      const before = await db.runTransaction(async (tx) => {
+        const brand = await tx.get(brandRef);
+        if (!brand.exists || String(brand.data()?.businessId) !== businessId) {
+          throw inventoryRefusal("brand_not_found");
+        }
+        const row = brand.data() || {};
+        const oldKey = inventory.brandNameKey(row.name);
+        const lock = await tx.get(newLock);
+        if (oldKey !== nameKey && lock.exists &&
+            String(lock.data()?.businessId) === businessId &&
+            String(lock.data()?.brandId) !== brandId) {
+          const holder = await tx.get(db.collection("inventoryBrands")
+              .doc(String(lock.data().brandId || "_")));
+          if (holder.exists &&
+              String(holder.data()?.businessId) === businessId) {
+            throw inventoryRefusal("brand_name_taken",
+                {brandId: holder.id});
+          }
+        }
+        if (oldKey !== nameKey) {
+          tx.delete(db.collection("inventoryBrandKeys")
+              .doc(inventory.brandKeyDocId(businessId, oldKey)));
+        }
+        tx.set(newLock, {businessId, brandId, nameKey});
+        tx.update(brandRef, {name, nameKey,
+          updatedAt: FirestoreFieldValue.serverTimestamp()});
+        return row;
+      });
+      const sync = await syncInventoryBrandName(db, businessId, brandId, name);
+      if (String(before.name) !== name) {
+        await inventorySetupAudit(businessId, "inventory_brand",
+            brandId, "renamed", uid,
+            `Renamed the brand ${before.name} to ${name}`);
+      }
+      return {success: true, brandId, name, itemsUpdated: sync.updated,
+        complete: sync.complete};
+    },
+);
+
+exports.archiveInventoryBrand = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const db = await requireInventoryAccess(uid, businessId);
+      if (typeof data.archived !== "boolean") {
+        throw inventoryRefusal("archived_invalid");
+      }
+      const archived = data.archived;
+      const brandId = inventoryDocId(data.brandId);
+      if (!brandId) throw inventoryRefusal("brand_not_found");
+      const row = await db.runTransaction(async (tx) => {
+        const ref = db.collection("inventoryBrands").doc(brandId);
+        const doc = await tx.get(ref);
+        if (!doc.exists || String(doc.data()?.businessId) !== businessId) {
+          throw inventoryRefusal("brand_not_found");
+        }
+        if ((doc.data().archived === true) !== archived) {
+          tx.update(ref, {archived,
+            updatedAt: FirestoreFieldValue.serverTimestamp()});
+        }
+        return doc.data();
+      });
+      if ((row.archived === true) !== archived) {
+        await inventorySetupAudit(businessId, "inventory_brand",
+            brandId, archived ? "archived" : "restored", uid,
+            `${archived ? "Archived" : "Restored"} the brand ${row.name}`);
+      }
+      return {success: true, archived};
+    },
+);
+
+// ---------------------------------------------------------------------------
 // Products.
 // ---------------------------------------------------------------------------
 
@@ -19987,6 +20222,8 @@ exports.createInventoryItem = onCall(
       const done = await db.runTransaction(async (tx) => {
         const sctx = await readInventoryStoreContext(tx, db, businessId);
         const category = await resolveInventoryCategoryIn(
+            tx, db, {businessId, uid, data});
+        const brand = await resolveInventoryBrandIn(
             tx, db, {businessId, uid, data});
         // Where the starting count goes: the stores named in `stock`, or the
         // one store (the caller's home, or the only one) for `quantity`.
@@ -20010,9 +20247,10 @@ exports.createInventoryItem = onCall(
         }
         const record = inventory.itemCreateRecord(data, {
           businessId, code, uid, quantity: total,
-          category: category?.value});
+          category: category?.value, brand: brand?.value});
         const now = FirestoreFieldValue.serverTimestamp();
         if (category) category.apply(tx);
+        if (brand) brand.apply(tx);
         tx.set(ref, {...record, ...(sctx.converted ? {storeStock: true} : {}),
           createdAt: now, updatedAt: now});
         if (sctx.converted) {
@@ -20039,11 +20277,12 @@ exports.createInventoryItem = onCall(
       });
       const {record} = done;
       await inventoryItemAudit(businessId, ref.id, "created", uid,
-          `Added ${record.name} (${code}) at ` +
+          `Added ${inventory.itemDisplayName(record)} (${code}) at ` +
           `${inventory.moneyText(record.priceCents)}, ` +
           `${record.quantity} in stock`);
       return {success: true, itemId: ref.id, code,
-        ...(record.categoryId ? {categoryId: record.categoryId} : {})};
+        ...(record.categoryId ? {categoryId: record.categoryId} : {}),
+        ...(record.brandId ? {brandId: record.brandId} : {})};
     },
 );
 
@@ -20067,11 +20306,20 @@ exports.updateInventoryItem = onCall(
           patch.category = category.value.name;
           patch.categoryId = category.value.categoryId;
         }
+        const brand = await resolveInventoryBrandIn(tx, db, {
+          businessId, uid, data,
+          currentBrandId: String(current.brandId || "")});
+        if (brand) {
+          patch.brand = brand.value.name;
+          patch.brandId = brand.value.brandId;
+        }
         const changes = inventory.itemFieldDiff(current, patch);
-        const idChanged = category &&
-          String(current.categoryId || "") !== patch.categoryId;
+        const idChanged = (category &&
+          String(current.categoryId || "") !== patch.categoryId) ||
+          (brand && String(current.brandId || "") !== patch.brandId);
         if (changes.length > 0 || idChanged) {
           if (category) category.apply(tx);
+          if (brand) brand.apply(tx);
           tx.update(ref, {...patch, updatedByStaffId: uid,
             updatedAt: FirestoreFieldValue.serverTimestamp()});
         }
@@ -20893,7 +21141,7 @@ exports.getInventorySummary = onCall(
         });
         return {rows, complete: result.exhausted};
       };
-      const [sales, items, cats, stock] = await Promise.all([
+      const [sales, items, cats, brands, stock] = await Promise.all([
         readAll(db.collection("inventorySales")
             .where("businessId", "==", businessId)
             .where("createdAt", ">=",
@@ -20902,6 +21150,8 @@ exports.getInventorySummary = onCall(
         readAll(db.collection("inventoryItems")
             .where("businessId", "==", businessId)),
         readAll(db.collection("inventoryCategories")
+            .where("businessId", "==", businessId)),
+        readAll(db.collection("inventoryBrands")
             .where("businessId", "==", businessId)),
         scope.multi ? readAll(db.collection("inventoryStock")
             .where("businessId", "==", businessId)) :
@@ -20940,11 +21190,13 @@ exports.getInventorySummary = onCall(
         ...shelf,
         byCategory: inventory.summarizeByCategory(wanted,
             {categories: cats.rows, items: itemMap}),
+        byBrand: inventory.summarizeByBrand(wanted,
+            {brands: brands.rows, items: itemMap}),
         byStore,
         multiStore: scope.multi,
         storeId: scope.filterStoreId,
         truncated: !sales.complete || !items.complete || !cats.complete ||
-          !stock.complete,
+          !brands.complete || !stock.complete,
       };
     },
 );

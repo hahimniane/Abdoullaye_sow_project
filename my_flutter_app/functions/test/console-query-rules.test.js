@@ -109,6 +109,13 @@ before(async () => {
         nameKey: "skin", archived: false});
       put(`inventoryCategories/${biz}-cat-old`, {businessId: biz,
         name: "Old", nameKey: "old", archived: true});
+      // Brands (v3), the same list shapes as categories.
+      put(`inventoryBrands/${biz}-brand`, {businessId: biz, name: "Jordan",
+        nameKey: "jordan", archived: false});
+      put(`inventoryBrands/${biz}-brand-old`, {businessId: biz,
+        name: "Old", nameKey: "old", archived: true});
+      put(`inventoryBrandKeys/${biz}-lock`, {businessId: biz,
+        brandId: `${biz}-brand`, nameKey: "jordan"});
       put(`inventoryStores/${biz}-main`, {businessId: biz, name: "Main store",
         archived: false, isMain: true});
       put(`inventoryStores/${biz}-annex`, {businessId: biz, name: "Annex",
@@ -226,6 +233,14 @@ const SHAPES = [
         .orderBy("nameKey").limit(200)],
   ["inventory: active categories by name", (db, b) =>
     db.collection("inventoryCategories").where("businessId", "==", b)
+        .where("archived", "==", false).orderBy("nameKey").limit(200)],
+  ["inventory: the whole brand list", (db, b) =>
+    db.collection("inventoryBrands").where("businessId", "==", b)],
+  ["inventory: brands by name", (db, b) =>
+    db.collection("inventoryBrands").where("businessId", "==", b)
+        .orderBy("nameKey").limit(200)],
+  ["inventory: active brands by name", (db, b) =>
+    db.collection("inventoryBrands").where("businessId", "==", b)
         .where("archived", "==", false).orderBy("nameKey").limit(200)],
   ["inventory: stores by name", (db, b) =>
     db.collection("inventoryStores").where("businessId", "==", b)
@@ -364,7 +379,7 @@ describe("console query shapes pass the rules for their own business", () => {
     it("the shared lists stay readable by store staff", async () => {
       const staff = dbFor("staff-inv-none");
       for (const name of ["inventoryItems", "inventoryCategories",
-        "inventoryStores"]) {
+        "inventoryBrands", "inventoryStores"]) {
         await assertSucceeds(staff.collection(name)
             .where("businessId", "==", "biz_a").get());
       }

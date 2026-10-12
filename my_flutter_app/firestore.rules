@@ -713,6 +713,15 @@ service cloud.firestore {
     match /inventoryCategoryKeys/{keyId} {
       allow read, write: if false;
     }
+    // Brands (v3) mirror categories: the managers read the list, every write is
+    // a callable, and the one-name-one-brand locks are the server's alone.
+    match /inventoryBrands/{brandId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /inventoryBrandKeys/{keyId} {
+      allow read, write: if false;
+    }
     // Once a business has two or more active stores, a staff member sees only
     // their home store's stock rows, sales and stock movements: those queries
     // must carry `where storeId == <home store>`. The owner, a platform admin

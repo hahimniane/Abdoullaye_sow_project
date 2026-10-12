@@ -333,7 +333,8 @@ describe("selling", () => {
         assert.equal(sale.totalCents, 1600);
         assert.deepEqual(sale.lines, [{
           itemId: id, name: "Black soap", code: (await itemDoc(id)).code,
-          quantity: 2, categoryId: "", category: "", listPriceCents: 1000,
+          quantity: 2, categoryId: "", category: "", brandId: "", brand: "",
+          listPriceCents: 1000,
           soldPriceCents: 800, costCents: 400, countWasOff: false,
           stockDeducted: 2,
         }]);
@@ -2187,4 +2188,437 @@ describe("adding the second store while sales are being rung up", () => {
           assert.equal(rows.reduce((n, x) => n + x.quantity, 0), 17);
         }
       });
+});
+
+// ===========================================================================
+// Brands (v3): the same shape as categories, with `brand`/`brandId` on the
+// product, the sale line and the summary. v2-shaped payloads are replayed.
+// ===========================================================================
+
+describe("brands", () => {
+  const BB = "inv-brand-biz";
+  const B_OWNER = "inv-brand-owner";
+  const B_STAFF = "inv-brand-staff";
+  const B_NONE = "inv-brand-ledger-only";
+  const b = callIn(BB);
+  const brandsOf = async () => (await db.collection("inventoryBrands")
+      .where("businessId", "==", BB).get()).docs
+      .map((d) => ({id: d.id, ...d.data()}));
+  const itemRow = async (id) => (await db.collection("inventoryItems").doc(id)
+      .get()).data();
+  const mk = async (extra = {}) => (await b("createInventoryItem", {
+    name: `Product ${++keys}`, priceCents: 1000, quantity: 5, ...extra,
+  }, B_OWNER)).itemId;
+
+  before(async () => {
+    await seedBusiness(BB, {
+      [B_OWNER]: {role: "businessOwner", businessId: BB},
+      [B_STAFF]: {role: "staff", businessId: BB,
+        businessPermissions: ["inventory"]},
+      [B_NONE]: {role: "staff", businessId: BB,
+        businessPermissions: ["ledger"]},
+    });
+  });
+
+  it("is gated like the rest: service off, no inventory section",
+      async () => {
+        const off = (name, data) => functions[name].run({
+          auth: {uid: OFF_OWNER, token: {}},
+          data: {businessId: BIZ_OFF, ...data},
+        });
+        const calls = [
+          ["createInventoryBrand", {name: "Jordan"}],
+          ["renameInventoryBrand", {brandId: "x", name: "Jordan"}],
+          ["archiveInventoryBrand", {brandId: "x", archived: true}],
+        ];
+        for (const [name, data] of calls) {
+          await assert.rejects(off(name, data),
+              refusal("service_disabled", "failed-precondition"), name);
+          await assert.rejects(b(name, data, B_NONE),
+              (error) => error.code === "permission-denied", name);
+          await assert.rejects(b(name, data, STRANGER),
+              (error) => error.code === "permission-denied", name);
+        }
+      });
+
+  it("creates a brand, trimmed, and refuses a duplicate in any case",
+      async () => {
+        const made = await b("createInventoryBrand", {name: "  Air   Jordan "},
+            B_STAFF);
+        assert.equal(made.success, true);
+        assert.equal(made.name, "Air Jordan");
+        const row = (await db.collection("inventoryBrands")
+            .doc(made.brandId).get()).data();
+        assert.deepEqual(
+            [row.businessId, row.name, row.nameKey, row.archived,
+              row.createdByStaffId],
+            [BB, "Air Jordan", "air jordan", false, B_STAFF]);
+        assert.ok(row.createdAt && row.updatedAt);
+        const lock = (await db.collection("inventoryBrandKeys")
+            .doc(require("../inventory").brandKeyDocId(BB, "air jordan"))
+            .get()).data();
+        assert.deepEqual(lock, {businessId: BB, brandId: made.brandId,
+          nameKey: "air jordan"});
+        await assert.rejects(b("createInventoryBrand", {name: "AIR JORDAN"},
+            B_OWNER), (error) => {
+          assert.equal(error.code, "already-exists");
+          assert.equal(error.details.reason, "brand_name_taken");
+          assert.equal(error.details.brandId, made.brandId);
+          assert.equal(error.details.archived, false);
+          return true;
+        });
+        await assert.rejects(b("createInventoryBrand", {name: "   "}, B_OWNER),
+            refusal("brand_name_required", "invalid-argument"));
+        await assert.rejects(b("createInventoryBrand", {}, B_OWNER),
+            refusal("brand_name_required"));
+        await assert.rejects(b("createInventoryBrand",
+            {name: "x".repeat(61)}, B_OWNER),
+        refusal("brand_too_long", "invalid-argument"));
+        const audit = (await db.collection("lotLedgerAudit")
+            .where("businessId", "==", BB)
+            .where("entityId", "==", made.brandId).get()).docs
+            .map((d) => d.data());
+        assert.equal(audit.length, 1);
+        assert.equal(audit[0].entityType, "inventory_brand");
+        assert.equal(audit[0].action, "created");
+        assert.equal(audit[0].acknowledged, true);
+      });
+
+  it("gives a product the brand it picked, with a name snapshot", async () => {
+    const {brandId} = await b("createInventoryBrand", {name: "Nike"}, B_OWNER);
+    const made = await b("createInventoryItem", {name: "Air Max",
+      priceCents: 1000, quantity: 5, brandId}, B_OWNER);
+    assert.equal(made.brandId, brandId);
+    const row = await itemRow(made.itemId);
+    assert.equal(row.brandId, brandId);
+    assert.equal(row.brand, "Nike");
+    await assert.rejects(mk({brandId: "no-such-brand"}),
+        refusal("brand_not_found", "not-found"));
+    await assert.rejects(mk({brandId: "a/b"}), refusal("brand_not_found"));
+    await assert.rejects(mk({brandId: 5}), refusal("brand_not_found"));
+    await assert.rejects(mk({brand: "x".repeat(61)}),
+        refusal("brand_too_long"));
+  });
+
+  it("refuses a brand of another business", async () => {
+    const OB = "inv-brand-other-biz";
+    const OO = "inv-brand-other-owner";
+    await seedBusiness(OB, {[OO]: {role: "businessOwner", businessId: OB}});
+    const foreign = (await callIn(OB)("createInventoryBrand",
+        {name: "Foreign"}, OO)).brandId;
+    await assert.rejects(mk({brandId: foreign}),
+        refusal("brand_not_found"));
+    // The same name in another business is a different brand.
+    const mine = (await b("createInventoryBrand", {name: "Foreign"},
+        B_OWNER)).brandId;
+    assert.notEqual(mine, foreign);
+    await assert.rejects(b("renameInventoryBrand",
+        {brandId: foreign, name: "Mine now"}, B_OWNER),
+    refusal("brand_not_found"));
+    await assert.rejects(b("archiveInventoryBrand",
+        {brandId: foreign, archived: true}, B_OWNER),
+    refusal("brand_not_found"));
+  });
+
+  it("finds or creates a typed brand, race-safe, in the list's spelling",
+      async () => {
+        const before = (await brandsOf()).length;
+        const ids = await Promise.all([0, 1, 2, 3].map((i) =>
+          mk({brand: i % 2 ? "Adidas" : "  adidas "})));
+        const rows = await Promise.all(ids.map(itemRow));
+        assert.equal(new Set(rows.map((r) => r.brandId)).size, 1);
+        assert.ok(rows.every((r) => r.brandId));
+        assert.equal((await brandsOf()).length, before + 1);
+        assert.equal(new Set(rows.map((r) => r.brand)).size, 1);
+        const again = await mk({brand: rows[0].brand.toUpperCase()});
+        assert.equal((await itemRow(again)).brand, rows[0].brand);
+        assert.equal((await brandsOf()).length, before + 1);
+      });
+
+  it("lets brandId win over typed text, and clears with an empty value",
+      async () => {
+        const {brandId} = await b("createInventoryBrand", {name: "Puma"},
+            B_OWNER);
+        const wins = await mk({brandId, brand: "Something else"});
+        assert.equal((await itemRow(wins)).brand, "Puma");
+        assert.equal((await itemRow(wins)).brandId, brandId);
+        const typedOnly = await mk({brand: "Reebok"});
+        const row = await itemRow(typedOnly);
+        assert.ok(row.brandId);
+        await b("updateInventoryItem", {itemId: typedOnly, brand: ""},
+            B_OWNER);
+        const cleared = await itemRow(typedOnly);
+        assert.equal(cleared.brand, "");
+        assert.equal(cleared.brandId, "");
+        await b("updateInventoryItem", {itemId: typedOnly, brand: "reebok"},
+            B_OWNER);
+        assert.equal((await itemRow(typedOnly)).brandId, row.brandId);
+        await b("updateInventoryItem", {itemId: typedOnly, brandId: ""},
+            B_OWNER);
+        assert.equal((await itemRow(typedOnly)).brandId, "");
+        await b("updateInventoryItem", {itemId: typedOnly, brandId, brand: ""},
+            B_OWNER);
+        assert.equal((await itemRow(typedOnly)).brand, "Puma");
+        await assert.rejects(b("updateInventoryItem",
+            {itemId: typedOnly, brandId: "nope"}, B_OWNER),
+        refusal("brand_not_found"));
+        await assert.rejects(b("updateInventoryItem",
+            {itemId: typedOnly, brand: "x".repeat(61)}, B_OWNER),
+        refusal("brand_too_long"));
+      });
+
+  it("keeps a v2-shaped request working: no brand fields, no brand",
+      async () => {
+        const id = await mk({category: "Shoes"});
+        const row = await itemRow(id);
+        assert.equal(row.brandId, "");
+        assert.equal(row.brand, "");
+        assert.equal(row.category, "Shoes");
+        const edited = await b("updateInventoryItem",
+            {itemId: id, name: "Renamed"}, B_OWNER);
+        assert.deepEqual(edited.changed, ["Name"]);
+        assert.equal((await itemRow(id)).brandId, "");
+        const made = await b("createInventoryItem", {name: "Plain",
+          priceCents: 100, quantity: 1}, B_OWNER);
+        assert.deepEqual(Object.keys(made).sort(),
+            ["code", "itemId", "success"]);
+      });
+
+  it("shows a brand change in the product history", async () => {
+    const id = await mk();
+    const {brandId} = await b("createInventoryBrand", {name: "Vans"}, B_OWNER);
+    const done = await b("updateInventoryItem", {itemId: id, brandId},
+        B_OWNER);
+    assert.deepEqual(done.changed, ["Brand"]);
+    const again = await b("updateInventoryItem", {itemId: id, brandId},
+        B_OWNER);
+    assert.deepEqual(again.changed, []);
+  });
+
+  it("renames a brand on its products but not on past sales", async () => {
+    const {brandId} = await b("createInventoryBrand", {name: "Gucci"},
+        B_OWNER);
+    const ids = await Promise.all([mk({brandId}), mk({brandId})]);
+    const sold = await b("recordInventorySale", {
+      clientRequestId: requestId(), paymentMethod: "cash",
+      lines: [{itemId: ids[0], quantity: 1, soldPriceCents: 1000}]}, B_OWNER);
+    const done = await b("renameInventoryBrand",
+        {brandId, name: "Gucci Italia"}, B_STAFF);
+    assert.equal(done.success, true);
+    assert.equal(done.brandId, brandId);
+    assert.equal(done.name, "Gucci Italia");
+    assert.equal(done.itemsUpdated, 2);
+    assert.equal(done.complete, true);
+    for (const id of ids) {
+      const row = await itemRow(id);
+      assert.equal(row.brand, "Gucci Italia");
+      assert.equal(row.brandId, brandId);
+    }
+    const sale = (await db.collection("inventorySales").doc(sold.saleId)
+        .get()).data();
+    assert.equal(sale.lines[0].brand, "Gucci");
+    assert.equal(sale.lines[0].brandId, brandId);
+    // The old name is free again, the new one is taken.
+    await b("createInventoryBrand", {name: "gucci"}, B_OWNER);
+    await assert.rejects(
+        b("renameInventoryBrand", {brandId, name: "GUCCI"}, B_OWNER),
+        (error) => {
+          assert.equal(error.code, "already-exists");
+          assert.equal(error.details.reason, "brand_name_taken");
+          return true;
+        });
+    // Renaming in place (only the case) is fine, and idempotent.
+    await b("renameInventoryBrand", {brandId, name: "GUCCI ITALIA"}, B_OWNER);
+    assert.equal((await itemRow(ids[1])).brand, "GUCCI ITALIA");
+    const same = await b("renameInventoryBrand",
+        {brandId, name: "GUCCI ITALIA"}, B_OWNER);
+    assert.equal(same.itemsUpdated, 0);
+    assert.equal(same.complete, true);
+    await assert.rejects(b("renameInventoryBrand",
+        {brandId: "nope", name: "Z"}, B_OWNER),
+    refusal("brand_not_found", "not-found"));
+    await assert.rejects(b("renameInventoryBrand", {name: "Z"}, B_OWNER),
+        refusal("brand_not_found"));
+    await assert.rejects(b("renameInventoryBrand", {brandId, name: ""},
+        B_OWNER), refusal("brand_name_required"));
+    await assert.rejects(b("renameInventoryBrand",
+        {brandId, name: "x".repeat(61)}, B_OWNER), refusal("brand_too_long"));
+  });
+
+  it("walks a rename in bounded pages and says when more remain", async () => {
+    const {brandId} = await b("createInventoryBrand", {name: "Bulk"},
+        B_OWNER);
+    const batch = db.batch();
+    for (let i = 0; i < 405; i++) {
+      batch.set(db.collection("inventoryItems").doc(`inv-brand-bulk-${i}`), {
+        businessId: BB, name: `Bulk ${i}`, code: `BULK${i}`, priceCents: 1,
+        costCents: null, quantity: 1, lowStockAt: null, category: "",
+        categoryId: "", brandId, brand: "Bulk", photoUrl: "",
+        archived: false, countWasOff: false});
+    }
+    await batch.commit();
+    const done = await b("renameInventoryBrand", {brandId, name: "Bulky"},
+        B_OWNER);
+    assert.equal(done.itemsUpdated, 405);
+    assert.equal(done.complete, true);
+    const left = (await db.collection("inventoryItems")
+        .where("businessId", "==", BB).where("brandId", "==", brandId).get())
+        .docs.filter((d) => d.data().brand !== "Bulky");
+    assert.equal(left.length, 0);
+  });
+
+  it("archives a brand and keeps it on the products", async () => {
+    const {brandId} = await b("createInventoryBrand", {name: "Seasonal"},
+        B_OWNER);
+    const id = await mk({brandId});
+    const done = await b("archiveInventoryBrand", {brandId, archived: true},
+        B_STAFF);
+    assert.deepEqual(done, {success: true, archived: true});
+    assert.equal((await db.collection("inventoryBrands").doc(brandId).get())
+        .data().archived, true);
+    assert.equal((await itemRow(id)).brandId, brandId);
+    // The product it is already on can still be edited with it.
+    await b("updateInventoryItem", {itemId: id, brandId, name: "Kept"},
+        B_OWNER);
+    assert.equal((await itemRow(id)).name, "Kept");
+    // It cannot be picked by id, but typing its name brings it back.
+    await assert.rejects(mk({brandId}), refusal("brand_not_found"));
+    const typed = await mk({brand: "seasonal"});
+    assert.equal((await itemRow(typed)).brandId, brandId);
+    assert.equal((await db.collection("inventoryBrands").doc(brandId).get())
+        .data().archived, false);
+    await assert.rejects(b("archiveInventoryBrand",
+        {brandId, archived: "yes"}, B_OWNER), refusal("archived_invalid"));
+    await assert.rejects(b("archiveInventoryBrand",
+        {brandId: "", archived: true}, B_OWNER), refusal("brand_not_found"));
+    await assert.rejects(b("archiveInventoryBrand",
+        {brandId: "nope", archived: true}, B_OWNER),
+    refusal("brand_not_found", "not-found"));
+    const restored = await b("archiveInventoryBrand",
+        {brandId, archived: false}, B_OWNER);
+    assert.deepEqual(restored, {success: true, archived: false});
+  });
+
+  it("snapshots the brand on a sale line, empty for a plain product",
+      async () => {
+        const {brandId} = await b("createInventoryBrand", {name: "Fila"},
+            B_OWNER);
+        const branded = await mk({brandId});
+        const plain = await mk();
+        const sold = await b("recordInventorySale", {
+          clientRequestId: requestId(), paymentMethod: "cash",
+          lines: [{itemId: branded, quantity: 1, soldPriceCents: 1000},
+            {itemId: plain, quantity: 1, soldPriceCents: 500}]}, B_OWNER);
+        const sale = (await db.collection("inventorySales").doc(sold.saleId)
+            .get()).data();
+        assert.equal(sale.lines[0].brandId, brandId);
+        assert.equal(sale.lines[0].brand, "Fila");
+        assert.equal(sale.lines[1].brandId, "");
+        assert.equal(sale.lines[1].brand, "");
+      });
+
+  describe("byBrand", () => {
+    const RB = "inv-brand-report-biz";
+    const r = callIn(RB);
+    const R_OWNER = "inv-brand-report-owner";
+    before(async () => {
+      await seedBusiness(RB, {
+        [R_OWNER]: {role: "businessOwner", businessId: RB}});
+    });
+    const mkr = async (extra) => (await r("createInventoryItem", {
+      priceCents: 1000, quantity: 20, ...extra}, R_OWNER)).itemId;
+    const ring = (lines) => r("recordInventorySale", {
+      clientRequestId: requestId(), paymentMethod: "cash", lines}, R_OWNER);
+
+    it("is empty without sales", async () => {
+      const s = await r("getInventorySummary", {range: "today"}, R_OWNER);
+      assert.deepEqual(s.byBrand, []);
+    });
+
+    it("groups revenue and profit, drops voided sales, reads legacy lines",
+        async () => {
+          const jordan = (await r("createInventoryBrand", {name: "Jordan"},
+              R_OWNER)).brandId;
+          const nike = (await r("createInventoryBrand", {name: "Nike"},
+              R_OWNER)).brandId;
+          await r("createInventoryBrand", {name: "Never sold"}, R_OWNER);
+          const shoe = await mkr({name: "11", brandId: jordan,
+            costCents: 300});
+          const slide = await mkr({name: "Slide", brandId: nike,
+            costCents: null});
+          const misc = await mkr({name: "Misc"});
+          const sold = await ring([
+            {itemId: shoe, quantity: 2, soldPriceCents: 800},
+            {itemId: slide, quantity: 3, soldPriceCents: 1000},
+            {itemId: misc, quantity: 1, soldPriceCents: 250}]);
+          const gone = await ring([
+            {itemId: slide, quantity: 5, soldPriceCents: 1000}]);
+          await r("voidInventorySale", {saleId: gone.saleId}, R_OWNER);
+          // A line written before brands existed: no brand snapshot at all.
+          await db.collection("inventorySales").add({
+            businessId: RB, voided: false, totalCents: 1000,
+            createdAt: admin.firestore.Timestamp.now(),
+            lines: [{itemId: shoe, name: "11", quantity: 1,
+              soldPriceCents: 1000, listPriceCents: 1000, costCents: 300}]});
+          const s = await r("getInventorySummary", {range: "today"}, R_OWNER);
+          assert.deepEqual(s.byBrand, [
+            {brandId: nike, name: "Nike", itemsSold: 3,
+              revenueCents: 3000, profitCents: 0},
+            {brandId: jordan, name: "Jordan", itemsSold: 3,
+              revenueCents: 2600, profitCents: 2600 - 900},
+            {brandId: "", name: "No brand", itemsSold: 1,
+              revenueCents: 250, profitCents: 0}]);
+          assert.equal(s.revenueCents, 5850);
+          // byCategory is untouched by brands.
+          assert.deepEqual(s.byCategory.map((e) => e.categoryId), [""]);
+          // The brand's current name shows on past sales.
+          await r("renameInventoryBrand",
+              {brandId: jordan, name: "Air Jordan"}, R_OWNER);
+          const after = await r("getInventorySummary", {range: "today"},
+              R_OWNER);
+          assert.ok(after.byBrand.some((e) => e.brandId === jordan &&
+            e.name === "Air Jordan"));
+          assert.ok(sold.saleId);
+        });
+  });
+
+  describe("in a business with several stores", () => {
+    const SB = "inv-brand-store-biz";
+    const S_OWNER = "inv-brand-store-owner";
+    const s = callIn(SB);
+    before(async () => {
+      await seedBusiness(SB, {
+        [S_OWNER]: {role: "businessOwner", businessId: SB}});
+    });
+
+    it("snapshots the brand on a per-store sale and counts it in byBrand",
+        async () => {
+          const {brandId} = await s("createInventoryBrand", {name: "Jordan"},
+              S_OWNER);
+          const made = await s("createInventoryItem", {name: "11",
+            priceCents: 1000, quantity: 10, brandId}, S_OWNER);
+          const second = await s("createInventoryStore", {name: "Annex"},
+              S_OWNER);
+          const sold = await s("recordInventorySale", {
+            clientRequestId: requestId(), paymentMethod: "cash",
+            storeId: second.storeId,
+            lines: [{itemId: made.itemId, quantity: 1,
+              soldPriceCents: 900}]}, S_OWNER);
+          const sale = (await db.collection("inventorySales")
+              .doc(sold.saleId).get()).data();
+          assert.equal(sale.storeId, second.storeId);
+          assert.equal(sale.lines[0].brandId, brandId);
+          assert.equal(sale.lines[0].brand, "Jordan");
+          const summary = await s("getInventorySummary", {range: "today"},
+              S_OWNER);
+          assert.deepEqual(summary.byBrand, [{brandId, name: "Jordan",
+            itemsSold: 1, revenueCents: 900, profitCents: 0}]);
+          const annex = await s("getInventorySummary",
+              {range: "today", storeId: second.storeId}, S_OWNER);
+          assert.equal(annex.byBrand.length, 1);
+          const main = await s("getInventorySummary",
+              {range: "today", storeId: `${SB}_main`}, S_OWNER);
+          assert.deepEqual(main.byBrand, []);
+        });
+  });
 });
