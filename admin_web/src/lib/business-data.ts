@@ -255,6 +255,11 @@ export function useInventoryCategories(businessId: string, enabled: boolean): Bu
   return useBusinessCollection("inventoryCategories", businessId, enabled, { pageSize: null, sort: "query" });
 }
 
+/** A business's product brands, whole (a short list), archived ones included. */
+export function useInventoryBrands(businessId: string, enabled: boolean): BusinessRowsResult {
+  return useBusinessCollection("inventoryBrands", businessId, enabled, { pageSize: null, sort: "query" });
+}
+
 /** A business's stores, whole (a handful), archived ones included. */
 export function useInventoryStores(businessId: string, enabled: boolean): BusinessRowsResult {
   return useBusinessCollection("inventoryStores", businessId, enabled, { pageSize: null, sort: "query" });

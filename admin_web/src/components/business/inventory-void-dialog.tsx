@@ -15,6 +15,7 @@ import {
   voidConsequenceText,
   voidInventorySaleRequest,
   type InventorySale,
+  productDisplayName,
 } from "@/lib/inventory";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 
@@ -78,7 +79,7 @@ export function InventoryVoidDialog({
           <ul className="ivt-void-lines">
             {sale.lines.map((line, index) => (
               <li key={`${line.itemId}-${index}`}>
-                <span data-no-translate>{line.quantity} × {line.name}</span>
+                <span data-no-translate>{line.quantity} × {productDisplayName(line)}</span>
               </li>
             ))}
           </ul>

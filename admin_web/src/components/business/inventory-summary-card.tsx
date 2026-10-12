@@ -11,6 +11,7 @@ import {
   inventorySummaryRequest,
   leftText,
   lowAtText,
+  productDisplayName,
   readInventorySummary,
   type InventorySummaryRange,
   type StoreAccess,
@@ -36,6 +37,7 @@ export function InventorySummaryCard({
   storeFilter,
   onStoreFilter,
   onOpenItem,
+  brandByItem,
 }: {
   businessId: string;
   enabled: boolean;
@@ -46,6 +48,8 @@ export function InventorySummaryCard({
   storeFilter: string;
   onStoreFilter: (storeId: string) => void;
   onOpenItem: (itemId: string) => void;
+  /** The brand each product wears now, by product id: the server's best/low rows may carry the name alone. */
+  brandByItem?: ReadonlyMap<string, string>;
 }) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const [range, setRange] = useState<InventorySummaryRange>("today");
@@ -60,6 +64,9 @@ export function InventorySummaryCard({
   const summary = readInventorySummary(totals.data);
   const showByStore = access.multi && access.canSeeAll && !storeFilter && summary !== null && summary.byStore.length > 0;
   const showByCategory = summary !== null && summary.byCategory.length > 0;
+  const showByBrand = summary !== null && summary.byBrand.length > 0;
+  const shownName = (row: { itemId: string; name: string; brand: string }) =>
+    productDisplayName({ name: row.name, brand: row.brand || brandByItem?.get(row.itemId) || "" });
 
   return (
     <section className="ivt-summary" aria-label="Sales summary">
@@ -98,7 +105,7 @@ export function InventorySummaryCard({
         loading={totals.loading}
         onRefresh={() => totals.refresh()}
       />
-      {(showByCategory || showByStore) && summary && (
+      {(showByCategory || showByBrand || showByStore) && summary && (
         <div className="ivt-breakdowns">
           {showByCategory && (
             <div className="ivt-breakdown">
@@ -111,6 +118,26 @@ export function InventorySummaryCard({
                   {summary.byCategory.map((row) => (
                     <tr key={row.categoryId || "uncategorized"}>
                       <td>{row.categoryId ? <strong data-no-translate>{row.name}</strong> : <strong>Uncategorized</strong>}</td>
+                      <td data-no-translate>{row.itemsSold}</td>
+                      <td data-no-translate>{moneyText(row.revenueCents)}</td>
+                      <td data-no-translate className={row.profitCents < 0 ? "ivt-neg" : undefined}>{moneyText(row.profitCents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {showByBrand && (
+            <div className="ivt-breakdown">
+              <h4>Brands</h4>
+              <table className="ivt-lines ivt-money-table">
+                <thead>
+                  <tr><th>Brand</th><th>Items sold</th><th>Revenue</th><th>Profit</th></tr>
+                </thead>
+                <tbody>
+                  {summary.byBrand.map((row) => (
+                    <tr key={row.brandId || "no-brand"}>
+                      <td>{row.brandId ? <strong data-no-translate>{row.name}</strong> : <strong>No brand</strong>}</td>
                       <td data-no-translate>{row.itemsSold}</td>
                       <td data-no-translate>{moneyText(row.revenueCents)}</td>
                       <td data-no-translate className={row.profitCents < 0 ? "ivt-neg" : undefined}>{moneyText(row.profitCents)}</td>
@@ -151,7 +178,7 @@ export function InventorySummaryCard({
               <ul>
                 {summary.best.map((row) => (
                   <li key={row.itemId}>
-                    <button type="button" className="ivt-link" onClick={() => onOpenItem(row.itemId)} data-no-translate>{row.name}</button>
+                    <button type="button" className="ivt-link" onClick={() => onOpenItem(row.itemId)} data-no-translate>{shownName(row)}</button>
                     <small data-no-translate>{row.quantity} · {moneyText(row.revenueCents)}</small>
                   </li>
                 ))}
@@ -164,7 +191,7 @@ export function InventorySummaryCard({
               <ul>
                 {summary.low.map((row) => (
                   <li key={`${row.itemId}-${row.storeId}`}>
-                    <button type="button" className="ivt-link" onClick={() => onOpenItem(row.itemId)} data-no-translate>{row.name}</button>
+                    <button type="button" className="ivt-link" onClick={() => onOpenItem(row.itemId)} data-no-translate>{shownName(row)}</button>
                     <small data-no-translate>
                       {leftText(row.quantity, lang)}
                       {row.lowStockAt !== null ? ` · ${lowAtText(row.lowStockAt, lang)}` : ""}
@@ -181,7 +208,7 @@ export function InventorySummaryCard({
               <ul>
                 {summary.countWasOff.map((row) => (
                   <li key={row.itemId}>
-                    <button type="button" className="ivt-link" onClick={() => onOpenItem(row.itemId)} data-no-translate>{row.name}</button>
+                    <button type="button" className="ivt-link" onClick={() => onOpenItem(row.itemId)} data-no-translate>{shownName(row)}</button>
                     <small>Recount it and set the count.</small>
                   </li>
                 ))}

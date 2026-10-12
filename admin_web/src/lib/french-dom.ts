@@ -5401,6 +5401,39 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Only the owner can do this.": "Seul le propriétaire peut faire cela.",
 });
 
+// Inventory v3 (docs/INVENTORY.md, "Brands and quick entry (v3)"): the brands
+// manager and breakdown, the brand picker and filter, "Save and add another
+// like it", and the refusals the server raises for brands. "Brand" is feminine
+// in French ("marque").
+Object.assign(TEXT_TRANSLATIONS, {
+  "Brand": "Marque",
+  "Brands": "Marques",
+  "All brands": "Toutes les marques",
+  "No brand": "Aucune marque",
+  "Filter by brand": "Filtrer par marque",
+  "Add a new brand": "Ajouter une nouvelle marque",
+  "New brand name": "Nom de la nouvelle marque",
+  "Brand name": "Nom de la marque",
+  "Archived brands": "Marques archivées",
+  "A brand goes in front of a product's name, like “Jordan 11”. The same list is used in every store. A brand is archived, never deleted: its products keep it.":
+    "Une marque se place devant le nom d’un produit, comme « Jordan 11 ». La même liste sert dans tous les magasins. Une marque est archivée, jamais supprimée : ses produits la gardent.",
+  "No brands yet. Add the first one above, or add one while you create a product.":
+    "Aucune marque pour l’instant. Ajoutez la première ci-dessus, ou ajoutez-en une en créant un produit.",
+  "Brand added.": "Marque ajoutée.",
+  "Brand renamed.": "Marque renommée.",
+  "Brand archived. Its products keep it.": "Marque archivée. Ses produits la gardent.",
+  "Brand restored.": "Marque restaurée.",
+  "Brand, name, category or code": "Marque, nom, catégorie ou code",
+  "Type the name without the brand. The brand you pick below is shown in front of it.":
+    "Saisissez le nom sans la marque. La marque choisie ci-dessous s’affiche devant.",
+  "Save and add another like it": "Enregistrer et en ajouter un autre semblable",
+  // The server's refusals for brands, and the checks made before the call.
+  "The brand is too long.": "La marque est trop longue.",
+  "Enter the brand's name.": "Saisissez le nom de la marque.",
+  "You already have a brand with that name.": "Vous avez déjà une marque portant ce nom.",
+  "That brand no longer exists.": "Cette marque n’existe plus.",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Inventory service": "Service d’inventaire",
   "17 characters": "17 caractères",

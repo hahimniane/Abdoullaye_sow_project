@@ -19,6 +19,7 @@ import {
   voidedByText,
   type InventorySale,
   type StoreAccess,
+  productDisplayName,
 } from "@/lib/inventory";
 import { statusPillClass } from "@/lib/status-pill";
 
@@ -146,7 +147,7 @@ export function InventorySalesList({
                           {sale.lines.map((line, index) => (
                             <tr key={`${line.itemId}-${index}`}>
                               <td>
-                                <strong data-no-translate>{line.name}</strong>
+                                <strong data-no-translate>{productDisplayName(line)}</strong>
                                 {line.code && <small data-no-translate>{line.code}</small>}
                                 {line.countWasOff && <small className="ctn-wa-warn">Count was off</small>}
                               </td>

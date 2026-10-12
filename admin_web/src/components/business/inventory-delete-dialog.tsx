@@ -11,6 +11,7 @@ import {
   inventoryMessage,
   runInventoryCall,
   type InventoryItem,
+  productDisplayName,
 } from "@/lib/inventory";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 
@@ -57,7 +58,7 @@ export function InventoryDeleteDialog({
         <header className="lst-modal-head">
           <div>
             <h3>Delete this product?</h3>
-            <p><span data-no-translate>{item.name}</span></p>
+            <p><span data-no-translate>{productDisplayName(item)}</span></p>
           </div>
           <button className="lst-icon-btn" type="button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </header>

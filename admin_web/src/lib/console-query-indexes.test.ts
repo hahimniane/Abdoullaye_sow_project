@@ -184,6 +184,7 @@ const SITES: Site[] = [
   // Sales: every store at once (owner, all-stores staff), or one store only (staff who work in one store: the rules' shape).
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventorySales newest first, all stores or one store", shapes: [bc("inventorySales", {}), bc("inventorySales", { where: [eq("storeId")] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryCategories", shapes: [bc("inventoryCategories", { pageSize: null })] },
+  { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryBrands", shapes: [bc("inventoryBrands", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryStores", shapes: [bc("inventoryStores", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryStock, all stores or one store", shapes: [bc("inventoryStock", { pageSize: null }), bc("inventoryStock", { pageSize: null, where: [eq("storeId")] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryMovements of one product", shapes: [bc("inventoryMovements", { where: [eq("itemId")] })] },
