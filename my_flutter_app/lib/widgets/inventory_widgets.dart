@@ -24,6 +24,7 @@ String inventoryFailureText(AppLocalizations l10n, InventoryFailure failure) =>
       InventoryFailure.itemNotFound => l10n.inventoryFailNotFound,
       InventoryFailure.saleVoided => l10n.inventoryFailVoided,
       InventoryFailure.noPermission => l10n.inventoryFailNoPermission,
+      InventoryFailure.deviceNotVerified => l10n.inventoryFailDeviceNotVerified,
       InventoryFailure.invalid => l10n.inventoryFailInvalid,
       InventoryFailure.unknown => l10n.inventoryFailUnknown,
       InventoryFailure.categoryNameRequired => l10n.inventoryErrCategoryName,
@@ -76,8 +77,7 @@ String inventoryMovementLabel(AppLocalizations l10n, String type) =>
       'transfer_in' ||
       'transfer_out' ||
       'transferIn' ||
-      'transferOut' =>
-        l10n.inventoryMoveTransfer,
+      'transferOut' => l10n.inventoryMoveTransfer,
       _ => type,
     };
 
@@ -136,11 +136,10 @@ class InventoryChoiceChips extends StatelessWidget {
 List<InventoryChoice> inventoryStoreChoices(
   AppLocalizations l10n,
   InventoryStoreContext context,
-) =>
-    [
-      (id: '', label: l10n.inventoryStoreFilterAll),
-      for (final store in context.active) (id: store.id, label: store.name),
-    ];
+) => [
+  (id: '', label: l10n.inventoryStoreFilterAll),
+  for (final store in context.active) (id: store.id, label: store.name),
+];
 
 /// "+5" / "-2" for a stock change.
 String inventoryDeltaText(int delta) => delta > 0 ? '+$delta' : '$delta';
@@ -171,7 +170,12 @@ class InventoryHeader extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 4, AppSpacing.sm, AppSpacing.md),
+          padding: const EdgeInsets.fromLTRB(
+            4,
+            4,
+            AppSpacing.sm,
+            AppSpacing.md,
+          ),
           child: Row(
             children: [
               const AppBackButton(),
@@ -259,20 +263,20 @@ class InventoryStatusChips extends StatelessWidget {
       children: [
         switch (item.stock) {
           InventoryStock.out => InventoryChip(
-              key: const Key('inv-chip-out'),
-              label: l10n.inventoryOut,
-              color: AppColors.errorRed,
-            ),
+            key: const Key('inv-chip-out'),
+            label: l10n.inventoryOut,
+            color: AppColors.errorRed,
+          ),
           InventoryStock.low => InventoryChip(
-              key: const Key('inv-chip-low'),
-              label: l10n.inventoryLow,
-              color: AppColors.warn,
-            ),
+            key: const Key('inv-chip-low'),
+            label: l10n.inventoryLow,
+            color: AppColors.warn,
+          ),
           InventoryStock.ok => InventoryChip(
-              key: const Key('inv-chip-ok'),
-              label: l10n.inventoryInStock,
-              color: AppColors.sage,
-            ),
+            key: const Key('inv-chip-ok'),
+            label: l10n.inventoryInStock,
+            color: AppColors.sage,
+          ),
         },
         if (item.countWasOff)
           InventoryChip(
@@ -305,8 +309,11 @@ class InventoryPhoto extends StatelessWidget {
       width: size,
       height: size,
       color: AppColors.parchment,
-      child: Icon(Icons.inventory_2_outlined,
-          size: size * 0.5, color: AppColors.muted),
+      child: Icon(
+        Icons.inventory_2_outlined,
+        size: size * 0.5,
+        color: AppColors.muted,
+      ),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
@@ -347,7 +354,9 @@ class InventoryNote extends StatelessWidget {
     final color = error ? AppColors.errorRed : AppColors.warn;
     return Container(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
@@ -356,8 +365,11 @@ class InventoryNote extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(error ? Icons.error_outline : Icons.warning_amber_rounded,
-              size: 16, color: color),
+          Icon(
+            error ? Icons.error_outline : Icons.warning_amber_rounded,
+            size: 16,
+            color: color,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -401,7 +413,10 @@ class InventoryFigure extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-              fontSize: 11.5, height: 1.25, color: AppColors.muted),
+            fontSize: 11.5,
+            height: 1.25,
+            color: AppColors.muted,
+          ),
         ),
       ],
     );

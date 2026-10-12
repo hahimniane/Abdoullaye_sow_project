@@ -20076,6 +20076,12 @@ abstract class AppLocalizations {
   /// **'You are not allowed to do that for this shop.'**
   String get inventoryFailNoPermission;
 
+  /// No description provided for @inventoryFailDeviceNotVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not verify this device with the server. Check your connection and try again. If it keeps happening, update the app or sign in again.'**
+  String get inventoryFailDeviceNotVerified;
+
   /// No description provided for @inventoryFailInvalid.
   ///
   /// In en, this message translates to:

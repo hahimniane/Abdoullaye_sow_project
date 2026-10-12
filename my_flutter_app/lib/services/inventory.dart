@@ -1022,7 +1022,10 @@ Map<String, Object?> updateInventoryItemRequest(
         'brandId': brandId
       else if (brand.isNotEmpty)
         'brand': brand
-      else ...{'brand': '', 'brandId': ''},
+      else ...{
+        'brand': '',
+        'brandId': '',
+      },
     if (photo != existing.photoUrl) 'photoUrl': photo,
   };
 }
@@ -1477,6 +1480,10 @@ enum InventoryFailure {
   itemNotFound,
   saleVoided,
   noPermission,
+
+  /// The server answered `unauthenticated`: it could not verify this device
+  /// or the sign-in. Nothing was lost; try again, then update or sign in again.
+  deviceNotVerified,
   invalid,
   unknown,
 
@@ -1554,8 +1561,12 @@ InventoryFailure inventoryFailureOf({
     case 'deadline-exceeded':
       return InventoryFailure.network;
     case 'permission-denied':
-    case 'unauthenticated':
       return InventoryFailure.noPermission;
+    case 'unauthenticated':
+      // Not about the shop: the server could not verify this phone (App
+      // Check) or the sign-in. "Not allowed" here sent people looking for a
+      // permission that was never missing.
+      return InventoryFailure.deviceNotVerified;
     case 'invalid-argument':
     case 'failed-precondition':
     case 'out-of-range':

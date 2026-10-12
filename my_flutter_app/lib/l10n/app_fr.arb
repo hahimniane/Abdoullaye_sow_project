@@ -5300,6 +5300,7 @@
   "inventoryFailNotFound": "Un produit du panier est introuvable. Retirez-le et réessayez.",
   "inventoryFailVoided": "Cette vente a déjà été annulée.",
   "inventoryFailNoPermission": "Vous n'avez pas le droit de faire cela pour cette boutique.",
+  "inventoryFailDeviceNotVerified": "Impossible de vérifier cet appareil auprès du serveur. Vérifiez votre connexion et réessayez. Si cela continue, mettez à jour l'application ou reconnectez-vous.",
   "inventoryFailInvalid": "Cela n'a pas pu être accepté. Vérifiez les détails et réessayez.",
   "inventoryFailUnknown": "Cela n'a pas abouti. Réessayez.",
   "inventoryProblemArchived": "Un produit du panier est archivé. Retirez-le pour continuer.",

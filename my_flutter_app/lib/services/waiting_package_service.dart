@@ -1,22 +1,25 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import '../utils/app_check_recovery.dart';
 import 'waiting_packages.dart';
 
 /// Calls one of the container callables and hands back its data. The waiting
 /// package sheets take this as a parameter, so a widget test answers (or
 /// refuses) in place of Firebase; the default is the real callable.
-typedef ContainerCallableCaller = Future<Object?> Function(
-  String name,
-  Map<String, Object?> payload,
-);
+typedef ContainerCallableCaller =
+    Future<Object?> Function(String name, Map<String, Object?> payload);
 
 Future<Object?> callContainerCallable(
   String name,
   Map<String, Object?> payload,
 ) async {
-  final response =
-      await FirebaseFunctions.instance.httpsCallable(name).call<Object?>(payload);
+  // One `unauthenticated` refusal (the phone's device-verification token was
+  // missing or stale for that request) is answered with a fresh token and one
+  // more try, so a sale or a package update is not lost to it.
+  final response = await callWithAppCheckRecovery(
+    () => FirebaseFunctions.instance.httpsCallable(name).call<Object?>(payload),
+  );
   return response.data;
 }
 
@@ -32,7 +35,7 @@ abstract interface class LinePaymentsSource {
 /// sorted on the phone.
 class FirestoreLinePaymentsSource implements LinePaymentsSource {
   FirestoreLinePaymentsSource({FirebaseFirestore? firestore})
-      : _override = firestore;
+    : _override = firestore;
 
   final FirebaseFirestore? _override;
   FirebaseFirestore get _db => _override ?? FirebaseFirestore.instance;
@@ -44,8 +47,10 @@ class FirestoreLinePaymentsSource implements LinePaymentsSource {
           .where('businessId', isEqualTo: businessId)
           .where('lineId', isEqualTo: lineId)
           .snapshots()
-          .map((snap) => sortPaymentsNewestFirst([
-                for (final d in snap.docs)
-                  ContainerLinePayment.fromMap(d.id, d.data()),
-              ]));
+          .map(
+            (snap) => sortPaymentsNewestFirst([
+              for (final d in snap.docs)
+                ContainerLinePayment.fromMap(d.id, d.data()),
+            ]),
+          );
 }

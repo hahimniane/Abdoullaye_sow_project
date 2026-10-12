@@ -11474,6 +11474,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'You are not allowed to do that for this shop.';
 
   @override
+  String get inventoryFailDeviceNotVerified =>
+      'We could not verify this device with the server. Check your connection and try again. If it keeps happening, update the app or sign in again.';
+
+  @override
   String get inventoryFailInvalid =>
       'That could not be accepted. Check the details and try again.';
 

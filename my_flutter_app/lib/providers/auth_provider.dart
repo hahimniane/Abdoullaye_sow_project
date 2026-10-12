@@ -17,6 +17,8 @@ import '../utils/business_permissions.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
 import 'auth_failure.dart';
 import 'auth_lookup_guard.dart';
+import 'auth_profile_gate.dart';
+import '../utils/app_check_recovery.dart';
 
 export 'auth_failure.dart';
 
@@ -113,6 +115,10 @@ class AuthProvider extends ChangeNotifier {
   /// profile with no list, from before the server wrote them, falls back to
   /// the defaults.
   bool _businessServicesKnown = false;
+
+  /// The account whose profile (role, business, permissions) is loaded now,
+  /// or null while none is. See [authEventKeepsLoadedProfile].
+  String? _profileUid;
   List<String> _businessPermissions = const [];
   String _inventoryHomeStoreId = '';
   bool _inventoryAllStores = false;
@@ -255,7 +261,16 @@ class AuthProvider extends ChangeNotifier {
     _profileWatch?.cancel();
     _profileWatch = null;
     if (user != null) {
-      _clearProfileState();
+      // authenticate() may already have loaded this account's profile by the
+      // time Firebase announces the sign-in. Keep it visible while it is
+      // refreshed: wiping it here sent staff to the customer screens on a
+      // first login. A different account still starts from a clean slate.
+      if (!authEventKeepsLoadedProfile(
+        loadedProfileUid: _profileUid,
+        eventUid: user.uid,
+      )) {
+        _clearProfileState();
+      }
       _userEmail = user.email;
       await _checkUserRole();
       // Signed out, or another account signed in, while the role loaded: the
@@ -343,26 +358,40 @@ class AuthProvider extends ChangeNotifier {
         _userEmail = refreshedUser.email;
 
         if (refreshedUser.emailVerified) {
-          try {
-            await refreshedUser.getIdToken(true);
-            await _functions
-                .httpsCallable('acceptAccessInvitation')
-                .call(<String, dynamic>{});
-          } on FirebaseFunctionsException catch (error) {
-            // Re-read the profile even when the callable response is lost:
-            // the invitation may already have been activated server-side.
-            debugPrint(
-              'ℹ️ Access invitation activation returned ${error.code}.',
-            );
-          }
-          if (!current()) return;
+          // Activation can lose a race with a cold function start, or its
+          // answer can be lost on a slow mobile network while the server still
+          // finishes it. Look again after a short pause before deciding the
+          // account has no profile, which would show the customer screens to
+          // an invited staff member until they sign in a second time.
+          for (var attempt = 0; attempt < 2; attempt++) {
+            try {
+              await refreshedUser.getIdToken(true);
+              await callWithAppCheckRecovery(
+                () => _functions
+                    .httpsCallable('acceptAccessInvitation')
+                    .call(<String, dynamic>{}),
+              );
+            } on FirebaseFunctionsException catch (error) {
+              // Re-read the profile even when the callable response is lost:
+              // the invitation may already have been activated server-side.
+              debugPrint(
+                'ℹ️ Access invitation activation returned ${error.code}.',
+              );
+            }
+            if (!current()) return;
 
-          userDoc = await _firestore
-              .collection('users')
-              .doc(refreshedUser.uid)
-              .get()
-              .timeout(const Duration(seconds: 15));
-          if (!current()) return;
+            userDoc = await _firestore
+                .collection('users')
+                .doc(refreshedUser.uid)
+                .get()
+                .timeout(const Duration(seconds: 15));
+            if (!current()) return;
+            if (userDoc.exists) break;
+            if (attempt == 0) {
+              await Future<void>.delayed(const Duration(seconds: 2));
+              if (!current()) return;
+            }
+          }
         }
       }
       if (userDoc.exists) {
@@ -417,6 +446,7 @@ class AuthProvider extends ChangeNotifier {
               ? data!['notificationPreferences'] as Map<String, dynamic>
               : null,
         );
+        _profileUid = signedInUser.uid;
         debugPrint(
           '👥 User role: ${_isAdmin
               ? 'admin'
@@ -435,8 +465,13 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('❌ Error checking user role: $e');
       if (!current()) return;
-      _clearProfileState();
-      _initializationIssue = AuthInitializationIssue.profileUnavailable;
+      // A refresh that fails for the account whose profile is already loaded
+      // (a network blip right after sign-in) must not downgrade that account
+      // to a customer; only an account with no profile yet reports the issue.
+      if (_profileUid != _auth.currentUser?.uid) {
+        _clearProfileState();
+        _initializationIssue = AuthInitializationIssue.profileUnavailable;
+      }
     } finally {
       // The role is known now (customer when the lookup failed). Notification
       // taps route by it: a lot's staff and owners land on business screens,
@@ -478,6 +513,7 @@ class AuthProvider extends ChangeNotifier {
     _businessName = null;
     _businessServices = const [];
     _businessServicesKnown = false;
+    _profileUid = null;
     _businessPermissions = const [];
     _inventoryHomeStoreId = '';
     _inventoryAllStores = false;
