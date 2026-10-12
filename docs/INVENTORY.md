@@ -207,3 +207,30 @@ All take `businessId` (the contract's one-line list leaves it out) and pass the 
 
 ## Tests
 `test/inventory.test.js` (pure rules, v2 sections at the end), `test/inventory-callables.test.js` (`npm run test:inventory`: v1 cases untouched, v2 in "categories", "stores", the conversion race and the v2 gate cases), `test/firestore-rules.test.js` ("inventory categories and stores") and `test/console-query-rules.test.js` (new query shapes and the store-scoped staff queries).
+
+---
+
+# Brands and quick entry (v3) - contract, agreed 2026-10-11
+
+Settled with the owner. A shop often carries one brand across shoes, slippers and shirts; typing it on every product is the slow part of entry. Two additions on top of v2; **nothing existing may break** (same compatibility rules as v2).
+
+## Brands
+- Each business keeps its own managed list, exactly like categories: `inventoryBrands/{id}` (businessId, name, nameKey = lowercased trimmed name with spaces collapsed, unique per business, archived, createdAt, updatedAt, createdByStaffId), with server-only lock documents `inventoryBrandKeys/{sha256(businessId NUL nameKey)}` -> {businessId, brandId}. Shared by every store. Name limit 60.
+- **A brand is optional.** A product carries `brandId` ("" = none) plus `brand` (the list's spelling, a snapshot). Any staff member with the inventory permission may add a brand on the spot while creating or editing a product; the owner manages the list (rename, archive). Renaming updates every product's snapshot in bounded pages (same mechanism as categories); sale lines keep the `brandId` + `brand` snapshot taken at sale time. Brands are archived, never deleted; products keep theirs; an archived brand cannot be picked by id but typing its name brings it back.
+- **Display: brand in front, everywhere.** With a brand, a product reads "Jordan 11" (brand, space, name) in lists, the basket, sales, labels and reports; the `name` field holds only "11". Without a brand it reads as before. Search matches the brand, the name, the category or the code. Lists get a brand filter row beside the category one: All brands / No brand / each active brand (app and console). Old apps that know nothing of brands keep showing `name` alone; that is acceptable.
+- Reports: `getInventorySummary` gains `byBrand: [{brandId, name, itemsSold, revenueCents, profitCents}]` with the same rules as `byCategory` (only brands that sold, revenue desc then name, "No brand" for `brandId: ""`, voided sales excluded, profit only on lines with a known cost; legacy lines without a snapshot use the product's current brand, bounded lookups).
+
+## Quick entry ("Save and add another like it")
+- Client-only. On the product form, a second save button saves the product and reopens the empty form with **brand and category kept**; name, price, cost, quantity (or per-store stock), low-stock number and photo start empty. The tag of the saved product is still reachable from the list as today. App and console both.
+
+## New / changed callables (all: inventory permission + service on, like the others)
+`createInventoryBrand {name}` -> {brandId, name}; `renameInventoryBrand {brandId, name}` -> {brandId, name, itemsUpdated, complete}; `archiveInventoryBrand {brandId, archived}` -> {archived};
+changed: `createInventoryItem` / `updateInventoryItem` (`brandId`, or a `brand` name to find-or-create; `brandId: ""` or `brand: ""` clears both; `brandId` wins over text), `recordInventorySale` (each line snapshots `brandId` + `brand`), `getInventorySummary` (+`byBrand`).
+Client reads: `inventoryBrands` where businessId (whole list, read by every member with the inventory permission, write false; `inventoryBrandKeys` unreadable). Composite indexes mirror `inventoryCategories`. Refusal codes in `details.reason` as before; new: brand_name_required, brand_name_taken, brand_not_found, brand_too_long.
+
+## Compatibility (hard rules)
+1. A request without `brandId`/`brand` behaves exactly as in v2; a product without a brand reads exactly as in v2.
+2. No bulk rewrite of products; rename is bounded and idempotent; nothing converts legacy data (there is no legacy brand field).
+3. Rules and indexes for `inventoryBrands` ship with the same change; the new client read has its index and a test in console-query-indexes / console-query-rules.
+4. Every new string in English and French.
+5. Server, console and app ship together in the next app release (1.0.11); the server deploy must keep old apps (1.0.9, 1.0.10) working unchanged.
