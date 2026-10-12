@@ -14,8 +14,16 @@
   # text into a second segment and far too long to read off a printed
   # invoice. /p?t=<token> is 61. QSA keeps the token; 302 rather than 301 so
   # the destination is never cached by a browser or an operator.
+  #
+  # PROJECT-SPECIFIC (the only two lines in this file that are). .htaccess cannot
+  # read assets/site-config.js, so the active pair is kept here, with the
+  # NEW_PROJECT_CONFIG pair beside it. Cutover: swap which pair is commented.
+  # Current project:
   RewriteRule ^p$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
   RewriteRule ^d$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingDocument [QSA,R=302,L]
+  # NEW_PROJECT_CONFIG (laawol-a855a) - enable at cutover, then delete the pair above:
+  # RewriteRule ^p$ https://us-central1-laawol-a855a.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
+  # RewriteRule ^d$ https://us-central1-laawol-a855a.cloudfunctions.net/parkingDocument [QSA,R=302,L]
 </IfModule>
 
 # Default document

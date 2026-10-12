@@ -295,6 +295,68 @@ for (const key of [
   assert(windows.target === null, "get-app.html must not redirect a desktop (even a touchscreen PC)");
 }
 
+// Project configuration: assets/site-config.js is the single source for the
+// Firebase/GCP project; nothing else on the site may name it.
+{
+  const siteConfigSource = read("assets/site-config.js");
+  const sandbox = { window: {} };
+  new Function("window", siteConfigSource)(sandbox.window);
+  const site = sandbox.window.LAAWOL_CONFIG;
+  assert(site && site.firebase, "site-config.js must define window.LAAWOL_CONFIG.firebase");
+  assert(
+    site.target === "current" && site.firebase.projectId === "car-selling-flutter-app",
+    "site-config.js must keep the current project active until the cutover switch is flipped",
+  );
+  assert(
+    site.functionsBaseUrl ===
+      `https://${site.region}-${site.firebase.projectId}.cloudfunctions.net`,
+    "site-config.js functionsBaseUrl must derive from the active project",
+  );
+  assert(
+    /NEW_PROJECT_CONFIG/.test(siteConfigSource) && siteConfigSource.includes("laawol-a855a"),
+    "site-config.js must carry the NEW_PROJECT_CONFIG block",
+  );
+  assert(
+    /throw new Error\(\s*"site-config\.js: target/.test(siteConfigSource),
+    "site-config.js must fail closed when the selected target has empty placeholders",
+  );
+  const siteLoad = (html) => html.indexOf('assets/site-config.js?v=');
+  htmlFiles.forEach((file) => {
+    const html = read(file);
+    const configAt = siteLoad(html);
+    assert(configAt !== -1, `${file} must load assets/site-config.js`);
+    for (const consumer of ["assets/chat.js?v=", "assets/content.js?v="]) {
+      assert(
+        html.indexOf(consumer) > configAt,
+        `${file} must load site-config.js before ${consumer}`,
+      );
+    }
+  });
+  for (const file of ["partner.html", "assets/chat.js", "assets/content.js"]) {
+    const source = read(file);
+    assert(
+      !/car-selling-flutter-app|577373430777|cloudfunctions\.net|AIza[0-9A-Za-z_-]{20,}|6L[A-Za-z0-9_-]{30,}/.test(source),
+      `${file} must read the project from window.LAAWOL_CONFIG, not hardcode it`,
+    );
+  }
+  const htaccess = read(".htaccess");
+  const activeRewrites = htaccess
+    .split("\n")
+    .filter((line) => /^\s*RewriteRule \^[pd]\$ https:\/\/[a-z0-9-]+\.cloudfunctions\.net\//.test(line));
+  assert(activeRewrites.length === 2, ".htaccess must have exactly one active /p and /d rewrite pair");
+  for (const line of activeRewrites) {
+    assert(
+      line.includes(`${site.region}-${site.firebase.projectId}.cloudfunctions.net`),
+      ".htaccess /p and /d rewrites must target the same project as site-config.js",
+    );
+  }
+  assert(
+    /#\s*RewriteRule \^p\$ https:\/\/us-central1-laawol-a855a\.cloudfunctions\.net\/parkingPaymentLink/.test(htaccess) &&
+      /#\s*RewriteRule \^d\$ https:\/\/us-central1-laawol-a855a\.cloudfunctions\.net\/parkingDocument/.test(htaccess),
+    ".htaccess must carry the NEW_PROJECT_CONFIG /p and /d rewrites, commented out",
+  );
+}
+
 console.log(
   `Verified public CMS/privacy hooks across ${htmlFiles.length} HTML files.`,
 );

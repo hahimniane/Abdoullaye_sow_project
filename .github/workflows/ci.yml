@@ -99,4 +99,8 @@ jobs:
       # `next build` does), and its tests exercise that loader.
       - run: npm ci --ignore-scripts
         working-directory: admin_web
+      # Includes project-migration-guard.test.mjs: no source outside the
+      # per-component single-source configs may name the Firebase project.
       - run: npm test
+      # Marketing site: assets/site-config.js is the single project source.
+      - run: npm run verify:public

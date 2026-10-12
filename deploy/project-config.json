@@ -1,0 +1,16 @@
+{
+  "_comment": "SINGLE SOURCE OF TRUTH for the Firebase/GCP project the deploy tooling (and deploy/store/gate.py) targets. `active` names the PRODUCTION project: flipping it from \"current\" to \"new\" is the cutover switch for deploy/. Any single run can still override the target with FIREBASE_PROJECT=<id|current|new> or --project=<id>. See docs/PROJECT_MIGRATION.md.",
+  "active": "current",
+  "projects": {
+    "current": {
+      "projectId": "car-selling-flutter-app",
+      "projectNumber": "577373430777",
+      "region": "us-central1"
+    },
+    "new": {
+      "projectId": "laawol-a855a",
+      "projectNumber": "127318353394",
+      "region": "us-central1"
+    }
+  }
+}

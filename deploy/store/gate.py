@@ -18,11 +18,28 @@ through the Firestore REST API because client writes are refused by the rules.
 """
 import argparse
 import json
+import os
 
 import google.auth
 import google.auth.transport.requests
 
-PROJECT = "car-selling-flutter-app"
+
+def _project_id():
+    """The project to move the gate in (deploy/project-config.json).
+
+    `FIREBASE_PROJECT=<id|current|new>` overrides, same as the node tooling.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "..", "project-config.json")) as handle:
+        config = json.load(handle)
+    projects = config["projects"]
+    requested = os.environ.get("FIREBASE_PROJECT", "").strip()
+    if not requested:
+        return projects[config["active"]]["projectId"]
+    return projects[requested]["projectId"] if requested in projects else requested
+
+
+PROJECT = _project_id()
 DOC = (f"https://firestore.googleapis.com/v1/projects/{PROJECT}"
        "/databases/(default)/documents/appConfig/client")
 

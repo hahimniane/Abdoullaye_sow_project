@@ -2,7 +2,10 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 
-export const DEFAULT_PRODUCTION_PROJECT = "car-selling-flutter-app";
+import { DEFAULT_PROJECT_ID } from "./project-config.mjs";
+
+// The project this checkout treats as production (project-config.json `active`).
+export const DEFAULT_PRODUCTION_PROJECT = DEFAULT_PROJECT_ID;
 export const DEVELOPMENT_PAYMENT_WINDOW_END =
   "2026-09-11T04:00:00.000Z";
 export const CI_VERIFICATION_SKIP_WINDOW_END =

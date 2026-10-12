@@ -232,10 +232,11 @@
   <script src="assets/script.js?v=13"></script>
   <script src="assets/mailto.js?v=2" defer></script>
   <script src="assets/motion.js?v=10" defer></script>
-  <script src="assets/chat.js?v=4" defer></script>
+  <script src="assets/site-config.js?v=1"></script>
+  <script src="assets/chat.js?v=5" defer></script>
   <script src="assets/i18n.js?v=13"></script>
   <script src="assets/country-catalog.js?v=1"></script>
-  <script src="assets/content.js?v=10"></script>
+  <script src="assets/content.js?v=11"></script>
 
   <script type="module">
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -245,14 +246,8 @@
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
     // Same Firebase project the mobile app and admin console use.
-    const firebaseConfig = {
-      apiKey: "AIzaSyBrRDTd5w2iWxTIfvsn7ra0xjW7M-iuPN8",
-      authDomain: "car-selling-flutter-app.firebaseapp.com",
-      projectId: "car-selling-flutter-app",
-      storageBucket: "car-selling-flutter-app.firebasestorage.app",
-      messagingSenderId: "577373430777",
-      appId: "1:577373430777:web:5af70db59c5d49a8125328",
-    };
+    // (assets/site-config.js is the single source for the project values.)
+    const firebaseConfig = window.LAAWOL_CONFIG.firebase;
     const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
     // createCustomerUser/submitBusinessApplication enforce App Check in
     // production; without this, every call from this page fails with a
@@ -261,7 +256,7 @@
     // token, which is misleading). Same reCAPTCHA Enterprise key admin_web
     // uses, already registered for laawoldigital.com.
     initializeAppCheck(app, {
-      provider: new ReCaptchaEnterpriseProvider("6Lcs5FUtAAAAAA_XmvDg0rDqUE4noHLjFCLqofHX"),
+      provider: new ReCaptchaEnterpriseProvider(window.LAAWOL_CONFIG.appCheckSiteKey),
       isTokenAutoRefreshEnabled: true,
     });
     const auth = getAuth(app);

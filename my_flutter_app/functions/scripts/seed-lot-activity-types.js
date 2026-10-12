@@ -7,7 +7,7 @@
  * live.
  *
  *   node scripts/seed-lot-activity-types.js \
- *     --project car-selling-flutter-app --business keren_auto_sales_llc
+ *     --project <project-id> --business keren_auto_sales_llc
  *
  * Add --dry-run to print what it would write without writing.
  */

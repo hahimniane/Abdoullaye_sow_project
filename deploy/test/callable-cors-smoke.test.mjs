@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
 
+import {ACTIVE_PROJECT} from "../project-config.mjs";
+
 import {
   MARKETPLACE_PEOPLE_CALLABLES,
   assessCallablePreflight,
@@ -33,10 +35,10 @@ test("marketplace people manifest covers every browser access callable", () => {
 
 test("builds a browser-like callable OPTIONS request", () => {
   assert.equal(callableServiceUrl({
-    projectId: "car-selling-flutter-app",
+    projectId: ACTIVE_PROJECT.projectId,
     region: "us-central1",
     functionName: "listMarketplacePeople",
-  }), "https://us-central1-car-selling-flutter-app.cloudfunctions.net/" +
+  }), `https://us-central1-${ACTIVE_PROJECT.projectId}.cloudfunctions.net/` +
     "listMarketplacePeople");
 
   assert.deepEqual(
@@ -73,7 +75,7 @@ test("read-only smoke reports every failed callable without stopping early",
         ["setMarketplaceUserStatus", 500],
       ]);
       const result = await smokeMarketplacePeopleCallableCors({
-        projectId: "car-selling-flutter-app",
+        projectId: ACTIVE_PROJECT.projectId,
         functionNames: [...statuses.keys(), "revokeUserSessions"],
         request: async (url, options) => {
           const name = url.split("/").at(-1);
@@ -98,7 +100,7 @@ test("read-only smoke reports every failed callable without stopping early",
 
 test("read-only smoke passes when every browser preflight is 2xx", async () => {
   const result = await smokeMarketplacePeopleCallableCors({
-    projectId: "car-selling-flutter-app",
+    projectId: ACTIVE_PROJECT.projectId,
     functionNames: ["listMarketplacePeople", "getMarketplacePerson"],
     request: async () => ({status: 204}),
   });
