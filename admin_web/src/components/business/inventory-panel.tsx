@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
-import { Archive, ArchiveRestore, ArrowRightLeft, Boxes, Pencil, Plus, RefreshCw, Store, Tag, Tags } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowRightLeft, BadgeCheck, Boxes, Pencil, Plus, RefreshCw, Store, Tag, Tags } from "lucide-react";
 
 import { CopyValue } from "@/components/copy-value";
+import { InventoryBrandsDialog } from "@/components/business/inventory-brands-dialog";
 import { InventoryCategoriesDialog } from "@/components/business/inventory-categories-dialog";
 import { InventoryDeleteDialog } from "@/components/business/inventory-delete-dialog";
 import { InventoryItemDetail } from "@/components/business/inventory-item-detail";
@@ -19,6 +20,7 @@ import { InventoryTransferDialog } from "@/components/business/inventory-transfe
 import { InventoryVoidDialog } from "@/components/business/inventory-void-dialog";
 import {
   useBusinessStaff,
+  useInventoryBrands,
   useInventoryCategories,
   useInventoryItems,
   useInventoryStock,
@@ -32,12 +34,15 @@ import {
   INVENTORY_FILTER_LABELS,
   INVENTORY_STATUS_LABELS,
   INVENTORY_STATUS_TONES,
+  NO_BRAND_FILTER,
   UNCATEGORIZED_FILTER,
   archiveInventoryItemRequest,
   archivedNameText,
+  brandResolver,
   buildStockIndex,
   categoryResolver,
   filterInventoryItems,
+  inventoryBrands,
   inventoryCategories,
   inventoryCounts,
   inventoryItemFromRow,
@@ -47,8 +52,10 @@ import {
   lowAtText,
   lowInStoresText,
   productCountText,
+  productDisplayName,
   resolveStoreAccess,
   runInventoryCall,
+  withCurrentBrand,
   type InventoryFilter,
   type InventoryItem,
   type InventoryListScope,
@@ -59,7 +66,7 @@ import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 import { statusPillClass } from "@/lib/status-pill";
 import type { FirestoreRow } from "@/types/admin";
 
-type Modal = "" | "item" | "stock" | "tags" | "delete" | "void" | "categories" | "stores" | "transfer";
+type Modal = "" | "item" | "stock" | "tags" | "delete" | "void" | "categories" | "brands" | "stores" | "transfer";
 type View = "products" | "sales";
 
 const FILTERS: InventoryFilter[] = ["all", "low", "countOff", "archived"];
@@ -93,6 +100,7 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
   const [view, setView] = useState<View>("products");
   const [filter, setFilter] = useState<InventoryFilter>("all");
   const [categoryFilterRaw, setCategoryFilter] = useState("");
+  const [brandFilterRaw, setBrandFilter] = useState("");
   const [storeFilterRaw, setStoreFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -109,6 +117,7 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
 
   const storesRead = useInventoryStores(businessId, enabled);
   const categoriesRead = useInventoryCategories(businessId, enabled);
+  const brandsRead = useInventoryBrands(businessId, enabled);
   const { isOwner, homeStoreId, allStores } = viewer;
   const access = useMemo(
     () => resolveStoreAccess({ isOwner, homeStoreId, allStores }, storesRead.rows),
@@ -119,6 +128,10 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
   // A list that could not be read is no list: the form falls back to a typed category and the category tools hide.
   const categoriesAvailable = !categoriesRead.error;
   const resolveCategory = useMemo(() => categoryResolver(categories), [categories]);
+  const brands = useMemo(() => inventoryBrands(brandsRead.rows, true), [brandsRead.rows]);
+  // Same for brands: a list that could not be read leaves the brand tools out and the form takes a typed brand.
+  const brandsAvailable = !brandsRead.error;
+  const resolveBrand = useMemo(() => brandResolver(brands), [brands]);
 
   // The store the lists are looking at: the chosen one for whoever sees all, the home store for the rest, none for one store.
   const storeFilter = access.multi && access.canSeeAll && access.stores.some((store) => store.id === storeFilterRaw) ? storeFilterRaw : "";
@@ -126,23 +139,28 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
   const categoryFilter = categoryFilterRaw === "" || categoryFilterRaw === UNCATEGORIZED_FILTER || categories.some((category) => category.id === categoryFilterRaw)
     ? categoryFilterRaw
     : "";
+  const brandFilter = brandFilterRaw === "" || brandFilterRaw === NO_BRAND_FILTER || brands.some((brand) => brand.id === brandFilterRaw)
+    ? brandFilterRaw
+    : "";
 
   const stockRead = useInventoryStock(businessId, enabled && access.multi && !access.needsHomeStore, access.scopedStoreId);
   const stockIndex = useMemo(() => buildStockIndex(stockRead.rows), [stockRead.rows]);
   const scope = useMemo<InventoryListScope>(() => ({
     categories,
     categoryId: categoryFilter,
+    brands,
+    brandId: brandFilter,
     stores: access.multi ? access.stores : undefined,
     storeId: scopeStoreId,
     stock: stockIndex,
-  }), [categories, categoryFilter, access.multi, access.stores, scopeStoreId, stockIndex]);
-  const countsScope = useMemo<InventoryListScope>(() => ({ ...scope, categoryId: "" }), [scope]);
+  }), [categories, categoryFilter, brands, brandFilter, access.multi, access.stores, scopeStoreId, stockIndex]);
+  const countsScope = useMemo<InventoryListScope>(() => ({ ...scope, categoryId: "", brandId: "" }), [scope]);
 
   const onSale = useInventoryItems(businessId, false, enabled);
   const archived = useInventoryItems(businessId, true, enabled && filter === "archived");
   const staff = useBusinessStaff(businessId, enabled);
   const selectedRow = useLiveDoc("inventoryItems", selectedId, enabled && Boolean(selectedId));
-  const selected = selectedRow ? inventoryItemFromRow(selectedRow) : null;
+  const selected = selectedRow ? withCurrentBrand(inventoryItemFromRow(selectedRow), resolveBrand) : null;
 
   const staffNames = useMemo(() => staffNameIndex(staff.rows), [staff.rows]);
   const staffName = (id: string) => staffNameFrom(staffNames, id);
@@ -150,7 +168,16 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
   const source = filter === "archived" ? archived : onSale;
   const shown = useMemo(() => filterInventoryItems(source.rows, filter, search, scope), [source.rows, filter, search, scope]);
   const counts = useMemo(() => inventoryCounts(onSale.rows, countsScope), [onSale.rows, countsScope]);
-  const onSaleItems = useMemo(() => onSale.rows.map(inventoryItemFromRow).filter((item) => item.id), [onSale.rows]);
+  const onSaleItems = useMemo(
+    () => onSale.rows.map(inventoryItemFromRow).filter((item) => item.id).map((item) => withCurrentBrand(item, resolveBrand)),
+    [onSale.rows, resolveBrand],
+  );
+  // The brand each product wears now, for the summary's lists (the server's rows carry the name alone).
+  const brandByItem = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of onSaleItems) if (item.brand) map.set(item.id, item.brand);
+    return map;
+  }, [onSaleItems]);
   const searching = search.trim().length > 0;
   const blocked = busy || !enabled || access.needsHomeStore;
 
@@ -189,8 +216,8 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
     setModal("transfer");
   }
 
-  function openTags(item: { id: string; name: string; code: string }) {
-    setTagsFor({ id: item.id, name: item.name, code: item.code });
+  function openTags(item: { id: string; name: string; brand?: string; code: string }) {
+    setTagsFor({ id: item.id, name: productDisplayName(item), code: item.code });
     setModal("tags");
   }
 
@@ -287,6 +314,9 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
                 {categoriesAvailable && (
                   <button className="lst-btn ghost" type="button" disabled={blocked} onClick={() => setModal("categories")}><Tags size={16} /> Categories</button>
                 )}
+                {brandsAvailable && (
+                  <button className="lst-btn ghost" type="button" disabled={blocked} onClick={() => setModal("brands")}><BadgeCheck size={16} /> Brands</button>
+                )}
                 {access.canManageStores && (
                   <button className="lst-btn ghost" type="button" disabled={busy || !enabled} onClick={() => setModal("stores")}><Store size={16} /> Stores</button>
                 )}
@@ -305,6 +335,7 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
                 storeFilter={storeFilter}
                 onStoreFilter={setStoreFilter}
                 onOpenItem={openFromSummary}
+                brandByItem={brandByItem}
               />
             )}
           </article>
@@ -348,10 +379,19 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
                         <option value={UNCATEGORIZED_FILTER}>Uncategorized</option>
                       </select>
                     )}
+                    {brandsAvailable && brands.length > 0 && (
+                      <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)} aria-label="Filter by brand">
+                        <option value="">All brands</option>
+                        {brands.map((brand) => (
+                          <option key={brand.id} value={brand.id} data-no-translate>{brand.archived ? archivedNameText(brand.name, lang, true) : brand.name}</option>
+                        ))}
+                        <option value={NO_BRAND_FILTER}>No brand</option>
+                      </select>
+                    )}
                     {access.multi && access.canSeeAll && (
                       <InventoryStoreFilter stores={access.stores} value={storeFilter} onChange={setStoreFilter} />
                     )}
-                    <input type="search" placeholder="Name, category or code" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search products" />
+                    <input type="search" placeholder="Brand, name, category or code" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search products" />
                   </div>
                   <p className="panel-lede">The products you sell. Each has one tag: staff scan it in the Laawol app to sell it at the counter, and the count goes down with every sale.</p>
 
@@ -361,7 +401,7 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
                     <div className="empty-state">No products yet. Add your first product, then print its tag.</div>
                   ) : shown.length === 0 ? (
                     <div className="empty-state">
-                      {searching || categoryFilter ? "No product matches that search."
+                      {searching || categoryFilter || brandFilter ? "No product matches that search."
                         : filter === "low" ? "Nothing is running low."
                         : filter === "countOff" ? "No product has a count that was off."
                         : filter === "archived" ? "No archived products."
@@ -385,7 +425,7 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
                               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(item.id); } }}
                             >
                               <span>
-                                <strong data-no-translate>{item.name}</strong>
+                                <strong data-no-translate>{productDisplayName(item)}</strong>
                                 {categoryName && <small data-no-translate>{categoryName}</small>}
                                 <small className="ctn-code-row">
                                   <code className="ctn-code" data-no-translate>{item.code}</code>
@@ -442,6 +482,8 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
           item={editing}
           categories={categories}
           categoriesAvailable={categoriesAvailable}
+          brands={brands}
+          brandsAvailable={brandsAvailable}
           access={access}
           onClose={closeModal}
           onFlash={say}
@@ -474,6 +516,9 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
       )}
       {modal === "categories" && (
         <InventoryCategoriesDialog businessId={businessId} categories={categories} onClose={closeModal} onFlash={say} />
+      )}
+      {modal === "brands" && (
+        <InventoryBrandsDialog businessId={businessId} brands={brands} onClose={closeModal} onFlash={say} />
       )}
       {modal === "stores" && access.canManageStores && (
         <InventoryStoresDialog businessId={businessId} stores={everyStore} onClose={closeModal} onFlash={say} />

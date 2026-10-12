@@ -16,6 +16,7 @@ import {
   itemCategoryName,
   itemStockView,
   leftText,
+  productDisplayName,
   lowInStoresText,
   storeNameIndex,
   type InventoryCategory,
@@ -91,7 +92,7 @@ export function InventoryItemDetail({
       <div className="ctn-detail">
         <div className="ctn-detail-head">
           <div>
-            <h2 data-no-translate>{item.name}</h2>
+            <h2 data-no-translate>{productDisplayName(item)}</h2>
             {categoryName && <p className="panel-lede" data-no-translate>{categoryName}</p>}
           </div>
           <div className="ctn-detail-actions">

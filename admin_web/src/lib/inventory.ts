@@ -30,6 +30,7 @@ type Row = Record<string, unknown>;
 
 const MAX_NAME = 120;
 const MAX_CATEGORY = 60;
+const MAX_BRAND = 60;
 const MAX_NOTE = 200;
 /** Console-side caps for a store's details (the contract names none; the server decides). */
 const MAX_STORE_NAME = 80;
@@ -125,6 +126,10 @@ export type InventoryItem = {
   category: string;
   /** The category's id; "" for a legacy product whose typed category is not in the list yet. */
   categoryId: string;
+  /** The name of the brand the product was saved with ("" = none; a snapshot, the list's name wins once renamed). */
+  brand: string;
+  /** The brand's id; "" for none. */
+  brandId: string;
   photoUrl: string;
   archived: boolean;
   countWasOff: boolean;
@@ -149,6 +154,8 @@ export function inventoryItemFromRow(row: unknown): InventoryItem {
     lowStockAt: low === null ? null : Math.max(0, low),
     category: text(r.category, MAX_CATEGORY),
     categoryId: text(r.categoryId),
+    brand: text(r.brand, MAX_BRAND),
+    brandId: text(r.brandId),
     photoUrl: text(r.photoUrl, MAX_URL),
     archived: r.archived === true,
     countWasOff: r.countWasOff === true,
@@ -157,6 +164,17 @@ export function inventoryItemFromRow(row: unknown): InventoryItem {
     createdAt: r.createdAt ?? null,
     updatedAt: r.updatedAt ?? null,
   };
+}
+
+/**
+ * What a product is called everywhere a person reads it: the brand in front,
+ * then the name ("Jordan 11"); just the name when there is no brand. The
+ * stored `name` holds only the part after the brand.
+ */
+export function productDisplayName(item: { name: string; brand?: string | null }): string {
+  const name = text(item.name, MAX_NAME);
+  const brand = text(item.brand ?? "", MAX_BRAND);
+  return brand ? `${brand} ${name}`.trim() : name;
 }
 
 export type InventoryStatus = "ok" | "low" | "out" | "archived";
@@ -210,7 +228,7 @@ function searchKey(value: string): string {
 /**
  * The products a filter and a search box narrow the list to, by name. "All"
  * is every product still on sale; Archived is the ones put away. A search
- * matches name, category and code (the code with or without its dash, or a
+ * matches brand, name, category and code (the code with or without its dash, or a
  * pasted tag link), every typed word having to match.
  *
  * `scope` is the v2 part (categories and stores). Left out, this is exactly
@@ -227,8 +245,10 @@ export function filterInventoryItems(
   const categories = scope.categories ?? [];
   // Built once for the whole list, then read per product.
   const resolve = categoryResolver(categories);
-  const inFilter = items.filter((item) => {
+  const resolveBrand = brandResolver(scope.brands ?? []);
+  const inFilter = items.map((item) => withCurrentBrand(item, resolveBrand)).filter((item) => {
     if (!itemInCategory(item, resolve, scope.categoryId ?? "")) return false;
+    if (!itemInBrand(item, resolveBrand, scope.brandId ?? "")) return false;
     if (filter === "archived") return item.archived;
     if (item.archived) return false;
     if (filter === "low") return itemStockView(item, scope).low;
@@ -245,10 +265,10 @@ export function filterInventoryItems(
     ? inFilter
     : inFilter.filter((item) => {
       const category = categoryNames.get(item.categoryId) ?? item.category;
-      const haystack = [searchKey(`${item.name} ${category} ${item.code}`), item.code.replace(/-/g, "").toLowerCase()].join(" ");
+      const haystack = [searchKey(`${productDisplayName(item)} ${category} ${item.code}`), item.code.replace(/-/g, "").toLowerCase()].join(" ");
       return words.every((word) => haystack.includes(word.replace(/-/g, "")) || haystack.includes(word));
     });
-  return [...hits].sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
+  return [...hits].sort((a, b) => productDisplayName(a).localeCompare(productDisplayName(b)) || a.code.localeCompare(b.code));
 }
 
 export type InventoryCounts = { onSale: number; low: number; countOff: number };
@@ -283,6 +303,7 @@ export type InventoryRefusal =
   | "quantity_invalid"
   | "low_stock_invalid"
   | "category_too_long"
+  | "brand_too_long"
   | "photo_url_invalid"
   | "add_quantity_invalid"
   | "set_quantity_invalid"
@@ -306,6 +327,10 @@ export type InventoryRefusal =
   | "category_name_required"
   | "category_name_taken"
   | "category_not_found"
+  // The server's v3 codes (brands).
+  | "brand_name_required"
+  | "brand_name_taken"
+  | "brand_not_found"
   | "store_name_required"
   | "store_not_found"
   | "store_archived"
@@ -334,6 +359,7 @@ export const INVENTORY_MESSAGES: Record<InventoryRefusal, string> = {
   quantity_invalid: "Enter how many are in stock, a whole number from 0.",
   low_stock_invalid: "Enter the low-stock number as a whole number, or leave it empty.",
   category_too_long: "The category is too long.",
+  brand_too_long: "The brand is too long.",
   photo_url_invalid: "The photo link must be a web address that starts with https://.",
   add_quantity_invalid: "Enter how many to add, a whole number above zero.",
   set_quantity_invalid: "Enter the number you counted, a whole number from 0.",
@@ -356,6 +382,9 @@ export const INVENTORY_MESSAGES: Record<InventoryRefusal, string> = {
   category_name_required: "Enter the category's name.",
   category_name_taken: "You already have a category with that name.",
   category_not_found: "That category no longer exists.",
+  brand_name_required: "Enter the brand's name.",
+  brand_name_taken: "You already have a brand with that name.",
+  brand_not_found: "That brand no longer exists.",
   store_name_required: "Enter the store's name.",
   store_not_found: "That store no longer exists.",
   store_archived: "That store is archived. Restore it first.",
@@ -468,6 +497,10 @@ export type InventoryItemDraft = {
   category: string;
   /** The chosen category's id; "" for none (or for the typed text above). Left out in the v1 shape. */
   categoryId?: string;
+  /** The brand's name: the chosen one's, or the typed text the server turns into a brand. "" = no brand. */
+  brand?: string;
+  /** The chosen brand's id; "" for none (or for the typed text above). */
+  brandId?: string;
   /**
    * Multi-store only: the starting count typed for each store, by store id.
    * Left out (or ignored) in a single-store business, where `quantity` is the count.
@@ -484,17 +517,41 @@ export const emptyInventoryItemDraft: InventoryItemDraft = {
   lowStockAt: "",
   category: "",
   categoryId: "",
+  brand: "",
+  brandId: "",
   stock: {},
   photoUrl: "",
 };
+
+/**
+ * "Save and add another like it": the empty form again, keeping ONLY the brand
+ * and the category (the ones a run of similar products shares). Name, price,
+ * cost, the count (or each store's), the low-stock number and the photo start
+ * empty.
+ */
+export function quickEntryDraft(saved: InventoryItemDraft): InventoryItemDraft {
+  return {
+    ...emptyInventoryItemDraft,
+    stock: {},
+    category: saved.category,
+    categoryId: saved.categoryId ?? "",
+    brand: saved.brand ?? "",
+    brandId: saved.brandId ?? "",
+  };
+}
 
 /**
  * A stored product back into the form, so the same form edits it. With the
  * business's categories the product's category is matched to the list (by id,
  * else by name); one that is not in the list yet stays as typed text.
  */
-export function inventoryDraftFromItem(item: InventoryItem, categories: readonly InventoryCategory[] = []): InventoryItemDraft {
+export function inventoryDraftFromItem(
+  item: InventoryItem,
+  categories: readonly InventoryCategory[] = [],
+  brands: readonly InventoryBrand[] = [],
+): InventoryItemDraft {
   const match = categoryForItem(item, categories);
+  const brandMatch = brandForItem(item, brands);
   return {
     name: item.name,
     price: item.priceCents > 0 ? centsToInput(item.priceCents) : "",
@@ -503,6 +560,8 @@ export function inventoryDraftFromItem(item: InventoryItem, categories: readonly
     lowStockAt: item.lowStockAt === null ? "" : String(item.lowStockAt),
     category: match ? match.name : item.category,
     categoryId: match ? match.id : "",
+    brand: brandMatch ? brandMatch.name : item.brand,
+    brandId: brandMatch ? brandMatch.id : "",
     stock: {},
     photoUrl: item.photoUrl,
   };
@@ -579,6 +638,7 @@ export function validateInventoryItemDraft(
   }
   if (Number.isNaN(readWholeNumber(draft.lowStockAt) ?? 0)) errors.push("low_stock_invalid");
   if (text(draft.category, MAX_CATEGORY + 1).length > MAX_CATEGORY) errors.push("category_too_long");
+  if (text(draft.brand ?? "", MAX_BRAND + 1).length > MAX_BRAND) errors.push("brand_too_long");
   if (!photoUrlOk(draft.photoUrl)) errors.push("photo_url_invalid");
   return errors;
 }
@@ -593,6 +653,18 @@ function categoryFields(draft: InventoryItemDraft): { categoryId?: string; categ
   if (categoryId) return { categoryId };
   const category = text(draft.category, MAX_CATEGORY);
   return category ? { category } : {};
+}
+
+/**
+ * The brand part of a create request: the chosen brand's id, or the typed name
+ * (which the server finds or creates), or nothing: a product without a brand
+ * sends exactly the v2 request.
+ */
+function brandFields(draft: InventoryItemDraft): { brandId?: string; brand?: string } {
+  const brandId = text(draft.brandId ?? "");
+  if (brandId) return { brandId };
+  const brand = text(draft.brand ?? "", MAX_BRAND);
+  return brand ? { brand } : {};
 }
 
 /**
@@ -614,6 +686,8 @@ export function createInventoryItemRequest(
   lowStockAt?: number;
   categoryId?: string;
   category?: string;
+  brandId?: string;
+  brand?: string;
   photoUrl?: string;
 } {
   const cost = readInventoryCost(draft.cost).cents;
@@ -627,6 +701,7 @@ export function createInventoryItemRequest(
     ...(cost !== null ? { costCents: cost } : {}),
     ...(low !== null && !Number.isNaN(low) ? { lowStockAt: low } : {}),
     ...categoryFields(draft),
+    ...brandFields(draft),
     ...(photoUrl ? { photoUrl } : {}),
   };
 }
@@ -648,6 +723,7 @@ export function updateInventoryItemRequest(businessId: string, item: InventoryIt
     ...(cost !== null ? { costCents: cost } : item.costCents !== null ? { costCents: null } : {}),
     ...(lowValue !== null ? { lowStockAt: lowValue } : item.lowStockAt !== null ? { lowStockAt: null } : {}),
     ...updateCategoryFields(item, draft),
+    ...updateBrandFields(item, draft),
     photoUrl: text(draft.photoUrl, MAX_URL),
   };
 }
@@ -665,6 +741,19 @@ function updateCategoryFields(item: InventoryItem, draft: InventoryItemDraft): {
 }
 
 /**
+ * A chosen brand is sent by id, a typed one as its name. No brand now but one
+ * before clears both (`brand: ""` + `brandId: ""`); a product that never had a
+ * brand sends nothing about it.
+ */
+function updateBrandFields(item: InventoryItem, draft: InventoryItemDraft): { brandId?: string; brand?: string } {
+  const chosen = text(draft.brandId ?? "");
+  if (chosen) return { brandId: chosen };
+  const brand = text(draft.brand ?? "", MAX_BRAND);
+  if (brand) return { brand };
+  return item.brandId || item.brand ? { brand: "", brandId: "" } : {};
+}
+
+/**
  * Whether saving an edit changes anything the server stores (an unchanged
  * form is not sent). `categories` is the list the form was opened with, so a
  * legacy product matched to a category by name is not "changed" by the match.
@@ -673,8 +762,9 @@ export function inventoryDraftChanged(
   item: InventoryItem,
   draft: InventoryItemDraft,
   categories: readonly InventoryCategory[] = [],
+  brands: readonly InventoryBrand[] = [],
 ): boolean {
-  const before = inventoryDraftFromItem(item, categories);
+  const before = inventoryDraftFromItem(item, categories, brands);
   const same = (a: string, b: string) => a.trim() === b.trim();
   const sameMoney = (a: string, b: string) => readMoneyInput(a).cents === readMoneyInput(b).cents;
   return !(
@@ -684,6 +774,8 @@ export function inventoryDraftChanged(
     readWholeNumber(before.lowStockAt) === readWholeNumber(draft.lowStockAt) &&
     same(before.categoryId ?? "", draft.categoryId ?? "") &&
     (text(draft.categoryId) !== "" || same(before.category, draft.category)) &&
+    same(before.brandId ?? "", draft.brandId ?? "") &&
+    (text(draft.brandId ?? "") !== "" || same(before.brand ?? "", draft.brand ?? "")) &&
     same(before.photoUrl, draft.photoUrl)
   );
 }
@@ -978,6 +1070,9 @@ export function readSaleResponse(data: unknown): SaleResponse {
 export type InventorySaleLine = {
   itemId: string;
   name: string;
+  /** The brand when it was sold (a snapshot); "" for none. */
+  brand: string;
+  brandId: string;
   code: string;
   quantity: number;
   listPriceCents: number;
@@ -1029,6 +1124,8 @@ export function inventorySaleFromRow(row: unknown): InventorySale {
     return {
       itemId: text(l.itemId),
       name: text(l.name, MAX_NAME),
+      brand: text(l.brand, MAX_BRAND),
+      brandId: text(l.brandId),
       code: text(l.code, 40),
       quantity,
       listPriceCents: list,
@@ -1067,7 +1164,7 @@ export function inventorySaleFromRow(row: unknown): InventorySale {
 
 /** The first product names on a sale, in the order they were rung up, and how many more there are. */
 export function saleLinesSummary(sale: Pick<InventorySale, "lines">, max = 2): { names: string[]; more: number } {
-  const names = sale.lines.map((line) => line.name).filter(Boolean);
+  const names = sale.lines.map((line) => productDisplayName(line)).filter(Boolean);
   return { names: names.slice(0, max), more: Math.max(0, names.length - max) };
 }
 
@@ -1185,6 +1282,15 @@ export type InventoryCategorySales = {
   profitCents: number;
 };
 
+/** One brand's line in the summary. An empty `brandId` is the "No brand" row. */
+export type InventoryBrandSales = {
+  brandId: string;
+  name: string;
+  itemsSold: number;
+  revenueCents: number;
+  profitCents: number;
+};
+
 /** One store's line in the summary (all-store callers of a multi-store business only). */
 export type InventoryStoreSales = {
   storeId: string;
@@ -1203,12 +1309,15 @@ export type InventorySummary = {
   costCents: number;
   profitCents: number;
   discountCents: number;
-  best: Array<{ itemId: string; name: string; quantity: number; revenueCents: number }>;
+  /** A row's `brand` is "" unless the server sends it; the screen then looks the product's brand up itself. */
+  best: Array<{ itemId: string; name: string; brand: string; quantity: number; revenueCents: number }>;
   /** In a multi-store business a low row also names the store it is low in. */
-  low: Array<{ itemId: string; name: string; quantity: number; lowStockAt: number | null; storeId: string; storeName: string }>;
-  countWasOff: Array<{ itemId: string; name: string }>;
+  low: Array<{ itemId: string; name: string; brand: string; quantity: number; lowStockAt: number | null; storeId: string; storeName: string }>;
+  countWasOff: Array<{ itemId: string; name: string; brand: string }>;
   /** Every category, most money first; voided sales are not in it. */
   byCategory: InventoryCategorySales[];
+  /** Every brand that sold, most money first; "No brand" is the row with an empty `brandId`. Empty unless the server sent it. */
+  byBrand: InventoryBrandSales[];
   /** Per store, most money first; empty unless the server sent it. */
   byStore: InventoryStoreSales[];
 };
@@ -1237,21 +1346,30 @@ export function readInventorySummary(data: unknown): InventorySummary | null {
     best: list(r.best).map((b) => ({
       itemId: text(b.itemId),
       name: text(b.name, MAX_NAME),
+      brand: text(b.brand, MAX_BRAND),
       quantity: nonNegativeInt(b.quantity),
       revenueCents: signedInt(b.revenueCents),
     })),
     low: list(r.low).map((b) => ({
       itemId: text(b.itemId),
       name: text(b.name, MAX_NAME),
+      brand: text(b.brand, MAX_BRAND),
       quantity: nonNegativeInt(b.quantity),
       lowStockAt: b.lowStockAt === null || b.lowStockAt === undefined || b.lowStockAt === "" ? null : nonNegativeInt(b.lowStockAt),
       storeId: text(b.storeId),
       storeName: text(b.storeName ?? b.store, MAX_STORE_NAME),
     })),
-    countWasOff: list(r.countWasOff).map((b) => ({ itemId: text(b.itemId), name: text(b.name, MAX_NAME) })),
+    countWasOff: list(r.countWasOff).map((b) => ({ itemId: text(b.itemId), name: text(b.name, MAX_NAME), brand: text(b.brand, MAX_BRAND) })),
     byCategory: byMoneyThenName(list(r.byCategory).map((c) => ({
       categoryId: text(c.categoryId),
       name: text(c.name, MAX_CATEGORY),
+      itemsSold: nonNegativeInt(c.itemsSold),
+      revenueCents: signedInt(c.revenueCents),
+      profitCents: signedInt(c.profitCents),
+    }))),
+    byBrand: byMoneyThenName(list(r.byBrand).map((c) => ({
+      brandId: text(c.brandId),
+      name: text(c.name, MAX_BRAND),
       itemsSold: nonNegativeInt(c.itemsSold),
       revenueCents: signedInt(c.revenueCents),
       profitCents: signedInt(c.profitCents),
@@ -1665,6 +1783,10 @@ export type InventoryListScope = {
   categories?: readonly InventoryCategory[];
   /** "" = every category, UNCATEGORIZED_FILTER, or a category id. */
   categoryId?: string;
+  /** v3: the business's brands (a rename shows at once, and the search reads them). */
+  brands?: readonly InventoryBrand[];
+  /** "" = every brand, NO_BRAND_FILTER, or a brand id. */
+  brandId?: string;
   /** The active stores; two or more switch the list to per-store stock. */
   stores?: readonly InventoryStore[];
   /** "" = all stores. */
@@ -1902,4 +2024,130 @@ export function countChangeText(name: string, before: number, after: number): st
 export function categoryCountText(count: number, lang: Lang = "en"): string {
   if (lang === "fr") return `${count} ${count === 1 ? "catégorie" : "catégories"}`;
   return `${count} ${count === 1 ? "category" : "categories"}`;
+}
+
+
+// ===========================================================================
+// v3: brands and quick entry (docs/INVENTORY.md, "Brands and quick entry (v3)").
+//
+// Brands mirror categories: one managed list per business, shared by every
+// store, optional on a product. A product without a brand reads, validates and
+// sends exactly what it did in v2.
+// ===========================================================================
+
+export type InventoryBrand = {
+  id: string;
+  name: string;
+  /** Lowercased, spaces collapsed: what makes two names the same brand. */
+  nameKey: string;
+  archived: boolean;
+};
+
+export function brandKey(name: unknown): string {
+  return text(name, MAX_BRAND * 4).toLowerCase();
+}
+
+export function inventoryBrandFromRow(row: unknown): InventoryBrand {
+  const r = asRow(row);
+  const name = text(r.name, MAX_BRAND);
+  return { id: text(r.id), name, nameKey: text(r.nameKey, MAX_BRAND * 4) || brandKey(name), archived: r.archived === true };
+}
+
+/** The business's brands by name; archived ones only when asked for. */
+export function inventoryBrands(rows: readonly unknown[], includeArchived = false): InventoryBrand[] {
+  return (Array.isArray(rows) ? rows : [])
+    .map(inventoryBrandFromRow)
+    .filter((brand) => brand.id && brand.name && (includeArchived || !brand.archived))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** "Everything" is "", a product with no brand is this, anything else is a brand's id. */
+export const NO_BRAND_FILTER = "__none__";
+
+export type BrandResolver = (item: Pick<InventoryItem, "brandId" | "brand">) => InventoryBrand | null;
+
+/**
+ * Which brand of the list a product belongs to: by its id, else (a brand that
+ * was typed and is not in the list we hold) by name. Built once for a whole list.
+ */
+export function brandResolver(brands: readonly InventoryBrand[]): BrandResolver {
+  const byId = new Map<string, InventoryBrand>();
+  const byKey = new Map<string, InventoryBrand>();
+  for (const brand of brands) {
+    byId.set(brand.id, brand);
+    if (!byKey.has(brand.nameKey) || !brand.archived) byKey.set(brand.nameKey, brand);
+  }
+  return (item) => {
+    const byItsId = item.brandId ? byId.get(item.brandId) : undefined;
+    if (byItsId) return byItsId;
+    const key = brandKey(item.brand);
+    return key ? byKey.get(key) ?? null : null;
+  };
+}
+
+export function brandForItem(item: Pick<InventoryItem, "brandId" | "brand">, brands: readonly InventoryBrand[]): InventoryBrand | null {
+  return brandResolver(brands)(item);
+}
+
+/** The product with its brand's CURRENT name (so a rename shows at once); unchanged when the brand is not in the list. */
+export function withCurrentBrand<T extends Pick<InventoryItem, "brandId" | "brand">>(item: T, resolve: BrandResolver): T {
+  const match = resolve(item);
+  return match && match.name !== item.brand ? { ...item, brand: match.name } : item;
+}
+
+/** Whether a product is under the brand filter ("" = any, NO_BRAND_FILTER = none, else an id). */
+export function itemInBrand(
+  item: Pick<InventoryItem, "brandId" | "brand">,
+  brands: readonly InventoryBrand[] | BrandResolver,
+  filter: string,
+): boolean {
+  if (!filter) return true;
+  const match = (typeof brands === "function" ? brands : brandResolver(brands))(item);
+  if (filter === NO_BRAND_FILTER) return match === null && !text(item.brand) && !text(item.brandId);
+  return match !== null && match.id === filter;
+}
+
+/** The choices of a brand dropdown: the active brands, plus the product's own when it is archived. */
+export function brandOptions(brands: readonly InventoryBrand[], selectedId = ""): InventoryBrand[] {
+  return brands
+    .filter((brand) => !brand.archived || brand.id === selectedId)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Every problem with a brand's name; `exceptId` is the one being renamed. */
+export function validateBrandName(name: unknown, brands: readonly InventoryBrand[], exceptId = ""): InventoryRefusal[] {
+  const value = text(name, MAX_BRAND + 1);
+  if (!value) return ["brand_name_required"];
+  if (value.length > MAX_BRAND) return ["brand_too_long"];
+  const key = brandKey(value);
+  return brands.some((brand) => brand.id !== exceptId && brand.nameKey === key) ? ["brand_name_taken"] : [];
+}
+
+export function createInventoryBrandRequest(businessId: string, name: unknown) {
+  return { businessId: text(businessId), name: text(name, MAX_BRAND) };
+}
+
+export function renameInventoryBrandRequest(businessId: string, brandId: string, name: unknown) {
+  return { businessId: text(businessId), brandId: text(brandId), name: text(name, MAX_BRAND) };
+}
+
+export function archiveInventoryBrandRequest(businessId: string, brandId: string, archived: boolean) {
+  return { businessId: text(businessId), brandId: text(brandId), archived: archived === true };
+}
+
+/** The new brand's id out of `createInventoryBrand`'s answer, "" when it gave none. */
+export function readCreatedBrandId(data: unknown): string {
+  return text(asRow(data).brandId);
+}
+
+/** "3 brands" / "3 marques". */
+export function brandCountText(count: number, lang: Lang = "en"): string {
+  if (lang === "fr") return `${count} ${count === 1 ? "marque" : "marques"}`;
+  return `${count} ${count === 1 ? "brand" : "brands"}`;
+}
+
+/** "Saved Jordan 11. Add the next one." / "Jordan 11 enregistré. Ajoutez le suivant.": what quick entry says after each save. */
+export function savedNextText(name: string, lang: Lang = "en"): string {
+  if (lang === "fr") return `${name} enregistré. Ajoutez le suivant.`;
+  return `Saved ${name}. Add the next one.`;
 }

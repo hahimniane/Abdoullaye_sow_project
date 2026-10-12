@@ -496,7 +496,7 @@ test("the summary answer is read tolerantly", () => {
   assert.equal(read?.revenueCents, 12000);
   assert.equal(read?.profitCents, 5000);
   assert.deepEqual(read?.low.map((l) => l.lowStockAt), [2, null]);
-  assert.deepEqual(read?.countWasOff, [{ itemId: "m", name: "Mystery" }]);
+  assert.deepEqual(read?.countWasOff, [{ itemId: "m", name: "Mystery", brand: "" }]);
   const empty = readInventorySummary({});
   assert.equal(empty?.salesCount, 0);
   assert.deepEqual(empty?.best, []);
@@ -1175,4 +1175,240 @@ test("sentences with a count or a name are built per language", () => {
   assert.equal(archivedNameText("Hair", "en", true), "Hair (archived)");
   assert.equal(archivedNameText("Hair", "fr", true), "Hair (archivée)");
   assert.equal(archivedNameText("Downtown", "fr"), "Downtown (archivé)");
+});
+
+// ---------------------------------------------------------------------------
+// v3: brands and quick entry.
+// ---------------------------------------------------------------------------
+
+import {
+  NO_BRAND_FILTER,
+  archiveInventoryBrandRequest,
+  brandCountText,
+  brandForItem,
+  brandKey,
+  brandOptions,
+  brandResolver,
+  createInventoryBrandRequest,
+  inventoryBrands,
+  itemInBrand,
+  productDisplayName,
+  quickEntryDraft,
+  readCreatedBrandId,
+  renameInventoryBrandRequest,
+  saleLinesSummary,
+  savedNextText,
+  validateBrandName,
+  withCurrentBrand,
+  type InventoryBrand,
+} from "./inventory.ts";
+
+const brandRows = [
+  { id: "b-jordan", name: "Jordan", nameKey: "jordan", archived: false },
+  { id: "b-nike", name: "Nike", nameKey: "nike", archived: false },
+  { id: "b-old", name: "Old Skool", nameKey: "old skool", archived: true },
+];
+const brands: InventoryBrand[] = inventoryBrands(brandRows, true);
+
+test("a product reads brand first, then name; without a brand it reads as before", () => {
+  assert.equal(productDisplayName({ name: "11", brand: "Jordan" }), "Jordan 11");
+  assert.equal(productDisplayName({ name: "Shea butter", brand: "" }), "Shea butter");
+  assert.equal(productDisplayName({ name: "Shea butter" }), "Shea butter");
+  assert.equal(productDisplayName({ name: " 11 ", brand: " Jordan " }), "Jordan 11");
+  // A sale line carries the brand it was sold under.
+  const sale = inventorySaleFromRow({ id: "s", lines: [{ itemId: "i", name: "11", brand: "Jordan", brandId: "b-jordan", quantity: 1, listPriceCents: 100, soldPriceCents: 100 }] });
+  assert.equal(sale.lines[0].brand, "Jordan");
+  assert.equal(productDisplayName(sale.lines[0]), "Jordan 11");
+  assert.deepEqual(saleLinesSummary(sale), { names: ["Jordan 11"], more: 0 });
+});
+
+test("a product row reads its brand fields; a row without them has none", () => {
+  const withBrand = item({ name: "11", brand: "Jordan", brandId: "b-jordan" });
+  assert.equal(withBrand.brand, "Jordan");
+  assert.equal(withBrand.brandId, "b-jordan");
+  const plain = item();
+  assert.equal(plain.brand, "");
+  assert.equal(plain.brandId, "");
+});
+
+test("the brand list is the business's own: by name, archived ones only when asked for", () => {
+  assert.deepEqual(inventoryBrands(brandRows).map((b) => b.name), ["Jordan", "Nike"]);
+  assert.deepEqual(inventoryBrands(brandRows, true).map((b) => b.name), ["Jordan", "Nike", "Old Skool"]);
+  assert.deepEqual(inventoryBrands([{ id: "", name: "x" }, { id: "y", name: "" }, null, 5]), []);
+  assert.equal(brandKey("  JoRdAn "), "jordan");
+  assert.deepEqual(brandOptions(brands).map((b) => b.id), ["b-jordan", "b-nike"]);
+  assert.deepEqual(brandOptions(brands, "b-old").map((b) => b.id), ["b-jordan", "b-nike", "b-old"]);
+  assert.equal(brandCountText(1, "fr"), "1 marque");
+  assert.equal(brandCountText(3), "3 brands");
+});
+
+test("a brand is found by id, else by name, and a rename shows at once", () => {
+  assert.equal(brandForItem({ brandId: "b-jordan", brand: "Air (old name)" }, brands)?.name, "Jordan");
+  assert.equal(brandForItem({ brandId: "", brand: " nike " }, brands)?.id, "b-nike");
+  assert.equal(brandForItem({ brandId: "", brand: "" }, brands), null);
+  assert.equal(brandForItem({ brandId: "", brand: "Unlisted" }, brands), null);
+  const resolve = brandResolver(brands);
+  assert.equal(withCurrentBrand(item({ name: "11", brand: "Air", brandId: "b-jordan" }), resolve).brand, "Jordan");
+  // Unknown to the list: the snapshot stays.
+  assert.equal(withCurrentBrand(item({ name: "11", brand: "Unlisted" }), resolve).brand, "Unlisted");
+});
+
+test("the brand filter: everything, one brand, or the products with none", () => {
+  const jordan = item({ brandId: "b-jordan", brand: "Jordan" });
+  const none = item({ id: "i2" });
+  const typedOnly = item({ id: "i3", brand: "Unlisted" });
+  assert.equal(itemInBrand(jordan, brands, ""), true);
+  assert.equal(itemInBrand(jordan, brands, "b-jordan"), true);
+  assert.equal(itemInBrand(jordan, brands, "b-nike"), false);
+  assert.equal(itemInBrand(none, brands, NO_BRAND_FILTER), true);
+  assert.equal(itemInBrand(jordan, brands, NO_BRAND_FILTER), false);
+  assert.equal(itemInBrand(typedOnly, brands, NO_BRAND_FILTER), false);
+});
+
+test("the list and the search read the brand: 'Jordan 11' is found by brand, by name, or both", () => {
+  const list = [
+    { id: "x1", name: "11", brand: "Jordan", brandId: "b-jordan", code: "IT-111111", category: "Shoes", priceCents: 500, quantity: 2 },
+    { id: "x2", name: "Air Max", brand: "Nike", brandId: "b-nike", code: "IT-222222", category: "Shoes", priceCents: 500, quantity: 2 },
+    { id: "x3", name: "Plain tee", code: "IT-333333", category: "Shirts", priceCents: 500, quantity: 2 },
+  ];
+  const scope = { brands };
+  assert.deepEqual(filterInventoryItems(list, "all", "jordan", scope).map((i) => i.id), ["x1"]);
+  assert.deepEqual(filterInventoryItems(list, "all", "jordan 11", scope).map((i) => i.id), ["x1"]);
+  assert.deepEqual(filterInventoryItems(list, "all", "11", scope).map((i) => i.id), ["x1"]);
+  assert.deepEqual(filterInventoryItems(list, "all", "nike shoes", scope).map((i) => i.id), ["x2"]);
+  // Without the list the stored snapshot still searches.
+  assert.deepEqual(filterInventoryItems(list, "all", "jordan").map((i) => i.id), ["x1"]);
+  // Sorted by what is shown: brand first.
+  assert.deepEqual(filterInventoryItems(list, "all", "", scope).map((i) => productDisplayName(i)), ["Jordan 11", "Nike Air Max", "Plain tee"]);
+  assert.equal(filterInventoryItems(list, "all", "", scope)[0].brand, "Jordan");
+  // The filter row.
+  assert.deepEqual(filterInventoryItems(list, "all", "", { ...scope, brandId: "b-nike" }).map((i) => i.id), ["x2"]);
+  assert.deepEqual(filterInventoryItems(list, "all", "", { ...scope, brandId: NO_BRAND_FILTER }).map((i) => i.id), ["x3"]);
+  // A rename shows at once, in the display and in the search.
+  const renamed: InventoryBrand[] = [{ id: "b-jordan", name: "Air Jordan", nameKey: "air jordan", archived: false }];
+  const hit = filterInventoryItems(list, "all", "air jordan", { brands: renamed });
+  assert.deepEqual(hit.map((i) => productDisplayName(i)), ["Air Jordan 11"]);
+});
+
+test("brand names are checked before the call: required, 60 at most, one per business", () => {
+  assert.deepEqual(validateBrandName("  ", brands), ["brand_name_required"]);
+  assert.deepEqual(validateBrandName("x".repeat(61), brands), ["brand_too_long"]);
+  assert.deepEqual(validateBrandName("  JORDAN ", brands), ["brand_name_taken"]);
+  assert.deepEqual(validateBrandName("Jordan", brands, "b-jordan"), []);
+  assert.deepEqual(validateBrandName("Adidas", brands), []);
+});
+
+test("the brand requests carry the business id and exactly the contract's fields", () => {
+  assert.deepEqual(createInventoryBrandRequest(" biz ", "  Jordan  "), { businessId: "biz", name: "Jordan" });
+  assert.deepEqual(renameInventoryBrandRequest("biz", "b-jordan", " Air Jordan "), { businessId: "biz", brandId: "b-jordan", name: "Air Jordan" });
+  assert.deepEqual(archiveInventoryBrandRequest("biz", "b-jordan", true), { businessId: "biz", brandId: "b-jordan", archived: true });
+  assert.deepEqual(archiveInventoryBrandRequest("biz", "b-jordan", "yes" as unknown as boolean), { businessId: "biz", brandId: "b-jordan", archived: false });
+  assert.equal(readCreatedBrandId({ brandId: " b-9 " }), "b-9");
+  assert.equal(readCreatedBrandId({}), "");
+  assert.equal(readCreatedBrandId(null), "");
+});
+
+test("a product request sends the brand id when chosen, the typed name otherwise, nothing when there is none", () => {
+  // None: exactly the v2 request.
+  const v2 = createInventoryItemRequest("biz", draft({ category: "Care" }));
+  assert.equal("brandId" in v2, false);
+  assert.equal("brand" in v2, false);
+  // Chosen from the list: the id alone.
+  const chosen = createInventoryItemRequest("biz", draft({ brandId: "b-jordan", brand: "Jordan", categoryId: "c-care", category: "Care" }));
+  assert.equal(chosen.brandId, "b-jordan");
+  assert.equal("brand" in chosen, false);
+  assert.equal(chosen.categoryId, "c-care");
+  // Typed (the list could not be read): the name.
+  const typed = createInventoryItemRequest("biz", draft({ brand: " Jordan ", brandId: "" }));
+  assert.equal(typed.brand, "Jordan");
+  assert.equal("brandId" in typed, false);
+});
+
+test("editing: a chosen brand goes by id, a typed one by name, a cleared one clears both, a never-branded product sends nothing", () => {
+  const branded = item({ name: "11", brand: "Jordan", brandId: "b-jordan" });
+  const base = inventoryDraftFromItem(branded, [], brands);
+  assert.equal(base.brandId, "b-jordan");
+  assert.equal(base.brand, "Jordan");
+  const same = updateInventoryItemRequest("biz", branded, base);
+  assert.equal(same.brandId, "b-jordan");
+  assert.equal("brand" in same, false);
+  const cleared = updateInventoryItemRequest("biz", branded, { ...base, brand: "", brandId: "" });
+  assert.equal(cleared.brand, "");
+  assert.equal(cleared.brandId, "");
+  const typed = updateInventoryItemRequest("biz", branded, { ...base, brand: "Nike", brandId: "" });
+  assert.equal(typed.brand, "Nike");
+  assert.equal("brandId" in typed, false);
+  const never = updateInventoryItemRequest("biz", item(), inventoryDraftFromItem(item(), [], brands));
+  assert.equal("brand" in never, false);
+  assert.equal("brandId" in never, false);
+});
+
+test("a change of brand alone is a change worth saving; the same brand is not", () => {
+  const branded = item({ name: "11", brand: "Jordan", brandId: "b-jordan" });
+  const base = inventoryDraftFromItem(branded, [], brands);
+  assert.equal(inventoryDraftChanged(branded, base, [], brands), false);
+  assert.equal(inventoryDraftChanged(branded, { ...base, brandId: "b-nike", brand: "Nike" }, [], brands), true);
+  assert.equal(inventoryDraftChanged(branded, { ...base, brandId: "", brand: "" }, [], brands), true);
+  // A product whose snapshot lags a rename is not "changed" by being matched to the list.
+  const lagging = item({ name: "11", brand: "Air", brandId: "b-jordan" });
+  assert.equal(inventoryDraftChanged(lagging, inventoryDraftFromItem(lagging, [], brands), [], brands), false);
+});
+
+test("a too-long brand typed into the form is refused before the call", () => {
+  assert.deepEqual(validateInventoryItemDraft(draft({ brand: "b".repeat(61) }), true), ["brand_too_long"]);
+  assert.deepEqual(validateInventoryItemDraft(draft({ brand: "Jordan", brandId: "b-jordan" }), true), []);
+});
+
+test("quick entry keeps ONLY the brand and the category; everything else starts empty", () => {
+  const saved = draft({
+    name: "11", price: "150", cost: "90", quantity: "12", lowStockAt: "3", photoUrl: "https://x.test/a.png",
+    brand: "Jordan", brandId: "b-jordan", category: "Shoes", categoryId: "c-shoes", stock: { "s-main": "5", "s-down": "7" },
+  });
+  const next = quickEntryDraft(saved);
+  assert.equal(next.brand, "Jordan");
+  assert.equal(next.brandId, "b-jordan");
+  assert.equal(next.category, "Shoes");
+  assert.equal(next.categoryId, "c-shoes");
+  assert.equal(next.name, "");
+  assert.equal(next.price, "");
+  assert.equal(next.cost, "");
+  assert.equal(next.quantity, emptyInventoryItemDraft.quantity);
+  assert.equal(next.lowStockAt, "");
+  assert.equal(next.photoUrl, "");
+  assert.deepEqual(next.stock, {});
+  // The saved draft is not touched, and the empty form's own stock map is not shared.
+  assert.equal(saved.name, "11");
+  assert.notEqual(next.stock, emptyInventoryItemDraft.stock);
+  // Nothing to keep: the empty form.
+  assert.deepEqual(quickEntryDraft(draft({ name: "x" })), { ...emptyInventoryItemDraft, stock: {} });
+});
+
+test("the summary reads byBrand, richest first, with the No brand row; an older answer has none", () => {
+  const read = readInventorySummary({
+    byBrand: [
+      { brandId: "", name: "No brand", itemsSold: 1, revenueCents: 500, profitCents: 100 },
+      { brandId: "b-nike", name: "Nike", itemsSold: 2, revenueCents: 9000, profitCents: -50 },
+      { brandId: "b-jordan", name: "Jordan", itemsSold: 3, revenueCents: 9000, profitCents: 4000 },
+    ],
+    best: [{ itemId: "i", name: "11", brand: "Jordan", quantity: 1, revenueCents: 100 }],
+  });
+  assert.deepEqual(read?.byBrand.map((b) => b.brandId), ["b-jordan", "b-nike", ""]);
+  assert.equal(read?.byBrand[1].profitCents, -50);
+  assert.equal(read?.best[0].brand, "Jordan");
+  assert.deepEqual(readInventorySummary({})?.byBrand, []);
+});
+
+test("the brand refusals read as friendly sentences", () => {
+  assert.equal(INVENTORY_MESSAGES.brand_name_required, "Enter the brand's name.");
+  assert.equal(INVENTORY_MESSAGES.brand_name_taken, "You already have a brand with that name.");
+  assert.equal(INVENTORY_MESSAGES.brand_not_found, "That brand no longer exists.");
+  assert.equal(INVENTORY_MESSAGES.brand_too_long, "The brand is too long.");
+  const failure = inventoryCallableFailure({ code: "functions/already-exists", message: "raw words", details: { reason: "brand_name_taken" } });
+  assert.equal(failure.reason, "brand_name_taken");
+  assert.equal(failure.message, INVENTORY_MESSAGES.brand_name_taken);
+});
+
+test("quick entry's confirmation is built per language", () => {
+  assert.equal(savedNextText("Jordan 11"), "Saved Jordan 11. Add the next one.");
+  assert.equal(savedNextText("Jordan 11", "fr"), "Jordan 11 enregistré. Ajoutez le suivant.");
 });

@@ -20,6 +20,7 @@ import {
   type StockIndex,
   type StoreAccess,
   type TransferDraft,
+  productDisplayName,
 } from "@/lib/inventory";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 
@@ -61,7 +62,7 @@ export function InventoryTransferDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const sorted = useMemo(() => [...items].sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code)), [items]);
+  const sorted = useMemo(() => [...items].sort((a, b) => productDisplayName(a).localeCompare(productDisplayName(b)) || a.code.localeCompare(b.code)), [items]);
   const hasProduct = Boolean(draft.itemId);
   const fromCount = hasProduct && draft.fromStoreId ? stockCountFor(stock, draft.itemId, draft.fromStoreId) : 0;
   const toCount = hasProduct && draft.toStoreId ? stockCountFor(stock, draft.itemId, draft.toStoreId) : 0;
@@ -101,7 +102,7 @@ export function InventoryTransferDialog({
               <select value={draft.itemId} onChange={(e) => setDraft((d) => ({ ...d, itemId: e.target.value }))} disabled={busy} aria-label="Product">
                 <option value="">Choose a product</option>
                 {sorted.map((item) => (
-                  <option key={item.id} value={item.id} data-no-translate>{item.name} · {item.code}</option>
+                  <option key={item.id} value={item.id} data-no-translate>{productDisplayName(item)} · {item.code}</option>
                 ))}
               </select>
             </label>

@@ -17,6 +17,7 @@ import {
   type StockDraft,
   type StockIndex,
   type StoreAccess,
+  productDisplayName,
 } from "@/lib/inventory";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 
@@ -76,7 +77,7 @@ export function InventoryStockDialog({
           <div>
             <h3>Add stock or set the count</h3>
             <p>
-              <span data-no-translate>{item.name}</span>
+              <span data-no-translate>{productDisplayName(item)}</span>
               {" — "}
               <span>In stock now</span>{" "}
               <b data-no-translate>{current}</b>
