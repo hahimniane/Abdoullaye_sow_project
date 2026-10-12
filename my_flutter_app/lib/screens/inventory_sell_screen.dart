@@ -41,9 +41,15 @@ class InventorySellScreen extends StatefulWidget {
     this.cameraEnabled = true,
     this.scans,
     this.access = const InventoryAccess.owner(),
+    this.startWithSearch = false,
   });
 
   final String businessId;
+
+  /// Opens on the code / product search with the keyboard up and the camera
+  /// closed - the home's "Enter code or search", for a tag that will not scan.
+  /// The camera is one tap away ("Scan another product").
+  final bool startWithSearch;
 
   /// What the signed-in person may do across stores. In a business with
   /// several stores it decides where the sale goes: staff sell from their home
@@ -82,7 +88,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
   /// Whether the camera is open. It closes after every tag it reads, so a
   /// camera drifting over the shelf cannot keep adding things; the person
   /// opens it again for the next product.
-  bool _scanning = true;
+  late bool _scanning = !widget.startWithSearch;
 
   late final InventoryContextWatcher _watcher = InventoryContextWatcher(
     source: _source,
@@ -462,6 +468,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
                 TextField(
                   key: const Key('inv-find'),
                   controller: _find,
+                  autofocus: widget.startWithSearch,
                   autocorrect: false,
                   textInputAction: TextInputAction.search,
                   onChanged: (_) => setState(() {}),

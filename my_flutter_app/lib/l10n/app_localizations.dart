@@ -20836,6 +20836,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only the owner can do that.'**
   String get inventoryFailOwnerOnly;
+
+  /// No description provided for @shopHomeSellSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan a product tag'**
+  String get shopHomeSellSubtitle;
+
+  /// No description provided for @shopHomeEnterCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter code or search'**
+  String get shopHomeEnterCode;
+
+  /// No description provided for @shopHomeSalesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Sale} other{Sales}}'**
+  String shopHomeSalesLabel(int count);
+
+  /// No description provided for @shopHomeProducts.
+  ///
+  /// In en, this message translates to:
+  /// **'Products'**
+  String get shopHomeProducts;
+
+  /// No description provided for @shopHomeProductsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock, prices and tags'**
+  String get shopHomeProductsHint;
+
+  /// No description provided for @shopHomeSalesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'History and voids'**
+  String get shopHomeSalesHint;
+
+  /// No description provided for @shopHomeLowCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Nothing low} =1{1 product} other{{count} products}}'**
+  String shopHomeLowCount(int count);
+
+  /// No description provided for @shopHomeAddHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A new item and its tag'**
+  String get shopHomeAddHint;
+
+  /// No description provided for @shopHomeRecentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s sales'**
+  String get shopHomeRecentTitle;
+
+  /// No description provided for @shopHomeSeeAll.
+  ///
+  /// In en, this message translates to:
+  /// **'See all'**
+  String get shopHomeSeeAll;
+
+  /// No description provided for @shopHomeNoSalesToday.
+  ///
+  /// In en, this message translates to:
+  /// **'No sales yet today. Scan a tag to make the first one.'**
+  String get shopHomeNoSalesToday;
+
+  /// No description provided for @shopHomeSaleItems.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{{name}} =1{{name} and 1 more} other{{name} and {count} more}}'**
+  String shopHomeSaleItems(int count, String name);
+
+  /// No description provided for @shopHomeLowNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is running low.'**
+  String get shopHomeLowNone;
+
+  /// No description provided for @shopHomeMoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get shopHomeMoreTitle;
+
+  /// No description provided for @shopHomePendingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending approval · You can already sell'**
+  String get shopHomePendingNote;
+
+  /// No description provided for @shopHomeChangesNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes requested · You can still sell'**
+  String get shopHomeChangesNote;
+
+  /// No description provided for @shopHomeNoInventoryAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'This business sells with Inventory. Ask the owner to give you the Inventory permission.'**
+  String get shopHomeNoInventoryAccess;
 }
 
 class _AppLocalizationsDelegate

@@ -129,6 +129,21 @@ bool businessHasShippingService(Iterable<String> services) {
   return shippingBusinessServiceKeys.any((key) => enabled.contains(key.value));
 }
 
+/// True when [services] (the business's `enabledServices` values) are
+/// Inventory and nothing else: a shop that sells at a counter. Such a business
+/// has no destinations, cars or shipments to set up, so copy written for those
+/// (the full-width "pending approval" banner, "no services are switched on")
+/// is wrong for it. Pure: the business home and the staff shell share it.
+bool businessIsShopOnly(Iterable<String> services) {
+  final enabled = services.toSet();
+  if (!enabled.contains(BusinessServiceKey.inventory.value)) return false;
+  return businessServiceCatalog.every(
+    (service) =>
+        service.key == BusinessServiceKey.inventory ||
+        !enabled.contains(service.key.value),
+  );
+}
+
 /// The Containers section is offered only when the business ships something,
 /// this person holds the containers permission, and there is a business to
 /// look in. Same three-gate shape as `inventoryAvailable`.

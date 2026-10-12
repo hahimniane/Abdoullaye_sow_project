@@ -101,15 +101,20 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
   /// known, so nobody asks for more than they may read). Listening again for
   /// the same store and page does nothing.
   void _listenSales({bool force = false}) {
-    if (!widget.access.seesAllStores && !_watcher.storesLoaded) {
+    final ctx = _watcher.context;
+    final scope = inventorySalesScope(
+      widget.access,
+      ctx,
+      storesLoaded: _watcher.storesLoaded,
+    );
+    if (!scope.ready) {
       _safety ??= Timer(const Duration(seconds: 15), () {
         if (mounted && !_loaded) setState(() => _loaded = true);
       });
       return;
     }
-    final ctx = _watcher.context;
-    final store = ctx.ownStoreId;
-    final key = '${ctx.homeStoreMissing ? '!' : store}#$_pages';
+    final store = scope.storeId;
+    final key = '${scope.none ? '!' : store}#$_pages';
     if (!force && key == _salesKey) return;
     _salesKey = key;
     _safety?.cancel();
@@ -118,7 +123,7 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
       if (mounted && !_loaded) setState(() => _loaded = true);
     });
     _salesSub?.cancel();
-    if (ctx.homeStoreMissing) {
+    if (scope.none) {
       // No store, no sales to read.
       _salesSub = null;
       _safety?.cancel();

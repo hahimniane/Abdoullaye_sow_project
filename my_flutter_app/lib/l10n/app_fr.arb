@@ -5542,5 +5542,46 @@
   "inventoryFailStoreNotAllowed": "Vous ne pouvez pas utiliser ce magasin. Vos ventes et comptages vont dans votre propre magasin.",
   "inventoryFailSameStore": "Choisissez deux magasins différents.",
   "inventoryFailInsufficientStock": "Le magasin d’origine n’en a pas autant. Réduisez le nombre ou ajoutez d’abord du stock.",
-  "inventoryFailOwnerOnly": "Seul le propriétaire peut faire cela."
+  "inventoryFailOwnerOnly": "Seul le propriétaire peut faire cela.",
+  "shopHomeSellSubtitle": "Scannez l’étiquette d’un produit",
+  "shopHomeEnterCode": "Saisir un code ou rechercher",
+  "shopHomeSalesLabel": "{count, plural, =1{Vente} other{Ventes}}",
+  "@shopHomeSalesLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shopHomeProducts": "Produits",
+  "shopHomeProductsHint": "Stock, prix et étiquettes",
+  "shopHomeSalesHint": "Historique et annulations",
+  "shopHomeLowCount": "{count, plural, =0{Rien en stock bas} =1{1 produit} other{{count} produits}}",
+  "@shopHomeLowCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shopHomeAddHint": "Un nouvel article et son étiquette",
+  "shopHomeRecentTitle": "Ventes du jour",
+  "shopHomeSeeAll": "Tout voir",
+  "shopHomeNoSalesToday": "Aucune vente aujourd’hui. Scannez une étiquette pour faire la première.",
+  "shopHomeSaleItems": "{count, plural, =0{{name}} =1{{name} et 1 autre} other{{name} et {count} autres}}",
+  "@shopHomeSaleItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "shopHomeLowNone": "Aucun produit en stock bas.",
+  "shopHomeMoreTitle": "Plus",
+  "shopHomePendingNote": "En attente d’approbation · Vous pouvez déjà vendre",
+  "shopHomeChangesNote": "Modifications demandées · Vous pouvez toujours vendre",
+  "shopHomeNoInventoryAccess": "Cette entreprise vend avec l’Inventaire. Demandez au propriétaire l’autorisation Inventaire."
 }

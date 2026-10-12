@@ -22,6 +22,7 @@ import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
 import '../services/container_manifest.dart';
 import '../services/inventory.dart';
+import '../services/shop_home.dart';
 import '../services/firestore_query_spec.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
@@ -38,6 +39,7 @@ import 'parking_month_end_screen.dart';
 import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
+import 'shop_home_section.dart';
 import 'staff_car_management_screen.dart';
 
 export '../services/business_service_overview.dart' show ServiceCategory;
@@ -99,7 +101,14 @@ class HomeMenu extends StatefulWidget {
     super.key,
     this.initialCategory,
     this.showBackButton = false,
+    this.shopApprovalStatus,
   });
+
+  /// A shop-only business's review state ('pending', 'changes_requested'),
+  /// from the staff shell, which then leaves out its full-width banner: a
+  /// shop can sell while it waits, so the home says so in a small note
+  /// instead. Null for every other business (the banner stays).
+  final String? shopApprovalStatus;
 
   /// Open on one service's list (a notification about freight lands on the
   /// freight list, not on "all").
@@ -781,11 +790,30 @@ class _HomeMenuState extends State<HomeMenu> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final auth = context.watch<AuthProvider>();
     final width = MediaQuery.of(context).size.width;
-    final pad = width * 0.06;
     final tiles = _overviewTiles();
-    final records = _filteredRecords;
-    final showRecords = !_isLoading && records.isNotEmpty;
+    // Whoever may sell gets Sell first. The gates are the Inventory row's own
+    // (inventoryAvailable); a shop with no other service gets the shop home,
+    // everyone else keeps this screen exactly as it was.
+    final layout = shopHomeLayout(
+      isAdmin: auth.isAdmin,
+      hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
+      canUseInventory: inventoryAvailable(
+        services: auth.businessServices,
+        hasPermission: auth.hasBusinessPermission(BusinessPermission.inventory),
+        businessId: _businessId,
+      ),
+      hasServiceSections: _enabledActivityCategories().isNotEmpty,
+    );
+    final shopOnly = layout == ShopHomeLayout.shopOnly;
+    // A shop keeps to the 8-point grid; the long-standing home keeps its own
+    // proportional margin.
+    final pad = shopOnly ? AppSpacing.lg : width * 0.06;
+    final records = shopOnly ? const <ActivityRecord>[] : _filteredRecords;
+    final showRecords = !shopOnly && !_isLoading && records.isNotEmpty;
+    final approval = widget.shopApprovalStatus;
+    final showApprovalNote = approval != null && approval != 'approved';
 
     return Scaffold(
       body: Container(
@@ -801,90 +829,127 @@ class _HomeMenuState extends State<HomeMenu> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          if (widget.showBackButton) const BackButton(),
-                          const Spacer(),
-                          // Same bell customers have: a business's
-                          // notifications (paid links, new opportunities,
-                          // viewing requests) were stored but reachable only
-                          // from a push banner.
-                          const CustomerNotificationBell(),
-                          const SizedBox(width: 4),
-                          const LanguageToggle(),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      // "Services. / Choose a service to get started" is an
-                      // invitation to pick something. Once the service grid
-                      // is on screen it is a caption for the thing directly
-                      // under it. Customers, who get no grid, still need it.
-                      if (tiles.isEmpty) ...[
-                        _WelcomeSection(l10n: l10n, width: width),
-                        const SizedBox(height: 24),
+                      if (layout == ShopHomeLayout.standard) ...[
+                        Row(
+                          children: [
+                            if (widget.showBackButton) const BackButton(),
+                            const Spacer(),
+                            // Same bell customers have: a business's
+                            // notifications (paid links, new opportunities,
+                            // viewing requests) were stored but reachable
+                            // only from a push banner.
+                            const CustomerNotificationBell(),
+                            const SizedBox(width: 4),
+                            const LanguageToggle(),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ] else ...[
+                        // Whoever may sell: the business name shares the row
+                        // with the bell and the language switch, and Sell
+                        // comes straight after - no scrolling to reach it.
+                        ShopHomeSection(
+                          key: const Key('shop-home'),
+                          businessId: _businessId,
+                          access: auth.inventoryAccess,
+                          businessName: auth.businessName ?? '',
+                          headerLeading: widget.showBackButton
+                              ? const BackButton()
+                              : null,
+                          headerActions: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CustomerNotificationBell(),
+                              SizedBox(width: 4),
+                              LanguageToggle(),
+                            ],
+                          ),
+                          approvalStatus: shopOnly ? approval : null,
+                          showTodaySales: shopOnly,
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
                       ],
-                      _ServicesSection(
-                        l10n: l10n,
-                        width: width,
-                        tiles: tiles,
-                        isLoading: _isLoading,
-                        selectedCategory: _selectedCategory,
-                        onCategoryTapped: (category) => _selectCategory(
-                          businessServiceOverviewSelection(
-                            _selectedCategory,
-                            category,
+                      if (shopOnly)
+                        _ShopMoreSection(l10n: l10n)
+                      else ...[
+                        // A shop-only business seen by someone who cannot
+                        // sell: the same calm note, above the services card.
+                        if (layout == ShopHomeLayout.standard &&
+                            showApprovalNote) ...[
+                          ShopApprovalNote(status: approval),
+                          const SizedBox(height: 16),
+                        ],
+                        // "Services. / Choose a service to get started" is an
+                        // invitation to pick something. Once the service grid
+                        // is on screen it is a caption for the thing directly
+                        // under it. Customers, who get no grid, still need it.
+                        if (tiles.isEmpty) ...[
+                          _WelcomeSection(l10n: l10n, width: width),
+                          const SizedBox(height: 24),
+                        ],
+                        _ServicesSection(
+                          l10n: l10n,
+                          width: width,
+                          tiles: tiles,
+                          isLoading: _isLoading,
+                          selectedCategory: _selectedCategory,
+                          onCategoryTapped: (category) => _selectCategory(
+                            businessServiceOverviewSelection(
+                              _selectedCategory,
+                              category,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _ActivitySection(
-                        l10n: l10n,
-                        hasRecords: records.isNotEmpty,
-                        historyLoaded: _historyStarted,
-                        isLoading: _isLoading,
-                        denseList: _parkingDenseList,
-                        onDenseListChanged: (dense) =>
-                            setState(() => _parkingDenseList = dense),
-                        selectedCategory: _selectedCategory,
-                        onCategoryChanged: _selectCategory,
-                        facets: _parkingFacets,
-                        onToggleKind: (kind) {
-                          setState(() {
-                            _parkingFacets = _parkingFacets.toggleKind(kind);
-                          });
-                        },
-                        onTogglePayment: (payment) {
-                          setState(() {
-                            _parkingFacets = _parkingFacets.togglePayment(
-                              payment,
-                            );
-                          });
-                        },
-                        onClearFacets: () {
-                          setState(() {
-                            _parkingFacets = const ParkingFacets();
-                          });
-                        },
-                        searchController: _parkingSearchController,
-                        onSearchChanged: (value) {
-                          setState(() {
-                            _parkingSearch = value;
-                          });
-                        },
-                        isNarrowed: _parkingListIsNarrowed,
-                        parkedFrom: _parkedFrom,
-                        parkedTo: _parkedTo,
-                        onParkedRangeChanged: (from, to) {
-                          setState(() {
-                            _parkedFrom = from;
-                            _parkedTo = to;
-                          });
-                        },
-                        // The scoreboard over the parked cars in view, from
-                        // the SAME filtered records the feed shows, so a
-                        // filter re-totals the numbers - as the console does.
-                        parkingTotals: _parkingTotalsCache,
-                      ),
+                        const SizedBox(height: 24),
+                        _ActivitySection(
+                          l10n: l10n,
+                          hasRecords: records.isNotEmpty,
+                          historyLoaded: _historyStarted,
+                          isLoading: _isLoading,
+                          denseList: _parkingDenseList,
+                          onDenseListChanged: (dense) =>
+                              setState(() => _parkingDenseList = dense),
+                          selectedCategory: _selectedCategory,
+                          onCategoryChanged: _selectCategory,
+                          facets: _parkingFacets,
+                          onToggleKind: (kind) {
+                            setState(() {
+                              _parkingFacets = _parkingFacets.toggleKind(kind);
+                            });
+                          },
+                          onTogglePayment: (payment) {
+                            setState(() {
+                              _parkingFacets = _parkingFacets.togglePayment(
+                                payment,
+                              );
+                            });
+                          },
+                          onClearFacets: () {
+                            setState(() {
+                              _parkingFacets = const ParkingFacets();
+                            });
+                          },
+                          searchController: _parkingSearchController,
+                          onSearchChanged: (value) {
+                            setState(() {
+                              _parkingSearch = value;
+                            });
+                          },
+                          isNarrowed: _parkingListIsNarrowed,
+                          parkedFrom: _parkedFrom,
+                          parkedTo: _parkedTo,
+                          onParkedRangeChanged: (from, to) {
+                            setState(() {
+                              _parkedFrom = from;
+                              _parkedTo = to;
+                            });
+                          },
+                          // The scoreboard over the parked cars in view, from
+                          // the SAME filtered records the feed shows, so a
+                          // filter re-totals the numbers - as the console does.
+                          parkingTotals: _parkingTotalsCache,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -906,7 +971,7 @@ class _HomeMenuState extends State<HomeMenu> {
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(pad, 12, pad, pad),
                 sliver: SliverToBoxAdapter(
-                  child: _isLoading || _businessId.isEmpty
+                  child: shopOnly || _isLoading || _businessId.isEmpty
                       ? const SizedBox.shrink()
                       : _HistoryFooter(
                           l10n: l10n,
@@ -1078,113 +1143,8 @@ class _ServicesSection extends StatelessWidget {
     final canRecordParkedCar = auth.hasBusinessPermission(
       BusinessPermission.parking,
     );
-    // The lot ledger — activity and expenses from the yard — is its own
-    // permission, mirroring the console's `ledger` tab.
-    final ledgerBusinessId = auth.businessId ?? '';
-    final canUseLotLedger =
-        auth.hasBusinessPermission(BusinessPermission.ledger) &&
-        ledgerBusinessId.isNotEmpty;
-    // Invoices and receipts: `ledger` OR the narrower `invoices` permission.
-    final canUseInvoices =
-        auth.hasInvoicesAccess && ledgerBusinessId.isNotEmpty;
-    // Containers - what the business loaded into each box - is its own
-    // permission, mirroring the console's `containers` tab, and is offered
-    // only to a business that ships (barrels, freight, car transport/parking).
-    final canUseContainers =
-        auth.hasContainersAccess && ledgerBusinessId.isNotEmpty;
-    // Inventory needs both gates: the business has the service switched on
-    // (it is not in the default list, so a legacy business without a stored
-    // list never sees it) and this person holds the inventory permission.
-    final canUseInventory = inventoryAvailable(
-      services: auth.businessServices,
-      hasPermission: auth.hasBusinessPermission(BusinessPermission.inventory),
-      businessId: ledgerBusinessId,
-    );
-    // Same two gates as the Car Transport tile itself: the business offers
-    // transport and this person holds the transport permission. Everything
-    // behind the button - `submitTransportQuote`, `withdrawTransportQuote`,
-    // `updateTransportFulfillmentStatus` - is gated on that same permission
-    // server-side, so an ungated button would only ever be refused.
-    final transportBusinessId = auth.businessId ?? '';
-    final canWorkTransport =
-        business_services.hasBusinessService(
-          services,
-          business_services.BusinessServiceKey.carTransport,
-        ) &&
-        auth.hasBusinessPermission(BusinessPermission.transport) &&
-        transportBusinessId.isNotEmpty;
-    final businessId = auth.businessId ?? '';
-    final hasCarSales = business_services.hasBusinessService(
-      services,
-      business_services.BusinessServiceKey.carSales,
-    );
-    void go(Widget screen) {
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => screen));
-    }
-
-    final moreTools = <_BusinessTool>[
-      if (hasCarSales &&
-          auth.hasBusinessPermission(BusinessPermission.listings))
-        _BusinessTool(
-          'listings',
-          Icons.directions_car_outlined,
-          l10n.businessListingsTitle,
-          () => go(const StaffCarManagementScreen(showBackButton: true)),
-        ),
-      if (hasCarSales &&
-          auth.hasBusinessPermission(BusinessPermission.purchases))
-        _BusinessTool(
-          'purchases',
-          Icons.handshake_outlined,
-          l10n.businessPurchasesTitle,
-          () => Navigator.of(context).pushNamed('/purchase-management'),
-        ),
-      if (auth.hasBusinessPermission(BusinessPermission.profile))
-        _BusinessTool(
-          'profile',
-          Icons.storefront_outlined,
-          l10n.businessProfile,
-          () => Navigator.of(context).pushNamed('/business-profile'),
-        ),
-      if (auth.hasBusinessPermission(BusinessPermission.destinations))
-        _BusinessTool(
-          'destinations',
-          Icons.public,
-          l10n.businessServicesCoverageTitle,
-          () => Navigator.of(context).pushNamed('/destination-countries'),
-        ),
-      if (businessId.isNotEmpty &&
-          auth.hasBusinessPermission(BusinessPermission.destinations))
-        _BusinessTool(
-          'offices',
-          Icons.place_outlined,
-          l10n.businessOfficesTitle,
-          () => go(OfficeLocationsScreen(businessId: businessId)),
-        ),
-      if (auth.hasBusinessPermission(BusinessPermission.people))
-        _BusinessTool(
-          'people',
-          Icons.group_outlined,
-          l10n.businessPeopleTitle,
-          () => Navigator.of(context).pushNamed('/add-staff'),
-        ),
-      if (businessId.isNotEmpty)
-        _BusinessTool(
-          'reviews',
-          Icons.star_outline_rounded,
-          l10n.businessReviewsTitle,
-          () => go(BusinessReviewsScreen(businessId: businessId)),
-        ),
-      if (auth.hasBusinessPermission(BusinessPermission.support))
-        _BusinessTool(
-          'support',
-          Icons.forum_outlined,
-          l10n.supportInbox,
-          () => Navigator.of(context).pushNamed('/business-support'),
-        ),
-    ];
+    final destinations = _businessDestinations(context, auth, l10n);
+    final moreTools = _businessTools(context, auth, l10n);
     return Container(
       padding: EdgeInsets.all(width * 0.06),
       decoration: BoxDecoration(
@@ -1209,6 +1169,16 @@ class _ServicesSection extends StatelessWidget {
             isLoading: isLoading,
             selectedCategory: selectedCategory,
             onCategoryTapped: onCategoryTapped,
+            // A shop's service is Inventory, switched on separately: "no
+            // services are switched on" was simply untrue for it. Someone
+            // there without the inventory permission is told what to ask for.
+            emptyText:
+                business_services.hasBusinessService(
+                  auth.businessServices,
+                  business_services.BusinessServiceKey.inventory,
+                )
+                ? l10n.shopHomeNoInventoryAccess
+                : l10n.businessServiceOverviewEmpty,
           ),
           if (showSales) ...[
             const SizedBox(height: 12),
@@ -1244,101 +1214,9 @@ class _ServicesSection extends StatelessWidget {
           // they read as a list you can walk into rather than as two more
           // buttons competing with the one action above them. Each says what
           // is inside, because a name alone makes people guess.
-          if (canUseLotLedger ||
-              canUseInvoices ||
-              canUseContainers ||
-              canUseInventory ||
-              canWorkTransport) ...[
+          if (destinations.isNotEmpty) ...[
             const SizedBox(height: 12),
-            _DestinationGroup(
-              rows: [
-                if (canUseLotLedger)
-                  _Destination(
-                    rowKey: const Key('open-lot-ledger'),
-                    icon: Icons.receipt_long_outlined,
-                    title: l10n.lotLedgerTitle,
-                    subtitle: l10n.lotLedgerSubtitle,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              LotLedgerScreen(businessId: ledgerBusinessId),
-                        ),
-                      );
-                    },
-                  ),
-                // The loading list: which box each car and barrel went into.
-                if (canUseContainers)
-                  _Destination(
-                    rowKey: const Key('open-containers'),
-                    icon: Icons.view_in_ar_outlined,
-                    title: l10n.ctrTitle,
-                    subtitle: l10n.ctrSubtitle,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              ContainersScreen(businessId: ledgerBusinessId),
-                        ),
-                      );
-                    },
-                  ),
-                // Products, their QR tags, and counter sales by scanning.
-                if (canUseInventory)
-                  _Destination(
-                    rowKey: const Key('open-inventory'),
-                    icon: Icons.qr_code_scanner,
-                    title: l10n.inventoryTitle,
-                    subtitle: l10n.inventorySubtitle,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => InventoryScreen(
-                            businessId: ledgerBusinessId,
-                            access: auth.inventoryAccess,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                // Invoices and receipts, written by hand for anything the
-                // business sold - on the platform or off it. The ledger
-                // permission or the narrower invoices one.
-                if (canUseInvoices)
-                  _Destination(
-                    rowKey: const Key('open-invoices'),
-                    icon: Icons.receipt_long_outlined,
-                    title: l10n.invMenuTitle,
-                    subtitle: l10n.invMenuSubtitle,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              InvoicesScreen(businessId: ledgerBusinessId),
-                        ),
-                      );
-                    },
-                  ),
-                // For a carrier rather than a lot: quote what came in, move
-                // what was won.
-                if (canWorkTransport)
-                  _Destination(
-                    rowKey: const Key('open-transport-jobs'),
-                    icon: Icons.local_shipping_outlined,
-                    title: l10n.businessTransportTitle,
-                    subtitle: l10n.businessTransportRowSubtitle,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => BusinessTransportScreen(
-                            businessId: transportBusinessId,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-              ],
-            ),
+            _DestinationGroup(rows: destinations),
           ],
           // Everything else the console offers, by the same permissions it
           // uses. Before this the phone said "use the web console" for most
@@ -1422,6 +1300,295 @@ class _ServicesSection extends StatelessWidget {
   }
 }
 
+/// The places a business goes from its home: the ledger, containers,
+/// inventory, invoices and the transport board, each behind the same gates it
+/// has always had. Shared by the services card and a shop's "More" list, so a
+/// place can never be offered on one and forgotten on the other.
+List<_Destination> _businessDestinations(
+  BuildContext context,
+  AuthProvider auth,
+  AppLocalizations l10n, {
+  bool includeInventory = true,
+}) {
+  final services = auth.effectiveBusinessServices;
+  // The lot ledger — activity and expenses from the yard — is its own
+  // permission, mirroring the console's `ledger` tab.
+  final ledgerBusinessId = auth.businessId ?? '';
+  final canUseLotLedger =
+      auth.hasBusinessPermission(BusinessPermission.ledger) &&
+      ledgerBusinessId.isNotEmpty;
+  // Invoices and receipts: `ledger` OR the narrower `invoices` permission.
+  final canUseInvoices = auth.hasInvoicesAccess && ledgerBusinessId.isNotEmpty;
+  // Containers - what the business loaded into each box - is its own
+  // permission, mirroring the console's `containers` tab, and is offered
+  // only to a business that ships (barrels, freight, car transport/parking).
+  final canUseContainers =
+      auth.hasContainersAccess && ledgerBusinessId.isNotEmpty;
+  // Inventory needs both gates: the business has the service switched on
+  // (it is not in the default list, so a legacy business without a stored
+  // list never sees it) and this person holds the inventory permission.
+  final canUseInventory = inventoryAvailable(
+    services: auth.businessServices,
+    hasPermission: auth.hasBusinessPermission(BusinessPermission.inventory),
+    businessId: ledgerBusinessId,
+  );
+  // Same two gates as the Car Transport tile itself: the business offers
+  // transport and this person holds the transport permission. Everything
+  // behind the button - `submitTransportQuote`, `withdrawTransportQuote`,
+  // `updateTransportFulfillmentStatus` - is gated on that same permission
+  // server-side, so an ungated button would only ever be refused.
+  final transportBusinessId = auth.businessId ?? '';
+  final canWorkTransport =
+      business_services.hasBusinessService(
+        services,
+        business_services.BusinessServiceKey.carTransport,
+      ) &&
+      auth.hasBusinessPermission(BusinessPermission.transport) &&
+      transportBusinessId.isNotEmpty;
+  return [
+    if (canUseLotLedger)
+      _Destination(
+        rowKey: const Key('open-lot-ledger'),
+        icon: Icons.receipt_long_outlined,
+        title: l10n.lotLedgerTitle,
+        subtitle: l10n.lotLedgerSubtitle,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LotLedgerScreen(businessId: ledgerBusinessId),
+            ),
+          );
+        },
+      ),
+    // The loading list: which box each car and barrel went into.
+    if (canUseContainers)
+      _Destination(
+        rowKey: const Key('open-containers'),
+        icon: Icons.view_in_ar_outlined,
+        title: l10n.ctrTitle,
+        subtitle: l10n.ctrSubtitle,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ContainersScreen(businessId: ledgerBusinessId),
+            ),
+          );
+        },
+      ),
+    // Products, their QR tags, and counter sales by scanning.
+    if (canUseInventory && includeInventory)
+      _Destination(
+        rowKey: const Key('open-inventory'),
+        icon: Icons.qr_code_scanner,
+        title: l10n.inventoryTitle,
+        subtitle: l10n.inventorySubtitle,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => InventoryScreen(
+                businessId: ledgerBusinessId,
+                access: auth.inventoryAccess,
+              ),
+            ),
+          );
+        },
+      ),
+    // Invoices and receipts, written by hand for anything the
+    // business sold - on the platform or off it. The ledger
+    // permission or the narrower invoices one.
+    if (canUseInvoices)
+      _Destination(
+        rowKey: const Key('open-invoices'),
+        icon: Icons.receipt_long_outlined,
+        title: l10n.invMenuTitle,
+        subtitle: l10n.invMenuSubtitle,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => InvoicesScreen(businessId: ledgerBusinessId),
+            ),
+          );
+        },
+      ),
+    // For a carrier rather than a lot: quote what came in, move
+    // what was won.
+    if (canWorkTransport)
+      _Destination(
+        rowKey: const Key('open-transport-jobs'),
+        icon: Icons.local_shipping_outlined,
+        title: l10n.businessTransportTitle,
+        subtitle: l10n.businessTransportRowSubtitle,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  BusinessTransportScreen(businessId: transportBusinessId),
+            ),
+          );
+        },
+      ),
+  ];
+}
+
+/// Everything else the console offers, by the same permissions it uses.
+List<_BusinessTool> _businessTools(
+  BuildContext context,
+  AuthProvider auth,
+  AppLocalizations l10n,
+) {
+  final services = auth.effectiveBusinessServices;
+  final businessId = auth.businessId ?? '';
+  final hasCarSales = business_services.hasBusinessService(
+    services,
+    business_services.BusinessServiceKey.carSales,
+  );
+  void go(Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
+  }
+
+  return <_BusinessTool>[
+    if (hasCarSales && auth.hasBusinessPermission(BusinessPermission.listings))
+      _BusinessTool(
+        'listings',
+        Icons.directions_car_outlined,
+        l10n.businessListingsTitle,
+        () => go(const StaffCarManagementScreen(showBackButton: true)),
+      ),
+    if (hasCarSales && auth.hasBusinessPermission(BusinessPermission.purchases))
+      _BusinessTool(
+        'purchases',
+        Icons.handshake_outlined,
+        l10n.businessPurchasesTitle,
+        () => Navigator.of(context).pushNamed('/purchase-management'),
+      ),
+    if (auth.hasBusinessPermission(BusinessPermission.profile))
+      _BusinessTool(
+        'profile',
+        Icons.storefront_outlined,
+        l10n.businessProfile,
+        () => Navigator.of(context).pushNamed('/business-profile'),
+      ),
+    if (auth.hasBusinessPermission(BusinessPermission.destinations))
+      _BusinessTool(
+        'destinations',
+        Icons.public,
+        l10n.businessServicesCoverageTitle,
+        () => Navigator.of(context).pushNamed('/destination-countries'),
+      ),
+    if (businessId.isNotEmpty &&
+        auth.hasBusinessPermission(BusinessPermission.destinations))
+      _BusinessTool(
+        'offices',
+        Icons.place_outlined,
+        l10n.businessOfficesTitle,
+        () => go(OfficeLocationsScreen(businessId: businessId)),
+      ),
+    if (auth.hasBusinessPermission(BusinessPermission.people))
+      _BusinessTool(
+        'people',
+        Icons.group_outlined,
+        l10n.businessPeopleTitle,
+        () => Navigator.of(context).pushNamed('/add-staff'),
+      ),
+    if (businessId.isNotEmpty)
+      _BusinessTool(
+        'reviews',
+        Icons.star_outline_rounded,
+        l10n.businessReviewsTitle,
+        () => go(BusinessReviewsScreen(businessId: businessId)),
+      ),
+    if (auth.hasBusinessPermission(BusinessPermission.support))
+      _BusinessTool(
+        'support',
+        Icons.forum_outlined,
+        l10n.supportInbox,
+        () => Navigator.of(context).pushNamed('/business-support'),
+      ),
+  ];
+}
+
+/// Everything a shop does besides selling, quieter than the counter above it:
+/// one list of places (profile, people, reviews, support, the ledger and
+/// invoices where the person holds them), the assistant, and - because it
+/// leaves the app - the console last, outlined. Built from the same lists the
+/// services card uses, so nothing reachable before is lost.
+class _ShopMoreSection extends StatelessWidget {
+  const _ShopMoreSection({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final businessId = auth.businessId ?? '';
+    final rows = <_Destination>[
+      // Inventory itself is the Products tile above.
+      ..._businessDestinations(context, auth, l10n, includeInventory: false),
+      for (final tool in _businessTools(context, auth, l10n))
+        _Destination(
+          rowKey: Key('business-tool-${tool.key}'),
+          icon: tool.icon,
+          title: tool.label,
+          onTap: tool.onPressed,
+        ),
+      if (businessId.isNotEmpty)
+        _Destination(
+          rowKey: const Key('open-business-assistant'),
+          icon: Icons.support_agent,
+          title: l10n.businessAssistantOpen,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => BusinessAssistantScreen(businessId: businessId),
+              ),
+            );
+          },
+        ),
+    ];
+    return Column(
+      key: const Key('shop-more'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.shopHomeMoreTitle,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: AppColors.ink,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _DestinationGroup(rows: rows),
+        const SizedBox(height: AppSpacing.lg),
+        SizedBox(
+          width: double.infinity,
+          child: AsyncActionButton.outlined(
+            icon: Icons.open_in_browser,
+            label: l10n.openBusinessConsole,
+            loadingLabel: l10n.openingBusinessConsole,
+            onPressed: () async {
+              final opened = await launchUrl(
+                Uri.parse('https://business.laawoldigital.com/'),
+                mode: LaunchMode.externalApplication,
+              );
+              if (!opened && context.mounted) {
+                showErrorSnackBar(context, l10n.businessConsoleOpenFailed);
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          l10n.businessOperationsWebNote,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppColors.muted, height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
 /// One tile per service the business actually offers, two to a row.
 ///
 /// A tile that only ever said "Barrels" would be a filter chip drawn larger.
@@ -1437,6 +1604,7 @@ class _ServiceOverviewGrid extends StatelessWidget {
     required this.isLoading,
     required this.selectedCategory,
     required this.onCategoryTapped,
+    required this.emptyText,
   });
 
   final AppLocalizations l10n;
@@ -1445,11 +1613,15 @@ class _ServiceOverviewGrid extends StatelessWidget {
   final ServiceCategory selectedCategory;
   final ValueChanged<ServiceCategory> onCategoryTapped;
 
+  /// What an empty grid says.
+  final String emptyText;
+
   @override
   Widget build(BuildContext context) {
     if (tiles.isEmpty) {
       return Text(
-        l10n.businessServiceOverviewEmpty,
+        emptyText,
+        key: const Key('service-overview-empty'),
         style: Theme.of(
           context,
         ).textTheme.bodyMedium?.copyWith(color: AppColors.muted, height: 1.4),
@@ -2657,13 +2829,15 @@ class _Destination {
     required this.rowKey,
     required this.icon,
     required this.title,
-    required this.subtitle,
+    this.subtitle = '',
     required this.onTap,
   });
 
   final Key rowKey;
   final IconData icon;
   final String title;
+
+  /// What is inside, under the title; '' for a place whose name says it.
   final String subtitle;
   final VoidCallback onTap;
 }
@@ -2746,17 +2920,19 @@ class _DestinationRow extends StatelessWidget {
                       color: AppColors.ink,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    row.subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      height: 1.35,
-                      color: AppColors.muted,
+                  if (row.subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      row.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: AppColors.muted,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

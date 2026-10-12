@@ -361,6 +361,23 @@ InventorySellStore inventorySellStore(InventoryStoreContext context) {
       : InventorySellStore(InventorySellStoreMode.home, home);
 }
 
+/// Which sales a person may read. Someone who sees every store reads them
+/// all at once (`storeId` ''); anyone else waits until the stores are known
+/// ([ready] false), then reads their own store's only - or nothing at all
+/// ([none]) when a business with several stores has not given them one yet.
+/// The rules allow nothing wider, so nobody ever asks for more.
+({bool ready, bool none, String storeId}) inventorySalesScope(
+  InventoryAccess access,
+  InventoryStoreContext context, {
+  required bool storesLoaded,
+}) {
+  if (!access.seesAllStores && !storesLoaded) {
+    return (ready: false, none: false, storeId: '');
+  }
+  if (context.homeStoreMissing) return (ready: true, none: true, storeId: '');
+  return (ready: true, none: false, storeId: context.ownStoreId);
+}
+
 /// The `storeId` a sale (or a stock change) is sent with. Only someone who
 /// picked a store sends one: in a single-store business and for staff with a
 /// home store it is left out and the server routes it, so an old app and a

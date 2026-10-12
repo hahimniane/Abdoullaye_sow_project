@@ -12093,4 +12093,85 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get inventoryFailOwnerOnly => 'Seul le propriétaire peut faire cela.';
+
+  @override
+  String get shopHomeSellSubtitle => 'Scannez l’étiquette d’un produit';
+
+  @override
+  String get shopHomeEnterCode => 'Saisir un code ou rechercher';
+
+  @override
+  String shopHomeSalesLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Ventes',
+      one: 'Vente',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shopHomeProducts => 'Produits';
+
+  @override
+  String get shopHomeProductsHint => 'Stock, prix et étiquettes';
+
+  @override
+  String get shopHomeSalesHint => 'Historique et annulations';
+
+  @override
+  String shopHomeLowCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count produits',
+      one: '1 produit',
+      zero: 'Rien en stock bas',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shopHomeAddHint => 'Un nouvel article et son étiquette';
+
+  @override
+  String get shopHomeRecentTitle => 'Ventes du jour';
+
+  @override
+  String get shopHomeSeeAll => 'Tout voir';
+
+  @override
+  String get shopHomeNoSalesToday =>
+      'Aucune vente aujourd’hui. Scannez une étiquette pour faire la première.';
+
+  @override
+  String shopHomeSaleItems(int count, String name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$name et $count autres',
+      one: '$name et 1 autre',
+      zero: '$name',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shopHomeLowNone => 'Aucun produit en stock bas.';
+
+  @override
+  String get shopHomeMoreTitle => 'Plus';
+
+  @override
+  String get shopHomePendingNote =>
+      'En attente d’approbation · Vous pouvez déjà vendre';
+
+  @override
+  String get shopHomeChangesNote =>
+      'Modifications demandées · Vous pouvez toujours vendre';
+
+  @override
+  String get shopHomeNoInventoryAccess =>
+      'Cette entreprise vend avec l’Inventaire. Demandez au propriétaire l’autorisation Inventaire.';
 }

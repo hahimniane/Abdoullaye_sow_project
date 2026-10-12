@@ -5542,5 +5542,46 @@
   "inventoryFailStoreNotAllowed": "You cannot use that store. Your sales and counts go to your own store.",
   "inventoryFailSameStore": "Choose two different stores.",
   "inventoryFailInsufficientStock": "The store you are moving from does not have that many. Lower the number, or add stock first.",
-  "inventoryFailOwnerOnly": "Only the owner can do that."
+  "inventoryFailOwnerOnly": "Only the owner can do that.",
+  "shopHomeSellSubtitle": "Scan a product tag",
+  "shopHomeEnterCode": "Enter code or search",
+  "shopHomeSalesLabel": "{count, plural, =1{Sale} other{Sales}}",
+  "@shopHomeSalesLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shopHomeProducts": "Products",
+  "shopHomeProductsHint": "Stock, prices and tags",
+  "shopHomeSalesHint": "History and voids",
+  "shopHomeLowCount": "{count, plural, =0{Nothing low} =1{1 product} other{{count} products}}",
+  "@shopHomeLowCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shopHomeAddHint": "A new item and its tag",
+  "shopHomeRecentTitle": "Today's sales",
+  "shopHomeSeeAll": "See all",
+  "shopHomeNoSalesToday": "No sales yet today. Scan a tag to make the first one.",
+  "shopHomeSaleItems": "{count, plural, =0{{name}} =1{{name} and 1 more} other{{name} and {count} more}}",
+  "@shopHomeSaleItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "shopHomeLowNone": "Nothing is running low.",
+  "shopHomeMoreTitle": "More",
+  "shopHomePendingNote": "Pending approval · You can already sell",
+  "shopHomeChangesNote": "Changes requested · You can still sell",
+  "shopHomeNoInventoryAccess": "This business sells with Inventory. Ask the owner to give you the Inventory permission."
 }

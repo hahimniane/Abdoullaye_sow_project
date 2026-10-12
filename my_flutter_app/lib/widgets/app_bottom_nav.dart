@@ -70,14 +70,63 @@ class AppBottomNav extends StatelessWidget {
     // The lift lives inside this widget's own bounds, so nothing is ever
     // clipped by the scaffold: the strip above the bar is simply transparent
     // and the button floats in it.
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.topCenter,
-      children: [
-        Padding(padding: const EdgeInsets.only(top: _lift), child: bar),
-        Positioned(top: 0, child: _RaisedAction(action: raised)),
-      ],
+    if (items.length.isEven) {
+      return Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: _lift),
+            child: bar,
+          ),
+          Positioned(top: 0, child: _RaisedAction(action: raised)),
+        ],
+      );
+    }
+    // With an odd number of tabs the action's slot is not the middle of the
+    // bar, so the button sits over its own slot - over its label - rather
+    // than over the middle, where it used to float between two tabs.
+    final insets = MediaQuery.paddingOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final left = raisedActionLeft(
+          width: constraints.maxWidth,
+          itemCount: items.length,
+          insetLeft: insets.left,
+          insetRight: insets.right,
+        );
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: _lift),
+              child: bar,
+            ),
+            Positioned(
+              top: 0,
+              left: left,
+              child: _RaisedAction(action: raised),
+            ),
+          ],
+        );
+      },
     );
+  }
+
+  /// Where the raised button's left edge goes so it is centred over the
+  /// action's slot: the slots share the bar's inner width equally, and the
+  /// action takes the slot after the first `itemCount ~/ 2` tabs.
+  @visibleForTesting
+  static double raisedActionLeft({
+    required double width,
+    required int itemCount,
+    double insetLeft = 0,
+    double insetRight = 0,
+  }) {
+    final inner = width - insetLeft - insetRight - 2 * AppSpacing.sm;
+    final slot = inner / (itemCount + 1);
+    final centre = insetLeft + AppSpacing.sm + slot * (itemCount ~/ 2 + 0.5);
+    return centre - _buttonSize / 2;
   }
 
   Widget _bar(BuildContext context) {
@@ -137,9 +186,7 @@ class AppBottomNav extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: raised.active
-                    ? AppColors.cobaltDeep
-                    : AppColors.cobalt,
+                color: raised.active ? AppColors.cobaltDeep : AppColors.cobalt,
                 fontFamily: 'JetBrains Mono',
                 fontWeight: FontWeight.w800,
                 fontSize: 9.5,
@@ -191,7 +238,9 @@ class AppBottomNav extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: isSelected ? AppColors.cobaltDeep : AppColors.muted,
+                      color: isSelected
+                          ? AppColors.cobaltDeep
+                          : AppColors.muted,
                       fontFamily: 'JetBrains Mono',
                       fontWeight: FontWeight.w700,
                       fontSize: 9.5,
@@ -225,8 +274,10 @@ class _RaisedActionState extends State<_RaisedAction>
     with SingleTickerProviderStateMixin {
   /// Unbounded because a spring settles on its own terms; clamping it to
   /// [0, 1] would cut the overshoot that makes the button read as landing.
-  late final AnimationController _enter =
-      AnimationController.unbounded(vsync: this, value: 0);
+  late final AnimationController _enter = AnimationController.unbounded(
+    vsync: this,
+    value: 0,
+  );
 
   @override
   void initState() {

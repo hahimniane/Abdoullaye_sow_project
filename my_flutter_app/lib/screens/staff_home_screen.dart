@@ -9,9 +9,11 @@ import '../widgets/lazy_indexed_stack.dart';
 import '../models/business_profile.dart';
 import '../models/business_service.dart';
 import '../models/platform_access.dart';
+import '../services/shop_home.dart';
 import '../utils/business_permissions.dart';
 import 'business_profile_screen.dart';
 import 'home_menu.dart';
+import 'inventory_sell_screen.dart';
 import 'platform_admin_dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'staff_car_management_screen.dart';
@@ -60,6 +62,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
     required bool canManageSupport,
     required bool canViewPeople,
     required bool canViewPlatformSupport,
+    String? shopApprovalStatus,
   }) {
     final hasCarSales = hasBusinessService(
       services,
@@ -68,7 +71,9 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
     return [
       _StaffTab(
         isAdmin ? 'platform' : 'home',
-        isAdmin ? const PlatformAdminDashboardScreen() : const HomeMenu(),
+        isAdmin
+            ? const PlatformAdminDashboardScreen()
+            : HomeMenu(shopApprovalStatus: shopApprovalStatus),
         AppBottomNavItem(
           icon: Icons.home_outlined,
           selectedIcon: Icons.home,
@@ -147,13 +152,56 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
     ];
   }
 
-  Widget _scaffold(List<_StaffTab> tabs, {Widget? banner}) {
+  Widget _scaffold(
+    List<_StaffTab> tabs, {
+    Widget? banner,
+    AppBottomNavAction? action,
+  }) {
     final ids = [for (final tab in tabs) tab.id];
     return _StaffScaffold(
       currentIndex: staffTabIndex(ids, _selectedTabId),
       tabs: tabs,
       onTap: (index) => setState(() => _selectedTabId = ids[index]),
       banner: banner,
+      action: action,
+    );
+  }
+
+  /// Sell, raised in the middle of the bar, for whoever may sell: a shop
+  /// sells from any tab in one tap. The sell screen applies the person's
+  /// store exactly as from the Inventory screen (their home store, or a
+  /// choice for the owner and "works in all stores" staff).
+  AppBottomNavAction? _sellAction(
+    AuthProvider auth,
+    AppLocalizations l10n,
+    List<String> services,
+    int tabCount,
+  ) {
+    final businessId = auth.businessId ?? '';
+    if (!shopSellActionAvailable(
+      isAdmin: auth.isAdmin,
+      services: services,
+      hasInventoryPermission: auth.hasBusinessPermission(
+        BusinessPermission.inventory,
+      ),
+      businessId: businessId,
+      tabCount: tabCount,
+    )) {
+      return null;
+    }
+    return AppBottomNavAction(
+      icon: Icons.qr_code_scanner_rounded,
+      label: l10n.inventorySell,
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => InventorySellScreen(
+              businessId: businessId,
+              access: auth.inventoryAccess,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -205,21 +253,29 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
             : null;
         final services =
             business?.enabledServices ?? authProvider.effectiveBusinessServices;
+        // A shop (Inventory and nothing else) can sell and keep stock while
+        // it waits for approval; "set up destinations, cars" is not its
+        // situation. Its home carries a small, true note instead of a
+        // full-width banner over every tab. Everyone else keeps the banner.
+        final shopOnly = business != null && businessIsShopOnly(services);
+        final tabs = _buildTabs(
+          l10n,
+          isAdmin,
+          services,
+          canManageListings: canManageListings,
+          canManagePurchases: canManagePurchases,
+          canManageProfile: canManageProfile,
+          canManageSupport: canManageSupport,
+          canViewPeople: canViewPeople,
+          canViewPlatformSupport: canViewPlatformSupport,
+          shopApprovalStatus: shopOnly ? business.status : null,
+        );
         return _scaffold(
-          _buildTabs(
-            l10n,
-            isAdmin,
-            services,
-            canManageListings: canManageListings,
-            canManagePurchases: canManagePurchases,
-            canManageProfile: canManageProfile,
-            canManageSupport: canManageSupport,
-            canViewPeople: canViewPeople,
-            canViewPlatformSupport: canViewPlatformSupport,
-          ),
-          banner: business == null
+          tabs,
+          banner: business == null || shopOnly
               ? null
               : _PendingBusinessBanner.fromBusiness(business),
+          action: _sellAction(authProvider, l10n, services, tabs.length),
         );
       },
     );
@@ -249,12 +305,14 @@ class _StaffScaffold extends StatelessWidget {
     required this.tabs,
     required this.onTap,
     this.banner,
+    this.action,
   });
 
   final int currentIndex;
   final List<_StaffTab> tabs;
   final ValueChanged<int> onTap;
   final Widget? banner;
+  final AppBottomNavAction? action;
 
   @override
   Widget build(BuildContext context) {
@@ -283,6 +341,7 @@ class _StaffScaffold extends StatelessWidget {
         currentIndex: currentIndex,
         onTap: onTap,
         items: [for (final tab in tabs) tab.item],
+        action: action,
       ),
     );
   }

@@ -11911,4 +11911,83 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inventoryFailOwnerOnly => 'Only the owner can do that.';
+
+  @override
+  String get shopHomeSellSubtitle => 'Scan a product tag';
+
+  @override
+  String get shopHomeEnterCode => 'Enter code or search';
+
+  @override
+  String shopHomeSalesLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sales',
+      one: 'Sale',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shopHomeProducts => 'Products';
+
+  @override
+  String get shopHomeProductsHint => 'Stock, prices and tags';
+
+  @override
+  String get shopHomeSalesHint => 'History and voids';
+
+  @override
+  String shopHomeLowCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count products',
+      one: '1 product',
+      zero: 'Nothing low',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shopHomeAddHint => 'A new item and its tag';
+
+  @override
+  String get shopHomeRecentTitle => 'Today\'s sales';
+
+  @override
+  String get shopHomeSeeAll => 'See all';
+
+  @override
+  String get shopHomeNoSalesToday =>
+      'No sales yet today. Scan a tag to make the first one.';
+
+  @override
+  String shopHomeSaleItems(int count, String name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$name and $count more',
+      one: '$name and 1 more',
+      zero: '$name',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shopHomeLowNone => 'Nothing is running low.';
+
+  @override
+  String get shopHomeMoreTitle => 'More';
+
+  @override
+  String get shopHomePendingNote => 'Pending approval · You can already sell';
+
+  @override
+  String get shopHomeChangesNote => 'Changes requested · You can still sell';
+
+  @override
+  String get shopHomeNoInventoryAccess =>
+      'This business sells with Inventory. Ask the owner to give you the Inventory permission.';
 }
