@@ -35,12 +35,12 @@
   // and ACTIVE_TARGET = "new" throws below until they are filled in.
   var NEW_PROJECT_CONFIG = {
     firebase: {
-      apiKey: "", // TODO(cutover): web app apiKey
+      apiKey: "AIzaSyDyz6neM8FSEgO2v01UZECeSGTAuTuFmQg", // new project web app apiKey
       authDomain: "laawol-a855a.firebaseapp.com",
       projectId: "laawol-a855a",
       storageBucket: "laawol-a855a.firebasestorage.app",
       messagingSenderId: "127318353394",
-      appId: "", // TODO(cutover): web app appId (1:127318353394:web:...)
+      appId: "1:127318353394:web:877e3c653bfcce7ec5776b",
     },
     appCheckSiteKey: "", // TODO(cutover): reCAPTCHA Enterprise key in the new project
   };

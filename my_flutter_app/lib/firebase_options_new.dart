@@ -22,8 +22,8 @@ abstract final class NewProjectFirebaseOptions {
   static const String projectNumber = '127318353394';
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: '', // TODO(cutover): web app apiKey
-    appId: '', // TODO(cutover): 1:127318353394:web:...
+    apiKey: 'AIzaSyDyz6neM8FSEgO2v01UZECeSGTAuTuFmQg', // new project web app apiKey
+    appId: '1:127318353394:web:877e3c653bfcce7ec5776b',
     messagingSenderId: projectNumber,
     projectId: projectId,
     authDomain: 'laawol-a855a.firebaseapp.com',
@@ -31,16 +31,16 @@ abstract final class NewProjectFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: '', // TODO(cutover): android app apiKey (google-services.json)
-    appId: '', // TODO(cutover): 1:127318353394:android:...
+    apiKey: 'AIzaSyCRCTpw_pH0XQ_dsbE7SGIIILNcb5cGEco', // new project android apiKey
+    appId: '1:127318353394:android:ff257491e3e691bcc5776b',
     messagingSenderId: projectNumber,
     projectId: projectId,
     storageBucket: 'laawol-a855a.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: '', // TODO(cutover): iOS app apiKey (GoogleService-Info.plist)
-    appId: '', // TODO(cutover): 1:127318353394:ios:...
+    apiKey: 'AIzaSyDIee2dyRW2o26ghNt3vDra4EtgYInBAT8', // new project iOS apiKey
+    appId: '1:127318353394:ios:920363c21e47717bc5776b',
     messagingSenderId: projectNumber,
     projectId: projectId,
     storageBucket: 'laawol-a855a.firebasestorage.app',

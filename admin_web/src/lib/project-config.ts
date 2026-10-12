@@ -42,12 +42,12 @@ export const CURRENT_PROJECT_CONFIG: FirebaseWebConfig = {
  * confirm both in the console when pasting the real values.
  */
 export const NEW_PROJECT_CONFIG: FirebaseWebConfig = {
-  apiKey: "", // TODO(cutover): web app apiKey
+  apiKey: "AIzaSyDyz6neM8FSEgO2v01UZECeSGTAuTuFmQg", // new project web app apiKey
   authDomain: "laawol-a855a.firebaseapp.com",
   projectId: "laawol-a855a",
   storageBucket: "laawol-a855a.firebasestorage.app",
   messagingSenderId: "127318353394",
-  appId: "", // TODO(cutover): web app appId (1:127318353394:web:...)
+  appId: "1:127318353394:web:877e3c653bfcce7ec5776b",
 };
 
 /** THE cutover switch for the consoles. */
