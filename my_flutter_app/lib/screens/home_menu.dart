@@ -332,8 +332,9 @@ class _HomeMenuState extends State<HomeMenu> {
 
     // The containers permission is what lets a business read its own boxes;
     // without it the rules refuse the query and the rows simply carry no link.
-    if (hasBusiness &&
-        auth.hasBusinessPermission(BusinessPermission.containers)) {
+    // It also needs a shipping service: a shop with only Inventory has no
+    // containers to read.
+    if (hasBusiness && auth.hasContainersAccess) {
       _listenOpen(openContainersSpec(businessId), (docs) {
         _containers = [
           for (final d in docs) ShippingContainer.fromMap(d.id, d.data()),
@@ -1073,11 +1074,14 @@ class _ServicesSection extends StatelessWidget {
     final canUseLotLedger =
         auth.hasBusinessPermission(BusinessPermission.ledger) &&
         ledgerBusinessId.isNotEmpty;
+    // Invoices and receipts: `ledger` OR the narrower `invoices` permission.
+    final canUseInvoices =
+        auth.hasInvoicesAccess && ledgerBusinessId.isNotEmpty;
     // Containers - what the business loaded into each box - is its own
-    // permission, mirroring the console's `containers` tab.
+    // permission, mirroring the console's `containers` tab, and is offered
+    // only to a business that ships (barrels, freight, car transport/parking).
     final canUseContainers =
-        auth.hasBusinessPermission(BusinessPermission.containers) &&
-        ledgerBusinessId.isNotEmpty;
+        auth.hasContainersAccess && ledgerBusinessId.isNotEmpty;
     // Inventory needs both gates: the business has the service switched on
     // (it is not in the default list, so a legacy business without a stored
     // list never sees it) and this person holds the inventory permission.
@@ -1230,6 +1234,7 @@ class _ServicesSection extends StatelessWidget {
           // buttons competing with the one action above them. Each says what
           // is inside, because a name alone makes people guess.
           if (canUseLotLedger ||
+              canUseInvoices ||
               canUseContainers ||
               canUseInventory ||
               canWorkTransport) ...[
@@ -1286,9 +1291,9 @@ class _ServicesSection extends StatelessWidget {
                     },
                   ),
                 // Invoices and receipts, written by hand for anything the
-                // business sold - on the platform or off it. Same gate as the
-                // ledger: the people who work the lot's money.
-                if (canUseLotLedger)
+                // business sold - on the platform or off it. The ledger
+                // permission or the narrower invoices one.
+                if (canUseInvoices)
                   _Destination(
                     rowKey: const Key('open-invoices'),
                     icon: Icons.receipt_long_outlined,

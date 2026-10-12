@@ -4073,6 +4073,7 @@
   "ctrLotPickAnother": "Choose a different car",
   "invMenuTitle": "Invoices & receipts",
   "invMenuSubtitle": "What you sold and what is owed, as PDFs to send.",
+  "invPermissionLabel": "Invoices",
   "invTitle": "Invoices & receipts",
   "invNew": "New invoice",
   "invSearchHint": "Number, title, customer or phone",

@@ -110,3 +110,33 @@ List<BusinessServiceDefinition> get ownerBusinessServiceCatalog =>
     businessServiceCatalog
         .where((service) => service.key != BusinessServiceKey.inventory)
         .toList(growable: false);
+
+/// The services that move goods in containers. Containers only make sense for
+/// a business that ships: barrels, parcels (freight), or cars (transport or
+/// parking, which load onto a box). A shop with only `inventory`, or a
+/// business with no services at all, has nothing to put in one.
+const shippingBusinessServiceKeys = <BusinessServiceKey>[
+  BusinessServiceKey.barrelShipping,
+  BusinessServiceKey.freight,
+  BusinessServiceKey.carTransport,
+  BusinessServiceKey.carParking,
+];
+
+/// True when [services] (the business's `enabledServices` values) include any
+/// shipping service. Pure: the one rule every Containers entry point shares.
+bool businessHasShippingService(Iterable<String> services) {
+  final enabled = services.toSet();
+  return shippingBusinessServiceKeys.any((key) => enabled.contains(key.value));
+}
+
+/// The Containers section is offered only when the business ships something,
+/// this person holds the containers permission, and there is a business to
+/// look in. Same three-gate shape as `inventoryAvailable`.
+bool containersAvailable({
+  required Iterable<String> services,
+  required bool hasPermission,
+  required String businessId,
+}) =>
+    businessHasShippingService(services) &&
+    hasPermission &&
+    businessId.trim().isNotEmpty;

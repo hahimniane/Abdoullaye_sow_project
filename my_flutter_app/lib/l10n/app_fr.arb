@@ -4073,6 +4073,7 @@
   "ctrLotPickAnother": "Choisir une autre voiture",
   "invMenuTitle": "Factures et reçus",
   "invMenuSubtitle": "Ce que vous avez vendu et ce qui est dû, en PDF à envoyer.",
+  "invPermissionLabel": "Factures",
   "invTitle": "Factures et reçus",
   "invNew": "Nouvelle facture",
   "invSearchHint": "Numéro, titre, client ou téléphone",

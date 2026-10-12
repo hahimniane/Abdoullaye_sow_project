@@ -9211,6 +9211,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'What you sold and what is owed, as PDFs to send.';
 
   @override
+  String get invPermissionLabel => 'Invoices';
+
+  @override
   String get invTitle => 'Invoices & receipts';
 
   @override
