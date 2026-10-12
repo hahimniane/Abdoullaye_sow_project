@@ -36,7 +36,7 @@ const CURRENT_PROJECT_CONFIG = Object.freeze({
 const NEW_PROJECT_CONFIG = Object.freeze({
   projectId: "laawol-a855a",
   projectNumber: "127318353394",
-  webApiKey: "", // TODO(cutover): paste the new web app's apiKey
+  webApiKey: "AIzaSyDyz6neM8FSEgO2v01UZECeSGTAuTuFmQg",
 });
 
 const KNOWN_PROJECTS = Object.freeze([
