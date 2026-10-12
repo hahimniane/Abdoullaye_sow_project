@@ -5,7 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
-import '../models/business_service.dart' show containersAvailable;
+import '../models/business_service.dart'
+    show containersAvailable, defaultBusinessServiceValues;
 import '../models/notification_preferences.dart';
 import '../models/platform_access.dart';
 import '../services/inventory_stores.dart' show InventoryAccess;
@@ -104,6 +105,14 @@ class AuthProvider extends ChangeNotifier {
   String? _businessId;
   String? _businessName;
   List<String> _businessServices = const [];
+
+  /// Whether the profile carried a services list at all. The server writes
+  /// one on every staff and owner profile (the full default set for an old
+  /// business that never stored one), so an EMPTY list is a real answer: a
+  /// shop registered with Inventory alone offers no other service. Only a
+  /// profile with no list, from before the server wrote them, falls back to
+  /// the defaults.
+  bool _businessServicesKnown = false;
   List<String> _businessPermissions = const [];
   String _inventoryHomeStoreId = '';
   bool _inventoryAllStores = false;
@@ -137,6 +146,14 @@ class AuthProvider extends ChangeNotifier {
   String? get businessId => _businessId;
   String? get businessName => _businessName;
   List<String> get businessServices => List.unmodifiable(_businessServices);
+  bool get businessServicesKnown => _businessServicesKnown;
+
+  /// The services to show: the stored list, or the defaults only when the
+  /// profile has none at all.
+  List<String> get effectiveBusinessServices =>
+      !_businessServicesKnown && _businessServices.isEmpty
+      ? defaultBusinessServiceValues
+      : List.unmodifiable(_businessServices);
   List<String> get businessPermissions =>
       List.unmodifiable(_businessPermissions);
 
@@ -384,6 +401,7 @@ class AuthProvider extends ChangeNotifier {
         _businessId = data?['businessId'] as String?;
         _businessName = data?['businessName'] as String?;
         _businessServices = _stringList(data?['businessServices']);
+        _businessServicesKnown = data?['businessServices'] is Iterable;
         _businessPermissions = _stringList(data?['businessPermissions']);
         _inventoryHomeStoreId = (data?['inventoryHomeStoreId'] ?? '')
             .toString()
@@ -459,6 +477,7 @@ class AuthProvider extends ChangeNotifier {
     _businessId = null;
     _businessName = null;
     _businessServices = const [];
+    _businessServicesKnown = false;
     _businessPermissions = const [];
     _inventoryHomeStoreId = '';
     _inventoryAllStores = false;

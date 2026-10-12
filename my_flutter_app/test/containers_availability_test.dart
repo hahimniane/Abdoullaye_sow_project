@@ -34,10 +34,12 @@ void main() {
     });
 
     test('the spellings are the real service keys', () {
-      expect(
-        shippingBusinessServiceKeys.map((k) => k.value).toSet(),
-        {'barrelShipping', 'freight', 'carTransport', 'carParking'},
-      );
+      expect(shippingBusinessServiceKeys.map((k) => k.value).toSet(), {
+        'barrelShipping',
+        'freight',
+        'carTransport',
+        'carParking',
+      });
       for (final key in shippingBusinessServiceKeys) {
         expect(BusinessServiceKey.fromValue(key.value), key);
       }
@@ -49,12 +51,11 @@ void main() {
       List<String> services = const ['freight'],
       bool hasPermission = true,
       String businessId = 'biz1',
-    }) =>
-        containersAvailable(
-          services: services,
-          hasPermission: hasPermission,
-          businessId: businessId,
-        );
+    }) => containersAvailable(
+      services: services,
+      hasPermission: hasPermission,
+      businessId: businessId,
+    );
 
     test('shipping service + permission + business shows it', () {
       expect(call(), isTrue);
@@ -99,5 +100,27 @@ void main() {
     expect(people, contains('BusinessPermission.invoices =>'));
     expect(read('lib/l10n/app_en.arb'), contains('"invPermissionLabel"'));
     expect(read('lib/l10n/app_fr.arb'), contains('"invPermissionLabel"'));
+  });
+
+  test('an empty services list is a real answer, not "show the defaults"', () {
+    // A shop registered with Inventory alone has `businessServices: []` on
+    // its profiles; only a profile with NO list falls back to the defaults.
+    String read(String path) => File(path).readAsStringSync();
+    final auth = read('lib/providers/auth_provider.dart');
+    expect(
+      auth,
+      contains(
+        "_businessServicesKnown = data?['businessServices'] is Iterable",
+      ),
+    );
+    expect(auth, contains('effectiveBusinessServices'));
+    for (final screen in [
+      'lib/screens/home_menu.dart',
+      'lib/screens/staff_home_screen.dart',
+    ]) {
+      final src = read(screen);
+      expect(src, contains('effectiveBusinessServices'), reason: screen);
+      expect(src, isNot(contains('businessServices.isEmpty')), reason: screen);
+    }
   });
 }

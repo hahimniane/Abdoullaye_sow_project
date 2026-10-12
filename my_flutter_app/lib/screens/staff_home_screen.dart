@@ -204,10 +204,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
             ? BusinessProfile.fromFirestore(snapshot.data!)
             : null;
         final services =
-            business?.enabledServices ??
-            (authProvider.businessServices.isEmpty
-                ? defaultBusinessServiceValues
-                : authProvider.businessServices);
+            business?.enabledServices ?? authProvider.effectiveBusinessServices;
         return _scaffold(
           _buildTabs(
             l10n,

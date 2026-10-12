@@ -95,7 +95,11 @@ String _categoryLabel(ServiceCategory category, AppLocalizations l10n) {
 }
 
 class HomeMenu extends StatefulWidget {
-  const HomeMenu({super.key, this.initialCategory, this.showBackButton = false});
+  const HomeMenu({
+    super.key,
+    this.initialCategory,
+    this.showBackButton = false,
+  });
 
   /// Open on one service's list (a notification about freight lands on the
   /// freight list, not on "all").
@@ -248,7 +252,8 @@ class _HomeMenuState extends State<HomeMenu> {
   /// resolves.
   void _listenOpen(
     FirestoreQuerySpec spec,
-    void Function(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) onDocs,
+    void Function(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs)
+    onDocs,
   ) {
     _subs.add(
       spec
@@ -285,7 +290,8 @@ class _HomeMenuState extends State<HomeMenu> {
     final createdAt = data['createdAt'];
     return ActivityRecord(
       category: ServiceCategory.freight,
-      title: '${data['receiverName'] ?? ''} • ${data['trackingCode'] ?? doc.id}',
+      title:
+          '${data['receiverName'] ?? ''} • ${data['trackingCode'] ?? doc.id}',
       subtitle: '${data['senderName'] ?? ''}',
       date: createdAt is Timestamp
           ? createdAt.toDate()
@@ -487,9 +493,8 @@ class _HomeMenuState extends State<HomeMenu> {
     );
   }
 
-  bool get _historyHasMore => _historyCollectionsInView().any(
-    (c) => _history[c]?.hasMore ?? true,
-  );
+  bool get _historyHasMore =>
+      _historyCollectionsInView().any((c) => _history[c]?.hasMore ?? true);
 
   bool get _historyStarted =>
       _historyCollectionsInView().any((c) => _history[c] != null);
@@ -676,14 +681,21 @@ class _HomeMenuState extends State<HomeMenu> {
         // filter.
         : categoryRecords.where((record) {
             final car = record.payload;
-            if (record.category != ServiceCategory.parking || car is! ParkedCar) {
+            if (record.category != ServiceCategory.parking ||
+                car is! ParkedCar) {
               return true;
             }
-            if (!businessParkingMatchesSearch(car.paymentFields, _parkingSearch)) {
+            if (!businessParkingMatchesSearch(
+              car.paymentFields,
+              _parkingSearch,
+            )) {
               return false;
             }
             // Status kind AND payment class, each an OR within itself.
-            if (!businessParkingMatchesFacets(car.paymentFields, _parkingFacets)) {
+            if (!businessParkingMatchesFacets(
+              car.paymentFields,
+              _parkingFacets,
+            )) {
               return false;
             }
             // Overlap, not containment: a car that arrived before the window
@@ -1052,9 +1064,7 @@ class _ServicesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final services = auth.businessServices.isEmpty
-        ? business_services.defaultBusinessServiceValues
-        : auth.businessServices;
+    final services = auth.effectiveBusinessServices;
     final showSales =
         business_services.hasBusinessService(
           services,
@@ -1109,10 +1119,11 @@ class _ServicesSection extends StatelessWidget {
       business_services.BusinessServiceKey.carSales,
     );
     void go(Widget screen) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => screen),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => screen));
     }
+
     final moreTools = <_BusinessTool>[
       if (hasCarSales &&
           auth.hasBusinessPermission(BusinessPermission.listings))
@@ -2021,13 +2032,9 @@ class _ActivityRecordTile extends StatelessWidget {
         l10n: l10n,
         car: car,
         staffNames: staffNames,
-        containerLink:
-            containerLinks[car.vinNumber.trim().toUpperCase()],
-        onTap: () => Navigator.pushNamed(
-          context,
-          '/parked-car-details',
-          arguments: car,
-        ),
+        containerLink: containerLinks[car.vinNumber.trim().toUpperCase()],
+        onTap: () =>
+            Navigator.pushNamed(context, '/parked-car-details', arguments: car),
       );
     }
     final card = _RecordCard(
@@ -2035,10 +2042,9 @@ class _ActivityRecordTile extends StatelessWidget {
       containerLink:
           record.category == ServiceCategory.parking &&
               record.payload is ParkedCar
-          ? containerLinks[(record.payload as ParkedCar)
-              .vinNumber
-              .trim()
-              .toUpperCase()]
+          ? containerLinks[(record.payload as ParkedCar).vinNumber
+                .trim()
+                .toUpperCase()]
           : null,
       subtitle: paymentNote.isEmpty
           ? record.subtitle
@@ -2061,11 +2067,7 @@ class _ActivityRecordTile extends StatelessWidget {
         record.payload is ParkedCar) {
       final car = record.payload as ParkedCar;
       onTap = () {
-        Navigator.pushNamed(
-          context,
-          '/parked-car-details',
-          arguments: car,
-        );
+        Navigator.pushNamed(context, '/parked-car-details', arguments: car);
       };
     } else if (record.category == ServiceCategory.barrels &&
         record.payload is BarrelShipment) {
@@ -2154,11 +2156,7 @@ class _ParkingScoreboard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.rule),
       ),
-      child: Wrap(
-        spacing: 22,
-        runSpacing: 12,
-        children: stats,
-      ),
+      child: Wrap(spacing: 22, runSpacing: 12, children: stats),
     );
   }
 }
@@ -2299,9 +2297,11 @@ class _ParkingListRow extends StatelessWidget {
     );
     final dates = DateFormat.MMMd(Localizations.localeOf(context).toString());
 
-    final vehicle = [car.carYear, car.carMake, car.carModel]
-        .where((part) => part.trim().isNotEmpty)
-        .join(' ');
+    final vehicle = [
+      car.carYear,
+      car.carMake,
+      car.carModel,
+    ].where((part) => part.trim().isNotEmpty).join(' ');
     final identifier = car.vinNumber.trim().isNotEmpty
         ? car.vinNumber.trim()
         : car.trackingCode;
@@ -2391,7 +2391,9 @@ class _ParkingListRow extends StatelessWidget {
                         Text(
                           rate > 0
                               ? l10n.parkingDaysAtRate(
-                                  days, currency.format(rate))
+                                  days,
+                                  currency.format(rate),
+                                )
                               : l10n.parkingUnbilledDays(days),
                           style: const TextStyle(
                             fontSize: 12,
@@ -2410,8 +2412,9 @@ class _ParkingListRow extends StatelessWidget {
                         if (car.isBusinessEntered)
                           BusinessParkingPaymentBadge(paymentFields: fields)
                         else
-                          _rowMeta(businessParkingPaymentStatusLabel(
-                              l10n, fields)),
+                          _rowMeta(
+                            businessParkingPaymentStatusLabel(l10n, fields),
+                          ),
                         if (containerLink != null)
                           ContainerLinkChip(link: containerLink!),
                         _rowMeta(
@@ -2419,7 +2422,9 @@ class _ParkingListRow extends StatelessWidget {
                           '${openEnded ? l10n.parkingOpenEnded : dates.format(car.parkingEndDate!)}',
                         ),
                         if (registeredBy.isNotEmpty)
-                          _rowMeta('${l10n.parkingRegisteredBy}: $registeredBy'),
+                          _rowMeta(
+                            '${l10n.parkingRegisteredBy}: $registeredBy',
+                          ),
                         if (receivedBy.isNotEmpty)
                           _rowMeta('${l10n.parkingReceivedBy}: $receivedBy'),
                       ],
