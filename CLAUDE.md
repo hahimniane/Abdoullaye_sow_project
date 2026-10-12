@@ -105,7 +105,7 @@ flutter test --coverage  # Generate coverage report
 
 ### Firebase
 ```bash
-# The app is configured with Firebase project: car-selling-flutter-app
+# The app is configured with Firebase project: car-selling-flutter-app (moving to laawol-a855a - see docs/PROJECT_MIGRATION.md)
 # Firebase options are in lib/firebase_options.dart
 # Firestore security rules are in ../firestore.rules at project root
 ```

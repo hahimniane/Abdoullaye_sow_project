@@ -144,9 +144,9 @@ From WhatsApp Manager → API setup, take the **permanent system-user access
 token** and the **Phone number ID**, then run (each prompts for the value):
 
 ```bash
-firebase functions:secrets:set WHATSAPP_ACCESS_TOKEN --project car-selling-flutter-app
-firebase functions:secrets:set WHATSAPP_PHONE_NUMBER_ID --project car-selling-flutter-app
-firebase deploy --only functions:sendContainerCustomerUpdates,functions:deliverContainerCustomerUpdate,functions:sendContainerCurrentStatus --project car-selling-flutter-app
+firebase functions:secrets:set WHATSAPP_ACCESS_TOKEN --project "$FIREBASE_PROJECT"
+firebase functions:secrets:set WHATSAPP_PHONE_NUMBER_ID --project "$FIREBASE_PROJECT"
+firebase deploy --only functions:sendContainerCustomerUpdates,functions:deliverContainerCustomerUpdate,functions:sendContainerCurrentStatus --project "$FIREBASE_PROJECT"
 ```
 
 All three read the secrets, so all three must be redeployed after the

@@ -48,9 +48,9 @@ transfer to them fails.
 ## 4. Set the three secrets **[you]**
 
 ```bash
-firebase functions:secrets:set STRIPE_SECRET_KEY      --project car-selling-flutter-app
-firebase functions:secrets:set STRIPE_WEBHOOK_SECRET  --project car-selling-flutter-app
-firebase functions:secrets:set BUSINESS_PRO_PRICE_ID  --project car-selling-flutter-app
+firebase functions:secrets:set STRIPE_SECRET_KEY      --project "$FIREBASE_PROJECT"
+firebase functions:secrets:set STRIPE_WEBHOOK_SECRET  --project "$FIREBASE_PROJECT"
+firebase functions:secrets:set BUSINESS_PRO_PRICE_ID  --project "$FIREBASE_PROJECT"
 ```
 
 `STRIPE_SECRET_KEY` is `sk_test_...` today. The webhook secret and price ID

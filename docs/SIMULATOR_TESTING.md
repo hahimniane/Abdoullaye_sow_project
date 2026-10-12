@@ -113,7 +113,7 @@ then reinstall the app.
 
 ## Stripe (needed before testing the PAY step)
 - `STRIPE_SECRET_KEY` is set to a **test** key on Stripe account `51TnSUd…`.
-  Verify with `firebase functions:secrets:access STRIPE_SECRET_KEY --project car-selling-flutter-app`
+  Verify with `firebase functions:secrets:access STRIPE_SECRET_KEY --project "$FIREBASE_PROJECT"`
   (prints a secret — run it yourself, never through a tool/chat).
 - The client's fallback publishable key in `lib/services/stripe_config_service.dart`
   is on that **same** account, so a plain `flutter run` pays correctly. Override with

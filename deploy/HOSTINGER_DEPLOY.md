@@ -205,7 +205,7 @@ The admin and business dashboards talk to Firebase project
   payment-mode checks before any write:
   ```bash
   cd deploy
-  DEPLOY_ENV=development FIREBASE_PROJECT=car-selling-flutter-app \
+  DEPLOY_ENV=development FIREBASE_PROJECT=<project-id> \
     npm run deploy:backend
   ```
   Through August 31, 2026, the explicit development label authorizes the
@@ -230,7 +230,7 @@ The admin and business dashboards talk to Firebase project
   targeted super-admin callable instead:
   ```bash
     cd deploy
-    DEPLOY_ENV=production FIREBASE_PROJECT=car-selling-flutter-app \
+    DEPLOY_ENV=production FIREBASE_PROJECT=<project-id> \
       npm run deploy:backend
   ```
   Call it first with `dryRun: true`, `businessId`, and either explicit `carIds`
@@ -250,20 +250,20 @@ The admin and business dashboards talk to Firebase project
 
   # Inspect unassigned legacy cars by old business display name.
   npm run backfill:cars -- \
-    --project car-selling-flutter-app \
+    --project "$FIREBASE_PROJECT" \
     --business-id alseny_business_center \
     --legacy-business-name "Alseny Business Center"
 
   # Commit only after reviewing the dry-run carIds.
   npm run backfill:cars -- \
-    --project car-selling-flutter-app \
+    --project "$FIREBASE_PROJECT" \
     --business-id alseny_business_center \
     --car-ids car_1,car_2 \
     --commit
 
   # Wrong/default ownership requires explicit verified IDs.
   npm run backfill:cars -- \
-    --project car-selling-flutter-app \
+    --project "$FIREBASE_PROJECT" \
     --business-id alseny_business_center \
     --car-ids car_3 \
     --reassign-explicit-car-ids \
@@ -272,11 +272,11 @@ The admin and business dashboards talk to Firebase project
 - Business Pro checkout requires these Firebase Function secrets to be real
   production values before the feature can process subscriptions:
   ```bash
-  firebase functions:secrets:set BUSINESS_PRO_PRICE_ID --project car-selling-flutter-app
-  firebase functions:secrets:set STRIPE_WEBHOOK_SECRET --project car-selling-flutter-app
-  firebase functions:secrets:set ANTHROPIC_API_KEY --project car-selling-flutter-app
+  firebase functions:secrets:set BUSINESS_PRO_PRICE_ID --project "$FIREBASE_PROJECT"
+  firebase functions:secrets:set STRIPE_WEBHOOK_SECRET --project "$FIREBASE_PROJECT"
+  firebase functions:secrets:set ANTHROPIC_API_KEY --project "$FIREBASE_PROJECT"
   cd deploy
-  DEPLOY_ENV=production FIREBASE_PROJECT=car-selling-flutter-app \
+  DEPLOY_ENV=production FIREBASE_PROJECT=<project-id> \
     npm run deploy:backend
   ```
   Register the Stripe webhook endpoint as:
