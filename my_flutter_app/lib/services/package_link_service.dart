@@ -129,8 +129,10 @@ class PackageLinkService {
         signedIn: auth.isAuthenticated,
         isAnonymous: auth.user?.isAnonymous ?? false,
         hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
-        hasContainersPermission:
-            auth.hasBusinessPermission(BusinessPermission.containers),
+        // The permission AND a shipping service: a business that does not
+        // ship has no containers, so its scans fall through to the public
+        // tracking page like any other.
+        hasContainersPermission: auth.hasContainersAccess,
         businessId: businessId,
       );
       var inBusiness = false;

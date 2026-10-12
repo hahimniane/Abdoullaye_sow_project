@@ -9356,6 +9356,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ce que vous avez vendu et ce qui est dû, en PDF à envoyer.';
 
   @override
+  String get invPermissionLabel => 'Factures';
+
+  @override
   String get invTitle => 'Factures et reçus';
 
   @override

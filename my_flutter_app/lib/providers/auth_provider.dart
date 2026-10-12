@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import '../models/business_service.dart' show containersAvailable;
 import '../models/notification_preferences.dart';
 import '../models/platform_access.dart';
 import '../services/inventory_stores.dart' show InventoryAccess;
@@ -153,6 +154,19 @@ class AuthProvider extends ChangeNotifier {
     permissions: _businessPermissions,
     permission: permission,
   );
+
+  /// Invoices and receipts: the `ledger` OR the `invoices` permission.
+  bool get hasInvoicesAccess =>
+      canAccessInvoices(isStaff: _isStaff, permissions: _businessPermissions);
+
+  /// Containers: the business ships (barrels, freight, car transport or
+  /// parking) AND this person holds the containers permission.
+  bool get hasContainersAccess => containersAvailable(
+    services: _businessServices,
+    hasPermission: hasBusinessPermission(BusinessPermission.containers),
+    businessId: _businessId ?? '',
+  );
+
   String? get userEmail => _userEmail;
   String? get customerName => _customerName;
   String? get customerPhone => _customerPhone;

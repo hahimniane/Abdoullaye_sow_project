@@ -1476,7 +1476,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     final businessId = (_paymentFields['businessId'] ?? '').toString().trim();
     if (vin.length < containerMinVin || businessId.isEmpty) return;
     final auth = context.read<AuthProvider>();
-    if (!auth.hasBusinessPermission(BusinessPermission.containers)) return;
+    if (!auth.hasContainersAccess) return;
     try {
       final lines = await FirebaseFirestore.instance
           .collection('containerLines')

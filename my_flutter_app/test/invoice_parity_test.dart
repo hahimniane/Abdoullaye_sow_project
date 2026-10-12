@@ -14,16 +14,17 @@ void main() {
   final backend = read('functions/invoice_ledger.js');
   final menu = read('lib/screens/home_menu.dart');
 
-  test('the screen is offered behind the ledger permission', () {
+  test('the screen is offered behind the ledger OR invoices permission', () {
     expect(menu, contains("import 'invoices_screen.dart';"));
     expect(menu, contains("Key('open-invoices')"));
     expect(menu, contains('InvoicesScreen(businessId: ledgerBusinessId)'));
-    // Gated on the same flag as the ledger tile, never a new permission.
+    // Its own flag (ledger OR invoices), not the ledger tile's.
     final tile = menu.indexOf("Key('open-invoices')");
-    final gate = menu.lastIndexOf('if (canUseLotLedger)', tile);
+    final gate = menu.lastIndexOf('if (canUseInvoices)', tile);
     expect(gate, greaterThan(0));
     expect('_Destination('.allMatches(menu.substring(gate, tile)).length, 1,
-        reason: 'the ledger gate must be the one right above the tile');
+        reason: 'the invoices gate must be the one right above the tile');
+    expect(menu, contains('auth.hasInvoicesAccess'));
   });
 
   test('the app calls every invoice callable the console calls', () {

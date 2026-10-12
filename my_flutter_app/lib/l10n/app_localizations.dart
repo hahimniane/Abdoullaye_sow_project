@@ -16266,6 +16266,12 @@ abstract class AppLocalizations {
   /// **'What you sold and what is owed, as PDFs to send.'**
   String get invMenuSubtitle;
 
+  /// No description provided for @invPermissionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices'**
+  String get invPermissionLabel;
+
   /// No description provided for @invTitle.
   ///
   /// In en, this message translates to:

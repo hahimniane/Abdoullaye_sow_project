@@ -29,7 +29,11 @@ void main() {
 
   test('the screen is gated on it and offered wherever permissions are edited',
       () {
-    expect(menu, contains('BusinessPermission.containers'));
+    // The menu asks the provider, which holds the permission AND shipping
+    // service rule (`containersAvailable`).
+    expect(menu, contains('auth.hasContainersAccess'));
+    expect(read('lib/providers/auth_provider.dart'),
+        contains('BusinessPermission.containers'));
     expect(menu, contains('ContainersScreen(businessId: ledgerBusinessId)'));
     expect(menu, contains("Key('open-containers')"));
     for (final path in [
