@@ -38,6 +38,10 @@ String inventoryFailureText(AppLocalizations l10n, InventoryFailure failure) =>
       InventoryFailure.sameStore => l10n.inventoryFailSameStore,
       InventoryFailure.insufficientStock => l10n.inventoryFailInsufficientStock,
       InventoryFailure.ownerOnly => l10n.inventoryFailOwnerOnly,
+      InventoryFailure.brandNameRequired => l10n.inventoryErrBrandName,
+      InventoryFailure.brandNameTaken => l10n.inventoryFailBrandNameTaken,
+      InventoryFailure.brandNotFound => l10n.inventoryFailBrandNotFound,
+      InventoryFailure.brandTooLong => l10n.inventoryFailBrandTooLong,
     };
 
 /// The product form's refusal codes, in words.
@@ -52,6 +56,8 @@ String inventoryFieldErrorText(AppLocalizations l10n, String code) =>
       'photo_invalid' => l10n.inventoryErrPhoto,
       'category_name_required' => l10n.inventoryErrCategoryName,
       'category_name_too_long' => l10n.inventoryErrNameTooLong,
+      'brand_name_required' => l10n.inventoryErrBrandName,
+      'brand_too_long' => l10n.inventoryFailBrandTooLong,
       'store_name_required' => l10n.inventoryErrStoreName,
       'store_name_too_long' => l10n.inventoryErrNameTooLong,
       'store_required' => l10n.inventoryErrStoreRequired,

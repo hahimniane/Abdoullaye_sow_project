@@ -35,6 +35,8 @@ void main() {
     'lib/screens/inventory_sell_screen.dart': sell,
     'lib/screens/inventory_categories_screen.dart':
         read('lib/screens/inventory_categories_screen.dart'),
+    'lib/screens/inventory_brands_screen.dart':
+        read('lib/screens/inventory_brands_screen.dart'),
     'lib/screens/inventory_stores_screen.dart':
         read('lib/screens/inventory_stores_screen.dart'),
     'lib/widgets/inventory_widgets.dart': read('lib/widgets/inventory_widgets.dart'),
@@ -72,6 +74,10 @@ void main() {
       'archiveInventoryStore',
       'setInventoryStaffAccess',
       'transferInventoryStock',
+      // Brands (v3).
+      'createInventoryBrand',
+      'renameInventoryBrand',
+      'archiveInventoryBrand',
     ]));
     final callers = '$service\n$pure';
     for (final name in contracted) {
@@ -84,7 +90,11 @@ void main() {
   });
 
   group('categories and stores (v2)', () {
-    final v2 = doc.substring(doc.indexOf('# Categories and stores (v2)'));
+    // The v2 section only: the v3 contract has its own group below.
+    final v2 = doc.substring(
+      doc.indexOf('# Categories and stores (v2)'),
+      doc.indexOf('# Brands and quick entry (v3)'),
+    );
     final auth = read('lib/providers/auth_provider.dart');
     final team = read('lib/screens/business_profile_screen.dart');
     final stores = read('lib/services/inventory_stores.dart');
@@ -119,7 +129,7 @@ void main() {
           .map((c) => c.trim())
           .toSet();
       expect(line, hasLength(12));
-      expect(inventoryFailureReasons.keys.toSet(), line);
+      expect(inventoryFailureReasons.keys.toSet(), containsAll(line));
       final widgets = read('lib/widgets/inventory_widgets.dart');
       final en = jsonDecode(read('lib/l10n/app_en.arb')) as Map<String, dynamic>;
       final fr = jsonDecode(read('lib/l10n/app_fr.arb')) as Map<String, dynamic>;
@@ -162,6 +172,90 @@ void main() {
       // The sale waits for the stores to be known, and for a store to sell
       // from, before anything is sent.
       expect(sell, contains('!_sell.canSell || !_watcher.storesLoaded'));
+    });
+  });
+
+  group('brands and quick entry (v3)', () {
+    final v3 = doc.substring(doc.indexOf('# Brands and quick entry (v3)'));
+    final v2 = doc.substring(
+      doc.indexOf('# Categories and stores (v2)'),
+      doc.indexOf('# Brands and quick entry (v3)'),
+    );
+    Set<String> newCodes(String section) => RegExp(r'new: ([a-z_, ]+)\.')
+        .firstMatch(section)!
+        .group(1)!
+        .split(',')
+        .map((c) => c.trim())
+        .toSet();
+
+    test('the app calls the three brand callables and reads the collection',
+        () {
+      for (final name in [
+        'createInventoryBrand',
+        'renameInventoryBrand',
+        'archiveInventoryBrand',
+      ]) {
+        expect(v3, contains('`$name {'), reason: '$name is in the contract');
+        expect(service, contains("'$name'"), reason: '$name is called');
+      }
+      expect(v3, contains('`inventoryBrands`'));
+      expect(service, contains("collection: 'inventoryBrands'"));
+      // Business-scoped like the other lists.
+      expect(service,
+          contains("inventoryBrandsSpec(String businessId) => FirestoreQuerySpec"));
+    });
+
+    test('v2 and v3 refusal codes together are the 16 the app maps', () {
+      final added = newCodes(v3);
+      expect(added, {
+        'brand_name_required',
+        'brand_name_taken',
+        'brand_not_found',
+        'brand_too_long',
+      });
+      final all = {...newCodes(v2), ...added};
+      expect(all, hasLength(16));
+      expect(inventoryFailureReasons.keys.toSet(), all);
+      final widgets = read('lib/widgets/inventory_widgets.dart');
+      final en = jsonDecode(read('lib/l10n/app_en.arb')) as Map<String, dynamic>;
+      final fr = jsonDecode(read('lib/l10n/app_fr.arb')) as Map<String, dynamic>;
+      for (final failure in inventoryFailureReasons.values) {
+        expect(widgets, contains('InventoryFailure.${failure.name} =>'),
+            reason: '${failure.name} has words');
+      }
+      for (final key in RegExp(r'InventoryFailure\.\w+ => l10n\.(\w+)')
+          .allMatches(widgets)
+          .map((m) => m.group(1)!)) {
+        expect(en.containsKey(key), isTrue, reason: 'en $key');
+        expect(fr.containsKey(key), isTrue, reason: 'fr $key');
+      }
+    });
+
+    test('a brand shows in front everywhere a product name is shown', () {
+      // The one place the words are joined; no screen spells the join itself.
+      expect(pure, contains('String inventoryDisplayName(String brand'));
+      for (final path in [
+        'lib/screens/inventory_screen.dart',
+        'lib/screens/inventory_item_screen.dart',
+        'lib/screens/inventory_item_sheets.dart',
+        'lib/screens/inventory_sell_screen.dart',
+        'lib/screens/inventory_sales_screen.dart',
+      ]) {
+        final source = screens[path]!;
+        expect(source, contains('displayName'), reason: path);
+        // A product's bare name is never shown (a brand would be lost).
+        expect(RegExp(r'\b(?:item|line\.item|widget\.item)\.name\b')
+            .hasMatch(source), isFalse, reason: path);
+      }
+    });
+
+    test('quick entry is a second button on the product form, client only', () {
+      final sheets = screens['lib/screens/inventory_item_sheets.dart']!;
+      expect(v3, contains('Save and add another like it'));
+      expect(sheets, contains("Key('inv-form-save-another')"));
+      expect(sheets, contains('inventorySaveAndAddAnother'));
+      // No new callable for it: the same createInventoryItem.
+      expect(v3, contains('Client-only'));
     });
   });
 
@@ -292,6 +386,7 @@ void main() {
       'lib/screens/inventory_sales_screen.dart',
       'lib/screens/inventory_item_screen.dart',
       'lib/screens/inventory_categories_screen.dart',
+      'lib/screens/inventory_brands_screen.dart',
       'lib/screens/inventory_stores_screen.dart',
     ]) {
       expect(screens[path], contains('Timer('), reason: path);

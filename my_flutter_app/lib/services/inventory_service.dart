@@ -44,6 +44,12 @@ bool inventoryCategoryCreateUnsupported(Object error) =>
     error is FirebaseFunctionsException &&
     inventoryCategoryCallableMissing(code: error.code, details: error.details);
 
+/// Whether [error] says the server has no `createInventoryBrand` (a server
+/// from before brands).
+bool inventoryBrandCreateUnsupported(Object error) =>
+    error is FirebaseFunctionsException &&
+    inventoryBrandCallableMissing(code: error.code, details: error.details);
+
 /// A fresh, hard-to-collide id for one sale attempt (`clientRequestId`).
 /// Retries of the same sale reuse it; the server answers with the same sale.
 String newInventoryRequestId([Random? random]) {
@@ -123,6 +129,12 @@ FirestoreQuerySpec inventoryCategoriesSpec(String businessId) =>
       filters: [QueryFilterSpec('businessId', QueryFilterOp.equal, businessId)],
     );
 
+/// The business's brands. Equality on `businessId` only.
+FirestoreQuerySpec inventoryBrandsSpec(String businessId) => FirestoreQuerySpec(
+      collection: 'inventoryBrands',
+      filters: [QueryFilterSpec('businessId', QueryFilterOp.equal, businessId)],
+    );
+
 /// The business's stores. Equality on `businessId` only.
 FirestoreQuerySpec inventoryStoresSpec(String businessId) => FirestoreQuerySpec(
       collection: 'inventoryStores',
@@ -172,6 +184,10 @@ abstract interface class InventorySource {
   /// The business's categories (empty before it has any, and on a server
   /// that has none).
   Stream<List<InventoryCategory>> watchCategories(String businessId);
+
+  /// The business's brands (empty before it has any, and on a server that has
+  /// none).
+  Stream<List<InventoryBrand>> watchBrands(String businessId);
 
   /// The business's stores (empty or one: a single-store business).
   Stream<List<InventoryStore>> watchStores(String businessId);
@@ -243,6 +259,15 @@ class FirestoreInventorySource implements InventorySource {
           .map((snap) => [
                 for (final d in snap.docs)
                   InventoryCategory.fromMap(d.id, d.data()),
+              ]);
+
+  @override
+  Stream<List<InventoryBrand>> watchBrands(String businessId) =>
+      inventoryBrandsSpec(businessId)
+          .build(_db)
+          .snapshots()
+          .map((snap) => [
+                for (final d in snap.docs) InventoryBrand.fromMap(d.id, d.data()),
               ]);
 
   @override
@@ -462,6 +487,34 @@ class InventoryService {
         'archiveInventoryCategory',
         archiveInventoryCategoryRequest(businessId, categoryId,
             archived: archived),
+      );
+
+  // ----- brands --------------------------------------------------------------
+
+  /// Adds a brand to the business's list; answers its id.
+  Future<String> createBrand(String businessId, String name) async {
+    final data = callableMap(await caller(
+      'createInventoryBrand',
+      createInventoryBrandRequest(businessId, name),
+    ));
+    return callableString(data['brandId']);
+  }
+
+  Future<void> renameBrand(String businessId, String brandId, String name) =>
+      caller(
+        'renameInventoryBrand',
+        renameInventoryBrandRequest(businessId, brandId, name),
+      );
+
+  /// Brands are archived, never deleted; products keep their brand.
+  Future<void> setBrandArchived(
+    String businessId,
+    String brandId, {
+    required bool archived,
+  }) =>
+      caller(
+        'archiveInventoryBrand',
+        archiveInventoryBrandRequest(businessId, brandId, archived: archived),
       );
 
   // ----- stores (owner only, except the transfer) ----------------------------

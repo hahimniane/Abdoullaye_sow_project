@@ -364,11 +364,19 @@ class _CategoryRow extends StatelessWidget {
           ),
           TextButton(
             key: Key('inv-category-rename-${category.id}'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(44, 44),
+            ),
             onPressed: busy ? null : onRename,
             child: Text(l10n.inventoryCategoryRename),
           ),
           TextButton(
             key: Key('inv-category-archive-${category.id}'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(44, 44),
+            ),
             onPressed: busy ? null : onArchive,
             child: Text(
               category.archived ? l10n.inventoryRestore : l10n.inventoryArchive,

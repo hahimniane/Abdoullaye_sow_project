@@ -982,7 +982,8 @@ void main() {
         failure('owner_only', code: 'permission-denied'),
         InventoryFailure.ownerOnly,
       );
-      expect(inventoryFailureReasons.keys, hasLength(12));
+      // The twelve of v2 and the four brand codes of v3.
+      expect(inventoryFailureReasons.keys, hasLength(16));
     });
 
     test('a refusal carrying several codes is read by any of ours', () {
@@ -1264,6 +1265,10 @@ class _Source implements InventorySource {
 
   @override
   Stream<List<InventoryCategory>> watchCategories(String businessId) =>
+      Stream.value(const []);
+
+  @override
+  Stream<List<InventoryBrand>> watchBrands(String businessId) =>
       Stream.value(const []);
 
   @override
