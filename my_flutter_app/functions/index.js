@@ -641,7 +641,7 @@ const VALID_BUSINESS_PERMISSIONS = [
   "growth",
   "containers",
   "inventory",
-  // Invoices and receipts a business writes by hand. "ledger" has always
+  // Invoices and receipts a business writes by hand. ledger has always
   // opened them too (it is offered only where Parking is on), so a shop that
   // sells without Parking grants this one to its staff instead.
   "invoices",
