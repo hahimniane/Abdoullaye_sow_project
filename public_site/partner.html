@@ -291,7 +291,7 @@
     ];
 
     // Not a real service key: a request the platform team reviews.
-    const INVENTORY_REQUEST = { label: "Inventory", desc: "Track stock and sell at the counter. Switched on by our team after approval." };
+    const INVENTORY_REQUEST = { label: "Inventory", desc: "Track stock and sell at the counter. You can register with Inventory alone. Switched on by our team after approval." };
 
     const $ = (id) => document.getElementById(id);
     const form = $("applyForm");
@@ -404,8 +404,10 @@
     });
     // Inventory is never self-served: the platform team switches it on after
     // approval. This card only REQUESTS it (sent as requestInventory, never
-    // inside enabledServices), starts unchecked, and does not count toward
-    // the "choose at least one service" rule.
+    // inside enabledServices) and starts unchecked. Asking for it does satisfy
+    // the "choose at least one service" rule: a shop can register with
+    // Inventory alone, and the server accepts an application with no services
+    // when requestInventory is true.
     const inventoryLabel = document.createElement("label");
     inventoryLabel.className = "partner-service-choice";
     inventoryLabel.innerHTML =
@@ -501,7 +503,7 @@
       if (!EMAIL_OK(email)) return showError("Saisissez une adresse email valide.");
       if (password.length < 6) return showError("Le mot de passe doit contenir au moins 6 caractères.");
       if (password !== confirmPassword) return showError("Les mots de passe ne correspondent pas.");
-      if (!services.length) return showError("Choisissez au moins un service d’entreprise.");
+      if (!services.length && !inventoryRequested()) return showError("Choisissez au moins un service d’entreprise.");
       if (!businessName) return showError("Veuillez saisir le nom de votre entreprise.");
       if (!selectedCountry) return showError("Sélectionnez le pays de votre entreprise.");
       if (!selectedCity) return showError("Sélectionnez la ville de votre entreprise.");

@@ -98,6 +98,7 @@ import {
   type BusinessStripeVerification,
   type VerificationStatus,
 } from "@/lib/business-verification";
+import { shippingServiceIds } from "@/lib/business-sidebar";
 import {
   businessHasInventory,
   businessRequestedInventory,
@@ -206,6 +207,7 @@ const businessStaffPermissionOptions = [
   "transport",
   "parking",
   "ledger",
+  "invoices",
   "destinations",
   "people",
   "reviews",
@@ -220,6 +222,7 @@ function businessPermissionLabel(permission: string) {
   if (permission === "ledger") return "Lot ledger";
   if (permission === "containers") return "Containers";
   if (permission === "inventory") return "Inventory";
+  if (permission === "invoices") return "Invoices";
   return permission.charAt(0).toUpperCase() + permission.slice(1);
 }
 
@@ -227,12 +230,13 @@ function businessPermissionLabel(permission: string) {
 // Not enforced/disabled here - a business can grant it ahead of turning the
 // service on, so staff already have access the moment it goes live instead
 // of needing a second invite/edit round trip.
-const businessPermissionRequiredService: Partial<Record<string, string>> = {
+const businessPermissionRequiredService: Partial<Record<string, string | readonly string[]>> = {
   barrels: "barrelShipping",
   freight: "freight",
   transport: "carTransport",
   parking: "carParking",
   ledger: "carParking",
+  containers: shippingServiceIds, // any shipping service
   listings: "carSales",
   purchases: "carSales",
   inventory: "inventory",
@@ -240,12 +244,13 @@ const businessPermissionRequiredService: Partial<Record<string, string>> = {
 
 function businessOffersService(
   business: FirestoreRow | null | undefined,
-  serviceId: string,
+  serviceId: string | readonly string[],
 ) {
   const services = Array.isArray(business?.enabledServices)
     ? business.enabledServices.map((item) => text(item, ""))
     : [];
-  return services.includes(serviceId);
+  const wanted = typeof serviceId === "string" ? [serviceId] : serviceId;
+  return wanted.some((id) => services.includes(id));
 }
 
 // ---- Admin roles & privileges (RBAC) ----

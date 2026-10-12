@@ -214,11 +214,17 @@ assert(
 );
 
 // Inventory is requested, never self-enabled: its own card sends a separate
-// requestInventory boolean, stays out of enabledServices, and does not count
-// toward "choose at least one service". Both languages translate it.
+// requestInventory boolean and stays out of enabledServices - but asking for
+// it does satisfy "choose at least one service" (Inventory alone is a valid
+// sign-up). Both languages translate it.
 assertIncludes(partner, 'id="requestInventory"', "partner.html Inventory request card");
 assertIncludes(partner, "requestInventory: inventoryRequested()", "partner.html submit payload");
 assertIncludes(partner, 'input[value]:checked', "partner.html selectedServices must skip the Inventory request box");
+assertIncludes(
+  partner,
+  "if (!services.length && !inventoryRequested()) return showError(",
+  "partner.html: Inventory alone must satisfy the at-least-one-service check",
+);
 assert(
   !/key:\s*"inventory"/.test(partner) && !/enabledServices:\s*\[[^\]]*inventory/i.test(partner),
   "partner.html must never put inventory in the SERVICES catalog or enabledServices",
@@ -231,7 +237,7 @@ assert(
 assertIncludes(i18n, '"Inventory": "Inventaire"', "i18n.js Inventory label");
 assertIncludes(
   i18n,
-  '"Track stock and sell at the counter. Switched on by our team after approval."',
+  '"Track stock and sell at the counter. You can register with Inventory alone. Switched on by our team after approval."',
   "i18n.js Inventory description",
 );
 

@@ -22,14 +22,19 @@ const peopleSource = read("../components/business/profile-support-people.tsx");
 const sidebarSource = read("./business-sidebar.ts");
 const stylesSource = read("../app/globals.css");
 
-test("the Containers tab sits under Transport & shipping, gated by its permission and no service", () => {
+test("the Containers tab sits under Transport & shipping, gated by its permission and any shipping service", () => {
   const tab = businessSidebarTabs.find((entry) => entry.id === "containers");
   assert.ok(tab, "no containers tab");
   assert.equal(tab.label, "Containers");
   assert.equal(tab.group, "transport");
   assert.equal(tab.permission, "containers");
-  assert.equal(tab.service, undefined, "a loading list is not tied to a sold service");
-  assert.match(sidebarSource, /\{id: "containers", label: "Containers", [^}]*permission: "containers"\}/);
+  assert.equal(tab.service, undefined, "shown on ANY of several services, not one");
+  assert.deepEqual(tab.services, ["barrelShipping", "freight", "carTransport", "carParking"]);
+  assert.match(sidebarSource, /\{id: "containers", label: "Containers", [^}]*services: shippingServiceIds, permission: "containers"\}/);
+  // The console decides visibility with the shared rule, for owners and staff alike.
+  assert.match(consoleSource, /businessTabServiceAllowed\(tab, \(id\) => services\.has\(id\)\)/);
+  // The People chip reads "not yet offered" on the same any-of rule.
+  assert.match(peopleSource, /containers: shippingServiceIds,/);
   // The staff-permission chip the owner grants, in the People panel — the
   // list the backend parity test regex-reads.
   assert.match(peopleSource, /const businessPermissionOptions = \[[\s\S]*?\{id: "containers", label: "Containers"\}[\s\S]*?\];/);
@@ -473,4 +478,12 @@ test("every label string has French", () => {
     assert.notEqual(french, english, `no French for "${english}"`);
     assert.equal(translateValue(french, "en"), english, `"${english}" does not round-trip`);
   }
+});
+
+test("the Containers permission chip and the new Invoices chip read the shared service rules", () => {
+  assert.match(peopleSource, /\{id: "invoices", label: "Invoices", description: "Receipts and what is owed"\}/);
+  // Invoices needs no service: no entry, so its chip never says "not yet offered".
+  assert.doesNotMatch(peopleSource, /^\s+invoices: "/m);
+  assert.equal(translateValue("Invoices", "fr"), "Factures");
+  assert.equal(translateValue("Receipts and what is owed", "fr"), "Reçus et sommes dues");
 });

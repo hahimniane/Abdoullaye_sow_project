@@ -100,6 +100,7 @@ import {
   STANDARD_FREIGHT_ITEMS,
 } from "@/lib/freight-payback";
 import { useInventoryStores } from "@/lib/business-data";
+import { shippingServiceIds } from "@/lib/business-sidebar";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
@@ -202,6 +203,7 @@ const businessPermissionOptions = [
   {id: "parking", label: "Parking"},
   {id: "ledger", label: "Lot ledger"},
   {id: "containers", label: "Containers"},
+  {id: "invoices", label: "Invoices", description: "Receipts and what is owed"},
   {id: "inventory", label: "Inventory"},
   {id: "destinations", label: "Services & coverage"},
   {id: "people", label: "People"},
@@ -214,12 +216,15 @@ const businessPermissionOptions = [
 // Not enforced server-side and not disabled here - a business can still grant
 // this ahead of turning the service on, so staff already have access the
 // moment it goes live instead of needing a second invite/edit round trip.
-const businessPermissionRequiredService: Partial<Record<string, string>> = {
+// A list means "any of these" (Containers: any shipping service). Invoices has
+// no entry: it needs no service, so its chip never reads "not yet offered".
+const businessPermissionRequiredService: Partial<Record<string, string | readonly string[]>> = {
   barrels: "barrelShipping",
   freight: "freight",
   transport: "carTransport",
   parking: "carParking",
   ledger: "carParking",
+  containers: shippingServiceIds,
   listings: "carSales",
   purchases: "carSales",
   inventory: "inventory",
@@ -227,12 +232,13 @@ const businessPermissionRequiredService: Partial<Record<string, string>> = {
 
 function businessOffersService(
   business: FirestoreRow | null | undefined,
-  serviceId: string,
+  serviceId: string | readonly string[],
 ) {
   const services = Array.isArray(business?.enabledServices) ?
     business.enabledServices.map((item) => text(item, "")) :
     [];
-  return services.includes(serviceId);
+  const wanted = typeof serviceId === "string" ? [serviceId] : serviceId;
+  return wanted.some((id) => services.includes(id));
 }
 
 const serviceOptions = [
@@ -2795,7 +2801,7 @@ export function BusinessPeoplePanel({
                           !businessOffersService(business, requiredService),
                       );
                       return (
-                        <button key={permission.id} type="button" className={`lst-chip ${on ? "on" : ""}`} onClick={() => update({ businessPermissions: togglePermission(draft.businessPermissions, permission.id, !on) })}>
+                        <button key={permission.id} type="button" title={permission.description} className={`lst-chip ${on ? "on" : ""}`} onClick={() => update({ businessPermissions: togglePermission(draft.businessPermissions, permission.id, !on) })}>
                           {permission.label}
                           {notYetOffered && (
                             <small className="lst-chip-note"> · not yet offered</small>
@@ -3026,6 +3032,7 @@ function StaffRow({
                 <button
                   key={permission.id}
                   type="button"
+                  title={permission.description}
                   className={`lst-chip ${on ? "on" : ""}`}
                   disabled={!canManageStaff}
                   onClick={() => toggle(permission.id, !on)}
