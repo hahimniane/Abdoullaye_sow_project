@@ -641,6 +641,10 @@ const VALID_BUSINESS_PERMISSIONS = [
   "growth",
   "containers",
   "inventory",
+  // Invoices and receipts a business writes by hand. "ledger" has always
+  // opened them too (it is offered only where Parking is on), so a shop that
+  // sells without Parking grants this one to its staff instead.
+  "invoices",
 ];
 const VALID_PLATFORM_ADMIN_ROLES = [
   "superAdmin",
@@ -3381,6 +3385,20 @@ function hasBusinessPermission(user, section) {
 async function requireBusinessPermission(uid, businessId, section) {
   const user = await requireBusinessManager(uid, businessId);
   if (!hasBusinessPermission(user, section)) {
+    throw new HttpsError(
+        "permission-denied",
+        "This staff account is not allowed to manage this section",
+    );
+  }
+  return user;
+}
+
+// Passes when the caller may manage the business AND holds at least one of
+// the sections (owners and admins hold every section). Used where two
+// permissions open the same screen, e.g. Invoices: "ledger" or "invoices".
+async function requireAnyBusinessPermission(uid, businessId, sections) {
+  const user = await requireBusinessManager(uid, businessId);
+  if (!sections.some((section) => hasBusinessPermission(user, section))) {
     throw new HttpsError(
         "permission-denied",
         "This staff account is not allowed to manage this section",
@@ -10642,16 +10660,20 @@ exports.submitBusinessApplication = onCall(
           normalizeBusinessServices(enabledServices, []),
           [], false, VALID_BUSINESS_SERVICES,
       );
-      if (!normalizedServices.length) {
+      // Asking for Inventory is only a request the admin sees; it is a
+      // separate flag and never part of enabledServices. Anything that is not
+      // the boolean true counts as "not requested".
+      const requestedInventory = request.data?.requestInventory === true;
+      // A shop that only wants Inventory has no other service to tick, so a
+      // request for Inventory stands in for the service choice. The business
+      // is then created with an empty service list until an admin switches
+      // Inventory on.
+      if (!normalizedServices.length && !requestedInventory) {
         throw new HttpsError(
             "invalid-argument",
             "Choose at least one business service",
         );
       }
-      // Asking for Inventory is only a request the admin sees; it is a
-      // separate flag and never part of enabledServices. Anything that is not
-      // the boolean true counts as "not requested".
-      const requestedInventory = request.data?.requestInventory === true;
 
       const userRecord = await admin.auth().getUser(applicantUid);
       const db = admin.firestore();
@@ -10675,6 +10697,7 @@ exports.submitBusinessApplication = onCall(
       const notificationRef = db.collection("platformNotifications").doc();
       const now = FirestoreFieldValue.serverTimestamp();
       let responseStatus = "pending";
+      let savedServices = normalizedServices;
       const profile = businessPublicFields({
         name: businessName,
         phone: businessPhone || ownerPhone,
@@ -10696,6 +10719,11 @@ exports.submitBusinessApplication = onCall(
         const currentStatus = businessDoc.data()?.status || "pending";
         const status = currentStatus === "approved" ? "approved" : "pending";
         responseStatus = status;
+        // An Inventory-only request must not wipe the services a business
+        // that already exists has running.
+        savedServices = normalizedServices.length ?
+          normalizedServices :
+          normalizeBusinessServices(businessDoc.data()?.enabledServices, []);
         transaction.set(businessRef, {
           ...profile,
           status,
@@ -10703,7 +10731,7 @@ exports.submitBusinessApplication = onCall(
           ownerName: String(ownerName).trim(),
           ownerPhone: String(ownerPhone).trim(),
           ownerEmail: userRecord.email || "",
-          enabledServices: normalizedServices,
+          enabledServices: savedServices,
           requestedInventory: requestedInventory &&
             !(businessDoc.data()?.enabledServices || [])
                 .includes("inventory"),
@@ -10721,7 +10749,7 @@ exports.submitBusinessApplication = onCall(
           role: "businessOwner",
           businessId,
           businessName: profile.name,
-          businessServices: normalizedServices,
+          businessServices: savedServices,
           updatedAt: now,
           createdAt: now,
         }, {merge: true});
@@ -10736,7 +10764,7 @@ exports.submitBusinessApplication = onCall(
           submittedAt: now,
           updatedAt: now,
           profile,
-          enabledServices: normalizedServices,
+          enabledServices: savedServices,
           requestedInventory,
           ...(marketplaceEvidence ? {
             marketplaceDisclosure: {
@@ -10755,7 +10783,7 @@ exports.submitBusinessApplication = onCall(
             applicantEmail: userRecord.email || "",
             title: "New business application",
             message: `${profile.name} is waiting for platform approval.`,
-            enabledServices: normalizedServices,
+            enabledServices: savedServices,
             requestedInventory,
             createdAt: now,
             updatedAt: now,
@@ -10782,7 +10810,7 @@ exports.submitBusinessApplication = onCall(
         success: true,
         businessId,
         businessName: profile.name,
-        enabledServices: normalizedServices,
+        enabledServices: savedServices,
         requestedInventory,
         status: responseStatus,
       };
@@ -11598,9 +11626,17 @@ exports.reviewBusinessApplication = onCall(
         profile.website = requireValidWebsite(profile.website);
       }
       const currentServices = businessServicesForVerification(current);
+      // An Inventory-only application has an empty service list on purpose;
+      // reviewing it without an explicit list must not hand it every default
+      // service.
+      const inventoryOnlyApplication =
+        current.requestedInventory === true &&
+        Array.isArray(current.enabledServices) &&
+        currentServices.length === 0;
       const normalizedServices = normalizeBusinessServices(
           enabledServices,
-          currentServices.length ? currentServices : DEFAULT_BUSINESS_SERVICES,
+          currentServices.length ? currentServices :
+            inventoryOnlyApplication ? [] : DEFAULT_BUSINESS_SERVICES,
       );
       const approveWithPlatformBypass =
         nextStatus === "approved" && platformDocumentBypass === true;
@@ -18770,11 +18806,12 @@ async function pollOneTrackedContainer(db, doc) {
 // ---------------------------------------------------------------------------
 // Invoices: what a business sold to someone, typed by hand, and what has been
 // paid against it. One open tab per deal; the paper is a PDF the console or
-// app builds from these rows. Gated on the ledger permission - the same
-// people who work the lot's money.
+// app builds from these rows. Open to staff holding the "ledger" permission
+// (the people who work the lot's money) or the "invoices" permission (for
+// shops without Parking, which never get to offer "ledger").
 // ---------------------------------------------------------------------------
 
-const INVOICE_SECTION = "ledger";
+const INVOICE_SECTIONS = ["ledger", "invoices"];
 
 function invoiceMessage(codes) {
   return (Array.isArray(codes) ? codes : [codes])
@@ -18795,7 +18832,7 @@ function invoiceToday() {
  * @return {Promise<{ref: object, data: object}>} The document.
  */
 async function loadInvoiceFor(db, uid, businessId, invoiceId) {
-  await requireBusinessPermission(uid, businessId, INVOICE_SECTION);
+  await requireAnyBusinessPermission(uid, businessId, INVOICE_SECTIONS);
   const ref = db.collection("invoices").doc(String(invoiceId || ""));
   const doc = invoiceId ? await ref.get() : null;
   if (!doc || !doc.exists || String(doc.data()?.businessId) !== businessId) {
@@ -18846,7 +18883,7 @@ exports.createInvoice = onCall(
       const uid = requireAuth(request);
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
-      await requireBusinessPermission(uid, businessId, INVOICE_SECTION);
+      await requireAnyBusinessPermission(uid, businessId, INVOICE_SECTIONS);
       const errors = validateInvoice(data);
       if (errors.length > 0) {
         throw new HttpsError("invalid-argument", invoiceMessage(errors));
@@ -37822,6 +37859,7 @@ const consoleTotals = createConsoleTotalsHandlers({
   requireAuth,
   requireBusinessManager,
   requireBusinessPermission,
+  requireAnyBusinessPermission,
   hasBusinessPermission,
   getUserProfile,
   hasAdminCapability,

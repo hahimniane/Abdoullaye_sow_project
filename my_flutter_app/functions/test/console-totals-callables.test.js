@@ -160,6 +160,8 @@ const USERS = {
     businessPermissions: ["ledger"]},
   parkingStaff: {role: "staff", businessId: "biz",
     businessPermissions: ["parking"]},
+  invoicesStaff: {role: "staff", businessId: "biz",
+    businessPermissions: ["invoices"]},
   outsider: {role: "businessOwner", businessId: "other"},
   customer: {role: "customer"},
   financeAdmin: {role: "admin", effectiveCapabilities: ["finance"]},
@@ -261,6 +263,23 @@ describe("console totals callables: who may call", () => {
         kind === "section" && value === section));
     });
   }
+
+  it("getInvoiceBoardTotals also opens for staff holding only invoices",
+      async () => {
+        const {handlers} = handlersFor({invoices: {}}, {touchGuard: true});
+        const result = await handlers.getInvoiceBoardTotals(
+            call("invoicesStaff", {businessId: "biz", today: "2026-10-05"}));
+        assert.equal(result.board.count, 0);
+        // Ledger staff and the owner keep working.
+        await handlers.getInvoiceBoardTotals(
+            call("ledgerStaff", {businessId: "biz", today: "2026-10-05"}));
+        await handlers.getInvoiceBoardTotals(
+            call("owner", {businessId: "biz", today: "2026-10-05"}));
+        // The lot ledger totals are NOT opened by the invoices permission.
+        await assert.rejects(handlers.getLotLedgerTotals(
+            call("invoicesStaff", {businessId: "biz"})),
+        {code: "permission-denied"});
+      });
 
   it("getBusinessOverview needs someone who works for that business",
       async () => {

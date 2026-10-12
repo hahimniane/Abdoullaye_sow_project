@@ -202,6 +202,7 @@ function createConsoleTotalsHandlers(deps) {
     requireAuth,
     requireBusinessManager,
     requireBusinessPermission,
+    requireAnyBusinessPermission = null,
     hasBusinessPermission,
     getUserProfile,
     hasAdminCapability,
@@ -349,10 +350,28 @@ function createConsoleTotalsHandlers(deps) {
 
   // ---- Invoices -----------------------------------------------------------
 
+  // Invoices open to "ledger" OR "invoices" staff (owners and admins pass).
+  async function requireInvoicePermission(uid, businessId) {
+    const sections = ["ledger", "invoices"];
+    if (requireAnyBusinessPermission) {
+      return requireAnyBusinessPermission(uid, businessId, sections);
+    }
+    let denied = null;
+    for (const section of sections) {
+      try {
+        return await requireBusinessPermission(uid, businessId, section);
+      } catch (error) {
+        if (error?.code !== "permission-denied") throw error;
+        denied = error;
+      }
+    }
+    throw denied;
+  }
+
   async function getInvoiceBoardTotals(request) {
     const uid = requireAuth(request);
     const businessId = businessIdFrom(request);
-    await requireBusinessPermission(uid, businessId, "ledger");
+    await requireInvoicePermission(uid, businessId);
     const today = DAY_RE.test(String(request.data?.today || "")) ?
       String(request.data.today) :
       zonedDayKey(now(), normalizeTimeZone(request.data?.timeZone));

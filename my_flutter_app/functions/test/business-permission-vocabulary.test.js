@@ -82,3 +82,30 @@ test("the web People panel offers exactly the backend vocabulary", () => {
 test("the Flutter permission constants match the backend vocabulary", () => {
   assert.deepEqual(flutterPermissions().sort(), backendPermissions().sort());
 });
+
+// Invoices has its own key because "ledger" is only offered where Parking is
+// on, so a shop's staff could never be given the Invoices tab. Both keys must
+// stay in the backend vocabulary, and every invoice callable must accept
+// either one (a source contract; the emulator suite proves the behaviour).
+test("the backend vocabulary carries both ledger and invoices", () => {
+  const backend = backendPermissions();
+  assert.ok(backend.includes("ledger"));
+  assert.ok(backend.includes("invoices"));
+});
+
+test("every invoice callable accepts the ledger or the invoices permission",
+    () => {
+      const source = read("my_flutter_app", "functions", "index.js");
+      assert.match(source,
+          /const INVOICE_SECTIONS = \["ledger", "invoices"\];/);
+      assert.doesNotMatch(source, /INVOICE_SECTION\b/);
+      const start = source.indexOf("async function loadInvoiceFor(");
+      const end = source.indexOf("exports.revertInvoicePayment", start);
+      assert.ok(start > 0 && end > start);
+      const invoiceBlock = source.slice(start, end);
+      assert.doesNotMatch(invoiceBlock,
+          /requireBusinessPermission\([^)]*"ledger"/);
+      assert.match(invoiceBlock, /requireAnyBusinessPermission\(/);
+      const totals = read("my_flutter_app", "functions", "console_totals.js");
+      assert.match(totals, /requireInvoicePermission\(uid, businessId\)/);
+    });

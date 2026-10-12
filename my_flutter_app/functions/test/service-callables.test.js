@@ -3171,3 +3171,128 @@ describe("car sales service callable lifecycle", () => {
     assert.equal(completedAgain.get("depositAmount"), depositAfterExtension);
   });
 });
+
+describe("invoice callables: the ledger OR the invoices permission", () => {
+  const BIZ = "invoice-perm-biz";
+  const OWNER = "invoice-perm-owner";
+  const LEDGER = "invoice-perm-ledger-staff";
+  const INVOICES = "invoice-perm-invoices-staff";
+  const BOTH = "invoice-perm-both-staff";
+  const PARKING = "invoice-perm-parking-staff";
+  const STRANGER = "invoice-perm-other-business-staff";
+  const run = (name, uid, data) => functions[name].run({
+    auth: {uid, token: {}}, data: {businessId: BIZ, ...data},
+  });
+  const denied = (error) => error.code === "permission-denied";
+
+  before(async () => {
+    await Promise.all([
+      db.collection("businesses").doc(BIZ).set({
+        name: "Invoice Perm Shop", status: "approved",
+        enabledServices: ["inventory"],
+      }),
+      db.collection("users").doc(OWNER).set({
+        role: "businessOwner", businessId: BIZ,
+        email: "invoice-owner@example.test",
+      }),
+      db.collection("users").doc(LEDGER).set({
+        role: "staff", businessId: BIZ, businessPermissions: ["ledger"],
+        email: "invoice-ledger@example.test",
+      }),
+      db.collection("users").doc(INVOICES).set({
+        role: "staff", businessId: BIZ, businessPermissions: ["invoices"],
+        email: "invoice-invoices@example.test",
+      }),
+      db.collection("users").doc(BOTH).set({
+        role: "staff", businessId: BIZ,
+        businessPermissions: ["ledger", "invoices"],
+        email: "invoice-both@example.test",
+      }),
+      db.collection("users").doc(PARKING).set({
+        role: "staff", businessId: BIZ,
+        businessPermissions: ["parking", "inventory"],
+        email: "invoice-parking@example.test",
+      }),
+      db.collection("users").doc(STRANGER).set({
+        role: "staff", businessId: "invoice-perm-elsewhere",
+        businessPermissions: ["ledger", "invoices"],
+        email: "invoice-stranger@example.test",
+      }),
+    ]);
+  });
+
+  // One full life of an invoice, as each kind of caller.
+  async function lifecycle(uid) {
+    const made = await run("createInvoice", uid, {
+      title: "Container of goods", customerName: "Perm Customer",
+      customerPhone: "+224620000099",
+    });
+    assert.equal(made.success, true);
+    const invoiceId = made.invoiceId;
+    await run("updateInvoice", uid, {
+      invoiceId, title: "Container of goods (edited)",
+      customerName: "Perm Customer",
+    });
+    const line = await run("addInvoiceLine", uid, {
+      invoiceId, line: {description: "Rice", quantity: 2,
+        unitPriceCents: 5000},
+    });
+    await run("updateInvoiceLine", uid, {
+      invoiceId, lineId: line.lineId, line: {quantity: 3},
+    });
+    const payment = await run("recordInvoicePayment", uid, {
+      invoiceId, payment: {amountCents: 5000, method: "cash"},
+    });
+    assert.equal(payment.balanceCents, 10000);
+    await run("revertInvoicePayment", uid, {
+      invoiceId, paymentId: payment.paymentId,
+    });
+    await run("removeInvoiceLine", uid, {invoiceId, lineId: line.lineId});
+    const gone = await run("deleteInvoice", uid, {invoiceId});
+    assert.equal(gone.success, true);
+    const board = await run("getInvoiceBoardTotals", uid, {
+      today: "2026-10-05",
+    });
+    assert.ok(board.board, "the invoice board totals answer");
+  }
+
+  it("lets staff holding only invoices run every invoice callable",
+      () => lifecycle(INVOICES));
+  it("keeps staff holding ledger working, unchanged",
+      () => lifecycle(LEDGER));
+  it("lets staff holding both, and the owner, in", async () => {
+    await lifecycle(BOTH);
+    await lifecycle(OWNER);
+  });
+
+  it("refuses staff with neither permission, and other businesses' staff",
+      async () => {
+        const made = await run("createInvoice", OWNER, {
+          title: "Held", customerName: "Held Customer",
+        });
+        const invoiceId = made.invoiceId;
+        for (const uid of [PARKING, STRANGER]) {
+          await assert.rejects(run("createInvoice", uid, {
+            title: "No", customerName: "No"}), denied, uid);
+          await assert.rejects(run("updateInvoice", uid, {
+            invoiceId, title: "No", customerName: "No"}), denied, uid);
+          await assert.rejects(run("deleteInvoice", uid, {invoiceId}),
+              denied, uid);
+          await assert.rejects(run("addInvoiceLine", uid, {
+            invoiceId, line: {description: "x", quantity: 1,
+              unitPriceCents: 1}}), denied, uid);
+          await assert.rejects(run("recordInvoicePayment", uid, {
+            invoiceId, payment: {amountCents: 1, method: "cash"}}),
+          denied, uid);
+          await assert.rejects(run("getInvoiceBoardTotals", uid, {}),
+              denied, uid);
+        }
+        await run("deleteInvoice", OWNER, {invoiceId});
+      });
+
+  it("does not let the invoices permission into the lot ledger", async () => {
+    await assert.rejects(run("getLotLedgerTotals", INVOICES, {}), denied);
+    await assert.rejects(run("upsertLotActivityType", INVOICES, {
+      name: "Fee"}), denied);
+  });
+});

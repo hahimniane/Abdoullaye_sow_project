@@ -808,8 +808,9 @@ describe("summary", () => {
 
 describe("a shop asks for Inventory on its application", () => {
   let applicants = 0;
+  let applicantUids = 0;
   const apply = async (extra = {}, name = `Request Shop ${++applicants}`) => {
-    const uid = `inv-test-applicant-${applicants}`;
+    const uid = `inv-test-applicant-${++applicantUids}`;
     await admin.auth().createUser({
       uid, email: `${uid}@example.test`, password: "InventoryApply-2026!",
     });
@@ -826,7 +827,7 @@ describe("a shop asks for Inventory on its application", () => {
         .doc(answer.businessId).get()).data();
     const application = (await db.collection("businessApplications")
         .where("businessId", "==", answer.businessId).get()).docs[0].data();
-    return {answer, business, application};
+    return {answer, business, application, uid};
   };
 
   it("stores the request and still leaves Inventory off", async () => {
@@ -913,6 +914,120 @@ describe("a shop asks for Inventory on its application", () => {
             .doc("inv-test-stale-request").get()).data();
         assert.equal(stored.requestedInventory, false);
         assert.ok(stored.enabledServices.includes("inventory"));
+      });
+
+  it("accepts an Inventory-only shop: no services, only the request",
+      async () => {
+        const {answer, business, application} = await apply({
+          requestInventory: true, enabledServices: [],
+        });
+        assert.equal(answer.success, true);
+        assert.equal(answer.status, "pending");
+        assert.deepEqual(answer.enabledServices, []);
+        assert.deepEqual(business.enabledServices, []);
+        assert.deepEqual(application.enabledServices, []);
+        assert.equal(business.requestedInventory, true);
+        assert.equal(application.requestedInventory, true);
+        assert.equal(business.status, "pending");
+        const owner = (await db.collection("users").doc(business.ownerUid)
+            .get()).data();
+        assert.equal(owner.role, "businessOwner");
+        assert.deepEqual(owner.businessServices, []);
+        // The admin is told, so the shop shows up in the console.
+        const notes = await db.collection("platformNotifications")
+            .where("businessId", "==", answer.businessId).get();
+        assert.equal(notes.size, 1);
+        assert.deepEqual(notes.docs[0].data().enabledServices, []);
+        assert.equal(notes.docs[0].data().requestedInventory, true);
+      });
+
+  it("treats a missing services list the same as an empty one", async () => {
+    const {business} = await apply({
+      requestInventory: true, enabledServices: undefined,
+    });
+    assert.deepEqual(business.enabledServices, []);
+    assert.equal(business.requestedInventory, true);
+  });
+
+  it("still refuses no services and no request, with the same message",
+      async () => {
+        for (const extra of [
+          {enabledServices: []},
+          {enabledServices: [], requestInventory: false},
+          {enabledServices: ["inventory"]},
+          {enabledServices: [], requestInventory: "true"},
+          {enabledServices: [], requestInventory: 1},
+          {enabledServices: undefined},
+        ]) {
+          await assert.rejects(apply(extra), (error) =>
+            error.code === "invalid-argument" &&
+            error.message === "Choose at least one business service",
+          JSON.stringify(extra));
+        }
+      });
+
+  it("lets the admin approve an Inventory-only shop, then switch it on",
+      async () => {
+        const ADMIN = "inv-test-request-admin";
+        const {answer} = await apply({
+          requestInventory: true, enabledServices: [],
+        });
+        const id = answer.businessId;
+        const ref = db.collection("businesses").doc(id);
+        // Stripe is the one approval gate an Inventory-only shop still has;
+        // it needs no service documents.
+        await ref.update({
+          stripeAccountId: "acct_inventory_only", chargesEnabled: true,
+          payoutsEnabled: true,
+        });
+        // The console may omit the services list; that must NOT hand the
+        // shop every default service.
+        const review = await functions.reviewBusinessApplication.run({
+          auth: {uid: ADMIN, token: {}},
+          data: {businessId: id, action: "approve"},
+        });
+        assert.equal(review.success, true);
+        const approved = (await ref.get()).data();
+        assert.equal(approved.status, "approved");
+        assert.deepEqual(approved.enabledServices, []);
+        assert.equal(approved.requestedInventory, true);
+        const on = await functions.setBusinessInventoryService.run({
+          auth: {uid: ADMIN, token: {}},
+          data: {businessId: id, enabled: true},
+        });
+        assert.deepEqual(on.enabledServices, ["inventory"]);
+        const live = (await ref.get()).data();
+        assert.deepEqual(live.enabledServices, ["inventory"]);
+        assert.equal(live.requestedInventory, false);
+        // The owner can now open the Inventory callables.
+        const ownerUid = live.ownerUid;
+        const made = await functions.createInventoryItem.run({
+          auth: {uid: ownerUid, token: {}},
+          data: {businessId: id, name: "Soap", priceCents: 500, quantity: 3},
+        });
+        assert.ok(made.itemId);
+      });
+
+  it("does not wipe a running business that asks for Inventory only",
+      async () => {
+        const first = await apply({enabledServices: ["freight"]},
+            "Reapply Shop");
+        const uid = first.uid;
+        const again = await functions.submitBusinessApplication.run({
+          auth: {uid, token: {}},
+          data: {
+            ownerName: "Applicant", ownerPhone: "+224620000077",
+            businessName: "Reapply Shop", enabledServices: [],
+            requestInventory: true, addressLine1: "1 Test Road",
+            city: "Conakry", country: "Guinea",
+          },
+        });
+        assert.equal(again.businessId, first.answer.businessId);
+        assert.deepEqual(again.enabledServices, ["freight"]);
+        const stored = (await db.collection("businesses")
+            .doc(first.answer.businessId).get()).data();
+        assert.deepEqual(stored.enabledServices, ["freight"]);
+        assert.equal(stored.requestedInventory, true);
       });
 });
 
