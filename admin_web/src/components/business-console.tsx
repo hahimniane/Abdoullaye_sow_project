@@ -77,7 +77,9 @@ import { useServerTotals } from "@/lib/use-server-totals";
 import { TotalsStatus } from "@/components/totals-status";
 import {
   buildBusinessSidebarGroups,
+  businessPermissionHeld,
   businessSidebarTabs,
+  businessTabServiceAllowed,
   normalizePinnedTabs,
   type BusinessSidebarTab,
   type BusinessTab,
@@ -290,8 +292,7 @@ export function BusinessConsole({
   const visibleTabs = useMemo(() => {
     return businessSidebarTabs.filter((tab) => {
       const serviceAllowed =
-        !tab.service ||
-        services.has(tab.service) ||
+        businessTabServiceAllowed(tab, (id) => services.has(id)) ||
         (tab.id === "listings" && hasListings);
       const permissionAllowed =
         !tab.permission || hasBusinessPermission(profile, tab.permission);
@@ -1695,7 +1696,7 @@ function hasBusinessPermission(profile: UserProfile, permission: string) {
   const permissions = Array.isArray(profile.businessPermissions)
     ? profile.businessPermissions.map((item) => text(item, ""))
     : [];
-  return permissions.includes(permission);
+  return businessPermissionHeld(permissions, permission);
 }
 
 type AttentionRow = {row: FirestoreRow; tab: BusinessTab};

@@ -14,16 +14,21 @@ import { businessSidebarTabs } from "./business-sidebar.ts";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const consoleSource = read("../components/business-console.tsx");
 const panelSource = read("../components/business/invoices-panel.tsx");
+const sidebarSource = read("./business-sidebar.ts");
 const backendSource = read("../../../my_flutter_app/functions/index.js");
 const rulesSource = read("../../../my_flutter_app/firestore.rules");
 
-test("the Invoices tab sits under Manage, gated by the ledger permission and no service", () => {
+test("the Invoices tab sits under Manage, gated by its own permission (ledger implies it) and no service", () => {
   const tab = businessSidebarTabs.find((entry) => entry.id === "invoices");
   assert.ok(tab, "no invoices tab");
   assert.equal(tab.label, "Invoices");
   assert.equal(tab.group, "manage");
-  assert.equal(tab.permission, "ledger");
+  assert.equal(tab.permission, "invoices");
   assert.equal(tab.service, undefined, "an invoice is not tied to a sold service");
+  assert.equal(tab.services, undefined, "an invoice is not tied to any sold service");
+  // Staff who held the ledger permission when Invoices was gated on it keep the tab.
+  assert.match(sidebarSource, /invoices: \["ledger"\]/);
+  assert.match(consoleSource, /return businessPermissionHeld\(permissions, permission\);/);
 });
 
 test("the console routes the tab to InvoicesPanel with the business identity", () => {
@@ -47,8 +52,9 @@ test("the panel reads the three collections by business and writes only through 
     assert.match(backendSource, new RegExp(`exports\\.${callable} = onCall\\(`), `backend lacks ${callable}`);
   }
   assert.doesNotMatch(panelSource, /setDoc\(|updateDoc\(|addDoc\(|deleteDoc\(/, "no client-side writes");
-  // Every invoice callable is gated on the ledger permission.
-  assert.match(backendSource, /const INVOICE_SECTION = "ledger";/);
+  // Every invoice callable is gated on a business permission section (the
+  // backend accepts "invoices" or "ledger" - see the permission-implies test).
+  assert.match(backendSource, /const INVOICE_SECTIONS? = /);
 });
 
 test("the paper leaves as a PDF file or as WhatsApp text, never a raw page", () => {
