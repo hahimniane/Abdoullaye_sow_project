@@ -286,6 +286,48 @@ test("collection inference covers live payloads without relatedCollection", () =
   );
 });
 
+test("an inventory sale alert opens the business Inventory sales tab on that sale", () => {
+  const data = {
+    type: "inventory_sale",
+    businessId: "biz-1",
+    saleId: "sale-9",
+    storeId: "s-down",
+    relatedCollection: "inventorySales",
+    relatedId: "sale-9",
+  };
+  assert.deepEqual(businessTargetForNotification(data), {
+    tab: "inventory",
+    focusId: "sale-9",
+    panelView: "sales",
+    storeId: "s-down",
+  });
+  // A single-store business sends no store; an older payload with only saleId still opens the sale.
+  const single = businessTargetForNotification({type: "inventory_sale", saleId: "sale-2", storeId: ""});
+  assert.equal(single.tab, "inventory");
+  assert.equal(single.focusId, "sale-2");
+  assert.equal(single.storeId, "");
+  assert.deepEqual(focusFromNotification(data), {collection: "inventorySales", id: "sale-9"});
+  assert.equal(collectionFromNotification({type: "inventory_sale", saleId: "x"}), "inventorySales");
+  // No sale id: the Sales tab still opens, with nothing to focus.
+  assert.equal(businessTargetForNotification({type: "inventory_sale"}).focusId, "");
+  // The customer and admin consoles ignore it.
+  assert.deepEqual(customerTargetForNotification(data), {tab: "home"});
+  assert.deepEqual(adminTargetForNotification(data), {tab: "today"});
+});
+
+test("the business console hands an inventory sale alert to the Inventory panel", () => {
+  const business = readFileSync("src/components/business-console.tsx", "utf8");
+  const panel = readFileSync("src/components/business/inventory-panel.tsx", "utf8");
+  const list = readFileSync("src/components/business/inventory-sales-list.tsx", "utf8");
+  assert.match(business, /saleFocusFrom\(target\.focusId, target\.storeId/);
+  assert.match(business, /focusSale=\{notificationSale\}/);
+  assert.match(panel, /setView\("sales"\)/);
+  assert.match(panel, /saleFocusStoreFilter\(saleFocus, access\)/);
+  assert.match(panel, /focus=\{saleFocus\}/);
+  assert.match(list, /useLiveDocRead\("inventorySales"/);
+  assert.match(list, /That sale is not available\./);
+});
+
 test("the consoles call the shared router instead of a local switch", () => {
   const customer = readFileSync("src/components/customer-console.tsx", "utf8");
   const business = readFileSync("src/components/business-console.tsx", "utf8");

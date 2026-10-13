@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { Archive, ArchiveRestore, ArrowRightLeft, BadgeCheck, Boxes, Pencil, Plus, RefreshCw, Store, Tag, Tags } from "lucide-react";
 
@@ -55,12 +55,14 @@ import {
   productDisplayName,
   resolveStoreAccess,
   runInventoryCall,
+  saleFocusStoreFilter,
   withCurrentBrand,
   type InventoryFilter,
   type InventoryItem,
   type InventoryListScope,
   type InventorySale,
   type InventoryViewer,
+  type SaleFocus,
 } from "@/lib/inventory";
 import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 import { statusPillClass } from "@/lib/status-pill";
@@ -78,6 +80,8 @@ type InventoryPanelProps = {
   previewMode: boolean;
   /** Who is looking: the owner, or staff with a home store (and maybe all stores). */
   viewer: InventoryViewer;
+  /** A sale alert was opened: show the Sales tab with this sale first. A new object per alert. */
+  focusSale?: SaleFocus | null;
 };
 
 /**
@@ -93,11 +97,12 @@ type InventoryPanelProps = {
  * stores) can move stock between stores. Staff who work in one store see only
  * that store everywhere, with no filter. The owner alone manages the stores.
  */
-export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPanelProps) {
+export function InventoryPanel({ businessId, previewMode, viewer, focusSale = null }: InventoryPanelProps) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const enabled = Boolean(businessId && !previewMode);
 
-  const [view, setView] = useState<View>("products");
+  const [view, setView] = useState<View>(focusSale ? "sales" : "products");
+  const [saleFocus, setSaleFocus] = useState<SaleFocus | null>(focusSale);
   const [filter, setFilter] = useState<InventoryFilter>("all");
   const [categoryFilterRaw, setCategoryFilter] = useState("");
   const [brandFilterRaw, setBrandFilter] = useState("");
@@ -132,6 +137,26 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
   // Same for brands: a list that could not be read leaves the brand tools out and the form takes a typed brand.
   const brandsAvailable = !brandsRead.error;
   const resolveBrand = useMemo(() => brandResolver(brands), [brands]);
+
+  // A sale alert (a new one, or the same one tapped again) opens the Sales tab on that sale. Whoever sees every
+  // store of a multi-store business is also narrowed to the sale's store, once the stores are known.
+  const [prevFocus, setPrevFocus] = useState<SaleFocus | null>(focusSale);
+  if (focusSale !== prevFocus) {
+    setPrevFocus(focusSale);
+    if (focusSale) {
+      setSaleFocus(focusSale);
+      setView("sales");
+      setSelectedId("");
+    }
+  }
+  const storeAppliedKey = useRef(-1);
+  useEffect(() => {
+    if (!saleFocus || storeAppliedKey.current === saleFocus.key) return;
+    const narrowTo = saleFocusStoreFilter(saleFocus, access);
+    if (!narrowTo) return;
+    storeAppliedKey.current = saleFocus.key;
+    setStoreFilter(narrowTo);
+  }, [saleFocus, access]);
 
   // The store the lists are looking at: the chosen one for whoever sees all, the home store for the rest, none for one store.
   const storeFilter = access.multi && access.canSeeAll && access.stores.some((store) => store.id === storeFilterRaw) ? storeFilterRaw : "";
@@ -254,8 +279,8 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
           tabIndex={0}
           className={`segment ${view === id ? "active" : ""}`}
           aria-pressed={view === id}
-          onClick={() => { setView(id); setSelectedId(""); }}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setView(id); setSelectedId(""); } }}
+          onClick={() => { setView(id); setSelectedId(""); setSaleFocus(null); }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setView(id); setSelectedId(""); setSaleFocus(null); } }}
         >
           {label}{count !== null && <b data-no-translate>{count}</b>}
         </span>
@@ -357,6 +382,7 @@ export function InventoryPanel({ businessId, previewMode, viewer }: InventoryPan
                   storeFilter={storeFilter}
                   onStoreFilter={setStoreFilter}
                   onVoid={(sale) => { setVoidSale(sale); setModal("void"); }}
+                  focus={saleFocus}
                 />
               ) : (
                 <>

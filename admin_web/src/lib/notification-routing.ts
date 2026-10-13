@@ -40,6 +40,8 @@ export type BusinessPanelView =
   | "jobs"
   | "requests"
   | "shipments"
+  // Inventory: the Sales tab, with one sale focused.
+  | "sales"
   // Parking's month-end bills for one month, e.g. "month_end:2026-09".
   | `month_end:${string}`;
 
@@ -48,6 +50,8 @@ export type BusinessNotificationTarget = {
   focusId?: string;
   panelView?: BusinessPanelView;
   caseId?: string;
+  /** Inventory sale alerts: the store the sale was rung up in ("" = single-store business). */
+  storeId?: string;
 };
 
 export type AdminNotificationTarget = {
@@ -98,6 +102,7 @@ const TYPE_COLLECTIONS: Record<string, string> = {
   barrel_pool_join: "barrelPools",
   barrel_pool_balance_due: "barrelPools",
   deposit_refund_due: "barrelPools",
+  inventory_sale: "inventorySales",
 };
 
 function firstText(...values: Array<string | undefined>): string {
@@ -119,6 +124,7 @@ export function collectionForNotificationType(type: string): string {
 export function recordIdFromNotification(data: NotificationData): string {
   return firstText(
     data.relatedId,
+    data.saleId,
     data.shipmentId,
     data.requestId,
     data.reservationId,
@@ -265,6 +271,14 @@ export function businessTargetForNotification(
       return {tab: "viewings", focusId};
     case "car_purchase_status":
       return {tab: "purchases", focusId};
+    // A sale rung up in the app: the Inventory sales tab with that sale open.
+    case "inventory_sale":
+      return {
+        tab: "inventory",
+        focusId,
+        panelView: "sales",
+        storeId: firstText(data.storeId),
+      };
     case "transport_opportunity":
     case "transport_quote_lost":
       return {tab: "transport", focusId, panelView: "opportunities"};

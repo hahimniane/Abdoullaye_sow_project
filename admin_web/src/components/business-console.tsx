@@ -87,7 +87,7 @@ import {
 import { buildBusinessVerificationChecklist } from "@/lib/business-verification";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
-import { inventoryViewerFromProfile } from "@/lib/inventory";
+import { inventoryViewerFromProfile, saleFocusFrom, type SaleFocus } from "@/lib/inventory";
 import {
   resolveBusinessPayoutStatus,
   type BusinessPayoutStatus,
@@ -216,6 +216,12 @@ export function BusinessConsole({
   const [notificationFocusView, setNotificationFocusView] =
     useState<BusinessPanelView | "">("");
   const [notificationCaseId, setNotificationCaseId] = useState("");
+  // An inventory sale alert: a new object per click, so tapping the same alert again re-opens its sale.
+  const [notificationSale, setNotificationSale] = useState<SaleFocus | null>(null);
+  // Leaving Inventory forgets the alert, so coming back by the sidebar opens the Products tab as usual.
+  useEffect(() => {
+    if (activeTab !== "inventory") setNotificationSale(null);
+  }, [activeTab]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarFilter, setSidebarFilter] = useState("");
   const [pinnedTabs, setPinnedTabs] = useState<BusinessTab[]>(readPinnedTabs);
@@ -503,6 +509,11 @@ export function BusinessConsole({
               setNotificationFocusId(target.focusId ?? "");
               setNotificationFocusView(target.panelView ?? "");
               setNotificationCaseId(target.caseId ?? "");
+              setNotificationSale(
+                target.panelView === "sales"
+                  ? saleFocusFrom(target.focusId, target.storeId, Date.now())
+                  : null,
+              );
             }}
             uid={firebaseUser.uid}
           />
@@ -704,6 +715,7 @@ export function BusinessConsole({
               business={business}
               previewMode={previewMode}
               viewer={inventoryViewerFromProfile(profile)}
+              focusSale={notificationSale}
             />
           )}
           {activeTab === "destinations" && (

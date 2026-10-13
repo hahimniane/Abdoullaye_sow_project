@@ -497,6 +497,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "L'e-mail donné avec la demande",
   "Enter the email you gave with the request.":
     "Entrez l'e-mail donné avec la demande.",
+  "That sale is not available.": "Cette vente n’est pas disponible.",
   "That did not work. Check the email and try again.":
     "Cela n'a pas fonctionné. Vérifiez l'e-mail et réessayez.",
   "Continue to booking": "Continuer vers la réservation",

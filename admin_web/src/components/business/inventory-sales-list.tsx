@@ -1,11 +1,11 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, RefreshCw, Undo2 } from "lucide-react";
 
 import { InventoryStoreFilter } from "@/components/business/inventory-store-filter";
 import { LoadMoreButton } from "@/components/show-more";
-import { useInventorySales } from "@/lib/business-data";
+import { useInventorySales, useLiveDocRead } from "@/lib/business-data";
 import { currentLanguage, formatDateTime } from "@/lib/format";
 import { moneyText } from "@/lib/invoice-ledger";
 import {
@@ -13,11 +13,13 @@ import {
   itemCountText,
   saleLinesSummary,
   saleStoreId,
+  saleVisibleToViewer,
   salesInStore,
   soldByText,
   storeNameIndex,
   voidedByText,
   type InventorySale,
+  type SaleFocus,
   type StoreAccess,
   productDisplayName,
 } from "@/lib/inventory";
@@ -32,7 +34,17 @@ import { statusPillClass } from "@/lib/status-pill";
  * A business with several stores gets a Store column; whoever sees every
  * store also gets a store filter. Staff of one store read only that store's
  * sales (the query is theirs), and have neither.
+ *
+ * A sale alert opens one sale (`focus`): read by id, so it shows even when it
+ * is not in the page loaded so far, put first, opened and briefly
+ * highlighted. One that cannot be read or may not be shown to this person
+ * says so instead, and the list opens as usual.
  */
+/** A sale opened from a notification waits this long to be read before it counts as not available. */
+const FOCUS_READ_TIMEOUT_MS = 15_000;
+/** How long the opened sale stays highlighted. */
+const FOCUS_HIGHLIGHT_MS = 4_000;
+
 export function InventorySalesList({
   businessId,
   enabled,
@@ -42,6 +54,7 @@ export function InventorySalesList({
   storeFilter,
   onStoreFilter,
   onVoid,
+  focus = null,
 }: {
   businessId: string;
   enabled: boolean;
@@ -52,6 +65,8 @@ export function InventorySalesList({
   storeFilter: string;
   onStoreFilter: (storeId: string) => void;
   onVoid: (sale: InventorySale) => void;
+  /** The sale a notification asked for, if any. */
+  focus?: SaleFocus | null;
 }) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const sales = useInventorySales(businessId, enabled && !access.needsHomeStore, access.scopedStoreId);
@@ -62,20 +77,61 @@ export function InventorySalesList({
   const list = useMemo(() => (narrowed ? salesInStore(all, storeFilter, access.stores) : all), [all, narrowed, storeFilter, access.stores]);
   const nameOfStore = (sale: InventorySale) => sale.storeName || storeNames.get(saleStoreId(sale, access.stores)) || "";
 
+  // The sale a notification asked for.
+  const focusRead = useLiveDocRead("inventorySales", focus?.saleId ?? "", enabled && Boolean(focus));
+  const focusedSale = useMemo(
+    () => (focus && focusRead.row && saleVisibleToViewer(focusRead.row, businessId, access) ? inventorySaleFromRow(focusRead.row) : null),
+    [focus, focusRead.row, businessId, access],
+  );
+  const [timedOutKey, setTimedOutKey] = useState(-1);
+  const focusKey = focus?.key ?? -1;
+  const focusPending = Boolean(focus) && !focusRead.settled;
+  useEffect(() => {
+    if (!focusPending) return undefined;
+    const timer = window.setTimeout(() => setTimedOutKey(focusKey), FOCUS_READ_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [focusPending, focusKey]);
+  const focusUnavailable = Boolean(focus) && !focusedSale && (focusRead.settled || timedOutKey === focusKey);
+  // Opened and highlighted when the alert arrives; the highlight fades by itself.
+  const [flashId, setFlashId] = useState("");
+  useEffect(() => {
+    if (!focus) return undefined;
+    setOpenId(focus.saleId);
+    setFlashId(focus.saleId);
+    const timer = window.setTimeout(() => setFlashId(""), FOCUS_HIGHLIGHT_MS);
+    return () => window.clearTimeout(timer);
+  }, [focus]);
+  // Scrolled into view once it has rendered (once per alert).
+  const scrolledKey = useRef(-1);
+  const focusedId = focusedSale?.id ?? "";
+  useEffect(() => {
+    if (!focusedId || scrolledKey.current === focusKey) return;
+    const row = document.getElementById(`ivt-sale-${focusedId}`);
+    if (!row) return;
+    scrolledKey.current = focusKey;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusedId, focusKey]);
+  // The opened sale leads the list; it is not shown twice.
+  const rows = useMemo(
+    () => (focusedSale ? [focusedSale, ...list.filter((sale) => sale.id !== focusedSale.id)] : list),
+    [focusedSale, list],
+  );
+
   return (
     <>
       {sales.error && <div className="lst-form-error" role="alert">{sales.error}</div>}
+      {focusUnavailable && <div className="lst-form-error" role="status">That sale is not available.</div>}
       <p className="panel-lede">Every sale rung up at the counter in the Laawol app. Open one to see what each product was listed at and what it sold for. Voiding a sale puts its stock back and keeps it here, marked.</p>
       {access.multi && access.canSeeAll && (
         <div className="panel-tools">
           <InventoryStoreFilter stores={access.stores} value={storeFilter} onChange={onStoreFilter} />
         </div>
       )}
-      {sales.loading && all.length === 0 ? (
+      {sales.loading && all.length === 0 && !focusedSale ? (
         <div className="empty-state"><RefreshCw className="spin" size={16} /> Loading…</div>
-      ) : all.length === 0 ? (
+      ) : all.length === 0 && !focusedSale ? (
         <div className="empty-state">No sales yet. They appear here once staff sell a product in the app.</div>
-      ) : list.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="empty-state">
           No sales from this store in the sales loaded so far.
           {sales.hasMore && <> <LoadMoreButton hasMore={sales.hasMore} loading={sales.loadingMore} onLoadMore={sales.loadMore} /></>}
@@ -84,7 +140,7 @@ export function InventorySalesList({
         <div className="mini-table">
           <div className={`ctn-table ivt-sales-table${access.multi ? " ivt-with-store" : ""}`}>
             <div className="mini-table-head"><span>Sale</span><span>Products</span>{access.multi && <span>Store</span>}<span>Paid with</span><span>Total</span><span aria-hidden="true"></span></div>
-            {list.map((sale) => {
+            {rows.map((sale) => {
               const open = openId === sale.id;
               const summary = saleLinesSummary(sale);
               const seller = staffName(sale.soldByStaffId);
@@ -92,7 +148,8 @@ export function InventorySalesList({
               return (
                 <Fragment key={sale.id}>
                   <div
-                    className={`mini-table-row ctn-clickable${sale.voided ? " ivt-voided" : ""}`}
+                    id={`ivt-sale-${sale.id}`}
+                    className={`mini-table-row ctn-clickable${sale.voided ? " ivt-voided" : ""}${flashId === sale.id ? " ivt-focused" : ""}`}
                     role="button"
                     tabIndex={0}
                     aria-expanded={open}

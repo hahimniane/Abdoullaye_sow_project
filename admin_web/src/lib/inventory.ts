@@ -1988,6 +1988,43 @@ export function salesInStore(sales: readonly InventorySale[], storeId: string, s
   return sales.filter((sale) => (sale.storeId || main) === storeId);
 }
 
+/**
+ * A sale a notification asked to open. `key` is new on every click, so the
+ * same alert tapped twice is a fresh request (the person may have moved on).
+ */
+export type SaleFocus = { saleId: string; storeId: string; key: number };
+
+/** The focus a sale alert asks for; none without a sale id. */
+export function saleFocusFrom(saleId: unknown, storeId: unknown, key: number): SaleFocus | null {
+  const id = text(saleId);
+  if (!id) return null;
+  return { saleId: id, storeId: text(storeId), key };
+}
+
+/**
+ * The store filter a sale alert applies: its store, but only for whoever sees
+ * every store of a multi-store business and only when that store exists.
+ * Staff of one store (and single-store businesses) keep the view they have.
+ */
+export function saleFocusStoreFilter(focus: Pick<SaleFocus, "storeId"> | null, access: StoreAccess): string {
+  if (!focus || !focus.storeId) return "";
+  if (!access.multi || !access.canSeeAll) return "";
+  return access.stores.some((store) => store.id === focus.storeId) ? focus.storeId : "";
+}
+
+/**
+ * Whether a sale opened by id may be shown to this viewer: the same reach as
+ * the sales list and the rules. Another business's sale never; staff tied to
+ * one store of a multi-store business, only that store's sales; staff with no
+ * store yet, nothing.
+ */
+export function saleVisibleToViewer(row: unknown, businessId: string, access: StoreAccess): boolean {
+  const r = asRow(row);
+  if (!businessId || text(r.businessId) !== businessId) return false;
+  if (access.needsHomeStore) return false;
+  return !access.scopedStoreId || text(r.storeId) === access.scopedStoreId;
+}
+
 // ---------------------------------------------------------------------------
 // v2 sentences with names or numbers in them, built per language.
 // ---------------------------------------------------------------------------

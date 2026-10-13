@@ -626,6 +626,9 @@ import {
   renameInventoryCategoryRequest,
   resolveStoreAccess,
   saleStoreId,
+  saleFocusFrom,
+  saleFocusStoreFilter,
+  saleVisibleToViewer,
   salesInStore,
   setInventoryStaffAccessRequest,
   staffAccessChanged,
@@ -1411,4 +1414,49 @@ test("the brand refusals read as friendly sentences", () => {
 test("quick entry's confirmation is built per language", () => {
   assert.equal(savedNextText("Jordan 11"), "Saved Jordan 11. Add the next one.");
   assert.equal(savedNextText("Jordan 11", "fr"), "Jordan 11 enregistré. Ajoutez le suivant.");
+});
+
+test("a sale alert's focus: needs a sale id, keeps its store, is new on every click", () => {
+  assert.equal(saleFocusFrom("", "s-down", 1), null);
+  assert.equal(saleFocusFrom(undefined, "s-down", 1), null);
+  assert.deepEqual(saleFocusFrom(" sale-1 ", " s-down ", 7), { saleId: "sale-1", storeId: "s-down", key: 7 });
+  // A single-store business sends no store.
+  assert.deepEqual(saleFocusFrom("sale-1", "", 2), { saleId: "sale-1", storeId: "", key: 2 });
+  assert.notEqual(saleFocusFrom("sale-1", "", 2), saleFocusFrom("sale-1", "", 2));
+});
+
+test("a sale alert narrows the list to its store only for whoever sees every store", () => {
+  const focus = { storeId: "s-down" };
+  const owner = resolveStoreAccess({ isOwner: true, homeStoreId: "", allStores: false }, storeRows);
+  const roaming = resolveStoreAccess({ isOwner: false, homeStoreId: "", allStores: true }, storeRows);
+  const staff = resolveStoreAccess({ isOwner: false, homeStoreId: "s-main", allStores: false }, storeRows);
+  assert.equal(saleFocusStoreFilter(focus, owner), "s-down");
+  assert.equal(saleFocusStoreFilter(focus, roaming), "s-down");
+  // Staff of another store keep their own view (the sale itself is then "not available").
+  assert.equal(saleFocusStoreFilter(focus, staff), "");
+  // A store that is gone, no store, a single-store business, no alert: no filter.
+  assert.equal(saleFocusStoreFilter({ storeId: "s-gone" }, owner), "");
+  assert.equal(saleFocusStoreFilter({ storeId: "" }, owner), "");
+  assert.equal(saleFocusStoreFilter(focus, resolveStoreAccess({ isOwner: true, homeStoreId: "", allStores: false }, [storeRows[0]])), "");
+  assert.equal(saleFocusStoreFilter(null, owner), "");
+});
+
+test("a sale opened by id is shown only to someone whose list could show it", () => {
+  const owner = resolveStoreAccess({ isOwner: true, homeStoreId: "", allStores: false }, storeRows);
+  const downStaff = resolveStoreAccess({ isOwner: false, homeStoreId: "s-down", allStores: false }, storeRows);
+  const homeless = resolveStoreAccess({ isOwner: false, homeStoreId: "", allStores: false }, storeRows);
+  const single = resolveStoreAccess({ isOwner: false, homeStoreId: "", allStores: false }, [storeRows[0]]);
+  const downSale = { id: "a", businessId: "biz-1", storeId: "s-down" };
+  const mainSale = { id: "b", businessId: "biz-1", storeId: "s-main" };
+  assert.equal(saleVisibleToViewer(downSale, "biz-1", owner), true);
+  assert.equal(saleVisibleToViewer(mainSale, "biz-1", owner), true);
+  assert.equal(saleVisibleToViewer(downSale, "biz-1", downStaff), true);
+  assert.equal(saleVisibleToViewer(mainSale, "biz-1", downStaff), false);
+  assert.equal(saleVisibleToViewer(downSale, "biz-1", homeless), false);
+  // Another business's sale never; a missing business or row never.
+  assert.equal(saleVisibleToViewer(downSale, "biz-2", owner), false);
+  assert.equal(saleVisibleToViewer(downSale, "", owner), false);
+  assert.equal(saleVisibleToViewer(null, "biz-1", owner), false);
+  // A single-store business: every inventory staff member, whatever the sale's store field says.
+  assert.equal(saleVisibleToViewer({ businessId: "biz-1" }, "biz-1", single), true);
 });

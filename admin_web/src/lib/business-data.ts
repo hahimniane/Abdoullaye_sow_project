@@ -123,6 +123,15 @@ export function useBusinessHasRecords(name: string, businessId: string, enabled:
  * screen even when it leaves the filtered page it was picked from.
  */
 export function useLiveDoc(name: string, id: string, enabled: boolean): FirestoreRow | null {
+  return useLiveDocRead(name, id, enabled).row;
+}
+
+/**
+ * A live document with its read state: `settled` turns true once the server
+ * has answered (the document, or "missing"/"refused" as a null row), so a
+ * caller can tell "still loading" from "not available".
+ */
+export function useLiveDocRead(name: string, id: string, enabled: boolean): { row: FirestoreRow | null; settled: boolean } {
   const [state, setState] = useState<{ key: string; row: FirestoreRow | null }>({ key: "", row: null });
   const key = `${name}/${id}`;
   const active = enabled && Boolean(id);
@@ -134,7 +143,8 @@ export function useLiveDoc(name: string, id: string, enabled: boolean): Firestor
       () => setState({ key, row: null }),
     );
   }, [active, id, key, name]);
-  return active && state.key === key ? state.row : null;
+  const settled = active && state.key === key;
+  return { row: settled ? state.row : null, settled };
 }
 
 /** Midnight UTC of today: a stay whose end is before it has ended. */
