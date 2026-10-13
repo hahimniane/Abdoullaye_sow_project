@@ -34,7 +34,25 @@ describe("notification settings helpers", () => {
           supportMessages: false,
           supportEscalations: false,
           supportCaseUpdates: false,
+          inventorySales: true,
         },
+    );
+  });
+
+  it("keeps Sales at my store on unless it is switched off", () => {
+    assert.equal(normalizeNotificationPreferences(undefined).inventorySales,
+        true);
+    assert.equal(normalizeNotificationPreferences({}).inventorySales, true);
+    assert.equal(
+        normalizeNotificationPreferences({inventorySales: false})
+            .inventorySales,
+        false,
+    );
+    // Turning business activity off does not silence sales, and vice versa.
+    assert.equal(
+        normalizeNotificationPreferences({businessActivity: false})
+            .inventorySales,
+        true,
     );
   });
 

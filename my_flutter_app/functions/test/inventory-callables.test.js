@@ -2737,3 +2737,127 @@ describe("brands", () => {
         });
   });
 });
+
+describe("sale notifications", () => {
+  // Who was told about a sale: one notificationDeliveries row (email channel,
+  // provider not configured in the emulator) per person told.
+  const toldAbout = async (saleId) => {
+    const snap = await db.collection("notificationDeliveries")
+        .where("data.saleId", "==", saleId).get();
+    return snap.docs.map((d) => d.data());
+  };
+  const recipientsOf = async (saleId) =>
+    [...new Set((await toldAbout(saleId)).map((d) => d.recipientUid))].sort();
+
+  describe("in a business with several stores", () => {
+    const NB = "inv-notify-biz";
+    const OWN = "inv-notify-owner";
+    const A = "inv-notify-a";
+    const B = "inv-notify-b";
+    const C = "inv-notify-c";
+    const D = "inv-notify-d";
+    const MUTED = "inv-notify-muted";
+    const s = callIn(NB);
+    const MAIN = `${NB}_main`;
+    let itemId;
+
+    before(async () => {
+      const clerk = {role: "staff", businessId: NB,
+        businessPermissions: ["inventory"]};
+      await seedBusiness(NB, {
+        [OWN]: {role: "businessOwner", businessId: NB},
+        [A]: {...clerk, fullName: "Mamadou Diallo"},
+        [B]: clerk, [C]: clerk, [D]: clerk, [MUTED]: {...clerk,
+          notificationPreferences: {inventorySales: false}},
+      });
+      itemId = (await s("createInventoryItem", {name: "11", brand: "Jordan",
+        priceCents: 6000, quantity: 20}, OWN)).itemId;
+      const annex = (await s("createInventoryStore", {name: "Annex"}, OWN))
+          .storeId;
+      await s("updateInventoryStore", {storeId: MAIN, name: "Downtown"}, OWN);
+      for (const [userId, homeStoreId, allStores] of [[A, MAIN, false],
+        [B, MAIN, false], [C, annex, true], [D, annex, false],
+        [MUTED, MAIN, false]]) {
+        await s("setInventoryStaffAccess", {userId, homeStoreId, allStores},
+            OWN);
+      }
+    });
+
+    it("tells the owner, the store's staff and all-stores staff, not the " +
+        "seller nor another store", async () => {
+      const clientRequestId = requestId();
+      const sold = await s("recordInventorySale", {clientRequestId,
+        paymentMethod: "cash",
+        lines: [{itemId, quantity: 1, soldPriceCents: 6000}]}, A);
+      assert.deepEqual(await recipientsOf(sold.saleId), [OWN, B, C].sort());
+      const rows = await toldAbout(sold.saleId);
+      for (const row of rows) {
+        assert.equal(row.preferenceKey, "inventorySales");
+        assert.equal(row.title, "Sale at Downtown");
+        assert.equal(row.body, "Mamadou sold Jordan 11 · $60.00");
+        assert.deepEqual(row.data, {type: "inventory_sale", businessId: NB,
+          saleId: sold.saleId, storeId: MAIN,
+          relatedCollection: "inventorySales", relatedId: sold.saleId});
+      }
+      // The in-app inbox gets it too.
+      const inbox = await db.collection("users").doc(B)
+          .collection("notifications")
+          .where("data.saleId", "==", sold.saleId).get();
+      assert.equal(inbox.size, 1);
+      assert.equal(inbox.docs[0].data().title, "Sale at Downtown");
+      const claim = (await db.collection("inventorySaleNotifications")
+          .doc(sold.saleId).get()).data();
+      assert.deepEqual([...claim.recipientUids].sort(), [OWN, B, C].sort());
+
+      // A retried call is the same sale and tells nobody again.
+      const again = await s("recordInventorySale", {clientRequestId,
+        paymentMethod: "cash",
+        lines: [{itemId, quantity: 1, soldPriceCents: 6000}]}, A);
+      assert.equal(again.replayed, true);
+      assert.equal((await toldAbout(sold.saleId)).length, rows.length);
+
+      // Voiding it notifies nobody.
+      await s("voidInventorySale", {saleId: sold.saleId}, OWN);
+      assert.equal((await toldAbout(sold.saleId)).length, rows.length);
+    });
+
+    it("tells the seller's store when the owner sells there", async () => {
+      const sold = await s("recordInventorySale", {clientRequestId:
+        requestId(), paymentMethod: "cash", storeId: MAIN,
+      lines: [{itemId, quantity: 1, soldPriceCents: 6000}]}, OWN);
+      assert.deepEqual(await recipientsOf(sold.saleId), [A, B, C].sort());
+    });
+  });
+
+  it("tells every inventory staff member and the owner of a single-store " +
+      "business", async () => {
+    const SB = "inv-notify-single";
+    const OWN = "inv-notify-single-owner";
+    const SELLER = "inv-notify-single-seller";
+    const OTHER = "inv-notify-single-other";
+    const LEDGER = "inv-notify-single-ledger";
+    const s = callIn(SB);
+    await seedBusiness(SB, {
+      [OWN]: {role: "businessOwner", businessId: SB},
+      [SELLER]: {role: "staff", businessId: SB,
+        businessPermissions: ["inventory"], fullName: "Awa Ndiaye"},
+      [OTHER]: {role: "staff", businessId: SB,
+        businessPermissions: ["inventory"]},
+      [LEDGER]: {role: "staff", businessId: SB,
+        businessPermissions: ["ledger"]},
+    });
+    const first = (await s("createInventoryItem", {name: "Cap",
+      priceCents: 1000, quantity: 5}, OWN)).itemId;
+    const second = (await s("createInventoryItem", {name: "Socks",
+      priceCents: 500, quantity: 5}, OWN)).itemId;
+    const sold = await s("recordInventorySale", {clientRequestId: requestId(),
+      paymentMethod: "cash", lines: [
+        {itemId: first, quantity: 2, soldPriceCents: 1000},
+        {itemId: second, quantity: 1, soldPriceCents: 500}]}, SELLER);
+    assert.deepEqual(await recipientsOf(sold.saleId), [OWN, OTHER].sort());
+    const [row] = await toldAbout(sold.saleId);
+    assert.equal(row.title, "New sale");
+    assert.equal(row.body, "Awa sold 2 × Cap +1 more · $25.00");
+    assert.equal(row.data.storeId, "");
+  });
+});

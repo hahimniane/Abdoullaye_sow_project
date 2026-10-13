@@ -722,6 +722,11 @@ service cloud.firestore {
     match /inventoryBrandKeys/{keyId} {
       allow read, write: if false;
     }
+    // One claim per sale so its "Sale at ..." push goes out once: the
+    // server's alone.
+    match /inventorySaleNotifications/{saleId} {
+      allow read, write: if false;
+    }
     // Once a business has two or more active stores, a staff member sees only
     // their home store's stock rows, sales and stock movements: those queries
     // must carry `where storeId == <home store>`. The owner, a platform admin

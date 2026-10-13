@@ -1528,3 +1528,161 @@ describe("inventory v3: brands", () => {
     });
   });
 });
+
+describe("inventory: sale notifications", () => {
+  const BIZ = "biz-1";
+  const STORE = "store-north";
+  const person = (id, extra = {}) => ({
+    id, businessId: BIZ, role: "staff", businessPermissions: ["inventory"],
+    fullName: `${id} Person`, ...extra,
+  });
+  const sale = (extra = {}) => ({
+    id: "sale-1", businessId: BIZ, storeId: STORE, storeName: "Main store",
+    totalCents: 6000,
+    lines: [{name: "11", brand: "Jordan", quantity: 1, soldPriceCents: 6000}],
+    ...extra,
+  });
+  const people = [
+    person("seller", {fullName: "Mamadou Diallo",
+      inventoryHomeStoreId: STORE}),
+    person("owner", {role: "businessOwner", businessPermissions: []}),
+    person("same-store", {inventoryHomeStoreId: STORE}),
+    person("all-stores", {inventoryHomeStoreId: "store-south",
+      inventoryAllStores: true}),
+    person("other-store", {inventoryHomeStoreId: "store-south"}),
+    person("no-home"),
+    person("ledger-only", {businessPermissions: ["ledger"],
+      inventoryHomeStoreId: STORE}),
+    person("muted", {inventoryHomeStoreId: STORE,
+      notificationPreferences: {inventorySales: false}}),
+    person("customer", {role: "customer"}),
+    person("foreign", {businessId: "biz-2", inventoryAllStores: true}),
+  ];
+  const plan = (extra = {}) => inv.planSaleNotification({
+    sale: sale(), users: people, sellerUid: "seller", multiStore: true,
+    ...extra,
+  });
+  const uids = (out) => out.recipients.map((r) => r.uid);
+
+  it("reaches the owner, the store's staff and all-stores staff", () => {
+    assert.deepEqual(uids(plan()), ["owner", "all-stores", "same-store"]);
+  });
+
+  it("never tells the seller about their own sale", () => {
+    assert.ok(!uids(plan()).includes("seller"));
+    // The owner selling is not told either; the staff of the store are.
+    assert.deepEqual(uids(plan({sellerUid: "owner"})),
+        ["all-stores", "same-store", "seller"]);
+  });
+
+  it("skips other stores, other businesses, customers and staff without " +
+      "the inventory permission", () => {
+    const out = uids(plan());
+    for (const uid of ["other-store", "no-home", "ledger-only", "customer",
+      "foreign"]) {
+      assert.ok(!out.includes(uid), uid);
+    }
+  });
+
+  it("skips anyone who switched Sales at my store off", () => {
+    assert.ok(!uids(plan()).includes("muted"));
+    const owner = people.map((p) => p.id === "owner" ?
+      {...p, notificationPreferences: {inventorySales: false,
+        businessActivity: true}} : p);
+    assert.ok(!uids(plan({users: owner})).includes("owner"));
+    // Any other switch being off does not matter; a missing one is on.
+    const other = people.map((p) => p.id === "same-store" ?
+      {...p, notificationPreferences: {businessActivity: false}} : p);
+    assert.ok(uids(plan({users: other})).includes("same-store"));
+  });
+
+  it("tells every inventory staff member in a single-store business", () => {
+    const noStores = plan({sale: sale({storeId: "", storeName: ""}),
+      multiStore: false});
+    assert.deepEqual(uids(noStores),
+        ["owner", "all-stores", "no-home", "other-store", "same-store"]);
+    assert.equal(noStores.title, "New sale");
+    // One active store left after archiving: still single-store.
+    const oneStore = plan({multiStore: false});
+    assert.deepEqual(uids(oneStore), uids(noStores));
+    assert.equal(oneStore.title, "New sale");
+  });
+
+  it("writes the sale, the seller's first name and the total", () => {
+    const out = plan();
+    assert.equal(out.title, "Sale at Main store");
+    assert.equal(out.body, "Mamadou sold Jordan 11 · $60.00");
+    assert.deepEqual(out.data, {type: "inventory_sale", businessId: BIZ,
+      saleId: "sale-1", storeId: STORE, relatedCollection: "inventorySales",
+      relatedId: "sale-1"});
+    for (const r of out.recipients) {
+      assert.deepEqual([r.language, r.title, r.body],
+          ["en", out.title, out.body]);
+    }
+  });
+
+  it("names the first line and counts the others", () => {
+    const several = sale({totalCents: 9550, lines: [
+      {name: "11", brand: "Jordan", quantity: 2},
+      {name: "Socks", brand: "", quantity: 1},
+      {name: "Cap", quantity: 3},
+    ]});
+    assert.equal(plan({sale: several}).body,
+        "Mamadou sold 2 × Jordan 11 +2 more · $95.50");
+    const two = sale({lines: [{name: "Socks", quantity: 1},
+      {name: "Cap", quantity: 1}]});
+    assert.equal(plan({sale: two}).body,
+        "Mamadou sold Socks +1 more · $60.00");
+  });
+
+  it("falls back when the seller has no name", () => {
+    const nameless = people.map((p) => p.id === "seller" ?
+      {...p, fullName: ""} : p);
+    assert.equal(plan({users: nameless}).body,
+        "Someone sold Jordan 11 · $60.00");
+    // A seller who is not one of the business's people (a platform admin).
+    assert.equal(plan({sellerUid: "admin-1",
+      seller: {fullName: "Awa Ndiaye"}}).body,
+    "Awa sold Jordan 11 · $60.00");
+  });
+
+  it("writes French for people whose profile is in French", () => {
+    const french = people.map((p) => p.id === "same-store" ?
+      {...p, language: "fr"} : p);
+    const out = plan({users: french});
+    const fr = out.recipients.find((r) => r.uid === "same-store");
+    assert.deepEqual([fr.language, fr.title, fr.body],
+        ["fr", "Vente à Main store", "Mamadou a vendu Jordan 11 · $60.00"]);
+    assert.equal(out.recipients.find((r) => r.uid === "owner").language, "en");
+    const several = inv.planSaleNotification({sale: sale({storeId: "",
+      storeName: "", lines: [{name: "Cap", quantity: 3},
+        {name: "Socks", quantity: 1}, {name: "Hat", quantity: 1}]}),
+    users: french, sellerUid: "seller", multiStore: false});
+    assert.deepEqual([several.copy.fr.title, several.copy.fr.body],
+        ["Nouvelle vente", "Mamadou a vendu 3 × Cap +2 autres · $60.00"]);
+    assert.equal(inv.planSaleNotification({sale: sale({lines: [
+      {name: "Cap", quantity: 1}, {name: "Hat", quantity: 1}]}),
+    users: [], sellerUid: "x", multiStore: true}).copy.fr.body,
+    "Quelqu'un a vendu Cap +1 autre · $60.00");
+    assert.equal(inv.notificationLanguageOf({locale: "fr_SN"}), "fr");
+    assert.equal(inv.notificationLanguageOf({preferredLanguage: "EN"}), "en");
+    assert.equal(inv.notificationLanguageOf({}), "en");
+  });
+
+  it("puts owners first and stops at 50 people", () => {
+    const crowd = [person("seller")];
+    for (let i = 0; i < 70; i++) {
+      crowd.push(person(`staff-${String(i).padStart(2, "0")}`,
+          {inventoryAllStores: true}));
+    }
+    crowd.push(person("z-owner", {role: "businessOwner"}));
+    const out = plan({users: crowd});
+    assert.equal(out.recipients.length, inv.MAX_SALE_NOTIFICATION_RECIPIENTS);
+    assert.equal(out.recipients.length, 50);
+    assert.equal(out.recipients[0].uid, "z-owner");
+  });
+
+  it("tells nobody when the seller is alone", () => {
+    assert.deepEqual(plan({users: [people[0]]}).recipients, []);
+  });
+});

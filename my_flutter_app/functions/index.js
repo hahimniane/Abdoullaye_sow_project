@@ -20541,13 +20541,73 @@ async function attachLegacyCategoryIdsIn(tx, db, businessId, items) {
   });
 }
 
+// The people a sale's notification is planned from: the business's staff and
+// owner(s). Generous on purpose - inventory.planSaleNotification filters them
+// down and caps the recipients at MAX_SALE_NOTIFICATION_RECIPIENTS.
+const INVENTORY_SALE_NOTIFY_SCAN = 300;
+
+/**
+ * Tells the other people of the sale's store (and the owner) that it was
+ * rung up: a push, an inbox entry and the usual notificationDeliveries rows,
+ * through sendPreferenceNotification under the `inventorySales` preference.
+ * At most once per sale: the `inventorySaleNotifications/{saleId}` claim can
+ * only be created once, so a retried call never notifies twice.
+ *
+ * @param {object} db Firestore.
+ * @param {object} input The sale as just written.
+ * @param {string} input.businessId The business.
+ * @param {string} input.saleId The sale's id.
+ * @param {string} input.sellerUid Who rang it up.
+ * @param {object} input.seller The seller's profile.
+ * @param {object} input.sale storeId, storeName, lines, totalCents.
+ * @param {boolean} input.multiStore Two or more active stores.
+ * @return {Promise<number>} How many people were told (0 on a repeat).
+ */
+async function notifyInventorySale(db, {businessId, saleId, sellerUid, seller,
+  sale, multiStore}) {
+  const claimRef = db.collection("inventorySaleNotifications").doc(saleId);
+  try {
+    await claimRef.create({businessId, saleId,
+      createdAt: FirestoreFieldValue.serverTimestamp()});
+  } catch (error) {
+    // ALREADY_EXISTS: this sale's people were already told.
+    if (error?.code === 6 || error?.code === "already-exists") return 0;
+    throw error;
+  }
+  const snap = await db.collection("users")
+      .where("businessId", "==", businessId)
+      .where("role", "in", ["staff", "businessOwner"])
+      .limit(INVENTORY_SALE_NOTIFY_SCAN)
+      .get();
+  const users = snap.docs.map((doc) => ({id: doc.id, ...doc.data()}))
+      .filter((user) => !accountAccessBlocked(user));
+  const plan = inventory.planSaleNotification({
+    sale: {...sale, id: saleId, businessId}, users, sellerUid, seller,
+    multiStore,
+  });
+  await Promise.all(plan.recipients.map((recipient) =>
+    safeSendPreferenceNotification({
+      uid: recipient.uid,
+      preferenceKey: inventory.SALE_NOTIFICATION_PREFERENCE,
+      title: recipient.title,
+      body: recipient.body,
+      data: plan.data,
+    })));
+  await claimRef.set({
+    recipientUids: plan.recipients.map((recipient) => recipient.uid),
+    notifiedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  return plan.recipients.length;
+}
+
 exports.recordInventorySale = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
       const {businessId} = inventoryIds(data);
-      const {db, access} = await requireInventoryContext(uid, businessId);
+      const {db, user, access} =
+        await requireInventoryContext(uid, businessId);
       const {errors, lines} = inventory.cleanSaleInput(data);
       if (errors.length > 0) throw inventoryRefusal(errors);
       const clientRequestId =
@@ -20651,6 +20711,23 @@ exports.recordInventorySale = onCall(
           // "Needs attention" feed.
           acknowledged: true,
         });
+        // The rest of the store hears about it. Only once the sale is
+        // committed, and a failed push never fails the sale. Awaited (not
+        // left running) because Cloud Functions may freeze the instance as
+        // soon as the answer is sent.
+        try {
+          await notifyInventorySale(db, {
+            businessId, saleId: saleRef.id, sellerUid: uid, seller: user,
+            sale: {storeId: done.storeId, storeName: done.storeName || "",
+              lines: done.plan.lines, totalCents: done.totalCents},
+            multiStore: done.multi === true,
+          });
+        } catch (error) {
+          logger.warn("Sale notification failed", {
+            businessId, saleId: saleRef.id,
+            error: error?.message || String(error),
+          });
+        }
       }
       return {success: true, saleId: saleRef.id, totalCents: done.totalCents,
         warnings: done.warnings, replayed: done.replayed,

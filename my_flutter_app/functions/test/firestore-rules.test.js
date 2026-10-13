@@ -1361,6 +1361,7 @@ describe("business dashboard Firestore rules", () => {
               multiStore: false}],
             ["inventoryCategoryKeys/forged", {businessId: "biz_a"}],
             ["inventoryBrandKeys/forged", {businessId: "biz_a"}],
+            ["inventorySaleNotifications/forged", {businessId: "biz_a"}],
           ];
           for (const [path, data] of writes) {
             await assertFails(setDoc(doc(owner, path), data));
@@ -1391,6 +1392,8 @@ describe("business dashboard Firestore rules", () => {
             await assertFails(getDoc(doc(db, "inventoryConfig/biz_a")));
             await assertFails(getDoc(doc(db, "inventoryCategoryKeys/lock1")));
             await assertFails(getDoc(doc(db, "inventoryBrandKeys/lock1")));
+            await assertFails(getDoc(doc(db,
+                "inventorySaleNotifications/sale1")));
           }
         });
 

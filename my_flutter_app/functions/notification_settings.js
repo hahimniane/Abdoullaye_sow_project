@@ -11,6 +11,9 @@ function defaultNotificationPreferences() {
     supportMessages: true,
     supportEscalations: true,
     supportCaseUpdates: true,
+    // Inventory: "Sales at my store" - a push when someone else of the
+    // store (or business) rings up a sale. On unless switched off.
+    inventorySales: true,
   };
 }
 
@@ -41,6 +44,8 @@ function normalizeNotificationPreferences(raw) {
     supportCaseUpdates:
       prefs.supportCaseUpdates !== false && prefs.supportActivity !== false &&
         defaults.supportCaseUpdates,
+    inventorySales:
+      prefs.inventorySales !== false && defaults.inventorySales,
   };
 }
 

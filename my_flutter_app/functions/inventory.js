@@ -1634,7 +1634,168 @@ function resolveSummaryScope({converted, stores, access, requestedStoreId}) {
   return {code: null, multi, filterStoreId: home.id, allView: false};
 }
 
+// ---------------------------------------------------------------------------
+// Sale notifications: when someone rings up a sale, the other people of that
+// store (and the owner) get a push. Only the sale: no payment method, no
+// profit. The seller never hears about their own sale.
+// ---------------------------------------------------------------------------
+
+/** The notification preference that switches these pushes off. */
+const SALE_NOTIFICATION_PREFERENCE = "inventorySales";
+/** The most people one sale notifies. */
+const MAX_SALE_NOTIFICATION_RECIPIENTS = 50;
+
+/**
+ * @param {object} user A `users` profile.
+ * @return {"en"|"fr"} The language its notifications are written in: French
+ *   when the profile says so, English otherwise.
+ */
+function notificationLanguageOf(user) {
+  for (const key of ["language", "preferredLanguage", "locale"]) {
+    const value = text(user?.[key], 20).toLowerCase();
+    if (value) return value.startsWith("fr") ? "fr" : "en";
+  }
+  return "en";
+}
+
+/**
+ * @param {object} user The seller's profile.
+ * @return {string} Their first name ("Mamadou" of "Mamadou Diallo"), else
+ *   the first word of whatever name the profile has, else "".
+ */
+function sellerFirstName(user) {
+  for (const key of ["fullName", "displayName", "name"]) {
+    const value = text(user?.[key], 120);
+    if (value) return value.split(/\s+/)[0];
+  }
+  return "";
+}
+
+/**
+ * The words of one sale notification in one language.
+ *
+ * @param {object} sale The sale: lines, totalCents, storeName.
+ * @param {boolean} named True when the title names the store.
+ * @param {string} seller The seller's first name ("" when unknown).
+ * @param {"en"|"fr"} language The language.
+ * @return {{title: string, body: string}} The copy.
+ */
+function saleNotificationCopy(sale, named, seller, language) {
+  const fr = language === "fr";
+  const lines = Array.isArray(sale?.lines) ? sale.lines : [];
+  const first = lines[0] || {};
+  const name = itemDisplayName(first) || (fr ? "un article" : "an item");
+  const quantity = Math.max(1, Math.round(Number(first.quantity) || 1));
+  const item = quantity > 1 ? `${quantity} × ${name}` : name;
+  const others = lines.length - 1;
+  const more = others <= 0 ? "" :
+    fr ? ` +${others} ${others === 1 ? "autre" : "autres"}` :
+      ` +${others} more`;
+  const who = seller || (fr ? "Quelqu'un" : "Someone");
+  const store = text(sale?.storeName, MAX_NAME);
+  const money = moneyText(sale?.totalCents);
+  if (fr) {
+    return {
+      title: named && store ? `Vente à ${store}` : "Nouvelle vente",
+      body: `${who} a vendu ${item}${more} · ${money}`,
+    };
+  }
+  return {
+    title: named && store ? `Sale at ${store}` : "New sale",
+    body: `${who} sold ${item}${more} · ${money}`,
+  };
+}
+
+/**
+ * Who hears about a sale, and what they read.
+ *
+ * Recipients: in a business with several stores, staff holding the inventory
+ * permission whose home store is the sale's store or who work in all stores;
+ * in a single-store business (no stores yet, one active store, or a sale with
+ * no store) every staff member holding the inventory permission. Plus the
+ * business owner(s) always. Never the seller, never anyone who switched
+ * "Sales at my store" off, never another business's people; owners first,
+ * at most MAX_SALE_NOTIFICATION_RECIPIENTS.
+ *
+ * @param {object} input The sale and the people.
+ * @param {object} input.sale The sale: id, businessId, storeId, storeName,
+ *   lines [{name, brand, quantity}], totalCents.
+ * @param {Array<object>} input.users The business's `users` profiles, each
+ *   with its `id` (the uid).
+ * @param {string} input.sellerUid Who rang it up.
+ * @param {object} [input.seller] The seller's profile, when it is not among
+ *   `users` (a platform admin).
+ * @param {boolean} [input.multiStore] True when the business has two or more
+ *   active stores.
+ * @return {{recipients: Array<{uid: string, language: string, title: string,
+ *   body: string}>, title: string, body: string, copy: object,
+ *   data: object}} The plan; `title`/`body` are the English copy.
+ */
+function planSaleNotification({sale, users, sellerUid, seller, multiStore}) {
+  const businessId = text(sale?.businessId, 200);
+  const storeId = text(sale?.storeId, 200);
+  const sellerId = text(sellerUid, 200);
+  const perStore = multiStore === true && Boolean(storeId);
+  const people = Array.isArray(users) ? users : [];
+  const chosen = [];
+  const seen = new Set();
+  for (const user of people) {
+    const uid = text(user?.id, 200);
+    if (!uid || uid === sellerId || seen.has(uid)) continue;
+    if (text(user.businessId, 200) !== businessId) continue;
+    if (user.notificationPreferences?.[SALE_NOTIFICATION_PREFERENCE] ===
+        false) {
+      continue;
+    }
+    const owner = user.role === "businessOwner";
+    if (!owner) {
+      if (user.role !== "staff") continue;
+      const permissions = Array.isArray(user.businessPermissions) ?
+        user.businessPermissions : [];
+      if (!permissions.includes("inventory")) continue;
+      if (perStore && user.inventoryAllStores !== true &&
+          text(user.inventoryHomeStoreId, 200) !== storeId) {
+        continue;
+      }
+    }
+    seen.add(uid);
+    chosen.push({uid, owner, user});
+  }
+  chosen.sort((a, b) => (a.owner === b.owner ?
+    (a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0) : a.owner ? -1 : 1));
+  const sellerProfile = seller ||
+    people.find((user) => text(user?.id, 200) === sellerId) || {};
+  const name = sellerFirstName(sellerProfile);
+  const copy = {
+    en: saleNotificationCopy(sale, perStore, name, "en"),
+    fr: saleNotificationCopy(sale, perStore, name, "fr"),
+  };
+  const saleId = text(sale?.id, 200);
+  return {
+    recipients: chosen.slice(0, MAX_SALE_NOTIFICATION_RECIPIENTS)
+        .map(({uid, user}) => {
+          const language = notificationLanguageOf(user);
+          return {uid, language, ...copy[language]};
+        }),
+    title: copy.en.title,
+    body: copy.en.body,
+    copy,
+    data: {
+      type: "inventory_sale",
+      businessId,
+      saleId,
+      storeId,
+      relatedCollection: "inventorySales",
+      relatedId: saleId,
+    },
+  };
+}
+
 module.exports = {
+  SALE_NOTIFICATION_PREFERENCE,
+  MAX_SALE_NOTIFICATION_RECIPIENTS,
+  planSaleNotification,
+  notificationLanguageOf,
   ownerEditableServices,
   planInventoryService,
   INVENTORY_PAYMENT_METHODS,
