@@ -2739,8 +2739,8 @@ describe("brands", () => {
 });
 
 describe("sale notifications", () => {
-  // Who was told about a sale: one notificationDeliveries row (email channel,
-  // provider not configured in the emulator) per person told.
+  // Who was told about a sale: one notificationDeliveries row (push channel;
+  // sale alerts never go by email or SMS) per person told.
   const toldAbout = async (saleId) => {
     const snap = await db.collection("notificationDeliveries")
         .where("data.saleId", "==", saleId).get();
@@ -2791,6 +2791,13 @@ describe("sale notifications", () => {
         lines: [{itemId, quantity: 1, soldPriceCents: 6000}]}, A);
       assert.deepEqual(await recipientsOf(sold.saleId), [OWN, B, C].sort());
       const rows = await toldAbout(sold.saleId);
+      // Push only (the owner's decision): one push ledger row per person,
+      // never an email or SMS row, whatever the providers are set to.
+      assert.deepEqual([...new Set(rows.map((row) => row.channel))], ["push"]);
+      assert.equal(rows.length, 3);
+      assert.equal((await db.collection("mail")
+          .where("deliveryId", "in", rows.map((row) => row.deliveryId || "-"))
+          .get()).size, 0);
       for (const row of rows) {
         assert.equal(row.preferenceKey, "inventorySales");
         assert.equal(row.title, "Sale at Downtown");

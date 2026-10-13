@@ -6192,6 +6192,7 @@ async function queueNotificationDeliveries({
   title,
   body,
   data,
+  pushOnly = false,
 }) {
   if (!uid) return [];
   const cleanTitle = String(title || "Laawol Digital update").trim();
@@ -6210,6 +6211,25 @@ async function queueNotificationDeliveries({
     createdAt: now,
     updatedAt: now,
   };
+  if (pushOnly) {
+    // A notification that must stay on the phone (a shop's sale alerts can
+    // come thirty times a day): one ledger row for the push, no email, no
+    // SMS, whatever those providers are set to.
+    const pushEnabled = settings.pushEnabled !== false &&
+      prefs.pushNotifications !== false;
+    const deliveryRef = db.collection("notificationDeliveries").doc();
+    batch.set(deliveryRef, {
+      ...base,
+      channel: "push",
+      status: pushEnabled ? "queued" : "disabled",
+      provider: "fcm",
+      to: "",
+      lastError: "",
+    });
+    await batch.commit();
+    return [{channel: "push", status: pushEnabled ? "queued" : "disabled",
+      provider: "fcm", to: "", deliveryId: deliveryRef.id}];
+  }
   const email = String(user?.email || "").trim().toLowerCase();
   const emailStatus = notificationDeliveryStatus({
     settings,
@@ -6622,6 +6642,7 @@ async function sendPreferenceNotification({
   title,
   body,
   data = {},
+  pushOnly = false,
 }) {
   if (!uid) return;
   const db = admin.firestore();
@@ -6655,6 +6676,7 @@ async function sendPreferenceNotification({
     title,
     body,
     data,
+    pushOnly,
   });
   // Emulator workflows must never reach real FCM/OAuth endpoints. Keep the
   // local delivery ledger above so notification behavior remains testable.
@@ -20548,8 +20570,9 @@ const INVENTORY_SALE_NOTIFY_SCAN = 300;
 
 /**
  * Tells the other people of the sale's store (and the owner) that it was
- * rung up: a push, an inbox entry and the usual notificationDeliveries rows,
- * through sendPreferenceNotification under the `inventorySales` preference.
+ * rung up: a push and an inbox entry, never an email or SMS (the owner asked
+ * for push only), through sendPreferenceNotification under the
+ * `inventorySales` preference.
  * At most once per sale: the `inventorySaleNotifications/{saleId}` claim can
  * only be created once, so a retried call never notifies twice.
  *
@@ -20592,6 +20615,7 @@ async function notifyInventorySale(db, {businessId, saleId, sellerUid, seller,
       title: recipient.title,
       body: recipient.body,
       data: plan.data,
+      pushOnly: true,
     })));
   await claimRef.set({
     recipientUids: plan.recipients.map((recipient) => recipient.uid),
