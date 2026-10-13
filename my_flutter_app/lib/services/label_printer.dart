@@ -268,13 +268,30 @@ enum PrinterAdapterState { on, off, unauthorized, unsupported, unknown }
 /// A printer seen while scanning.
 @immutable
 class PrinterDevice {
-  const PrinterDevice({required this.id, required this.name, this.rssi = 0});
+  const PrinterDevice({
+    required this.id,
+    required this.name,
+    this.rssi = 0,
+    this.advertisesPrinterService = false,
+  });
 
   final String id;
   final String name;
 
   /// Signal strength in dBm (closer to 0 is stronger).
   final int rssi;
+
+  /// The advertisement named the printer service (ff00). iPhones often leave
+  /// service ids out of what they report, so a printer can be real without
+  /// this; it only decides the order of the list, never whether to show it.
+  final bool advertisesPrinterService;
+
+  /// Looks like a Phomemo: the serial-style name ("Q2…") or the service.
+  bool get looksLikePrinter =>
+      advertisesPrinterService ||
+      name.toUpperCase().startsWith('Q2') ||
+      name.toUpperCase().contains('M221') ||
+      name.toUpperCase().contains('PHOMEMO');
 }
 
 abstract class PrinterTransport {
@@ -397,10 +414,17 @@ class LabelPrinterController extends ChangeNotifier {
   int get progressTotal => _progressTotal;
   int? get batteryPercent => _battery;
 
-  /// Printers seen in the last scan, strongest signal first.
+  /// Devices seen in the last scan: likely printers first, then by signal.
+  /// Every named device is listed, because the phone may not report the
+  /// printer's service id; the printer is confirmed on connect (ff02/ff03).
   List<PrinterDevice> get found {
     final list = _found.values.toList()
-      ..sort((a, b) => b.rssi.compareTo(a.rssi));
+      ..sort((a, b) {
+        if (a.looksLikePrinter != b.looksLikePrinter) {
+          return a.looksLikePrinter ? -1 : 1;
+        }
+        return b.rssi.compareTo(a.rssi);
+      });
     return list;
   }
 
@@ -454,20 +478,31 @@ class LabelPrinterController extends ChangeNotifier {
     if (adapter != null) return adapter;
     _found.clear();
     _set(PrinterStatus.scanning);
-    log.add('scan: start (${scanTimeout.inSeconds} s, service ff00)');
+    log.add('scan: start (${scanTimeout.inSeconds} s, any device)');
+    var unnamed = 0;
     try {
       await for (final device in transport.scan(scanTimeout)) {
+        // Nameless advertisements are not offered: nothing to pick by.
+        if (device.name.trim().isEmpty) {
+          unnamed++;
+          continue;
+        }
         final known = _found.containsKey(device.id);
         _found[device.id] = device;
         if (!known) {
           log.add(
-            'scan: found "${device.name.isEmpty ? '?' : device.name}" '
-            '${_shortId(device.id)} rssi ${device.rssi}',
+            'scan: found "${device.name}" ${_shortId(device.id)} '
+            'rssi ${device.rssi}'
+            '${device.advertisesPrinterService ? ' service ff00' : ''}',
           );
         }
         _notify();
       }
-      log.add('scan: done, ${_found.length} printer(s)');
+      final likely = _found.values.where((d) => d.looksLikePrinter).length;
+      log.add(
+        'scan: done, ${_found.length} named device(s), $likely likely '
+        'printer(s), $unnamed unnamed skipped',
+      );
       return null;
     } on PrinterException catch (e) {
       log.add('scan: failed ${e.failure.name} ${e.detail}');

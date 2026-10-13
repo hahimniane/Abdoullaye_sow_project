@@ -5660,7 +5660,7 @@
   "labelPrinterNone": "No printer chosen yet. Find it below.",
   "labelPrinterScan": "Find printers",
   "labelPrinterScanning": "Looking for printers…",
-  "labelPrinterScanHint": "Turn the printer on and close the Print Master app first. The printer shows up with a name such as Q2….",
+  "labelPrinterScanHint": "Turn the printer on and close the Print Master app first. The printer shows up with a name such as Q2… at the top of the list; other nearby devices are listed below it.",
   "labelPrinterNoneFound": "No printer found nearby.",
   "labelPrinterSignal": "Signal {rssi} dBm",
   "@labelPrinterSignal": {

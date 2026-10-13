@@ -12108,7 +12108,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get labelPrinterScanHint =>
-      'Turn the printer on and close the Print Master app first. The printer shows up with a name such as Q2….';
+      'Turn the printer on and close the Print Master app first. The printer shows up with a name such as Q2… at the top of the list; other nearby devices are listed below it.';
 
   @override
   String get labelPrinterNoneFound => 'No printer found nearby.';

@@ -97,10 +97,13 @@ class BlePrinterTransport implements PrinterTransport {
       results = FlutterBluePlus.onScanResults.listen((list) {
         for (final r in list) {
           final ad = r.advertisementData;
+          // No service filter: iOS often omits service ids from what it
+          // reports, and a filtered scan then never shows the printer at
+          // all. Every device is offered; the service id, when present, only
+          // ranks it. The printer is confirmed on connect (ff02/ff03).
           final advertisesPrinter = ad.serviceUuids.any(
             (g) => _same(g, m221ServiceUuid),
           );
-          if (!advertisesPrinter) continue;
           final name = ad.advName.isNotEmpty
               ? ad.advName
               : r.device.platformName;
@@ -110,16 +113,14 @@ class BlePrinterTransport implements PrinterTransport {
                 id: r.device.remoteId.str,
                 name: name,
                 rssi: r.rssi,
+                advertisesPrinterService: advertisesPrinter,
               ),
             );
           }
         }
       });
       try {
-        await FlutterBluePlus.startScan(
-          withServices: [Guid(m221ServiceUuid)],
-          timeout: timeout,
-        );
+        await FlutterBluePlus.startScan(timeout: timeout);
         // startScan returns once scanning has begun; wait for its end.
         scanning = FlutterBluePlus.isScanning.listen((on) {
           if (!on) unawaited(finish());

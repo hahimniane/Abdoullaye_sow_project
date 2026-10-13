@@ -5660,7 +5660,7 @@
   "labelPrinterNone": "Aucune imprimante choisie. Recherchez-la ci-dessous.",
   "labelPrinterScan": "Rechercher les imprimantes",
   "labelPrinterScanning": "Recherche des imprimantes…",
-  "labelPrinterScanHint": "Allumez l’imprimante et fermez d’abord l’app Print Master. L’imprimante apparaît avec un nom comme Q2….",
+  "labelPrinterScanHint": "Allumez l’imprimante et fermez d’abord l’app Print Master. L’imprimante apparaît avec un nom comme Q2… en haut de la liste ; les autres appareils à proximité sont listés en dessous.",
   "labelPrinterNoneFound": "Aucune imprimante trouvée à proximité.",
   "labelPrinterSignal": "Signal {rssi} dBm",
   "@labelPrinterSignal": {

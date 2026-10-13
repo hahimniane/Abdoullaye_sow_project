@@ -244,6 +244,47 @@ void main() {
       expect(c.log.text(), contains('scan: found "Q2NEAR"'));
     });
 
+    // Regression: the first real scan on an iPhone found nothing because the
+    // app asked only for devices advertising service ff00, and iOS does not
+    // always report that id. Every named device is offered now; likely
+    // printers come first and the service id only ranks them.
+    test(
+      'an open scan lists every named device, likely printers first',
+      () async {
+        final printer = FakePrinterTransport(
+          devices: const [
+            PrinterDevice(id: 'tv', name: 'Living room TV', rssi: -30),
+            PrinterDevice(id: 'q2', name: 'Q2A1B2C3', rssi: -70),
+            PrinterDevice(
+              id: 'svc',
+              name: 'LabelThing',
+              rssi: -80,
+              advertisesPrinterService: true,
+            ),
+            PrinterDevice(id: 'blank', name: '', rssi: -20),
+          ],
+        );
+        final c = fakeController(
+          printer,
+          settings: const LabelPrinterSettings(),
+        );
+        expect(await c.scan(), isNull);
+        // Likely printers (serial-style name, or the service) before the rest,
+        // each group by signal; the nameless advertisement is not offered.
+        expect(c.found.map((d) => d.id), ['q2', 'svc', 'tv']);
+        final log = c.log.text();
+        expect(log, contains('scan: start (8 s, any device)'));
+        expect(
+          log,
+          contains('scan: found "LabelThing" svc rssi -80 service ff00'),
+        );
+        expect(
+          log,
+          contains('3 named device(s), 2 likely printer(s), 1 unnamed skipped'),
+        );
+      },
+    );
+
     test('a status check logs the raw replies and reads the battery', () async {
       final printer = FakePrinterTransport(paperReply: [0x1A, 0x06, 0x89]);
       final c = fakeController(printer);

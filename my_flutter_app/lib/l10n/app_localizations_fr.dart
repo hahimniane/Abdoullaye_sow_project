@@ -12293,7 +12293,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get labelPrinterScanHint =>
-      'Allumez l’imprimante et fermez d’abord l’app Print Master. L’imprimante apparaît avec un nom comme Q2….';
+      'Allumez l’imprimante et fermez d’abord l’app Print Master. L’imprimante apparaît avec un nom comme Q2… en haut de la liste ; les autres appareils à proximité sont listés en dessous.';
 
   @override
   String get labelPrinterNoneFound => 'Aucune imprimante trouvée à proximité.';

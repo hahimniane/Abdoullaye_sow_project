@@ -21134,7 +21134,7 @@ abstract class AppLocalizations {
   /// No description provided for @labelPrinterScanHint.
   ///
   /// In en, this message translates to:
-  /// **'Turn the printer on and close the Print Master app first. The printer shows up with a name such as Q2….'**
+  /// **'Turn the printer on and close the Print Master app first. The printer shows up with a name such as Q2… at the top of the list; other nearby devices are listed below it.'**
   String get labelPrinterScanHint;
 
   /// No description provided for @labelPrinterNoneFound.
