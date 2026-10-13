@@ -96,6 +96,10 @@ class _FakeSource implements InventorySource {
   }
 
   @override
+  Stream<InventorySale?> watchSale(String businessId, String saleId) =>
+      Stream.value(null);
+
+  @override
   Stream<List<InventoryMovement>> watchMovements(
     String businessId,
     String itemId, {

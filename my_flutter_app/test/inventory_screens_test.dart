@@ -97,6 +97,8 @@ class _FakeSource implements InventorySource {
     this.brands = const [],
     this.stores = const [],
     this.stock = const [],
+    this.deniedSales = const {},
+    this.saleHangs = false,
   });
 
   final List<InventoryItem> items;
@@ -109,6 +111,15 @@ class _FakeSource implements InventorySource {
   final List<InventoryStore> stores;
   final List<InventoryStockRow> stock;
   final List<String> codeLookups = [];
+
+  /// Sales the rules refuse this reader by id (another store's, for staff).
+  final Set<String> deniedSales;
+
+  /// A sale read by id that never answers.
+  final bool saleHangs;
+
+  /// The sales read by id, in order.
+  final List<String> saleLookups = [];
 
   /// What the screens asked for, so a test can say who read what.
   final List<String> salesStores = [];
@@ -143,6 +154,19 @@ class _FakeSource implements InventorySource {
       for (final s in sales)
         if (storeId.isEmpty || s.storeId == storeId) s,
     ]);
+  }
+
+  @override
+  Stream<InventorySale?> watchSale(String businessId, String saleId) {
+    saleLookups.add(saleId);
+    if (saleHangs) return StreamController<InventorySale?>().stream;
+    if (deniedSales.contains(saleId)) {
+      return Stream.error(StateError('permission-denied'));
+    }
+    for (final s in sales) {
+      if (s.id == saleId) return Stream.value(s);
+    }
+    return Stream.value(null);
   }
 
   @override
@@ -1152,6 +1176,326 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+  });
+
+  group('sales list: opened from a sale notification', () {
+    InventorySale sale(
+      String id,
+      String storeId,
+      int minute, {
+      String businessId = 'b1',
+      String name = 'Soap',
+    }) => InventorySale(
+      id: id,
+      businessId: businessId,
+      lines: [
+        InventorySaleLine(
+          itemId: 'i1',
+          name: name,
+          code: 'IT-K7M4P2',
+          quantity: 1,
+          listPriceCents: 450,
+          soldPriceCents: 450,
+        ),
+      ],
+      totalCents: 450,
+      paymentMethod: 'cash',
+      soldByStaffId: 'u1',
+      storeId: storeId,
+      createdAt: DateTime(2026, 10, 10, 15, minute),
+    );
+
+    // Newest first: c (Brooklyn), b (Brooklyn), a (Main store, the oldest).
+    final sales = [
+      sale('a', 's-main', 1),
+      sale('b', 's-bk', 2),
+      sale('c', 's-bk', 3),
+    ];
+
+    InventorySaleCard card(WidgetTester tester, String id) =>
+        tester.widget<InventorySaleCard>(find.byKey(ValueKey('inv-sale-$id')));
+
+    double top(WidgetTester tester, String id) =>
+        tester.getTopLeft(find.byKey(ValueKey('inv-sale-$id'))).dy;
+
+    testWidgets('opens that sale first, highlighted, then the rest of the '
+        'list without it', (tester) async {
+      final src = _FakeSource(sales: sales, stores: _stores);
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: src,
+          service: _Calls().service,
+          saleId: 'a',
+        ),
+      );
+      expect(src.saleLookups, ['a']);
+      // The oldest sale, opened on top of the newer ones and shown once.
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('inv-sale-focused')),
+          matching: find.byKey(const ValueKey('inv-sale-a')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('inv-sale-a')), findsOneWidget);
+      expect(top(tester, 'a'), lessThan(top(tester, 'c')));
+      expect(top(tester, 'c'), lessThan(top(tester, 'b')));
+      expect(find.text('Cash · Store: Main store'), findsOneWidget);
+      expect(find.byKey(const Key('inv-sale-unavailable')), findsNothing);
+      // Highlighted briefly, then like the others.
+      expect(card(tester, 'a').highlighted, isTrue);
+      expect(card(tester, 'c').highlighted, isFalse);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(card(tester, 'a').highlighted, isFalse);
+      // It is the real card: it can be voided from here.
+      expect(find.byKey(const Key('inv-void-a')), findsOneWidget);
+    });
+
+    testWidgets('a void from the opened sale goes through', (tester) async {
+      final calls = _Calls();
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: _FakeSource(sales: sales, stores: _stores),
+          service: calls.service,
+          saleId: 'b',
+        ),
+      );
+      await tester.tap(find.byKey(const Key('inv-void-b')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Void sale'));
+      await tester.pumpAndSettle();
+      expect(calls.named('voidInventorySale').single.payload, {
+        'businessId': 'b1',
+        'saleId': 'b',
+      });
+    });
+
+    testWidgets('staff of another store: refused by the rules, the list '
+        'opens with a note', (tester) async {
+      final src = _FakeSource(
+        sales: sales,
+        stores: _stores,
+        deniedSales: const {'a'},
+      );
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: src,
+          service: _Calls().service,
+          access: _staffBk,
+          saleId: 'a',
+        ),
+      );
+      expect(src.saleLookups, ['a']);
+      expect(find.byKey(const Key('inv-sale-unavailable')), findsOneWidget);
+      expect(find.text('That sale is not available.'), findsOneWidget);
+      expect(find.byKey(const Key('inv-sale-focused')), findsNothing);
+      expect(find.byKey(const ValueKey('inv-sale-a')), findsNothing);
+      // Their own store's list, as always.
+      expect(src.salesStores, ['s-bk']);
+      expect(find.byKey(const ValueKey('inv-sale-b')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-sale-c')), findsOneWidget);
+    });
+
+    testWidgets('staff of another store: never shown even if the read '
+        'answers', (tester) async {
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: _FakeSource(sales: sales, stores: _stores),
+          service: _Calls().service,
+          access: _staffBk,
+          saleId: 'a',
+        ),
+      );
+      expect(find.byKey(const Key('inv-sale-unavailable')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-sale-a')), findsNothing);
+      expect(find.byKey(const ValueKey('inv-sale-b')), findsOneWidget);
+    });
+
+    testWidgets('staff open their own store\'s sale', (tester) async {
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: _FakeSource(sales: sales, stores: _stores),
+          service: _Calls().service,
+          access: _staffBk,
+          saleId: 'b',
+        ),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('inv-sale-focused')),
+          matching: find.byKey(const ValueKey('inv-sale-b')),
+        ),
+        findsOneWidget,
+      );
+      expect(top(tester, 'b'), lessThan(top(tester, 'c')));
+      expect(find.byKey(const Key('inv-sale-unavailable')), findsNothing);
+    });
+
+    testWidgets('staff with no store: nothing is read, the note shows', (
+      tester,
+    ) async {
+      final src = _FakeSource(sales: sales, stores: _stores);
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: src,
+          service: _Calls().service,
+          access: const InventoryAccess(),
+          saleId: 'b',
+        ),
+      );
+      expect(src.saleLookups, isEmpty);
+      expect(src.salesStores, isEmpty);
+      expect(find.byKey(const Key('inv-sale-unavailable')), findsOneWidget);
+      expect(find.byKey(const Key('inv-sales-empty')), findsOneWidget);
+    });
+
+    testWidgets('an unknown sale falls back to the list with the note', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: _FakeSource(sales: sales, stores: _stores),
+          service: _Calls().service,
+          saleId: 'gone',
+        ),
+      );
+      expect(find.text('That sale is not available.'), findsOneWidget);
+      expect(find.byKey(const Key('inv-sale-focused')), findsNothing);
+      for (final id in ['a', 'b', 'c']) {
+        expect(find.byKey(ValueKey('inv-sale-$id')), findsOneWidget);
+      }
+      expect(top(tester, 'c'), lessThan(top(tester, 'a')));
+    });
+
+    testWidgets('another business\'s sale is never shown', (tester) async {
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: _FakeSource(
+            sales: [
+              ...sales,
+              sale('x', 's-main', 9, businessId: 'other'),
+            ],
+            stores: _stores,
+          ),
+          service: _Calls().service,
+          saleId: 'x',
+        ),
+      );
+      expect(find.byKey(const Key('inv-sale-unavailable')), findsOneWidget);
+      expect(find.byKey(const Key('inv-sale-focused')), findsNothing);
+    });
+
+    testWidgets('a read that never answers still ends in the list', (
+      tester,
+    ) async {
+      // Pumped by hand: pumpAndSettle would run the clock past the safety.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: InventorySalesScreen(
+            businessId: 'b1',
+            source: _FakeSource(sales: sales, stores: _stores, saleHangs: true),
+            service: _Calls().service,
+            saleId: 'a',
+          ),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-sale-a')), findsNothing);
+      await tester.pump(const Duration(seconds: 14));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('inv-sale-unavailable')), findsOneWidget);
+      expect(find.byKey(const ValueKey('inv-sale-a')), findsOneWidget);
+    });
+
+    testWidgets('no sale id: the list as always, nothing read by id', (
+      tester,
+    ) async {
+      final src = _FakeSource(sales: sales, stores: _stores);
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: src,
+          service: _Calls().service,
+        ),
+      );
+      expect(src.saleLookups, isEmpty);
+      expect(find.byKey(const Key('inv-sale-focused')), findsNothing);
+      expect(find.byKey(const Key('inv-sale-unavailable')), findsNothing);
+      expect(top(tester, 'c'), lessThan(top(tester, 'a')));
+    });
+
+    for (final (locale, note) in const [
+      (Locale('en'), 'That sale is not available.'),
+      (Locale('fr'), "Cette vente n'est pas disponible."),
+    ]) {
+      testWidgets('${locale.languageCode} at 320 wide: the opened sale and '
+          'the note fit', (tester) async {
+        final long = sale(
+          'a',
+          's-main',
+          1,
+          name: 'Savon noir artisanal au beurre de karité, grand format',
+        );
+        await _pump(
+          tester,
+          InventorySalesScreen(
+            businessId: 'b1',
+            source: _FakeSource(
+              sales: [long, ...sales.skip(1)],
+              stores: _stores,
+            ),
+            service: _Calls().service,
+            saleId: 'a',
+          ),
+          locale: locale,
+          size: const Size(320, 700),
+        );
+        expect(find.byKey(const Key('inv-sale-focused')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await _pump(
+          tester,
+          InventorySalesScreen(
+            key: const Key('second'),
+            businessId: 'b1',
+            source: _FakeSource(
+              sales: sales,
+              stores: _stores,
+              deniedSales: const {'a'},
+            ),
+            service: _Calls().service,
+            access: _staffBk,
+            saleId: 'a',
+          ),
+          locale: locale,
+          size: const Size(320, 700),
+        );
+        expect(find.text(note), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 
   group('products list', () {

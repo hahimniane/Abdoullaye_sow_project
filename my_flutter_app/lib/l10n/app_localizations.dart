@@ -20142,6 +20142,12 @@ abstract class AppLocalizations {
   /// **'Could not load the sales. Check your connection.'**
   String get inventorySalesLoadFailed;
 
+  /// No description provided for @inventorySaleNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'That sale is not available.'**
+  String get inventorySaleNotAvailable;
+
   /// No description provided for @inventoryLoadMoreSales.
   ///
   /// In en, this message translates to:

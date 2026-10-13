@@ -464,4 +464,13 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 - Anything that reads `SharedPreferences` with a safety timeout leaves a
   pending timer in widget tests unless the test calls
   `SharedPreferences.setMockInitialValues` first.
+- Some tests read source text verbatim, so whole-file `dart format` can fail
+  them: `startup_does_not_block_test.dart` greps `lib/main.dart` for
+  `_startupStep('push notifications'` and `unawaited(\n` - edit `main.dart` by
+  hand, do not reformat it. `inventory_parity_test.dart` treats any backticked
+  `` `SomethingInventoryX {` `` / `(` in `docs/INVENTORY.md` as a callable the
+  app must call; write Dart class names as `` `InventorySalesArguments` (a, b) ``.
+- A screen with a 15 s safety timer cannot have its spinner asserted after
+  `pumpAndSettle` (the settle runs the fake clock past the timer). Pump by hand
+  (`pumpWidget` + `pump(Duration)`) to see the loading state, then pump past it.
 

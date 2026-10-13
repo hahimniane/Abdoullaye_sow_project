@@ -11512,6 +11512,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not load the sales. Check your connection.';
 
   @override
+  String get inventorySaleNotAvailable => 'That sale is not available.';
+
+  @override
   String get inventoryLoadMoreSales => 'Load more';
 
   @override

@@ -11693,6 +11693,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de charger les ventes. Vérifiez votre connexion.';
 
   @override
+  String get inventorySaleNotAvailable => 'Cette vente n\'est pas disponible.';
+
+  @override
   String get inventoryLoadMoreSales => 'Voir plus';
 
   @override

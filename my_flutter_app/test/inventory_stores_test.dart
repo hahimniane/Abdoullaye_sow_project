@@ -484,6 +484,48 @@ void main() {
         'c',
       ]);
     });
+
+    test('a sale opened by id reaches exactly as far as the list does', () {
+      const stores = [_main, _brooklyn];
+      bool visible(InventorySale s, InventoryStoreContext ctx) =>
+          inventorySaleVisible(s, businessId: 'b1', context: ctx);
+      final main = sale('a', 's-main');
+      final bk = sale('b', 's-bk');
+      final old = sale('c', '');
+      // The owner and all-stores staff: every sale of the business.
+      for (final access in const [
+        InventoryAccess.owner(),
+        InventoryAccess(allStores: true),
+      ]) {
+        final ctx = _ctx(stores, access: access);
+        expect([main, bk, old].every((s) => visible(s, ctx)), isTrue);
+      }
+      // Staff tied to Brooklyn: Brooklyn's only (the list's storeId filter).
+      final staff = _ctx(stores, access: _staffAtBrooklyn);
+      expect(visible(bk, staff), isTrue);
+      expect(visible(main, staff), isFalse);
+      expect(visible(old, staff), isFalse);
+      // Staff with no store yet: nothing.
+      final none = _ctx(stores, access: const InventoryAccess());
+      expect([main, bk, old].any((s) => visible(s, none)), isFalse);
+      // A single-store business: every sale, whatever the home store says.
+      final single = _ctx(const [_main], access: _staffAtBrooklyn);
+      expect([main, bk, old].every((s) => visible(s, single)), isTrue);
+      // Never another business's sale, nor any sale without a business.
+      final foreign = InventorySale(
+        id: 'x',
+        businessId: 'other',
+        lines: const [],
+        totalCents: 1,
+        paymentMethod: 'cash',
+        soldByStaffId: 'u',
+      );
+      expect(visible(foreign, _ctx(stores)), isFalse);
+      expect(
+        inventorySaleVisible(main, businessId: '', context: _ctx(stores)),
+        isFalse,
+      );
+    });
   });
 
   group('categories', () {
@@ -1285,6 +1327,10 @@ class _Source implements InventorySource {
     required int limit,
     String storeId = '',
   }) => Stream.value(const []);
+
+  @override
+  Stream<InventorySale?> watchSale(String businessId, String saleId) =>
+      Stream.value(null);
 
   @override
   Stream<List<InventoryMovement>> watchMovements(

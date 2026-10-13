@@ -551,6 +551,22 @@ List<InventorySale> inventorySalesForStore(
       sale,
 ];
 
+/// Whether [sale] - opened by id, from a notification - may be shown to this
+/// viewer: the same reach as the sales list ([inventorySalesScope]) and the
+/// rules. Not a sale of another business; for staff tied to one store of a
+/// multi-store business, only that store's sales; for staff of a multi-store
+/// business with no store yet, nothing. Call it once the stores are known.
+bool inventorySaleVisible(
+  InventorySale sale, {
+  required String businessId,
+  required InventoryStoreContext context,
+}) {
+  if (businessId.isEmpty || sale.businessId != businessId) return false;
+  if (context.homeStoreMissing) return false;
+  final own = context.ownStoreId;
+  return own.isEmpty || sale.storeId == own;
+}
+
 // ---------------------------------------------------------------------------
 // Request builders.
 // ---------------------------------------------------------------------------
