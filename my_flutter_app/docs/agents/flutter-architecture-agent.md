@@ -298,6 +298,15 @@ Add future project conventions and repeated architectural decisions here.
   pings a licence server at build time. Do not bump it without the owner's
   decision. Keep radio code behind `PrinterTransport` (`label_printer.dart`)
   so everything else is testable with `test/fixtures/fake_printer.dart`.
+- The app language lives on the phone (`LanguageProvider`) AND on the
+  profile as `users/{uid}.preferredLanguage` ("en" | "fr"), saved by
+  `ProfileLanguageSync` (`lib/services/`, run by `ProfileLanguageSyncHost`
+  in `main.dart`) on start, sign-in and every switch, through
+  `updateCustomerProfile` with only `{preferredLanguage}`. Server-written
+  pushes pick their language with functions `notification_settings.js`
+  `recipientLanguage(user)` - the one helper; never re-derive it. Only the
+  inventory sale push has French copy so far; `sendPreferenceNotification`
+  itself takes one title/body.
 - `SnackBar` with an `action` persists until tapped (Flutter's `persist`
   defaults to true then); `showSuccessSnackBar(actionLabel:, onAction:)`
   passes `persist: false` and a longer duration.
