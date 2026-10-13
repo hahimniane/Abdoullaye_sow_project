@@ -20,6 +20,7 @@
 
 const crypto = require("node:crypto");
 const {INVOICE_PAYMENT_METHODS, MAX_CENTS} = require("./invoice_ledger");
+const {recipientLanguage} = require("./notification_settings");
 
 const INVENTORY_PAYMENT_METHODS = INVOICE_PAYMENT_METHODS;
 
@@ -1646,19 +1647,6 @@ const SALE_NOTIFICATION_PREFERENCE = "inventorySales";
 const MAX_SALE_NOTIFICATION_RECIPIENTS = 50;
 
 /**
- * @param {object} user A `users` profile.
- * @return {"en"|"fr"} The language its notifications are written in: French
- *   when the profile says so, English otherwise.
- */
-function notificationLanguageOf(user) {
-  for (const key of ["language", "preferredLanguage", "locale"]) {
-    const value = text(user?.[key], 20).toLowerCase();
-    if (value) return value.startsWith("fr") ? "fr" : "en";
-  }
-  return "en";
-}
-
-/**
  * @param {object} user The seller's profile.
  * @return {string} Their first name ("Mamadou" of "Mamadou Diallo"), else
  *   the first word of whatever name the profile has, else "".
@@ -1774,7 +1762,7 @@ function planSaleNotification({sale, users, sellerUid, seller, multiStore}) {
   return {
     recipients: chosen.slice(0, MAX_SALE_NOTIFICATION_RECIPIENTS)
         .map(({uid, user}) => {
-          const language = notificationLanguageOf(user);
+          const language = recipientLanguage(user);
           return {uid, language, ...copy[language]};
         }),
     title: copy.en.title,
@@ -1795,7 +1783,6 @@ module.exports = {
   SALE_NOTIFICATION_PREFERENCE,
   MAX_SALE_NOTIFICATION_RECIPIENTS,
   planSaleNotification,
-  notificationLanguageOf,
   ownerEditableServices,
   planInventoryService,
   INVENTORY_PAYMENT_METHODS,

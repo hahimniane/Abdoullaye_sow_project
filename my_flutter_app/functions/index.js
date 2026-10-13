@@ -203,6 +203,7 @@ const {
   defaultNotificationPreferences,
   normalizeNotificationPreferences,
   normalizePlatformNotificationSettings,
+  normalizePreferredLanguage,
   notificationData,
   notificationDeliveryStatus,
   notificationHtml,
@@ -1068,6 +1069,33 @@ exports.updateCustomerProfile = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
       const uid = requireAuth(request);
+      // The app's language ("en" | "fr"), saved so pushes built on the
+      // server can be written in it (recipientLanguage). Anything else is
+      // ignored.
+      const preferredLanguage = normalizePreferredLanguage(
+          request.data?.preferredLanguage,
+      );
+      // The app saves its language on its own - at start, at sign-in and
+      // when the person switches - with no name or phone. Staff and owners
+      // may have neither, so this never runs the profile checks below.
+      const languageOnly = request.data?.preferredLanguage !== undefined &&
+        request.data?.fullName === undefined &&
+        request.data?.phone === undefined;
+      if (languageOnly) {
+        if (!preferredLanguage) return {success: true, preferredLanguage: ""};
+        const userRef = admin.firestore().collection("users").doc(uid);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) {
+          throw new HttpsError("not-found", "User profile not found");
+        }
+        if (userSnap.data()?.preferredLanguage !== preferredLanguage) {
+          await userRef.update({
+            preferredLanguage,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+        }
+        return {success: true, preferredLanguage};
+      }
       const fullName = String(request.data?.fullName || "").trim();
       const phone = String(request.data?.phone || "").trim();
       const profileImageUrl =
@@ -1155,6 +1183,7 @@ exports.updateCustomerProfile = onCall(
         };
         if (profileImageUrl) updates.profileImageUrl = profileImageUrl;
         if (profileImagePath) updates.profileImagePath = profileImagePath;
+        if (preferredLanguage) updates.preferredLanguage = preferredLanguage;
         transaction.set(userRef, updates, {merge: true});
       });
 
@@ -1164,6 +1193,7 @@ exports.updateCustomerProfile = onCall(
         normalizedPhone,
         phoneVerified,
         notificationPreferences,
+        ...(preferredLanguage ? {preferredLanguage} : {}),
       };
     },
 );

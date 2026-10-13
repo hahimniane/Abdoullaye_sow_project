@@ -4,6 +4,7 @@ const {describe, it} = require("node:test");
 const {
   normalizeNotificationPreferences,
   normalizePlatformNotificationSettings,
+  normalizePreferredLanguage,
   notificationData,
   notificationDeliveryStatus,
   notificationHtml,
@@ -11,6 +12,7 @@ const {
   notificationRetryPlan,
   notificationTestReadiness,
   platformNotificationEnabled,
+  recipientLanguage,
 } = require("../notification_settings");
 
 describe("notification settings helpers", () => {
@@ -403,5 +405,43 @@ describe("notification settings helpers", () => {
           message: "Choose email or SMS for the notification test.",
         },
     );
+  });
+});
+
+describe("notification language", () => {
+  it("is French when the first language field set starts with fr", () => {
+    assert.equal(recipientLanguage({preferredLanguage: "fr"}), "fr");
+    assert.equal(recipientLanguage({language: "fr-SN"}), "fr");
+    assert.equal(recipientLanguage({locale: "FR_sn"}), "fr");
+    assert.equal(recipientLanguage({locale: " fr "}), "fr");
+  });
+
+  it("is English otherwise, and when the profile names none", () => {
+    assert.equal(recipientLanguage({preferredLanguage: "en"}), "en");
+    assert.equal(recipientLanguage({preferredLanguage: "EN"}), "en");
+    assert.equal(recipientLanguage({language: "wo"}), "en");
+    assert.equal(recipientLanguage({}), "en");
+    assert.equal(recipientLanguage(null), "en");
+    assert.equal(recipientLanguage(undefined), "en");
+    assert.equal(recipientLanguage({preferredLanguage: ""}), "en");
+  });
+
+  it("lets the app's own choice win over older fields", () => {
+    assert.equal(
+        recipientLanguage({preferredLanguage: "en", locale: "fr_SN"}), "en");
+    assert.equal(
+        recipientLanguage({preferredLanguage: "fr", language: "en"}), "fr");
+    // An empty preferredLanguage does not hide the next field.
+    assert.equal(
+        recipientLanguage({preferredLanguage: " ", language: "fr"}), "fr");
+  });
+
+  it("accepts only en or fr from a client", () => {
+    assert.equal(normalizePreferredLanguage("en"), "en");
+    assert.equal(normalizePreferredLanguage("fr"), "fr");
+    for (const bad of ["FR", "fr_SN", "de", "", " fr", null, undefined, 1,
+      {}, ["fr"]]) {
+      assert.equal(normalizePreferredLanguage(bad), "", String(bad));
+    }
   });
 });

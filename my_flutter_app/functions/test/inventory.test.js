@@ -1664,9 +1664,27 @@ describe("inventory: sale notifications", () => {
       {name: "Cap", quantity: 1}, {name: "Hat", quantity: 1}]}),
     users: [], sellerUid: "x", multiStore: true}).copy.fr.body,
     "Quelqu'un a vendu Cap +1 autre · $60.00");
-    assert.equal(inv.notificationLanguageOf({locale: "fr_SN"}), "fr");
-    assert.equal(inv.notificationLanguageOf({preferredLanguage: "EN"}), "en");
-    assert.equal(inv.notificationLanguageOf({}), "en");
+    assert.equal(inv.notificationLanguageOf, undefined,
+        "one language helper: notification_settings.recipientLanguage");
+  });
+
+  it("writes in the language the app saved on the profile", () => {
+    // The app saves `preferredLanguage` ("en" | "fr"); the planner reads it
+    // through recipientLanguage, and it wins over an older `locale`.
+    const saved = people.map((p) => {
+      if (p.id === "same-store") return {...p, preferredLanguage: "fr"};
+      if (p.id === "owner") {
+        return {...p, preferredLanguage: "en", locale: "fr_SN"};
+      }
+      return p;
+    });
+    const out = plan({users: saved});
+    const byUid = Object.fromEntries(out.recipients.map((r) => [r.uid, r]));
+    assert.deepEqual(
+        [byUid["same-store"].language, byUid["same-store"].title],
+        ["fr", "Vente à Main store"]);
+    assert.deepEqual([byUid.owner.language, byUid.owner.title],
+        ["en", "Sale at Main store"]);
   });
 
   it("puts owners first and stops at 50 people", () => {

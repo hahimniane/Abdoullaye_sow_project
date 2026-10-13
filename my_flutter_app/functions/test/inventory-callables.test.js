@@ -2867,4 +2867,55 @@ describe("sale notifications", () => {
     assert.equal(row.body, "Awa sold 2 × Cap +1 more · $25.00");
     assert.equal(row.data.storeId, "");
   });
+
+  it("writes it in the language the app saved on the profile", async () => {
+    const LB = "inv-notify-lang";
+    const OWN = "inv-notify-lang-owner";
+    const SELLER = "inv-notify-lang-seller";
+    const FR = "inv-notify-lang-fr";
+    const s = callIn(LB);
+    // Staff have no phone on file: the language must save without one.
+    await seedBusiness(LB, {
+      [OWN]: {role: "businessOwner", businessId: LB},
+      [SELLER]: {role: "staff", businessId: LB,
+        businessPermissions: ["inventory"], fullName: "Awa Ndiaye"},
+      [FR]: {role: "staff", businessId: LB,
+        businessPermissions: ["inventory"]},
+    });
+    const saveLanguage = (uid, preferredLanguage) =>
+      functions.updateCustomerProfile.run({auth: {uid, token: {}},
+        data: {preferredLanguage}});
+
+    assert.deepEqual(await saveLanguage(FR, "fr"),
+        {success: true, preferredLanguage: "fr"});
+    const profile = (await db.collection("users").doc(FR).get()).data();
+    assert.equal(profile.preferredLanguage, "fr");
+    // Name and phone are left alone by a language-only save.
+    assert.equal(profile.fullName, FR);
+    assert.equal(profile.phone, undefined);
+    // Only "en" and "fr" are kept; anything else is ignored.
+    for (const bad of ["de", "FR", "", 7]) {
+      assert.equal((await saveLanguage(FR, bad)).preferredLanguage, "");
+    }
+    assert.equal((await db.collection("users").doc(FR).get()).data()
+        .preferredLanguage, "fr");
+    await assert.rejects(() => saveLanguage("inv-notify-lang-nobody", "fr"),
+        (error) => error.code === "not-found");
+
+    const item = (await s("createInventoryItem", {name: "Cap",
+      priceCents: 1000, quantity: 5}, OWN)).itemId;
+    const sold = await s("recordInventorySale", {clientRequestId: requestId(),
+      paymentMethod: "cash",
+      lines: [{itemId: item, quantity: 1, soldPriceCents: 1000}]}, SELLER);
+    const rows = Object.fromEntries((await toldAbout(sold.saleId))
+        .map((row) => [row.recipientUid, row]));
+    assert.deepEqual([rows[FR].title, rows[FR].body],
+        ["Nouvelle vente", "Awa a vendu Cap · $10.00"]);
+    assert.deepEqual([rows[OWN].title, rows[OWN].body],
+        ["New sale", "Awa sold Cap · $10.00"]);
+    const inbox = await db.collection("users").doc(FR)
+        .collection("notifications")
+        .where("data.saleId", "==", sold.saleId).get();
+    assert.equal(inbox.docs[0].data().title, "Nouvelle vente");
+  });
 });
