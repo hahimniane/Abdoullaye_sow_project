@@ -17,6 +17,13 @@ void main() {
     expect(prefs.supportMessages, isTrue);
     expect(prefs.supportEscalations, isTrue);
     expect(prefs.supportCaseUpdates, isTrue);
+    expect(prefs.inventorySales, isTrue);
+    // A profile saved before the switch existed has it on.
+    expect(
+      NotificationPreferences.fromMap({'businessActivity': true})
+          .inventorySales,
+      isTrue,
+    );
   });
 
   test('notification preferences serialize and preserve disabled values', () {
@@ -37,6 +44,7 @@ void main() {
       'supportMessages': true,
       'supportEscalations': true,
       'supportCaseUpdates': true,
+      'inventorySales': true,
     });
     expect(
       NotificationPreferences.fromMap(prefs.toMap()).shipmentActivity,
@@ -52,6 +60,17 @@ void main() {
     expect(supportDisabled.supportMessages, isFalse);
     expect(supportDisabled.supportEscalations, isFalse);
     expect(supportDisabled.supportCaseUpdates, isFalse);
+
+    final salesOff = NotificationPreferences.defaults.copyWith(
+      inventorySales: false,
+    );
+    expect(salesOff.toMap()['inventorySales'], isFalse);
+    expect(
+      NotificationPreferences.fromMap(salesOff.toMap()).inventorySales,
+      isFalse,
+    );
+    expect(NotificationPreferences.fromMap(salesOff.toMap()).businessActivity,
+        isTrue);
   });
 
   test('phone alias key keeps only digits for phone sign-in lookup', () {

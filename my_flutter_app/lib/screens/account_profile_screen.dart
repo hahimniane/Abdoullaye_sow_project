@@ -9,10 +9,12 @@ import '../l10n/app_localizations.dart';
 import '../models/notification_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../services/biometric_lock_service.dart';
+import '../services/inventory.dart' show inventoryAvailable;
 import '../services/push_notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/auth_error_text.dart';
+import '../utils/business_permissions.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/phone_verification_status.dart';
 import '../utils/root_navigation.dart';
@@ -136,7 +138,8 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
       if (_preferences.carActivity ||
           _preferences.shipmentActivity ||
           _preferences.businessActivity ||
-          _preferences.reviewActivity) {
+          _preferences.reviewActivity ||
+          _preferences.inventorySales) {
         try {
           await PushNotificationService().requestPermissionAndRegister();
         } catch (error) {
@@ -488,6 +491,22 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                       _preferences.copyWith(reviewActivity: value),
                     ),
                   ),
+                  // Only people who sell through Inventory hear about sales.
+                  if (inventoryAvailable(
+                    services: auth.businessServices,
+                    hasPermission: auth.hasBusinessPermission(
+                      BusinessPermission.inventory,
+                    ),
+                    businessId: auth.businessId ?? '',
+                  ))
+                    _PreferenceSwitch(
+                      key: const Key('inventory-sales-notifications'),
+                      title: l10n.inventorySalesNotifications,
+                      value: _preferences.inventorySales,
+                      onChanged: (value) => _updatePreferences(
+                        _preferences.copyWith(inventorySales: value),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -566,6 +585,7 @@ class _ProfileSection extends StatelessWidget {
 
 class _PreferenceSwitch extends StatelessWidget {
   const _PreferenceSwitch({
+    super.key,
     required this.title,
     required this.value,
     required this.onChanged,

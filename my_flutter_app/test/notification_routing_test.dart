@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/screens/review_composer_screen.dart';
 import 'package:my_flutter_app/screens/tracking_screen.dart';
@@ -327,6 +329,58 @@ void businessRoutingTests() {
               {'type': 'support_message', 'caseId': 'c1'}, audience: business)
           ?.name,
           '/support-thread');
+    });
+
+    test('a sale at the store opens the Inventory sales list', () {
+      final route = routeForNotificationData({
+        'type': 'inventory_sale',
+        'businessId': 'biz-1',
+        'saleId': 'sale-1',
+        'storeId': 'store-north',
+        'relatedCollection': 'inventorySales',
+        'relatedId': 'sale-1',
+      }, audience: business);
+      expect(route?.name, '/inventory-sales');
+      final args = route?.arguments as InventorySalesArguments;
+      expect(args.saleId, 'sale-1');
+      expect(args.storeId, 'store-north');
+
+      // A single-store business sends no store.
+      final single = routeForNotificationData({
+        'type': 'inventory_sale',
+        'saleId': 'sale-2',
+        'storeId': '',
+      }, audience: business);
+      expect(single?.name, '/inventory-sales');
+      expect((single?.arguments as InventorySalesArguments).storeId, isNull);
+
+      // Only a business opens it: a customer has no sales list.
+      expect(
+        routeForNotificationData({'type': 'inventory_sale', 'saleId': 's'}),
+        isNull,
+      );
+      // The tap waits for the role, then opens it for the business.
+      final decision = decideNotificationTap(
+        {'type': 'inventory_sale', 'saleId': 'sale-1'},
+        appReady: true,
+        audience: business,
+      );
+      expect(decision.action, NotificationTapAction.open);
+      expect(decision.route?.name, '/inventory-sales');
+      expect(
+        decideNotificationTap(
+          {'type': 'inventory_sale', 'saleId': 'sale-1'},
+          appReady: true,
+          audience: null,
+        ).action,
+        NotificationTapAction.wait,
+      );
+      // The push service pushes it on the root navigator by name, so the
+      // name must be in MaterialApp.routes.
+      expect(
+        File('lib/main.dart').readAsStringSync(),
+        contains("'/inventory-sales': (context)"),
+      );
     });
 
     test('a customer still gets the customer screens for shared types', () {

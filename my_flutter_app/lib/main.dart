@@ -28,6 +28,7 @@ import 'screens/home_menu.dart';
 import 'screens/business_record_screen.dart';
 import 'screens/business_reviews_screen.dart';
 import 'screens/business_transport_screen.dart';
+import 'screens/inventory_sales_screen.dart';
 import 'services/business_service_overview.dart';
 import 'screens/park_car_screen.dart';
 import 'screens/send_barrel_screen.dart';
@@ -369,6 +370,15 @@ class MyApp extends StatelessWidget {
                 final businessId =
                     context.read<AuthProvider>().businessId ?? '';
                 return BusinessTransportScreen(businessId: businessId);
+              },
+              // A "Sale at ..." notification: the Inventory sales list, as
+              // the person would see it from the Inventory section.
+              '/inventory-sales': (context) {
+                final auth = context.read<AuthProvider>();
+                return InventorySalesScreen(
+                  businessId: auth.businessId ?? '',
+                  access: auth.inventoryAccess,
+                );
               },
               '/business-reviews': (context) {
                 final businessId =

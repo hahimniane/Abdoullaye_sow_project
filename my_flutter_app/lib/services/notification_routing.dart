@@ -34,6 +34,17 @@ class BusinessHomeArguments {
   final String? category;
 }
 
+/// The Inventory sales list, opened from a "Sale at ..." notification.
+class InventorySalesArguments {
+  const InventorySalesArguments({this.saleId, this.storeId});
+
+  /// The sale the notification was about.
+  final String? saleId;
+
+  /// The store it was rung up at ('' / null in a single-store business).
+  final String? storeId;
+}
+
 /// Where to navigate for a given push notification's `data` payload.
 class NotificationRoute {
   const NotificationRoute(this.name, {this.arguments});
@@ -342,6 +353,17 @@ NotificationRoute? _businessRouteForNotificationData(
     case 'review_request':
       // A business is told about a review left for it, not asked to write one.
       return const NotificationRoute('/business-reviews');
+    // "Sale at Main store": someone else of the store rang up a sale.
+    case 'inventory_sale':
+      final saleId = _firstNonEmpty(data, ['saleId', 'relatedId']);
+      final storeId = data['storeId']?.toString().trim() ?? '';
+      return NotificationRoute(
+        '/inventory-sales',
+        arguments: InventorySalesArguments(
+          saleId: saleId.isEmpty ? null : saleId,
+          storeId: storeId.isEmpty ? null : storeId,
+        ),
+      );
     default:
       return null; // support_* types share the customer routes below.
   }

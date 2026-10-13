@@ -1492,6 +1492,7 @@
   "walletActivityNotifications": "Mises à jour de remboursement du portefeuille",
   "businessActivityNotifications": "Mises à jour de demande d’entreprise",
   "reviewActivityNotifications": "Demandes d'avis",
+  "inventorySalesNotifications": "Ventes de mon magasin",
   "faceId": "Face ID",
   "faceIdUnlock": "Utiliser Face ID pour déverrouiller l’application",
   "faceIdUnavailable": "Face ID n’est pas disponible sur cet appareil",

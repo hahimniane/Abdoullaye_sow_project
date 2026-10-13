@@ -1492,6 +1492,7 @@
   "walletActivityNotifications": "Wallet refund updates",
   "businessActivityNotifications": "Business application updates",
   "reviewActivityNotifications": "Review requests",
+  "inventorySalesNotifications": "Sales at my store",
   "faceId": "Face ID",
   "faceIdUnlock": "Use Face ID to unlock this app",
   "faceIdUnavailable": "Face ID is not available on this device",

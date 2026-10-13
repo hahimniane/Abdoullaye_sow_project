@@ -3660,6 +3660,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reviewActivityNotifications => 'Review requests';
 
   @override
+  String get inventorySalesNotifications => 'Sales at my store';
+
+  @override
   String get faceId => 'Face ID';
 
   @override

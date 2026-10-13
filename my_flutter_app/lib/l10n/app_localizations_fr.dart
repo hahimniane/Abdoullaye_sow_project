@@ -3737,6 +3737,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get reviewActivityNotifications => 'Demandes d\'avis';
 
   @override
+  String get inventorySalesNotifications => 'Ventes de mon magasin';
+
+  @override
   String get faceId => 'Face ID';
 
   @override

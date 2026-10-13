@@ -6716,6 +6716,12 @@ abstract class AppLocalizations {
   /// **'Review requests'**
   String get reviewActivityNotifications;
 
+  /// No description provided for @inventorySalesNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales at my store'**
+  String get inventorySalesNotifications;
+
   /// No description provided for @faceId.
   ///
   /// In en, this message translates to:

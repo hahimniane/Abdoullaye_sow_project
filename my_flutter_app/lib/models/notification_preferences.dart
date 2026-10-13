@@ -11,6 +11,7 @@ class NotificationPreferences {
     this.supportMessages = true,
     this.supportEscalations = true,
     this.supportCaseUpdates = true,
+    this.inventorySales = true,
   });
 
   final bool pushNotifications;
@@ -24,6 +25,10 @@ class NotificationPreferences {
   final bool supportMessages;
   final bool supportEscalations;
   final bool supportCaseUpdates;
+
+  /// Inventory "Sales at my store": a push when someone else of this
+  /// person's store (or business) rings up a sale. On unless switched off.
+  final bool inventorySales;
 
   static const defaults = NotificationPreferences();
 
@@ -46,6 +51,7 @@ class NotificationPreferences {
       supportCaseUpdates:
           data['supportCaseUpdates'] != false &&
           data['supportActivity'] != false,
+      inventorySales: data['inventorySales'] != false,
     );
   }
 
@@ -62,6 +68,7 @@ class NotificationPreferences {
       'supportMessages': supportMessages,
       'supportEscalations': supportEscalations,
       'supportCaseUpdates': supportCaseUpdates,
+      'inventorySales': inventorySales,
     };
   }
 
@@ -77,6 +84,7 @@ class NotificationPreferences {
     bool? supportMessages,
     bool? supportEscalations,
     bool? supportCaseUpdates,
+    bool? inventorySales,
   }) {
     return NotificationPreferences(
       pushNotifications: pushNotifications ?? this.pushNotifications,
@@ -90,6 +98,7 @@ class NotificationPreferences {
       supportMessages: supportMessages ?? this.supportMessages,
       supportEscalations: supportEscalations ?? this.supportEscalations,
       supportCaseUpdates: supportCaseUpdates ?? this.supportCaseUpdates,
+      inventorySales: inventorySales ?? this.inventorySales,
     );
   }
 }
