@@ -66,6 +66,7 @@ import 'screens/transport_request_details_screen.dart';
 import 'screens/freight_quote_details_screen.dart';
 import 'services/notification_routing.dart';
 import 'services/stripe_config_service.dart';
+import 'widgets/profile_language_sync_host.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -214,6 +215,9 @@ class MyApp extends StatelessWidget {
               : AppGateProvider(),
         ),
       ],
+      // Saves the app language on the signed-in profile, so pushes built on
+      // the server are written in it. Listens on its own; never rebuilds.
+      builder: (context, child) => ProfileLanguageSyncHost(child: child!),
       // Only the locale changes the app shell. Listening to AuthProvider here
       // rebuilt the whole MaterialApp - theme, route table, every delegate -
       // on each auth/profile notification; screens that care about auth

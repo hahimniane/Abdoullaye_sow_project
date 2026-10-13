@@ -130,6 +130,10 @@ class AuthProvider extends ChangeNotifier {
   String? _profileImageUrl;
   NotificationPreferences _notificationPreferences =
       NotificationPreferences.defaults;
+
+  /// The app language saved on the profile (`preferredLanguage`), which the
+  /// server writes notifications in. See [ProfileLanguageSync].
+  String? _profileLanguage;
   bool _isLoading = false;
   bool _isInitializing = true;
   bool _isEmailVerificationSending = false;
@@ -206,6 +210,13 @@ class AuthProvider extends ChangeNotifier {
   String? get profileImageUrl => _profileImageUrl;
   NotificationPreferences get notificationPreferences =>
       _notificationPreferences;
+
+  /// The account whose profile is loaded now; null while signed out or
+  /// while no profile has loaded.
+  String? get loadedProfileUid => _profileUid;
+
+  /// The language saved on the loaded profile ("en" / "fr"), if any.
+  String? get profileLanguage => _profileLanguage;
   bool get isLoading => _isLoading;
   bool get isInitializing => _isInitializing;
   bool get isEmailVerificationSending => _isEmailVerificationSending;
@@ -446,6 +457,8 @@ class AuthProvider extends ChangeNotifier {
               ? data!['notificationPreferences'] as Map<String, dynamic>
               : null,
         );
+        final savedLanguage = data?['preferredLanguage'];
+        _profileLanguage = savedLanguage is String ? savedLanguage : null;
         _profileUid = signedInUser.uid;
         debugPrint(
           '👥 User role: ${_isAdmin
@@ -523,6 +536,7 @@ class AuthProvider extends ChangeNotifier {
     _phoneVerified = false;
     _profileImageUrl = null;
     _notificationPreferences = NotificationPreferences.defaults;
+    _profileLanguage = null;
   }
 
   List<String> _stringList(dynamic raw) {
@@ -672,6 +686,20 @@ class AuthProvider extends ChangeNotifier {
       phone: trimmed,
       notificationPreferences: _notificationPreferences,
     );
+  }
+
+  /// Saves the app language ("en" / "fr") on the signed-in person's profile
+  /// so pushes built on the server are written in it. Language only: no name
+  /// or phone is needed, so staff and owners save it too. Throws on failure;
+  /// [ProfileLanguageSync] calls it and only logs.
+  Future<void> saveProfileLanguage(String languageCode) async {
+    final uid = _profileUid;
+    if (_user == null || uid == null) return;
+    await _functions.httpsCallable('updateCustomerProfile').call<Object?>({
+      'preferredLanguage': languageCode,
+    });
+    // Still the same account: remember what the profile now says.
+    if (_profileUid == uid) _profileLanguage = languageCode;
   }
 
   Future<void> updateAccountProfile({

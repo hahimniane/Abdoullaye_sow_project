@@ -417,11 +417,47 @@ function notificationRetryPlan({deliveryId, delivery, settings}) {
   );
 }
 
+// The languages a person can choose in the app. The app saves its choice to
+// the profile as `preferredLanguage` (updateCustomerProfile).
+const PREFERRED_LANGUAGES = ["en", "fr"];
+
+// Profile fields that may name a person's language, the app's own choice
+// first: the first one that is set decides.
+const PROFILE_LANGUAGE_FIELDS = ["preferredLanguage", "language", "locale"];
+
+/**
+ * @param {*} raw A `preferredLanguage` sent by a client.
+ * @return {string} "en" or "fr"; "" for anything else, which is ignored.
+ */
+function normalizePreferredLanguage(raw) {
+  return typeof raw === "string" && PREFERRED_LANGUAGES.includes(raw) ?
+    raw : "";
+}
+
+/**
+ * The one place that decides what language a person's notifications are
+ * written in.
+ *
+ * @param {object} user A `users` profile.
+ * @return {"en"|"fr"} "fr" when the first language field the profile has
+ *   (`preferredLanguage`, then `language`, then `locale`) starts with "fr";
+ *   "en" otherwise, and when it has none.
+ */
+function recipientLanguage(user) {
+  for (const key of PROFILE_LANGUAGE_FIELDS) {
+    const value = String(user?.[key] ?? "").trim().toLowerCase();
+    if (value) return value.startsWith("fr") ? "fr" : "en";
+  }
+  return "en";
+}
+
 module.exports = {
+  PREFERRED_LANGUAGES,
   defaultNotificationPreferences,
   defaultPlatformNotificationSettings,
   normalizeNotificationPreferences,
   normalizePlatformNotificationSettings,
+  normalizePreferredLanguage,
   notificationData,
   notificationDeliveryStatus,
   notificationHtml,
@@ -429,4 +465,5 @@ module.exports = {
   notificationRetryPlan,
   notificationTestReadiness,
   platformNotificationEnabled,
+  recipientLanguage,
 };
