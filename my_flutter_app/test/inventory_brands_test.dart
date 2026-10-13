@@ -69,8 +69,12 @@ void main() {
     });
 
     test('one store\'s view of a product keeps its brand', () {
-      final shown = _item('i1', name: '11', brand: 'Jordan', brandId: 'br1')
-          .withQuantity(3);
+      final shown = _item(
+        'i1',
+        name: '11',
+        brand: 'Jordan',
+        brandId: 'br1',
+      ).withQuantity(3);
       expect(shown.quantity, 3);
       expect(shown.brand, 'Jordan');
       expect(shown.brandId, 'br1');
@@ -161,11 +165,7 @@ void main() {
   });
 
   group('the product form sends the brand', () {
-    const filled = InventoryItemDraft(
-      name: '11',
-      price: '90',
-      quantity: '4',
-    );
+    const filled = InventoryItemDraft(name: '11', price: '90', quantity: '4');
 
     test('no brand, no brand fields: exactly the v2 request', () {
       final request = createInventoryItemRequest('b1', filled);
@@ -206,12 +206,7 @@ void main() {
     });
 
     test('an edit sends the brand only when it changed', () {
-      final existing = _item(
-        'i1',
-        name: '11',
-        brand: 'Jordan',
-        brandId: 'br1',
-      );
+      final existing = _item('i1', name: '11', brand: 'Jordan', brandId: 'br1');
       final same = updateInventoryItemRequest(
         'b1',
         existing,
@@ -251,12 +246,7 @@ void main() {
 
     test('clearing the brand sends both fields empty; nothing to clear sends '
         'nothing', () {
-      final existing = _item(
-        'i1',
-        name: '11',
-        brand: 'Jordan',
-        brandId: 'br1',
-      );
+      final existing = _item('i1', name: '11', brand: 'Jordan', brandId: 'br1');
       final cleared = updateInventoryItemRequest(
         'b1',
         existing,
@@ -307,19 +297,28 @@ void main() {
       _item('i1', name: '11', brand: 'Jordan', brandId: 'br1'),
       _item('i2', name: 'Air Max', brand: 'Nike', brandId: 'br2'),
       _item('i3', name: 'Soap'),
-      _item('i4', name: 'Slides', brand: 'Nike', brandId: 'br2', archived: true),
+      _item(
+        'i4',
+        name: 'Slides',
+        brand: 'Nike',
+        brandId: 'br2',
+        archived: true,
+      ),
     ];
 
-    List<String> ids(String brandId, {String query = '', bool archived = false}) =>
-        [
-          for (final i in inventoryListing(
-            items,
-            brandId: brandId,
-            query: query,
-            showArchived: archived,
-          ))
-            i.id,
-        ];
+    List<String> ids(
+      String brandId, {
+      String query = '',
+      bool archived = false,
+    }) => [
+      for (final i in inventoryListing(
+        items,
+        brandId: brandId,
+        query: query,
+        showArchived: archived,
+      ))
+        i.id,
+    ];
 
     test('all brands, no brand, one brand', () {
       expect(ids(''), unorderedEquals(['i1', 'i2', 'i3']));
@@ -344,7 +343,11 @@ void main() {
         _item('b', name: '11', brand: 'Jordan', brandId: 'br1'),
         _item('c', name: 'Air', brand: 'Adidas', brandId: 'br3'),
       ]);
-      expect(ordered.map((i) => i.displayName), ['Adidas Air', 'Jordan 11', 'Zed']);
+      expect(ordered.map((i) => i.displayName), [
+        'Adidas Air',
+        'Jordan 11',
+        'Zed',
+      ]);
     });
 
     test('the tag-will-not-scan search finds by brand too', () {
@@ -391,9 +394,14 @@ void main() {
     });
 
     test('each brand refusal maps to its own failure', () {
-      InventoryFailure failure(String reason, {String code = 'invalid-argument'}) =>
-          inventoryFailureOf(code: code, details: {'reason': reason});
-      expect(failure('brand_name_required'), InventoryFailure.brandNameRequired);
+      InventoryFailure failure(
+        String reason, {
+        String code = 'invalid-argument',
+      }) => inventoryFailureOf(code: code, details: {'reason': reason});
+      expect(
+        failure('brand_name_required'),
+        InventoryFailure.brandNameRequired,
+      );
       expect(
         failure('brand_name_taken', code: 'already-exists'),
         InventoryFailure.brandNameTaken,
@@ -542,6 +550,10 @@ class _BrandSource implements InventorySource {
     required int limit,
     String storeId = '',
   }) => Stream.value(const []);
+
+  @override
+  Stream<InventorySale?> watchSale(String businessId, String saleId) =>
+      Stream.value(null);
 
   @override
   Stream<List<InventoryMovement>> watchMovements(

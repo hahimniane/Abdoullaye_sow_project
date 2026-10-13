@@ -5311,6 +5311,7 @@
   "inventoryNoSales": "No sales yet",
   "inventoryNoSalesHint": "Sales you record from the Sell screen appear here.",
   "inventorySalesLoadFailed": "Could not load the sales. Check your connection.",
+  "inventorySaleNotAvailable": "That sale is not available.",
   "inventoryLoadMoreSales": "Load more",
   "inventoryVoidedMark": "Voided",
   "inventoryVoidedBy": "Voided by {name} · {when}",

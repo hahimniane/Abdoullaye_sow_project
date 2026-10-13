@@ -5311,6 +5311,7 @@
   "inventoryNoSales": "Aucune vente pour le moment",
   "inventoryNoSalesHint": "Les ventes enregistrées depuis l'écran Vendre apparaissent ici.",
   "inventorySalesLoadFailed": "Impossible de charger les ventes. Vérifiez votre connexion.",
+  "inventorySaleNotAvailable": "Cette vente n'est pas disponible.",
   "inventoryLoadMoreSales": "Voir plus",
   "inventoryVoidedMark": "Annulée",
   "inventoryVoidedBy": "Annulée par {name} · {when}",

@@ -372,12 +372,15 @@ class MyApp extends StatelessWidget {
                 return BusinessTransportScreen(businessId: businessId);
               },
               // A "Sale at ..." notification: the Inventory sales list, as
-              // the person would see it from the Inventory section.
+              // the person would see it from the Inventory section, opened on
+              // that sale when they may see it.
               '/inventory-sales': (context) {
                 final auth = context.read<AuthProvider>();
+                final args = ModalRoute.of(context)?.settings.arguments;
                 return InventorySalesScreen(
                   businessId: auth.businessId ?? '',
                   access: auth.inventoryAccess,
+                  saleId: args is InventorySalesArguments ? args.saleId : null,
                 );
               },
               '/business-reviews': (context) {
