@@ -206,6 +206,21 @@ test("the register form offers Save, Save & print label and Save & add another f
   assert.match(containersSource, /defaultWaitingDestination\(destinations\.rows\)/);
 });
 
+test("the register form's 'Money received now?' asks what the payment dialog asks, from the same lists", () => {
+  // Only on a new package, only once a price is entered.
+  assert.match(panelSource, /\{!editingId && \(\s*<div className="wpk-intake-money">/);
+  assert.match(panelSource, /disabled=\{busy \|\| \(!draft\.money\.received && !moneyAvailable\)\}/);
+  assert.match(panelSource, /switchIntakeMoney\(d, e\.target\.checked\)/);
+  // The same method list and labels, the same people, nobody chosen by default.
+  assert.match(panelSource, /INVOICE_PAYMENT_METHODS\.map\(\(m\) => \(<option key=\{m\} value=\{m\}>\{INVOICE_PAYMENT_METHOD_LABELS\[m\]\}<\/option>\)\)/);
+  assert.match(panelSource, /<span>Received by<\/span>[\s\S]*?<option value="">Choose staff<\/option>[\s\S]*?staffOptions\.map/);
+  assert.match(paymentSource, /INVOICE_PAYMENT_METHODS\.map\(\(m\) => \(<option key=\{m\} value=\{m\}>\{INVOICE_PAYMENT_METHOD_LABELS\[m\]\}<\/option>\)\)/);
+  // Checked against the people offered, sent with the package, cleared for the next one.
+  assert.match(panelSource, /validateWaitingPackage\(draft, staffIds\)/);
+  assert.match(panelSource, /addWaitingPackagePayload\(businessId, draft\)/);
+  assert.match(panelSource, /setDraft\(nextPackageForSameCustomer\(draft\)\)/);
+});
+
 test("the customer's and receiver's phones use the shared picker through ContactPhone", () => {
   assert.match(panelSource, /import \{ ContactPhone \} from "@\/components\/business\/contact-phone";/);
   assert.equal((panelSource.match(/<ContactPhone\b/g) ?? []).length, 2);

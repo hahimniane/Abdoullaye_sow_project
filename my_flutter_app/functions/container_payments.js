@@ -150,6 +150,44 @@ function linePaymentRecord(input, recordedByStaffId = "") {
 }
 
 /**
+ * The money taken at the counter as a package is registered, when the
+ * request carries any: `payment` absent (or null) means nothing was received
+ * and registration behaves as it always did. Anything else is judged by
+ * validateLinePayment, so a malformed one is refused, never ignored.
+ *
+ * @param {object} data Raw addWaitingPackage data.
+ * @return {object|null} The payment input, or null for none.
+ */
+function registrationPayment(data) {
+  const raw = data && typeof data === "object" ? data.payment : undefined;
+  if (raw === undefined || raw === null) return null;
+  return typeof raw === "object" ? raw : {};
+}
+
+/**
+ * Whether the person named as having taken the money is one of this
+ * business's people: the owner the business names, or anyone whose profile
+ * points at it (the team list the console's "Received by" offers). A person
+ * from another business is refused rather than stored, so the cash count
+ * never credits a stranger.
+ *
+ * @param {object} args {staffId, businessId, person (users/{staffId} or
+ *   null), business (businesses/{businessId} or null)}.
+ * @return {boolean} True when the money may be credited to them.
+ */
+function receiverBelongsToBusiness({staffId, businessId, person, business}) {
+  const id = text(staffId, MAX_STAFF_ID);
+  const biz = text(businessId, MAX_STAFF_ID);
+  if (!id || !biz || id.includes("/")) return false;
+  if (person && typeof person === "object" &&
+      text(person.businessId, MAX_STAFF_ID) === biz) {
+    return true;
+  }
+  return Boolean(business && typeof business === "object" &&
+    text(business.ownerUid, MAX_STAFF_ID) === id);
+}
+
+/**
  * @param {object[]} payments A line's payments, reverted ones included.
  * @return {number} The sum of those that still count.
  */
@@ -213,6 +251,8 @@ module.exports = {
   linePriceRecord,
   validateLinePayment,
   linePaymentRecord,
+  registrationPayment,
+  receiverBelongsToBusiness,
   sumLivePayments,
   paymentRevertRefusal,
   linePaymentStanding,

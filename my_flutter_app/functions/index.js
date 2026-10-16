@@ -392,6 +392,8 @@ const {
   linePriceRecord: containerLinePriceRecord,
   validateLinePayment: validateContainerLinePayment,
   linePaymentRecord: containerLinePaymentRecord,
+  registrationPayment: containerRegistrationPayment,
+  receiverBelongsToBusiness,
   sumLivePayments: sumContainerLivePayments,
   paymentRevertRefusal: containerPaymentRevertRefusal,
 } = require("./container_payments");
@@ -421,6 +423,8 @@ const {
   labelFormat,
   labelCopies,
   containerLabelsModel,
+  labelLineRows,
+  packageLabelsResponse,
   renderContainerLabels,
 } = require("./container_labels");
 const inventory = require("./inventory");
@@ -17074,14 +17078,75 @@ function containerLineAudit(businessId, lineId, row, action, uid, summary) {
  * @return {Promise<string>} The name, else "".
  */
 async function businessStaffName(db, businessId, staffId) {
-  const id = String(staffId || "").trim();
-  if (!id || id.includes("/")) return "";
-  const doc = await db.collection("users").doc(id).get().catch(() => null);
-  const row = doc && doc.exists ? doc.data() || {} : null;
-  if (!row || String(row.businessId || "") !== businessId) return "";
+  const row = await businessPersonProfile(db, businessId, staffId);
+  if (!row) return "";
   return [row.fullName, row.name, row.email]
       .map((value) => String(value || "").trim())
       .find(Boolean) || "";
+}
+
+/**
+ * One of a business's own people - anyone whose profile points at it (the
+ * team the console's "Received by" lists), or the owner the business names -
+ * read once for the names in its history and for who may be credited with
+ * money. The business is only read when the profile does not settle it.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business whose person this must be.
+ * @param {string} staffId The person's uid.
+ * @return {Promise<object|null>} Their profile ({} for an owner with none),
+ *   or null when they are not this business's.
+ */
+async function businessPersonProfile(db, businessId, staffId) {
+  const id = String(staffId || "").trim();
+  if (!id || id.includes("/") || !businessId) return null;
+  const doc = await db.collection("users").doc(id).get().catch(() => null);
+  const person = doc && doc.exists ? doc.data() || {} : null;
+  if (receiverBelongsToBusiness({staffId: id, businessId, person})) {
+    return person;
+  }
+  const biz = await db.collection("businesses").doc(businessId).get()
+      .catch(() => null);
+  const business = biz && biz.exists ? biz.data() || {} : null;
+  return receiverBelongsToBusiness({staffId: id, businessId, person,
+    business}) ? person || {} : null;
+}
+
+/**
+ * The refusal for money credited to someone who is not this business's.
+ *
+ * @return {HttpsError} The error to throw.
+ */
+function receivedByInvalid() {
+  return new HttpsError("invalid-argument",
+      containerMessage("received_by_invalid"),
+      {reasons: ["received_by_invalid"]});
+}
+
+/**
+ * The history sentence for money taken on a package: who held it, who typed
+ * it in when that is someone else, and whether it settled the price. Used by
+ * recordContainerLinePayment and by addWaitingPackage's money at drop-off.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} uid Who typed it in.
+ * @param {object} args {record (linePaymentRecord), row (the line),
+ *   paidCents (the line's paid total after it)}.
+ * @return {Promise<string>} The sentence.
+ */
+async function containerPaymentSummary(db, businessId, uid,
+    {record, row, paidCents}) {
+  const owed = Number(row?.priceCents) || 0;
+  const receiverName = await businessStaffName(
+      db, businessId, record.receivedByStaffId);
+  const recorderName = record.receivedByStaffId === uid ? "" :
+    await businessStaffName(db, businessId, uid);
+  return `Received ${lotMoney(record.amountCents)} (${record.method})` +
+    (receiverName ? ` by ${receiverName}` : "") +
+    (recorderName ? ` (entered by ${recorderName})` : "") +
+    ` for ${containerLineTitle(row)}` +
+    (paidCents >= owed ? " — paid in full" : "");
 }
 
 /**
@@ -17765,17 +17830,35 @@ exports.addWaitingPackage = onCall(
       const businessId = String(data.businessId || "").trim();
       await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
       const errors = validateWaitingPackage(data);
+      // Money taken at the counter as it is dropped off: judged by the same
+      // rules as any later payment, against the price in this request.
+      const payment = containerRegistrationPayment(data);
+      if (payment) {
+        errors.push(...validateContainerLinePayment(payment, {
+          priceCents: containerLinePriceRecord(data).priceCents,
+          paidCents: 0,
+        }));
+      }
       if (errors.length > 0) {
         throw new HttpsError("invalid-argument", containerMessage(errors),
             {reasons: errors});
       }
       const db = admin.firestore();
+      if (payment && !await businessPersonProfile(
+          db, businessId, payment.receivedByStaffId)) {
+        throw receivedByInvalid();
+      }
       const record = containerLineRecord(data, {
         containerId: "",
         containerStatus: LINE_STATUS_WAITING,
         addedByStaffId: uid,
       });
+      const paymentRecord = payment ?
+        containerLinePaymentRecord(payment, uid) : null;
+      const paidCents = paymentRecord ? paymentRecord.amountCents : 0;
       const lineRef = db.collection("containerLines").doc();
+      const payRef = paymentRecord ?
+        db.collection("containerLinePayments").doc() : null;
       // Minted before the transaction: finding a free code reads other lines.
       const trackingCode = await generateTrackingCode(
           CONTAINER_LINE_CODE_PREFIX, "containerLines");
@@ -17799,10 +17882,21 @@ exports.addWaitingPackage = onCall(
         tx.set(lineRef, {
           businessId,
           ...record,
+          paidCents,
           trackingCode,
           createdAt: FirestoreFieldValue.serverTimestamp(),
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
+        // The money lands with the package or not at all: never a package
+        // that says paid without its payment, nor a payment with no package.
+        if (payRef) {
+          tx.set(payRef, {
+            businessId,
+            lineId: lineRef.id,
+            ...paymentRecord,
+            createdAt: FirestoreFieldValue.serverTimestamp(),
+          });
+        }
       });
       try {
         await addLine();
@@ -17825,7 +17919,13 @@ exports.addWaitingPackage = onCall(
           (record.destinationCountryName ?
             `, going to ${record.destinationCountryName}` : "") +
           ", waiting for a container");
-      return {success: true, lineId: lineRef.id, trackingCode};
+      if (paymentRecord) {
+        await containerLineAudit(businessId, lineRef.id, record,
+            "payment", uid, await containerPaymentSummary(db, businessId, uid,
+                {record: paymentRecord, row: record, paidCents}));
+      }
+      return {success: true, lineId: lineRef.id, trackingCode, paidCents,
+        paymentId: payRef ? payRef.id : ""};
     },
 );
 
@@ -18054,6 +18154,11 @@ exports.recordContainerLinePayment = onCall(
       }
       const lineRef = db.collection("containerLines").doc(lineId);
       const payRef = db.collection("containerLinePayments").doc();
+      // Whether the person named may be credited, read once before the
+      // transaction; refused after the payment's own checks, so a blank
+      // name still says "say who" rather than "not on your team".
+      const receiverKnown = Boolean(await businessPersonProfile(
+          db, businessId, data.receivedByStaffId));
       const done = await db.runTransaction(async (tx) => {
         const lineDoc = await tx.get(lineRef);
         const row = lineDoc.exists ? lineDoc.data() || {} : null;
@@ -18072,6 +18177,7 @@ exports.recordContainerLinePayment = onCall(
           throw new HttpsError("invalid-argument", containerMessage(errors),
               {reasons: errors});
         }
+        if (!receiverKnown) throw receivedByInvalid();
         // `receivedByStaffId` is who held the money (chosen, as for parking);
         // `recordedByStaffId` is who typed it in (the signed-in person).
         const record = containerLinePaymentRecord(data, uid);
@@ -18088,18 +18194,9 @@ exports.recordContainerLinePayment = onCall(
         });
         return {row, record, paidCents: after};
       });
-      const owed = Number(done.row.priceCents) || 0;
       // Who took the money, and who typed it in when that is someone else.
-      const receiverName = await businessStaffName(
-          db, businessId, done.record.receivedByStaffId);
-      const recorderName = done.record.receivedByStaffId === uid ? "" :
-        await businessStaffName(db, businessId, uid);
-      const summary = `Received ${lotMoney(done.record.amountCents)} ` +
-        `(${done.record.method})` +
-        (receiverName ? ` by ${receiverName}` : "") +
-        (recorderName ? ` (entered by ${recorderName})` : "") +
-        ` for ${containerLineTitle(done.row)}` +
-        (done.paidCents >= owed ? " — paid in full" : "");
+      const summary = await containerPaymentSummary(db, businessId, uid,
+          {record: done.record, row: done.row, paidCents: done.paidCents});
       await containerLineAudit(businessId, lineId, done.row,
           "payment", uid, summary);
       if (done.row.containerId) {
@@ -19229,6 +19326,81 @@ exports.revertInvoicePayment = onCall(
 const LABEL_TOKEN_SEPARATOR = ".";
 
 /**
+ * The line ids a label request names: `lineIds`, else the one `lineId`.
+ * Refuses an empty or oversized list (1 to 100).
+ *
+ * @param {object} data The callable data.
+ * @return {string[]} The ids, de-duplicated.
+ */
+function labelLineIds(data) {
+  const named = Array.isArray(data.lineIds) ? data.lineIds :
+    (data.lineId ? [data.lineId] : []);
+  const {ids, errors} = cleanLineIds(named);
+  if (errors.length > 0) {
+    throw new HttpsError("invalid-argument", containerMessage(errors),
+        {reasons: errors});
+  }
+  return ids;
+}
+
+/**
+ * The packages with no container whose labels are asked for, by id, each
+ * with its tracking code. Gated on the containers section; every id must be
+ * this business's line. Lines from before codes existed get theirs now
+ * rather than printing a sheet with gaps. Shared by the labels link and by
+ * the labels the phone prints itself.
+ *
+ * @param {object} db Firestore.
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @param {object} data The callable data {lineIds | lineId}.
+ * @return {Promise<{docs: object[], codes: Map<string, string>}>} The line
+ *   snapshots in the order asked, and the stored code of each.
+ */
+async function looseLabelLines(db, uid, businessId, data) {
+  await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+  const ids = labelLineIds(data);
+  const docs = await db.getAll(
+      ...ids.map((id) => db.collection("containerLines").doc(id)));
+  const gone = ids.filter((id, i) => !docs[i].exists ||
+    String(docs[i].data()?.businessId) !== businessId);
+  if (gone.length > 0) throw containerRefusal("line_not_found", gone);
+  const codes = await assignMissingLineCodes(db, docs);
+  return {docs, codes};
+}
+
+/**
+ * A container's lines for its labels, each with its tracking code (lines
+ * from before codes existed get theirs now), and the ones asked for: one
+ * `lineId` (a reprint for one barrel), several `lineIds`, or the whole box.
+ * Shared by the labels link and by the labels the phone prints itself.
+ *
+ * @param {object} db Firestore.
+ * @param {object} ref The container, already loaded for the caller.
+ * @param {object} data The callable data {lineId?, lineIds?}.
+ * @return {Promise<{docs: object[], codes: Map<string, string>,
+ *   chosen: object[]}>} Every line, the stored codes, and the lines asked
+ *   for (every line when none was named).
+ */
+async function containerLabelLines(db, ref, data) {
+  const lines = await db.collection("containerLines")
+      .where("containerId", "==", ref.id).get();
+  // Each code is stored as it is assigned (first write wins), and the map
+  // holds the code actually stored for every line.
+  const codes = await assignMissingLineCodes(db, lines.docs);
+  const named = Array.isArray(data.lineIds) || String(data.lineId || "") ?
+    labelLineIds(data) : [];
+  if (named.length === 0) return {docs: lines.docs, codes, chosen: lines.docs};
+  const byId = new Map(lines.docs.map((d) => [d.id, d]));
+  const gone = named.filter((id) => !byId.has(id));
+  if (gone.length > 0) {
+    throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found,
+        {reason: "line_not_found", lineIds: gone});
+  }
+  return {docs: lines.docs, codes, chosen: named.map((id) => byId.get(id))};
+}
+
+/**
  * The labels link for packages that have no container, or any lines named
  * outright. Each line carries its own secret token; the link holds the tokens
  * of exactly the lines asked for, so it opens those labels and nothing else.
@@ -19240,22 +19412,7 @@ const LABEL_TOKEN_SEPARATOR = ".";
  * @return {Promise<object>} The callable's answer.
  */
 async function containerLineLabelsUrl(db, uid, businessId, data) {
-  await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
-  const named = Array.isArray(data.lineIds) ? data.lineIds :
-    (data.lineId ? [data.lineId] : []);
-  const {ids, errors} = cleanLineIds(named);
-  if (errors.length > 0) {
-    throw new HttpsError("invalid-argument", containerMessage(errors),
-        {reasons: errors});
-  }
-  const docs = await db.getAll(
-      ...ids.map((id) => db.collection("containerLines").doc(id)));
-  const gone = ids.filter((id, i) => !docs[i].exists ||
-    String(docs[i].data()?.businessId) !== businessId);
-  if (gone.length > 0) throw containerRefusal("line_not_found", gone);
-  // Lines from before codes existed get theirs now rather than printing a
-  // sheet with gaps.
-  const codes = await assignMissingLineCodes(db, docs);
+  const {docs, codes} = await looseLabelLines(db, uid, businessId, data);
   const tokens = [];
   for (const group of inGroups(docs, 10)) {
     tokens.push(...await Promise.all(group.map(async (d) => {
@@ -19409,19 +19566,11 @@ exports.getContainerDocumentUrl = onCall(
       const url = `${base}?t=${encodeURIComponent(token)}`;
       if (String(data.view || "") !== "labels") return {success: true, url};
       // Labels need every line's code; lines from before codes existed get
-      // theirs now rather than printing a sheet with gaps.
-      const lines = await db.collection("containerLines")
-          .where("containerId", "==", ref.id).get();
-      // Each code is stored as it is assigned (first write wins), and the
-      // map holds the code actually stored for every line.
-      const codes = await assignMissingLineCodes(db, lines.docs);
-      // One line's labels - a reprint for one barrel - or the whole box.
+      // theirs now rather than printing a sheet with gaps. One line's labels
+      // - a reprint for one barrel - or the whole box.
       const lineId = String(data.lineId || "");
-      const lineDoc = lineId ?
-        lines.docs.find((d) => d.id === lineId) : null;
-      if (lineId && !lineDoc) {
-        throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
-      }
+      const {codes, chosen} = await containerLabelLines(db, ref, {lineId});
+      const lineDoc = lineId ? chosen[0] : null;
       const code = lineDoc ? String(codes.get(lineDoc.id) ||
         lineDoc.data()?.trackingCode || "") : "";
       const query = new URLSearchParams({
@@ -19431,6 +19580,44 @@ exports.getContainerDocumentUrl = onCall(
         ...(code ? {code} : {}),
       });
       return {success: true, url: `${url}&${query.toString()}`};
+    },
+);
+
+// The labels as data, for the phone to print itself (a Bluetooth label
+// printer, or its own print dialog on a 4x6 printer): the same lines, the
+// same codes and the same words as the printable page, with no logo and no
+// price. `containerId` empty means packages still waiting, named by id.
+exports.getPackageLabels = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      const containerId = String(data.containerId || "").trim();
+      let container = null;
+      let chosen;
+      let codes;
+      if (containerId) {
+        const loaded =
+          await loadContainerFor(db, uid, businessId, containerId);
+        container = loaded.data;
+        ({codes, chosen} = await containerLabelLines(db, loaded.ref, data));
+      } else {
+        ({docs: chosen, codes} =
+          await looseLabelLines(db, uid, businessId, data));
+      }
+      const business = await db.collection("businesses").doc(businessId)
+          .get().catch(() => null);
+      const model = containerLabelsModel({
+        container,
+        lines: labelLineRows(
+            chosen.map((d) => ({id: d.id, line: d.data() || {}})), codes),
+        business: business && business.exists ? business.data() : {},
+        consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+        copies: labelCopies(data.copies),
+      });
+      return packageLabelsResponse(model);
     },
 );
 

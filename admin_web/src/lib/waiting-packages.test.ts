@@ -17,8 +17,11 @@ import {
   assignmentRefusal,
   defaultWaitingDestination,
   emptyPackagePaymentDraft,
+  emptyIntakeMoney,
   emptyWaitingPackageDraft,
   filterWaitingPackages,
+  intakeMoneyAvailable,
+  intakePaymentPayload,
   mainDestinationChanges,
   nextPackageForSameCustomer,
   packageMethodLabel,
@@ -37,7 +40,9 @@ import {
   selectedCountText,
   setPackagePriceRequest,
   sortWaitingNewestFirst,
+  switchIntakeMoney,
   updateWaitingPackageRequest,
+  validateIntakeMoney,
   validatePackagePaymentDraft,
   validatePackagePrice,
   validateWaitingPackage,
@@ -444,6 +449,75 @@ test("the add request carries what the server stores, and only what was entered"
   assert.equal("lengthIn" in bare, false, "no size typed, none sent");
   assert.equal("priceCents" in bare, false, "no price typed, none sent");
   assert.equal(bare.payOnArrival, false);
+});
+
+// ---------------------------------------------------------------------------
+// "Money received now?" at registration.
+// ---------------------------------------------------------------------------
+
+const STAFF = ["owner", "cashier"];
+
+/** A priced draft with the money section switched on. */
+function paidDraft(money: Partial<WaitingPackageDraft["money"]> = {}, over: Partial<WaitingPackageDraft> = {}): WaitingPackageDraft {
+  const on = switchIntakeMoney(draft({ price: "150", ...over }), true);
+  return { ...on, money: { ...on.money, receivedByStaffId: "cashier", ...money } };
+}
+
+test("money received now opens only on a price, on the full price, cash, nobody chosen", () => {
+  const blank = emptyWaitingPackageDraft(guinea);
+  assert.deepEqual(blank.money, { received: false, ...emptyPackagePaymentDraft });
+  assert.equal(intakeMoneyAvailable(draft()), false);
+  assert.equal(intakeMoneyAvailable(draft({ price: "x" })), false);
+  assert.equal(intakeMoneyAvailable(draft({ price: "45,50" })), true);
+  // No price: the switch does nothing.
+  const unpriced = draft();
+  assert.equal(switchIntakeMoney(unpriced, true), unpriced);
+  const on = switchIntakeMoney(draft({ price: "45,50" }), true);
+  assert.deepEqual(on.money, { received: true, amount: "45.50", method: "cash", note: "", receivedByStaffId: "" });
+  // Off forgets what was typed.
+  const off = switchIntakeMoney({ ...on, money: { ...on.money, amount: "10", receivedByStaffId: "cashier" } }, false);
+  assert.deepEqual(off.money, emptyIntakeMoney());
+});
+
+test("money received now is refused the way the server refuses a payment", () => {
+  assert.deepEqual(validateWaitingPackage(paidDraft(), STAFF), []);
+  assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "40" }), STAFF), [], "part now, the rest later");
+  assert.deepEqual(validateWaitingPackage(paidDraft({ receivedByStaffId: "" }), STAFF), ["received_by_required"]);
+  assert.deepEqual(validateWaitingPackage(paidDraft({ receivedByStaffId: "stranger" }), STAFF), ["received_by_invalid"]);
+  assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "150.01" }), STAFF), ["payment_exceeds_balance"]);
+  assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "0" }), STAFF), ["amount_required"]);
+  assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "" }), STAFF), ["amount_required"]);
+  assert.deepEqual(validateWaitingPackage(paidDraft({ method: "barter" as never }), STAFF), ["payment_method_invalid"]);
+  // The price taken away after the switch was turned on.
+  assert.deepEqual(validateWaitingPackage({ ...paidDraft(), price: "" }, STAFF), ["price_required"]);
+  // Switched off: nothing about money is checked.
+  assert.deepEqual(validateWaitingPackage(draft({ money: { ...emptyIntakeMoney(), amount: "999" } }), STAFF), []);
+  assert.deepEqual(validateIntakeMoney(paidDraft({ receivedByStaffId: "stranger" })), [], "no list, no membership check");
+  assert.equal(
+    waitingPackageMessage(["received_by_invalid"]),
+    "Choose someone on your team as the person who took the payment.",
+  );
+});
+
+test("the add request carries the money as payment, in cents, only when it was received", () => {
+  const payload = addWaitingPackagePayload("biz", paidDraft({ amount: "60", method: "zelle", note: "  at the counter " }));
+  assert.deepEqual(payload.payment, { amountCents: 6000, method: "zelle", receivedByStaffId: "cashier", note: "at the counter" });
+  assert.equal(payload.priceCents, 15000);
+  assert.deepEqual(intakePaymentPayload(paidDraft()), { amountCents: 15000, method: "cash", receivedByStaffId: "cashier" }, "no note, none sent");
+  // Switched off, or never on: the request is what it always was.
+  const before = addWaitingPackagePayload("biz", draft({ price: "150" }));
+  assert.equal("payment" in before, false);
+  assert.equal(intakePaymentPayload(draft({ money: { ...emptyIntakeMoney(), amount: "60", receivedByStaffId: "cashier" } })), null);
+  // An edit never sends money: that is "Record a payment".
+  assert.equal("payment" in updateWaitingPackageRequest("biz", "w1", paidDraft()).line, false);
+});
+
+test("money is per package: add another, and reopening a saved one, start with none", () => {
+  const next = nextPackageForSameCustomer(paidDraft({ amount: "60" }));
+  assert.deepEqual(next.money, emptyIntakeMoney());
+  assert.equal(next.price, "");
+  const reopened = waitingPackageDraftFromRow({ id: "w1", kind: "barrels", quantity: 2, priceCents: 15000, paidCents: 6000 });
+  assert.deepEqual(reopened.money, emptyIntakeMoney());
 });
 
 test("a car goes with its VIN, cleaned, and counts as one", () => {

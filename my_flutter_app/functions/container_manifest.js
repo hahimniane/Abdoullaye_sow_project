@@ -1051,6 +1051,8 @@ const CONTAINER_MESSAGES = Object.freeze({
   amount_too_large: "That amount is larger than a package can carry.",
   payment_method_invalid: "Say how the payment arrived.",
   received_by_required: "Say which staff member took the payment.",
+  received_by_invalid:
+    "Choose someone on your team as the person who took the payment.",
   payment_exceeds_balance: "That is more than what is still owed.",
   payment_not_found: "That payment no longer exists.",
   payment_already_reverted: "That payment was already reverted.",

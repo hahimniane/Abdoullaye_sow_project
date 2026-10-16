@@ -5083,6 +5083,13 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This car is already waiting for a container.": "Cette voiture attend déjà un conteneur.",
   "Choose where this package is going.": "Choisissez où va ce colis.",
   "Set a price before recording a payment.": "Définissez un prix avant d’enregistrer un paiement.",
+  "Choose someone on your team as the person who took the payment.":
+    "Choisissez un membre de votre équipe comme personne ayant reçu le paiement.",
+  // The register form's "Money received now?" section.
+  "Money received now?": "Argent reçu maintenant ?",
+  "Enter a price first to record money received now.":
+    "Saisissez d’abord un prix pour enregistrer l’argent reçu maintenant.",
+  "Amount ($)": "Montant ($)",
   "A package can only go on a container headed to the same country.":
     "Un colis ne peut aller que dans un conteneur à destination du même pays.",
   "Enter the length, width and height in inches, or leave all three empty.":

@@ -236,6 +236,7 @@ export type ContainerRefusal =
   | "amount_too_large"
   | "payment_method_invalid"
   | "received_by_required"
+  | "received_by_invalid"
   | "payment_exceeds_balance"
   | "payment_not_found"
   | "payment_already_reverted";
@@ -295,6 +296,7 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   amount_too_large: "That amount is larger than a package can carry.",
   payment_method_invalid: "Say how the payment arrived.",
   received_by_required: "Say which staff member took the payment.",
+  received_by_invalid: "Choose someone on your team as the person who took the payment.",
   payment_exceeds_balance: "That is more than what is still owed.",
   payment_not_found: "That payment no longer exists.",
   payment_already_reverted: "That payment was already reverted.",

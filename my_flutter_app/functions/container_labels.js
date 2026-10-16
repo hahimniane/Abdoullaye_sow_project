@@ -299,11 +299,63 @@ ${pages.join("\n") || empty}
 </body></html>`;
 }
 
+const createdMillis = (line) => {
+  const at = line?.createdAt;
+  if (!at) return 0;
+  if (typeof at.toMillis === "function") return at.toMillis();
+  if (typeof at.seconds === "number") return at.seconds * 1000;
+  const parsed = new Date(at).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+/**
+ * The lines a label job prints, as the model reads them: each carrying the
+ * code actually stored for it (codes are assigned just before, so the
+ * snapshot may predate its own code), in the order they were taken in. A
+ * line with no stored code - removed while its code was being written - is
+ * left out rather than printed blank.
+ *
+ * @param {object[]} entries The lines as read, {id, line}.
+ * @param {Map<string, string>} codes The stored code by line id.
+ * @return {object[]} The rows for containerLabelsModel.
+ */
+function labelLineRows(entries, codes) {
+  const stored = codes instanceof Map ? codes : new Map();
+  return (Array.isArray(entries) ? entries : [])
+      .filter((entry) => entry && stored.get(entry.id))
+      .map((entry) => ({...(entry.line || {}),
+        trackingCode: stored.get(entry.id)}))
+      .sort((a, b) => createdMillis(a) - createdMillis(b));
+}
+
+/**
+ * What the phone needs to print labels itself (a Bluetooth label printer, or
+ * its own print dialog): the labels exactly as the page prints them, and the
+ * words of the footer. No logo and no price - the phone draws its own, and
+ * the paper never carries a price.
+ *
+ * @param {object} model From containerLabelsModel.
+ * @return {object} {labels, reference, hasContainer, businessName,
+ *   businessPhone}.
+ */
+function packageLabelsResponse(model) {
+  const m = model && typeof model === "object" ? model : {};
+  return {
+    labels: Array.isArray(m.labels) ? m.labels : [],
+    reference: text(m.reference, 120),
+    hasContainer: m.hasContainer === true,
+    businessName: text(m.businessName, 160),
+    businessPhone: text(m.businessPhone, 40),
+  };
+}
+
 module.exports = {
   LABELS_PER_PACKAGE,
   LABEL_FORMATS,
   labelFormat,
   labelCopies,
   containerLabelsModel,
+  labelLineRows,
+  packageLabelsResponse,
   renderContainerLabels,
 };

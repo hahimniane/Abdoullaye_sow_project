@@ -884,7 +884,7 @@ describe("the container callables and their gates", () => {
       "updateContainerLineContacts", "getContainerDocumentUrl",
       "addWaitingPackage", "assignContainerLines", "unassignContainerLine",
       "setContainerLinePrice", "recordContainerLinePayment",
-      "revertContainerLinePayment"]) {
+      "revertContainerLinePayment", "getPackageLabels"]) {
       const body = callable(name);
       // The gate is either inline or the shared loader, which carries it.
       assert.match(body, /CONTAINER_SECTION|loadContainerFor\(/,
@@ -1111,6 +1111,48 @@ describe("the container callables and their gates", () => {
     assert.match(revert, /reverted: true,\s*revertedByStaffId: uid/);
     assert.doesNotMatch(revert, /tx\.delete\(/);
     assert.match(callable("setContainerLinePrice"), /db\.runTransaction\(/);
+  });
+
+  it("takes money at drop-off in the transaction that creates the package",
+      () => {
+        const body = callable("addWaitingPackage");
+        // Judged by the payment's own rules before anything is written.
+        assert.match(body, /validateContainerLinePayment\(payment, \{/);
+        assert.ok(body.indexOf("validateContainerLinePayment(") <
+          body.indexOf("db.runTransaction("));
+        assert.ok(body.indexOf("receivedByInvalid()") <
+          body.indexOf("db.runTransaction("));
+        const tx = body.slice(body.indexOf("db.runTransaction("),
+            body.indexOf("await addLine();"));
+        assert.match(tx, /tx\.set\(lineRef, \{[\s\S]*?paidCents,/);
+        assert.match(tx, /tx\.set\(payRef, \{[\s\S]*?\.\.\.paymentRecord/);
+        assert.match(body, /containerLinePaymentRecord\(payment, uid\)/);
+        assert.match(body, /paymentId: payRef \? payRef\.id : ""/);
+        // Both ways of taking money refuse a stranger as the receiver.
+        for (const name of ["addWaitingPackage",
+          "recordContainerLinePayment"]) {
+          assert.match(callable(name), /businessPersonProfile\(/, name);
+          assert.match(callable(name), /containerPaymentSummary\(/, name);
+        }
+      });
+
+  it("prints the phone's labels from the same loaders as the page", () => {
+    const body = callable("getPackageLabels");
+    assert.match(body, /loadContainerFor\(db, uid, businessId, containerId\)/);
+    assert.match(body, /containerLabelLines\(db, loaded\.ref, data\)/);
+    assert.match(body, /looseLabelLines\(db, uid, businessId, data\)/);
+    assert.match(body, /packageLabelsResponse\(model\)/);
+    const url = callable("getContainerDocumentUrl");
+    assert.match(url, /containerLabelLines\(db, ref, \{lineId\}\)/);
+    const loose = source.slice(
+        source.indexOf("async function containerLineLabelsUrl("),
+        source.indexOf("async function containerLineLabelsPage("));
+    assert.match(loose, /looseLabelLines\(db, uid, businessId, data\)/);
+    // One copy of the loading, not two: neither callable loads lines itself.
+    for (const own of [body, url, loose]) {
+      assert.doesNotMatch(own,
+          /assignMissingLineCodes\(|collection\("containerLines"\)/);
+    }
   });
 
   it("serves a waiting package's labels from its own line token", () => {

@@ -190,8 +190,64 @@ describe("the words the screens show", () => {
     for (const code of ["price_invalid", "price_below_paid", "price_required",
       "amount_required", "amount_too_large", "payment_method_invalid",
       "payment_exceeds_balance", "payment_not_found",
-      "payment_already_reverted", "received_by_required"]) {
+      "payment_already_reverted", "received_by_required",
+      "received_by_invalid"]) {
       assert.ok(CONTAINER_MESSAGES[code], code);
     }
+  });
+});
+
+describe("money received as a package is registered", () => {
+  const {registrationPayment, receiverBelongsToBusiness} =
+    require("../container_payments");
+
+  it("is nothing when the request carries no payment", () => {
+    assert.equal(registrationPayment({}), null);
+    assert.equal(registrationPayment({payment: null}), null);
+    assert.equal(registrationPayment(null), null);
+    const payment = {amountCents: 500, method: "cash",
+      receivedByStaffId: "s1"};
+    assert.equal(registrationPayment({payment}), payment);
+  });
+
+  it("judges a malformed payment instead of ignoring it", () => {
+    const odd = registrationPayment({payment: "yes"});
+    assert.deepEqual(odd, {});
+    assert.deepEqual(validateLinePayment(odd, {priceCents: 1000}),
+        ["amount_required", "payment_method_invalid", "received_by_required"]);
+  });
+
+  it("is judged against the price in the same request", () => {
+    const payment = {amountCents: 15001, method: "cash",
+      receivedByStaffId: "s1"};
+    assert.deepEqual(validateLinePayment(payment,
+        {priceCents: 15000, paidCents: 0}), ["payment_exceeds_balance"]);
+    assert.deepEqual(validateLinePayment(payment,
+        {priceCents: null, paidCents: 0}), ["price_required"]);
+    assert.deepEqual(validateLinePayment({...payment, amountCents: 15000},
+        {priceCents: 15000, paidCents: 0}), []);
+  });
+
+  it("credits only one of the business's own people", () => {
+    const base = {staffId: "s1", businessId: "biz"};
+    assert.equal(receiverBelongsToBusiness({...base,
+      person: {businessId: "biz"}}), true);
+    // The owner the business names, even without a profile pointing at it.
+    assert.equal(receiverBelongsToBusiness({...base, person: null,
+      business: {ownerUid: "s1"}}), true);
+    assert.equal(receiverBelongsToBusiness({...base,
+      person: {businessId: "other"}, business: {ownerUid: "owner"}}), false);
+    assert.equal(receiverBelongsToBusiness({...base, person: null,
+      business: null}), false);
+    for (const staffId of ["", "  ", "a/b", undefined]) {
+      assert.equal(receiverBelongsToBusiness({staffId, businessId: "biz",
+        person: {businessId: "biz"}}), false, String(staffId));
+    }
+    assert.equal(receiverBelongsToBusiness({staffId: "s1", businessId: "",
+      person: {businessId: ""}}), false);
+  });
+
+  it("has a message for a receiver who is not on the team", () => {
+    assert.match(CONTAINER_MESSAGES.received_by_invalid, /your team/);
   });
 });

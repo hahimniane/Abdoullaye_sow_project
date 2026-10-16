@@ -350,7 +350,21 @@ export type WaitingPackageDraft = {
   /** US dollars as typed; blank is "no price yet". */
   price: string;
   payOnArrival: boolean;
+  /** Money taken at the counter as it is dropped off; per package, never carried to the next. */
+  money: IntakeMoneyDraft;
 };
+
+/**
+ * "Money received now?": the switch, and when it is on, the same fields a
+ * later payment asks for. Sent with the package as `payment`, judged by the
+ * server with the same rules as `recordContainerLinePayment`.
+ */
+export type IntakeMoneyDraft = PackagePaymentDraft & { received: boolean };
+
+/** The money section switched off and blank: no amount, nobody chosen. */
+export function emptyIntakeMoney(): IntakeMoneyDraft {
+  return { received: false, ...emptyPackagePaymentDraft };
+}
 
 /** A blank package, opened on the main destination when there is one. */
 export function emptyWaitingPackageDraft(destination: DestinationRef | null = null): WaitingPackageDraft {
@@ -375,6 +389,7 @@ export function emptyWaitingPackageDraft(destination: DestinationRef | null = nu
     heightIn: "",
     price: "",
     payOnArrival: false,
+    money: emptyIntakeMoney(),
   };
 }
 
@@ -422,6 +437,8 @@ export function waitingPackageDraftFromRow(row: unknown): WaitingPackageDraft {
     heightIn: line.heightIn === null ? "" : trimNumber(line.heightIn),
     price: line.priceCents !== null && line.priceCents > 0 ? centsToInput(line.priceCents) : "",
     payOnArrival: line.payOnArrival,
+    // Money on a saved package goes through "Record a payment", never the edit form.
+    money: emptyIntakeMoney(),
   };
 }
 
@@ -452,7 +469,8 @@ export type WaitingPackageError =
   | ContainerLineError
   | "package_destination_required"
   | "size_invalid"
-  | "price_invalid";
+  | "price_invalid"
+  | IntakeMoneyError;
 
 /**
  * The price as cents: null for blank, NaN for unreadable, a refusal when it
@@ -476,15 +494,77 @@ function readSides(draft: Pick<WaitingPackageDraft, "lengthIn" | "widthIn" | "he
   return { sides: sides as [number, number, number], error: null };
 }
 
-/** Every problem at once: the manifest's line checks, then the waiting package's own. */
-export function validateWaitingPackage(draft: WaitingPackageDraft): WaitingPackageError[] {
+/**
+ * Every problem at once: the manifest's line checks, then the waiting
+ * package's own, then the money taken at drop-off (when the switch is on).
+ * `staffIds` is the business's people the "Received by" select offers.
+ */
+export function validateWaitingPackage(draft: WaitingPackageDraft, staffIds?: readonly string[]): WaitingPackageError[] {
   const errors: WaitingPackageError[] = validateContainerLineDraft(lineDraftOf(draft));
   if (!text(draft.destinationCountryId, 60)) errors.push("package_destination_required");
   const { error: sizeError } = readSides(draft);
   if (sizeError) errors.push(sizeError);
   const { error: priceError } = readPackagePrice(draft.price);
   if (priceError) errors.push(priceError);
+  errors.push(...validateIntakeMoney(draft, staffIds));
   return errors;
+}
+
+// ---------------------------------------------------------------------------
+// "Money received now?" - a payment taken as the package is registered.
+// ---------------------------------------------------------------------------
+
+export type IntakeMoneyError = PackagePaymentError | "received_by_invalid";
+
+/** The switch can only be turned on once a readable price is entered: a payment is judged against it. */
+export function intakeMoneyAvailable(draft: Pick<WaitingPackageDraft, "price">): boolean {
+  return readPackagePrice(draft.price).cents !== null;
+}
+
+/**
+ * Turning the money section on opens it on the full price (editable), cash,
+ * and nobody chosen - who took it must be picked, as for any payment.
+ * Turning it off forgets what was typed.
+ */
+export function switchIntakeMoney(draft: WaitingPackageDraft, on: boolean): WaitingPackageDraft {
+  if (!on) return { ...draft, money: emptyIntakeMoney() };
+  const { cents } = readPackagePrice(draft.price);
+  if (cents === null) return draft;
+  return { ...draft, money: { ...emptyIntakeMoney(), received: true, amount: centsToInput(cents) } };
+}
+
+/**
+ * The server's checks for money at drop-off, before the round trip: the
+ * payment validator's, against the price in the same form and nothing paid
+ * yet, and the person who took it must be one of the business's people.
+ */
+export function validateIntakeMoney(draft: WaitingPackageDraft, staffIds?: readonly string[]): IntakeMoneyError[] {
+  const money = draft.money;
+  if (!money?.received) return [];
+  const { cents } = readPackagePrice(draft.price);
+  const errors: IntakeMoneyError[] = validatePackagePaymentDraft(money, {
+    status: cents === null ? "no_price" : "unpaid",
+    priceCents: cents,
+    paidCents: 0,
+    balanceCents: cents,
+    payOnArrival: draft.payOnArrival === true,
+  });
+  const who = text(money.receivedByStaffId, 120);
+  if (who && staffIds && !staffIds.includes(who)) errors.push("received_by_invalid");
+  return errors;
+}
+
+/** The `payment` half of the `addWaitingPackage` request, or null when no money was received. */
+export function intakePaymentPayload(draft: WaitingPackageDraft) {
+  const money = draft.money;
+  if (!money?.received) return null;
+  const note = text(money.note, MAX_NOTE);
+  return {
+    amountCents: readMoneyInput(money.amount).cents ?? 0,
+    method: text(money.method, 40),
+    receivedByStaffId: text(money.receivedByStaffId, 120),
+    ...(note ? { note } : {}),
+  };
 }
 
 /** The refusals as one sentence per problem, the way the form shows them (the server's sentences). */
@@ -507,10 +587,13 @@ function packageExtras(draft: WaitingPackageDraft, withPrice = true) {
 
 /** The `addWaitingPackage` request, shaped as the server stores it. */
 export function addWaitingPackagePayload(businessId: string, draft: WaitingPackageDraft) {
+  const payment = intakePaymentPayload(draft);
   return {
     businessId: text(businessId, 200),
     ...containerLinePayload(lineDraftOf(draft)),
     ...packageExtras(draft),
+    // Only when money was received: without it the request is what it always was.
+    ...(payment ? { payment } : {}),
   };
 }
 

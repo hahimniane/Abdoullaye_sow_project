@@ -14092,6 +14092,8 @@ html[data-lang-pending] body {
 .wpk-money-line small { color: var(--muted); }
 .wpk-inline-actions { display: flex; gap: 8px; margin: 10px 0 4px; }
 .wpk-payment-form { margin-top: 14px; }
+.wpk-intake-money { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; padding: 12px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.wpk-intake-money .wpk-payment-form { margin-top: 4px; }
 .wpk-history-title { margin: 18px 0 8px; font-size: 14px; }
 .wpk-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .wpk-history li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }

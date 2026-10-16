@@ -66,8 +66,8 @@ New codes: `package_destination_required`, `destination_mismatch`,
 `line_is_waiting`, `line_not_in_container`, `line_ids_invalid`,
 `line_has_payments`, `price_invalid`, `price_below_paid`, `price_required`,
 `amount_required`, `amount_too_large`, `payment_method_invalid`,
-`received_by_required`, `payment_exceeds_balance`, `payment_not_found`,
-`payment_already_reverted`,
+`received_by_required`, `received_by_invalid`, `payment_exceeds_balance`,
+`payment_not_found`, `payment_already_reverted`,
 `vin_already_waiting` (message only; see VIN below).
 
 ## Callables
@@ -77,10 +77,34 @@ New codes: `package_destination_required`, `destination_mismatch`,
 carYear?, quantity, description, ownerKind: 'customer', customerName,
 customerPhone, receiverName, receiverPhone, notifyCustomer, notifyReceiver,
 destinationCountryId, destinationCountryName, lengthIn?, widthIn?, heightIn?,
-priceCents?: int|null, payOnArrival?: bool}` -> `{success, lineId, trackingCode}`.
+priceCents?: int|null, payOnArrival?: bool, payment?: {amountCents: int > 0,
+method, receivedByStaffId, note?}}` -> `{success, lineId, trackingCode,
+paidCents, paymentId}`.
 Rules as `validateContainerLine` plus: `ownerKind` must be `customer`,
 destination id required. `description` is stored for `other` only, `quantity`
 is 1 for cars. `paidCents` in the request is ignored.
+
+**Money received at drop-off** (`payment`, optional). Absent or `null`: nothing
+changes (`paidCents: 0`, `paymentId: ""`). Present: judged by the same
+`validateLinePayment` as `recordContainerLinePayment`, against the price in the
+**same request** and nothing paid - `amount_required`, `amount_too_large`,
+`price_required` (no price sent), `payment_exceeds_balance` (more than the
+price), `payment_method_invalid` (`method` is one of the invoice methods:
+`cash`, `zelle`, `cashapp`, `venmo`, `check`, `card_in_person`, `other`), `received_by_required`. These are reported with
+the package's own problems in one `invalid-argument` (`details.reasons`), then
+`received_by_invalid` (its own `invalid-argument`) when the person is not one
+of the business's people. All refusals happen **before anything is written**.
+On success the line (`paidCents` = amount) and its `containerLinePayments` row
+(`{businessId, lineId, amountCents, method, note, receivedByStaffId,
+recordedByStaffId: caller, reverted: false, createdAt}`) are written in the
+same transaction as the line and its VIN lock, and the package's history gets a
+`payment` entry worded as `recordContainerLinePayment`'s. A part payment is
+fine; the rest is taken later with `recordContainerLinePayment`.
+
+**Who may be named as having taken money** (`received_by_invalid` otherwise),
+for both callables: a person whose `users/{uid}.businessId` is this business
+(the team list the console's "Received by" select reads), or the business's
+`ownerUid`.
 
 ### `assignContainerLines`
 `{businessId, containerId, lineIds: string[] (1..100, deduplicated)}` ->
@@ -134,12 +158,14 @@ paid (or clearing it after a payment). Both fields are written every call.
 `{success, paymentId, paidCents}`. Needs a price (`price_required`), amount > 0
 and <= balance (`payment_exceeds_balance`), and **who took the money**
 (`receivedByStaffId`, trimmed, required: `received_by_required`, the same rule
-and wording as parking). The row stores `receivedByStaffId` = the chosen person
+and wording as parking) who must be one of the business's people
+(`received_by_invalid`, checked after the payment's own checks; see
+`addWaitingPackage`). The row stores `receivedByStaffId` = the chosen person
 and `recordedByStaffId` = the caller. The audit summary reads
-`Received $X (method) by <receiver> (entered by <caller>) for <package>`; the
-receiver is named only when it is one of this business's people (read from
-`users`), and "entered by" only when it is someone else. Transactional: the paid total is recomputed from
-the line's live payments, so concurrent payments cannot overpay.
+`Received $X (method) by <receiver> (entered by <caller>) for <package>`, with
+"entered by" only when it is someone else. Transactional: the paid total is
+recomputed from the line's live payments, so concurrent payments cannot
+overpay.
 
 ### `revertContainerLinePayment`
 `{businessId, paymentId}` -> `{success, paidCents}`. Soft revert; recomputes
@@ -152,6 +178,29 @@ With `containerId`: unchanged. **Without it**, `{businessId, lineIds: [...]}`
 Each line has its own `documentToken`; the link's `t` is the tokens joined with
 `.`, and `/d` (`parkingDocument`) serves exactly those lines' labels. No
 container footer when printing this way.
+
+### `getPackageLabels` (labels as data, for the phone to print itself)
+`{businessId, containerId?: string ("" or absent for waiting packages),
+lineIds?: string[] (1..100), lineId?: string, copies?: 1|2 (default 2)}` ->
+`{labels, reference, hasContainer, businessName, businessPhone}`.
+Same gate (containers section) and the same line loading and tracking-code
+assignment as `getContainerDocumentUrl` (shared helpers `looseLabelLines` /
+`containerLabelLines`):
+- **No container**: `lineIds` (or one `lineId`) required - empty, over 100 or
+  not strings is `invalid-argument` `line_ids_invalid`; a line missing or
+  another business's is `not-found` `line_not_found` with `details.lineIds`.
+- **With `containerId`**: the container must be this business's
+  (`not-found` otherwise); the whole box, or only `lineId` / `lineIds` that are
+  on it (others: `not-found` `line_not_found` with `details.lineIds`).
+- Permission: `permission-denied` without the containers section or for
+  another business.
+
+`labels` is exactly `containerLabelsModel(...).labels` - one entry per copy per
+package, oldest drop-off first, each `{code, link, what, vin, packageNumber,
+packageCount, receiver, receiverPhone, sender, senderPhone, destination, size,
+place}` (`link` is the public tracking link the QR encodes). `reference` is the
+container number / label / booking reference, `""` without a container. No
+logo, no price.
 
 ## Labels
 Per package label: QR (unchanged public tracking link), code, what, VIN,

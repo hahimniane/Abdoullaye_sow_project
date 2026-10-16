@@ -26,6 +26,7 @@ process.env.WHATSAPP_ACCESS_TOKEN = "unset";
 process.env.WHATSAPP_PHONE_NUMBER_ID = "unset";
 
 const functions = require("../index");
+const {CONTAINER_MESSAGES} = require("../container_manifest");
 const db = admin.firestore();
 
 const BIZ = "container-test-biz";
@@ -1356,10 +1357,6 @@ describe("waiting packages", () => {
           // Typing in one's own receipt names the person once.
           await pay({lineId, amountCents: 1000, method: "zelle",
             receivedByStaffId: OWNER});
-          // Someone who is not this business's person is stored as chosen,
-          // but never named in the history.
-          await pay({lineId, amountCents: 500, method: "cash",
-            receivedByStaffId: OTHER_BIZ_STAFF});
           const summaries = (await audits(lineId, "payment"))
               .map((e) => e.summary);
           const both = new RegExp("^Received \\$20\\.00 \\(cash\\) by " +
@@ -1368,13 +1365,30 @@ describe("waiting packages", () => {
           assert.ok(summaries.some((t) =>
             /^Received \$10\.00 \(zelle\) by Dala Owner for /.test(t) &&
             !/entered by/.test(t)), summaries.join(" | "));
-          const stranger = summaries.find((t) => /\$5\.00/.test(t));
-          assert.doesNotMatch(stranger, /Stranger/);
-          assert.match(stranger,
-              /^Received \$5\.00 \(cash\) \(entered by Dala Owner\) for /);
-          assert.ok((await payments(lineId)).some((p) =>
-            p.receivedByStaffId === OTHER_BIZ_STAFF &&
-            p.recordedByStaffId === OWNER));
+        });
+
+    // Regression: a person of another business used to be stored as the
+    // one who held the money (only left unnamed in the history), so the
+    // cash count credited a stranger.
+    it("refuses a receiver who is not one of the business's people",
+        async () => {
+          const {lineId} = await call("addWaitingPackage",
+              waitingPackage({priceCents: 10000}));
+          for (const stranger of [OTHER_BIZ_STAFF, "no-such-person"]) {
+            await assert.rejects(pay({lineId, amountCents: 500,
+              method: "cash", receivedByStaffId: stranger}),
+            (error) => error.code === "invalid-argument" &&
+                error.details?.reasons?.[0] === "received_by_invalid" &&
+                error.message === CONTAINER_MESSAGES.received_by_invalid,
+            stranger);
+          }
+          // The payment's own checks still answer first.
+          await assert.rejects(pay({lineId, amountCents: 999999,
+            method: "cash", receivedByStaffId: OTHER_BIZ_STAFF}),
+          (error) => error.details?.reasons?.includes(
+              "payment_exceeds_balance"));
+          assert.equal((await payments(lineId)).length, 0);
+          assert.equal((await lineRef(lineId).get()).get("paidCents"), 0);
         });
 
     it("refuses an overpayment, no price, and a bad payment", async () => {
@@ -1470,6 +1484,114 @@ describe("waiting packages", () => {
         });
   });
 
+  describe("money received as it is dropped off", () => {
+    const paymentsOf = async (lineId) => (await db
+        .collection("containerLinePayments").where("lineId", "==", lineId)
+        .get()).docs.map((d) => ({id: d.id, ...d.data()}));
+    const linesFor = async (customerName) => (await db
+        .collection("containerLines").where("businessId", "==", BIZ)
+        .where("customerName", "==", customerName).get()).size;
+    const cash = (extra = {}) => ({amountCents: 6000, method: "cash",
+      receivedByStaffId: RECEIVER, note: "at the counter", ...extra});
+
+    it("writes the package and its payment together", async () => {
+      const out = await call("addWaitingPackage", waitingPackage({
+        priceCents: 15000, payOnArrival: true, payment: cash()}));
+      assert.equal(out.paidCents, 6000);
+      assert.ok(out.paymentId);
+      assert.match(out.trackingCode, /^CL-/);
+      const line = (await lineRef(out.lineId).get()).data();
+      assert.equal(line.paidCents, 6000);
+      assert.equal(line.priceCents, 15000);
+      assert.equal(line.containerStatus, "waiting");
+      const [row, ...more] = await paymentsOf(out.lineId);
+      assert.equal(more.length, 0);
+      assert.equal(row.id, out.paymentId);
+      assert.equal(row.businessId, BIZ);
+      assert.equal(row.amountCents, 6000);
+      assert.equal(row.method, "cash");
+      assert.equal(row.note, "at the counter");
+      assert.equal(row.receivedByStaffId, RECEIVER);
+      assert.equal(row.recordedByStaffId, OWNER);
+      assert.equal(row.reverted, false);
+      assert.ok(row.createdAt);
+      const [entry] = await audits(out.lineId, "payment");
+      assert.match(entry.summary, new RegExp("^Received \\$60\\.00 " +
+        "\\(cash\\) by Awa Cashier \\(entered by Dala Owner\\) for "));
+      assert.doesNotMatch(entry.summary, /paid in full/);
+      assert.equal(entry.entityType, "container_line");
+      // The rest is taken like any later payment.
+      const rest = await pay({lineId: out.lineId, amountCents: 9000,
+        method: "zelle"});
+      assert.equal(rest.paidCents, 15000);
+    });
+
+    it("says paid in full when it covers the price", async () => {
+      const out = await call("addWaitingPackage", waitingPackage({
+        priceCents: 6000, payment: cash({receivedByStaffId: OWNER})}));
+      const [entry] = await audits(out.lineId, "payment");
+      assert.match(entry.summary,
+          /^Received \$60\.00 \(cash\) by Dala Owner for .* — paid in full$/);
+    });
+
+    it("refuses before creating anything", async () => {
+      const cases = [
+        [{priceCents: 5000, payment: cash()}, "payment_exceeds_balance"],
+        [{payment: cash()}, "price_required"],
+        [{priceCents: 10000, payment: cash({receivedByStaffId: ""})},
+          "received_by_required"],
+        [{priceCents: 10000, payment: cash({receivedByStaffId: undefined})},
+          "received_by_required"],
+        [{priceCents: 10000, payment: cash({method: "barter"})},
+          "payment_method_invalid"],
+        [{priceCents: 10000, payment: cash({amountCents: 0})},
+          "amount_required"],
+        [{priceCents: 10000, payment: cash({
+          receivedByStaffId: OTHER_BIZ_STAFF})}, "received_by_invalid"],
+        [{priceCents: 10000, payment: cash({
+          receivedByStaffId: "no-such-person"})}, "received_by_invalid"],
+      ];
+      for (const [extra, reason] of cases) {
+        const customerName = `Refused ${reason} ${Math.random()}`;
+        await assert.rejects(call("addWaitingPackage",
+            waitingPackage({customerName, ...extra})),
+        (error) => error.code === "invalid-argument" &&
+            error.details?.reasons?.includes(reason), reason);
+        assert.equal(await linesFor(customerName), 0, reason);
+      }
+      // The package's own problems and the payment's, named together.
+      await assert.rejects(call("addWaitingPackage", waitingPackage({
+        destinationCountryId: "", payment: cash()})),
+      (error) => error.details?.reasons?.includes(
+          "package_destination_required") &&
+          error.details?.reasons?.includes("price_required"));
+    });
+
+    it("never leaves a car's lock behind when the money is refused",
+        async () => {
+          const vin = freshVin();
+          await assert.rejects(call("addWaitingPackage", {
+            ...waitingCar(vin), priceCents: 100, payment: cash()}));
+          assert.equal((await lockRef(vin).get()).exists, false);
+          const out = await call("addWaitingPackage", {...waitingCar(vin),
+            priceCents: 6000, payment: cash()});
+          assert.equal(out.paidCents, 6000);
+          assert.equal((await lockRef(vin).get()).get("lineId"), out.lineId);
+        });
+
+    it("is unchanged without a payment", async () => {
+      for (const payment of [undefined, null]) {
+        const out = await call("addWaitingPackage",
+            waitingPackage({priceCents: 15000, payment}));
+        assert.equal(out.paidCents, 0);
+        assert.equal(out.paymentId, "");
+        assert.equal((await lineRef(out.lineId).get()).get("paidCents"), 0);
+        assert.equal((await paymentsOf(out.lineId)).length, 0);
+        assert.equal((await audits(out.lineId, "payment")).length, 0);
+      }
+    });
+  });
+
   describe("their labels", () => {
     it("links straight to the labels of the lines asked for", async () => {
       const a = await call("addWaitingPackage", waitingPackage());
@@ -1556,6 +1678,101 @@ describe("waiting packages", () => {
       // A made-up token opens nothing.
       await open({t: "x".repeat(32), view: "labels"});
       assert.equal(sent.status, 404);
+    });
+
+    describe("as data for the phone to print", () => {
+      it("gives waiting packages' labels, codes and all, no price",
+          async () => {
+            const a = await call("addWaitingPackage", waitingPackage({
+              quantity: 2, lengthIn: 30, widthIn: 20, heightIn: 12.5,
+              priceCents: 15000}));
+            const b = await call("addWaitingPackage", waitingPackage({
+              kind: "other", quantity: 1, description: "Generator",
+              receiverName: "Awa Ba"}));
+            const out = await call("getPackageLabels",
+                {containerId: "", lineIds: [a.lineId, b.lineId]});
+            assert.deepEqual(Object.keys(out).sort(), ["businessName",
+              "businessPhone", "hasContainer", "labels", "reference"]);
+            assert.equal(out.hasContainer, false);
+            assert.equal(out.reference, "");
+            assert.equal(out.businessName, "Dala Shipping");
+            // Two copies a package by default: 2 barrels + 1 generator.
+            assert.equal(out.labels.length, 6);
+            const first = out.labels[0];
+            assert.equal(first.code, a.trackingCode);
+            assert.match(first.link, new RegExp(`/t/${a.trackingCode}$`));
+            assert.equal(first.what, "Barrel");
+            assert.equal(first.packageCount, 2);
+            assert.equal(first.receiver, "Mariama Bah");
+            assert.equal(first.receiverPhone, "+224620000000");
+            assert.equal(first.sender, "Fatou Diallo");
+            assert.equal(first.senderPhone, "+16465550100");
+            assert.equal(first.destination, "Guinea");
+            assert.equal(first.size, "30 × 20 × 12.5 in");
+            assert.equal(first.place, "Guinea · 30 × 20 × 12.5 in");
+            assert.equal(out.labels[5].what, "Generator");
+            assert.equal(out.labels[5].receiver, "Awa Ba");
+            assert.doesNotMatch(JSON.stringify(out), /15000|150\.00|logo/i);
+            // One package, one copy each: a reprint.
+            const one = await call("getPackageLabels",
+                {lineId: b.lineId, copies: 1});
+            assert.equal(one.labels.length, 1);
+            assert.equal(one.labels[0].code, b.trackingCode);
+          });
+
+      it("gives a container's labels, the whole box or the lines asked",
+          async () => {
+            const box = await newContainer({containerNumber: "MSKU1234567"});
+            const {lineId} = await call("addContainerLine",
+                {containerId: box, line: barrelLine(3)});
+            await call("addContainerLine",
+                {containerId: box, line: carLine(freshVin())});
+            const all = await call("getPackageLabels", {containerId: box});
+            assert.equal(all.hasContainer, true);
+            assert.equal(all.reference, "MSKU1234567");
+            assert.equal(all.labels.length, (3 + 1) * 2);
+            // Every line got its code as the labels were asked for.
+            const code = (await lineRef(lineId).get()).get("trackingCode");
+            assert.match(code, /^CL-/);
+            assert.equal(all.labels[0].code, code);
+            const just = await call("getPackageLabels",
+                {containerId: box, lineId, copies: 1});
+            assert.deepEqual(just.labels.map((l) => l.packageNumber),
+                [1, 2, 3]);
+            await assert.rejects(call("getPackageLabels",
+                {containerId: box, lineIds: [lineId, "not-on-it"]}),
+            (error) => error.code === "not-found" &&
+                error.details?.lineIds?.includes("not-on-it"));
+          });
+
+      it("is gated, scoped to the business, and bounded", async () => {
+        const a = await call("addWaitingPackage", waitingPackage());
+        const box = await newContainer();
+        await assert.rejects(call("getPackageLabels",
+            {lineIds: [a.lineId]}, NO_CONTAINERS),
+        (error) => error.code === "permission-denied");
+        await assert.rejects(call("getPackageLabels",
+            {containerId: box}, NO_CONTAINERS),
+        (error) => error.code === "permission-denied");
+        await assert.rejects(call("getPackageLabels",
+            {lineIds: [a.lineId]}, OTHER_BIZ_STAFF),
+        (error) => error.code === "permission-denied");
+        await assert.rejects(call("getPackageLabels",
+            {lineIds: [a.lineId, "no-such-line"]}),
+        (error) => error.code === "not-found" &&
+            error.details?.lineIds?.includes("no-such-line"));
+        await assert.rejects(call("getPackageLabels", {lineIds: []}),
+            (error) => error.code === "invalid-argument");
+        await assert.rejects(call("getPackageLabels", {}),
+            (error) => error.code === "invalid-argument");
+        await assert.rejects(call("getPackageLabels",
+            {lineIds: Array.from({length: 101}, (_, i) => `l${i}`)}),
+        (error) => error.code === "invalid-argument" &&
+            error.details?.reasons?.includes("line_ids_invalid"));
+        await assert.rejects(call("getPackageLabels",
+            {containerId: "no-such-box"}),
+        (error) => error.code === "not-found");
+      });
     });
   });
 });

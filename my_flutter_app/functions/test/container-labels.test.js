@@ -173,3 +173,52 @@ describe("reprinting one package", () => {
     assert.match(page, /direct\s+thermal labels fade/);
   });
 });
+
+describe("labels the phone prints itself", () => {
+  const {labelLineRows, packageLabelsResponse} =
+    require("../container_labels");
+
+  it("hands back exactly the page's labels, and the footer's words", () => {
+    const m = model();
+    const out = packageLabelsResponse(m);
+    assert.deepEqual(Object.keys(out).sort(), ["businessName",
+      "businessPhone", "hasContainer", "labels", "reference"]);
+    assert.equal(out.labels, m.labels);
+    assert.deepEqual(Object.keys(out.labels[0]).sort(), ["code",
+      "destination", "link", "packageCount", "packageNumber", "place",
+      "receiver", "receiverPhone", "sender", "senderPhone", "size", "vin",
+      "what"]);
+    assert.equal(out.reference, "MSKU1234567");
+    assert.equal(out.hasContainer, true);
+    assert.equal(out.businessName, "Dala Shipping");
+    assert.equal(out.businessPhone, "+16465550100");
+    // Never a logo, never a price.
+    assert.doesNotMatch(JSON.stringify(out), /logo|price/i);
+  });
+
+  it("works for waiting packages with no container", () => {
+    const out = packageLabelsResponse(containerLabelsModel({container: null,
+      business, lines: [{...lines[0], destinationCountryName: "Senegal"}],
+      copies: 1}));
+    assert.equal(out.hasContainer, false);
+    assert.equal(out.reference, "");
+    assert.equal(out.labels.length, 3);
+    assert.equal(out.labels[0].destination, "Senegal");
+    assert.deepEqual(packageLabelsResponse(null), {labels: [],
+      reference: "", hasContainer: false, businessName: "",
+      businessPhone: ""});
+  });
+
+  it("prints the stored codes, oldest drop-off first, skipping the gone",
+      () => {
+        const rows = labelLineRows([
+          {id: "b", line: {kind: "barrels", quantity: 1, trackingCode: "",
+            createdAt: {seconds: 20}}},
+          {id: "a", line: {kind: "car", createdAt: new Date(10000)}},
+          {id: "gone", line: {kind: "barrels", quantity: 1}},
+        ], new Map([["a", "CL-AAAAAA"], ["b", "CL-BBBBBB"]]));
+        assert.deepEqual(rows.map((r) => r.trackingCode),
+            ["CL-AAAAAA", "CL-BBBBBB"]);
+        assert.deepEqual(labelLineRows(null, null), []);
+      });
+});

@@ -21,7 +21,7 @@ import {
 import { destinationCountryName } from "@/lib/destination-countries";
 import { functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
-import { moneyText } from "@/lib/invoice-ledger";
+import { INVOICE_PAYMENT_METHODS, INVOICE_PAYMENT_METHOD_LABELS, moneyText, type InvoicePaymentMethod } from "@/lib/invoice-ledger";
 import { matchLotCustomers, type LotCustomer } from "@/lib/lot-customers";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { statusPillClass } from "@/lib/status-pill";
@@ -32,12 +32,14 @@ import {
   destinationPlace,
   emptyWaitingPackageDraft,
   filterWaitingPackages,
+  intakeMoneyAvailable,
   nextPackageForSameCustomer,
   packagePriceChanged,
   runPackageCall,
   savedPackageStub,
   setPackagePriceRequest,
   sortWaitingNewestFirst,
+  switchIntakeMoney,
   updateWaitingPackageRequest,
   validateWaitingPackage,
   volumeCubicFeet,
@@ -47,6 +49,7 @@ import {
   waitingPackageMessage,
   waitingPackageRow,
   type DestinationRef,
+  type IntakeMoneyDraft,
   type WaitingPackageDraft,
 } from "@/lib/waiting-packages";
 import {
@@ -167,6 +170,10 @@ export function WaitingPackagesPanel({
     [...destinationRows],
   );
   const volume = volumeCubicFeet(parseInches(draft.lengthIn), parseInches(draft.widthIn), parseInches(draft.heightIn));
+  // "Money received now?" opens once a price is entered; who took it is one of these people.
+  const moneyAvailable = intakeMoneyAvailable(draft);
+  const staffIds = useMemo(() => staffOptions.map((s) => s.id), [staffOptions]);
+  const setMoney = (patch: Partial<IntakeMoneyDraft>) => setDraft((d) => ({ ...d, money: { ...d.money, ...patch } }));
 
   function closeModal() {
     setModal("");
@@ -263,7 +270,7 @@ export function WaitingPackagesPanel({
   }
 
   async function save(mode: SaveMode) {
-    const errors = validateWaitingPackage(draft);
+    const errors = validateWaitingPackage(draft, staffIds);
     if (errors.length) {
       setDraftError(waitingPackageMessage(errors));
       return;
@@ -488,6 +495,44 @@ export function WaitingPackagesPanel({
                   </label>
                 </div>
               </div>
+
+              {!editingId && (
+                <div className="wpk-intake-money">
+                  <label className="ctn-notify wpk-pay-arrival">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      aria-checked={draft.money.received}
+                      checked={draft.money.received}
+                      disabled={busy || (!draft.money.received && !moneyAvailable)}
+                      onChange={(e) => setDraft((d) => switchIntakeMoney(d, e.target.checked))}
+                    />
+                    <span>Money received now?</span>
+                  </label>
+                  {!draft.money.received && !moneyAvailable && <small className="lst-hint">Enter a price first to record money received now.</small>}
+                  {draft.money.received && (
+                    <div className="lst-form-grid wpk-payment-form">
+                      <label className="lst-field"><span>Amount ($)</span>
+                        <input inputMode="decimal" value={draft.money.amount} onChange={(e) => setMoney({ amount: e.target.value })} placeholder="0.00" disabled={busy} />
+                      </label>
+                      <label className="lst-field"><span>How it arrived</span>
+                        <select value={draft.money.method} disabled={busy} onChange={(e) => setMoney({ method: e.target.value as InvoicePaymentMethod })}>
+                          {INVOICE_PAYMENT_METHODS.map((m) => (<option key={m} value={m}>{INVOICE_PAYMENT_METHOD_LABELS[m]}</option>))}
+                        </select>
+                      </label>
+                      <label className="lst-field"><span>Received by</span>
+                        <select value={draft.money.receivedByStaffId} disabled={busy} onChange={(e) => setMoney({ receivedByStaffId: e.target.value })}>
+                          <option value="">Choose staff</option>
+                          {staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                        </select>
+                      </label>
+                      <label className="lst-field wide"><span>Note</span>
+                        <input value={draft.money.note} onChange={(e) => setMoney({ note: e.target.value })} placeholder="optional" disabled={busy} />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="lst-form-grid">
                 <label className="lst-field" style={{ position: "relative" }}><span>Customer</span>
