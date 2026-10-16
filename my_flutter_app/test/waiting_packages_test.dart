@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/models/destination_country.dart';
 import 'package:my_flutter_app/services/container_manifest.dart';
+import 'package:my_flutter_app/services/lot_ledger.dart'
+    show LotStaff, withBusinessOwner;
 import 'package:my_flutter_app/services/package_codes.dart';
 import 'package:my_flutter_app/services/waiting_packages.dart';
 
@@ -691,6 +693,149 @@ void main() {
       );
       expect(request['lineId'], 'l7');
       expect(request.containsKey('lineIds'), isFalse);
+    });
+  });
+
+  group('money received as the package is registered', () {
+    const paid = IntakePaymentDraft(
+      amount: '45,50',
+      method: 'zelle',
+      receivedByStaffId: ' u-owner ',
+      note: '  half now  ',
+    );
+
+    test('the amount opens on the whole price', () {
+      expect(intakeAmountInput(4550), '45.50');
+      expect(intakeAmountInput(9900), '99');
+      expect(intakeAmountInput(null), '');
+      expect(intakeAmountInput(0), '');
+    });
+
+    test('the same checks as a later payment, against nothing paid yet', () {
+      expect(
+        intakePaymentErrors(paid, priceCents: 4550, staffIds: ['u-owner']),
+        isEmpty,
+      );
+      // More than the price: the whole balance is the price.
+      expect(
+        intakePaymentErrors(
+          const IntakePaymentDraft(amount: '46', receivedByStaffId: 'u1'),
+          priceCents: 4550,
+        ),
+        ['payment_exceeds_balance'],
+      );
+      // No price: there is nothing to pay against.
+      expect(
+        intakePaymentErrors(
+          const IntakePaymentDraft(amount: '10', receivedByStaffId: 'u1'),
+          priceCents: null,
+        ),
+        ['price_required'],
+      );
+      expect(
+        intakePaymentErrors(
+          const IntakePaymentDraft(amount: '', method: 'gold'),
+          priceCents: 4550,
+        ),
+        ['amount_required', 'payment_method_invalid', 'received_by_required'],
+      );
+    });
+
+    test('a receiver who is not a person of this business is received_by_invalid',
+        () {
+      expect(
+        intakePaymentErrors(paid, priceCents: 4550, staffIds: ['u1', 'u2']),
+        ['received_by_invalid'],
+      );
+      // An unread team leaves that check to the server.
+      expect(intakePaymentErrors(paid, priceCents: 4550), isEmpty);
+      // The payment sheet's validator is the one being extended.
+      expect(
+        validatePackagePayment(
+          amount: '5',
+          method: 'cash',
+          standing: packageStanding(
+            priceCents: 1000,
+            paidCents: 0,
+            payOnArrival: false,
+          ),
+          receivedByStaffId: 'stranger',
+          staffIds: ['u1'],
+        ),
+        ['received_by_invalid'],
+      );
+    });
+
+    test('the request carries the payment beside the price', () {
+      final request = addWaitingPackageRequest(
+        'b1',
+        _draft(priceCents: 4550, payOnArrival: true),
+        payment: paid,
+      );
+      expect(request['priceCents'], 4550);
+      expect(request['payment'], {
+        'amountCents': 4550,
+        'method': 'zelle',
+        'receivedByStaffId': 'u-owner',
+        'note': 'half now',
+      });
+      // Never the server's own number.
+      expect(request.containsKey('paidCents'), isFalse);
+    });
+
+    test('no note, no note field; a long note is cut to 200', () {
+      expect(
+        intakePaymentRecord(const IntakePaymentDraft(
+          amount: '10',
+          receivedByStaffId: 'u1',
+        )),
+        {'amountCents': 1000, 'method': 'cash', 'receivedByStaffId': 'u1'},
+      );
+      final long = intakePaymentRecord(
+        IntakePaymentDraft(amount: '1', receivedByStaffId: 'u1', note: 'x' * 260),
+      );
+      expect((long['note'] as String).length, 200);
+    });
+
+    test('"received by" offers the owner even when their profile names no '
+        'business, never twice', () {
+      const team = [LotStaff(id: 'u1', name: 'Ibrahima Sow')];
+      expect(
+        [
+          for (final p in withBusinessOwner(team,
+              ownerUid: 'owner', ownerName: 'Aissatou Barry'))
+            '${p.id}:${p.name}',
+        ],
+        ['owner:Aissatou Barry', 'u1:Ibrahima Sow'],
+      );
+      expect(
+        withBusinessOwner(
+          const [LotStaff(id: 'owner', name: 'From profile'), ...team],
+          ownerUid: 'owner',
+          ownerName: 'From business',
+        ).map((p) => p.name),
+        ['From profile', 'Ibrahima Sow'],
+      );
+      expect(withBusinessOwner(team, ownerUid: ''), team);
+      expect(
+        withBusinessOwner(team, ownerUid: 'o', fallbackName: 'a@b.co')
+            .first
+            .name,
+        'a@b.co',
+      );
+    });
+
+    test('never a payment without a price, nor without being asked', () {
+      expect(
+        addWaitingPackageRequest('b1', _draft(), payment: paid)
+            .containsKey('payment'),
+        isFalse,
+      );
+      expect(
+        addWaitingPackageRequest('b1', _draft(priceCents: 4550))
+            .containsKey('payment'),
+        isFalse,
+      );
     });
   });
 }

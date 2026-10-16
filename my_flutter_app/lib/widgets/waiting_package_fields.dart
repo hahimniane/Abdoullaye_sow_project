@@ -188,3 +188,133 @@ class WaitingPackageFields extends StatelessWidget {
     );
   }
 }
+
+/// "Was money received?" on the register form: a switch that only works once
+/// the package has a price (a payment is always against one), and then how
+/// much (the whole price to start with), how it arrived, who took it - chosen,
+/// never assumed - and an optional note.
+///
+/// Pure presentation like [WaitingPackageFields]: the sheet owns the
+/// controllers, the choices and the refusals.
+class IntakePaymentFields extends StatelessWidget {
+  const IntakePaymentFields({
+    super.key,
+    required this.price,
+    required this.received,
+    required this.onReceived,
+    required this.amount,
+    required this.note,
+    required this.methodLabel,
+    required this.onPickMethod,
+    required this.receiverName,
+    required this.onPickReceiver,
+    required this.onEdited,
+    this.enabled = true,
+    this.amountError,
+    this.methodError,
+    this.receiverError,
+  });
+
+  /// The price field: the switch follows it as it is typed.
+  final TextEditingController price;
+  final bool received;
+  final ValueChanged<bool> onReceived;
+  final TextEditingController amount;
+  final TextEditingController note;
+  final String methodLabel;
+  final VoidCallback onPickMethod;
+
+  /// The chosen person's name; empty until someone is picked.
+  final String receiverName;
+  final VoidCallback onPickReceiver;
+  final VoidCallback onEdited;
+  final bool enabled;
+  final String? amountError;
+  final String? methodError;
+  final String? receiverError;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return AnimatedBuilder(
+      animation: price,
+      builder: (context, _) {
+        final priced = readPackagePrice(price.text).cents != null;
+        final on = received && priced;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SwitchListTile.adaptive(
+              key: const Key('wpk-money-received'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: on,
+              onChanged: enabled && priced ? onReceived : null,
+              title: Text(
+                l10n.wpkMoneyReceivedNow,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: priced ? AppColors.ink : AppColors.muted,
+                ),
+              ),
+              subtitle: Text(
+                priced
+                    ? l10n.wpkMoneyReceivedNote
+                    : l10n.wpkMoneyReceivedNeedsPrice,
+                key: const Key('wpk-money-received-note'),
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            ),
+            if (on) ...[
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                key: const Key('wpk-money-amount'),
+                controller: amount,
+                enabled: enabled,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [_decimal],
+                onChanged: (_) => onEdited(),
+                decoration: InputDecoration(
+                  labelText: l10n.wpkAmountReceived,
+                  prefixText: r'$ ',
+                  errorText: amountError,
+                  errorMaxLines: 3,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              LotPickerField(
+                key: const Key('wpk-money-method'),
+                label: l10n.wpkMethod,
+                value: methodLabel,
+                placeholder: l10n.wpkMethod,
+                onTap: enabled ? onPickMethod : () {},
+                error: methodError,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              LotPickerField(
+                key: const Key('wpk-money-received-by'),
+                label: l10n.lotReceivedBy,
+                value: receiverName,
+                placeholder: l10n.lotReceivedBy,
+                onTap: enabled ? onPickReceiver : () {},
+                error: receiverError,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                key: const Key('wpk-money-note'),
+                controller: note,
+                enabled: enabled,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(labelText: l10n.wpkNote),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  static final _decimal = FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'));
+}

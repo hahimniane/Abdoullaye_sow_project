@@ -204,6 +204,7 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
         businessCountryCode: _businessCountryCode,
         destinations: _destinations,
         existing: line,
+        staff: widget.staff,
       );
       return;
     }

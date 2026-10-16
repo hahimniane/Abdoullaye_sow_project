@@ -21436,6 +21436,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The printer is busy with another job.'**
   String get labelPrinterErrorBusy;
+
+  /// No description provided for @wpkMoneyReceivedNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Money received now?'**
+  String get wpkMoneyReceivedNow;
+
+  /// No description provided for @wpkMoneyReceivedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Record what the customer paid at the counter as they drop it off.'**
+  String get wpkMoneyReceivedNote;
+
+  /// No description provided for @wpkMoneyReceivedNeedsPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a price first: a payment is always against one.'**
+  String get wpkMoneyReceivedNeedsPrice;
+
+  /// No description provided for @wpkErrReceivedByInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose someone on your team as the person who took the payment.'**
+  String get wpkErrReceivedByInvalid;
+
+  /// No description provided for @wpkSavedWithPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Package saved: {code} · {amount} received'**
+  String wpkSavedWithPayment(String code, String amount);
+
+  /// No description provided for @pkgLabelSizeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Package label size'**
+  String get pkgLabelSizeLabel;
+
+  /// No description provided for @pkgLabelsHow.
+  ///
+  /// In en, this message translates to:
+  /// **'How to print'**
+  String get pkgLabelsHow;
+
+  /// No description provided for @pkgLabelsMethodPrinter.
+  ///
+  /// In en, this message translates to:
+  /// **'Label printer (Bluetooth)'**
+  String get pkgLabelsMethodPrinter;
+
+  /// No description provided for @pkgLabelsMethodPrinterNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Straight to the Phomemo label printer from this phone. Choose the printer in Printer settings.'**
+  String get pkgLabelsMethodPrinterNote;
+
+  /// No description provided for @pkgLabelsMethodPrinterNoteNamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Straight to {name} from this phone, on {size} labels.'**
+  String pkgLabelsMethodPrinterNoteNamed(String name, String size);
+
+  /// No description provided for @pkgLabelsMethodSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Print 4 × 6 (any printer)'**
+  String get pkgLabelsMethodSystem;
+
+  /// No description provided for @pkgLabelsMethodSystemNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens the print dialog: AirPrint on iPhone, the print service on Android, including a 4 × 6 printer shared from your computer.'**
+  String get pkgLabelsMethodSystemNote;
+
+  /// No description provided for @pkgLabelsPrintButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Print'**
+  String get pkgLabelsPrintButton;
+
+  /// No description provided for @pkgLabelsPreparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing labels…'**
+  String get pkgLabelsPreparing;
+
+  /// No description provided for @pkgLabelsStopping.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopping after this label…'**
+  String get pkgLabelsStopping;
+
+  /// No description provided for @pkgLabelsPrinted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 label printed.} other{{count} labels printed.}}'**
+  String pkgLabelsPrinted(int count);
+
+  /// No description provided for @pkgLabelsCouldNotLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'The labels could not be loaded. Try again in a moment.'**
+  String get pkgLabelsCouldNotLoad;
+
+  /// No description provided for @pkgLabelsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No packages to print.'**
+  String get pkgLabelsNone;
+
+  /// No description provided for @pkgLabelsPrintFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The labels could not be printed. Try again.'**
+  String get pkgLabelsPrintFailed;
+
+  /// No description provided for @pkgLabelsOneNotePrinter.
+  ///
+  /// In en, this message translates to:
+  /// **'One label per package: enough for a pickup or a torn label.'**
+  String get pkgLabelsOneNotePrinter;
+
+  /// No description provided for @pkgLabelsTipPrinter.
+  ///
+  /// In en, this message translates to:
+  /// **'Each label carries the QR code, the tracking code, and both names and phone numbers. Set the label size to the roll loaded in the printer.'**
+  String get pkgLabelsTipPrinter;
+
+  /// No description provided for @pkgLabelsTipSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side.'**
+  String get pkgLabelsTipSystem;
 }
 
 class _AppLocalizationsDelegate

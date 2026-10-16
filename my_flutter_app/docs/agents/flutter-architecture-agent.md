@@ -307,6 +307,14 @@ Add future project conventions and repeated architectural decisions here.
   `recipientLanguage(user)` - the one helper; never re-derive it. Only the
   inventory sale push has French copy so far; `sendPreferenceNotification`
   itself takes one title/body.
+- "Received by" pickers list everyone the server accepts: `users` whose
+  `businessId` is the business plus the business's `ownerUid`
+  (`withBusinessOwner` in `lot_ledger.dart`). A users query alone can miss an
+  owner whose profile never got `businessId`.
+- Package labels printed from the phone (M221 or the 4 x 6 system dialog)
+  read `getPackageLabels` and draw `layoutPackageLabel`; never re-derive the
+  label from Firestore lines on the phone. The dart:ui bitmap renderer is
+  injected into `LabelPrintSheet` so widget tests (fake async) pass a fake.
 - `SnackBar` with an `action` persists until tapped (Flutter's `persist`
   defaults to true then); `showSuccessSnackBar(actionLabel:, onAction:)`
   passes `persist: false` and a longer duration.

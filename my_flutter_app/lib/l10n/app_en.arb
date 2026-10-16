@@ -5731,5 +5731,54 @@
   "labelPrinterErrorNoCompletion": "The printer did not confirm the tag. Check the labels and that the cover is closed, then try again. If it keeps happening, copy the print log and send it to the developer.",
   "labelPrinterErrorOutOfPaper": "The printer is out of labels. Load a roll and try again.",
   "labelPrinterErrorWrite": "Sending to the printer failed. Try again.",
-  "labelPrinterErrorBusy": "The printer is busy with another job."
+  "labelPrinterErrorBusy": "The printer is busy with another job.",
+  "wpkMoneyReceivedNow": "Money received now?",
+  "wpkMoneyReceivedNote": "Record what the customer paid at the counter as they drop it off.",
+  "wpkMoneyReceivedNeedsPrice": "Enter a price first: a payment is always against one.",
+  "wpkErrReceivedByInvalid": "Choose someone on your team as the person who took the payment.",
+  "wpkSavedWithPayment": "Package saved: {code} · {amount} received",
+  "@wpkSavedWithPayment": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgLabelSizeLabel": "Package label size",
+  "pkgLabelsHow": "How to print",
+  "pkgLabelsMethodPrinter": "Label printer (Bluetooth)",
+  "pkgLabelsMethodPrinterNote": "Straight to the Phomemo label printer from this phone. Choose the printer in Printer settings.",
+  "pkgLabelsMethodPrinterNoteNamed": "Straight to {name} from this phone, on {size} labels.",
+  "@pkgLabelsMethodPrinterNoteNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "pkgLabelsMethodSystem": "Print 4 × 6 (any printer)",
+  "pkgLabelsMethodSystemNote": "Opens the print dialog: AirPrint on iPhone, the print service on Android, including a 4 × 6 printer shared from your computer.",
+  "pkgLabelsPrintButton": "Print",
+  "pkgLabelsPreparing": "Preparing labels…",
+  "pkgLabelsStopping": "Stopping after this label…",
+  "pkgLabelsPrinted": "{count, plural, =1{1 label printed.} other{{count} labels printed.}}",
+  "@pkgLabelsPrinted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pkgLabelsCouldNotLoad": "The labels could not be loaded. Try again in a moment.",
+  "pkgLabelsNone": "No packages to print.",
+  "pkgLabelsPrintFailed": "The labels could not be printed. Try again.",
+  "pkgLabelsOneNotePrinter": "One label per package: enough for a pickup or a torn label.",
+  "pkgLabelsTipPrinter": "Each label carries the QR code, the tracking code, and both names and phone numbers. Set the label size to the roll loaded in the printer.",
+  "pkgLabelsTipSystem": "Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side."
 }

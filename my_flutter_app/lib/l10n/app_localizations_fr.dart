@@ -12468,4 +12468,92 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get labelPrinterErrorBusy =>
       'L’imprimante est occupée par une autre tâche.';
+
+  @override
+  String get wpkMoneyReceivedNow => 'Argent reçu maintenant ?';
+
+  @override
+  String get wpkMoneyReceivedNote =>
+      'Enregistrez ce que le client a payé au comptoir, au moment du dépôt.';
+
+  @override
+  String get wpkMoneyReceivedNeedsPrice =>
+      'Saisissez d’abord un prix : un paiement se fait toujours sur un prix.';
+
+  @override
+  String get wpkErrReceivedByInvalid =>
+      'Choisissez un membre de votre équipe comme personne ayant reçu le paiement.';
+
+  @override
+  String wpkSavedWithPayment(String code, String amount) {
+    return 'Colis enregistré : $code · $amount reçus';
+  }
+
+  @override
+  String get pkgLabelSizeLabel => 'Taille des étiquettes de colis';
+
+  @override
+  String get pkgLabelsHow => 'Comment imprimer';
+
+  @override
+  String get pkgLabelsMethodPrinter => 'Imprimante d’étiquettes (Bluetooth)';
+
+  @override
+  String get pkgLabelsMethodPrinterNote =>
+      'Directement vers l’imprimante d’étiquettes Phomemo depuis ce téléphone. Choisissez l’imprimante dans Réglages de l’imprimante.';
+
+  @override
+  String pkgLabelsMethodPrinterNoteNamed(String name, String size) {
+    return 'Directement vers $name depuis ce téléphone, sur des étiquettes de $size.';
+  }
+
+  @override
+  String get pkgLabelsMethodSystem => 'Imprimer en 4 × 6 (toute imprimante)';
+
+  @override
+  String get pkgLabelsMethodSystemNote =>
+      'Ouvre la fenêtre d’impression : AirPrint sur iPhone, le service d’impression sur Android, y compris une imprimante 4 × 6 partagée depuis votre ordinateur.';
+
+  @override
+  String get pkgLabelsPrintButton => 'Imprimer';
+
+  @override
+  String get pkgLabelsPreparing => 'Préparation des étiquettes…';
+
+  @override
+  String get pkgLabelsStopping => 'Arrêt après cette étiquette…';
+
+  @override
+  String pkgLabelsPrinted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count étiquettes imprimées.',
+      one: '1 étiquette imprimée.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pkgLabelsCouldNotLoad =>
+      'Impossible de charger les étiquettes. Réessayez dans un instant.';
+
+  @override
+  String get pkgLabelsNone => 'Aucun colis à imprimer.';
+
+  @override
+  String get pkgLabelsPrintFailed =>
+      'Impossible d’imprimer les étiquettes. Réessayez.';
+
+  @override
+  String get pkgLabelsOneNotePrinter =>
+      'Une étiquette par colis : suffisant pour un retrait ou une étiquette déchirée.';
+
+  @override
+  String get pkgLabelsTipPrinter =>
+      'Chaque étiquette porte le code QR, le code de suivi, ainsi que les deux noms et numéros de téléphone. Réglez la taille sur le rouleau chargé dans l’imprimante.';
+
+  @override
+  String get pkgLabelsTipSystem =>
+      'Choisissez l’imprimante 4 × 6 dans la fenêtre et imprimez en taille réelle (100 %). Deux étiquettes par colis, une pour chaque côté.';
 }

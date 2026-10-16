@@ -1055,3 +1055,21 @@ class LotStaff {
   final String id;
   final String name;
 }
+
+/// Everyone in the business: the people whose profile names it, plus the
+/// owner the business document names ([ownerUid]) when their own profile does
+/// not - the same set the server accepts as "received by". The owner is named
+/// from the business ([ownerName]), else [fallbackName]; never listed twice.
+List<LotStaff> withBusinessOwner(
+  List<LotStaff> people, {
+  required String ownerUid,
+  String ownerName = '',
+  String fallbackName = '',
+}) {
+  final id = ownerUid.trim();
+  if (id.isEmpty || people.any((p) => p.id == id)) return people;
+  final name = ownerName.trim().isNotEmpty
+      ? ownerName.trim()
+      : (fallbackName.trim().isNotEmpty ? fallbackName.trim() : id);
+  return [LotStaff(id: id, name: name), ...people];
+}

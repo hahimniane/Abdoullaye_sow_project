@@ -1,11 +1,16 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/destination_country.dart';
 import '../data/calling_code_catalog.dart';
 import 'container_manifest.dart';
 import 'package_codes.dart';
+import 'package_labels.dart';
+import 'waiting_package_service.dart' show callContainerCallable;
 
 /// Reading one package - a container line - and its container, scoped to the
 /// business the way the rules require. Behind an interface so the scan
@@ -165,3 +170,34 @@ Future<void> openContainerLabels({
   final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!opened) throw StateError('not opened');
 }
+
+/// Asks `getPackageLabels` for the labels a [packageLabelsRequest] names.
+/// Throws when the server refuses; the caller says so.
+typedef PackageLabelsLoader = Future<PackageLabelSet> Function(
+  Map<String, Object?> request,
+);
+
+Future<PackageLabelSet> loadPackageLabels(Map<String, Object?> request) async =>
+    PackageLabelSet.fromResponse(
+      await callContainerCallable('getPackageLabels', request),
+    );
+
+/// Hands a finished 4 x 6 in PDF to the system print dialog (AirPrint on an
+/// iPhone, the print service on Android). Answers false when the person
+/// cancelled the dialog.
+typedef PackageLabelsPdfPrinter = Future<bool> Function(
+  Uint8List bytes,
+  String name,
+);
+
+Future<bool> printPackageLabelsPdf(Uint8List bytes, String name) =>
+    Printing.layoutPdf(
+      onLayout: (_) async => bytes,
+      name: name,
+      format: packageLabelPageFormat(PackageLabelSizes.fourBySix),
+      // The pages are already the label: never re-laid out for another paper.
+      dynamicLayout: false,
+      // iOS: ask for the 4 x 6 page itself rather than letter, so the label
+      // prints at actual size.
+      forceCustomPrintPaper: true,
+    );

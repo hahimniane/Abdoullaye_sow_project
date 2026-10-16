@@ -1188,6 +1188,199 @@ void main() {
     });
   });
 
+  group('money received at registration', () {
+    const team = [
+      LotStaff(id: 'u-owner', name: 'Aissatou Barry'),
+      LotStaff(id: 'u-staff', name: 'Ibrahima Sow'),
+    ];
+    Widget sheet(_Calls calls) => waitingPackageSheetForTesting(
+          caller: calls.call,
+          destinations: [_guinea],
+          defaultDestination: const DestinationRef('guinea', 'Guinea'),
+          staff: team,
+        );
+
+    SwitchListTile moneySwitch(WidgetTester tester) => tester
+        .widget<SwitchListTile>(find.byKey(const Key('wpk-money-received')));
+
+    Future<void> barrel(WidgetTester tester) async {
+      await tester.tap(find.text('Barrels'));
+      await tester.pumpAndSettle();
+      await _type(tester, 'line-quantity', '2');
+      await _type(tester, 'line-customer', 'Fatou Diallo');
+    }
+
+    testWidgets('the switch stays off until there is a price', (tester) async {
+      await _openSheet<WaitingPackageSaved>(tester, sheet(_Calls()));
+      await barrel(tester);
+      expect(moneySwitch(tester).onChanged, isNull,
+          reason: 'a payment is always against a price');
+      expect(moneySwitch(tester).value, isFalse);
+      expect(find.text('Enter a price first: a payment is always against one.'),
+          findsOneWidget);
+      expect(find.byKey(const Key('wpk-money-amount')), findsNothing);
+
+      await _type(tester, 'wpk-price', 'free');
+      expect(moneySwitch(tester).onChanged, isNull,
+          reason: 'an unreadable price is no price');
+
+      await _type(tester, 'wpk-price', '45,50');
+      expect(moneySwitch(tester).onChanged, isNotNull);
+      await _tap(tester, 'wpk-money-received');
+      // The whole price to start with; the method and who took it shown.
+      expect(_field(tester, 'wpk-money-amount'), '45.50');
+      expect(find.byKey(const Key('wpk-money-method')), findsOneWidget);
+      expect(find.text('Cash'), findsOneWidget);
+      expect(find.byKey(const Key('wpk-money-received-by')), findsOneWidget);
+
+      // Clearing the price takes the section away again.
+      await _type(tester, 'wpk-price', '');
+      expect(moneySwitch(tester).value, isFalse);
+      expect(find.byKey(const Key('wpk-money-amount')), findsNothing);
+    });
+
+    testWidgets('saving without who took the money says so and sends nothing',
+        (tester) async {
+      final calls = _Calls();
+      await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
+      await barrel(tester);
+      await _type(tester, 'wpk-price', '45');
+      await _tap(tester, 'wpk-money-received');
+      await _tap(tester, 'line-save');
+      expect(find.text('Say which staff member took the payment.'),
+          findsOneWidget);
+      expect(calls.log, isEmpty, reason: 'refused at the field, no round trip');
+
+      // More than the price is refused at the amount.
+      await _type(tester, 'wpk-money-amount', '50');
+      await _tap(tester, 'line-save');
+      expect(calls.log, isEmpty);
+      expect(find.byKey(const Key('wpk-money-amount')), findsOneWidget);
+    });
+
+    testWidgets('the payment rides on the request; add another starts it over',
+        (tester) async {
+      final calls = _Calls()
+        ..answers['addWaitingPackage'] = {
+          'lineId': 'l1',
+          'trackingCode': 'CL-AAAAAA',
+          'paidCents': 2000,
+          'paymentId': 'p1',
+        };
+      final opened =
+          await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
+      await barrel(tester);
+      await _type(tester, 'wpk-price', '45');
+      await _tap(tester, 'wpk-money-received');
+      await _type(tester, 'wpk-money-amount', '20');
+      await _tap(tester, 'wpk-money-method');
+      await tester.tap(find.text('Zelle'));
+      await tester.pumpAndSettle();
+      await _tap(tester, 'wpk-money-received-by');
+      // Everyone in the business, the owner included; nobody chosen for them.
+      expect(find.text('Aissatou Barry'), findsOneWidget);
+      expect(find.text('Ibrahima Sow'), findsOneWidget);
+      await tester.tap(find.text('Ibrahima Sow'));
+      await tester.pumpAndSettle();
+      await _type(tester, 'wpk-money-note', 'rest on arrival');
+      await _tap(tester, 'line-save-and-another');
+
+      final sent = calls.of('addWaitingPackage').single;
+      expect(sent['priceCents'], 4500);
+      expect(sent['payment'], {
+        'amountCents': 2000,
+        'method': 'zelle',
+        'receivedByStaffId': 'u-staff',
+        'note': 'rest on arrival',
+      });
+      expect(opened.closed, isFalse);
+
+      // The next box: no money section until asked again, nobody chosen.
+      expect(moneySwitch(tester).value, isFalse);
+      expect(find.byKey(const Key('wpk-money-amount')), findsNothing);
+      await _type(tester, 'line-quantity', '1');
+      await _type(tester, 'wpk-price', '30');
+      await _tap(tester, 'wpk-money-received');
+      expect(_field(tester, 'wpk-money-amount'), '30');
+      expect(find.text('Ibrahima Sow'), findsNothing);
+      expect(find.text('Cash'), findsOneWidget);
+
+      // Switched off again: the second package goes without a payment.
+      await _tap(tester, 'wpk-money-received');
+      await _tap(tester, 'line-save');
+      expect(calls.of('addWaitingPackage'), hasLength(2));
+      expect(calls.of('addWaitingPackage').last.containsKey('payment'), isFalse);
+      expect(opened.closed, isTrue);
+    });
+
+    testWidgets('paid at the counter, the saved package says so',
+        (tester) async {
+      final calls = _Calls()
+        ..answers['addWaitingPackage'] = {
+          'lineId': 'l1',
+          'trackingCode': 'CL-AAAAAA',
+          'paidCents': 4500,
+        };
+      final opened =
+          await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
+      await barrel(tester);
+      await _type(tester, 'wpk-price', '45');
+      await _tap(tester, 'wpk-money-received');
+      await _tap(tester, 'wpk-money-received-by');
+      await tester.tap(find.text('Aissatou Barry'));
+      await tester.pumpAndSettle();
+      await _tap(tester, 'line-save');
+      expect(opened.value!.paidCents, 4500);
+      expect(opened.value!.line!.paidCents, 4500);
+      expect(find.text(r'Package saved: CL-AAAAAA · $45.00 received'),
+          findsOneWidget);
+    });
+
+    testWidgets('a receiver the server does not know is said in words',
+        (tester) async {
+      final calls = _Calls()..refuse = (_) => FirebaseFunctionsException(
+            message: 'refused',
+            code: 'invalid-argument',
+            details: {
+              'reasons': ['received_by_invalid'],
+            },
+          );
+      final opened =
+          await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
+      await barrel(tester);
+      await _type(tester, 'wpk-price', '45');
+      await _tap(tester, 'wpk-money-received');
+      await _tap(tester, 'wpk-money-received-by');
+      await tester.tap(find.text('Aissatou Barry'));
+      await tester.pumpAndSettle();
+      await _tap(tester, 'line-save');
+      expect(
+        find.text(
+            'Choose someone on your team as the person who took the payment.'),
+        findsOneWidget,
+      );
+      expect(opened.closed, isFalse);
+    });
+
+    testWidgets('fits a narrow French phone', (tester) async {
+      await _openSheet<WaitingPackageSaved>(
+        tester,
+        sheet(_Calls()),
+        locale: const Locale('fr'),
+        width: 320,
+      );
+      await tester.tap(find.text('Des barils'));
+      await tester.pumpAndSettle();
+      await _type(tester, 'wpk-price', '45');
+      await _tap(tester, 'wpk-money-received');
+      expect(find.text('Argent reçu maintenant ?'), findsOneWidget);
+      await _tap(tester, 'line-save');
+      expect(find.text('Indiquez quel employé a reçu le paiement.'),
+          findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('a narrow French phone', () {
     // 320 logical pixels is the smallest phone still in use; French labels are
     // the longest. Overflow is an exception in a test, so a clean run is the
