@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/label_printer.dart';
+import '../services/package_labels.dart' show PackageLabelSizes;
 import '../services/tag_labels.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -76,46 +77,81 @@ Future<bool> ensureBluetoothExplained(BuildContext context) async {
   return false;
 }
 
-/// The label size: the three common sizes and a custom width x height.
-/// Reports every change; [onChanged] gets null custom values while a typed
-/// custom size is not valid.
+/// Which size a [LabelSizePicker] sets: the shop tag's, or the package
+/// label's (its own saved choice on the same printer).
+enum LabelSizeKind { tag, package }
+
+/// The label size: the common sizes and a custom width x height. Reports
+/// every change; [onChanged] gets null custom values while a typed custom
+/// size is not valid. [kind] picks which of the two saved sizes it shows -
+/// the shop tag's (2 x 1 in, 40 x 30, 50 x 30 mm) or the package label's
+/// (70 x 80, 50 x 80, 62 x 100 mm); custom has the same limits for both.
 class LabelSizePicker extends StatefulWidget {
   const LabelSizePicker({
     super.key,
     required this.settings,
     required this.onChanged,
     this.enabled = true,
+    this.kind = LabelSizeKind.tag,
   });
 
   final LabelPrinterSettings settings;
   final void Function(String sizeId, double? widthMm, double? heightMm)
   onChanged;
   final bool enabled;
+  final LabelSizeKind kind;
 
   @override
   State<LabelSizePicker> createState() => _LabelSizePickerState();
 }
 
 class _LabelSizePickerState extends State<LabelSizePicker> {
-  late String _sizeId = widget.settings.sizeId;
+  bool get _package => widget.kind == LabelSizeKind.package;
+
+  String _savedId(LabelPrinterSettings s) =>
+      _package ? s.packageSizeId : s.sizeId;
+
+  late String _sizeId = _savedId(widget.settings);
   late final _width = TextEditingController(
-    text: _num(widget.settings.customWidthMm),
+    text: _num(
+      _package
+          ? widget.settings.packageWidthMm
+          : widget.settings.customWidthMm,
+    ),
   );
   late final _height = TextEditingController(
-    text: _num(widget.settings.customHeightMm),
+    text: _num(
+      _package
+          ? widget.settings.packageHeightMm
+          : widget.settings.customHeightMm,
+    ),
   );
   bool _invalid = false;
+
+  /// Keys stay `label-size-*` for the tag picker; the package picker's are
+  /// `package-size-*`, so both can sit on the settings screen.
+  String get _keyPrefix => _package ? 'package-size' : 'label-size';
 
   static String _num(double v) =>
       v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
+  List<String> get _ids => _package
+      ? [for (final s in PackageLabelSizes.presets) s.id, tagSizeCustom]
+      : const [tagSize2x1in, tagSize40x30mm, tagSize50x30mm, tagSizeCustom];
+
+  String _name(AppLocalizations l10n, String id) {
+    if (!_package) return tagSizeName(l10n, id);
+    if (id == tagSizeCustom) return l10n.printTagsSizeCustom;
+    // A size is not copy: the same "70 × 80 mm" in English and French.
+    return PackageLabelSizes.resolve(id).mmText;
+  }
+
   @override
   void didUpdateWidget(LabelSizePicker old) {
     super.didUpdateWidget(old);
-    if (old.settings.sizeId != widget.settings.sizeId &&
-        widget.settings.sizeId != _sizeId) {
-      _sizeId = widget.settings.sizeId;
-    }
+    final was = _savedId(old.settings);
+    final now = _savedId(widget.settings);
+    if (was != now && now != _sizeId) _sizeId = now;
   }
 
   @override
@@ -144,7 +180,7 @@ class _LabelSizePickerState extends State<LabelSizePicker> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          l10n.printTagsSizeLabel,
+          _package ? l10n.pkgLabelSizeLabel : l10n.printTagsSizeLabel,
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -156,15 +192,10 @@ class _LabelSizePickerState extends State<LabelSizePicker> {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.xs,
           children: [
-            for (final id in const [
-              tagSize2x1in,
-              tagSize40x30mm,
-              tagSize50x30mm,
-              tagSizeCustom,
-            ])
+            for (final id in _ids)
               ChoiceChip(
-                key: Key('label-size-$id'),
-                label: Text(tagSizeName(l10n, id)),
+                key: Key('$_keyPrefix-$id'),
+                label: Text(_name(l10n, id)),
                 selected: id == _sizeId,
                 onSelected: widget.enabled
                     ? (_) {
@@ -181,7 +212,7 @@ class _LabelSizePickerState extends State<LabelSizePicker> {
             children: [
               Expanded(
                 child: TextField(
-                  key: const Key('label-size-width'),
+                  key: Key('$_keyPrefix-width'),
                   controller: _width,
                   enabled: widget.enabled,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -196,7 +227,7 @@ class _LabelSizePickerState extends State<LabelSizePicker> {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: TextField(
-                  key: const Key('label-size-height'),
+                  key: Key('$_keyPrefix-height'),
                   controller: _height,
                   enabled: widget.enabled,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -213,7 +244,7 @@ class _LabelSizePickerState extends State<LabelSizePicker> {
           if (_invalid) ...[
             const SizedBox(height: AppSpacing.sm),
             InventoryNote(
-              key: const Key('label-size-error'),
+              key: Key('$_keyPrefix-error'),
               text: l10n.printTagsCustomError,
             ),
           ],

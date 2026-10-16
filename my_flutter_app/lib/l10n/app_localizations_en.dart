@@ -12282,4 +12282,92 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get labelPrinterErrorBusy => 'The printer is busy with another job.';
+
+  @override
+  String get wpkMoneyReceivedNow => 'Money received now?';
+
+  @override
+  String get wpkMoneyReceivedNote =>
+      'Record what the customer paid at the counter as they drop it off.';
+
+  @override
+  String get wpkMoneyReceivedNeedsPrice =>
+      'Enter a price first: a payment is always against one.';
+
+  @override
+  String get wpkErrReceivedByInvalid =>
+      'Choose someone on your team as the person who took the payment.';
+
+  @override
+  String wpkSavedWithPayment(String code, String amount) {
+    return 'Package saved: $code · $amount received';
+  }
+
+  @override
+  String get pkgLabelSizeLabel => 'Package label size';
+
+  @override
+  String get pkgLabelsHow => 'How to print';
+
+  @override
+  String get pkgLabelsMethodPrinter => 'Label printer (Bluetooth)';
+
+  @override
+  String get pkgLabelsMethodPrinterNote =>
+      'Straight to the Phomemo label printer from this phone. Choose the printer in Printer settings.';
+
+  @override
+  String pkgLabelsMethodPrinterNoteNamed(String name, String size) {
+    return 'Straight to $name from this phone, on $size labels.';
+  }
+
+  @override
+  String get pkgLabelsMethodSystem => 'Print 4 × 6 (any printer)';
+
+  @override
+  String get pkgLabelsMethodSystemNote =>
+      'Opens the print dialog: AirPrint on iPhone, the print service on Android, including a 4 × 6 printer shared from your computer.';
+
+  @override
+  String get pkgLabelsPrintButton => 'Print';
+
+  @override
+  String get pkgLabelsPreparing => 'Preparing labels…';
+
+  @override
+  String get pkgLabelsStopping => 'Stopping after this label…';
+
+  @override
+  String pkgLabelsPrinted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count labels printed.',
+      one: '1 label printed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pkgLabelsCouldNotLoad =>
+      'The labels could not be loaded. Try again in a moment.';
+
+  @override
+  String get pkgLabelsNone => 'No packages to print.';
+
+  @override
+  String get pkgLabelsPrintFailed =>
+      'The labels could not be printed. Try again.';
+
+  @override
+  String get pkgLabelsOneNotePrinter =>
+      'One label per package: enough for a pickup or a torn label.';
+
+  @override
+  String get pkgLabelsTipPrinter =>
+      'Each label carries the QR code, the tracking code, and both names and phone numbers. Set the label size to the roll loaded in the printer.';
+
+  @override
+  String get pkgLabelsTipSystem =>
+      'Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side.';
 }

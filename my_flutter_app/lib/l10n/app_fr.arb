@@ -5731,5 +5731,54 @@
   "labelPrinterErrorNoCompletion": "L’imprimante n’a pas confirmé l’étiquette. Vérifiez les étiquettes et que le capot est fermé, puis réessayez. Si cela continue, copiez le journal d’impression et envoyez-le au développeur.",
   "labelPrinterErrorOutOfPaper": "L’imprimante n’a plus d’étiquettes. Chargez un rouleau et réessayez.",
   "labelPrinterErrorWrite": "L’envoi vers l’imprimante a échoué. Réessayez.",
-  "labelPrinterErrorBusy": "L’imprimante est occupée par une autre tâche."
+  "labelPrinterErrorBusy": "L’imprimante est occupée par une autre tâche.",
+  "wpkMoneyReceivedNow": "Argent reçu maintenant ?",
+  "wpkMoneyReceivedNote": "Enregistrez ce que le client a payé au comptoir, au moment du dépôt.",
+  "wpkMoneyReceivedNeedsPrice": "Saisissez d’abord un prix : un paiement se fait toujours sur un prix.",
+  "wpkErrReceivedByInvalid": "Choisissez un membre de votre équipe comme personne ayant reçu le paiement.",
+  "wpkSavedWithPayment": "Colis enregistré : {code} · {amount} reçus",
+  "pkgLabelSizeLabel": "Taille des étiquettes de colis",
+  "pkgLabelsHow": "Comment imprimer",
+  "pkgLabelsMethodPrinter": "Imprimante d’étiquettes (Bluetooth)",
+  "pkgLabelsMethodPrinterNote": "Directement vers l’imprimante d’étiquettes Phomemo depuis ce téléphone. Choisissez l’imprimante dans Réglages de l’imprimante.",
+  "pkgLabelsMethodPrinterNoteNamed": "Directement vers {name} depuis ce téléphone, sur des étiquettes de {size}.",
+  "pkgLabelsMethodSystem": "Imprimer en 4 × 6 (toute imprimante)",
+  "pkgLabelsMethodSystemNote": "Ouvre la fenêtre d’impression : AirPrint sur iPhone, le service d’impression sur Android, y compris une imprimante 4 × 6 partagée depuis votre ordinateur.",
+  "pkgLabelsPrintButton": "Imprimer",
+  "pkgLabelsPreparing": "Préparation des étiquettes…",
+  "pkgLabelsStopping": "Arrêt après cette étiquette…",
+  "pkgLabelsPrinted": "{count, plural, =1{1 étiquette imprimée.} other{{count} étiquettes imprimées.}}",
+  "pkgLabelsCouldNotLoad": "Impossible de charger les étiquettes. Réessayez dans un instant.",
+  "pkgLabelsNone": "Aucun colis à imprimer.",
+  "pkgLabelsPrintFailed": "Impossible d’imprimer les étiquettes. Réessayez.",
+  "pkgLabelsOneNotePrinter": "Une étiquette par colis : suffisant pour un retrait ou une étiquette déchirée.",
+  "pkgLabelsTipPrinter": "Chaque étiquette porte le code QR, le code de suivi, ainsi que les deux noms et numéros de téléphone. Réglez la taille sur le rouleau chargé dans l’imprimante.",
+  "pkgLabelsTipSystem": "Choisissez l’imprimante 4 × 6 dans la fenêtre et imprimez en taille réelle (100 %). Deux étiquettes par colis, une pour chaque côté.",
+  "@wpkSavedWithPayment": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@pkgLabelsMethodPrinterNoteNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "@pkgLabelsPrinted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

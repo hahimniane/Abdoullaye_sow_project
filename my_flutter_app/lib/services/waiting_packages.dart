@@ -205,11 +205,17 @@ List<String> validatePackagePrice(String raw, int paidCents) {
 /// amount, a price to pay against, never above the balance, a known method,
 /// and who took the money (as parking and lot payments ask). Mirrors
 /// `validateLinePayment`.
+///
+/// [staffIds] is everyone in the business the phone knows of: when it is
+/// given, a receiver who is not among them is `received_by_invalid`, the code
+/// the server answers for someone who is not a person of this business. An
+/// empty list (the team could not be read) leaves that check to the server.
 List<String> validatePackagePayment({
   required String amount,
   required String method,
   required PackagePayment standing,
   required String receivedByStaffId,
+  Iterable<String> staffIds = const [],
 }) {
   final errors = <String>[];
   final cents = readMoneyInput(amount).cents;
@@ -225,7 +231,15 @@ List<String> validatePackagePayment({
   if (!invoicePaymentMethods.contains(method.trim())) {
     errors.add('payment_method_invalid');
   }
-  if (receivedByStaffId.trim().isEmpty) errors.add('received_by_required');
+  final receiver = receivedByStaffId.trim();
+  if (receiver.isEmpty) {
+    errors.add('received_by_required');
+  } else {
+    final known = {for (final id in staffIds) id.trim()}..remove('');
+    if (known.isNotEmpty && !known.contains(receiver)) {
+      errors.add('received_by_invalid');
+    }
+  }
   return errors;
 }
 
@@ -478,15 +492,78 @@ Map<String, Object?> _packageExtras(
   };
 }
 
-/// The `addWaitingPackage` request body, flat as the server reads it.
+/// Money taken at the counter as the package is registered: how much, how it
+/// arrived, who took it, and an optional note - typed as the sheet holds it.
+/// [intakePaymentErrors] checks it and [intakePaymentRecord] sends it.
+class IntakePaymentDraft {
+  const IntakePaymentDraft({
+    this.amount = '',
+    this.method = 'cash',
+    this.receivedByStaffId = '',
+    this.note = '',
+  });
+
+  /// US dollars as typed ("45", "45,50").
+  final String amount;
+  final String method;
+  final String receivedByStaffId;
+  final String note;
+}
+
+/// The amount field's opening text when "money received now" is switched on:
+/// the whole price, which is what most customers hand over.
+String intakeAmountInput(int? priceCents) =>
+    priceCents == null || priceCents <= 0 ? '' : invoiceCentsToInput(priceCents);
+
+/// The checks on money taken at registration: the same ones as a payment
+/// recorded later ([validatePackagePayment]), against a package with nothing
+/// paid yet - so no price is `price_required` and more than the price is
+/// `payment_exceeds_balance`.
+List<String> intakePaymentErrors(
+  IntakePaymentDraft payment, {
+  required int? priceCents,
+  Iterable<String> staffIds = const [],
+}) =>
+    validatePackagePayment(
+      amount: payment.amount,
+      method: payment.method,
+      standing: packageStanding(
+        priceCents: priceCents,
+        paidCents: 0,
+        payOnArrival: false,
+      ),
+      receivedByStaffId: payment.receivedByStaffId,
+      staffIds: staffIds,
+    );
+
+/// The `payment` object `addWaitingPackage` takes. The note only when there
+/// is one, cut to the server's 200 characters.
+Map<String, Object?> intakePaymentRecord(IntakePaymentDraft payment) {
+  final note = payment.note.trim();
+  return {
+    'amountCents': readMoneyInput(payment.amount).cents ?? 0,
+    'method': payment.method.trim(),
+    'receivedByStaffId': payment.receivedByStaffId.trim(),
+    if (note.isNotEmpty)
+      'note': note.length > 200 ? note.substring(0, 200) : note,
+  };
+}
+
+/// The `addWaitingPackage` request body, flat as the server reads it. With
+/// [payment] - money handed over at the counter - the package is registered
+/// and paid (in part or in full) in one call. A payment needs the price on
+/// the same package, so it is never sent without one.
 Map<String, Object?> addWaitingPackageRequest(
   String businessId,
-  ContainerLineDraft draft,
-) =>
+  ContainerLineDraft draft, {
+  IntakePaymentDraft? payment,
+}) =>
     {
       'businessId': businessId.trim(),
       ...containerLineRecord(draft),
       ..._packageExtras(draft, withPrice: true, clearEmptySize: false),
+      if (payment != null && draft.priceCents != null)
+        'payment': intakePaymentRecord(payment),
     };
 
 /// The `updateContainerLine` request for an edited waiting package: no
@@ -593,11 +670,15 @@ class WaitingPackageSaved {
     this.printLabel = false,
     this.edited = false,
     this.line,
+    this.paidCents = 0,
   });
 
   final String lineId;
   final String trackingCode;
   final bool printLabel;
+
+  /// What was paid on it at the counter as it was registered (cents).
+  final int paidCents;
 
   /// The package as it was just saved - enough to name it on a label before
   /// the live list has caught up with the server.

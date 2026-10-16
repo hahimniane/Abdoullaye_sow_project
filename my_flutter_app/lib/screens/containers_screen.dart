@@ -15,10 +15,13 @@ import '../services/container_lot_cars.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
 import '../services/known_car_lookup.dart';
+import '../services/label_printer.dart' show LabelPrinterController;
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
+import '../services/package_labels.dart' show PackageLabelsTarget;
 import '../services/vin_decoder_service.dart';
-import '../services/invoice_ledger.dart' show invoiceCentsToInput;
+import '../services/invoice_ledger.dart'
+    show invoiceCentsToInput, invoicePaymentMethods;
 import '../services/waiting_package_service.dart';
 import '../services/waiting_packages.dart';
 import '../theme/app_colors.dart';
@@ -34,6 +37,7 @@ import '../widgets/lot_sheets.dart';
 import '../widgets/package_money.dart';
 import '../widgets/waiting_package_fields.dart';
 import 'add_waiting_packages_sheet.dart';
+import 'label_printer_settings_screen.dart';
 import 'package_payment_sheet.dart';
 import 'package_result_screen.dart';
 import 'package_scan_screen.dart';
@@ -141,7 +145,18 @@ class _ContainersScreenState extends State<ContainersScreen> {
   List<ContainerLine> get _lines => _feed.lines;
   bool get _loading => !_feed.loaded;
   bool get _loadFailed => _feed.failed;
-  List<LotStaff> _staff = const [];
+  /// The profiles that name this business, and its owner as the business
+  /// names them: together, everyone who can take money ([_staff]).
+  List<LotStaff> _people = const [];
+  String _ownerUid = '';
+  String _ownerName = '';
+  List<LotStaff> get _staff => withBusinessOwner(
+        _people,
+        ownerUid: _ownerUid,
+        ownerName: _ownerName,
+        fallbackName: _ownerEmail,
+      );
+  String _ownerEmail = '';
   List<LotCustomer> _customers = const [];
 
   /// The business's `parkedCars` rows that still hold a space - in the lot,
@@ -205,7 +220,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
-      setState(() => _staff = [
+      setState(() => _people = [
             for (final d in snap.docs)
               LotStaff(
                 id: d.id,
@@ -240,6 +255,9 @@ class _ContainersScreenState extends State<ContainersScreen> {
       final data = doc.data() ?? const <String, dynamic>{};
       setState(() {
         _businessName = (data['name'] ?? data['businessName'] ?? '').toString();
+        _ownerUid = (data['ownerUid'] ?? '').toString();
+        _ownerName = (data['ownerName'] ?? '').toString();
+        _ownerEmail = (data['ownerEmail'] ?? '').toString();
         _businessCountryCode = CallingCodeCatalog.countryCodeForReference(
               (data['country'] ?? '').toString(),
             ) ??
@@ -2689,7 +2707,12 @@ class _LineFormSheet extends StatefulWidget {
     this.destinations = const [],
     this.defaultDestination,
     this.caller = callContainerCallable,
+    this.staff = const [],
   }) : assert(waiting || container != null);
+
+  /// Everyone in the business - the owner and every staff member - offered
+  /// as "received by" when money is taken as a package is registered.
+  final List<LotStaff> staff;
 
   final String businessId;
 
@@ -2759,6 +2782,15 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   String _destinationId = '';
   String _destinationName = '';
   bool _payOnArrival = false;
+
+  /// "Was money received?" for a new package: off until switched on (and
+  /// only once there is a price), then how much, how, who took it - never
+  /// chosen for them - and a note.
+  bool _moneyReceived = false;
+  final _payAmount = TextEditingController();
+  final _payNote = TextEditingController();
+  String _payMethod = 'cash';
+  String? _payReceivedBy;
 
   /// Lines saved from this one opening of the sheet. Five barrels for three
   /// customers are three lines, entered back to back without closing it.
@@ -2854,11 +2886,98 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     for (final c in [
       _vin, _make, _model, _year, _quantity, _description, _customer, _phone,
       _receiver, _receiverPhone, _lotFilter, _length, _width, _height, _price,
+      _payAmount, _payNote,
     ]) {
       c.dispose();
     }
     super.dispose();
   }
+
+  /// Money is asked about only when a new package is registered; an existing
+  /// one takes payments in its own sheet.
+  bool get _asksForMoney => _waiting && !_editing;
+
+  /// Whether this save carries a payment: switched on, against a price.
+  bool get _sendsPayment =>
+      _asksForMoney &&
+      _moneyReceived &&
+      readPackagePrice(_price.text).cents != null;
+
+  IntakePaymentDraft get _intakePayment => IntakePaymentDraft(
+        amount: _payAmount.text,
+        method: _payMethod,
+        receivedByStaffId: _payReceivedBy ?? '',
+        note: _payNote.text,
+      );
+
+  /// The money section back to its first state: the next box may be paid
+  /// differently, or not yet, and by someone else.
+  void _resetMoney() {
+    _moneyReceived = false;
+    _payAmount.clear();
+    _payNote.clear();
+    _payMethod = 'cash';
+    _payReceivedBy = null;
+  }
+
+  void _switchMoneyReceived(bool on) {
+    AppHaptics.selection();
+    setState(() {
+      _moneyReceived = on;
+      _errors = {..._errors}..removeAll(_paymentCodes);
+      // Most customers hand over the whole price: start there, editable.
+      if (on && _payAmount.text.trim().isEmpty) {
+        _payAmount.text = intakeAmountInput(readPackagePrice(_price.text).cents);
+      }
+    });
+  }
+
+  Future<void> _pickPayMethod() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.wpkMethod,
+      selected: _payMethod,
+      options: [
+        for (final m in invoicePaymentMethods)
+          LotOption(m, containerPaymentMethodLabel(l10n, m)),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _payMethod = picked;
+      _errors = {..._errors}..remove('payment_method_invalid');
+    });
+  }
+
+  Future<void> _pickPayReceiver() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.lotReceivedBy,
+      selected: _payReceivedBy,
+      options: [
+        for (final member in widget.staff) LotOption(member.id, member.name),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _payReceivedBy = picked;
+      _errors = {..._errors}
+        ..remove('received_by_required')
+        ..remove('received_by_invalid');
+    });
+  }
+
+  static const _paymentCodes = {
+    'amount_required',
+    'amount_too_large',
+    'payment_exceeds_balance',
+    'price_required',
+    'payment_method_invalid',
+    'received_by_required',
+    'received_by_invalid',
+  };
 
   /// The cars standing in the lot right now, joined to the open container
   /// already holding each - the same join the parked-car list draws its
@@ -3152,6 +3271,15 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     if (_waiting && readPackagePrice(_price.text).error != null) {
       errors.add('price_invalid');
     }
+    // Money taken at the counter: the same checks a payment recorded later
+    // gets, against this package's price with nothing paid yet.
+    if (_sendsPayment) {
+      errors.addAll(intakePaymentErrors(
+        _intakePayment,
+        priceCents: draft.priceCents,
+        staffIds: [for (final s in widget.staff) s.id],
+      ));
+    }
     if (_kind == containerLineKindCar && _errors.contains('vin_already_loaded')) {
       errors.add('vin_already_loaded');
     }
@@ -3289,22 +3417,35 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       showSuccessSnackBar(context, l10n.wpkUpdated);
       return;
     }
-    final data = await widget.caller(
-      'addWaitingPackage',
-      addWaitingPackageRequest(widget.businessId, draft),
+    final payment = _sendsPayment ? _intakePayment : null;
+    final request = addWaitingPackageRequest(
+      widget.businessId,
+      draft,
+      payment: payment,
     );
+    final data = await widget.caller('addWaitingPackage', request);
     final map = data is Map ? data : const {};
     final lineId = (map['lineId'] ?? '').toString();
     final code = (map['trackingCode'] ?? '').toString();
+    // What the server says is paid now; the amount sent when it did not say.
+    final paidAnswer = map['paidCents'];
+    final paidCents = paidAnswer is num && paidAnswer.isFinite
+        ? paidAnswer.round()
+        : (payment == null
+            ? 0
+            : (intakePaymentRecord(payment)['amountCents'] as int? ?? 0));
     final saved = WaitingPackageSaved(
       lineId: lineId,
       trackingCode: code,
       printLabel: printLabel,
+      paidCents: paidCents,
       line: ContainerLine.fromMap(lineId, {
-        ...addWaitingPackageRequest(widget.businessId, draft),
+        for (final entry in request.entries)
+          if (entry.key != 'payment') entry.key: entry.value,
         'containerId': '',
         'containerStatus': containerLineStatusWaiting,
         'trackingCode': code,
+        'paidCents': paidCents,
       }),
     );
     if (!mounted) return;
@@ -3331,6 +3472,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         _conflictName = '';
         _conflictWaiting = false;
         _payOnArrival = false;
+        _resetMoney();
         _errors = {};
         _serverNote = '';
       });
@@ -3341,7 +3483,10 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       context,
       saved.trackingCode.isEmpty
           ? l10n.wpkSavedNoCode
-          : l10n.wpkSaved(saved.trackingCode),
+          : (saved.paidCents > 0
+              ? l10n.wpkSavedWithPayment(
+                  saved.trackingCode, formatLotCents(saved.paidCents))
+              : l10n.wpkSaved(saved.trackingCode)),
     );
   }
 
@@ -3357,6 +3502,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     'size_invalid',
     'price_invalid',
     'price_below_paid',
+    ..._paymentCodes,
   };
 
   @override
@@ -3647,6 +3793,43 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               sizeError: errorFor('size_invalid'),
               priceError:
                   errorFor('price_invalid') ?? errorFor('price_below_paid'),
+            ),
+          if (_asksForMoney && showOwner)
+            IntakePaymentFields(
+              price: _price,
+              received: _moneyReceived,
+              onReceived: _switchMoneyReceived,
+              amount: _payAmount,
+              note: _payNote,
+              methodLabel: containerPaymentMethodLabel(l10n, _payMethod),
+              onPickMethod: _pickPayMethod,
+              receiverName: widget.staff
+                      .where((s) => s.id == _payReceivedBy)
+                      .firstOrNull
+                      ?.name ??
+                  '',
+              onPickReceiver: _pickPayReceiver,
+              enabled: !_busy,
+              onEdited: () {
+                if (_serverNote.isNotEmpty ||
+                    _errors.any(_paymentCodes.contains)) {
+                  setState(() {
+                    _serverNote = '';
+                    _errors = {..._errors}
+                      ..remove('amount_required')
+                      ..remove('amount_too_large')
+                      ..remove('payment_exceeds_balance')
+                      ..remove('price_required');
+                  });
+                }
+              },
+              amountError: errorFor('amount_required') ??
+                  errorFor('amount_too_large') ??
+                  errorFor('payment_exceeds_balance') ??
+                  errorFor('price_required'),
+              methodError: errorFor('payment_method_invalid'),
+              receiverError: errorFor('received_by_required') ??
+                  errorFor('received_by_invalid'),
             ),
           if (showOwner) ...[
             const SizedBox(height: AppSpacing.lg),
@@ -4663,6 +4846,7 @@ String containerErrorText(
     'amount_too_large' => l10n.wpkErrAmountTooLarge,
     'payment_method_invalid' => l10n.wpkErrMethodInvalid,
     'received_by_required' => l10n.wpkErrReceivedByRequired,
+    'received_by_invalid' => l10n.wpkErrReceivedByInvalid,
     'payment_exceeds_balance' => l10n.wpkErrExceedsBalance,
     'payment_not_found' => l10n.wpkErrPaymentNotFound,
     'payment_already_reverted' => l10n.wpkErrPaymentReverted,
@@ -4863,6 +5047,7 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
   ContainerLine? existing,
   VoidCallback? onLineAdded,
   ContainerCallableCaller caller = callContainerCallable,
+  List<LotStaff> staff = const [],
 }) {
   final start = existing == null
       ? defaultWaitingDestination(destinations)
@@ -4885,12 +5070,16 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
       destinations: destinations,
       defaultDestination: start,
       caller: caller,
+      staff: staff,
     ),
   );
 }
 
 /// The print-labels sheet for every package on [container], or for [line]
-/// alone. [opener] fetches the page and opens it (a fake in tests).
+/// alone: straight to the label printer, through the system print dialog
+/// (4 x 6), or the label page in the browser. [opener] fetches the page and
+/// opens it; [loader], [pdfPrinter] and [printer] stand in for the callable,
+/// the dialog and the Bluetooth printer in tests.
 ///
 /// A package still waiting for a container has none: pass the [line] alone and
 /// the labels are asked for by line id, printable before any container exists.
@@ -4900,9 +5089,14 @@ Future<void> showContainerLabelSheet(
   ShippingContainer? container,
   ContainerLine? line,
   ContainerLabelOpener opener = openContainerLabels,
+  PackageLabelsLoader loader = loadPackageLabels,
+  PackageLabelsPdfPrinter pdfPrinter = printPackageLabelsPdf,
+  LabelPrinterController? printer,
 }) {
   assert(container != null || line != null);
   final l10n = AppLocalizations.of(context)!;
+  final containerId = container?.id ?? '';
+  final lineId = line?.id ?? '';
   return showLotSheet<bool>(
     context,
     LabelPrintSheet(
@@ -4911,9 +5105,22 @@ Future<void> showContainerLabelSheet(
           : l10n.ctrPrintLabelsOne(containerLineTitle(l10n, line)),
       onPrint: (choice) => opener(
         businessId: businessId,
-        containerId: container?.id ?? '',
+        containerId: containerId,
         choice: choice,
-        lineId: line?.id ?? '',
+        lineId: lineId,
+      ),
+      target: PackageLabelsTarget(
+        businessId: businessId,
+        containerId: containerId,
+        lineId: lineId,
+      ),
+      loader: loader,
+      pdfPrinter: pdfPrinter,
+      printer: printer,
+      openPrinterSettings: (context, printer) => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => LabelPrinterSettingsScreen(printer: printer),
+        ),
       ),
     ),
   );
@@ -4958,9 +5165,11 @@ Widget waitingPackageSheetForTesting({
   ContainerLine? existing,
   List<ContainerLine> lines = const [],
   List<LotCustomer> customers = const [],
+  List<LotStaff> staff = const [],
 }) =>
     _LineFormSheet(
       businessId: 'b1',
+      staff: staff,
       containers: const [],
       lines: lines,
       customers: customers,

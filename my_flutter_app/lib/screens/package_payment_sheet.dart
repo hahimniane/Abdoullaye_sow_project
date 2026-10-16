@@ -223,6 +223,7 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
       method: _method,
       standing: standing,
       receivedByStaffId: _receivedBy ?? '',
+      staffIds: [for (final s in widget.staff) s.id],
     );
     if (errors.isNotEmpty) {
       AppHaptics.refuse();
@@ -310,7 +311,9 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
     if (picked == null || !mounted) return;
     setState(() {
       _receivedBy = picked;
-      _errors = {..._errors}..remove('received_by_required');
+      _errors = {..._errors}
+        ..remove('received_by_required')
+        ..remove('received_by_invalid');
     });
   }
 
@@ -464,7 +467,7 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
               value: _staffName(_receivedBy ?? ''),
               placeholder: l10n.lotReceivedBy,
               onTap: busy ? () {} : _pickReceivedBy,
-              error: errorFor(['received_by_required']),
+              error: errorFor(['received_by_required', 'received_by_invalid']),
             ),
             const SizedBox(height: AppSpacing.md),
             TextField(

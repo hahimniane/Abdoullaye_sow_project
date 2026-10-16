@@ -117,6 +117,9 @@ const containerRefusalCodes = <String>[
   'amount_too_large',
   'payment_method_invalid',
   'received_by_required',
+  // The receiver named is not a person of this business (addWaitingPackage's
+  // `payment`, recordContainerLinePayment).
+  'received_by_invalid',
   'payment_exceeds_balance',
   'payment_not_found',
   'payment_already_reverted',

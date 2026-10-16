@@ -22,6 +22,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'm221_protocol.dart';
+import 'package_labels.dart' show PackageLabelSizes, packageSize70x80mm;
 import 'tag_labels.dart';
 
 // ---------------------------------------------------------------------------
@@ -49,7 +50,22 @@ class LabelPrinterSettings {
     this.speed = m221DefaultSpeed,
     this.xOffset = 0,
     this.yOffset = 0,
+    this.packageSizeId = packageSize70x80mm,
+    this.packageWidthMm = 70,
+    this.packageHeightMm = 80,
   });
+
+  /// The size package labels print at - its own choice, kept apart from the
+  /// shop tag size: one printer, two rolls. Same clamps as a tag.
+  final String packageSizeId;
+  final double packageWidthMm;
+  final double packageHeightMm;
+
+  TagLabelSize get packageSize => PackageLabelSizes.resolve(
+    packageSizeId,
+    customWidthMm: packageWidthMm,
+    customHeightMm: packageHeightMm,
+  );
 
   /// The printer's Bluetooth id ("" = none chosen yet) and the name it
   /// advertised (a serial such as "Q2...").
@@ -81,7 +97,13 @@ class LabelPrinterSettings {
     int? speed,
     int? xOffset,
     int? yOffset,
+    String? packageSizeId,
+    double? packageWidthMm,
+    double? packageHeightMm,
   }) => LabelPrinterSettings(
+    packageSizeId: packageSizeId ?? this.packageSizeId,
+    packageWidthMm: clampTagWidthMm(packageWidthMm ?? this.packageWidthMm),
+    packageHeightMm: clampTagHeightMm(packageHeightMm ?? this.packageHeightMm),
     deviceId: deviceId ?? this.deviceId,
     deviceName: deviceName ?? this.deviceName,
     sizeId: sizeId ?? this.sizeId,
@@ -109,6 +131,9 @@ class LabelPrinterSettings {
     'speed': speed,
     'xOffset': xOffset,
     'yOffset': yOffset,
+    'packageSizeId': packageSizeId,
+    'packageWidthMm': packageWidthMm,
+    'packageHeightMm': packageHeightMm,
   };
 
   /// Tolerant: anything missing or out of range falls back or is clamped,
@@ -126,7 +151,13 @@ class LabelPrinterSettings {
 
     const d = LabelPrinterSettings();
     final size = text('sizeId');
+    final packageSize = text('packageSizeId');
     return d.copyWith(
+      packageSizeId: PackageLabelSizes.isKnown(packageSize)
+          ? packageSize
+          : packageSize70x80mm,
+      packageWidthMm: number('packageWidthMm')?.toDouble(),
+      packageHeightMm: number('packageHeightMm')?.toDouble(),
       deviceId: text('deviceId'),
       deviceName: text('deviceName'),
       sizeId:
@@ -877,6 +908,8 @@ class LabelPrinterController extends ChangeNotifier {
       'Laawol label printer log${app.isEmpty ? '' : ' ($app)'}',
       'printer: ${s.hasPrinter ? '"${s.deviceName}" ${_shortId(s.deviceId)}' : 'none'}',
       'label: ${size.id} ${size.mmText} = ${size.widthDots}x${size.heightDots} dots',
+      'package label: ${s.packageSize.id} ${s.packageSize.mmText} = '
+          '${s.packageSize.widthDots}x${s.packageSize.heightDots} dots',
       'density ${s.density}, speed ${s.speed}, x ${s.xOffset}, y ${s.yOffset}',
       if (_battery != null) 'battery: $_battery%',
       '---',

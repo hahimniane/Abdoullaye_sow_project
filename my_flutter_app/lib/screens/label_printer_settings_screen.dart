@@ -407,6 +407,26 @@ class _LabelPrinterSettingsScreenState
         },
       ),
       const SizedBox(height: AppSpacing.md),
+      // Package labels are printed on their own roll, at their own size.
+      LabelSizePicker(
+        key: const Key('label-printer-package-size'),
+        kind: LabelSizeKind.package,
+        settings: s,
+        enabled: !_working,
+        onChanged: (id, w, h) {
+          if (id == tagSizeCustom && (w == null || h == null)) return;
+          unawaited(
+            _update(
+              (c) => c.copyWith(
+                packageSizeId: id,
+                packageWidthMm: w,
+                packageHeightMm: h,
+              ),
+            ),
+          );
+        },
+      ),
+      const SizedBox(height: AppSpacing.md),
       PrinterStepper(
         keyPrefix: 'label-printer-density',
         label: l10n.labelPrinterDensity,

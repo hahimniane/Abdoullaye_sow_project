@@ -162,6 +162,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       destinations: widget.destinations,
       onLineAdded: widget.onCustomerRecorded,
       caller: widget.caller,
+      staff: widget.staff,
     );
     if (saved == null || !mounted) return;
     final line = saved.line;
@@ -182,6 +183,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       existing: line,
       onLineAdded: widget.onCustomerRecorded,
       caller: widget.caller,
+      staff: widget.staff,
     );
   }
 
