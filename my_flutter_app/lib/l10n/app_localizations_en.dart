@@ -10098,6 +10098,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pkgResultWaiting => 'waiting for WhatsApp to be connected';
 
   @override
+  String get pkgResultWaitingTemplate =>
+      'waiting for WhatsApp to approve the message';
+
+  @override
   String get pkgResultNoPhone => 'not sent, no phone';
 
   @override

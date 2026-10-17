@@ -112,6 +112,21 @@ not every update it missed:
 
 There is no button for it in the console or the app yet.
 
+## Templates still in review
+
+A template that Meta has not approved yet answers every send with error
+`132001`. Such a row is not failed: it becomes `waiting_for_template`, the
+try does not count towards the 5-attempt limit, and the scheduled function
+`requeueTemplateWaitingUpdates` (every 30 minutes) puts every waiting row back
+to `queued`, which sends it again. The first sweep after Meta approves the
+template sends everything that was waiting, with nobody re-queueing by hand.
+A row that has waited more than 14 days is marked `failed` ("not approved
+within 14 days"). `sendContainerCurrentStatus` treats a waiting row as on its
+way. The console and the app show "waiting for WhatsApp to approve the
+message". Rules: `container_updates.js` (`whatsappSendOutcome`,
+`statusAfterAttempt`, `templateWaitDecision`), tested in
+`test/container-updates.test.js`.
+
 ## One-time setup (platform admin)
 
 ### 1. Meta business verification

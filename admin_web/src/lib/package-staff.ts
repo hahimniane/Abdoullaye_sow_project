@@ -180,6 +180,7 @@ const RESULT_PHRASE: Record<string, string> = {
   sent: "sent",
   failed: "failed to send",
   waiting_for_whatsapp: "waiting for WhatsApp to be connected",
+  waiting_for_template: "waiting for WhatsApp to approve the message",
   // The send queue's states: on its way, not a failure.
   queued: "queued to send",
   sending: "sending",
@@ -196,6 +197,7 @@ const RESULT_TONE: Record<string, PackageUpdateTone> = {
   sent: "ok",
   failed: "error",
   waiting_for_whatsapp: "warn",
+  waiting_for_template: "info",
   queued: "info",
   sending: "info",
   retrying: "warn",

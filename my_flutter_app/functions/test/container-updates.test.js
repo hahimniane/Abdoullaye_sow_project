@@ -644,3 +644,67 @@ describe("the server wiring", () => {
     assert.match(source, /where\("carrierTrackingDone", "==", false\)/);
   });
 });
+
+describe("templates still in review", () => {
+  const {
+    TEMPLATE_NOT_READY_CODES,
+    TEMPLATE_WAIT_MAX_MS,
+    templateWaitDecision,
+  } = require("../container_updates");
+
+  it("Meta's 'template not available yet' waits instead of failing", () => {
+    assert.ok(TEMPLATE_NOT_READY_CODES.includes(132001));
+    const outcome = whatsappSendOutcome(
+        {ok: false, httpStatus: 404, errorCode: 132001});
+    assert.equal(outcome, "await_template");
+    assert.equal(statusAfterAttempt(outcome, 1),
+        UPDATE_STATUS.WAITING_TEMPLATE);
+    // Even past the attempt limit it waits: the attempt is not counted.
+    assert.equal(statusAfterAttempt(outcome, WHATSAPP_MAX_ATTEMPTS + 3),
+        UPDATE_STATUS.WAITING_TEMPLATE);
+  });
+
+  it("other Meta refusals still fail for good", () => {
+    assert.equal(whatsappSendOutcome(
+        {ok: false, httpStatus: 400, errorCode: 132000}), "failed");
+    assert.equal(whatsappSendOutcome(
+        {ok: false, httpStatus: 400, errorCode: 131026}), "failed");
+    assert.equal(whatsappSendOutcome({ok: false, httpStatus: 400}), "failed");
+  });
+
+  it("the sweep re-queues a waiting row, expires an old one, skips others",
+      () => {
+        const now = Date.UTC(2026, 9, 17, 12);
+        const fresh = {status: UPDATE_STATUS.WAITING_TEMPLATE,
+          createdAt: new Date(now - 60 * 60 * 1000)};
+        const old = {status: UPDATE_STATUS.WAITING_TEMPLATE,
+          createdAt: new Date(now - TEMPLATE_WAIT_MAX_MS - 1)};
+        assert.equal(templateWaitDecision(fresh, now), "requeue");
+        assert.equal(templateWaitDecision(old, now), "expire");
+        assert.equal(templateWaitDecision(
+            {status: UPDATE_STATUS.FAILED, createdAt: new Date(now)}, now),
+        "skip");
+        assert.equal(templateWaitDecision(null, now), "skip");
+        // No timestamps at all: try again rather than drop it.
+        assert.equal(templateWaitDecision(
+            {status: UPDATE_STATUS.WAITING_TEMPLATE}, now), "requeue");
+      });
+
+  it("sending the current status leaves a template-waiting row alone", () => {
+    assert.equal(requeueDecision(
+        {status: UPDATE_STATUS.WAITING_TEMPLATE}, Date.now()), "in_flight");
+  });
+
+  it("the half-hourly sweep is wired to the queue", () => {
+    const source = readFileSync(path.join(__dirname, "..", "index.js"),
+        "utf8");
+    const start = source.indexOf("exports.requeueTemplateWaitingUpdates");
+    assert.ok(start > 0, "sweep is exported");
+    const body = source.slice(start, start + 2500);
+    assert.match(body, /every 30 minutes/);
+    assert.match(body, /CONTAINER_UPDATE_STATUS\.WAITING_TEMPLATE/);
+    assert.match(body, /templateWaitDecision/);
+    assert.match(body, /CONTAINER_UPDATE_STATUS\.QUEUED/);
+    assert.match(source, /errorCode: Number\(data\?\.error\?\.code\)/);
+  });
+});

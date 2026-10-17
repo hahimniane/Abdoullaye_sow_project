@@ -377,6 +377,7 @@ const {
   claimContainerUpdate,
   whatsappSendOutcome,
   statusAfterAttempt,
+  templateWaitDecision,
   requeueDecision,
   latestCustomerUpdate,
   mergeLastCustomerUpdate,
@@ -18493,6 +18494,7 @@ async function sendWhatsAppMessage(body) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       return {ok: false, httpStatus: response.status, messageId: "",
+        errorCode: Number(data?.error?.code) || 0,
         error: String(data?.error?.message || `HTTP ${response.status}`)
             .slice(0, 300)};
     }
@@ -18817,9 +18819,15 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
       const sent = await sendWhatsAppMessage(message);
       const status = statusAfterAttempt(
           whatsappSendOutcome(sent), claim.attempts);
+      const waitingForTemplate =
+        status === CONTAINER_UPDATE_STATUS.WAITING_TEMPLATE;
       await recordContainerUpdateAttempt(db, rowRef, row, {
         status,
         leaseUntilMs: 0,
+        // Waiting for Meta to approve the template is not the message's
+        // fault: the try does not count towards the attempt limit.
+        ...(waitingForTemplate ?
+          {attempts: Math.max(0, claim.attempts - 1)} : {}),
         whatsappMessageId: sent.messageId,
         error: status === CONTAINER_UPDATE_STATUS.SENT ? "" : sent.error,
         ...(status === CONTAINER_UPDATE_STATUS.SENT ?
@@ -18829,12 +18837,58 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         throw new Error(`WhatsApp update ${rowRef.id} will be retried: ` +
           sent.error);
       }
+      if (waitingForTemplate) {
+        logger.info("WhatsApp template not approved yet; the update waits", {
+          messageId: rowRef.id, update: row.update, error: sent.error,
+        });
+      }
       if (status === CONTAINER_UPDATE_STATUS.FAILED) {
         logger.warn("WhatsApp container update failed", {
           messageId: rowRef.id, containerId: row.containerId,
           lineId: row.lineId, role: row.role, error: sent.error,
         });
       }
+    },
+);
+
+// Every 30 minutes, tries again every update that is waiting for Meta to
+// approve its template, so a template approved tonight starts sending on its
+// own - nobody re-queues anything by hand. A row that has waited more than
+// 14 days is marked failed (the template was probably rejected).
+exports.requeueTemplateWaitingUpdates = onSchedule(
+    {
+      schedule: "every 30 minutes",
+      timeZone: "America/New_York",
+      timeoutSeconds: 120,
+    },
+    async () => {
+      const db = admin.firestore();
+      const snap = await db.collection("containerUpdates")
+          .where("status", "==", CONTAINER_UPDATE_STATUS.WAITING_TEMPLATE)
+          .limit(300)
+          .get();
+      if (snap.empty) return;
+      const nowMs = Date.now();
+      let requeued = 0;
+      let expired = 0;
+      for (const doc of snap.docs) {
+        const decision = templateWaitDecision(doc.data() || {}, nowMs);
+        if (decision === "requeue") {
+          // Becoming `queued` is what makes deliverContainerCustomerUpdate
+          // send it (shouldSendQueuedRow).
+          await doc.ref.update({status: CONTAINER_UPDATE_STATUS.QUEUED,
+            updatedAt: FirestoreFieldValue.serverTimestamp()});
+          requeued += 1;
+        } else if (decision === "expire") {
+          await recordContainerUpdateAttempt(db, doc.ref, doc.data() || {}, {
+            status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
+            error: "The WhatsApp template was not approved within 14 days.",
+          });
+          expired += 1;
+        }
+      }
+      logger.info("Template-waiting WhatsApp updates swept",
+          {requeued, expired});
     },
 );
 

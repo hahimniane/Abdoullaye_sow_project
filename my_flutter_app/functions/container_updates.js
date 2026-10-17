@@ -374,6 +374,9 @@ function whatsappConfigured(config) {
 //   queued -> sending -> sent
 //                     -> retrying -> sending ... (a 5xx, a 429, the network)
 //                     -> failed                   (Meta refused the message)
+//                     -> waiting_for_template     (template not approved yet)
+//   waiting_for_template -> queued  (every 30 minutes, for up to 14 days,
+//                                    so a newly approved template just works)
 //
 // A row is claimed in a transaction (queued/retrying -> sending, with a
 // lease). A sender that dies mid-send leaves `sending` with a lease that
@@ -388,7 +391,16 @@ const UPDATE_STATUS = Object.freeze({
   SENT: "sent",
   FAILED: "failed",
   WAITING: "waiting_for_whatsapp",
+  WAITING_TEMPLATE: "waiting_for_template",
 });
+
+// Meta's answer when a template name/language is not usable yet - the case
+// right after a template is submitted and still in review. Such a row waits
+// (it is not the message's fault) and is tried again until the template is
+// approved, instead of failing for good.
+const TEMPLATE_NOT_READY_CODES = Object.freeze([132001]);
+// How long a row may wait for its template before it is given up on.
+const TEMPLATE_WAIT_MAX_MS = 14 * 24 * 60 * 60 * 1000;
 
 // Longer than one send can take (the fetch gives up at WHATSAPP_TIMEOUT_MS
 // and the function at its own timeout), so a live sender is never robbed.
@@ -467,14 +479,19 @@ function claimContainerUpdate(row, nowMs, opts = {}) {
 /**
  * What a WhatsApp answer means for the row.
  *
- * @param {object} result {ok, httpStatus} - httpStatus 0 when the request
- *   never got an answer (network, timeout).
- * @return {"sent"|"retry"|"failed"} `retry` for what may pass on a second
- *   try (the network, Meta overloaded or rate-limiting), `failed` for what
- *   never will (a template, a number or a token Meta refused).
+ * @param {object} result {ok, httpStatus, errorCode} - httpStatus 0 when
+ *   the request never got an answer (network, timeout); errorCode is Meta's
+ *   error code when it gave one.
+ * @return {"sent"|"retry"|"await_template"|"failed"} `retry` for what may
+ *   pass on a second try (the network, Meta overloaded or rate-limiting),
+ *   `await_template` while the template is not approved yet, `failed` for
+ *   what never will (a number or a token Meta refused).
  */
 function whatsappSendOutcome(result) {
   if (result?.ok) return "sent";
+  if (TEMPLATE_NOT_READY_CODES.includes(Number(result?.errorCode || 0))) {
+    return "await_template";
+  }
   const status = Number(result?.httpStatus || 0);
   if (!status || status === 408 || status === 429 || status >= 500) {
     return "retry";
@@ -488,11 +505,12 @@ function whatsappSendOutcome(result) {
  * @param {string} outcome From whatsappSendOutcome.
  * @param {number} attempts Attempts made, this one included.
  * @param {number} [maxAttempts] The bound.
- * @return {string} sent, retrying, or failed.
+ * @return {string} sent, retrying, waiting_for_template, or failed.
  */
 function statusAfterAttempt(outcome, attempts,
     maxAttempts = WHATSAPP_MAX_ATTEMPTS) {
   if (outcome === "sent") return UPDATE_STATUS.SENT;
+  if (outcome === "await_template") return UPDATE_STATUS.WAITING_TEMPLATE;
   if (outcome === "retry" && positiveInt(attempts) < maxAttempts) {
     return UPDATE_STATUS.RETRYING;
   }
@@ -512,13 +530,34 @@ function requeueDecision(row, nowMs) {
   if (!row) return "create";
   const status = text(row.status, 40);
   if (status === UPDATE_STATUS.SENT) return "already_sent";
-  if (status === UPDATE_STATUS.QUEUED || status === UPDATE_STATUS.RETRYING) {
+  // Waiting for its template counts as on its way: the half-hourly sweep
+  // sends it the moment the template is approved.
+  if (status === UPDATE_STATUS.QUEUED || status === UPDATE_STATUS.RETRYING ||
+      status === UPDATE_STATUS.WAITING_TEMPLATE) {
     return "in_flight";
   }
   if (status === UPDATE_STATUS.SENDING &&
       Number(row.leaseUntilMs || 0) > nowMs) {
     return "in_flight";
   }
+  return "requeue";
+}
+
+/**
+ * What the half-hourly sweep does with a row waiting for its template.
+ *
+ * @param {object|null} row The containerUpdates row.
+ * @param {number} nowMs The time.
+ * @param {number} [maxWaitMs] How long a row may wait.
+ * @return {"requeue"|"expire"|"skip"} `requeue` to try again now, `expire`
+ *   when it has waited too long (marked failed), `skip` for any other row.
+ */
+function templateWaitDecision(row, nowMs, maxWaitMs = TEMPLATE_WAIT_MAX_MS) {
+  if (!row || text(row.status, 40) !== UPDATE_STATUS.WAITING_TEMPLATE) {
+    return "skip";
+  }
+  const since = toMillis(row.createdAt) || toMillis(row.updatedAt);
+  if (since && nowMs - since > maxWaitMs) return "expire";
   return "requeue";
 }
 
@@ -591,6 +630,9 @@ function mergeLastCustomerUpdate(previous, update, entries, atMs) {
 
 module.exports = {
   UPDATE_STATUS,
+  TEMPLATE_NOT_READY_CODES,
+  TEMPLATE_WAIT_MAX_MS,
+  templateWaitDecision,
   WHATSAPP_SEND_LEASE_MS,
   WHATSAPP_TIMEOUT_MS,
   WHATSAPP_MAX_ATTEMPTS,

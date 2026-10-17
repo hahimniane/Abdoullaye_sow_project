@@ -4566,6 +4566,7 @@
   "pkgResultSent": "envoyée",
   "pkgResultFailed": "échec de l’envoi",
   "pkgResultWaiting": "en attente de la connexion WhatsApp",
+  "pkgResultWaitingTemplate": "en attente de l’approbation du message par WhatsApp",
   "pkgResultNoPhone": "non envoyée, pas de téléphone",
   "pkgResultSwitchedOff": "non envoyée, mises à jour désactivées",
   "pkgResultNeedsCountryCode": "non envoyée, le téléphone n’a pas d’indicatif pays",

@@ -870,6 +870,9 @@ const containerUpdateSent = 'sent';
 const containerUpdateFailed = 'failed';
 const containerUpdateSkipped = 'skipped';
 const containerUpdateWaiting = 'waiting_for_whatsapp';
+// Meta is still reviewing the message's template; it sends on its own once
+// the template is approved.
+const containerUpdateWaitingTemplate = 'waiting_for_template';
 
 // The send queue's in-between states (docs/WHATSAPP_CONTAINER_UPDATES.md):
 // waiting for the sender, claimed by one, or retrying after a network or

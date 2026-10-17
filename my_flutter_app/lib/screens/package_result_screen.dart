@@ -1077,6 +1077,7 @@ String _resultLabel(AppLocalizations l10n, ContainerLineUpdateResult r) =>
       containerUpdateSent => l10n.pkgResultSent,
       containerUpdateFailed => l10n.pkgResultFailed,
       containerUpdateWaiting => l10n.pkgResultWaiting,
+      containerUpdateWaitingTemplate => l10n.pkgResultWaitingTemplate,
       // The send queue's states: on its way, not a failure.
       containerUpdateQueued => l10n.pkgResultQueued,
       containerUpdateSending => l10n.pkgResultSending,
@@ -1093,6 +1094,7 @@ IconData _resultIcon(String status) => switch (status) {
       containerUpdateSent => Icons.check_circle_outline,
       containerUpdateFailed => Icons.error_outline,
       containerUpdateWaiting => Icons.hourglass_empty,
+      containerUpdateWaitingTemplate => Icons.schedule_send_outlined,
       containerUpdateQueued => Icons.schedule_send_outlined,
       containerUpdateSending => Icons.send_outlined,
       containerUpdateRetrying => Icons.autorenew,
@@ -1103,7 +1105,10 @@ Color _resultColor(String status) => switch (status) {
       containerUpdateSent => AppColors.sage,
       containerUpdateFailed => AppColors.errorRed,
       containerUpdateWaiting => AppColors.warn,
-      containerUpdateQueued || containerUpdateSending => AppColors.cobaltDeep,
+      containerUpdateQueued ||
+      containerUpdateSending ||
+      containerUpdateWaitingTemplate =>
+        AppColors.cobaltDeep,
       containerUpdateRetrying => AppColors.warn,
       _ => AppColors.muted,
     };

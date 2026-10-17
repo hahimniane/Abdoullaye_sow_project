@@ -17796,6 +17796,12 @@ abstract class AppLocalizations {
   /// **'waiting for WhatsApp to be connected'**
   String get pkgResultWaiting;
 
+  /// No description provided for @pkgResultWaitingTemplate.
+  ///
+  /// In en, this message translates to:
+  /// **'waiting for WhatsApp to approve the message'**
+  String get pkgResultWaitingTemplate;
+
   /// No description provided for @pkgResultNoPhone.
   ///
   /// In en, this message translates to:
