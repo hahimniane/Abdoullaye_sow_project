@@ -567,7 +567,7 @@ export function WaitingPackagesPanel({
                   initialCountryCode={receiverPhoneCountry}
                 />
               </div>
-              {!editingId && <p className="lst-hint">Nobody is messaged when a package is registered or added to a container. The first WhatsApp message goes out when the container ships.</p>}
+              {!editingId && <p className="lst-hint">The customer and the receiver get a WhatsApp message when the package is registered, when the container ships and when it arrives. Adding it to a container sends nothing.</p>}
             </div>
             <footer className="lst-modal-foot wpk-foot">
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>

@@ -4,8 +4,11 @@ import test from "node:test";
 
 import { translateValue } from "./french-dom.ts";
 import {
+  GET_APP_URL,
   GUEST_CONTAINER_STAGES,
   GUEST_JOURNEY_STAGES,
+  GUEST_SHIPPING_FIELDS,
+  parseGuestShipping,
   guestJourneyStages,
   guestServiceLabel,
   guestStageLabel,
@@ -137,6 +140,63 @@ test("the server's container service and stage map are the ones this parser know
     record: {trackingCode: "CL-K7M4P2", service: "container", stage: "waiting_container", updatedAtMs: 1},
   });
   assert.equal(waiting.found && waiting.record.stage, "waiting_container");
+});
+
+test("a sailed container line carries its shipping details, and nothing else", () => {
+  const parsed = parseGuestTrackingResponse({
+    version: 1,
+    found: true,
+    record: {
+      trackingCode: "CL-K7M4P2",
+      service: "container",
+      stage: "in_transit",
+      updatedAtMs: 1,
+      shipping: {
+        shippingLine: " Maersk ",
+        containerNumber: "MSKU1234565",
+        bookingNumber: "",
+        receiverName: "must be ignored",
+      },
+    },
+  });
+  assert.ok(parsed.found);
+  assert.deepEqual(parsed.record.shipping, {
+    shippingLine: "Maersk",
+    containerNumber: "MSKU1234565",
+  });
+  // Nothing known, or another service: no block at all.
+  assert.equal(parseGuestShipping("container", {bookingNumber: "  "}), undefined);
+  assert.equal(parseGuestShipping("container", "MSKU1234565"), undefined);
+  assert.equal(parseGuestShipping("barrel", {containerNumber: "MSKU1234565"}), undefined);
+  assert.deepEqual(GUEST_SHIPPING_FIELDS.map((f) => f.key),
+    ["shippingLine", "containerNumber", "bookingNumber"]);
+  assert.equal(GET_APP_URL, "https://laawoldigital.com/get-app.html");
+});
+
+test("the server's shipping fields are the ones this parser reads", () => {
+  const server = readFileSync(
+    new URL("../../../my_flutter_app/functions/guest_tracking.js", import.meta.url),
+    "utf8",
+  );
+  for (const {key} of GUEST_SHIPPING_FIELDS) {
+    assert.match(server, new RegExp(`\\.\\.\\.\\(${key} \\? \\{${key}\\} : \\{\\}\\)`), key);
+  }
+});
+
+test("every shipping-details string has French", () => {
+  const strings = [
+    "Shipping details",
+    "You can also follow it with these on the shipping line’s website.",
+    "Get the Laawol app",
+    "For your privacy, only the shipment status and shipping details are shown here.",
+    "Last update: received",
+    ...GUEST_SHIPPING_FIELDS.map((f) => f.label),
+  ];
+  for (const english of strings) {
+    const french = translateValue(english, "fr");
+    assert.notEqual(french, english, `no French for "${english}"`);
+    assert.equal(translateValue(french, "en"), english, `"${english}" does not round-trip`);
+  }
 });
 
 test("every container tracking string has French", () => {

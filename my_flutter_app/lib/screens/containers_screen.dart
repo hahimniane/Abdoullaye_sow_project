@@ -2057,9 +2057,12 @@ String containerSendStatusSummary(
   return parts.join(' ');
 }
 
-/// A customer-update moment in words: "left port", "arrived".
+/// A customer-update moment in words: "received", "left port", "arrived".
+/// `at_port` is only on lines summarised before the carrier's "at the
+/// port" and staff's "arrived" became one message.
 String containerUpdateMomentLabel(AppLocalizations l10n, String update) =>
     switch (update) {
+      containerUpdateReceived => l10n.pkgMomentReceived,
       containerUpdateShipped => l10n.pkgMomentShipped,
       containerUpdateAtPort => l10n.pkgMomentAtPort,
       containerUpdateArrived => l10n.pkgMomentArrived,
@@ -3965,7 +3968,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             if (_waiting && !_editing) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(
-                l10n.wpkNoNotice,
+                l10n.wpkUpdatesNotice,
                 key: const Key('wpk-no-notice'),
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),

@@ -190,6 +190,8 @@ test("the last update is read like the app reads it; anything malformed is no up
   assert.deepEqual(last.results.map((r) => r.text), ["Customer: sent", "Receiver: not sent, the phone has no country code"]);
   assert.equal(packageLastUpdate({ update: "at_port", results: [] })?.sentence, "Last update: at the destination port");
   assert.equal(packageLastUpdate({ update: "arrived" })?.sentence, "Last update: arrived");
+  // The drop-off message (package_received).
+  assert.equal(packageLastUpdate({ update: "received" })?.sentence, "Last update: received");
   assert.equal(packageLastUpdate({ update: "arrived" })?.at, null);
   assert.equal(packageLastUpdate({ update: "customs" })?.sentence, "Latest update");
   // A Firestore Timestamp in `at` is read when there is no atMs.

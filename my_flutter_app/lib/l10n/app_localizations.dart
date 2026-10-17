@@ -5456,6 +5456,36 @@ abstract class AppLocalizations {
   /// **'For privacy, guest tracking shows only the service status. Sign in to see private booking details and actions.'**
   String get guestTrackingPrivacyNote;
 
+  /// No description provided for @guestTrackingShippingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping details'**
+  String get guestTrackingShippingTitle;
+
+  /// No description provided for @guestTrackingShippingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can also follow it with these on the shipping line\'s website.'**
+  String get guestTrackingShippingHint;
+
+  /// No description provided for @guestTrackingShippingLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping line'**
+  String get guestTrackingShippingLine;
+
+  /// No description provided for @guestTrackingContainerNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Container number'**
+  String get guestTrackingContainerNumber;
+
+  /// No description provided for @guestTrackingBookingNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking number'**
+  String get guestTrackingBookingNumber;
+
   /// No description provided for @guestTrackingTrackAnother.
   ///
   /// In en, this message translates to:
@@ -17742,6 +17772,12 @@ abstract class AppLocalizations {
   /// **'arrived'**
   String get pkgMomentArrived;
 
+  /// No description provided for @pkgMomentReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'received'**
+  String get pkgMomentReceived;
+
   /// No description provided for @pkgResultSent.
   ///
   /// In en, this message translates to:
@@ -18684,11 +18720,11 @@ abstract class AppLocalizations {
   /// **'It waits here until a container takes it.'**
   String get wpkRegisterSubtitle;
 
-  /// No description provided for @wpkNoNotice.
+  /// No description provided for @wpkUpdatesNotice.
   ///
   /// In en, this message translates to:
-  /// **'Nobody is messaged when a package is registered or added to a container. The first WhatsApp message goes out when the container ships.'**
-  String get wpkNoNotice;
+  /// **'The customer and the receiver get a WhatsApp message when the package is registered, when the container ships and when it arrives. Adding it to a container sends nothing.'**
+  String get wpkUpdatesNotice;
 
   /// No description provided for @wpkEmptyTitle.
   ///

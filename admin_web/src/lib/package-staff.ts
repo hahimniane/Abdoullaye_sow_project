@@ -167,7 +167,11 @@ export type PackageUpdateTone = "ok" | "error" | "warn" | "info" | "muted";
 
 /** The moment the line's last update was about, as one whole sentence. */
 export const PACKAGE_UPDATE_SENTENCE: Record<string, string> = {
+  // package_received, sent when the package is registered.
+  received: "Last update: received",
   shipped: "Last update: left port",
+  // Lines summarised before the carrier's "at the port" and staff's
+  // "arrived" became one message; new lines say "arrived" for either.
   at_port: "Last update: at the destination port",
   arrived: "Last update: arrived",
 };

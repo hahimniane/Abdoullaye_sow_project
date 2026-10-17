@@ -26,7 +26,51 @@ export type GuestTrackingRecord = {
   /** Price requests only: how many businesses have answered. A count is
    * public; a price never is - seeing prices takes the claim step. */
   quoteCount?: number;
+  /** Container lines only, once the box has sailed: what the shipping line
+   * calls it, each field only when known. The box's details, never the
+   * person's. */
+  shipping?: GuestContainerShipping;
 };
+
+export type GuestContainerShipping = {
+  shippingLine?: string;
+  containerNumber?: string;
+  bookingNumber?: string;
+};
+
+/** The shipping details in the order the result card lists them. */
+export const GUEST_SHIPPING_FIELDS: ReadonlyArray<{
+  key: keyof GuestContainerShipping;
+  label: string;
+}> = [
+  {key: "shippingLine", label: "Shipping line"},
+  {key: "containerNumber", label: "Container number"},
+  {key: "bookingNumber", label: "Booking number"},
+];
+
+/** Where the result card's "Get the Laawol app" link goes. */
+export const GET_APP_URL = "https://laawoldigital.com/get-app.html";
+
+/**
+ * The shipping details a container line's answer carries: only the three
+ * known fields, only non-empty short text, and nothing at all for any other
+ * service or when none is known.
+ */
+export function parseGuestShipping(
+  service: string,
+  value: unknown,
+): GuestContainerShipping | undefined {
+  if (service !== "container" || !value || typeof value !== "object") {
+    return undefined;
+  }
+  const row = value as Record<string, unknown>;
+  const shipping: GuestContainerShipping = {};
+  for (const {key} of GUEST_SHIPPING_FIELDS) {
+    const text = typeof row[key] === "string" ? (row[key] as string).trim() : "";
+    if (text) shipping[key] = text.slice(0, 60);
+  }
+  return Object.keys(shipping).length > 0 ? shipping : undefined;
+}
 
 export type GuestTrackingResponse =
   | {version: 1; found: false}
@@ -87,6 +131,7 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
   ) {
     throw new Error("guest-tracking-response-invalid");
   }
+  const shipping = parseGuestShipping(service, row.shipping);
   return {
     version: 1,
     found: true,
@@ -96,6 +141,7 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
       stage,
       updatedAtMs,
       ...(quoteCount !== undefined ? {quoteCount} : {}),
+      ...(shipping ? {shipping} : {}),
     },
   };
 }

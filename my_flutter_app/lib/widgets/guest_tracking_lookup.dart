@@ -376,6 +376,10 @@ class _GuestTrackingSuccess extends StatelessWidget {
             label: l10n.guestTrackingStatusLabel,
             value: _stageLabel(l10n, record.stage),
           ),
+          if (record.shipping != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            _GuestShippingDetails(shipping: record.shipping!),
+          ],
           if (record.service == GuestTrackingServiceType.freightQuote) ...[
             const SizedBox(height: AppSpacing.md),
             _GuestQuoteClaim(
@@ -545,6 +549,79 @@ class _GuestFact extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A sailed container's shipping line, container number and booking
+/// number - what the WhatsApp "departed" message's button opens this page
+/// for. Only the known ones are listed.
+class _GuestShippingDetails extends StatelessWidget {
+  const _GuestShippingDetails({required this.shipping});
+
+  final GuestContainerShipping shipping;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context).textTheme;
+    final rows = <(String, String)>[
+      (l10n.guestTrackingShippingLine, shipping.shippingLine),
+      (l10n.guestTrackingContainerNumber, shipping.containerNumber),
+      (l10n.guestTrackingBookingNumber, shipping.bookingNumber),
+    ].where((row) => row.$2.isNotEmpty).toList();
+    return Container(
+      key: const Key('guest-tracking-shipping'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.lightSurfaceVariant),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.guestTrackingShippingTitle,
+            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            l10n.guestTrackingShippingHint,
+            style: theme.bodySmall?.copyWith(
+              color: AppColors.lightMuted,
+              height: 1.4,
+            ),
+          ),
+          for (final (label, value) in rows) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    label,
+                    style: theme.bodySmall?.copyWith(
+                      color: AppColors.lightMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  flex: 3,
+                  child: SelectableText(
+                    value,
+                    style: theme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

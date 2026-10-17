@@ -92,6 +92,24 @@ void main() {
       expect(empty.queued, 0);
     });
 
+    test('every update a line can carry has words in both languages', () {
+      final en = AppLocalizationsEn();
+      final fr = AppLocalizationsFr();
+      expect(containerUpdateMomentLabel(en, containerUpdateReceived),
+          'received');
+      expect(containerUpdateMomentLabel(fr, containerUpdateReceived), 'reçu');
+      for (final update in [
+        containerUpdateReceived,
+        containerUpdateShipped,
+        containerUpdateAtPort,
+        containerUpdateArrived,
+      ]) {
+        // An update with no words falls through as its raw id in both.
+        expect(containerUpdateMomentLabel(fr, update),
+            isNot(containerUpdateMomentLabel(en, update)));
+      }
+    });
+
     test('a refusal names its reason, or none', () {
       expect(
         containerStatusRefusalReason({'reason': 'whatsapp_not_configured'}),

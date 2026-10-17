@@ -857,7 +857,10 @@ class ContainerLine {
 }
 
 // The update moments and per-person outcomes the server writes to
-// `lastCustomerUpdate` (functions/index.js sendContainerCustomerUpdates).
+// `lastCustomerUpdate` (functions/index.js sendContainerCustomerUpdates and
+// queuePackageReceived). The carrier's "at the port" now sends the arrival's
+// message, so `at_port` only appears on lines summarised before that.
+const containerUpdateReceived = 'received';
 const containerUpdateShipped = 'shipped';
 const containerUpdateAtPort = 'at_port';
 const containerUpdateArrived = 'arrived';

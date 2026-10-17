@@ -332,6 +332,87 @@ void main() {
     });
   }
 
+  test('a sailed container line reads its shipping details, nothing else',
+      () {
+    GuestTrackingRecord parse(String service, Object? shipping) =>
+        GuestTrackingRecord.fromMap({
+          'trackingCode': 'CL-K7M4P2',
+          'service': service,
+          'stage': 'in_transit',
+          'shipping': shipping,
+        });
+    final shipping = parse('container', {
+      'shippingLine': ' Maersk ',
+      'containerNumber': 'MSKU1234565',
+      'bookingNumber': '',
+      'receiverName': 'must be ignored',
+    }).shipping!;
+    expect(shipping.shippingLine, 'Maersk');
+    expect(shipping.containerNumber, 'MSKU1234565');
+    expect(shipping.bookingNumber, '');
+    expect(parse('container', {'bookingNumber': '  '}).shipping, isNull);
+    expect(parse('container', 'MSKU1234565').shipping, isNull);
+    expect(parse('container', null).shipping, isNull);
+    expect(parse('barrel', {'containerNumber': 'MSKU1234565'}).shipping,
+        isNull);
+  });
+
+  for (final (locale, title, line, booking) in [
+    (const Locale('en'), 'Shipping details', 'Shipping line',
+        'Booking number'),
+    (const Locale('fr'), "Informations d'expédition", 'Compagnie maritime',
+        'Numéro de réservation'),
+  ]) {
+    testWidgets('a sailed container shows the ship details '
+        '(${locale.languageCode})', (tester) async {
+      final service = _FakeGuestTrackingService(
+        (_) async => const GuestTrackingResult.found(
+          GuestTrackingRecord(
+            trackingCode: 'CL-K7M4P2',
+            service: GuestTrackingServiceType.container,
+            stage: GuestTrackingStage.inTransit,
+            shipping: GuestContainerShipping(
+              shippingLine: 'Maersk',
+              bookingNumber: 'BK-998877',
+            ),
+          ),
+        ),
+      );
+      tester.view.physicalSize = const Size(360, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pumpLookup(tester, service, initialCode: 'CL-K7M4P2',
+          locale: locale);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('guest-tracking-shipping')), findsOneWidget);
+      expect(find.text(title), findsOneWidget);
+      expect(find.text(line), findsOneWidget);
+      expect(find.text('Maersk'), findsOneWidget);
+      expect(find.text(booking), findsOneWidget);
+      expect(find.text('BK-998877'), findsOneWidget);
+      // Not known, so not listed.
+      expect(find.text(locale.languageCode == 'en' ? 'Container number'
+          : 'Numéro de conteneur'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('a box not yet sailed shows no ship details', (tester) async {
+    final service = _FakeGuestTrackingService(
+      (_) async => const GuestTrackingResult.found(
+        GuestTrackingRecord(
+          trackingCode: 'CL-K7M4P2',
+          service: GuestTrackingServiceType.container,
+          stage: GuestTrackingStage.booked,
+        ),
+      ),
+    );
+    await _pumpLookup(tester, service, initialCode: 'CL-K7M4P2');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('guest-tracking-shipping')), findsNothing);
+  });
+
   testWidgets('no initial code means no lookup fires', (tester) async {
     final service = _FakeGuestTrackingService((_) async => _success);
     await _pumpLookup(tester, service);

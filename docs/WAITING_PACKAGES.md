@@ -8,9 +8,12 @@ added to a container. Backend: `my_flutter_app/functions`
 (`container_manifest.js`, `container_payments.js`, `index.js`).
 
 Rules of the road
-- **Nobody is messaged** at drop-off or when a package is put on a container.
-  The first WhatsApp message is still the "shipped" one. These callables write
-  no `trackingEvents` and no `containerUpdates`.
+- **One message at drop-off, none when a package is put on a container.**
+  `addWaitingPackage` (like `addContainerLine`) queues the `package_received`
+  WhatsApp message (`containerUpdates/{lineId}_{role}_received`, see
+  docs/WHATSAPP_CONTAINER_UPDATES.md). Assigning and unassigning write no
+  `trackingEvents` and no `containerUpdates`; the next message is the
+  "shipped" one.
 - **Destination is a hard block.** A package only rides a container going to
   the same `destinationCountryId`. The server enforces it (assign, move, edit,
   add, and changing a container's destination under its packages).

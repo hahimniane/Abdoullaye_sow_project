@@ -4261,6 +4261,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Last update: left port": "Dernière mise à jour : parti du port",
   "Last update: at the destination port": "Dernière mise à jour : au port de destination",
   "Last update: arrived": "Dernière mise à jour : arrivé",
+  "Last update: received": "Dernière mise à jour : reçu",
   "Latest update": "Dernière mise à jour",
   // One person's outcome on the last update, as whole sentences.
   "Customer: sent": "Client : envoyée",
@@ -4298,6 +4299,15 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Not available": "Non disponible",
   "For your privacy, only the booking status is shown here.":
     "Pour protéger votre vie privée, seul le statut de la commande est affiché ici.",
+  // A sailed container's details on the public tracking result.
+  "For your privacy, only the shipment status and shipping details are shown here.":
+    "Pour protéger votre vie privée, seuls le statut de l’envoi et les informations d’expédition sont affichés ici.",
+  "Shipping details": "Informations d’expédition",
+  "You can also follow it with these on the shipping line’s website.":
+    "Vous pouvez aussi le suivre avec ces informations sur le site de la compagnie maritime.",
+  "Shipping line": "Compagnie maritime",
+  "Booking number": "Numéro de réservation",
+  "Get the Laawol app": "Télécharger l’application Laawol",
   "Track another": "Suivre un autre envoi",
   // On the tracking result card, in both the guest lookup and the signed-in
   // one. Missed on the first pass because the label is inside a ternary
@@ -5054,8 +5064,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Correct what was written on it.": "Corrigez ce qui est écrit dessus.",
   "What the customer dropped off. It waits here until a container takes it.":
     "Ce que le client a déposé. Il attend ici qu’un conteneur le prenne.",
-  "Nobody is messaged when a package is registered or added to a container. The first WhatsApp message goes out when the container ships.":
-    "Personne n’est averti quand un colis est enregistré ou ajouté à un conteneur. Le premier message WhatsApp part quand le conteneur est expédié.",
+  "The customer and the receiver get a WhatsApp message when the package is registered, when the container ships and when it arrives. Adding it to a container sends nothing.":
+    "Le client et le destinataire reçoivent un message WhatsApp à l’enregistrement du colis, au départ du conteneur et à son arrivée. L’ajouter à un conteneur n’envoie rien.",
   "Save & add another for the same customer": "Enregistrer et en ajouter un autre pour le même client",
   "Save & print label": "Enregistrer et imprimer l’étiquette",
   "Pay on arrival": "Paiement à l’arrivée",

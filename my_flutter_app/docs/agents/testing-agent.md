@@ -473,4 +473,17 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 - A screen with a 15 s safety timer cannot have its spinner asserted after
   `pumpAndSettle` (the settle runs the fake clock past the timer). Pump by hand
   (`pumpWidget` + `pump(Duration)`) to see the loading state, then pump past it.
+- `app_en.arb` and `app_fr.arb` must have the same keys *including* `@key`
+  metadata blocks (`freight_category_test.dart` "catalogs stay key for key
+  identical"). Either add the `@key` block to both files or to neither.
+- WhatsApp messages: the template name and `{{n}}` order are tested in
+  `functions/test/whatsapp-templates.test.js`, which also checks each
+  template's variable count against `docs/WHATSAPP_CONTAINER_UPDATES.md`.
+  The emulator suite (`npm run test:containers`) fakes Meta at `fetch` and
+  asserts the parameters actually sent; check both when a template changes.
+- Next's Turbopack build refuses a symlinked `admin_web/node_modules` ("points
+  out of the filesystem root"); in a worktree run `npm ci` there instead. A
+  production `next build` needs the App Check site key; for a local browser
+  check of a public page build with `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true`,
+  stub the callable at `window.fetch`, and delete `admin_web/out` afterwards.
 

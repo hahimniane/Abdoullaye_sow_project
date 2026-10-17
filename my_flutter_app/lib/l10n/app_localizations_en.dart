@@ -2994,6 +2994,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'For privacy, guest tracking shows only the service status. Sign in to see private booking details and actions.';
 
   @override
+  String get guestTrackingShippingTitle => 'Shipping details';
+
+  @override
+  String get guestTrackingShippingHint =>
+      'You can also follow it with these on the shipping line\'s website.';
+
+  @override
+  String get guestTrackingShippingLine => 'Shipping line';
+
+  @override
+  String get guestTrackingContainerNumber => 'Container number';
+
+  @override
+  String get guestTrackingBookingNumber => 'Booking number';
+
+  @override
   String get guestTrackingTrackAnother => 'Track another number';
 
   @override
@@ -10070,6 +10086,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pkgMomentArrived => 'arrived';
 
   @override
+  String get pkgMomentReceived => 'received';
+
+  @override
   String get pkgResultSent => 'sent';
 
   @override
@@ -10646,8 +10665,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wpkRegisterSubtitle => 'It waits here until a container takes it.';
 
   @override
-  String get wpkNoNotice =>
-      'Nobody is messaged when a package is registered or added to a container. The first WhatsApp message goes out when the container ships.';
+  String get wpkUpdatesNotice =>
+      'The customer and the receiver get a WhatsApp message when the package is registered, when the container ships and when it arrives. Adding it to a container sends nothing.';
 
   @override
   String get wpkEmptyTitle => 'No packages are waiting.';

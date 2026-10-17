@@ -3060,6 +3060,22 @@ class AppLocalizationsFr extends AppLocalizations {
       'Pour protéger votre vie privée, le suivi sans compte affiche uniquement le statut du service. Connectez-vous pour voir les détails privés et les actions de la réservation.';
 
   @override
+  String get guestTrackingShippingTitle => 'Informations d\'expédition';
+
+  @override
+  String get guestTrackingShippingHint =>
+      'Vous pouvez aussi le suivre avec ces informations sur le site de la compagnie maritime.';
+
+  @override
+  String get guestTrackingShippingLine => 'Compagnie maritime';
+
+  @override
+  String get guestTrackingContainerNumber => 'Numéro de conteneur';
+
+  @override
+  String get guestTrackingBookingNumber => 'Numéro de réservation';
+
+  @override
   String get guestTrackingTrackAnother => 'Suivre un autre numéro';
 
   @override
@@ -10221,6 +10237,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pkgMomentArrived => 'arrivé';
 
   @override
+  String get pkgMomentReceived => 'reçu';
+
+  @override
   String get pkgResultSent => 'envoyée';
 
   @override
@@ -10804,8 +10823,8 @@ class AppLocalizationsFr extends AppLocalizations {
   String get wpkRegisterSubtitle => 'Il attend ici qu\'un conteneur le prenne.';
 
   @override
-  String get wpkNoNotice =>
-      'Personne n\'est contacté quand un colis est enregistré ou ajouté à un conteneur. Le premier message WhatsApp part quand le conteneur est expédié.';
+  String get wpkUpdatesNotice =>
+      'Le client et le destinataire reçoivent un message WhatsApp à l\'enregistrement du colis, au départ du conteneur et à son arrivée. L\'ajouter à un conteneur n\'envoie rien.';
 
   @override
   String get wpkEmptyTitle => 'Aucun colis en attente.';

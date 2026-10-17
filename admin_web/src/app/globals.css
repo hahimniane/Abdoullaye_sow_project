@@ -6190,6 +6190,56 @@ html[data-lang-pending] body {
   padding: 10px 12px;
 }
 
+/* A sailed container's details, as the shipping line calls them. */
+.guest-tracking-shipping {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.guest-tracking-shipping h3 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.guest-tracking-shipping p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.guest-tracking-shipping dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.guest-tracking-shipping dl div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  justify-content: space-between;
+}
+
+.guest-tracking-shipping dt {
+  color: var(--muted);
+}
+
+.guest-tracking-shipping dd {
+  color: var(--ink);
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.guest-tracking-get-app {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
 .guest-tracking-result .trk-actions {
   display: flex;
   flex-wrap: wrap;

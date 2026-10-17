@@ -24,6 +24,49 @@ enum GuestTrackingStage {
   cancelled,
 }
 
+/// A sailed container's details as the shipping line calls them, on a
+/// container line's public answer (functions/guest_tracking.js
+/// `publicContainerShipping`). Each field is '' when not known; the box's
+/// details, never the person's.
+class GuestContainerShipping {
+  const GuestContainerShipping({
+    this.shippingLine = '',
+    this.containerNumber = '',
+    this.bookingNumber = '',
+  });
+
+  final String shippingLine;
+  final String containerNumber;
+  final String bookingNumber;
+
+  /// Null for any other service, or when nothing is known.
+  static GuestContainerShipping? fromWire(
+    GuestTrackingServiceType service,
+    Object? value,
+  ) {
+    if (service != GuestTrackingServiceType.container || value is! Map) {
+      return null;
+    }
+    String read(String key) {
+      final raw = value[key];
+      if (raw is! String) return '';
+      final text = raw.trim();
+      return text.length > 60 ? text.substring(0, 60) : text;
+    }
+
+    final shipping = GuestContainerShipping(
+      shippingLine: read('shippingLine'),
+      containerNumber: read('containerNumber'),
+      bookingNumber: read('bookingNumber'),
+    );
+    return shipping.shippingLine.isEmpty &&
+            shipping.containerNumber.isEmpty &&
+            shipping.bookingNumber.isEmpty
+        ? null
+        : shipping;
+  }
+}
+
 class GuestTrackingRecord {
   const GuestTrackingRecord({
     required this.trackingCode,
@@ -31,6 +74,7 @@ class GuestTrackingRecord {
     required this.stage,
     this.updatedAt,
     this.quoteCount = 0,
+    this.shipping,
   });
 
   final String trackingCode;
@@ -42,6 +86,9 @@ class GuestTrackingRecord {
   /// public; a price never is - seeing prices takes the claim step.
   final int quoteCount;
 
+  /// Container lines only, once the box has sailed.
+  final GuestContainerShipping? shipping;
+
   factory GuestTrackingRecord.fromMap(Map<String, dynamic> data) {
     final trackingCode = data['trackingCode'];
     if (trackingCode is! String || trackingCode.trim().isEmpty) {
@@ -49,9 +96,11 @@ class GuestTrackingRecord {
     }
 
     final rawCount = data['quoteCount'];
+    final service = _serviceFromWire(data['service']);
     return GuestTrackingRecord(
       trackingCode: trackingCode.trim(),
-      service: _serviceFromWire(data['service']),
+      service: service,
+      shipping: GuestContainerShipping.fromWire(service, data['shipping']),
       stage: _stageFromWire(data['stage']),
       updatedAt: _dateFromMilliseconds(data['updatedAtMs']),
       quoteCount: rawCount is num && rawCount.isFinite && rawCount > 0

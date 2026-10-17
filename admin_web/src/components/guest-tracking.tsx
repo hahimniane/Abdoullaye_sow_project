@@ -20,6 +20,8 @@ import {
 } from "firebase/firestore";
 import { currentLocale } from "@/lib/format";
 import {
+  GET_APP_URL,
+  GUEST_SHIPPING_FIELDS,
   guestJourneyStages,
   guestServiceLabel,
   guestStageLabel,
@@ -295,6 +297,34 @@ export function GuestTracking({
               stages={guestJourneyStages(record.service)}
             />
           )}
+          {/* The WhatsApp "departed" message sends people here for these,
+              so a sailed box names what the shipping line calls it. */}
+          {record.shipping && (
+            <section
+              aria-labelledby="guest-tracking-shipping-title"
+              className="guest-tracking-shipping"
+            >
+              <h3 id="guest-tracking-shipping-title">Shipping details</h3>
+              <p>You can also follow it with these on the shipping line’s website.</p>
+              <dl>
+                {GUEST_SHIPPING_FIELDS.filter(({key}) => record.shipping?.[key]).map(
+                  ({key, label}) => (
+                    <div key={key}>
+                      <dt>{label}</dt>
+                      <dd data-no-translate>{record.shipping?.[key]}</dd>
+                    </div>
+                  ),
+                )}
+              </dl>
+            </section>
+          )}
+          {offerApp && record.service === "container" && (
+            <p className="guest-tracking-get-app">
+              <a href={GET_APP_URL} rel="noopener noreferrer" target="_blank">
+                Get the Laawol app
+              </a>
+            </p>
+          )}
           {record.service === "freight_quote" && claimedRequest && (
             <div className="guest-quote-state guest-quote-open">
               <CustomerFreightQuotes request={claimedRequest} />
@@ -372,7 +402,9 @@ export function GuestTracking({
             <strong>Updated</strong> <time>{updated}</time>
           </p>
           <p className="guest-tracking-privacy">
-            For your privacy, only the booking status is shown here.
+            {record.shipping
+              ? "For your privacy, only the shipment status and shipping details are shown here."
+              : "For your privacy, only the booking status is shown here."}
           </p>
           <div className="trk-actions">
             <button className="secondary-button" onClick={() => void copyCode()} type="button">
