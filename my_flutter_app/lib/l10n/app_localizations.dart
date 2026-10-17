@@ -22288,6 +22288,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing happened in this period.'**
   String get salesHistNothingHappened;
+
+  /// No description provided for @zelleCheckButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Check Zelle'**
+  String get zelleCheckButton;
+
+  /// No description provided for @zelleCheckTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle check'**
+  String get zelleCheckTitle;
+
+  /// No description provided for @zelleCheckSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for exactly {amount} in the business bank'**
+  String zelleCheckSubtitle(String amount);
+
+  /// No description provided for @zelleChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the bank…'**
+  String get zelleChecking;
+
+  /// No description provided for @zelleReceivedAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Received ✓ {amount}'**
+  String zelleReceivedAmount(String amount);
+
+  /// No description provided for @zelleDepositedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposited in {bank}'**
+  String zelleDepositedIn(String bank);
+
+  /// No description provided for @zelleAlreadyConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Already confirmed against the bank.'**
+  String get zelleAlreadyConfirmed;
+
+  /// No description provided for @zelleNotFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not in the bank yet'**
+  String get zelleNotFoundTitle;
+
+  /// No description provided for @zelleNotFoundHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No deposit of exactly {amount} yet. A Zelle can take a few minutes to arrive.'**
+  String zelleNotFoundHint(String amount);
+
+  /// No description provided for @zelleRetryIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking again in {seconds} s'**
+  String zelleRetryIn(int seconds);
+
+  /// No description provided for @zelleRetryStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get zelleRetryStop;
+
+  /// No description provided for @zelleRetryStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic checks stopped.'**
+  String get zelleRetryStopped;
+
+  /// No description provided for @zelleRetryExhausted.
+  ///
+  /// In en, this message translates to:
+  /// **'Still not there after 3 minutes. Ask the customer to confirm it was sent, then check again.'**
+  String get zelleRetryExhausted;
+
+  /// No description provided for @zelleCheckAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get zelleCheckAgain;
+
+  /// No description provided for @zelleChooseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Several deposits of {amount}'**
+  String zelleChooseTitle(String amount);
+
+  /// No description provided for @zelleChooseHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the one from this customer, by the sender\'s name.'**
+  String get zelleChooseHint;
+
+  /// No description provided for @zelleUnknownSender.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender not shown'**
+  String get zelleUnknownSender;
+
+  /// No description provided for @zelleNotConnectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank not connected'**
+  String get zelleNotConnectedTitle;
+
+  /// No description provided for @zelleNotConnectedStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the owner to connect the business bank, then check again.'**
+  String get zelleNotConnectedStaff;
+
+  /// No description provided for @zelleNotConnectedOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the bank that receives Zelle so your team can check payments.'**
+  String get zelleNotConnectedOwner;
+
+  /// No description provided for @zelleConnectBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect bank'**
+  String get zelleConnectBank;
+
+  /// No description provided for @zelleNeedsReauthTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank sign-in needed'**
+  String get zelleNeedsReauthTitle;
+
+  /// No description provided for @zelleNeedsReauthStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank asks the owner to sign in again. Ask the owner, then check again.'**
+  String get zelleNeedsReauthStaff;
+
+  /// No description provided for @zelleNeedsReauthOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Your bank asks you to sign in again before payments can be checked.'**
+  String get zelleNeedsReauthOwner;
+
+  /// No description provided for @zelleReconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnect'**
+  String get zelleReconnect;
+
+  /// No description provided for @zelleChipConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank ✓'**
+  String get zelleChipConfirmed;
+
+  /// No description provided for @zelleFailNotZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment was not recorded as Zelle.'**
+  String get zelleFailNotZelle;
+
+  /// No description provided for @zelleFailRecordNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment could not be found.'**
+  String get zelleFailRecordNotFound;
+
+  /// No description provided for @zelleFailRecordVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment was voided or reverted, so there is nothing to check.'**
+  String get zelleFailRecordVoided;
+
+  /// No description provided for @zelleFailOwnerRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can connect or change the bank.'**
+  String get zelleFailOwnerRequired;
+
+  /// No description provided for @zelleFailWindowInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick between 2 and 60 minutes.'**
+  String get zelleFailWindowInvalid;
+
+  /// No description provided for @zelleFailNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check the connection and try again.'**
+  String get zelleFailNetwork;
+
+  /// No description provided for @zelleFailUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank check did not answer clearly. Try again.'**
+  String get zelleFailUnreadable;
+
+  /// No description provided for @bankZelleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank for Zelle checks'**
+  String get bankZelleTitle;
+
+  /// No description provided for @bankZelleSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Let your team confirm Zelle payments arrived'**
+  String get bankZelleSubtitle;
+
+  /// No description provided for @bankZelleIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the account that receives Zelle. Your team can then confirm a payment arrived. They never see your balance or other transactions.'**
+  String get bankZelleIntro;
+
+  /// No description provided for @bankStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get bankStatusActive;
+
+  /// No description provided for @bankStatusNeedsReauth.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in needed'**
+  String get bankStatusNeedsReauth;
+
+  /// No description provided for @bankStatusDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get bankStatusDisconnected;
+
+  /// No description provided for @bankUnnamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your bank'**
+  String get bankUnnamed;
+
+  /// No description provided for @bankLastSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Last synced {when}'**
+  String bankLastSync(String when);
+
+  /// No description provided for @bankNeverSynced.
+  ///
+  /// In en, this message translates to:
+  /// **'Not synced yet'**
+  String get bankNeverSynced;
+
+  /// No description provided for @bankNeedsReauthNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your bank needs you to sign in again. Until then, Zelle checks will not work.'**
+  String get bankNeedsReauthNote;
+
+  /// No description provided for @bankWindowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Look for deposits within'**
+  String get bankWindowLabel;
+
+  /// No description provided for @bankWindowMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String bankWindowMinutes(int minutes);
+
+  /// No description provided for @bankWindowHint.
+  ///
+  /// In en, this message translates to:
+  /// **'How long before a check a Zelle may have arrived.'**
+  String get bankWindowHint;
+
+  /// No description provided for @bankWindowSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Window saved'**
+  String get bankWindowSaved;
+
+  /// No description provided for @bankDisconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect bank'**
+  String get bankDisconnect;
+
+  /// No description provided for @bankDisconnectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect the bank?'**
+  String get bankDisconnectTitle;
+
+  /// No description provided for @bankDisconnectMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your team will not be able to check Zelle payments until you connect again. Payments already confirmed stay confirmed.'**
+  String get bankDisconnectMessage;
+
+  /// No description provided for @bankDisconnectedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank disconnected'**
+  String get bankDisconnectedDone;
+
+  /// No description provided for @bankConnectedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank connected'**
+  String get bankConnectedDone;
+
+  /// No description provided for @bankLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank connection did not finish. Try again.'**
+  String get bankLinkFailed;
+
+  /// No description provided for @bankLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the bank connection. Check the connection and try again.'**
+  String get bankLoadFailed;
+
+  /// No description provided for @bankConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get bankConnecting;
 }
 
 class _AppLocalizationsDelegate

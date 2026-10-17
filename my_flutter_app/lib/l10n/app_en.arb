@@ -6188,5 +6188,116 @@
   },
   "salesHistPartial": "Some activity could not be loaded, so stock changes, credit payments or older voids may be missing.",
   "salesHistLoadFailed": "Couldn't load this period. Check the connection and try again.",
-  "salesHistNothingHappened": "Nothing happened in this period."
+  "salesHistNothingHappened": "Nothing happened in this period.",
+  "zelleCheckButton": "Check Zelle",
+  "zelleCheckTitle": "Zelle check",
+  "zelleCheckSubtitle": "Looking for exactly {amount} in the business bank",
+  "@zelleCheckSubtitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleChecking": "Checking the bank…",
+  "zelleReceivedAmount": "Received ✓ {amount}",
+  "@zelleReceivedAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleDepositedIn": "Deposited in {bank}",
+  "@zelleDepositedIn": {
+    "placeholders": {
+      "bank": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleAlreadyConfirmed": "Already confirmed against the bank.",
+  "zelleNotFoundTitle": "Not in the bank yet",
+  "zelleNotFoundHint": "No deposit of exactly {amount} yet. A Zelle can take a few minutes to arrive.",
+  "@zelleNotFoundHint": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleRetryIn": "Checking again in {seconds} s",
+  "@zelleRetryIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "zelleRetryStop": "Stop",
+  "zelleRetryStopped": "Automatic checks stopped.",
+  "zelleRetryExhausted": "Still not there after 3 minutes. Ask the customer to confirm it was sent, then check again.",
+  "zelleCheckAgain": "Check again",
+  "zelleChooseTitle": "Several deposits of {amount}",
+  "@zelleChooseTitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleChooseHint": "Pick the one from this customer, by the sender's name.",
+  "zelleUnknownSender": "Sender not shown",
+  "zelleNotConnectedTitle": "Bank not connected",
+  "zelleNotConnectedStaff": "Ask the owner to connect the business bank, then check again.",
+  "zelleNotConnectedOwner": "Connect the bank that receives Zelle so your team can check payments.",
+  "zelleConnectBank": "Connect bank",
+  "zelleNeedsReauthTitle": "Bank sign-in needed",
+  "zelleNeedsReauthStaff": "The bank asks the owner to sign in again. Ask the owner, then check again.",
+  "zelleNeedsReauthOwner": "Your bank asks you to sign in again before payments can be checked.",
+  "zelleReconnect": "Reconnect",
+  "zelleChipConfirmed": "Bank ✓",
+  "zelleFailNotZelle": "This payment was not recorded as Zelle.",
+  "zelleFailRecordNotFound": "This payment could not be found.",
+  "zelleFailRecordVoided": "This payment was voided or reverted, so there is nothing to check.",
+  "zelleFailOwnerRequired": "Only the business owner can connect or change the bank.",
+  "zelleFailWindowInvalid": "Pick between 2 and 60 minutes.",
+  "zelleFailNetwork": "No connection. Check the connection and try again.",
+  "zelleFailUnreadable": "The bank check did not answer clearly. Try again.",
+  "bankZelleTitle": "Bank for Zelle checks",
+  "bankZelleSubtitle": "Let your team confirm Zelle payments arrived",
+  "bankZelleIntro": "Connect the account that receives Zelle. Your team can then confirm a payment arrived. They never see your balance or other transactions.",
+  "bankStatusActive": "Connected",
+  "bankStatusNeedsReauth": "Sign-in needed",
+  "bankStatusDisconnected": "Not connected",
+  "bankUnnamed": "Your bank",
+  "bankLastSync": "Last synced {when}",
+  "@bankLastSync": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "bankNeverSynced": "Not synced yet",
+  "bankNeedsReauthNote": "Your bank needs you to sign in again. Until then, Zelle checks will not work.",
+  "bankWindowLabel": "Look for deposits within",
+  "bankWindowMinutes": "{minutes} min",
+  "@bankWindowMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "bankWindowHint": "How long before a check a Zelle may have arrived.",
+  "bankWindowSaved": "Window saved",
+  "bankDisconnect": "Disconnect bank",
+  "bankDisconnectTitle": "Disconnect the bank?",
+  "bankDisconnectMessage": "Your team will not be able to check Zelle payments until you connect again. Payments already confirmed stay confirmed.",
+  "bankDisconnectedDone": "Bank disconnected",
+  "bankConnectedDone": "Bank connected",
+  "bankLinkFailed": "The bank connection did not finish. Try again.",
+  "bankLoadFailed": "Couldn't load the bank connection. Check the connection and try again.",
+  "bankConnecting": "Connecting…"
 }

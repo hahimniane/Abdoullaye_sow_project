@@ -6188,5 +6188,116 @@
   },
   "salesHistPartial": "Une partie de l'activité n'a pas pu être chargée : des mouvements de stock, des paiements de crédit ou des annulations plus anciennes peuvent manquer.",
   "salesHistLoadFailed": "Impossible de charger cette période. Vérifiez la connexion et réessayez.",
-  "salesHistNothingHappened": "Rien ne s'est passé sur cette période."
+  "salesHistNothingHappened": "Rien ne s'est passé sur cette période.",
+  "zelleCheckButton": "Vérifier Zelle",
+  "zelleCheckTitle": "Vérification Zelle",
+  "zelleCheckSubtitle": "Recherche d'exactement {amount} sur le compte de l'entreprise",
+  "@zelleCheckSubtitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleChecking": "Vérification auprès de la banque…",
+  "zelleReceivedAmount": "Reçu ✓ {amount}",
+  "@zelleReceivedAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleDepositedIn": "Déposé sur {bank}",
+  "@zelleDepositedIn": {
+    "placeholders": {
+      "bank": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleAlreadyConfirmed": "Déjà confirmé auprès de la banque.",
+  "zelleNotFoundTitle": "Pas encore arrivé sur le compte",
+  "zelleNotFoundHint": "Aucun dépôt d'exactement {amount} pour l'instant. Un Zelle peut mettre quelques minutes à arriver.",
+  "@zelleNotFoundHint": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleRetryIn": "Nouvelle vérification dans {seconds} s",
+  "@zelleRetryIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "zelleRetryStop": "Arrêter",
+  "zelleRetryStopped": "Vérifications automatiques arrêtées.",
+  "zelleRetryExhausted": "Toujours rien après 3 minutes. Demandez au client de confirmer l'envoi, puis vérifiez à nouveau.",
+  "zelleCheckAgain": "Vérifier à nouveau",
+  "zelleChooseTitle": "Plusieurs dépôts de {amount}",
+  "@zelleChooseTitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "zelleChooseHint": "Choisissez celui de ce client, d'après le nom de l'expéditeur.",
+  "zelleUnknownSender": "Expéditeur non indiqué",
+  "zelleNotConnectedTitle": "Banque non connectée",
+  "zelleNotConnectedStaff": "Demandez au propriétaire de connecter la banque de l'entreprise, puis vérifiez à nouveau.",
+  "zelleNotConnectedOwner": "Connectez la banque qui reçoit les Zelle pour que votre équipe puisse vérifier les paiements.",
+  "zelleConnectBank": "Connecter la banque",
+  "zelleNeedsReauthTitle": "Reconnexion bancaire requise",
+  "zelleNeedsReauthStaff": "La banque demande au propriétaire de se reconnecter. Prévenez-le, puis vérifiez à nouveau.",
+  "zelleNeedsReauthOwner": "Votre banque vous demande de vous reconnecter avant de pouvoir vérifier les paiements.",
+  "zelleReconnect": "Reconnecter",
+  "zelleChipConfirmed": "Banque ✓",
+  "zelleFailNotZelle": "Ce paiement n'a pas été enregistré comme Zelle.",
+  "zelleFailRecordNotFound": "Ce paiement est introuvable.",
+  "zelleFailRecordVoided": "Ce paiement a été annulé : il n'y a rien à vérifier.",
+  "zelleFailOwnerRequired": "Seul le propriétaire de l'entreprise peut connecter ou modifier la banque.",
+  "zelleFailWindowInvalid": "Choisissez entre 2 et 60 minutes.",
+  "zelleFailNetwork": "Pas de connexion. Vérifiez la connexion et réessayez.",
+  "zelleFailUnreadable": "La vérification n'a pas donné de réponse claire. Réessayez.",
+  "bankZelleTitle": "Banque pour vérifier les Zelle",
+  "bankZelleSubtitle": "Permettre à votre équipe de confirmer les Zelle reçus",
+  "bankZelleIntro": "Connectez le compte qui reçoit les Zelle. Votre équipe pourra confirmer qu'un paiement est arrivé, sans jamais voir votre solde ni vos autres opérations.",
+  "bankStatusActive": "Connectée",
+  "bankStatusNeedsReauth": "Reconnexion requise",
+  "bankStatusDisconnected": "Non connectée",
+  "bankUnnamed": "Votre banque",
+  "bankLastSync": "Dernière synchronisation : {when}",
+  "@bankLastSync": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "bankNeverSynced": "Pas encore synchronisée",
+  "bankNeedsReauthNote": "Votre banque vous demande de vous reconnecter. D'ici là, les vérifications Zelle ne fonctionneront pas.",
+  "bankWindowLabel": "Chercher les dépôts sur",
+  "bankWindowMinutes": "{minutes} min",
+  "@bankWindowMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "bankWindowHint": "Délai maximal entre l'arrivée d'un Zelle et sa vérification.",
+  "bankWindowSaved": "Durée enregistrée",
+  "bankDisconnect": "Déconnecter la banque",
+  "bankDisconnectTitle": "Déconnecter la banque ?",
+  "bankDisconnectMessage": "Votre équipe ne pourra plus vérifier les paiements Zelle tant que vous ne reconnectez pas la banque. Les paiements déjà confirmés le restent.",
+  "bankDisconnectedDone": "Banque déconnectée",
+  "bankConnectedDone": "Banque connectée",
+  "bankLinkFailed": "La connexion bancaire n'a pas abouti. Réessayez.",
+  "bankLoadFailed": "Impossible de charger la connexion bancaire. Vérifiez la connexion et réessayez.",
+  "bankConnecting": "Connexion…"
 }

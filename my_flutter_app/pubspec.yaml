@@ -70,6 +70,7 @@ dependencies:
   app_links: ^7.2.1
   flutter_blue_plus: 1.36.8
   qr: ^3.0.2
+  plaid_flutter: ^5.2.1
 
 dev_dependencies:
   flutter_test:

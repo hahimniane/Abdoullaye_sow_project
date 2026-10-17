@@ -12882,4 +12882,201 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get salesHistNothingHappened => 'Nothing happened in this period.';
+
+  @override
+  String get zelleCheckButton => 'Check Zelle';
+
+  @override
+  String get zelleCheckTitle => 'Zelle check';
+
+  @override
+  String zelleCheckSubtitle(String amount) {
+    return 'Looking for exactly $amount in the business bank';
+  }
+
+  @override
+  String get zelleChecking => 'Checking the bank…';
+
+  @override
+  String zelleReceivedAmount(String amount) {
+    return 'Received ✓ $amount';
+  }
+
+  @override
+  String zelleDepositedIn(String bank) {
+    return 'Deposited in $bank';
+  }
+
+  @override
+  String get zelleAlreadyConfirmed => 'Already confirmed against the bank.';
+
+  @override
+  String get zelleNotFoundTitle => 'Not in the bank yet';
+
+  @override
+  String zelleNotFoundHint(String amount) {
+    return 'No deposit of exactly $amount yet. A Zelle can take a few minutes to arrive.';
+  }
+
+  @override
+  String zelleRetryIn(int seconds) {
+    return 'Checking again in $seconds s';
+  }
+
+  @override
+  String get zelleRetryStop => 'Stop';
+
+  @override
+  String get zelleRetryStopped => 'Automatic checks stopped.';
+
+  @override
+  String get zelleRetryExhausted =>
+      'Still not there after 3 minutes. Ask the customer to confirm it was sent, then check again.';
+
+  @override
+  String get zelleCheckAgain => 'Check again';
+
+  @override
+  String zelleChooseTitle(String amount) {
+    return 'Several deposits of $amount';
+  }
+
+  @override
+  String get zelleChooseHint =>
+      'Pick the one from this customer, by the sender\'s name.';
+
+  @override
+  String get zelleUnknownSender => 'Sender not shown';
+
+  @override
+  String get zelleNotConnectedTitle => 'Bank not connected';
+
+  @override
+  String get zelleNotConnectedStaff =>
+      'Ask the owner to connect the business bank, then check again.';
+
+  @override
+  String get zelleNotConnectedOwner =>
+      'Connect the bank that receives Zelle so your team can check payments.';
+
+  @override
+  String get zelleConnectBank => 'Connect bank';
+
+  @override
+  String get zelleNeedsReauthTitle => 'Bank sign-in needed';
+
+  @override
+  String get zelleNeedsReauthStaff =>
+      'The bank asks the owner to sign in again. Ask the owner, then check again.';
+
+  @override
+  String get zelleNeedsReauthOwner =>
+      'Your bank asks you to sign in again before payments can be checked.';
+
+  @override
+  String get zelleReconnect => 'Reconnect';
+
+  @override
+  String get zelleChipConfirmed => 'Bank ✓';
+
+  @override
+  String get zelleFailNotZelle => 'This payment was not recorded as Zelle.';
+
+  @override
+  String get zelleFailRecordNotFound => 'This payment could not be found.';
+
+  @override
+  String get zelleFailRecordVoided =>
+      'This payment was voided or reverted, so there is nothing to check.';
+
+  @override
+  String get zelleFailOwnerRequired =>
+      'Only the business owner can connect or change the bank.';
+
+  @override
+  String get zelleFailWindowInvalid => 'Pick between 2 and 60 minutes.';
+
+  @override
+  String get zelleFailNetwork =>
+      'No connection. Check the connection and try again.';
+
+  @override
+  String get zelleFailUnreadable =>
+      'The bank check did not answer clearly. Try again.';
+
+  @override
+  String get bankZelleTitle => 'Bank for Zelle checks';
+
+  @override
+  String get bankZelleSubtitle =>
+      'Let your team confirm Zelle payments arrived';
+
+  @override
+  String get bankZelleIntro =>
+      'Connect the account that receives Zelle. Your team can then confirm a payment arrived. They never see your balance or other transactions.';
+
+  @override
+  String get bankStatusActive => 'Connected';
+
+  @override
+  String get bankStatusNeedsReauth => 'Sign-in needed';
+
+  @override
+  String get bankStatusDisconnected => 'Not connected';
+
+  @override
+  String get bankUnnamed => 'Your bank';
+
+  @override
+  String bankLastSync(String when) {
+    return 'Last synced $when';
+  }
+
+  @override
+  String get bankNeverSynced => 'Not synced yet';
+
+  @override
+  String get bankNeedsReauthNote =>
+      'Your bank needs you to sign in again. Until then, Zelle checks will not work.';
+
+  @override
+  String get bankWindowLabel => 'Look for deposits within';
+
+  @override
+  String bankWindowMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get bankWindowHint =>
+      'How long before a check a Zelle may have arrived.';
+
+  @override
+  String get bankWindowSaved => 'Window saved';
+
+  @override
+  String get bankDisconnect => 'Disconnect bank';
+
+  @override
+  String get bankDisconnectTitle => 'Disconnect the bank?';
+
+  @override
+  String get bankDisconnectMessage =>
+      'Your team will not be able to check Zelle payments until you connect again. Payments already confirmed stay confirmed.';
+
+  @override
+  String get bankDisconnectedDone => 'Bank disconnected';
+
+  @override
+  String get bankConnectedDone => 'Bank connected';
+
+  @override
+  String get bankLinkFailed => 'The bank connection did not finish. Try again.';
+
+  @override
+  String get bankLoadFailed =>
+      'Couldn\'t load the bank connection. Check the connection and try again.';
+
+  @override
+  String get bankConnecting => 'Connecting…';
 }

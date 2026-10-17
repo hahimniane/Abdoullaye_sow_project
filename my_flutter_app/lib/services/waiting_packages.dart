@@ -23,6 +23,7 @@ import '../utils/money_input.dart';
 import 'container_manifest.dart';
 import 'invoice_ledger.dart' show invoiceCentsToInput, invoicePaymentMethods;
 import 'lot_ledger.dart' show lotDateOf;
+import 'zelle_check.dart' show BankCheck;
 
 const _cubicInchesPerCubicFoot = 1728;
 
@@ -264,7 +265,11 @@ class ContainerLinePayment {
     required this.createdAt,
     required this.revertedAt,
     required this.reverted,
+    this.bankCheck,
   });
+
+  /// What the owner's bank showed for this payment (null: never checked).
+  final BankCheck? bankCheck;
 
   final String id;
   final String lineId;
@@ -304,6 +309,7 @@ class ContainerLinePayment {
       createdAt: lotDateOf(d['createdAt']),
       revertedAt: lotDateOf(d['revertedAt']),
       reverted: d['reverted'] == true,
+      bankCheck: BankCheck.fromMap(d['bankCheck'], date: lotDateOf),
     );
   }
 }

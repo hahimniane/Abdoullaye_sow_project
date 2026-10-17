@@ -13077,4 +13077,203 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get salesHistNothingHappened =>
       'Rien ne s\'est passé sur cette période.';
+
+  @override
+  String get zelleCheckButton => 'Vérifier Zelle';
+
+  @override
+  String get zelleCheckTitle => 'Vérification Zelle';
+
+  @override
+  String zelleCheckSubtitle(String amount) {
+    return 'Recherche d\'exactement $amount sur le compte de l\'entreprise';
+  }
+
+  @override
+  String get zelleChecking => 'Vérification auprès de la banque…';
+
+  @override
+  String zelleReceivedAmount(String amount) {
+    return 'Reçu ✓ $amount';
+  }
+
+  @override
+  String zelleDepositedIn(String bank) {
+    return 'Déposé sur $bank';
+  }
+
+  @override
+  String get zelleAlreadyConfirmed => 'Déjà confirmé auprès de la banque.';
+
+  @override
+  String get zelleNotFoundTitle => 'Pas encore arrivé sur le compte';
+
+  @override
+  String zelleNotFoundHint(String amount) {
+    return 'Aucun dépôt d\'exactement $amount pour l\'instant. Un Zelle peut mettre quelques minutes à arriver.';
+  }
+
+  @override
+  String zelleRetryIn(int seconds) {
+    return 'Nouvelle vérification dans $seconds s';
+  }
+
+  @override
+  String get zelleRetryStop => 'Arrêter';
+
+  @override
+  String get zelleRetryStopped => 'Vérifications automatiques arrêtées.';
+
+  @override
+  String get zelleRetryExhausted =>
+      'Toujours rien après 3 minutes. Demandez au client de confirmer l\'envoi, puis vérifiez à nouveau.';
+
+  @override
+  String get zelleCheckAgain => 'Vérifier à nouveau';
+
+  @override
+  String zelleChooseTitle(String amount) {
+    return 'Plusieurs dépôts de $amount';
+  }
+
+  @override
+  String get zelleChooseHint =>
+      'Choisissez celui de ce client, d\'après le nom de l\'expéditeur.';
+
+  @override
+  String get zelleUnknownSender => 'Expéditeur non indiqué';
+
+  @override
+  String get zelleNotConnectedTitle => 'Banque non connectée';
+
+  @override
+  String get zelleNotConnectedStaff =>
+      'Demandez au propriétaire de connecter la banque de l\'entreprise, puis vérifiez à nouveau.';
+
+  @override
+  String get zelleNotConnectedOwner =>
+      'Connectez la banque qui reçoit les Zelle pour que votre équipe puisse vérifier les paiements.';
+
+  @override
+  String get zelleConnectBank => 'Connecter la banque';
+
+  @override
+  String get zelleNeedsReauthTitle => 'Reconnexion bancaire requise';
+
+  @override
+  String get zelleNeedsReauthStaff =>
+      'La banque demande au propriétaire de se reconnecter. Prévenez-le, puis vérifiez à nouveau.';
+
+  @override
+  String get zelleNeedsReauthOwner =>
+      'Votre banque vous demande de vous reconnecter avant de pouvoir vérifier les paiements.';
+
+  @override
+  String get zelleReconnect => 'Reconnecter';
+
+  @override
+  String get zelleChipConfirmed => 'Banque ✓';
+
+  @override
+  String get zelleFailNotZelle =>
+      'Ce paiement n\'a pas été enregistré comme Zelle.';
+
+  @override
+  String get zelleFailRecordNotFound => 'Ce paiement est introuvable.';
+
+  @override
+  String get zelleFailRecordVoided =>
+      'Ce paiement a été annulé : il n\'y a rien à vérifier.';
+
+  @override
+  String get zelleFailOwnerRequired =>
+      'Seul le propriétaire de l\'entreprise peut connecter ou modifier la banque.';
+
+  @override
+  String get zelleFailWindowInvalid => 'Choisissez entre 2 et 60 minutes.';
+
+  @override
+  String get zelleFailNetwork =>
+      'Pas de connexion. Vérifiez la connexion et réessayez.';
+
+  @override
+  String get zelleFailUnreadable =>
+      'La vérification n\'a pas donné de réponse claire. Réessayez.';
+
+  @override
+  String get bankZelleTitle => 'Banque pour vérifier les Zelle';
+
+  @override
+  String get bankZelleSubtitle =>
+      'Permettre à votre équipe de confirmer les Zelle reçus';
+
+  @override
+  String get bankZelleIntro =>
+      'Connectez le compte qui reçoit les Zelle. Votre équipe pourra confirmer qu\'un paiement est arrivé, sans jamais voir votre solde ni vos autres opérations.';
+
+  @override
+  String get bankStatusActive => 'Connectée';
+
+  @override
+  String get bankStatusNeedsReauth => 'Reconnexion requise';
+
+  @override
+  String get bankStatusDisconnected => 'Non connectée';
+
+  @override
+  String get bankUnnamed => 'Votre banque';
+
+  @override
+  String bankLastSync(String when) {
+    return 'Dernière synchronisation : $when';
+  }
+
+  @override
+  String get bankNeverSynced => 'Pas encore synchronisée';
+
+  @override
+  String get bankNeedsReauthNote =>
+      'Votre banque vous demande de vous reconnecter. D\'ici là, les vérifications Zelle ne fonctionneront pas.';
+
+  @override
+  String get bankWindowLabel => 'Chercher les dépôts sur';
+
+  @override
+  String bankWindowMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get bankWindowHint =>
+      'Délai maximal entre l\'arrivée d\'un Zelle et sa vérification.';
+
+  @override
+  String get bankWindowSaved => 'Durée enregistrée';
+
+  @override
+  String get bankDisconnect => 'Déconnecter la banque';
+
+  @override
+  String get bankDisconnectTitle => 'Déconnecter la banque ?';
+
+  @override
+  String get bankDisconnectMessage =>
+      'Votre équipe ne pourra plus vérifier les paiements Zelle tant que vous ne reconnectez pas la banque. Les paiements déjà confirmés le restent.';
+
+  @override
+  String get bankDisconnectedDone => 'Banque déconnectée';
+
+  @override
+  String get bankConnectedDone => 'Banque connectée';
+
+  @override
+  String get bankLinkFailed =>
+      'La connexion bancaire n\'a pas abouti. Réessayez.';
+
+  @override
+  String get bankLoadFailed =>
+      'Impossible de charger la connexion bancaire. Vérifiez la connexion et réessayez.';
+
+  @override
+  String get bankConnecting => 'Connexion…';
 }

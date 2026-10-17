@@ -18,6 +18,7 @@ import '../utils/money_input.dart';
 import '../utils/phone_number_validator.dart';
 import 'inventory.dart';
 import 'lot_ledger.dart' show lotDateOf;
+import 'zelle_check.dart' show BankCheck;
 import 'waiting_packages.dart'
     show packageStanding, validatePackagePayment, PackagePayment;
 
@@ -385,6 +386,7 @@ class InventoryCreditPayment {
     this.revertedByStaffId = '',
     this.revertedAt,
     this.createdAt,
+    this.bankCheck,
   });
 
   factory InventoryCreditPayment.fromMap(String id, Map<String, dynamic> d) {
@@ -408,9 +410,12 @@ class InventoryCreditPayment {
       revertedByStaffId: text(d['revertedByStaffId'], 128),
       revertedAt: lotDateOf(d['revertedAt']),
       createdAt: lotDateOf(d['createdAt']),
+      bankCheck: BankCheck.fromMap(d['bankCheck'], date: lotDateOf),
     );
   }
 
+  /// What the owner's bank showed for this payment (null: never checked).
+  final BankCheck? bankCheck;
   final String id;
   final String businessId;
   final String saleId;

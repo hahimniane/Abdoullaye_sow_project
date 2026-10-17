@@ -18,6 +18,7 @@ import '../utils/money_input.dart';
 import 'invoice_ledger.dart' show invoiceCentsToInput, invoicePaymentMethods;
 import 'lot_ledger.dart' show lotDateOf;
 import 'package_codes.dart' show packageLinkHost, packageTrackingAlphabet;
+import 'zelle_check.dart' show BankCheck;
 
 // ---------------------------------------------------------------------------
 // Limits. Cents mirror the invoice cap; the quantities are what a counter can
@@ -380,6 +381,7 @@ class InventorySale {
     this.creditPaidCents = 0,
     this.creditStatus = 'none',
     this.voidReason = '',
+    this.bankCheck,
   });
 
   factory InventorySale.fromMap(String id, Map<String, dynamic> data) {
@@ -418,6 +420,7 @@ class InventorySale {
         _ => 'none',
       },
       voidReason: _text(data['voidReason'], 300),
+      bankCheck: BankCheck.fromMap(data['bankCheck'], date: lotDateOf),
     );
   }
 
@@ -457,6 +460,10 @@ class InventorySale {
   /// `none` (paid in full, every old sale), `open` or `paid`.
   final String creditStatus;
   final String voidReason;
+
+  /// What the owner's bank showed for the Zelle taken at the counter, once
+  /// someone checked (null: never checked).
+  final BankCheck? bankCheck;
 
   int get itemCount => lines.fold(0, (sum, line) => sum + line.quantity);
   int get discountCents =>
