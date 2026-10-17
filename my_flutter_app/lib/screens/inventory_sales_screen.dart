@@ -11,6 +11,8 @@ import '../services/inventory_service.dart';
 import '../services/inventory_stores.dart';
 import '../services/inventory_team.dart';
 import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
+import '../services/zelle_check.dart';
+import '../services/zelle_check_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -19,7 +21,9 @@ import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/zelle_check_widgets.dart';
 import 'inventory_credit_sheet.dart';
+import 'zelle_check_sheet.dart';
 
 /// The sales recorded at the counter, newest first, one page at a time. Each
 /// shows what was sold, at what price, how it was paid and by whom. A sale is
@@ -111,6 +115,9 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
   String _storeFilter = '';
 
   List<InventorySale> _sales = const [];
+
+  /// Confirmed from the Check Zelle sheet, before the stream shows it.
+  final Map<String, BankCheck> _bankConfirmed = {};
   late final InventoryTeamWatcher _team = InventoryTeamWatcher(
     source: _source,
     creditSource: widget.creditSource,
@@ -337,6 +344,7 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
       paymentsStoreId: scope.storeId,
       currentUserId: _me,
       clock: widget.clock,
+      isOwner: widget.access.isOwner,
     );
   }
 
@@ -381,6 +389,30 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     highlighted: highlighted,
     today: shopToday(widget.clock()),
     onCredit: sale.hadCredit ? () => _openCredit(sale) : null,
+    bankCheck: sale.bankCheck ?? _bankConfirmed[sale.id],
+    onCheckZelle:
+        !sale.voided &&
+            offersZelleCheck(
+              method: sale.paymentMethod,
+              amountCents: sale.paidAtSaleCents,
+              bankCheck: sale.bankCheck ?? _bankConfirmed[sale.id],
+            )
+        ? () => _checkZelle(sale)
+        : null,
+  );
+
+  /// "Check Zelle" on the money taken at the counter.
+  Future<void> _checkZelle(InventorySale sale) => showZelleCheckSheet(
+    context,
+    businessId: widget.businessId,
+    kind: ZelleCheckKind.inventorySale,
+    id: sale.id,
+    amountCents: sale.paidAtSaleCents,
+    isOwner: widget.access.isOwner,
+    service: ZelleCheckService(caller: widget.service.caller),
+    onConfirmed: (check) {
+      if (mounted) setState(() => _bankConfirmed[sale.id] = check);
+    },
   );
 
   @override
@@ -567,9 +599,18 @@ class InventorySaleCard extends StatelessWidget {
     this.highlighted = false,
     this.today,
     this.onCredit,
+    this.onCheckZelle,
+    this.bankCheck,
   });
 
   final InventorySale sale;
+
+  /// Opens "Check Zelle" for the money taken at the counter; null where it
+  /// is not offered (not Zelle, nothing paid now, voided, confirmed).
+  final VoidCallback? onCheckZelle;
+
+  /// The bank check to show: the sale's own, or one just confirmed.
+  final BankCheck? bankCheck;
 
   /// For the credit chip's overdue reading (null: now).
   final DateTime? today;
@@ -640,6 +681,11 @@ class InventorySaleCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if (!sale.voided &&
+                  showsBankConfirmedChip(bankCheck ?? sale.bankCheck)) ...[
+                ZelleConfirmedChip(key: Key('inv-bank-ok-${sale.id}')),
+                const SizedBox(width: 4),
+              ],
               if (sale.isOnCredit && !sale.voided)
                 InventoryCreditChip(
                   key: Key('inv-credit-chip-${sale.id}'),
@@ -748,6 +794,11 @@ class InventorySaleCard extends StatelessWidget {
               child: Wrap(
                 alignment: WrapAlignment.end,
                 children: [
+                  if (onCheckZelle != null)
+                    ZelleCheckButton(
+                      key: Key('inv-check-zelle-${sale.id}'),
+                      onPressed: onCheckZelle,
+                    ),
                   if (onCredit != null)
                     TextButton(
                       key: Key('inv-credit-open-${sale.id}'),

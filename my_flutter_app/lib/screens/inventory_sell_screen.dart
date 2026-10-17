@@ -14,6 +14,8 @@ import '../services/inventory_service.dart';
 import '../services/inventory_stores.dart';
 import '../services/inventory_team.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
+import '../services/zelle_check.dart';
+import '../services/zelle_check_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -23,6 +25,8 @@ import '../widgets/day_picker.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/scanner_camera_view.dart';
+import '../widgets/zelle_check_widgets.dart';
+import 'zelle_check_sheet.dart';
 
 /// The counter: scan a product's tag and it joins the basket; scan it again
 /// and it counts one more. Quantity and price can be changed per line (the
@@ -161,6 +165,12 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
 
   /// What the last sale left owed, for the done card.
   ({int paidNowCents, int creditCents, String customerName})? _soldCredit;
+
+  /// How the last sale was paid at the counter, and how much: "Check Zelle"
+  /// on the done card when it was Zelle. Set once the bank confirms it.
+  String _soldMethod = '';
+  int _soldPaidNowCents = 0;
+  BankCheck? _soldBankCheck;
 
   late final String _me = widget.currentUserId ?? inventoryCurrentUserId();
 
@@ -539,6 +549,13 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
         _result = result;
         _soldStoreName = storeName;
         _soldLines = basket.lines;
+        _soldMethod = _payment;
+        _soldBankCheck = null;
+        _soldPaidNowCents = credit == null
+            ? result.totalCents
+            : (result.creditCents > 0
+                  ? result.totalCents - result.creditCents
+                  : split.paidNowCents);
         _soldCredit = credit == null
             ? null
             : (
@@ -570,6 +587,9 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
         _scanning = true;
         _result = null;
         _soldCredit = null;
+        _soldMethod = '';
+        _soldPaidNowCents = 0;
+        _soldBankCheck = null;
         _soldLines = const [];
         _note = null;
         _failure = null;
@@ -995,6 +1015,22 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
         ],
       );
 
+  /// "Check Zelle" on the sale just rung up.
+  Future<void> _checkZelle(InventorySaleResult result) => showZelleCheckSheet(
+        context,
+        businessId: widget.businessId,
+        kind: ZelleCheckKind.inventorySale,
+        id: result.saleId,
+        amountCents: _soldPaidNowCents,
+        isOwner: widget.access.isOwner,
+        service: ZelleCheckService(caller: widget.service.caller),
+        onConfirmed: (check) {
+          if (mounted && _result?.saleId == result.saleId) {
+            setState(() => _soldBankCheck = check);
+          }
+        },
+      );
+
   Widget _saleDone(AppLocalizations l10n, InventorySaleResult result) {
     final names = {for (final l in _soldLines) l.item.id: l.item.displayName};
     return Container(
@@ -1077,6 +1113,26 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
               key: ValueKey('inv-warning-$id'),
               error: false,
               text: l10n.inventoryCountWasOffWarn(names[id] ?? id),
+            ),
+          ],
+          if (showsBankConfirmedChip(_soldBankCheck)) ...[
+            const SizedBox(height: AppSpacing.md),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: ZelleConfirmedChip(key: Key('inv-sale-done-bank-ok')),
+            ),
+          ] else if (offersZelleCheck(
+            method: _soldMethod,
+            amountCents: _soldPaidNowCents,
+            bankCheck: _soldBankCheck,
+          )) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ZelleCheckButton(
+                key: const Key('inv-sale-done-check-zelle'),
+                onPressed: () => _checkZelle(result),
+              ),
             ),
           ],
           const SizedBox(height: AppSpacing.lg),

@@ -507,3 +507,7 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   first State (`didUpdateWidget`, not `initState`), so `late final` fields built
   from `widget.source` keep the first fake and the second setup is silently
   ignored. Give each setup its own `testWidgets` (or a new `Key`).
+- Timed re-check UIs (the Zelle sheet's 20 s / 3 min countdown) keep the
+  schedule in a pure counter (`ZelleRetryCountdown`) and show a static icon,
+  not a spinner, while waiting: widget tests drive it with `pump(Duration)`,
+  and a spinner running between checks would make `pumpAndSettle` time out.

@@ -10,6 +10,8 @@ import '../services/invoice_ledger.dart'
 import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../services/waiting_package_service.dart';
 import '../services/waiting_packages.dart';
+import '../services/zelle_check.dart';
+import '../services/zelle_check_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -19,7 +21,9 @@ import '../utils/money_input.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_money.dart';
+import '../widgets/zelle_check_widgets.dart';
 import 'containers_screen.dart';
+import 'zelle_check_sheet.dart';
 
 /// How a hand-recorded payment arrived, in words.
 String containerPaymentMethodLabel(AppLocalizations l10n, String method) =>
@@ -43,6 +47,7 @@ Future<void> showPackagePaymentSheet(
   List<LotStaff> staff = const [],
   ContainerCallableCaller caller = callContainerCallable,
   LinePaymentsSource? payments,
+  bool? isOwner,
 }) =>
     showLotSheet<void>(
       context,
@@ -52,6 +57,7 @@ Future<void> showPackagePaymentSheet(
         staff: staff,
         caller: caller,
         payments: payments,
+        isOwner: isOwner,
       ),
     );
 
@@ -67,12 +73,17 @@ class PackagePaymentSheet extends StatefulWidget {
     this.staff = const [],
     this.caller = callContainerCallable,
     this.payments,
+    this.isOwner,
   });
 
   final String businessId;
   final ContainerLine line;
   final List<LotStaff> staff;
   final ContainerCallableCaller caller;
+
+  /// Whether the viewer owns the business (Check Zelle then offers to
+  /// connect the bank); null reads the signed-in profile.
+  final bool? isOwner;
 
   /// The line's payments; the real collection unless a test gives its own.
   final LinePaymentsSource? payments;
@@ -98,6 +109,9 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
   String? _receivedBy;
   List<ContainerLinePayment> _payments = const [];
   bool _historyLoaded = false;
+
+  /// Confirmed from the Check Zelle sheet, before the stream shows it.
+  final Map<String, BankCheck> _bankConfirmed = {};
 
   /// Which action is in flight: every button waits, the one pressed spins.
   String _busy = '';
@@ -282,6 +296,21 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
       showSuccessSnackBar(context, l10n.wpkReverted);
     });
   }
+
+  /// "Check Zelle" on one payment: the owner's bank, through the same
+  /// caller as every other action here.
+  Future<void> _checkZelle(ContainerLinePayment payment) => showZelleCheckSheet(
+        context,
+        businessId: widget.businessId,
+        kind: ZelleCheckKind.containerLinePayment,
+        id: payment.id,
+        amountCents: payment.amountCents,
+        isOwner: widget.isOwner,
+        service: ZelleCheckService(caller: widget.caller),
+        onConfirmed: (check) {
+          if (mounted) setState(() => _bankConfirmed[payment.id] = check);
+        },
+      );
 
   Future<void> _pickMethod() async {
     final l10n = AppLocalizations.of(context)!;
@@ -527,6 +556,9 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
                     busy: busy,
                     reverting: _busy == 'revert:${payment.id}',
                     onRevert: () => _revert(payment),
+                    bankCheck:
+                        payment.bankCheck ?? _bankConfirmed[payment.id],
+                    onCheckZelle: () => _checkZelle(payment),
                   ),
               ],
             ),
@@ -556,7 +588,16 @@ class RecordedPaymentRow extends StatelessWidget {
     required this.busy,
     required this.reverting,
     required this.onRevert,
+    this.bankCheck,
+    this.onCheckZelle,
   });
+
+  /// What the owner's bank showed for it: "Bank ✓" once confirmed.
+  final BankCheck? bankCheck;
+
+  /// Opens "Check Zelle"; null where checking is not offered. Shown only for
+  /// a Zelle payment that is not reverted and not confirmed yet.
+  final VoidCallback? onCheckZelle;
 
   final String id;
   final int amountCents;
@@ -616,6 +657,25 @@ class RecordedPaymentRow extends StatelessWidget {
                       fontSize: 12,
                       height: 1.35,
                       color: AppColors.muted,
+                    ),
+                  ),
+                if (!reverted && showsBankConfirmedChip(bankCheck))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: ZelleConfirmedChip(key: Key('pay-bank-ok:$id')),
+                  )
+                else if (onCheckZelle != null &&
+                    offersZelleCheck(
+                      method: method,
+                      amountCents: amountCents,
+                      bankCheck: bankCheck,
+                      reverted: reverted,
+                    ))
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ZelleCheckButton(
+                      key: Key('pay-check-zelle:$id'),
+                      onPressed: busy ? null : onCheckZelle,
                     ),
                   ),
                 if (reverted)

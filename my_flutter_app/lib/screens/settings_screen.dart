@@ -7,6 +7,7 @@ import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../screens/support_inbox_screen.dart';
+import 'bank_zelle_settings_screen.dart';
 import '../services/support_service.dart';
 import '../services/biometric_lock_service.dart';
 import '../theme/app_colors.dart';
@@ -321,6 +322,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                         ],
+                        // Only the owner connects the bank Zelle is checked
+                        // against; staff only run the checks.
+                        if (authProvider.isBusinessOwner &&
+                            (authProvider.businessId ?? '').isNotEmpty) ...[
+                          const Divider(height: 1),
+                          _SettingRow(
+                            key: const Key('settings-bank-zelle'),
+                            icon: Icons.account_balance_outlined,
+                            title: l10n.bankZelleTitle,
+                            subtitle: l10n.bankZelleSubtitle,
+                            onTap: () => Navigator.of(
+                              context,
+                              rootNavigator: true,
+                            ).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => BankZelleSettingsScreen(
+                                  businessId: authProvider.businessId!,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                         if (authProvider.isAdmin) ...[
                           _SettingRow(
                             icon: Icons.public,
@@ -519,6 +542,7 @@ class _SettingsSectionLabel extends StatelessWidget {
 
 class _SettingRow extends StatelessWidget {
   const _SettingRow({
+    super.key,
     required this.icon,
     required this.title,
     this.subtitle,

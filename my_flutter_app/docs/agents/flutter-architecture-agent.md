@@ -318,4 +318,11 @@ Add future project conventions and repeated architectural decisions here.
 - `SnackBar` with an `action` persists until tapped (Flutter's `persist`
   defaults to true then); `showSuccessSnackBar(actionLabel:, onAction:)`
   passes `persist: false` and a longer duration.
+- Zelle bank checks (docs/ZELLE_BANK_CHECK.md): pure logic in
+  `lib/services/zelle_check.dart`, callables in `zelle_check_service.dart`
+  through `callContainerCallable`, so each sheet hands its own (test) caller
+  to `ZelleCheckService(caller: ...)`. Plaid Link stays behind
+  `BankLinkLauncher`; only the owner opens `BankZelleSettingsScreen`. A new
+  Zelle payment surface uses `offersZelleCheck` / `showsBankConfirmedChip`
+  and `showZelleCheckSheet` with its `ZelleCheckKind`, never its own rules.
 

@@ -12,6 +12,8 @@ import '../services/invoice_ledger.dart' show invoicePaymentMethods;
 import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../services/package_codes.dart' show packagePhoneCallUri;
 import '../services/waiting_packages.dart' show wholeBalanceInput;
+import '../services/zelle_check.dart';
+import '../services/zelle_check_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -24,6 +26,7 @@ import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import 'package_payment_sheet.dart'
     show RecordedPaymentRow, containerPaymentMethodLabel;
+import 'zelle_check_sheet.dart';
 
 /// Starts a phone call; answers whether anything could take it.
 typedef InventoryDialer = Future<bool> Function(Uri uri);
@@ -44,6 +47,7 @@ Future<void> showInventoryCreditSheet(
   String currentUserId = '',
   DateTime Function() clock = DateTime.now,
   InventoryDialer dialer = _launchDialer,
+  bool? isOwner,
 }) => showLotSheet<void>(
   context,
   InventoryCreditSheet(
@@ -56,6 +60,7 @@ Future<void> showInventoryCreditSheet(
     currentUserId: currentUserId,
     clock: clock,
     dialer: dialer,
+    isOwner: isOwner,
   ),
 );
 
@@ -75,7 +80,12 @@ class InventoryCreditSheet extends StatefulWidget {
     this.currentUserId = '',
     this.clock = DateTime.now,
     this.dialer = _launchDialer,
+    this.isOwner,
   });
+
+  /// Whether the viewer owns the business (Check Zelle then offers to
+  /// connect the bank); null reads the signed-in profile.
+  final bool? isOwner;
 
   final String businessId;
   final InventorySale sale;
@@ -112,6 +122,9 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
   String? _receivedBy;
   List<InventoryCreditPayment> _payments = const [];
   bool _historyLoaded = false;
+
+  /// Confirmed from the Check Zelle sheet, before the stream shows it.
+  final Map<String, BankCheck> _bankConfirmed = {};
 
   /// Changing the collector or the due date: the two pickers and Save.
   bool _editing = false;
@@ -308,6 +321,21 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
       showSuccessSnackBar(context, l10n.invCreditChanged);
     });
   }
+
+  /// "Check Zelle" on one later payment, through the inventory caller.
+  Future<void> _checkZelle(InventoryCreditPayment payment) =>
+      showZelleCheckSheet(
+        context,
+        businessId: widget.businessId,
+        kind: ZelleCheckKind.inventoryCreditPayment,
+        id: payment.id,
+        amountCents: payment.amountCents,
+        isOwner: widget.isOwner,
+        service: ZelleCheckService(caller: widget.service.caller),
+        onConfirmed: (check) {
+          if (mounted) setState(() => _bankConfirmed[payment.id] = check);
+        },
+      );
 
   Future<void> _pickMethod() async {
     final l10n = AppLocalizations.of(context)!;
@@ -666,6 +694,11 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
                     busy: busy || _sale.voided,
                     reverting: _busy == 'revert:${payment.id}',
                     onRevert: () => _revert(payment),
+                    bankCheck:
+                        payment.bankCheck ?? _bankConfirmed[payment.id],
+                    onCheckZelle: _sale.voided
+                        ? null
+                        : () => _checkZelle(payment),
                   ),
               ],
             ),

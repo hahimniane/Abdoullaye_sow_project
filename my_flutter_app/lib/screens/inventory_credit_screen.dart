@@ -171,6 +171,7 @@ class _InventoryCreditScreenState extends State<InventoryCreditScreen> {
       paymentsStoreId: _scope.storeId,
       currentUserId: _me,
       clock: widget.clock,
+      isOwner: widget.access.isOwner,
     );
   }
 
