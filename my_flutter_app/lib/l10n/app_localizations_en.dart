@@ -13079,4 +13079,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bankConnecting => 'Connecting…';
+
+  @override
+  String get zelleFailBankAccessDenied =>
+      'The bank refused access. The owner needs to connect the bank again.';
+
+  @override
+  String get zelleFailKindInvalid =>
+      'This kind of payment can\'t be checked against the bank.';
+
+  @override
+  String get zelleFailPlatformInvalid =>
+      'A bank can\'t be connected from this device.';
+
+  @override
+  String get zelleFailNoDepositoryAccount =>
+      'Pick a checking or savings account: that is where Zelle arrives.';
+
+  @override
+  String get zelleFailCandidateInvalid =>
+      'That deposit can\'t be used for this payment. Check again.';
+
+  @override
+  String get zelleFailCandidateTaken =>
+      'Someone just matched that deposit to another payment. The list was checked again.';
+
+  @override
+  String get zelleFailBankError => 'The bank didn\'t answer. Try again.';
 }

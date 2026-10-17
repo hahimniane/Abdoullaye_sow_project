@@ -13276,4 +13276,31 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get bankConnecting => 'Connexion…';
+
+  @override
+  String get zelleFailBankAccessDenied =>
+      'La banque a refusé l\'accès. Le propriétaire doit reconnecter la banque.';
+
+  @override
+  String get zelleFailKindInvalid =>
+      'Ce type de paiement ne peut pas être vérifié auprès de la banque.';
+
+  @override
+  String get zelleFailPlatformInvalid =>
+      'Impossible de connecter une banque depuis cet appareil.';
+
+  @override
+  String get zelleFailNoDepositoryAccount =>
+      'Choisissez un compte courant ou d\'épargne : c\'est là qu\'arrivent les Zelle.';
+
+  @override
+  String get zelleFailCandidateInvalid =>
+      'Ce dépôt ne peut pas servir pour ce paiement. Vérifiez à nouveau.';
+
+  @override
+  String get zelleFailCandidateTaken =>
+      'Quelqu\'un vient d\'associer ce dépôt à un autre paiement. La liste a été revérifiée.';
+
+  @override
+  String get zelleFailBankError => 'La banque n\'a pas répondu. Réessayez.';
 }

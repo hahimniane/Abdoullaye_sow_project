@@ -24,10 +24,15 @@ class ZelleCheckService {
   Future<BankLinkToken?> createLinkToken(
     String businessId, {
     required String platform,
+    String language = '',
   }) async => BankLinkToken.fromCallable(
     await caller(
       'createBankLinkToken',
-      createBankLinkTokenRequest(businessId, platform: platform),
+      createBankLinkTokenRequest(
+        businessId,
+        platform: platform,
+        language: language,
+      ),
     ),
   );
 

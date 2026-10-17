@@ -327,6 +327,14 @@ void main() {
         'record_voided': ZelleCheckFailure.recordVoided,
         'bank_owner_required': ZelleCheckFailure.bankOwnerRequired,
         'window_invalid': ZelleCheckFailure.windowInvalid,
+        'bank_access_denied': ZelleCheckFailure.bankAccessDenied,
+        'kind_invalid': ZelleCheckFailure.kindInvalid,
+        'platform_invalid': ZelleCheckFailure.platformInvalid,
+        'public_token_required': ZelleCheckFailure.publicTokenRequired,
+        'no_depository_account': ZelleCheckFailure.noDepositoryAccount,
+        'candidate_invalid': ZelleCheckFailure.candidateInvalid,
+        'candidate_taken': ZelleCheckFailure.candidateTaken,
+        'bank_error': ZelleCheckFailure.bankError,
       };
       for (final e in codes.entries) {
         expect(
@@ -437,6 +445,130 @@ void main() {
     });
   });
 
+  group('server details (agent/plaid-server)', () {
+    /// Noon UTC on Oct 17, 2026: what a date-only deposit carries.
+    final noonMs = DateTime.utc(2026, 10, 17, 12).millisecondsSinceEpoch;
+
+    test('Plaid Link gets the app language; others are not sent', () {
+      expect(
+        createBankLinkTokenRequest('b1', platform: 'ios', language: 'fr'),
+        {'businessId': 'b1', 'platform': 'ios', 'language': 'fr'},
+      );
+      expect(
+        createBankLinkTokenRequest('b1', platform: 'ios', language: 'en-US'),
+        {'businessId': 'b1', 'platform': 'ios', 'language': 'en'},
+      );
+      expect(
+        createBankLinkTokenRequest('b1', platform: 'ios', language: 'es'),
+        {'businessId': 'b1', 'platform': 'ios'},
+      );
+    });
+
+    test(
+      'timeKnown: false is read on confirmations, candidates, bankCheck',
+      () {
+        final c = ZelleConfirmation.fromMap({
+          'amountCents': 6000,
+          'atMs': noonMs,
+          'timeKnown': false,
+        })!;
+        expect(c.timeKnown, isFalse);
+        expect(
+          ZelleConfirmation.fromMap({'amountCents': 1})!.timeKnown,
+          isTrue,
+        );
+        final r = ZelleCheckResult.fromCallable({
+          'result': 'choose',
+          'candidates': [
+            {'creditId': 'c1', 'atMs': noonMs, 'timeKnown': false},
+          ],
+        })!;
+        // A date-only deposit comes back as a choice even when it is alone.
+        expect(r.outcome, ZelleCheckOutcome.choose);
+        expect(r.candidates.single.timeKnown, isFalse);
+        expect(
+          BankCheck.fromMap({
+            'status': 'confirmed',
+            'timeKnown': false,
+          })!.timeKnown,
+          isFalse,
+        );
+      },
+    );
+
+    test('a date-only deposit shows its date, never a made-up time', () {
+      final at = DateTime.fromMillisecondsSinceEpoch(noonMs, isUtc: true);
+      expect(zelleTimeLabel(at, 'en', timeKnown: false), 'Oct 17, 2026');
+      expect(zelleTimeLabel(at, 'fr', timeKnown: false), '17 oct. 2026');
+      final en = lookupAppLocalizations(const Locale('en'));
+      expect(
+        zelleConfirmationLine(
+          en,
+          ZelleConfirmation(
+            amountCents: 6000,
+            at: at,
+            timeKnown: false,
+            senderName: 'FATOU D.',
+          ),
+          'en',
+        ),
+        r'Received ✓ $60.00 · Oct 17, 2026 · FATOU D.',
+      );
+      expect(zelleDepositDay(at), DateTime(2026, 10, 17));
+    });
+
+    test('token mode, connect and status extras', () {
+      expect(
+        BankLinkToken.fromCallable({
+          'linkToken': 't',
+          'mode': 'update',
+        })!.isUpdate,
+        isTrue,
+      );
+      expect(BankLinkToken.fromCallable({'linkToken': 't'})!.mode, 'connect');
+      final connected = BankConnectResult.fromCallable({
+        'status': 'active',
+        'accountName': 'Business Checking',
+        'accountMask': '1234',
+        'synced': true,
+      });
+      expect(connected.accountName, 'Business Checking');
+      expect(connected.synced, isTrue);
+      final status = BusinessBankStatus.fromCallable({
+        'connected': true,
+        'status': 'needs_reauth',
+        'accountName': 'Business Checking',
+        'accountMask': '1234',
+        'lastErrorCode': 'ITEM_LOGIN_REQUIRED',
+      });
+      expect(status.accountName, 'Business Checking');
+      expect(status.lastErrorCode, 'ITEM_LOGIN_REQUIRED');
+      expect(
+        status.copyWith(windowMinutes: 5).accountName,
+        'Business Checking',
+      );
+      expect(
+        bankAccountLabel('Business Checking', '1234'),
+        'Business Checking \u2022\u2022\u2022\u2022 1234',
+      );
+      expect(bankAccountLabel('', '1234'), '\u2022\u2022\u2022\u2022 1234');
+      expect(bankAccountLabel(' ', ''), '');
+    });
+
+    test('checkedAt is a Firestore Timestamp on the record', () {
+      final sale = InventorySale.fromMap('s1', {
+        'totalCents': 6000,
+        'bankCheck': {
+          'status': 'confirmed',
+          'atMs': noonMs,
+          'checkedAt': _FakeTimestamp(DateTime(2026, 10, 17, 14, 44)),
+        },
+      });
+      expect(sale.bankCheck!.checkedAt, DateTime(2026, 10, 17, 14, 44));
+      expect(sale.bankCheck!.at, DateTime.utc(2026, 10, 17, 12));
+    });
+  });
+
   group('source contracts', () {
     String read(String path) => File(path).readAsStringSync();
 
@@ -523,4 +655,13 @@ void main() {
       );
     });
   });
+}
+
+/// Stands in for a Firestore Timestamp: anything with `toDate()`.
+class _FakeTimestamp {
+  _FakeTimestamp(this.date);
+
+  final DateTime date;
+
+  DateTime toDate() => date;
 }

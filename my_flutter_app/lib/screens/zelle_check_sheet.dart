@@ -248,6 +248,7 @@ class _ZelleCheckSheetState extends State<ZelleCheckSheet> {
       _confirming = candidate.creditId;
       _note = '';
     });
+    var recheck = false;
     try {
       final result = await widget.service
           .confirmCandidate(
@@ -272,13 +273,27 @@ class _ZelleCheckSheetState extends State<ZelleCheckSheet> {
           : error is TimeoutException
           ? ZelleCheckFailure.network
           : ZelleCheckFailure.unknown;
-      setState(() => _note = zelleFailureText(l10n, failure));
+      if (failure == ZelleCheckFailure.candidateTaken) {
+        // Someone else just matched that deposit: the list is stale.
+        recheck = true;
+      } else {
+        setState(() => _note = zelleFailureText(l10n, failure));
+      }
     } finally {
       if (mounted) {
         setState(() {
           _inFlight = false;
           _confirming = '';
         });
+      }
+    }
+    if (recheck && mounted) {
+      await _check(manual: true);
+      if (mounted) {
+        setState(
+          () =>
+              _note = zelleFailureText(l10n, ZelleCheckFailure.candidateTaken),
+        );
       }
     }
   }
@@ -487,7 +502,8 @@ class _ZelleCheckSheetState extends State<ZelleCheckSheet> {
                     : c.senderName,
                 note: [
                   amount,
-                  if (c.at != null) zelleTimeLabel(c.at, locale),
+                  if (c.at != null)
+                    zelleTimeLabel(c.at, locale, timeKnown: c.timeKnown),
                 ].join(' · '),
                 selected: _confirming == c.creditId,
                 enabled: !_inFlight,

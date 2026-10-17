@@ -76,6 +76,18 @@ class _BankZelleSettingsScreenState extends State<BankZelleSettingsScreen> {
     }
   }
 
+  /// A fresh status without the spinner or the error panel (after connect).
+  Future<void> _reloadQuietly() async {
+    try {
+      final status = await widget.service
+          .bankStatus(widget.businessId)
+          .timeout(const Duration(seconds: 20));
+      if (mounted && status.connected) setState(() => _status = status);
+    } catch (_) {
+      // What is on screen already came from the connect answer.
+    }
+  }
+
   String _failureText(AppLocalizations l10n, Object error) {
     if (error is FirebaseFunctionsException) {
       return zelleFailureText(
@@ -114,6 +126,8 @@ class _BankZelleSettingsScreenState extends State<BankZelleSettingsScreen> {
     final token = await widget.service.createLinkToken(
       widget.businessId,
       platform: bankLinkPlatform(isIOS: isIOS),
+      // Plaid Link speaks the app's language.
+      language: Localizations.localeOf(context).languageCode,
     );
     if (!mounted) return;
     if (token == null) {
@@ -145,11 +159,14 @@ class _BankZelleSettingsScreenState extends State<BankZelleSettingsScreen> {
         status: result.status,
         institutionName: result.institutionName,
         accountMask: result.accountMask,
+        accountName: result.accountName,
         windowMinutes: before?.windowMinutes ?? defaultBankCheckWindowMinutes,
         lastSyncAt: before?.lastSyncAt,
       );
     });
     showSuccessSnackBar(context, l10n.bankConnectedDone);
+    // The first sync ran: read the status again for its time.
+    if (result.synced) unawaited(_reloadQuietly());
   });
 
   Future<void> _pickWindow() async {
@@ -384,9 +401,16 @@ class _StatusCard extends StatelessWidget {
                         color: AppColors.ink,
                       ),
                     ),
-                    if (status.connected && status.accountMask.isNotEmpty)
+                    if (status.connected &&
+                        bankAccountLabel(
+                          status.accountName,
+                          status.accountMask,
+                        ).isNotEmpty)
                       Text(
-                        bankAccountMaskLabel(status.accountMask),
+                        bankAccountLabel(
+                          status.accountName,
+                          status.accountMask,
+                        ),
                         key: const Key('bank-mask'),
                         style: const TextStyle(
                           fontSize: 13,

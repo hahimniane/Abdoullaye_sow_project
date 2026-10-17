@@ -330,6 +330,97 @@ void main() {
       expect(bank.named('checkZellePayment'), hasLength(2));
     });
 
+    testWidgets('one date-only deposit: a choice, with its date only', (
+      tester,
+    ) async {
+      final noonMs = DateTime.utc(2026, 10, 17, 12).millisecondsSinceEpoch;
+      final bank = _Bank({
+        'checkZellePayment': (_) => {
+          'result': 'choose',
+          'candidates': [
+            {
+              'creditId': 'c1',
+              'atMs': noonMs,
+              'timeKnown': false,
+              'senderName': 'FATOU D.',
+            },
+          ],
+        },
+        'confirmZelleCandidate': (_) => {
+          'confirmation': {
+            'amountCents': 6000,
+            'atMs': noonMs,
+            'timeKnown': false,
+            'senderName': 'FATOU D.',
+          },
+        },
+      });
+      await _openCheck(tester, bank);
+      expect(find.byKey(const Key('zelle-candidate-c1')), findsOneWidget);
+      expect(find.text(r'$60.00 · Oct 17, 2026'), findsOneWidget);
+      // No time anywhere: the bank gave none.
+      expect(find.textContaining('AM'), findsNothing);
+      expect(find.textContaining('PM'), findsNothing);
+      await tester.tap(find.byKey(const Key('zelle-candidate-c1')));
+      await tester.pump();
+      expect(
+        find.text(r'Received ✓ $60.00 · Oct 17, 2026 · FATOU D.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a deposit someone else just took: re-check and say so', (
+      tester,
+    ) async {
+      var checks = 0;
+      final bank = _Bank({
+        'checkZellePayment': (_) => ++checks == 1
+            ? {
+                'result': 'choose',
+                'candidates': [
+                  {'creditId': 'c1', 'atMs': _atMs, 'senderName': 'FATOU D.'},
+                  {'creditId': 'c2', 'atMs': _atMs, 'senderName': 'AWA B.'},
+                ],
+              }
+            : {
+                'result': 'choose',
+                'candidates': [
+                  {'creditId': 'c2', 'atMs': _atMs, 'senderName': 'AWA B.'},
+                ],
+              },
+        'confirmZelleCandidate': (_) => throw _refusal('candidate_taken'),
+      });
+      await _openCheck(tester, bank);
+      await tester.tap(find.byKey(const Key('zelle-candidate-c1')));
+      await tester.pump();
+      await tester.pump();
+      expect(bank.named('checkZellePayment'), hasLength(2));
+      expect(find.byKey(const Key('zelle-candidate-c1')), findsNothing);
+      expect(find.byKey(const Key('zelle-candidate-c2')), findsOneWidget);
+      expect(
+        find.text(
+          'Someone just matched that deposit to another payment. The list '
+          'was checked again.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the bank not answering reads as a plain retry', (
+      tester,
+    ) async {
+      final bank = _Bank({
+        'checkZellePayment': (_) => throw FirebaseFunctionsException(
+          message: 'x',
+          code: 'unavailable',
+          details: {'reason': 'bank_error', 'bankError': 'INSTITUTION_DOWN'},
+        ),
+      });
+      await _openCheck(tester, bank);
+      expect(find.text("The bank didn't answer. Try again."), findsOneWidget);
+      expect(find.textContaining('INSTITUTION_DOWN'), findsNothing);
+    });
+
     testWidgets('bank asks to sign in again: owner Reconnect, staff told', (
       tester,
     ) async {
@@ -500,6 +591,7 @@ void main() {
       expect(bank.named('createBankLinkToken').single, {
         'businessId': 'b1',
         'platform': 'ios',
+        'language': 'en',
       });
       expect(link.tokens, ['link-sandbox-1']);
       expect(bank.named('connectBusinessBank').single, {
@@ -582,6 +674,65 @@ void main() {
       expect(bank.named('disconnectBusinessBank').single, {'businessId': 'b1'});
       expect(find.text('Not connected'), findsOneWidget);
       expect(find.byKey(const Key('bank-connect')), findsOneWidget);
+    });
+
+    testWidgets('the account name shows with the mask', (tester) async {
+      final bank = _Bank({
+        'getBusinessBankStatus': (_) => {
+          ...active,
+          'accountName': 'Business Checking',
+        },
+      });
+      await openSettings(tester, bank, _FakeLink(const BankLinkOutcome.exit()));
+      expect(
+        find.text('Business Checking \u2022\u2022\u2022\u2022 1234'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Plaid Link is asked for in French on a French phone', (
+      tester,
+    ) async {
+      final bank = _Bank({
+        'getBusinessBankStatus': (_) => {'connected': false},
+        'createBankLinkToken': (_) => {'linkToken': 'link-1'},
+      });
+      await openSettings(
+        tester,
+        bank,
+        _FakeLink(const BankLinkOutcome.exit()),
+        locale: const Locale('fr'),
+      );
+      await tester.tap(find.byKey(const Key('bank-connect')));
+      await tester.pumpAndSettle();
+      expect(bank.named('createBankLinkToken').single['language'], 'fr');
+    });
+
+    testWidgets('after a synced connect the status is read again', (
+      tester,
+    ) async {
+      var reads = 0;
+      final bank = _Bank({
+        'getBusinessBankStatus': (_) =>
+            ++reads == 1 ? {'connected': false} : active,
+        'createBankLinkToken': (_) => {'linkToken': 'link-1'},
+        'connectBusinessBank': (_) => {
+          'status': 'active',
+          'institutionName': 'Chase',
+          'accountMask': '1234',
+          'synced': true,
+        },
+      });
+      await openSettings(
+        tester,
+        bank,
+        _FakeLink(const BankLinkOutcome.success(publicToken: 'p')),
+      );
+      await tester.tap(find.byKey(const Key('bank-connect')));
+      await tester.pumpAndSettle();
+      expect(reads, 2);
+      final sync = tester.widget<Text>(find.byKey(const Key('bank-last-sync')));
+      expect(_plain(sync.data!), 'Last synced Oct 17, 2026 2:43 PM');
     });
 
     testWidgets('a cancelled disconnect calls nothing', (tester) async {

@@ -22618,6 +22618,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connecting…'**
   String get bankConnecting;
+
+  /// No description provided for @zelleFailBankAccessDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank refused access. The owner needs to connect the bank again.'**
+  String get zelleFailBankAccessDenied;
+
+  /// No description provided for @zelleFailKindInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'This kind of payment can\'t be checked against the bank.'**
+  String get zelleFailKindInvalid;
+
+  /// No description provided for @zelleFailPlatformInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'A bank can\'t be connected from this device.'**
+  String get zelleFailPlatformInvalid;
+
+  /// No description provided for @zelleFailNoDepositoryAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a checking or savings account: that is where Zelle arrives.'**
+  String get zelleFailNoDepositoryAccount;
+
+  /// No description provided for @zelleFailCandidateInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That deposit can\'t be used for this payment. Check again.'**
+  String get zelleFailCandidateInvalid;
+
+  /// No description provided for @zelleFailCandidateTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone just matched that deposit to another payment. The list was checked again.'**
+  String get zelleFailCandidateTaken;
+
+  /// No description provided for @zelleFailBankError.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank didn\'t answer. Try again.'**
+  String get zelleFailBankError;
 }
 
 class _AppLocalizationsDelegate

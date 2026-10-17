@@ -58,11 +58,24 @@ bool bankCheckWindowValid(int minutes) =>
 // Requests, exactly as the callables read them.
 // ---------------------------------------------------------------------------
 
-/// `createBankLinkToken`: [platform] is `ios` or `android`.
+/// `createBankLinkToken`: [platform] is `ios` or `android`; [language]
+/// (`en` / `fr`, the app's) is the language Plaid Link shows.
 Map<String, Object?> createBankLinkTokenRequest(
   String businessId, {
   required String platform,
-}) => {'businessId': businessId, 'platform': platform};
+  String language = '',
+}) => {
+  'businessId': businessId,
+  'platform': platform,
+  'language': ?bankLinkLanguage(language),
+};
+
+/// The app language as the callables take it (`en` or `fr`); null for any
+/// other, so nothing is sent and the server keeps its default.
+String? bankLinkLanguage(String languageCode) {
+  final code = languageCode.trim().toLowerCase().split(RegExp('[-_]')).first;
+  return code == 'en' || code == 'fr' ? code : null;
+}
 
 /// `connectBusinessBank`: the Link public token, and the account the owner
 /// picked when Link names one.
@@ -124,6 +137,18 @@ DateTime? _instantOfMs(Object? value) {
   return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
 }
 
+/// `timeKnown: false` means the bank gave a date only (`atMs` is then noon
+/// UTC of that date); anything else, including no field, is a real time.
+bool _timeKnown(Object? value) => value != false;
+
+/// The calendar day of a date-only deposit (noon UTC of that day), as a
+/// local date for the date helpers. Never shifted by a time zone: the bank's
+/// date is the date.
+DateTime zelleDepositDay(DateTime at) {
+  final utc = at.toUtc();
+  return DateTime(utc.year, utc.month, utc.day);
+}
+
 /// A deposit the bank shows for the payment.
 class ZelleConfirmation {
   const ZelleConfirmation({
@@ -131,9 +156,11 @@ class ZelleConfirmation {
     this.at,
     this.senderName = '',
     this.institutionName = '',
+    this.timeKnown = true,
   });
 
-  /// `{amountCents, atMs, senderName, institutionName}`; null without a
+  /// `{amountCents, atMs, timeKnown?, senderName, institutionName}`; null
+  /// without a
   /// positive amount (nothing was confirmed).
   static ZelleConfirmation? fromMap(Object? data) {
     if (data is! Map) return null;
@@ -143,6 +170,7 @@ class ZelleConfirmation {
     return ZelleConfirmation(
       amountCents: cents,
       at: _instantOfMs(map['atMs']),
+      timeKnown: _timeKnown(map['timeKnown']),
       senderName: _text(map['senderName'], 80),
       institutionName: _text(map['institutionName'], 80),
     );
@@ -150,19 +178,32 @@ class ZelleConfirmation {
 
   final int amountCents;
 
-  /// When the deposit landed (a true instant), if the bank said.
+  /// When the deposit landed (a true instant), if the bank said. With
+  /// [timeKnown] false only its date means anything (see [zelleDepositDay]).
   final DateTime? at;
+
+  /// False when the bank gave a date and no time: show the date only.
+  final bool timeKnown;
   final String senderName;
   final String institutionName;
 }
 
-/// One of several same-amount deposits: the person picks by sender name.
+/// A same-amount deposit the person picks by sender name. A date-only
+/// deposit always comes as a choice, even alone, so the person confirms it.
 class ZelleCandidate {
-  const ZelleCandidate({required this.creditId, this.at, this.senderName = ''});
+  const ZelleCandidate({
+    required this.creditId,
+    this.at,
+    this.senderName = '',
+    this.timeKnown = true,
+  });
 
   final String creditId;
   final DateTime? at;
   final String senderName;
+
+  /// False when the bank gave a date and no time.
+  final bool timeKnown;
 }
 
 enum ZelleCheckOutcome { confirmed, notFound, choose, alreadyConfirmed }
@@ -209,10 +250,12 @@ class ZelleCheckResult {
                   ZelleCandidate(
                     creditId: id,
                     at: _instantOfMs(c['atMs']),
+                    timeKnown: _timeKnown(c['timeKnown']),
                     senderName: _text(c['senderName'], 80),
                   ),
         ];
-        // A choice of nothing (or one) is not a choice the sheet can offer.
+        // A choice of nothing cannot be offered. One is fine: a date-only
+        // deposit is always confirmed by hand.
         if (candidates.isEmpty) return null;
         return ZelleCheckResult(
           outcome: ZelleCheckOutcome.choose,
@@ -251,6 +294,7 @@ class BankCheck {
     this.institutionName = '',
     this.checkedByUid = '',
     this.checkedAt,
+    this.timeKnown = true,
   });
 
   /// Null for a record with no (or an unreadable) `bankCheck`.
@@ -269,6 +313,7 @@ class BankCheck {
       creditId: _text(map['creditId'], 128),
       amountCents: _optionalInt(map['amountCents']),
       at: _instantOfMs(map['atMs']),
+      timeKnown: _timeKnown(map['timeKnown']),
       senderName: _text(map['senderName'], 80),
       institutionName: _text(map['institutionName'], 80),
       checkedByUid: _text(map['checkedByUid'], 128),
@@ -285,6 +330,7 @@ class BankCheck {
     status: 'confirmed',
     amountCents: c.amountCents,
     at: c.at,
+    timeKnown: c.timeKnown,
     senderName: c.senderName,
     institutionName: c.institutionName,
   );
@@ -297,7 +343,12 @@ class BankCheck {
   final String senderName;
   final String institutionName;
   final String checkedByUid;
+
+  /// A Firestore Timestamp on the record, read through the `date` reader.
   final DateTime? checkedAt;
+
+  /// False when the bank gave the deposit's date only.
+  final bool timeKnown;
 
   bool get confirmed => status == 'confirmed';
 }
@@ -340,6 +391,8 @@ class BusinessBankStatus {
     this.accountMask = '',
     this.windowMinutes = defaultBankCheckWindowMinutes,
     this.lastSyncAt,
+    this.accountName = '',
+    this.lastErrorCode = '',
   });
 
   static const none = BusinessBankStatus(
@@ -367,10 +420,18 @@ class BusinessBankStatus {
           ? minutes
           : defaultBankCheckWindowMinutes,
       lastSyncAt: _instantOfMs(map['lastSyncAt']),
+      accountName: _text(map['accountName'], 80),
+      lastErrorCode: _text(map['lastErrorCode'], 80),
     );
   }
 
   final bool connected;
+
+  /// The account's own name ("Business Checking"), owner only.
+  final String accountName;
+
+  /// Plaid's last error on the connection, owner only (not shown as text).
+  final String lastErrorCode;
   final BankLinkStatus status;
   final String institutionName;
 
@@ -389,18 +450,29 @@ class BusinessBankStatus {
     accountMask: accountMask,
     windowMinutes: windowMinutes ?? this.windowMinutes,
     lastSyncAt: lastSyncAt,
+    accountName: accountName,
+    lastErrorCode: lastErrorCode,
   );
 }
+
+/// "Business Checking •••• 1234", whichever parts there are.
+String bankAccountLabel(String accountName, String mask) => [
+  if (accountName.trim().isNotEmpty) accountName.trim(),
+  if (mask.isNotEmpty) bankAccountMaskLabel(mask),
+].join(' ');
 
 /// "•••• 1234", or "" without a mask.
 String bankAccountMaskLabel(String mask) => mask.isEmpty ? '' : '•••• $mask';
 
-/// `connectBusinessBank`: `{status, institutionName, accountMask}`.
+/// `connectBusinessBank`: `{status, institutionName, accountMask,
+/// accountName, synced}`.
 class BankConnectResult {
   const BankConnectResult({
     required this.status,
     this.institutionName = '',
     this.accountMask = '',
+    this.accountName = '',
+    this.synced = false,
   });
 
   factory BankConnectResult.fromCallable(Object? data) {
@@ -409,17 +481,28 @@ class BankConnectResult {
       status: _bankLinkStatusOf(_text(map['status'], 20)),
       institutionName: _text(map['institutionName'], 80),
       accountMask: _text(map['accountMask'], 8).replaceAll(RegExp(r'\D'), ''),
+      accountName: _text(map['accountName'], 80),
+      synced: map['synced'] == true,
     );
   }
 
   final BankLinkStatus status;
   final String institutionName;
   final String accountMask;
+  final String accountName;
+
+  /// The first sync already ran (the last-sync time is then worth reloading).
+  final bool synced;
 }
 
-/// `createBankLinkToken`: `{linkToken, expiration}`; null without a token.
+/// `createBankLinkToken`: `{linkToken, expiration, mode}`; null without a
+/// token. [mode] is `update` when the server made it to sign in again.
 class BankLinkToken {
-  const BankLinkToken({required this.linkToken, this.expiration = ''});
+  const BankLinkToken({
+    required this.linkToken,
+    this.expiration = '',
+    this.mode = 'connect',
+  });
 
   static BankLinkToken? fromCallable(Object? data) {
     final map = callableMap(data);
@@ -428,11 +511,15 @@ class BankLinkToken {
     return BankLinkToken(
       linkToken: token,
       expiration: _text(map['expiration'], 60),
+      mode: _text(map['mode'], 20) == 'update' ? 'update' : 'connect',
     );
   }
 
   final String linkToken;
   final String expiration;
+  final String mode;
+
+  bool get isUpdate => mode == 'update';
 }
 
 // ---------------------------------------------------------------------------
@@ -447,6 +534,18 @@ enum ZelleCheckFailure {
   recordVoided,
   bankOwnerRequired,
   windowInvalid,
+  bankAccessDenied,
+  kindInvalid,
+  platformInvalid,
+  publicTokenRequired,
+  noDepositoryAccount,
+  candidateInvalid,
+
+  /// Someone else just matched that deposit: refresh and check again.
+  candidateTaken,
+
+  /// The bank (Plaid) did not answer; `details.bankError` may name why.
+  bankError,
   network,
   noPermission,
   deviceNotVerified,
@@ -461,6 +560,14 @@ const _zelleFailureReasons = <String, ZelleCheckFailure>{
   'record_voided': ZelleCheckFailure.recordVoided,
   'bank_owner_required': ZelleCheckFailure.bankOwnerRequired,
   'window_invalid': ZelleCheckFailure.windowInvalid,
+  'bank_access_denied': ZelleCheckFailure.bankAccessDenied,
+  'kind_invalid': ZelleCheckFailure.kindInvalid,
+  'platform_invalid': ZelleCheckFailure.platformInvalid,
+  'public_token_required': ZelleCheckFailure.publicTokenRequired,
+  'no_depository_account': ZelleCheckFailure.noDepositoryAccount,
+  'candidate_invalid': ZelleCheckFailure.candidateInvalid,
+  'candidate_taken': ZelleCheckFailure.candidateTaken,
+  'bank_error': ZelleCheckFailure.bankError,
 };
 
 /// The failure a refusal names: `details.reason` (or `details.code`, or one

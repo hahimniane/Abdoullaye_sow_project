@@ -6299,5 +6299,12 @@
   "bankConnectedDone": "Bank connected",
   "bankLinkFailed": "The bank connection did not finish. Try again.",
   "bankLoadFailed": "Couldn't load the bank connection. Check the connection and try again.",
-  "bankConnecting": "Connecting…"
+  "bankConnecting": "Connecting…",
+  "zelleFailBankAccessDenied": "The bank refused access. The owner needs to connect the bank again.",
+  "zelleFailKindInvalid": "This kind of payment can't be checked against the bank.",
+  "zelleFailPlatformInvalid": "A bank can't be connected from this device.",
+  "zelleFailNoDepositoryAccount": "Pick a checking or savings account: that is where Zelle arrives.",
+  "zelleFailCandidateInvalid": "That deposit can't be used for this payment. Check again.",
+  "zelleFailCandidateTaken": "Someone just matched that deposit to another payment. The list was checked again.",
+  "zelleFailBankError": "The bank didn't answer. Try again."
 }

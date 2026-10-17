@@ -9,25 +9,39 @@ import '../utils/date_display.dart';
 import 'inventory_widgets.dart' show InventoryChip;
 
 /// What a refused bank call says, in the reader's language.
-String zelleFailureText(AppLocalizations l10n, ZelleCheckFailure failure) =>
-    switch (failure) {
-      ZelleCheckFailure.bankNotConnected => l10n.zelleNotConnectedTitle,
-      ZelleCheckFailure.bankNeedsReauth => l10n.zelleNeedsReauthTitle,
-      ZelleCheckFailure.notZelle => l10n.zelleFailNotZelle,
-      ZelleCheckFailure.recordNotFound => l10n.zelleFailRecordNotFound,
-      ZelleCheckFailure.recordVoided => l10n.zelleFailRecordVoided,
-      ZelleCheckFailure.bankOwnerRequired => l10n.zelleFailOwnerRequired,
-      ZelleCheckFailure.windowInvalid => l10n.zelleFailWindowInvalid,
-      ZelleCheckFailure.network => l10n.zelleFailNetwork,
-      ZelleCheckFailure.noPermission => l10n.inventoryFailNoPermission,
-      ZelleCheckFailure.deviceNotVerified =>
-        l10n.inventoryFailDeviceNotVerified,
-      ZelleCheckFailure.unknown => l10n.inventoryFailUnknown,
-    };
+String zelleFailureText(
+  AppLocalizations l10n,
+  ZelleCheckFailure failure,
+) => switch (failure) {
+  ZelleCheckFailure.bankNotConnected => l10n.zelleNotConnectedTitle,
+  ZelleCheckFailure.bankNeedsReauth => l10n.zelleNeedsReauthTitle,
+  ZelleCheckFailure.notZelle => l10n.zelleFailNotZelle,
+  ZelleCheckFailure.recordNotFound => l10n.zelleFailRecordNotFound,
+  ZelleCheckFailure.recordVoided => l10n.zelleFailRecordVoided,
+  ZelleCheckFailure.bankOwnerRequired => l10n.zelleFailOwnerRequired,
+  ZelleCheckFailure.windowInvalid => l10n.zelleFailWindowInvalid,
+  ZelleCheckFailure.bankAccessDenied => l10n.zelleFailBankAccessDenied,
+  ZelleCheckFailure.kindInvalid => l10n.zelleFailKindInvalid,
+  ZelleCheckFailure.platformInvalid => l10n.zelleFailPlatformInvalid,
+  ZelleCheckFailure.publicTokenRequired => l10n.bankLinkFailed,
+  ZelleCheckFailure.noDepositoryAccount => l10n.zelleFailNoDepositoryAccount,
+  ZelleCheckFailure.candidateInvalid => l10n.zelleFailCandidateInvalid,
+  ZelleCheckFailure.candidateTaken => l10n.zelleFailCandidateTaken,
+  ZelleCheckFailure.bankError => l10n.zelleFailBankError,
+  ZelleCheckFailure.network => l10n.zelleFailNetwork,
+  ZelleCheckFailure.noPermission => l10n.inventoryFailNoPermission,
+  ZelleCheckFailure.deviceNotVerified => l10n.inventoryFailDeviceNotVerified,
+  ZelleCheckFailure.unknown => l10n.inventoryFailUnknown,
+};
 
-/// A deposit's time on the shop's clock (New York), 12-hour.
-String zelleTimeLabel(DateTime? at, String locale) =>
-    at == null ? '' : displayTime(easternWallAsLocal(at), locale);
+/// When a deposit landed: its time on the shop's clock (New York, 12-hour),
+/// or - when the bank gave a date only ([timeKnown] false) - just that date,
+/// month first. Never a made-up time.
+String zelleTimeLabel(DateTime? at, String locale, {bool timeKnown = true}) {
+  if (at == null) return '';
+  if (!timeKnown) return displayDate(zelleDepositDay(at), locale);
+  return displayTime(easternWallAsLocal(at), locale);
+}
 
 /// "Received ✓ $60.00 · 2:43 PM · FATOU D." - the parts the bank gave.
 String zelleConfirmationLine(
@@ -36,7 +50,8 @@ String zelleConfirmationLine(
   String locale,
 ) => [
   l10n.zelleReceivedAmount(formatLotCents(confirmation.amountCents)),
-  if (confirmation.at != null) zelleTimeLabel(confirmation.at, locale),
+  if (confirmation.at != null)
+    zelleTimeLabel(confirmation.at, locale, timeKnown: confirmation.timeKnown),
   if (confirmation.senderName.isNotEmpty) confirmation.senderName,
 ].join(' · ');
 
