@@ -136,8 +136,13 @@ test("every customer receiver-name input offers remembered recipients", () => {
 
 test("a saved number re-syncs the phone country instead of showing the wrong flag", () => {
   const phone = readFileSync("src/components/customer-phone-field.tsx", "utf8");
-  assert.match(phone, /callingCodeOptionForPhone\(trimmed, initialCountryCode\)/);
-  assert.match(phone, /if \(next && next\.code !== countryCode\)/);
+  // The country is derived from the stored number on every render (a saved
+  // recipient's own code wins), then the person's pick, then the default -
+  // behaviour pinned in calling-code-catalog.test.ts.
+  assert.match(phone, /phoneFieldCountry\(value, chosenCountry, initialCountryCode\)/);
+  assert.match(phone, /phoneFieldNationalNumber\(value, option\)/);
+  // No effect may reset the pick to the default when the number is empty.
+  assert.doesNotMatch(phone, /useEffect/);
 });
 
 test("recipient suggestions are localized and positioned over the form", () => {
