@@ -106,7 +106,8 @@ test("categories, stores and per-store stock are read through the shared busines
 test("every store control is gated on the business having two stores, and on who is looking", () => {
   // The store filter: only whoever sees every store of a multi-store business.
   assert.match(panel, /\{access\.multi && access\.canSeeAll && \(\s*<InventoryStoreFilter/);
-  assert.match(salesList, /\{access\.multi && access\.canSeeAll && \(\s*<div className="panel-tools">\s*<InventoryStoreFilter/);
+  // v4: the sales list's tool row always holds the credit filter; the store filter inside it is still gated.
+  assert.match(salesList, /\{access\.multi && access\.canSeeAll && \(\s*<InventoryStoreFilter/);
   assert.match(summaryCard, /\{access\.multi && access\.canSeeAll && \(\s*<div className="panel-tools">\s*<InventoryStoreFilter/);
   // The Store column and the per-store figures.
   assert.match(salesList, /\{access\.multi && <span>Store<\/span>\}/);

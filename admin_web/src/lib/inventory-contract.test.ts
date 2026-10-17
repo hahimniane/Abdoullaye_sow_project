@@ -15,6 +15,9 @@ import {
   businessRequestedInventory,
 } from "./inventory.ts";
 import { BUSINESS_SERVICE_IDS } from "./business-service-settings.ts";
+import { CREDIT_CHIP_LABELS, CREDIT_GROUP_LABELS, SALE_CREDIT_FILTER_LABELS } from "./inventory-credit.ts";
+import { HISTORY_KIND_LABELS } from "./inventory-history.ts";
+import { inventoryNotificationPreferenceFields } from "./notification-preferences.ts";
 import { businessSidebarTabs } from "./business-sidebar.ts";
 import { storeLinksFor } from "./app-store-links.ts";
 
@@ -41,6 +44,12 @@ const screens = {
   "the transfer dialog": B + "inventory-transfer-dialog.tsx",
   "the store filter": B + "inventory-store-filter.tsx",
   "the public tag page": "../components/item-tag-page.tsx",
+  // v4: credit sales and the sales history.
+  "the credit block": B + "inventory-credit-block.tsx",
+  "the credit payment dialog": B + "inventory-credit-payment-dialog.tsx",
+  "the collector dialog": B + "inventory-collector-dialog.tsx",
+  "Credit owed": B + "inventory-credit-list.tsx",
+  "the sales history": B + "inventory-history.tsx",
 } as const;
 const sources = Object.fromEntries(Object.entries(screens).map(([name, path]) => [name, read(path)])) as Record<keyof typeof screens, string>;
 const allSource = Object.values(sources).join("\n");
@@ -125,6 +134,12 @@ test("the sentences the pure module builds for the new screens have their French
     ...Object.values(INVENTORY_MOVEMENT_LABELS),
     ...Object.values(INVENTORY_RANGE_LABELS),
     ...Object.values(INVOICE_PAYMENT_METHOD_LABELS),
+    ...Object.values(CREDIT_CHIP_LABELS),
+    ...Object.values(CREDIT_GROUP_LABELS),
+    ...Object.values(SALE_CREDIT_FILTER_LABELS),
+    ...Object.values(HISTORY_KIND_LABELS),
+    ...inventoryNotificationPreferenceFields.flatMap((field) => [field.label, field.hint]),
+    "On credit",
     "The tags are not ready yet. Try again in a moment.",
     "The change did not save.",
   ];

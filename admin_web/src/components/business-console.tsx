@@ -59,6 +59,7 @@ import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import { NotificationBell } from "@/components/notification-bell";
 import { ToggleRow } from "@/components/toggle-row";
 import {
+  inventoryNotificationPreferenceFields,
   mergeNotificationPreferences,
   notificationPreferenceFields,
 } from "@/lib/notification-preferences";
@@ -128,7 +129,7 @@ const serviceLabels: Record<string, string> = {
 
 const businessSidebarStorageKey = "laawol:business-sidebar-pins";
 
-function NotificationPreferencesPanel({ profile }: { profile: UserProfile }) {
+function NotificationPreferencesPanel({ profile, showInventory = false }: { profile: UserProfile; showInventory?: boolean }) {
   const [prefs, setPrefs] = useState(() =>
     mergeNotificationPreferences(profile.notificationPreferences),
   );
@@ -161,7 +162,7 @@ function NotificationPreferencesPanel({ profile }: { profile: UserProfile }) {
       {error && <div className="error-box">{error}</div>}
       {notice && <div className="info-band">{notice}</div>}
       <div className="toggle-list">
-        {notificationPreferenceFields.map((field) => (
+        {[...notificationPreferenceFields, ...(showInventory ? inventoryNotificationPreferenceFields : [])].map((field) => (
           <ToggleRow
             key={field.key}
             label={field.label}
@@ -622,7 +623,7 @@ export function BusinessConsole({
           {activeTab === "profile" && (
             <>
               <BusinessProfilePanel businessId={businessId} business={business} />
-              <NotificationPreferencesPanel profile={profile} />
+              <NotificationPreferencesPanel profile={profile} showInventory={visibleTabs.some((tab) => tab.id === "inventory")} />
             </>
           )}
           {activeTab === "listings" && (
@@ -715,6 +716,7 @@ export function BusinessConsole({
               business={business}
               previewMode={previewMode}
               viewer={inventoryViewerFromProfile(profile)}
+              viewerUid={firebaseUser.uid}
               focusSale={notificationSale}
             />
           )}

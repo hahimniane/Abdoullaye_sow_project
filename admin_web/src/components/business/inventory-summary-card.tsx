@@ -16,6 +16,7 @@ import {
   type InventorySummaryRange,
   type StoreAccess,
 } from "@/lib/inventory";
+import { ofWhichOnCreditText, stillOwedText } from "@/lib/inventory-credit";
 import { useServerTotals, viewerTimeZone } from "@/lib/use-server-totals";
 
 type SummaryResponse = Record<string, unknown> & { computedAtMs?: number };
@@ -95,7 +96,14 @@ export function InventorySummaryCard({
       <div className="pk-scoreboard" role="group" aria-label="Sales totals">
         <div className="pk-stat"><span>Sales</span><b data-no-translate>{summary ? summary.salesCount : "—"}</b><small>{summary ? <><span data-no-translate>{summary.itemsSold}</span> <span>items sold</span></> : null}</small></div>
         <div className="pk-stat"><span>Revenue</span><b data-no-translate>{summary ? moneyText(summary.revenueCents) : "—"}</b>
-          <small>{summary && summary.discountCents > 0 ? <><span data-no-translate>{moneyText(summary.discountCents)}</span> <span>in discounts</span></> : <span>what was taken at the counter</span>}</small>
+          <small>{summary && summary.discountCents > 0 ? <><span data-no-translate>{moneyText(summary.discountCents)}</span> <span>in discounts</span></> : summary && summary.creditCents > 0 ? <span>everything sold</span> : <span>what was taken at the counter</span>}</small>
+          {/* The total keeps its meaning (everything sold); what went on credit is said beside it. */}
+          {summary && summary.creditCents > 0 && (
+            <small className="ivt-of-credit" data-no-translate>
+              {ofWhichOnCreditText(summary.creditCents, lang)}
+              {summary.creditOutstandingCents > 0 ? ` · ${stillOwedText(summary.creditOutstandingCents, lang)}` : ""}
+            </small>
+          )}
         </div>
         <div className="pk-stat"><span>Profit</span><b data-no-translate className={summary && summary.profitCents < 0 ? "owed" : ""}>{summary ? moneyText(summary.profitCents) : "—"}</b><small>from the costs you entered</small></div>
       </div>
