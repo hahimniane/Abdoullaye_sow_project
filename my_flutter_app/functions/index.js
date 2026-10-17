@@ -38818,3 +38818,646 @@ exports.getAdminOverview = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
     consoleTotals.getAdminOverview);
 exports.getPlatformEarnings = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
     consoleTotals.getPlatformEarnings);
+
+// ---- Zelle bank check (docs/ZELLE_BANK_CHECK.md) --------------------------
+// The owner connects the business's own bank account (read-only, Plaid);
+// staff tap "Check Zelle" on a payment recorded as Zelle and the server looks
+// for a deposit of exactly that amount in the owner's window. Decisions live
+// in zelle_check.js, the feed in bank_sync.js, Plaid in plaid_client.js, the
+// sealed access token in bank_token_crypto.js. Both collections are
+// server-only (rules deny every client).
+const plaidClient = require("./plaid_client");
+const bankSync = require("./bank_sync");
+const zelleCheck = require("./zelle_check");
+const bankTokenCrypto = require("./bank_token_crypto");
+
+const plaidClientIdSecret = defineSecret("PLAID_CLIENT_ID");
+const plaidSecretSecret = defineSecret("PLAID_SECRET");
+// 32 random bytes, base64: seals the bank access token at rest.
+const bankTokenKeySecret = defineSecret("BANK_TOKEN_KEY");
+const BANK_SECRETS = [plaidClientIdSecret, plaidSecretSecret,
+  bankTokenKeySecret];
+
+/**
+ * @param {string} code A zelle_check BANK_REFUSALS code.
+ * @param {object} extra More details.
+ * @return {HttpsError} The refusal, with details.reason like inventory's.
+ */
+function bankRefusal(code, extra = {}) {
+  return new HttpsError(zelleCheck.bankRefusalKind(code),
+      zelleCheck.bankRefusalMessage(code),
+      {reason: code, reasons: [code], ...extra});
+}
+
+/**
+ * Anything a Plaid call threw, as a refusal the screens can show. Plaid's
+ * own message is for developers and can name the bank: it goes to the log.
+ *
+ * @param {*} error What was thrown.
+ * @param {object} context Logged with it (never a token).
+ * @return {HttpsError} The error to throw.
+ */
+function bankHttpsError(error, context) {
+  if (error instanceof HttpsError) return error;
+  const plaid = error instanceof plaidClient.PlaidError ? error : null;
+  const code = plaid ? plaid.code : "NETWORK";
+  const info = plaidClient.bankErrorInfo(code, plaid ? plaid.type : "");
+  logger.error("plaid call failed", {...context, plaidCode: code,
+    plaidType: plaid ? plaid.type : null,
+    plaidRequestId: plaid ? plaid.requestId : null, reason: info.reason,
+    error: plaid ? undefined : String(error?.message || error)});
+  if (info.needsReauth) return bankRefusal("bank_needs_reauth");
+  return new HttpsError(info.httpsCode, info.message,
+      {reason: "bank_error", reasons: ["bank_error"], bankError: info.reason});
+}
+
+let cachedBankPlaid = null;
+/**
+ * One Plaid client per instance (keeps the webhook key cache warm).
+ *
+ * @return {object} The client.
+ */
+function bankPlaidClient() {
+  const clientId = safeSecretValue(plaidClientIdSecret);
+  const secret = safeSecretValue(plaidSecretSecret);
+  const environment = plaidClient.plaidEnvironment();
+  const key = `${clientId}|${environment}|${secret.length}`;
+  if (!cachedBankPlaid || cachedBankPlaid.key !== key) {
+    cachedBankPlaid = {key, client: plaidClient.createPlaidClient({
+      clientId, secret, environment})};
+  }
+  return cachedBankPlaid.client;
+}
+
+/**
+ * @param {string} accessToken Plaid's access token.
+ * @param {string} businessId Bound into the seal.
+ * @return {string} The sealed token.
+ */
+function sealBankToken(accessToken, businessId) {
+  return bankTokenCrypto.encryptBankToken(accessToken,
+      safeSecretValue(bankTokenKeySecret), businessId);
+}
+
+/**
+ * Opens a link's access token, server-side only. A token that no longer
+ * opens (the key was changed) reads as "not connected": the owner connects
+ * the bank again.
+ *
+ * @param {object} link The stored link.
+ * @param {string} businessId The business.
+ * @return {string} The access token.
+ */
+function openBankToken(link, businessId) {
+  try {
+    return bankTokenCrypto.decryptBankToken(link.accessTokenEnc,
+        safeSecretValue(bankTokenKeySecret), businessId);
+  } catch (error) {
+    logger.error("bank token could not be opened", {businessId,
+      error: String(error?.message || error)});
+    throw bankRefusal("bank_not_connected");
+  }
+}
+
+/**
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @return {object} Its businessBankLinks document.
+ */
+function bankLinkRef(db, businessId) {
+  return db.collection(bankSync.BANK_LINKS).doc(businessId);
+}
+
+/**
+ * Who the caller is to this business's bank (zelle_check.bankRoleOf).
+ *
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} {db, user, business, role}.
+ */
+async function bankCaller(uid, businessId) {
+  if (!businessId || businessId.includes("/")) {
+    throw bankRefusal("bank_access_denied");
+  }
+  const user = await getUserProfile(uid);
+  const db = admin.firestore();
+  const doc = await db.collection("businesses").doc(businessId).get();
+  const business = doc.exists ? doc.data() || {} : null;
+  if (!business) throw bankRefusal("bank_access_denied");
+  const role = zelleCheck.bankRoleOf({uid, user, businessId, business});
+  return {db, user, business, role};
+}
+
+/**
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} bankCaller's answer, once the caller is the
+ *   owner (or a platform admin).
+ */
+async function requireBankOwner(uid, businessId) {
+  const caller = await bankCaller(uid, businessId);
+  if (caller.role !== "owner") throw bankRefusal("bank_owner_required");
+  return caller;
+}
+
+/**
+ * Syncs the business's link now. Never throws: a failed sync leaves the
+ * deposits already read, and its outcome says whether the login expired.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} link The stored link.
+ * @param {string} accessToken The opened token.
+ * @return {Promise<object>} syncBusinessBank's outcome.
+ */
+async function syncBankLink(db, businessId, link, accessToken) {
+  try {
+    return await bankSync.syncBusinessBank({db,
+      FieldValue: FirestoreFieldValue, businessId, plaid: bankPlaidClient(),
+      accessToken, link, logger});
+  } catch (error) {
+    logger.error("bank sync crashed", {businessId,
+      error: String(error?.message || error)});
+    return {ok: false, info: plaidClient.bankErrorInfo("NETWORK")};
+  }
+}
+
+exports.createBankLinkToken = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      secrets: BANK_SECRETS},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const {db} = await requireBankOwner(uid, businessId);
+      const platform = zelleCheck.cleanPlatform(data.platform);
+      if (!platform) throw bankRefusal("platform_invalid");
+      const doc = await bankLinkRef(db, businessId).get();
+      const link = doc.exists ? doc.data() || {} : null;
+      // An expired login is repaired in update mode: same login, same
+      // history, no new item.
+      const repairing = link?.status === "needs_reauth" &&
+        Boolean(link.accessTokenEnc);
+      const accessToken = repairing ? openBankToken(link, businessId) : "";
+      try {
+        const token = await bankPlaidClient().createLinkToken({uid,
+          platform, webhookUrl: plaidClient.plaidWebhookUrl(),
+          language: data.language, ...(repairing ? {accessToken} : {})});
+        return {linkToken: String(token.link_token || ""),
+          expiration: String(token.expiration || ""),
+          mode: repairing ? "update" : "connect"};
+      } catch (error) {
+        throw bankHttpsError(error, {businessId, step: "link_token"});
+      }
+    },
+);
+
+exports.connectBusinessBank = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      secrets: BANK_SECRETS},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const {db} = await requireBankOwner(uid, businessId);
+      const publicToken = String(data.publicToken || "").trim();
+      if (!publicToken) throw bankRefusal("public_token_required");
+      const plaid = bankPlaidClient();
+      const ref = bankLinkRef(db, businessId);
+      const before = await ref.get();
+      const oldItemId = before.exists ? String(before.data()?.itemId || "") :
+        "";
+      let exchanged;
+      try {
+        exchanged = await plaid.exchangePublicToken(publicToken);
+      } catch (error) {
+        throw bankHttpsError(error, {businessId, step: "exchange"});
+      }
+      const accessToken = String(exchanged.access_token || "");
+      const itemId = String(exchanged.item_id || "");
+      // A login we cannot use must not keep costing money - unless it is
+      // the very login already connected (a repair).
+      const dropNew = async () => {
+        if (itemId && itemId !== oldItemId) {
+          await plaid.removeItem(accessToken).catch(() => undefined);
+        }
+      };
+      let accounts;
+      try {
+        accounts = await plaid.getAccounts(accessToken);
+      } catch (error) {
+        await dropNew();
+        throw bankHttpsError(error, {businessId, step: "accounts"});
+      }
+      const account = zelleCheck.pickDepositoryAccount(accounts.accounts,
+          data.accountId);
+      if (!account) {
+        await dropNew();
+        throw bankRefusal("no_depository_account");
+      }
+      const institutionId = String(accounts.item?.institution_id || "");
+      const institutionName = institutionId ?
+        await plaid.getInstitution(institutionId)
+            .then((r) => String(r.institution?.name || ""))
+            .catch(() => "") : "";
+      const sealed = sealBankToken(accessToken, businessId);
+      const now = FirestoreFieldValue.serverTimestamp();
+      const previous = await db.runTransaction(async (tx) => {
+        const doc = await tx.get(ref);
+        const old = doc.exists ? doc.data() || {} : null;
+        const sameFeed = Boolean(old && old.itemId === itemId &&
+          old.accountId === account.account_id);
+        tx.set(ref, {
+          businessId,
+          itemId,
+          accessTokenEnc: sealed,
+          institutionId,
+          institutionName,
+          accountId: String(account.account_id),
+          accountMask: String(account.mask || ""),
+          accountName: String(account.name || ""),
+          status: "active",
+          // The same login and account keeps its place in the feed.
+          cursor: sameFeed ? String(old.cursor || "") : "",
+          connectedAt: now,
+          connectedByUid: uid,
+          windowMinutes: zelleCheck.windowMinutesOf(old),
+          lastSyncAt: sameFeed ? old.lastSyncAt || null : null,
+          lastRefreshAt: null,
+          lastErrorCode: null,
+          updatedAt: now,
+        });
+        return old;
+      });
+      // Connecting a new bank over an old one: the old login is removed at
+      // Plaid so it stops reading the account (and costing money).
+      if (previous && previous.itemId && previous.itemId !== itemId &&
+          previous.accessTokenEnc && previous.status !== "disconnected") {
+        try {
+          const oldToken = bankTokenCrypto.decryptBankToken(
+              previous.accessTokenEnc, safeSecretValue(bankTokenKeySecret),
+              businessId);
+          await plaid.removeItem(oldToken);
+        } catch (error) {
+          logger.warn("old bank login could not be removed", {businessId,
+            plaidCode: error?.code || null});
+        }
+      }
+      logger.info("bank connected", {businessId, byUid: uid,
+        repaired: Boolean(previous && previous.itemId === itemId)});
+      const link = (await ref.get()).data() || {};
+      const sync = await syncBankLink(db, businessId, link, accessToken);
+      return {status: "active", institutionName,
+        accountMask: String(account.mask || ""),
+        accountName: String(account.name || ""),
+        synced: sync.ok === true};
+    },
+);
+
+exports.getBusinessBankStatus = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    async (request) => {
+      const uid = requireAuth(request);
+      const businessId = String(request.data?.businessId || "").trim();
+      const {db, role} = await bankCaller(uid, businessId);
+      if (role === "none") throw bankRefusal("bank_access_denied");
+      const doc = await bankLinkRef(db, businessId).get();
+      return zelleCheck.bankStatusView(doc.exists ? doc.data() || {} : null,
+          role);
+    },
+);
+
+exports.setBankCheckWindow = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const {db} = await requireBankOwner(uid, businessId);
+      const minutes = zelleCheck.cleanWindowMinutes(data.minutes);
+      if (minutes === null) throw bankRefusal("window_invalid");
+      await bankLinkRef(db, businessId).set({businessId,
+        windowMinutes: minutes, windowUpdatedByUid: uid,
+        updatedAt: FirestoreFieldValue.serverTimestamp()}, {merge: true});
+      return {success: true, windowMinutes: minutes};
+    },
+);
+
+exports.disconnectBusinessBank = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      secrets: BANK_SECRETS},
+    async (request) => {
+      const uid = requireAuth(request);
+      const businessId = String(request.data?.businessId || "").trim();
+      const {db} = await requireBankOwner(uid, businessId);
+      const ref = bankLinkRef(db, businessId);
+      const doc = await ref.get();
+      const link = doc.exists ? doc.data() || {} : null;
+      if (!link || !link.accessTokenEnc || link.status === "disconnected") {
+        return {success: true, connected: false, status: "disconnected"};
+      }
+      // Tell Plaid first: a login nobody removed keeps reading the account.
+      try {
+        await bankPlaidClient().removeItem(openBankToken(link, businessId));
+      } catch (error) {
+        logger.warn("plaid item remove failed", {businessId,
+          plaidCode: error?.code || null});
+      }
+      await ref.update({status: "disconnected", accessTokenEnc: "",
+        cursor: "", disconnectedAt: FirestoreFieldValue.serverTimestamp(),
+        disconnectedByUid: uid,
+        updatedAt: FirestoreFieldValue.serverTimestamp()});
+      logger.info("bank disconnected", {businessId, byUid: uid});
+      return {success: true, connected: false, status: "disconnected"};
+    },
+);
+
+/**
+ * The payment record a check is about, once the caller may view it: the
+ * inventory gate plus store scoping for sales and credit payments, the
+ * containers section for package payments.
+ *
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @param {string} kind A zelle_check KINDS key.
+ * @param {string} id The record's id.
+ * @return {Promise<object>} {db, recordRef, record, timeZone}.
+ */
+async function zelleRecordFor(uid, businessId, kind, id) {
+  const plan = zelleCheck.checkAccessPlan(kind);
+  let db;
+  let access = null;
+  if (plan.section === INVENTORY_SECTION) {
+    const context = await requireInventoryContext(uid, businessId);
+    db = context.db;
+    access = context.access;
+  } else {
+    await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+    db = admin.firestore();
+  }
+  if (!id) throw bankRefusal("record_not_found");
+  const recordRef = db.collection(plan.collection).doc(id);
+  const [recordDoc, businessDoc] = await Promise.all([recordRef.get(),
+    db.collection("businesses").doc(businessId).get()]);
+  const record = recordDoc.exists ? recordDoc.data() || {} : null;
+  if (!record || String(record.businessId || "") !== businessId) {
+    throw bankRefusal("record_not_found");
+  }
+  if (plan.storeScoped) {
+    // The void rule: staff tied to one store of a multi-store business
+    // check only that store's money.
+    const sctx = await loadInventoryStoreContext(db, businessId);
+    if (sctx.converted && inventory.isMultiStore(sctx.stores) &&
+        !access.all &&
+        inventory.saleStoreId(record, sctx.mainStoreId) !==
+          access.homeStoreId) {
+      throw inventoryRefusal("store_not_allowed");
+    }
+  }
+  const refusal = zelleCheck.checkRecordRefusal(kind, record, businessId);
+  if (refusal) throw bankRefusal(refusal);
+  return {db, recordRef, record,
+    timeZone: zelleCheck.safeTimeZone(businessDoc.data()?.timeZone)};
+}
+
+/**
+ * Spends one deposit on one payment, in a transaction that re-reads both:
+ * a deposit confirms exactly one payment, a payment is confirmed once.
+ *
+ * @param {object} db Firestore.
+ * @param {object} input {businessId, kind, id, recordRef, creditId, uid,
+ *   timeZone}.
+ * @return {Promise<object>} {result: "confirmed" | "already_confirmed",
+ *   confirmation} or {result: null, why} when the deposit is not usable.
+ */
+async function consumeZelleCredit(db, input) {
+  const creditRef = db.collection(bankSync.BANK_CREDITS).doc(input.creditId);
+  const linkRef = bankLinkRef(db, input.businessId);
+  return db.runTransaction(async (tx) => {
+    const [creditDoc, recordDoc, linkDoc] =
+      await tx.getAll(creditRef, input.recordRef, linkRef);
+    const record = recordDoc.exists ? recordDoc.data() || {} : null;
+    const refusal = zelleCheck.checkRecordRefusal(input.kind, record,
+        input.businessId);
+    if (refusal) throw bankRefusal(refusal);
+    const payment = zelleCheck.paymentOfRecord(input.kind, record);
+    const held = zelleCheck.confirmationFromBankCheck(payment.bankCheck);
+    if (held) return {result: "already_confirmed", confirmation: held};
+    const link = linkDoc.exists ? linkDoc.data() || {} : null;
+    if (!link || link.status === "disconnected" || !link.accountId) {
+      throw bankRefusal("bank_not_connected");
+    }
+    const credit = creditDoc.exists ?
+      {id: creditDoc.id, ...creditDoc.data()} : null;
+    if (!credit || String(credit.businessId || "") !== input.businessId) {
+      return {result: null, why: "missing"};
+    }
+    const why = zelleCheck.creditIneligibility(credit, {
+      amountCents: payment.amountCents, atMs: payment.atMs,
+      windowMinutes: zelleCheck.windowMinutesOf(link),
+      accountId: link.accountId, timeZone: input.timeZone});
+    if (why) return {result: null, why};
+    const now = FirestoreFieldValue.serverTimestamp();
+    tx.update(creditRef, {consumedBy: {kind: input.kind, id: input.id},
+      consumedAt: now, consumedByUid: input.uid});
+    tx.update(input.recordRef, {bankCheck: {
+      ...zelleCheck.confirmedBankCheck({credit,
+        institutionName: link.institutionName, uid: input.uid}),
+      checkedAt: now}});
+    return {result: "confirmed",
+      confirmation: zelleCheck.confirmationOf(credit, link.institutionName)};
+  });
+}
+
+exports.checkZellePayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      secrets: BANK_SECRETS},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const kind = zelleCheck.cleanKind(data.kind);
+      if (!kind) throw bankRefusal("kind_invalid");
+      const id = zelleCheck.cleanDocId(data.id);
+      const {db, recordRef, record, timeZone} =
+        await zelleRecordFor(uid, businessId, kind, id);
+      const held = zelleCheck.confirmationFromBankCheck(
+          zelleCheck.paymentOfRecord(kind, record).bankCheck);
+      if (held) return {result: "already_confirmed", confirmation: held};
+
+      const linkRef = bankLinkRef(db, businessId);
+      const linkDoc = await linkRef.get();
+      const link = linkDoc.exists ? linkDoc.data() || {} : null;
+      const linkProblem = zelleCheck.linkRefusal(link);
+      if (linkProblem) throw bankRefusal(linkProblem);
+      const accessToken = openBankToken(link, businessId);
+
+      // Ask the bank for anything new: billed, so once a minute per
+      // business, and best effort (a refusal falls back to what was read).
+      const refresh = await db.runTransaction(async (tx) => {
+        const doc = await tx.get(linkRef);
+        if (!zelleCheck.refreshDue(doc.data()?.lastRefreshAt, Date.now())) {
+          return false;
+        }
+        tx.update(linkRef, {
+          lastRefreshAt: FirestoreFieldValue.serverTimestamp()});
+        return true;
+      }).catch(() => false);
+      if (refresh) {
+        await bankPlaidClient().refreshTransactions(accessToken)
+            .catch((error) => logger.info("bank refresh unavailable", {
+              businessId, plaidCode: error?.code || null}));
+      }
+      const sync = await syncBankLink(db, businessId, link, accessToken);
+      if (!sync.ok && sync.info?.needsReauth) {
+        throw bankRefusal("bank_needs_reauth");
+      }
+
+      const payment = zelleCheck.paymentOfRecord(kind, record);
+      const matchCtx = {amountCents: payment.amountCents, atMs: payment.atMs,
+        windowMinutes: zelleCheck.windowMinutesOf(link),
+        accountId: link.accountId, timeZone};
+      // A deposit taken by another check between the read and the write is
+      // simply left out on the next round.
+      for (let round = 0; round < 3; round += 1) {
+        const snap = await db.collection(bankSync.BANK_CREDITS)
+            .where("businessId", "==", businessId)
+            .where("amountCents", "==", payment.amountCents)
+            .orderBy("createdAt", "desc")
+            .limit(zelleCheck.MAX_CANDIDATE_READ)
+            .get();
+        const credits = snap.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+        const outcome = zelleCheck.zelleOutcome(
+            zelleCheck.zelleCandidates(matchCtx, credits));
+        if (outcome.result === "choose") {
+          return {result: "choose",
+            candidates: outcome.candidates.map(zelleCheck.candidateView)};
+        }
+        if (outcome.result === "confirmed") {
+          const done = await consumeZelleCredit(db, {businessId, kind, id,
+            recordRef, creditId: outcome.credit.id, uid, timeZone});
+          if (done.result) return done;
+          continue;
+        }
+        break;
+      }
+      // Not found yet: noted on the record, never blocks checking again.
+      return db.runTransaction(async (tx) => {
+        const doc = await tx.get(recordRef);
+        const current = zelleCheck.confirmationFromBankCheck(
+            zelleCheck.paymentOfRecord(kind, doc.data() || {}).bankCheck);
+        if (current) {
+          return {result: "already_confirmed", confirmation: current};
+        }
+        tx.update(recordRef, {bankCheck: {status: "not_found",
+          checkedByUid: uid,
+          checkedAt: FirestoreFieldValue.serverTimestamp()}});
+        return {result: "not_found"};
+      });
+    },
+);
+
+exports.confirmZelleCandidate = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const kind = zelleCheck.cleanKind(data.kind);
+      if (!kind) throw bankRefusal("kind_invalid");
+      const id = zelleCheck.cleanDocId(data.id);
+      const {db, recordRef, timeZone} =
+        await zelleRecordFor(uid, businessId, kind, id);
+      const creditId = zelleCheck.cleanDocId(data.creditId);
+      if (!creditId || !creditId.startsWith(`${businessId}_`)) {
+        throw bankRefusal("candidate_invalid");
+      }
+      const done = await consumeZelleCredit(db, {businessId, kind, id,
+        recordRef, creditId, uid, timeZone});
+      if (done.result) return done;
+      throw bankRefusal(done.why === "consumed" ? "candidate_taken" :
+        "candidate_invalid");
+    },
+);
+
+/**
+ * Applies a Plaid ITEM webhook to a link that is still that login.
+ *
+ * @param {object} db Firestore.
+ * @param {object} ref The link document.
+ * @param {string} itemId The login.
+ * @param {object} change From bank_sync.itemWebhookChange.
+ * @return {Promise<boolean>} Whether it was written.
+ */
+async function applyBankItemChange(db, ref, itemId, change) {
+  const patch = {lastErrorCode: change.lastErrorCode,
+    updatedAt: FirestoreFieldValue.serverTimestamp()};
+  return db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    const link = doc.exists ? doc.data() || {} : null;
+    if (!link || link.itemId !== itemId || link.status === "disconnected") {
+      return false;
+    }
+    // LOGIN_REPAIRED only lifts a login that was waiting for it.
+    if (change.status === "active" && link.status !== "needs_reauth") {
+      return false;
+    }
+    tx.update(ref, change.status ? {...patch, status: change.status} : patch);
+    return true;
+  });
+}
+
+// Plaid telling us an account changed. Verified first (a JWT Plaid signs
+// over the exact body); then thin: it syncs or records the login's state
+// and answers 200, so a new Plaid message type never becomes an outage.
+exports.plaidWebhook = onRequest(
+    {cors: false, invoker: "public", secrets: BANK_SECRETS},
+    async (req, res) => {
+      if (req.method !== "POST") {
+        res.status(405).send("Method not allowed");
+        return;
+      }
+      const verdict = await plaidClient.verifyPlaidWebhook({
+        jwt: req.get("plaid-verification"),
+        rawBody: req.rawBody,
+        fetchKey: (kid) => bankPlaidClient().getWebhookVerificationKey(kid),
+      });
+      if (!verdict.ok) {
+        logger.warn("plaid webhook rejected", {reason: verdict.reason});
+        res.status(401).send({ok: false});
+        return;
+      }
+      const body = req.body || {};
+      const type = String(body.webhook_type || "");
+      const code = String(body.webhook_code || "");
+      const itemId = String(body.item_id || "");
+      if ((type !== "TRANSACTIONS" && type !== "ITEM") || !itemId) {
+        res.status(200).send({ok: true, ignored: true});
+        return;
+      }
+      const db = admin.firestore();
+      const snap = await db.collection(bankSync.BANK_LINKS)
+          .where("itemId", "==", itemId).limit(1).get();
+      const doc = snap.docs[0];
+      const link = doc ? doc.data() || {} : null;
+      if (!doc || link.status === "disconnected" || !link.accessTokenEnc) {
+        res.status(200).send({ok: true, unknownItem: true});
+        return;
+      }
+      try {
+        if (type === "ITEM") {
+          const change = bankSync.itemWebhookChange(code, body.error);
+          if (change) await applyBankItemChange(db, doc.ref, itemId, change);
+        } else {
+          const outcome = await syncBankLink(db, doc.id, link,
+              openBankToken(link, doc.id));
+          logger.info("bank sync from webhook", {businessId: doc.id, code,
+            ok: outcome.ok === true});
+        }
+      } catch (error) {
+        logger.error("plaid webhook handling failed", {businessId: doc.id,
+          type, code, error: String(error?.message || error)});
+      }
+      res.status(200).send({ok: true});
+    },
+);

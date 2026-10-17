@@ -1457,6 +1457,51 @@ describe("business dashboard Firestore rules", () => {
           }
         });
 
+    // Zelle bank check: the sealed token, the feed cursor and the deposits
+    // are the server's alone - not even the owner reads them directly.
+    it("keeps the connected bank and its deposits server-only",
+        async () => {
+          await testEnv.withSecurityRulesDisabled(async (context) => {
+            const admin = context.firestore();
+            await setDoc(doc(admin, "businessBankLinks/biz_a"), {
+              businessId: "biz_a", itemId: "item-1", status: "active",
+              accessTokenEnc: "v1:sealed", accountMask: "1234"});
+            await setDoc(doc(admin, "businessBankCredits/biz_a_t1"), {
+              businessId: "biz_a", transactionId: "t1", amountCents: 4000,
+              senderName: "Fatou Bah"});
+          });
+          for (const uid of ["owner-a", "super-admin", "inv-clerk-none",
+            "owner-b", null]) {
+            const db = firestoreFor(uid);
+            await assertFails(getDoc(doc(db, "businessBankLinks/biz_a")));
+            await assertFails(getDoc(doc(db,
+                "businessBankCredits/biz_a_t1")));
+            await assertFails(getDocs(query(collection(db,
+                "businessBankCredits"), where("businessId", "==", "biz_a"))));
+            await assertFails(getDocs(query(collection(db,
+                "businessBankLinks"), where("businessId", "==", "biz_a"))));
+            await assertFails(setDoc(doc(db, "businessBankLinks/biz_a"),
+                {businessId: "biz_a", windowMinutes: 60}));
+            await assertFails(updateDoc(doc(db,
+                "businessBankCredits/biz_a_t1"),
+            {consumedBy: {kind: "inventory_sale", id: "s"}}));
+            await assertFails(deleteDoc(doc(db,
+                "businessBankCredits/biz_a_t1")));
+          }
+        });
+
+    it("does not let a client write a payment's bankCheck", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), "inventorySales/bank_sale"), {
+          businessId: "biz_a", paymentMethod: "zelle", totalCents: 4000,
+          storeId: ""});
+      });
+      for (const uid of ["owner-a", "inv-clerk-none"]) {
+        await assertFails(updateDoc(doc(firestoreFor(uid),
+            "inventorySales/bank_sale"), {bankCheck: {status: "confirmed"}}));
+      }
+    });
+
     it("does not let staff give themselves a store or all-stores access",
         async () => {
           await seedStores({multiStore: true});

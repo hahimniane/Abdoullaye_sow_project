@@ -727,6 +727,16 @@ service cloud.firestore {
     match /inventorySaleNotifications/{saleId} {
       allow read, write: if false;
     }
+    // Zelle bank check (docs/ZELLE_BANK_CHECK.md): the connected bank (a
+    // sealed access token, the feed cursor) and the deposits read from it.
+    // The server's alone - not even the owner reads them directly; the
+    // callables answer with only what each person may see.
+    match /businessBankLinks/{businessId} {
+      allow read, write: if false;
+    }
+    match /businessBankCredits/{creditId} {
+      allow read, write: if false;
+    }
     // Once a business has two or more active stores, a staff member sees only
     // their home store's stock rows, sales and stock movements: those queries
     // must carry `where storeId == <home store>`. The owner, a platform admin
