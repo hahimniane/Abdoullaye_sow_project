@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { Archive, ArchiveRestore, ArrowRightLeft, BadgeCheck, Boxes, Pencil, Plus, RefreshCw, Store, Tag, Tags } from "lucide-react";
 
 import { CopyValue } from "@/components/copy-value";
 import { InventoryBrandsDialog } from "@/components/business/inventory-brands-dialog";
 import { InventoryCategoriesDialog } from "@/components/business/inventory-categories-dialog";
+import { InventoryCreditList } from "@/components/business/inventory-credit-list";
 import { InventoryDeleteDialog } from "@/components/business/inventory-delete-dialog";
+import { InventoryHistory } from "@/components/business/inventory-history";
 import { InventoryItemDetail } from "@/components/business/inventory-item-detail";
 import { InventoryItemDialog, type CreatedInventoryItem } from "@/components/business/inventory-item-dialog";
 import { InventorySalesList } from "@/components/business/inventory-sales-list";
@@ -64,12 +66,14 @@ import {
   type InventoryViewer,
   type SaleFocus,
 } from "@/lib/inventory";
-import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
+import { dateKeyInZone } from "@/lib/inventory-credit";
+import { historyZone } from "@/lib/inventory-history";
+import { staffNameFrom, staffNameIndex, staffOptionsFrom } from "@/lib/staff-names";
 import { statusPillClass } from "@/lib/status-pill";
 import type { FirestoreRow } from "@/types/admin";
 
 type Modal = "" | "item" | "stock" | "tags" | "delete" | "void" | "categories" | "brands" | "stores" | "transfer";
-type View = "products" | "sales";
+type View = "products" | "sales" | "credit" | "history";
 
 const FILTERS: InventoryFilter[] = ["all", "low", "countOff", "archived"];
 
@@ -82,6 +86,8 @@ type InventoryPanelProps = {
   viewer: InventoryViewer;
   /** A sale alert was opened: show the Sales tab with this sale first. A new object per alert. */
   focusSale?: SaleFocus | null;
+  /** The signed-in person: who received a later credit payment unless someone else is picked. */
+  viewerUid?: string;
 };
 
 /**
@@ -97,7 +103,7 @@ type InventoryPanelProps = {
  * stores) can move stock between stores. Staff who work in one store see only
  * that store everywhere, with no filter. The owner alone manages the stores.
  */
-export function InventoryPanel({ businessId, previewMode, viewer, focusSale = null }: InventoryPanelProps) {
+export function InventoryPanel({ businessId, business = null, previewMode, viewer, focusSale = null, viewerUid = "" }: InventoryPanelProps) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const enabled = Boolean(businessId && !previewMode);
 
@@ -188,7 +194,12 @@ export function InventoryPanel({ businessId, previewMode, viewer, focusSale = nu
   const selected = selectedRow ? withCurrentBrand(inventoryItemFromRow(selectedRow), resolveBrand) : null;
 
   const staffNames = useMemo(() => staffNameIndex(staff.rows), [staff.rows]);
-  const staffName = (id: string) => staffNameFrom(staffNames, id);
+  const staffName = useCallback((id: string) => staffNameFrom(staffNames, id), [staffNames]);
+  // "Received by" and the collector pick from the business's people, as the package payments do.
+  const staffOptions = useMemo(() => staffOptionsFrom(staffNames), [staffNames]);
+  // Dates (due dates, the history's days) are read in the business's zone: New York unless it stores one.
+  const zone = useMemo(() => historyZone(business), [business]);
+  const todayKey = dateKeyInZone(Date.now(), zone);
 
   const source = filter === "archived" ? archived : onSale;
   const shown = useMemo(() => filterInventoryItems(source.rows, filter, search, scope), [source.rows, filter, search, scope]);
@@ -203,6 +214,8 @@ export function InventoryPanel({ businessId, previewMode, viewer, focusSale = nu
     for (const item of onSaleItems) if (item.brand) map.set(item.id, item.brand);
     return map;
   }, [onSaleItems]);
+  const itemNames = useMemo(() => new Map(onSaleItems.map((item) => [item.id, productDisplayName(item)])), [onSaleItems]);
+  const itemName = useCallback((itemId: string) => itemNames.get(itemId) ?? "", [itemNames]);
   const searching = search.trim().length > 0;
   const blocked = busy || !enabled || access.needsHomeStore;
 
@@ -264,6 +277,14 @@ export function InventoryPanel({ businessId, previewMode, viewer, focusSale = nu
     }, (failure) => setFlashError(failure.message));
   }
 
+  // A row of Credit owed or of the history opens its sale on the Sales tab, like a sale alert does.
+  function openSale(saleId: string, storeId: string) {
+    if (!saleId) return;
+    setSaleFocus({ saleId, storeId, key: Date.now() });
+    setView("sales");
+    setSelectedId("");
+  }
+
   function openFromSummary(itemId: string) {
     if (!itemId) return;
     setView("products");
@@ -272,7 +293,7 @@ export function InventoryPanel({ businessId, previewMode, viewer, focusSale = nu
 
   const tabs = (
     <div className="service-segments" role="tablist" aria-label="Inventory lists">
-      {([["products", "Products", counts.onSale], ["sales", "Sales", null]] as [View, string, number | null][]).map(([id, label, count]) => (
+      {([["products", "Products", counts.onSale], ["sales", "Sales", null], ["history", "History", null], ["credit", "Credit owed", null]] as [View, string, number | null][]).map(([id, label, count]) => (
         <span
           key={id}
           role="button"
@@ -372,7 +393,33 @@ export function InventoryPanel({ businessId, previewMode, viewer, focusSale = nu
           ) : (
             <article className="panel">
               {tabs}
-              {view === "sales" ? (
+              {view === "credit" ? (
+                <InventoryCreditList
+                  businessId={businessId}
+                  enabled={enabled}
+                  access={access}
+                  storeFilter={storeFilter}
+                  onStoreFilter={setStoreFilter}
+                  staffName={staffName}
+                  staffOptions={staffOptions}
+                  todayKey={todayKey}
+                  onOpenSale={openSale}
+                />
+              ) : view === "history" ? (
+                <InventoryHistory
+                  businessId={businessId}
+                  enabled={enabled}
+                  access={access}
+                  isOwner={viewer.isOwner}
+                  zone={zone}
+                  todayKey={todayKey}
+                  storeFilter={storeFilter}
+                  onStoreFilter={setStoreFilter}
+                  staffName={staffName}
+                  itemName={itemName}
+                  onOpenSale={openSale}
+                />
+              ) : view === "sales" ? (
                 <InventorySalesList
                   businessId={businessId}
                   enabled={enabled}
@@ -383,6 +430,11 @@ export function InventoryPanel({ businessId, previewMode, viewer, focusSale = nu
                   onStoreFilter={setStoreFilter}
                   onVoid={(sale) => { setVoidSale(sale); setModal("void"); }}
                   focus={saleFocus}
+                  viewerUid={viewerUid}
+                  staffOptions={staffOptions}
+                  todayKey={todayKey}
+                  onFlash={say}
+                  onError={(message) => { setFlash(""); setFlashError(message); }}
                 />
               ) : (
                 <>

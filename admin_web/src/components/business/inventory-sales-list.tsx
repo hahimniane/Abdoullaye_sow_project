@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, RefreshCw, Undo2 } from "lucide-react";
 
+import { InventoryCreditBlock } from "@/components/business/inventory-credit-block";
 import { InventoryStoreFilter } from "@/components/business/inventory-store-filter";
 import { LoadMoreButton } from "@/components/show-more";
 import { useInventorySales, useLiveDocRead } from "@/lib/business-data";
@@ -23,6 +24,16 @@ import {
   type StoreAccess,
   productDisplayName,
 } from "@/lib/inventory";
+import {
+  CREDIT_CHIP_TONES,
+  SALE_CREDIT_FILTERS,
+  SALE_CREDIT_FILTER_LABELS,
+  creditChip,
+  creditChipText,
+  receivedByText,
+  saleMatchesCreditFilter,
+  type SaleCreditFilter,
+} from "@/lib/inventory-credit";
 import { statusPillClass } from "@/lib/status-pill";
 
 /**
@@ -55,6 +66,11 @@ export function InventorySalesList({
   onStoreFilter,
   onVoid,
   focus = null,
+  viewerUid,
+  staffOptions,
+  todayKey,
+  onFlash,
+  onError,
 }: {
   businessId: string;
   enabled: boolean;
@@ -67,6 +83,14 @@ export function InventorySalesList({
   onVoid: (sale: InventorySale) => void;
   /** The sale a notification asked for, if any. */
   focus?: SaleFocus | null;
+  /** The signed-in person: who received a later payment unless someone else is picked. */
+  viewerUid: string;
+  /** The business's people, for "Received by" and the collector. */
+  staffOptions: readonly { id: string; name: string }[];
+  /** Today in the shops' zone (what "overdue" is measured against). */
+  todayKey: string;
+  onFlash: (message: string) => void;
+  onError: (message: string) => void;
 }) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const sales = useInventorySales(businessId, enabled && !access.needsHomeStore, access.scopedStoreId);
@@ -74,7 +98,11 @@ export function InventorySalesList({
   const all = useMemo(() => sales.rows.map(inventorySaleFromRow).filter((sale) => sale.id), [sales.rows]);
   const storeNames = useMemo(() => storeNameIndex(access.stores), [access.stores]);
   const narrowed = access.multi && access.canSeeAll && storeFilter !== "";
-  const list = useMemo(() => (narrowed ? salesInStore(all, storeFilter, access.stores) : all), [all, narrowed, storeFilter, access.stores]);
+  const [creditFilter, setCreditFilter] = useState<SaleCreditFilter>("all");
+  const list = useMemo(() => {
+    const inStore = narrowed ? salesInStore(all, storeFilter, access.stores) : all;
+    return creditFilter === "all" ? inStore : inStore.filter((sale) => saleMatchesCreditFilter(sale, creditFilter));
+  }, [all, narrowed, storeFilter, access.stores, creditFilter]);
   const nameOfStore = (sale: InventorySale) => sale.storeName || storeNames.get(saleStoreId(sale, access.stores)) || "";
 
   // The sale a notification asked for.
@@ -122,18 +150,21 @@ export function InventorySalesList({
       {sales.error && <div className="lst-form-error" role="alert">{sales.error}</div>}
       {focusUnavailable && <div className="lst-form-error" role="status">That sale is not available.</div>}
       <p className="panel-lede">Every sale rung up at the counter in the Laawol app. Open one to see what each product was listed at and what it sold for. Voiding a sale puts its stock back and keeps it here, marked.</p>
-      {access.multi && access.canSeeAll && (
-        <div className="panel-tools">
+      <div className="panel-tools">
+        <select value={creditFilter} onChange={(e) => setCreditFilter(e.target.value as SaleCreditFilter)} aria-label="Filter sales by credit">
+          {SALE_CREDIT_FILTERS.map((id) => (<option key={id} value={id}>{SALE_CREDIT_FILTER_LABELS[id]}</option>))}
+        </select>
+        {access.multi && access.canSeeAll && (
           <InventoryStoreFilter stores={access.stores} value={storeFilter} onChange={onStoreFilter} />
-        </div>
-      )}
+        )}
+      </div>
       {sales.loading && all.length === 0 && !focusedSale ? (
         <div className="empty-state"><RefreshCw className="spin" size={16} /> Loading…</div>
       ) : all.length === 0 && !focusedSale ? (
         <div className="empty-state">No sales yet. They appear here once staff sell a product in the app.</div>
       ) : rows.length === 0 ? (
         <div className="empty-state">
-          No sales from this store in the sales loaded so far.
+          {creditFilter === "all" ? "No sales from this store in the sales loaded so far." : "No sales match this filter in the sales loaded so far."}
           {sales.hasMore && <> <LoadMoreButton hasMore={sales.hasMore} loading={sales.loadingMore} onLoadMore={sales.loadMore} /></>}
         </div>
       ) : (
@@ -145,6 +176,8 @@ export function InventorySalesList({
               const summary = saleLinesSummary(sale);
               const seller = staffName(sale.soldByStaffId);
               const voider = staffName(sale.voidedByStaffId);
+              const chip = creditChip(sale, todayKey);
+              const receiver = sale.receivedByStaffId !== sale.soldByStaffId ? staffName(sale.receivedByStaffId) : "";
               return (
                 <Fragment key={sale.id}>
                   <div
@@ -168,13 +201,15 @@ export function InventorySalesList({
                       <span><strong data-no-translate>{nameOfStore(sale) || "—"}</strong></span>
                     )}
                     <span>
-                      <strong>{sale.methodLabel}</strong>
+                      {sale.paidNowCents > 0 || sale.creditCents === 0 ? <strong>{sale.methodLabel}</strong> : <strong>On credit</strong>}
+                      {receiver && <small data-no-translate>{receivedByText(receiver, lang)}</small>}
                       {sale.anyCountWasOff && <small className="ctn-wa-warn">Count was off</small>}
                     </span>
                     <span>
                       <strong data-no-translate>{moneyText(sale.totalCents)}</strong>
                       {sale.discountCents > 0 && <small><span>Discount</span> <span data-no-translate>{moneyText(sale.discountCents)}</span></small>}
                       {sale.voided && <span className={statusPillClass("muted")}>Voided</span>}
+                      {chip && <span className={`${statusPillClass(CREDIT_CHIP_TONES[chip.status])}${chip.status === "overdue" ? " ivt-overdue-pill" : ""}`} data-no-translate>{creditChipText(chip, lang)}</span>}
                     </span>
                     <span className="ctn-row-actions">
                       {!sale.voided && (
@@ -195,6 +230,20 @@ export function InventorySalesList({
                         <p className="ivt-void-note" data-no-translate>
                           {voidedByText(voider, lang)} · {formatDateTime(sale.voidedAt)}{sale.voidReason ? ` · ${sale.voidReason}` : ""}
                         </p>
+                      )}
+                      {sale.credit && (
+                        <InventoryCreditBlock
+                          businessId={businessId}
+                          sale={sale}
+                          enabled={enabled}
+                          access={access}
+                          viewerUid={viewerUid}
+                          staffName={staffName}
+                          staffOptions={staffOptions}
+                          todayKey={todayKey}
+                          onFlash={onFlash}
+                          onError={onError}
+                        />
                       )}
                       <table className="ivt-lines">
                         <thead>

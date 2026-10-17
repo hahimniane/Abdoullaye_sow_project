@@ -346,6 +346,20 @@ export type InventoryRefusal =
   | "sale_not_found"
   | "sale_voided"
   | "confirm_required"
+  // The server's v4 codes (credit sales and who received the money).
+  | "received_by_invalid"
+  | "credit_invalid"
+  | "paid_now_invalid"
+  | "credit_customer_required"
+  | "customer_phone_invalid"
+  | "collector_invalid"
+  | "due_date_invalid"
+  | "amount_invalid"
+  | "payment_exceeds_balance"
+  | "no_credit"
+  | "credit_has_payments"
+  | "payment_not_found"
+  | "payment_already_reverted"
   | "service_not_enabled"
   | "permission_denied"
   | "sign_in_required"
@@ -399,6 +413,19 @@ export const INVENTORY_MESSAGES: Record<InventoryRefusal, string> = {
   sale_not_found: "That sale no longer exists.",
   sale_voided: "That sale was already voided.",
   confirm_required: "Confirm the deletion first.",
+  received_by_invalid: "Choose who received the money: someone of this business.",
+  credit_invalid: "The credit details could not be read.",
+  paid_now_invalid: "The amount paid now must be less than the sale total.",
+  credit_customer_required: "Enter the customer's name and phone number.",
+  customer_phone_invalid: "Enter the customer's phone number with its country code.",
+  collector_invalid: "Choose who collects the rest: someone of this business.",
+  due_date_invalid: "The due date must be today or later.",
+  amount_invalid: "Enter the amount received, more than zero.",
+  payment_exceeds_balance: "That is more than the customer still owes.",
+  no_credit: "That sale was not made on credit.",
+  credit_has_payments: "Money was already collected on this credit. Revert those payments before voiding the sale.",
+  payment_not_found: "That payment no longer exists.",
+  payment_already_reverted: "That payment was already reverted.",
   service_not_enabled: "Inventory is not switched on for this business.",
   permission_denied: "You do not have access to Inventory. Ask the owner to add it to your permissions.",
   sign_in_required: "Sign in again to continue.",
@@ -1106,7 +1133,33 @@ export type InventorySale = {
   voidReason: string;
   anyCountWasOff: boolean;
   createdAt: unknown;
+  /** Who took the money at the counter (v4); the seller for a sale from before v4. */
+  receivedByStaffId: string;
+  /** What was paid at the counter: the whole total unless the sale went on credit. */
+  paidNowCents: number;
+  /** What the customer owed after the sale (0 for a normal sale). */
+  creditCents: number;
+  /** Collected since, from payments that were not reverted. */
+  creditPaidCents: number;
+  /** Still owed: creditCents - creditPaidCents. */
+  creditRemainingCents: number;
+  /** "none" for a normal (or voided) sale, else "open" until it is paid. */
+  creditStatus: InventoryCreditStatus;
+  /** Who owes and who collects; null for a normal sale. */
+  credit: InventorySaleCredit | null;
 };
+
+export type InventoryCreditStatus = "none" | "open" | "paid";
+
+export type InventorySaleCredit = {
+  customerName: string;
+  customerPhone: string;
+  collectorStaffId: string;
+  /** "YYYY-MM-DD", or "" for no due date. */
+  dueDate: string;
+};
+
+const DATE_KEY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
 export function inventoryMethodLabel(method: unknown): string {
   const id = text(method, 40);
@@ -1138,13 +1191,28 @@ export function inventorySaleFromRow(row: unknown): InventorySale {
     };
   });
   const listTotal = lines.reduce((sum, l) => sum + l.listPriceCents * l.quantity, 0);
+  // The stored total is the record; the lines are only added up when it is missing.
+  const totalCents = r.totalCents === undefined || r.totalCents === null
+    ? lines.reduce((sum, l) => sum + l.lineTotalCents, 0)
+    : nonNegativeInt(r.totalCents);
+  const voided = r.voided === true;
+  // v4 money: a sale from before it has none of these fields and was paid in full at the counter.
+  const creditCents = Math.min(totalCents, nonNegativeInt(r.creditCents));
+  const creditPaidCents = Math.min(creditCents, nonNegativeInt(r.creditPaidCents));
+  const rawCredit = asRow(r.credit);
+  const dueDate = text(rawCredit.dueDate, 10);
+  const credit: InventorySaleCredit | null = creditCents > 0
+    ? {
+      customerName: text(rawCredit.customerName, MAX_NAME),
+      customerPhone: text(rawCredit.customerPhone, 40),
+      collectorStaffId: text(rawCredit.collectorStaffId),
+      dueDate: DATE_KEY.test(dueDate) ? dueDate : "",
+    }
+    : null;
   return {
     id: text(r.id),
     lines,
-    // The stored total is the record; the lines are only added up when it is missing.
-    totalCents: r.totalCents === undefined || r.totalCents === null
-      ? lines.reduce((sum, l) => sum + l.lineTotalCents, 0)
-      : nonNegativeInt(r.totalCents),
+    totalCents,
     listTotalCents: listTotal,
     discountCents: lines.reduce((sum, l) => sum + l.discountCents, 0),
     itemCount: lines.reduce((sum, l) => sum + l.quantity, 0),
@@ -1153,12 +1221,19 @@ export function inventorySaleFromRow(row: unknown): InventorySale {
     soldByStaffId: text(r.soldByStaffId),
     storeId: text(r.storeId),
     storeName: text(r.storeName, MAX_STORE_NAME),
-    voided: r.voided === true,
+    voided,
     voidedByStaffId: text(r.voidedByStaffId),
     voidedAt: r.voidedAt ?? null,
     voidReason: text(r.voidReason ?? r.reason, MAX_NOTE),
     anyCountWasOff: lines.some((l) => l.countWasOff),
     createdAt: r.createdAt ?? null,
+    receivedByStaffId: text(r.receivedByStaffId) || text(r.soldByStaffId),
+    paidNowCents: totalCents - creditCents,
+    creditCents,
+    creditPaidCents,
+    creditRemainingCents: creditCents - creditPaidCents,
+    creditStatus: voided || creditCents <= 0 ? "none" : creditPaidCents >= creditCents ? "paid" : "open",
+    credit,
   };
 }
 
@@ -1320,6 +1395,12 @@ export type InventorySummary = {
   byBrand: InventoryBrandSales[];
   /** Per store, most money first; empty unless the server sent it. */
   byStore: InventoryStoreSales[];
+  /** Of the revenue: taken at the counter (v4). The whole revenue from a server without the field. */
+  paidNowCents: number;
+  /** Of the revenue: put on credit (v4); 0 from a server without the field. */
+  creditCents: number;
+  /** Still owed today on the period's credit sales. */
+  creditOutstandingCents: number;
 };
 
 /** Most money first; equal money by name, so the order never jitters between answers. */
@@ -1374,6 +1455,11 @@ export function readInventorySummary(data: unknown): InventorySummary | null {
       revenueCents: signedInt(c.revenueCents),
       profitCents: signedInt(c.profitCents),
     }))),
+    paidNowCents: r.paidNowCents === undefined || r.paidNowCents === null
+      ? Math.max(0, signedInt(r.revenueCents) - nonNegativeInt(r.creditCents))
+      : nonNegativeInt(r.paidNowCents),
+    creditCents: nonNegativeInt(r.creditCents),
+    creditOutstandingCents: nonNegativeInt(r.creditOutstandingCents),
     byStore: byMoneyThenName(list(r.byStore).map((s) => ({
       storeId: text(s.storeId),
       name: text(s.name, MAX_STORE_NAME),

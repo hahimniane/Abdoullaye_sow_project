@@ -289,6 +289,58 @@ export function useInventoryStock(businessId: string, enabled: boolean, storeId 
   });
 }
 
+/**
+ * The sales that still owe money (credit, v4), whole: `creditStatus == "open"`
+ * is a short list by nature. Staff of one store ask for their store's only
+ * (the rules refuse an unscoped read for them).
+ */
+export function useInventoryOpenCredit(businessId: string, enabled: boolean, storeId = ""): BusinessRowsResult {
+  const store = storeId.trim();
+  return useBusinessCollection("inventorySales", businessId, enabled, {
+    pageSize: null,
+    where: [...(store ? [["storeId", "==", store] as const] : []), ["creditStatus", "==", "open"]],
+    sort: "query",
+  });
+}
+
+/** One credit sale's later payments, whole (reverted ones included), store-scoped like the sale. */
+export function useInventoryCreditPayments(businessId: string, saleId: string, enabled: boolean, storeId = ""): BusinessRowsResult {
+  const store = storeId.trim();
+  return useBusinessCollection("inventoryCreditPayments", businessId, enabled && Boolean(saleId), {
+    pageSize: null,
+    where: [...(store ? [["storeId", "==", store] as const] : []), ["saleId", "==", saleId]],
+    sort: "query",
+  });
+}
+
+/** The collections the sales history reads by period. */
+export type InventoryPeriodCollection = "inventorySales" | "inventoryMovements" | "inventoryCreditPayments";
+
+/**
+ * What one period holds in a history collection, newest first: `createdAt`
+ * from `startMs` (included) to `endMs` (excluded), capped at `pageSize` with
+ * "Load more" past it. Staff of one store read their store's rows only.
+ */
+export function useInventoryPeriodRows(
+  name: InventoryPeriodCollection,
+  businessId: string,
+  enabled: boolean,
+  { storeId = "", startMs, endMs, pageSize }: { storeId?: string; startMs: number; endMs: number; pageSize: number },
+): BusinessRowsResult {
+  const store = storeId.trim();
+  return useBusinessCollection(name, businessId, enabled && endMs > startMs, {
+    pageSize,
+    where: [
+      ...(store ? [["storeId", "==", store] as const] : []),
+      ["createdAt", ">=", new Date(startMs)],
+      ["createdAt", "<", new Date(endMs)],
+    ],
+    orderBy: "createdAt",
+    direction: "desc",
+    sort: "query",
+  });
+}
+
 /** One product's stock history, newest first, a page at a time. */
 export function useInventoryMovements(businessId: string, itemId: string, enabled: boolean): BusinessRowsResult {
   return useBusinessCollection("inventoryMovements", businessId, enabled && Boolean(itemId), {

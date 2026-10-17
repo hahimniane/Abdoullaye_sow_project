@@ -9,6 +9,10 @@ export type NotificationPreferences = {
   shipmentActivity: boolean;
   walletActivity: boolean;
   businessActivity: boolean;
+  /** Inventory: "Sales at my store" (push when someone else rings up a sale). */
+  inventorySales: boolean;
+  /** Inventory: "Credit I collect" (push when a credit is put on me, and when it is overdue). */
+  inventoryCredit: boolean;
 };
 
 export function defaultNotificationPreferences(): NotificationPreferences {
@@ -20,6 +24,8 @@ export function defaultNotificationPreferences(): NotificationPreferences {
     shipmentActivity: true,
     walletActivity: true,
     businessActivity: true,
+    inventorySales: true,
+    inventoryCredit: true,
   };
 }
 
@@ -63,5 +69,23 @@ export const notificationPreferenceFields: Array<{
     key: "businessActivity",
     label: "Business updates",
     hint: "Application, verification, and account status",
+  },
+];
+
+/** Shown only to people who use Inventory (the business console decides). */
+export const inventoryNotificationPreferenceFields: Array<{
+  key: keyof NotificationPreferences;
+  label: string;
+  hint: string;
+}> = [
+  {
+    key: "inventorySales",
+    label: "Sales at my store",
+    hint: "A notification when someone else rings up a sale",
+  },
+  {
+    key: "inventoryCredit",
+    label: "Credit I collect",
+    hint: "When a sale on credit is given to you to collect, and when it is overdue",
   },
 ];

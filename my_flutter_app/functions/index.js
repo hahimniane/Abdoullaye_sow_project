@@ -20984,23 +20984,44 @@ exports.recordInventorySale = onCall(
       const {businessId} = inventoryIds(data);
       const {db, user, access} =
         await requireInventoryContext(uid, businessId);
-      const {errors, lines} = inventory.cleanSaleInput(data);
-      if (errors.length > 0) throw inventoryRefusal(errors);
       const clientRequestId =
         inventory.cleanClientRequestId(data.clientRequestId);
-      const paymentMethod = inventory.text(data.paymentMethod, 40);
-      const saleRef = db.collection("inventorySales")
-          .doc(inventory.saleDocId(businessId, clientRequestId));
+      const saleRef = clientRequestId ? db.collection("inventorySales")
+          .doc(inventory.saleDocId(businessId, clientRequestId)) : null;
+      // The same retry key is the same sale: answered as stored, never rung
+      // up twice, and never refused for a rule that only bites later (a due
+      // date that was today when the first send went out).
+      const replayOf = (sale) => ({replayed: true,
+        totalCents: Number(sale.totalCents) || 0,
+        warnings: inventory.saleWarnings(sale),
+        storeId: String(sale.storeId || ""),
+        creditCents: inventory.creditStanding(sale).creditCents});
+      const earlier = saleRef ? await saleRef.get() : null;
+      if (earlier && earlier.exists) {
+        const done = replayOf(earlier.data() || {});
+        return {success: true, saleId: saleRef.id,
+          totalCents: done.totalCents, warnings: done.warnings,
+          replayed: true, creditCents: done.creditCents,
+          ...(done.storeId ? {storeId: done.storeId} : {})};
+      }
+      const {errors, lines, credit} = inventory.cleanSaleInput(data,
+          inventory.todayKeyIn(new Date()));
+      if (errors.length > 0) throw inventoryRefusal(errors);
+      // Who took the money at the counter: the seller unless someone else of
+      // the business is named (v4). Read once, before the transaction.
+      const receivedByStaffId = await inventoryReceiverOf(db, businessId,
+          uid, data.receivedByStaffId);
+      if (credit && !(await businessPersonProfile(db, businessId,
+          credit.collectorStaffId))) {
+        throw inventoryRefusal("collector_invalid");
+      }
+      // A sale entirely on credit took nothing at the counter, so no method.
+      const paymentMethod = credit && credit.paidNowCents === 0 ? "" :
+        inventory.text(data.paymentMethod, 40);
       const itemIds = [...new Set(lines.map((l) => l.itemId))];
       const done = await db.runTransaction(async (tx) => {
-        // The same retry key is the same sale: answered, never rung up twice.
         const existing = await tx.get(saleRef);
-        if (existing.exists) {
-          const sale = existing.data() || {};
-          return {replayed: true, totalCents: Number(sale.totalCents) || 0,
-            warnings: inventory.saleWarnings(sale),
-            storeId: String(sale.storeId || "")};
-        }
+        if (existing.exists) return replayOf(existing.data() || {});
         const sctx = await readInventoryStoreContext(tx, db, businessId);
         const store = inventoryStoreFor(sctx, access, data.storeId);
         const docs = await tx.getAll(...itemIds.map(
@@ -21029,10 +21050,12 @@ exports.recordInventorySale = onCall(
           voidedAt: null,
           createdAt: now,
         };
+        const money = (totalCents) => inventory.saleMoneyFields({
+          totalCents, credit, receivedByStaffId});
         if (!store) {
           const plan = inventory.planSale(lines, items);
           tx.set(saleRef, {...sale, lines: plan.lines,
-            totalCents: plan.totalCents});
+            totalCents: plan.totalCents, ...money(plan.totalCents)});
           for (const change of plan.items) {
             tx.update(db.collection("inventoryItems").doc(change.itemId), {
               quantity: change.quantityAfter,
@@ -21049,13 +21072,14 @@ exports.recordInventorySale = onCall(
                 createdAt: now});
           }
           return {replayed: false, totalCents: plan.totalCents,
-            warnings: plan.warnings, plan, storeId: ""};
+            warnings: plan.warnings, plan, storeId: "",
+            creditCents: money(plan.totalCents).creditCents};
         }
         const plan = inventory.planStoreSale(lines, items, rows,
             {storeId: store.id, mainStoreId: sctx.mainStoreId});
         tx.set(saleRef, {...sale, lines: plan.lines,
           totalCents: plan.totalCents, storeId: store.id,
-          storeName: String(store.name || "")});
+          storeName: String(store.name || ""), ...money(plan.totalCents)});
         for (const write of plan.writes) {
           writeInventoryStoreStock(tx, db, {
             businessId, itemId: write.itemId, storeId: store.id, write, now});
@@ -21071,7 +21095,8 @@ exports.recordInventorySale = onCall(
         return {replayed: false, totalCents: plan.totalCents,
           warnings: plan.warnings, plan, storeId: store.id,
           storeName: String(store.name || ""),
-          multi: inventory.isMultiStore(sctx.stores)};
+          multi: inventory.isMultiStore(sctx.stores),
+          creditCents: money(plan.totalCents).creditCents};
       });
       if (!done.replayed) {
         const pieces = done.plan.lines.reduce((n, l) => n + l.quantity, 0);
@@ -21079,8 +21104,11 @@ exports.recordInventorySale = onCall(
           businessId, entityType: "inventory_sale", entityId: saleRef.id,
           action: "sold", byStaffId: uid,
           summary: `Sold ${pieces} ${pieces === 1 ? "piece" : "pieces"} ` +
-            `for ${inventory.moneyText(done.totalCents)} (${paymentMethod})` +
+            `for ${inventory.moneyText(done.totalCents)}` +
+            (paymentMethod ? ` (${paymentMethod})` : "") +
             (done.multi ? ` at ${done.storeName}` : "") +
+            (done.creditCents > 0 ?
+              ` - ${inventory.moneyText(done.creditCents)} on credit` : "") +
             (done.warnings.length > 0 ? " - a count was off" : ""),
           changes: [],
           // A counter sale is history, not news: it stays out of the
@@ -21104,9 +21132,16 @@ exports.recordInventorySale = onCall(
             error: error?.message || String(error),
           });
         }
+        // The person who collects the rest of a credit hears about it.
+        if (done.creditCents > 0) {
+          await notifyInventoryCredit(db, {
+            saleId: saleRef.id, actorUid: uid, kind: "assigned",
+            multiStore: done.multi === true});
+        }
       }
       return {success: true, saleId: saleRef.id, totalCents: done.totalCents,
         warnings: done.warnings, replayed: done.replayed,
+        creditCents: done.creditCents || 0,
         ...(done.storeId ? {storeId: done.storeId} : {})};
     },
 );
@@ -21145,6 +21180,17 @@ exports.voidInventorySale = onCall(
           }
           if (store.archived === true) throw inventoryRefusal("store_archived");
         }
+        // Money collected on its credit must be reverted first: a void would
+        // otherwise leave payments standing on a sale that never happened.
+        if (inventory.creditStanding(sale).creditCents > 0) {
+          const live = (await tx.get(inventoryCreditPaymentsOf(
+              db, businessId, saleId))).docs
+              .filter((d) => d.data()?.reverted !== true);
+          if (live.length > 0) {
+            throw inventoryRefusal("credit_has_payments",
+                {paymentIds: live.map((d) => d.id)});
+          }
+        }
         const ids = [...new Set((sale.lines || []).map((l) => l.itemId))]
             .filter((id) => id && !String(id).includes("/"));
         const docs = ids.length === 0 ? [] : await tx.getAll(...ids.map(
@@ -21160,7 +21206,11 @@ exports.voidInventorySale = onCall(
           null;
         const now = FirestoreFieldValue.serverTimestamp();
         tx.update(saleRef, {voided: true, voidedByStaffId: uid,
-          voidedAt: now, voidReason: reason});
+          voidedAt: now, voidReason: reason,
+          // A voided sale owes nothing: it leaves the open-credit list (its
+          // credit block stays for the history).
+          ...(inventory.creditStanding(sale).creditCents > 0 ?
+            {creditStatus: inventory.CREDIT_STATUS.NONE} : {})});
         if (!store) {
           const plan = inventory.planVoid(sale, items);
           for (const change of plan.items) {
@@ -21201,6 +21251,442 @@ exports.voidInventorySale = onCall(
         changes: [],
       });
       return {success: true, skippedItemIds: done.plan.skipped};
+    },
+);
+
+// ---------------------------------------------------------------------------
+// Credit sales and who received the money (v4, docs/INVENTORY.md). The pure
+// rules are in inventory.js; the payment rows follow the container package
+// payments (one row per payment, struck through when reverted, the total on
+// the sale recomputed from the live rows in the same transaction).
+// ---------------------------------------------------------------------------
+
+const INVENTORY_CREDIT_PAYMENTS = "inventoryCreditPayments";
+// The overdue-credit morning job.
+const INVENTORY_CREDIT_REMINDER_TIMEOUT_S = 540;
+const INVENTORY_CREDIT_REMINDER_PAGE = 200;
+
+const inventoryCreditPaymentsOf = (db, businessId, saleId) =>
+  db.collection(INVENTORY_CREDIT_PAYMENTS)
+      .where("businessId", "==", businessId)
+      .where("saleId", "==", saleId);
+
+/**
+ * Who took the money: the caller when nobody else is named, else a person of
+ * this business (the owner the business names, or a profile pointing at it).
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} uid The caller (already through the inventory gate).
+ * @param {*} raw The `receivedByStaffId` the client sent.
+ * @return {Promise<string>} The uid to credit.
+ */
+async function inventoryReceiverOf(db, businessId, uid, raw) {
+  if (raw === undefined || raw === null ||
+      (typeof raw === "string" && raw.trim() === "")) {
+    return uid;
+  }
+  const id = inventory.cleanStaffId(raw);
+  if (!id) throw inventoryRefusal("received_by_invalid");
+  if (id === uid) return uid;
+  if (!(await businessPersonProfile(db, businessId, id))) {
+    throw inventoryRefusal("received_by_invalid");
+  }
+  return id;
+}
+
+/**
+ * A staff member tied to one store of a multi-store business may only act on
+ * that store's sales (the void rule). Read inside the transaction.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} sale The stored sale.
+ * @param {object} access What the caller may do with stores.
+ * @return {Promise<object>} The store context.
+ */
+async function requireInventorySaleStoreIn(tx, db, businessId, sale, access) {
+  const sctx = await readInventoryStoreContext(tx, db, businessId);
+  if (sctx.converted && inventory.isMultiStore(sctx.stores) && !access.all &&
+      inventory.saleStoreId(sale, sctx.mainStoreId) !== access.homeStoreId) {
+    throw inventoryRefusal("store_not_allowed");
+  }
+  return sctx;
+}
+
+/**
+ * Reads a sale of this business inside a transaction.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} ref The sale's document.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} The sale.
+ */
+async function inventorySaleIn(tx, ref, businessId) {
+  const doc = await tx.get(ref);
+  const sale = doc.exists ? doc.data() || {} : null;
+  if (!sale || String(sale.businessId) !== businessId) {
+    throw inventoryRefusal("sale_not_found");
+  }
+  return sale;
+}
+
+/**
+ * @param {object} profile A person's profile ({} or null when unknown).
+ * @param {string} uid Their uid.
+ * @return {string} The name the history shows.
+ */
+function inventoryPersonName(profile, uid) {
+  for (const key of ["fullName", "displayName", "name", "email"]) {
+    const value = String(profile?.[key] || "").trim();
+    if (value) return value.slice(0, 120);
+  }
+  return uid;
+}
+
+/**
+ * Pushes a credit to its collector (`assigned`) or, from the morning job, to
+ * the collector and the owners (`overdue`). Never throws: a failed push never
+ * fails the sale or the job's other sales.
+ *
+ * @param {object} db Firestore.
+ * @param {object} input {saleId, actorUid, kind, multiStore, sale (read when
+ *   absent), users (the collector's profile is read when absent),
+ *   ownerUids}.
+ * @return {Promise<number>} How many people were told.
+ */
+async function notifyInventoryCredit(db, {saleId, actorUid = "", kind,
+  multiStore = false, sale = null, users = null, ownerUids = []}) {
+  try {
+    let row = sale;
+    if (!row) {
+      const doc = await db.collection("inventorySales").doc(saleId).get();
+      if (!doc.exists) return 0;
+      row = doc.data() || {};
+    }
+    let people = users;
+    if (!people) {
+      const collector = inventory.cleanStaffId(row.credit?.collectorStaffId);
+      const doc = collector ?
+        await db.collection("users").doc(collector).get() : null;
+      people = doc && doc.exists ? [{id: doc.id, ...doc.data()}] : [];
+    }
+    const plan = inventory.planCreditNotification({
+      sale: {...row, id: saleId},
+      users: people.filter((user) => !accountAccessBlocked(user)),
+      actorUid, kind, multiStore, ownerUids});
+    await Promise.all(plan.recipients.map((recipient) =>
+      safeSendPreferenceNotification({
+        uid: recipient.uid,
+        preferenceKey: inventory.CREDIT_NOTIFICATION_PREFERENCE,
+        title: recipient.title,
+        body: recipient.body,
+        data: plan.data,
+        pushOnly: true,
+      })));
+    return plan.recipients.length;
+  } catch (error) {
+    logger.warn("Credit notification failed", {
+      saleId, kind, error: error?.message || String(error)});
+    return 0;
+  }
+}
+
+// Money collected later on a credit sale, any amount up to what is still
+// owed. The sale's collected total is recomputed from its live payments in
+// the same transaction, so two people recording at once cannot overpay it.
+exports.recordInventoryCreditPayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
+      const saleId = inventoryDocId(data.saleId);
+      if (!saleId) throw inventoryRefusal("sale_not_found");
+      const receivedByStaffId = await inventoryReceiverOf(db, businessId, uid,
+          data.receivedByStaffId);
+      const saleRef = db.collection("inventorySales").doc(saleId);
+      const payRef = db.collection(INVENTORY_CREDIT_PAYMENTS).doc();
+      const done = await db.runTransaction(async (tx) => {
+        const sale = await inventorySaleIn(tx, saleRef, businessId);
+        const payments = await tx.get(
+            inventoryCreditPaymentsOf(db, businessId, saleId));
+        await requireInventorySaleStoreIn(tx, db, businessId, sale, access);
+        const state = inventory.creditStateRefusal(sale);
+        if (state) throw inventoryRefusal(state);
+        const live = sumContainerLivePayments(
+            payments.docs.map((d) => d.data() || {}));
+        const errors = inventory.creditPaymentErrors(data, sale, live);
+        if (errors.length > 0) throw inventoryRefusal(errors);
+        const record = inventory.creditPaymentRecord({businessId,
+          sale: {...sale, id: saleId}, input: data, receivedByStaffId,
+          recordedByStaffId: uid});
+        const now = FirestoreFieldValue.serverTimestamp();
+        tx.set(payRef, {...record, createdAt: now});
+        const creditCents = inventory.creditStanding(sale).creditCents;
+        const paid = live + record.amountCents;
+        const status = inventory.creditStatusFor(creditCents, paid);
+        tx.update(saleRef, {creditPaidCents: paid, creditStatus: status,
+          creditUpdatedAt: now});
+        return {record, paid, status, remaining: creditCents - paid};
+      });
+      await writeLotLedgerAudit({
+        businessId, entityType: "inventory_sale", entityId: saleId,
+        action: "credit_payment", byStaffId: uid,
+        summary: `Received ${inventory.moneyText(done.record.amountCents)} ` +
+          `(${done.record.method}) on credit` +
+          (done.status === inventory.CREDIT_STATUS.PAID ? " — paid in full" :
+            `, ${inventory.moneyText(done.remaining)} still owed`),
+        changes: [],
+        acknowledged: true,
+      });
+      return {success: true, paymentId: payRef.id,
+        creditPaidCents: done.paid, creditStatus: done.status};
+    },
+);
+
+// Struck through, not erased: the row keeps who reverted it and when, and
+// the credit opens again.
+exports.revertInventoryCreditPayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
+      const paymentId = inventoryDocId(data.paymentId);
+      if (!paymentId) throw inventoryRefusal("payment_not_found");
+      const payRef = db.collection(INVENTORY_CREDIT_PAYMENTS).doc(paymentId);
+      const done = await db.runTransaction(async (tx) => {
+        const payDoc = await tx.get(payRef);
+        const payment = payDoc.exists ? payDoc.data() || {} : null;
+        if (!payment || String(payment.businessId) !== businessId) {
+          throw inventoryRefusal("payment_not_found");
+        }
+        const saleId = inventoryDocId(payment.saleId);
+        if (!saleId) throw inventoryRefusal("sale_not_found");
+        const saleRef = db.collection("inventorySales").doc(saleId);
+        const sale = await inventorySaleIn(tx, saleRef, businessId);
+        const payments = await tx.get(
+            inventoryCreditPaymentsOf(db, businessId, saleId));
+        await requireInventorySaleStoreIn(tx, db, businessId, sale, access);
+        const refusal = containerPaymentRevertRefusal(payment);
+        if (refusal) throw inventoryRefusal(refusal);
+        const live = sumContainerLivePayments(payments.docs
+            .filter((d) => d.id !== paymentId).map((d) => d.data() || {}));
+        const creditCents = inventory.creditStanding(sale).creditCents;
+        const status = sale.voided === true ? inventory.CREDIT_STATUS.NONE :
+          inventory.creditStatusFor(creditCents, live);
+        const now = FirestoreFieldValue.serverTimestamp();
+        tx.update(payRef, {reverted: true, revertedByStaffId: uid,
+          revertedAt: now});
+        tx.update(saleRef, {creditPaidCents: live, creditStatus: status,
+          creditUpdatedAt: now});
+        return {payment, saleId, live, status, remaining: creditCents - live};
+      });
+      await writeLotLedgerAudit({
+        businessId, entityType: "inventory_sale", entityId: done.saleId,
+        action: "credit_payment_reverted", byStaffId: uid,
+        summary: `Reverted a ${inventory.moneyText(done.payment.amountCents)}` +
+          ` (${done.payment.method}) credit payment, ` +
+          `${inventory.moneyText(done.remaining)} still owed`,
+        changes: [],
+        acknowledged: true,
+      });
+      return {success: true, paymentId, saleId: done.saleId,
+        creditPaidCents: done.live, creditStatus: done.status};
+    },
+);
+
+// Who collects a credit, and by when. A new collector is told.
+exports.setInventoryCreditCollector = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
+      const saleId = inventoryDocId(data.saleId);
+      if (!saleId) throw inventoryRefusal("sale_not_found");
+      const change = inventory.cleanCollectorChange(data,
+          inventory.todayKeyIn(new Date()));
+      if (change.errors.length > 0) throw inventoryRefusal(change.errors);
+      const collector = await businessPersonProfile(db, businessId,
+          change.collectorStaffId);
+      if (!collector) throw inventoryRefusal("collector_invalid");
+      const saleRef = db.collection("inventorySales").doc(saleId);
+      const done = await db.runTransaction(async (tx) => {
+        const sale = await inventorySaleIn(tx, saleRef, businessId);
+        const sctx = await requireInventorySaleStoreIn(tx, db, businessId,
+            sale, access);
+        const state = inventory.creditStateRefusal(sale);
+        if (state) throw inventoryRefusal(state);
+        const before = sale.credit || {};
+        const collectorChanged = String(before.collectorStaffId || "") !==
+          change.collectorStaffId;
+        const dueDate = change.dueDate === undefined ?
+          String(before.dueDate || "") : change.dueDate;
+        const dueChanged = dueDate !== String(before.dueDate || "");
+        if (collectorChanged || dueChanged) {
+          tx.update(saleRef, {
+            "credit.collectorStaffId": change.collectorStaffId,
+            "credit.dueDate": dueDate,
+            "creditUpdatedAt": FirestoreFieldValue.serverTimestamp(),
+            "creditUpdatedByStaffId": uid,
+            // A new due date earns a fresh overdue reminder.
+            ...(dueChanged ? {lastCreditReminderAt: null} : {}),
+          });
+        }
+        return {sale, collectorChanged, dueChanged, dueDate,
+          multi: inventory.isMultiStore(sctx.stores)};
+      });
+      const parts = [];
+      if (done.collectorChanged) {
+        parts.push("collector to " +
+          inventoryPersonName(collector, change.collectorStaffId));
+      }
+      if (done.dueChanged) {
+        parts.push(done.dueDate ? "due date to " +
+          inventory.dueDateText(done.dueDate, "en") : "due date removed");
+      }
+      if (parts.length > 0) {
+        await writeLotLedgerAudit({
+          businessId, entityType: "inventory_sale", entityId: saleId,
+          action: "credit_collector_changed", byStaffId: uid,
+          summary: `Changed the credit ${parts.join(", ")}`,
+          changes: [],
+          acknowledged: true,
+        });
+      }
+      if (done.collectorChanged) {
+        await notifyInventoryCredit(db, {
+          saleId, actorUid: uid, kind: "assigned", multiStore: done.multi,
+          sale: {...done.sale, credit: {...(done.sale.credit || {}),
+            collectorStaffId: change.collectorStaffId,
+            dueDate: done.dueDate}},
+          users: [{id: change.collectorStaffId, ...collector}]});
+      }
+      return {success: true, saleId, collectorStaffId: change.collectorStaffId,
+        dueDate: done.dueDate, changed: done.collectorChanged ||
+          done.dueChanged};
+    },
+);
+
+/**
+ * The people an overdue reminder may reach in one business, read once per
+ * business per run: its staff and owners, the owner the business names, and
+ * whether it has several stores. Null when Inventory is switched off.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @return {Promise<?object>} {users, ownerUids, multiStore}.
+ */
+async function inventoryCreditReminderContext(db, businessId) {
+  const business = await db.collection("businesses").doc(businessId).get();
+  if (!business.exists) return null;
+  const services = normalizeBusinessServices(business.data()?.enabledServices);
+  if (!services.includes(INVENTORY_SERVICE)) return null;
+  const [people, sctx] = await Promise.all([
+    db.collection("users").where("businessId", "==", businessId)
+        .where("role", "in", ["staff", "businessOwner"])
+        .limit(INVENTORY_SALE_NOTIFY_SCAN).get(),
+    loadInventoryStoreContext(db, businessId),
+  ]);
+  const ownerUid = String(business.data()?.ownerUid || "").trim();
+  const users = people.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+  if (ownerUid && !users.some((user) => user.id === ownerUid)) {
+    const owner = await db.collection("users").doc(ownerUid).get();
+    if (owner.exists) users.push({id: owner.id, ...owner.data()});
+  }
+  return {users, ownerUids: ownerUid ? [ownerUid] : [],
+    multiStore: inventory.isMultiStore(sctx.stores)};
+}
+
+/**
+ * Claims one overdue reminder (re-read in a transaction, so two runs never
+ * both send it) and then sends it.
+ *
+ * @param {object} db Firestore.
+ * @param {object} doc The sale's snapshot from the query.
+ * @param {object} run {todayKey, nowMs, contexts (businessId -> promise)}.
+ * @return {Promise<number>} People told (0 when not claimed).
+ */
+async function remindInventoryCredit(db, doc, {todayKey, nowMs, contexts}) {
+  const claimed = await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(doc.ref);
+    const sale = fresh.exists ? fresh.data() || {} : null;
+    if (!inventory.shouldRemindCredit(sale, todayKey, nowMs)) return null;
+    tx.update(doc.ref, {
+      lastCreditReminderAt: FirestoreTimestamp.fromMillis(nowMs)});
+    return sale;
+  });
+  if (!claimed) return 0;
+  const businessId = String(claimed.businessId || "");
+  if (!contexts.has(businessId)) {
+    contexts.set(businessId, inventoryCreditReminderContext(db, businessId));
+  }
+  const context = await contexts.get(businessId);
+  if (!context) return 0;
+  return notifyInventoryCredit(db, {
+    saleId: doc.id, kind: "overdue", sale: claimed, users: context.users,
+    ownerUids: context.ownerUids, multiStore: context.multiStore});
+}
+
+// Every morning: open credit past its due date is pushed to its collector
+// and the owners, at most once per sale every 3 days. One query across all
+// businesses (open credit with a due date before today, oldest due first),
+// paged until done or the deadline.
+exports.remindOverdueInventoryCredit = onSchedule(
+    {
+      schedule: "0 8 * * *",
+      timeZone: inventory.CREDIT_ZONE,
+      timeoutSeconds: INVENTORY_CREDIT_REMINDER_TIMEOUT_S,
+    },
+    async () => {
+      const db = admin.firestore();
+      const now = new Date();
+      const nowMs = now.getTime();
+      const todayKey = inventory.todayKeyIn(now);
+      const contexts = new Map();
+      let told = 0;
+      let failed = 0;
+      const run = await drainPages({
+        pageSize: INVENTORY_CREDIT_REMINDER_PAGE,
+        deadlineMs: sweepDeadline({startMs: nowMs,
+          timeoutSeconds: INVENTORY_CREDIT_REMINDER_TIMEOUT_S}),
+        fetchPage: async (cursor) => {
+          let query = db.collection("inventorySales")
+              .where("creditStatus", "==", inventory.CREDIT_STATUS.OPEN)
+              .where("credit.dueDate", ">", "")
+              .where("credit.dueDate", "<", todayKey)
+              .orderBy("credit.dueDate")
+              .orderBy(admin.firestore.FieldPath.documentId())
+              .limit(INVENTORY_CREDIT_REMINDER_PAGE);
+          if (cursor) query = query.startAfter(cursor);
+          return (await query.get()).docs;
+        },
+        processPage: async (docs) => {
+          const due = docs.filter((doc) => inventory.shouldRemindCredit(
+              doc.data(), todayKey, nowMs));
+          const results = await mapWithConcurrency(due, 5, (doc) =>
+            remindInventoryCredit(db, doc, {todayKey, nowMs, contexts}));
+          results.forEach((result, index) => {
+            if (result.status === "fulfilled") {
+              told += result.value;
+              return;
+            }
+            failed += 1;
+            logger.warn("Overdue credit reminder failed", {
+              saleId: due[index].id,
+              error: String(result.reason?.message || result.reason)});
+          });
+        },
+      });
+      logger.info("Overdue credit reminders", {todayKey, told, failed,
+        deadlineReached: run.deadlineReached});
+      return {told, failed};
     },
 );
 

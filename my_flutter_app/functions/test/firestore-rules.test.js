@@ -1334,6 +1334,66 @@ describe("business dashboard Firestore rules", () => {
           .size, 1);
     });
 
+    // Credit payments (v4) are read by whoever may read their sale - the
+    // sale's store travels on each row - and written only by the callables.
+    it("reads credit payments like their sale, and never writes them",
+        async () => {
+          await seedStores({multiStore: true});
+          await testEnv.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            const put = (p, data) => setDoc(doc(db, p), data);
+            await Promise.all([
+              put("inventoryCreditPayments/pay_annex", {businessId: "biz_a",
+                saleId: "sale_annex", storeId: "store_annex",
+                amountCents: 200, reverted: false,
+                createdAt: new Date("2026-10-11")}),
+              put("inventoryCreditPayments/pay_main", {businessId: "biz_a",
+                saleId: "sale_main", storeId: "store_main", amountCents: 300,
+                reverted: false, createdAt: new Date("2026-10-11")}),
+            ]);
+          });
+          const paysOf = (db, saleId, storeId) => query(
+              collection(db, "inventoryCreditPayments"),
+              where("businessId", "==", "biz_a"),
+              ...(storeId ? [where("storeId", "==", storeId)] : []),
+              where("saleId", "==", saleId));
+          const historyOf = (db, storeId) => query(
+              collection(db, "inventoryCreditPayments"),
+              where("businessId", "==", "biz_a"),
+              ...(storeId ? [where("storeId", "==", storeId)] : []),
+              orderBy("createdAt", "desc"));
+          const annex = firestoreFor("inv-clerk-annex");
+          assert.equal((await assertSucceeds(getDocs(paysOf(annex,
+              "sale_annex", "store_annex")))).size, 1);
+          await assertSucceeds(getDocs(historyOf(annex, "store_annex")));
+          await assertFails(getDocs(paysOf(annex, "sale_main", "store_main")));
+          await assertFails(getDocs(paysOf(annex, "sale_annex", null)));
+          await assertFails(getDocs(historyOf(annex, null)));
+          await assertSucceeds(getDoc(doc(annex,
+              "inventoryCreditPayments/pay_annex")));
+          await assertFails(getDoc(doc(annex,
+              "inventoryCreditPayments/pay_main")));
+          for (const uid of ["owner-a", "inv-rover"]) {
+            const db = firestoreFor(uid);
+            assert.equal((await assertSucceeds(getDocs(historyOf(db, null))))
+                .size, 2, uid);
+            await assertSucceeds(getDocs(paysOf(db, "sale_main", null)));
+          }
+          for (const uid of ["owner-b", "inv-clerk-b"]) {
+            await assertFails(getDocs(historyOf(firestoreFor(uid), null)));
+          }
+          await assertFails(getDocs(historyOf(firestoreFor(null), null)));
+          const owner = firestoreFor("owner-a");
+          await assertFails(setDoc(doc(owner,
+              "inventoryCreditPayments/forged"), {businessId: "biz_a",
+            saleId: "sale_main", storeId: "store_main", amountCents: 1000,
+            reverted: false}));
+          await assertFails(updateDoc(doc(owner,
+              "inventoryCreditPayments/pay_main"), {reverted: true}));
+          await assertFails(deleteDoc(doc(owner,
+              "inventoryCreditPayments/pay_main")));
+        });
+
     it("lets managers list categories, brands and stores, nobody write",
         async () => {
           await seedStores({multiStore: true});

@@ -188,6 +188,27 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryStores", shapes: [bc("inventoryStores", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryStock, all stores or one store", shapes: [bc("inventoryStock", { pageSize: null }), bc("inventoryStock", { pageSize: null, where: [eq("storeId")] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryMovements of one product", shapes: [bc("inventoryMovements", { where: [eq("itemId")] })] },
+  // Credit sales (v4) and the sales history: every shape also store-scoped for staff of one store.
+  {
+    file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryOpenCredit, all stores or one store",
+    shapes: [bc("inventorySales", { pageSize: null, where: [["creditStatus", "==", "open"]] }),
+      bc("inventorySales", { pageSize: null, where: [eq("storeId"), ["creditStatus", "==", "open"]] })],
+  },
+  {
+    file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryCreditPayments of one sale",
+    shapes: [bc("inventoryCreditPayments", { pageSize: null, where: [eq("saleId")] }),
+      bc("inventoryCreditPayments", { pageSize: null, where: [eq("storeId"), eq("saleId")] })],
+  },
+  {
+    file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryPeriodRows (sales, movements, credit payments in a period)",
+    shapes: (["inventorySales", "inventoryMovements", "inventoryCreditPayments"] as const).flatMap((name) => [false, true].map((scoped) =>
+      bc(name, {
+        pageSize: 1000,
+        where: [...(scoped ? [eq("storeId")] : []), ["createdAt", ">=", 1], ["createdAt", "<", 2]],
+        orderBy: "createdAt",
+        direction: "desc",
+      }))),
+  },
   { file: L("business-data.ts"), kind: "useDocsWhereIn", what: "open container lines", shapes: [raw("containerLines", [eq("businessId"), ["containerId", "in", ["a"]]])] },
   // --- lib/use-paged-query.ts: the generic hooks themselves -----------------
   { file: L("use-paged-query.ts"), kind: "query", what: "usePagedQuery window (generic)", shapes: [] },
