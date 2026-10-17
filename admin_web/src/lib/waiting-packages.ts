@@ -43,6 +43,7 @@ import {
   type InvoicePaymentMethod,
 } from "./invoice-ledger.ts";
 import { readMoneyInput } from "./money-input.ts";
+import { bankCheckFrom, type BankCheck } from "./zelle-check.ts";
 
 type Row = Record<string, unknown>;
 
@@ -731,6 +732,8 @@ export type PackagePaymentEntry = {
   revertedByStaffId: string;
   at: unknown;
   reverted: boolean;
+  /** The Zelle bank check (server-written); null when never checked. */
+  bankCheck: BankCheck | null;
 };
 
 function millis(value: unknown): number {
@@ -759,6 +762,7 @@ export function packagePaymentEntries(rows: readonly unknown[]): PackagePaymentE
       revertedByStaffId: text(row.revertedByStaffId, 200),
       at: row.createdAt ?? null,
       reverted: row.reverted === true,
+      bankCheck: bankCheckFrom(row.bankCheck),
     }))
     .sort((a, b) => millis(b.at) - millis(a.at));
 }

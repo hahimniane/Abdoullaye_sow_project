@@ -25,6 +25,7 @@ import {
 } from "./invoice-ledger.ts";
 import { readMoneyInput } from "./money-input.ts";
 import { PACKAGE_TRACKING_ALPHABET } from "./package-staff.ts";
+import { bankCheckFrom, type BankCheck } from "./zelle-check.ts";
 
 type Row = Record<string, unknown>;
 
@@ -1147,6 +1148,8 @@ export type InventorySale = {
   creditStatus: InventoryCreditStatus;
   /** Who owes and who collects; null for a normal sale. */
   credit: InventorySaleCredit | null;
+  /** The Zelle bank check of the paid-now part (server-written); null when never checked. */
+  bankCheck: BankCheck | null;
 };
 
 export type InventoryCreditStatus = "none" | "open" | "paid";
@@ -1234,6 +1237,7 @@ export function inventorySaleFromRow(row: unknown): InventorySale {
     creditRemainingCents: creditCents - creditPaidCents,
     creditStatus: voided || creditCents <= 0 ? "none" : creditPaidCents >= creditCents ? "paid" : "open",
     credit,
+    bankCheck: bankCheckFrom(r.bankCheck),
   };
 }
 
