@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/eastern_clock.dart';
 import '../services/inventory.dart';
 import '../services/inventory_context.dart';
 import '../services/inventory_credit.dart';
@@ -182,7 +183,7 @@ class _InventoryCreditScreenState extends State<InventoryCreditScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final locale = dateLocaleOf(context);
-    final today = widget.clock();
+    final today = shopToday(widget.clock());
     final stores = _watcher.context;
     final shown = inventoryOpenCredits(
       _credits,

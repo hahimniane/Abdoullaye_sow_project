@@ -53,6 +53,10 @@ String inventoryFailureText(AppLocalizations l10n, InventoryFailure failure) =>
       InventoryFailure.creditHasPayments => l10n.invCreditFailHasPayments,
       InventoryFailure.paymentNotFound => l10n.wpkErrPaymentNotFound,
       InventoryFailure.paymentReverted => l10n.wpkErrPaymentReverted,
+      InventoryFailure.creditInvalid => l10n.invCreditFailInvalid,
+      InventoryFailure.paidNowInvalid => l10n.invCreditErrPaidNowInvalid,
+      InventoryFailure.customerPhoneInvalid => l10n.invCreditFailPhoneInvalid,
+      InventoryFailure.amountInvalid => l10n.invCreditFailAmountInvalid,
     };
 
 /// The checkout's and a credit payment's refusal codes

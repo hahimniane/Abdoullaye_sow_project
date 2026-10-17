@@ -200,7 +200,9 @@ void main() {
   });
 
   group('brands and quick entry (v3)', () {
-    final v3 = doc.substring(doc.indexOf('# Brands and quick entry (v3)'));
+    final v3Start = doc.indexOf('# Brands and quick entry (v3)');
+    final v4Start = doc.indexOf('# Credit sales and received by (v4)');
+    final v3 = doc.substring(v3Start, v4Start > v3Start ? v4Start : null);
     final v2 = doc.substring(
       doc.indexOf('# Categories and stores (v2)'),
       doc.indexOf('# Brands and quick entry (v3)'),
@@ -239,23 +241,32 @@ void main() {
       });
       final all = {...newCodes(v2), ...added};
       expect(all, hasLength(16));
-      // Plus the codes of "received by" and credit sales (the credit server
-      // contract: received_by_invalid, credit_customer_required,
-      // collector_invalid, due_date_invalid, payment_exceeds_balance,
-      // no_credit, credit_has_payments) and the two payment ones the
-      // package payments already share (payment_not_found,
-      // payment_already_reverted).
+      // Plus the codes "received by" and credit sales added (v4), as the
+      // credit server answers them (agent/credit-sales-server).
       const credit = {
         'received_by_invalid',
+        'credit_invalid',
+        'paid_now_invalid',
         'credit_customer_required',
+        'customer_phone_invalid',
         'collector_invalid',
         'due_date_invalid',
+        'amount_invalid',
         'payment_exceeds_balance',
         'no_credit',
         'credit_has_payments',
         'payment_not_found',
         'payment_already_reverted',
       };
+      // Once the v4 section is in docs/INVENTORY.md, its list is the source.
+      final v4List = RegExp(r'The full list of codes added by v4: ([a-z_, ]+)\.')
+          .firstMatch(doc);
+      if (v4List != null) {
+        expect(
+          v4List.group(1)!.split(',').map((c) => c.trim()).toSet(),
+          credit,
+        );
+      }
       expect(inventoryFailureReasons.keys.toSet(), {...all, ...credit});
       final widgets = read('lib/widgets/inventory_widgets.dart');
       final en = jsonDecode(read('lib/l10n/app_en.arb')) as Map<String, dynamic>;

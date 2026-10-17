@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/eastern_clock.dart';
 import '../services/inventory.dart';
 import '../services/inventory_context.dart';
 import '../services/inventory_credit.dart';
@@ -378,8 +379,8 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     canVoid: _voiding.isEmpty,
     onVoid: () => _void(sale),
     highlighted: highlighted,
-    today: widget.clock(),
-    onCredit: sale.isOnCredit ? () => _openCredit(sale) : null,
+    today: shopToday(widget.clock()),
+    onCredit: sale.hadCredit ? () => _openCredit(sale) : null,
   );
 
   @override
@@ -643,7 +644,7 @@ class InventorySaleCard extends StatelessWidget {
                 InventoryCreditChip(
                   key: Key('inv-credit-chip-${sale.id}'),
                   sale: sale,
-                  today: today ?? DateTime.now(),
+                  today: today ?? shopToday(DateTime.now()),
                 ),
               if (sale.voided)
                 InventoryChip(
@@ -693,8 +694,10 @@ class InventorySaleCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             [
-              // Nothing paid at the counter: no method to name.
-              if (!sale.isOnCredit || sale.paidAtSaleCents > 0)
+              // Nothing paid at the counter (method stored as ""): say so.
+              if (sale.hadCredit && sale.paidAtSaleCents == 0)
+                l10n.invCreditPaymentOnCredit
+              else
                 inventoryPaymentLabel(l10n, sale.paymentMethod),
               if (soldBy.isNotEmpty) l10n.inventorySoldBy(soldBy),
               if (receivedBy.isNotEmpty &&
@@ -705,7 +708,7 @@ class InventorySaleCard extends StatelessWidget {
             key: Key('inv-sale-meta-${sale.id}'),
             style: const TextStyle(fontSize: 12, color: AppColors.muted),
           ),
-          if (sale.isOnCredit) ...[
+          if (sale.hadCredit) ...[
             const SizedBox(height: 2),
             Text(
               [

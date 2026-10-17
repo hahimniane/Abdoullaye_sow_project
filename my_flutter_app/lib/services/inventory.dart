@@ -472,8 +472,12 @@ class InventorySale {
   int get paidAtSaleCents {
     final paid = paidNowCents;
     if (paid != null) return paid < 0 ? 0 : paid;
-    return isOnCredit ? totalCents - creditCents : totalCents;
+    return hadCredit ? totalCents - creditCents : totalCents;
   }
+
+  /// Rung up with part (or all) left on credit, even once voided: voiding
+  /// sets [creditStatus] back to `none` but keeps the figures.
+  bool get hadCredit => creditCents > 0;
 
   /// Sold on credit: part (or all) left for the customer to pay later.
   bool get isOnCredit => creditStatus != 'none' && creditCents > 0;
@@ -1481,6 +1485,9 @@ class InventorySummary {
     this.costCents = 0,
     this.profitCents = 0,
     this.discountCents = 0,
+    this.paidNowCents,
+    this.creditCents = 0,
+    this.creditOutstandingCents = 0,
     this.best = const [],
     this.low = const [],
     this.countWasOff = const [],
@@ -1509,6 +1516,11 @@ class InventorySummary {
       costCents: _int(map['costCents']),
       profitCents: _int(map['profitCents']),
       discountCents: _int(map['discountCents']),
+      paidNowCents: _optionalInt(map['paidNowCents']),
+      creditCents: _int(map['creditCents']) < 0 ? 0 : _int(map['creditCents']),
+      creditOutstandingCents: _int(map['creditOutstandingCents']) < 0
+          ? 0
+          : _int(map['creditOutstandingCents']),
       best: [
         for (final row in rows('best'))
           InventoryBestSeller(
@@ -1578,6 +1590,13 @@ class InventorySummary {
   final int costCents;
   final int profitCents;
   final int discountCents;
+
+  /// Of [revenueCents]: taken at the counter (null from a server before
+  /// credit sales: all of it), put on credit, and still owed today on those
+  /// sales.
+  final int? paidNowCents;
+  final int creditCents;
+  final int creditOutstandingCents;
   final List<InventoryBestSeller> best;
   final List<InventoryLowStock> low;
   final List<({String itemId, String name})> countWasOff;
@@ -1641,6 +1660,10 @@ enum InventoryFailure {
   creditHasPayments,
   paymentNotFound,
   paymentReverted,
+  creditInvalid,
+  paidNowInvalid,
+  customerPhoneInvalid,
+  amountInvalid,
 }
 
 /// The v2 and v3 refusal codes (`details.reason`) and the failure each one is.
@@ -1670,6 +1693,10 @@ const inventoryFailureReasons = <String, InventoryFailure>{
   'credit_has_payments': InventoryFailure.creditHasPayments,
   'payment_not_found': InventoryFailure.paymentNotFound,
   'payment_already_reverted': InventoryFailure.paymentReverted,
+  'credit_invalid': InventoryFailure.creditInvalid,
+  'paid_now_invalid': InventoryFailure.paidNowInvalid,
+  'customer_phone_invalid': InventoryFailure.customerPhoneInvalid,
+  'amount_invalid': InventoryFailure.amountInvalid,
 };
 
 /// Reads a failure from the parts of a `FirebaseFunctionsException`: its

@@ -487,3 +487,7 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   check of a public page build with `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true`,
   stub the callable at `window.fetch`, and delete `admin_web/out` afterwards.
 
+- Calling `pumpWidget` twice in one test with the same screen type keeps the
+  first State (`didUpdateWidget`, not `initState`), so `late final` fields built
+  from `widget.source` keep the first fake and the second setup is silently
+  ignored. Give each setup its own `testWidgets` (or a new `Key`).

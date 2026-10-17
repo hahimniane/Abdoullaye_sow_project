@@ -606,6 +606,21 @@ void main() {
     expect(of('no_credit'), InventoryFailure.noCredit);
     expect(of('credit_has_payments'), InventoryFailure.creditHasPayments);
     expect(of('sale_voided'), InventoryFailure.saleVoided);
+    expect(of('credit_invalid'), InventoryFailure.creditInvalid);
+    expect(of('paid_now_invalid'), InventoryFailure.paidNowInvalid);
+    expect(
+      of('customer_phone_invalid'),
+      InventoryFailure.customerPhoneInvalid,
+    );
+    expect(of('amount_invalid'), InventoryFailure.amountInvalid);
+    expect(
+      inventoryFailureOf(
+        code: 'not-found',
+        details: {'reason': 'payment_not_found'},
+      ),
+      InventoryFailure.paymentNotFound,
+    );
+    expect(of('payment_already_reverted'), InventoryFailure.paymentReverted);
     // Several codes at once: any of ours names it.
     expect(
       inventoryFailureOf(

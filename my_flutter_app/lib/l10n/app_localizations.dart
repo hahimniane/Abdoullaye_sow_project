@@ -21743,6 +21743,36 @@ abstract class AppLocalizations {
   /// **'This sale has credit payments. Revert them before voiding it.'**
   String get invCreditFailHasPayments;
 
+  /// No description provided for @invCreditFailInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'These credit details are not valid. Check them and try again.'**
+  String get invCreditFailInvalid;
+
+  /// No description provided for @invCreditFailAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount above zero, to the cent.'**
+  String get invCreditFailAmountInvalid;
+
+  /// No description provided for @invCreditFailPhoneInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the customer\'s phone with its country code.'**
+  String get invCreditFailPhoneInvalid;
+
+  /// No description provided for @invCreditPaymentOnCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'On credit'**
+  String get invCreditPaymentOnCredit;
+
+  /// No description provided for @invSummaryOnCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Of which on credit {credit} ({owed} still owed)'**
+  String invSummaryOnCredit(String credit, String owed);
+
   /// No description provided for @invCreditChipOpen.
   ///
   /// In en, this message translates to:
@@ -21922,6 +21952,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Credit to collect'**
   String get invCreditNotifications;
+
+  /// No description provided for @salesHistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales history'**
+  String get salesHistTitle;
+
+  /// No description provided for @salesHistHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Day, week, month, year'**
+  String get salesHistHint;
+
+  /// No description provided for @salesHistDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day'**
+  String get salesHistDay;
+
+  /// No description provided for @salesHistWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get salesHistWeek;
+
+  /// No description provided for @salesHistMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get salesHistMonth;
+
+  /// No description provided for @salesHistYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get salesHistYear;
+
+  /// No description provided for @salesHistPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous period'**
+  String get salesHistPrevious;
+
+  /// No description provided for @salesHistNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next period'**
+  String get salesHistNext;
+
+  /// No description provided for @salesHistPickDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date'**
+  String get salesHistPickDate;
+
+  /// No description provided for @salesHistRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get salesHistRefresh;
+
+  /// No description provided for @salesHistCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, day{Today} week{This week} month{This month} other{This year}}'**
+  String salesHistCurrent(String kind);
+
+  /// No description provided for @salesHistRange.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} – {end}'**
+  String salesHistRange(String start, String end);
+
+  /// No description provided for @salesHistTotalSold.
+  ///
+  /// In en, this message translates to:
+  /// **'Total sold'**
+  String get salesHistTotalSold;
+
+  /// No description provided for @salesHistVsPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'{change} {kind, select, day{vs the day before} week{vs the week before} month{vs the month before} other{vs the year before}}'**
+  String salesHistVsPrevious(String change, String kind);
+
+  /// No description provided for @salesHistNoComparison.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, day{No sales the day before} week{No sales the week before} month{No sales the month before} other{No sales the year before}}'**
+  String salesHistNoComparison(String kind);
+
+  /// No description provided for @salesHistSalesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{sale} other{sales}}'**
+  String salesHistSalesLabel(int count);
+
+  /// No description provided for @salesHistAverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Average sale'**
+  String get salesHistAverage;
+
+  /// No description provided for @salesHistItemsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{item sold} other{items sold}}'**
+  String salesHistItemsLabel(int count);
+
+  /// No description provided for @salesHistProfitPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 line has no cost and is left out} other{{count} lines have no cost and are left out}}'**
+  String salesHistProfitPartial(int count);
+
+  /// No description provided for @salesHistCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit collected {amount}'**
+  String salesHistCollected(String amount);
+
+  /// No description provided for @salesHistVoidedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 voided sale, not counted} other{{count} voided sales, not counted}}'**
+  String salesHistVoidedCount(int count);
+
+  /// No description provided for @salesHistChartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, day{By hour} week{By day} month{By day} other{By month}}'**
+  String salesHistChartTitle(String kind);
+
+  /// No description provided for @salesHistChartHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a bar to see its amount.'**
+  String get salesHistChartHint;
+
+  /// No description provided for @salesHistBarValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {amount}'**
+  String salesHistBarValue(String label, String amount);
+
+  /// No description provided for @salesHistOpenDay.
+  ///
+  /// In en, this message translates to:
+  /// **'See this day'**
+  String get salesHistOpenDay;
+
+  /// No description provided for @salesHistOpenMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'See this month'**
+  String get salesHistOpenMonth;
+
+  /// No description provided for @salesHistByStore.
+  ///
+  /// In en, this message translates to:
+  /// **'By store'**
+  String get salesHistByStore;
+
+  /// No description provided for @salesHistBySeller.
+  ///
+  /// In en, this message translates to:
+  /// **'By seller'**
+  String get salesHistBySeller;
+
+  /// No description provided for @salesHistByPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'By payment'**
+  String get salesHistByPayment;
+
+  /// No description provided for @salesHistTopProducts.
+  ///
+  /// In en, this message translates to:
+  /// **'Top products'**
+  String get salesHistTopProducts;
+
+  /// No description provided for @salesHistTopBrands.
+  ///
+  /// In en, this message translates to:
+  /// **'Top brands'**
+  String get salesHistTopBrands;
+
+  /// No description provided for @salesHistTopCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'Top categories'**
+  String get salesHistTopCategories;
+
+  /// No description provided for @salesHistSalesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 sale} other{{count} sales}}'**
+  String salesHistSalesCount(int count);
+
+  /// No description provided for @salesHistPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 sold} other{{count} sold}}'**
+  String salesHistPieces(int count);
+
+  /// No description provided for @salesHistNoStore.
+  ///
+  /// In en, this message translates to:
+  /// **'No store'**
+  String get salesHistNoStore;
+
+  /// No description provided for @salesHistUnknownPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown person'**
+  String get salesHistUnknownPerson;
+
+  /// No description provided for @salesHistTimelineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened'**
+  String get salesHistTimelineTitle;
+
+  /// No description provided for @salesHistMoreLines.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} + {count} more'**
+  String salesHistMoreLines(String name, int count);
+
+  /// No description provided for @salesHistEventSaleFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale'**
+  String get salesHistEventSaleFallback;
+
+  /// No description provided for @salesHistEventVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale voided'**
+  String get salesHistEventVoided;
+
+  /// No description provided for @salesHistEventPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit payment'**
+  String get salesHistEventPayment;
+
+  /// No description provided for @salesHistEventReverted.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit payment reverted'**
+  String get salesHistEventReverted;
+
+  /// No description provided for @salesHistEventAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock added: {item}'**
+  String salesHistEventAdded(String item);
+
+  /// No description provided for @salesHistEventSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Count set: {item}'**
+  String salesHistEventSet(String item);
+
+  /// No description provided for @salesHistEventMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock moved: {item}'**
+  String salesHistEventMoved(String item);
+
+  /// No description provided for @salesHistUnknownItem.
+  ///
+  /// In en, this message translates to:
+  /// **'A product'**
+  String get salesHistUnknownItem;
+
+  /// No description provided for @salesHistVoidedTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get salesHistVoidedTag;
+
+  /// No description provided for @salesHistByPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'by {name}'**
+  String salesHistByPerson(String name);
+
+  /// No description provided for @salesHistCountNow.
+  ///
+  /// In en, this message translates to:
+  /// **'now {count}'**
+  String salesHistCountNow(int count);
+
+  /// No description provided for @salesHistEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No sales in this period'**
+  String get salesHistEmpty;
+
+  /// No description provided for @salesHistEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick another day, week, month or year.'**
+  String get salesHistEmptyHint;
+
+  /// No description provided for @salesHistTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the first {count} records of this period (the newest). Pick a shorter period to see them all.'**
+  String salesHistTruncated(String count);
+
+  /// No description provided for @salesHistPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Some activity could not be loaded, so stock changes, credit payments or older voids may be missing.'**
+  String get salesHistPartial;
+
+  /// No description provided for @salesHistLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this period. Check the connection and try again.'**
+  String get salesHistLoadFailed;
+
+  /// No description provided for @salesHistNothingHappened.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing happened in this period.'**
+  String get salesHistNothingHappened;
 }
 
 class _AppLocalizationsDelegate

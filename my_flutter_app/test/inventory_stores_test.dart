@@ -1024,9 +1024,9 @@ void main() {
         failure('owner_only', code: 'permission-denied'),
         InventoryFailure.ownerOnly,
       );
-      // The twelve of v2, the four brand codes of v3, and the nine of
+      // The twelve of v2, the four brand codes of v3, and the thirteen of
       // "received by" and credit sales (inventory_credit_test.dart).
-      expect(inventoryFailureReasons.keys, hasLength(25));
+      expect(inventoryFailureReasons.keys, hasLength(29));
     });
 
     test('a refusal carrying several codes is read by any of ours', () {

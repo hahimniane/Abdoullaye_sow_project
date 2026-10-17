@@ -20,6 +20,7 @@ import 'inventory_categories_screen.dart';
 import 'inventory_item_screen.dart';
 import 'inventory_item_sheets.dart';
 import 'inventory_credit_screen.dart';
+import 'sales_history_screen.dart';
 import 'inventory_sales_screen.dart';
 import 'inventory_sell_screen.dart';
 import 'inventory_stores_screen.dart';
@@ -380,18 +381,40 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                ContainerActionButton(
-                  key: const Key('inv-open-credit'),
-                  icon: Icons.handshake_outlined,
-                  label: l10n.invCreditOwedTitle,
-                  onTap: () => _push(
-                    InventoryCreditScreen(
-                      businessId: widget.businessId,
-                      source: _source,
-                      service: widget.service,
-                      access: widget.access,
+                Row(
+                  children: [
+                    Expanded(
+                      child: ContainerActionButton(
+                        key: const Key('inv-open-credit'),
+                        icon: Icons.handshake_outlined,
+                        label: l10n.invCreditOwedTitle,
+                        onTap: () => _push(
+                          InventoryCreditScreen(
+                            businessId: widget.businessId,
+                            source: _source,
+                            service: widget.service,
+                            access: widget.access,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: ContainerActionButton(
+                        key: const Key('inv-open-history'),
+                        icon: Icons.insights_outlined,
+                        label: l10n.salesHistTitle,
+                        onTap: () => _push(
+                          SalesHistoryScreen(
+                            businessId: widget.businessId,
+                            source: _source,
+                            service: widget.service,
+                            access: widget.access,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 if (stores.viewerSeesAll) ...[
@@ -608,6 +631,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
             Text(
               [
                 l10n.inventoryItemsSoldCount(summary.itemsSold),
+                if (summary.creditCents > 0)
+                  l10n.invSummaryOnCredit(
+                    formatLotCents(summary.creditCents),
+                    formatLotCents(summary.creditOutstandingCents),
+                  ),
                 if (summary.discountCents > 0)
                   '${l10n.inventoryDiscounts}: ${formatLotCents(summary.discountCents)}',
               ].join(' · '),

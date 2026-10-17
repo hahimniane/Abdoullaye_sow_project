@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart' show invoiceCentsToInput;
+import '../services/eastern_clock.dart';
 import '../services/inventory.dart';
 import '../services/inventory_context.dart';
 import '../services/inventory_credit.dart';
@@ -427,7 +428,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
   }
 
   Future<void> _pickDueDate() async {
-    final today = widget.clock();
+    final today = shopToday(widget.clock());
     final current = parseDayKey(_checkout.dueDate);
     final picked = await pickCalendarDay(
       context,
@@ -452,7 +453,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
         _checkoutNow,
         totalCents: _basket.totalCents,
         staffIds: [for (final p in _team.people) p.id],
-        today: widget.clock(),
+        today: shopToday(widget.clock()),
       );
 
   /// After a sale: the next one starts as a plain sale taken by me.

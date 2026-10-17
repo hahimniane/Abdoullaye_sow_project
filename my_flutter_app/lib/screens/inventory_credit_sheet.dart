@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/eastern_clock.dart';
 import '../services/inventory.dart';
 import '../services/inventory_credit.dart';
 import '../services/inventory_service.dart';
@@ -283,7 +284,7 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
       setState(() => _errors = {'collector_required'});
       return;
     }
-    if (!inventoryDueDateValid(_editDueDate, today: widget.clock()) &&
+    if (!inventoryDueDateValid(_editDueDate, today: shopToday(widget.clock())) &&
         _editDueDate != (_sale.credit?.dueDate ?? '')) {
       AppHaptics.refuse();
       setState(() => _errors = {'due_date_invalid'});
@@ -354,7 +355,7 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
     final l10n = AppLocalizations.of(context)!;
     final locale = dateLocaleOf(context);
     final busy = _busy.isNotEmpty;
-    final today = widget.clock();
+    final today = shopToday(widget.clock());
     final due = parseDayKey(_dueDate);
     final overdue =
         _open &&
@@ -713,7 +714,7 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
               onTap: busy
                   ? () {}
                   : () async {
-                      final today = widget.clock();
+                      final today = shopToday(widget.clock());
                       final picked = await pickCalendarDay(
                         context,
                         initial: due ?? today.add(const Duration(days: 7)),

@@ -79,3 +79,23 @@ String displayWeekdayDateTime(DateTime date, String locale) =>
 /// "3:05 PM" / "15:05".
 String displayTime(DateTime date, String locale) =>
     DateFormat.jm(_dateLocale(locale)).format(date);
+
+/// "Fri, Oct 16, 2026" / "ven. 16 oct. 2026".
+String displayWeekdayDate(DateTime date, String locale) =>
+    DateFormat.yMMMEd(_dateLocale(locale)).format(date);
+
+/// "October 2026" / "octobre 2026".
+String displayMonthYear(DateTime date, String locale) =>
+    DateFormat.yMMMM(_dateLocale(locale)).format(date);
+
+/// "3 PM" / "15 h" - an hour of the day.
+String displayHour(DateTime date, String locale) =>
+    DateFormat.j(_dateLocale(locale)).format(date);
+
+/// "Sun" / "dim." - a bar of a week chart.
+String displayWeekdayShort(DateTime date, String locale) =>
+    DateFormat.E(_dateLocale(locale)).format(date);
+
+/// "J" / "J" - a bar of a year chart (the narrow month letter).
+String displayMonthNarrow(DateTime date, String locale) =>
+    DateFormat('MMMMM', _dateLocale(locale)).format(date);
