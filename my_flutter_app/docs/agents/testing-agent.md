@@ -487,3 +487,19 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   check of a public page build with `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true`,
   stub the callable at `window.fetch`, and delete `admin_web/out` afterwards.
 
+- Concurrent Firestore tests in the emulator suites (`functions/test/*-callables`)
+  flake unless contention is handled. The emulator locks pessimistically: contending
+  transactions wait ~3s and one is given up on, sometimes as INVALID_ARGUMENT
+  "Transaction is invalid or closed", which the Admin SDK does not retry (it only
+  retries that code when the text says "has expired"). The loser reaches the test
+  raw, with no `details.reason` (symptom: outcomes like `['ok', undefined]`, or a
+  slow round that times out). It is not a callable defect. In
+  `inventory-callables.test.js` wrap each racing call in `untilSettled` /
+  `outcomeOf`: they retry only a raw numeric ABORTED / "invalid or closed", never a
+  refusal or an HttpsError, give racing sales their own `clientRequestId` so a
+  retry is the same sale, and still assert the final state (no overdraw, total =
+  sum of the stores). Never serialize the calls to dodge it - that stops proving the
+  race. When looping the suite for flake checks start a FRESH emulator per run
+  (`npm run test:inventory`): wiping Firestore between runs inside one emulator
+  gives constant false failures. If 8080/9099 are held by another session's
+  suite, run on a scratch `firebase.json` with other ports instead of killing it.

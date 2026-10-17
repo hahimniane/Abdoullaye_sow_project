@@ -64,6 +64,97 @@ const refusal = (code, kind) => (error) => {
   return true;
 };
 
+// The emulator locks pessimistically: transactions that contend for the same
+// documents wait about three seconds and one of them is then given up on. The
+// Admin SDK retries a gRPC ABORTED by itself, but the emulator also reports a
+// transaction it invalidated as INVALID_ARGUMENT "Transaction is invalid or
+// closed", and the SDK only retries that code when the text says "has
+// expired" (the production wording). So the loser reaches the caller raw,
+// with no `details.reason`. That is lock arbitration, not an answer from the
+// callable: a caller simply tries again, so the race tests do too.
+//
+// Only that raw, numeric-coded contention is retried. A refusal
+// (`details.reason`), an HttpsError (string code) or any other failure is
+// thrown at once, so a retry can never hide a real defect, and a retried
+// call runs the real transaction again - what the stores finally hold is
+// still what each test asserts. A call that gave up before committing
+// changed nothing, so retrying it cannot apply it twice.
+const GRPC_ABORTED = 10;
+const GRPC_INVALID_ARGUMENT = 3;
+
+const isEmulatorContention = (error) => !error?.details?.reason &&
+  (error?.code === GRPC_ABORTED ||
+    (error?.code === GRPC_INVALID_ARGUMENT &&
+      /transaction is invalid or closed/i.test(String(error.message))));
+
+async function untilSettled(run, attempts = 8) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt >= attempts || !isEmulatorContention(error)) throw error;
+    }
+  }
+}
+
+// What a race participant ended with: "ok", the callable's refusal reason, or
+// - so a failure names itself instead of showing as `undefined` - the raw
+// code and message.
+const outcomeOf = (run) => untilSettled(run).then(() => "ok", (error) =>
+  error.details?.reason || `${error.code}: ${error.message}`);
+
+describe("retrying emulator contention", () => {
+  const raw = (code, message) => Object.assign(new Error(message), {code});
+
+  it("retries only a raw abort or an invalidated transaction", async () => {
+    for (const error of [raw(GRPC_ABORTED, "10 ABORTED: too much contention"),
+      raw(GRPC_INVALID_ARGUMENT, "3 INVALID_ARGUMENT: Transaction is " +
+        "invalid or closed.")]) {
+      let calls = 0;
+      const value = await untilSettled(async () => {
+        if (++calls < 3) throw error;
+        return "done";
+      });
+      assert.deepEqual([value, calls], ["done", 3], error.message);
+    }
+  });
+
+  it("throws a refusal, an HttpsError or any other failure at once",
+      async () => {
+        const refused = Object.assign(raw(GRPC_ABORTED, "refused"),
+            {details: {reason: "insufficient_stock"}});
+        const failures = [refused,
+          Object.assign(new Error("denied"), {code: "permission-denied"}),
+          raw(GRPC_INVALID_ARGUMENT, "3 INVALID_ARGUMENT: bad field"),
+          raw(14, "14 UNAVAILABLE"), new Error("plain")];
+        for (const error of failures) {
+          let calls = 0;
+          await assert.rejects(untilSettled(async () => {
+            calls++;
+            throw error;
+          }), (thrown) => thrown === error);
+          assert.equal(calls, 1, error.message);
+        }
+      });
+
+  it("gives up after its attempts and surfaces the last error", async () => {
+    const error = raw(GRPC_ABORTED, "10 ABORTED: still contended");
+    let calls = 0;
+    await assert.rejects(untilSettled(async () => {
+      calls++;
+      throw error;
+    }, 3), (thrown) => thrown === error);
+    assert.equal(calls, 3);
+  });
+
+  it("names a failure that has no reason instead of hiding it", async () => {
+    assert.equal(await outcomeOf(async () => {
+      throw raw(GRPC_INVALID_ARGUMENT, "3 INVALID_ARGUMENT: bad field");
+    }), "3: 3 INVALID_ARGUMENT: bad field");
+    assert.equal(await outcomeOf(async () => "fine"), "ok");
+  });
+});
+
 before(async () => {
   await Promise.all([
     db.collection("businesses").doc(BIZ).set({
@@ -434,10 +525,14 @@ describe("selling", () => {
   it("lets two sales of the last piece both through, floored and flagged",
       async () => {
         const id = await newItem({quantity: 1});
-        const [a, b] = await Promise.all([
-          sell([{itemId: id, quantity: 1, soldPriceCents: 1000}], {}, OWNER),
-          sell([{itemId: id, quantity: 1, soldPriceCents: 1000}], {}, CASHIER),
-        ]);
+        // Each send keeps its own key, so one the emulator gives up on is
+        // sent again as the same sale, not booked twice.
+        const ringUp = (uid) => {
+          const extra = {clientRequestId: requestId()};
+          return untilSettled(() => sell([{itemId: id, quantity: 1,
+            soldPriceCents: 1000}], extra, uid));
+        };
+        const [a, b] = await Promise.all([ringUp(OWNER), ringUp(CASHIER)]);
         assert.notEqual(a.saleId, b.saleId);
         const row = await itemDoc(id);
         assert.equal(row.quantity, 0);
@@ -547,11 +642,16 @@ describe("voiding a sale", () => {
     const id = await newItem({quantity: 5});
     const {saleId} = await sell([
       {itemId: id, quantity: 2, soldPriceCents: 1000}]);
+    // A void the emulator gives up on is sent again and then finds the sale
+    // already voided; exactly one of the two may go through.
     const results = await Promise.allSettled([
-      call("voidInventorySale", {saleId}),
-      call("voidInventorySale", {saleId}, CASHIER),
+      untilSettled(() => call("voidInventorySale", {saleId})),
+      untilSettled(() => call("voidInventorySale", {saleId}, CASHIER)),
     ]);
     assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+    for (const r of results.filter((x) => x.status === "rejected")) {
+      assert.equal(r.reason?.details?.reason, "sale_voided");
+    }
     assert.equal((await itemDoc(id)).quantity, 5);
   });
 
@@ -1835,9 +1935,14 @@ describe("stores", () => {
     it("lets two simultaneous last-piece sales on one store both through",
         async () => {
           const id = await mk({stock: {[main]: 5, [annex]: 1}});
-          const results = await Promise.all([
-            ring(id, 1, {storeId: annex}, HOME_A),
-            ring(id, 1, {storeId: annex}, ROVER)]);
+          // Each send keeps its own key: one the emulator gives up on is
+          // sent again as the same sale, not booked twice.
+          const ringOnce = (uid) => {
+            const extra = {clientRequestId: requestId(), storeId: annex};
+            return untilSettled(() => ring(id, 1, extra, uid));
+          };
+          const results = await Promise.all([ringOnce(HOME_A),
+            ringOnce(ROVER)]);
           assert.equal(results.length, 2);
           assert.equal(results.filter((r) => r.warnings.length > 0).length, 1);
           assert.equal((await stockAt(id, annex)).quantity, 0);
@@ -2008,11 +2113,14 @@ describe("stores", () => {
         });
 
     it("never overdraws when two transfers race for the same pieces",
-        async () => {
+        {timeout: 120000}, async () => {
           const id = await mk({stock: {[main]: 3, [annex]: 0}});
-          const attempt = () => s("transferInventoryStock", {itemId: id,
-            fromStoreId: main, toStoreId: annex, quantity: 2}, OWN)
-              .then(() => "ok", (error) => error.details?.reason);
+          // Whichever call the emulator gives up on is sent again, and then
+          // meets the other's committed result: it must be refused for
+          // stock, never allowed to take the pieces a second time.
+          const attempt = () => outcomeOf(() => s("transferInventoryStock",
+              {itemId: id, fromStoreId: main, toStoreId: annex, quantity: 2},
+              OWN));
           const outcomes = await Promise.all([attempt(), attempt()]);
           assert.deepEqual(outcomes.sort(), ["insufficient_stock", "ok"]);
           assert.equal((await stockAt(id, main)).quantity, 1);
@@ -2275,7 +2383,7 @@ describe("stores", () => {
 
 describe("adding the second store while sales are being rung up", () => {
   it("never loses a piece: the total always equals the stores' sum",
-      async () => {
+      {timeout: 120000}, async () => {
         const RB = "inv-race-biz";
         const owner = "inv-race-owner";
         const r = callIn(RB);
@@ -2286,11 +2394,17 @@ describe("adding the second store while sales are being rung up", () => {
           ids.push((await r("createInventoryItem", {name: `Race ${i}`,
             priceCents: 1000, quantity: 20}, owner)).itemId);
         }
-        const sales = ids.map((itemId) => r("recordInventorySale", {
-          clientRequestId: requestId(), paymentMethod: "cash",
-          lines: [{itemId, quantity: 3, soldPriceCents: 1000}]}, owner));
+        // A sale the emulator gives up on is sent again with the same key -
+        // the app's own retry - so each of the six is booked exactly once.
+        const sales = ids.map((itemId) => {
+          const clientRequestId = requestId();
+          return untilSettled(() => r("recordInventorySale", {
+            clientRequestId, paymentMethod: "cash",
+            lines: [{itemId, quantity: 3, soldPriceCents: 1000}]}, owner));
+        });
         const [, ...done] = await Promise.all([
-          r("createInventoryStore", {name: "Second"}, owner), ...sales]);
+          untilSettled(() => r("createInventoryStore", {name: "Second"},
+              owner)), ...sales]);
         assert.equal(done.length, 6);
         for (const itemId of ids) {
           const item = (await db.collection("inventoryItems").doc(itemId)
