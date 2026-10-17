@@ -5,34 +5,44 @@
  * where their goods are, by WhatsApp, without anyone at the business having
  * to remember to.
  *
- * The pure half. A container moves (staff mark it shipped or arrived, or the
- * carrier feed reports it on the ship or landed); each move that a customer
- * cares about is one *update*, and each update becomes one WhatsApp template
- * message per person on each line: the customer who handed the goods in and
- * the receiver who collects them. Everything that touches Firestore or the
- * WhatsApp Cloud API stays in `index.js`.
+ * The pure half. A package is registered (`received`), then its container
+ * moves (staff mark it shipped or arrived, or the carrier feed reports it on
+ * the ship or landed); each move that a customer cares about is one
+ * *update*, and each update becomes one WhatsApp template message per person
+ * on each line: the customer who handed the goods in and the receiver who
+ * collects them. Everything that touches Firestore or the WhatsApp Cloud API
+ * stays in `index.js`.
  *
  * Two sources describe the same moment - staff tapping "Shipped" and the
- * carrier reporting "on_ship" - so a message is keyed by line, person and
- * update, never by what produced it. Whoever reports first sends; the other
- * finds the message already written and says nothing.
+ * carrier reporting "on_ship", or the carrier's "at the port" and staff's
+ * "Arrived" - so a message is keyed by line, person and the message's
+ * update (messageUpdateFor), never by what produced it. Whoever reports
+ * first sends; the other finds the message already written and says
+ * nothing.
  *
  * WhatsApp only lets a business start a conversation with a template that
- * Meta has approved, so the copy here fills a template's variables rather
- * than composing free text. The template text lives in
- * docs/WHATSAPP_CONTAINER_UPDATES.md and must match what is approved.
+ * Meta has approved. Which template each update sends, and the order of its
+ * variables, live in whatsapp_templates.js; the approved text lives in
+ * docs/WHATSAPP_CONTAINER_UPDATES.md and must match.
  */
 
 const {isInternationalPhone} = require("./container_manifest");
+const {ALL_COUNTRIES} = require("./country_catalog");
+const {templateMessage} = require("./whatsapp_templates");
 
 const CONTAINER_UPDATE = Object.freeze({
+  // The package is registered: dropped off to wait for a container, or
+  // added straight onto one. Per line, not a moment on a container's
+  // timeline.
+  RECEIVED: "received",
   SHIPPED: "shipped",
+  // The carrier reports the box landed. A timeline moment of its own, but
+  // never a message of its own: it shares the arrival's message (see
+  // messageUpdateFor), so a person hears "arrived" once.
   AT_PORT: "at_port",
   ARRIVED: "arrived",
 });
 const CONTAINER_UPDATES = Object.freeze(Object.values(CONTAINER_UPDATE));
-
-const WHATSAPP_TEMPLATE = "container_status_update";
 
 // What the carrier feed says -> the update a customer hears. Only the moves
 // worth a message are here; anything else is recorded on the timeline and
@@ -57,25 +67,6 @@ const CONTAINER_STATUS_BY_CARRIER_STATUS = Object.freeze({
 // Past these the carrier has nothing more to say about the box.
 const CARRIER_FINAL_STATUSES = Object.freeze(
     ["picked_up", "delivered", "empty_returned"]);
-
-// Whole sentences, because the template reads "...about {{3}}: {{4}}" and
-// a phrase that has to agree with "3 barrels" or "a car" never does in both
-// languages.
-const STATUS_COPY = Object.freeze({
-  [CONTAINER_UPDATE.SHIPPED]: {
-    en: "the container has left port and is on its way",
-    fr: "le conteneur a quitté le port et est en route",
-  },
-  [CONTAINER_UPDATE.AT_PORT]: {
-    en: "the container has reached the destination port and is being unloaded",
-    fr: "le conteneur est arrivé au port de destination et est en cours " +
-      "de déchargement",
-  },
-  [CONTAINER_UPDATE.ARRIVED]: {
-    en: "it has arrived at its destination",
-    fr: "l'envoi est arrivé à destination",
-  },
-});
 
 // Countries where a customer is far more likely to read French than
 // English. Everyone else gets English; the template exists in both.
@@ -268,51 +259,94 @@ function trackingLink(consoleUrl, trackingCode) {
 }
 
 /**
- * The WhatsApp Cloud API request body for one person.
+ * The update a moment's message is keyed by. The carrier's "at the port"
+ * and staff's "arrived" are the same news for a customer - the goods are
+ * there - so both are the `arrived` message: whichever is reported first
+ * queues it, and the other finds the row already written.
  *
- * Template body ({{n}} in order): the person's name, the business, what is
- * on the line, what just happened, the tracking code. The button opens the
- * tracking page; its URL ends in {{1}}, the tracking code.
+ * @param {string} update A moment's customerUpdate.
+ * @return {string|null} The message's update, or null for none.
+ */
+function messageUpdateFor(update) {
+  const value = text(update, 20);
+  if (value === CONTAINER_UPDATE.AT_PORT) return CONTAINER_UPDATE.ARRIVED;
+  return CONTAINER_UPDATES.includes(value) ? value : null;
+}
+
+const COUNTRY_BY_ID = new Map(ALL_COUNTRIES.map((c) => [c.id, c]));
+const COUNTRY_BY_NAME = new Map(
+    ALL_COUNTRIES.map((c) => [c.name.toLowerCase(), c]));
+let frenchRegionNames = null;
+
+/**
+ * A country's ISO code from what a line or container stores (an ISO code
+ * such as "gn", a catalog id such as "guinea", or only its name).
  *
- * @param {object} args {phone, name, businessName, line, update,
- *   trackingCode}.
- * @return {object} The /messages request body.
+ * @param {string} id destinationCountryId.
+ * @param {string} name destinationCountryName.
+ * @return {string} The two-letter code, or "".
+ */
+function countryCode(id, name) {
+  const key = text(id, 60).toLowerCase();
+  if (/^[a-z]{2}$/.test(key)) return key.toUpperCase();
+  const row = COUNTRY_BY_ID.get(key) ||
+    COUNTRY_BY_NAME.get(text(name, 120).toLowerCase());
+  return row ? row.code : "";
+}
+
+/**
+ * Where the goods are going, in the reader's language: the line's own
+ * destination (a waiting package carries one), else its container's.
+ * French readers get the French name ("Guinée"); a country Intl does not
+ * know keeps its stored name.
+ *
+ * @param {object} line A containerLines row.
+ * @param {object|null} container Its container, if any.
+ * @param {"en"|"fr"} language The language.
+ * @return {string} The country's name, or "" when none is known.
+ */
+function destinationName(line, container, language) {
+  const own = text(line?.destinationCountryName, 120) ||
+    text(line?.destinationCountryId, 60);
+  const source = own ? line : (container || {});
+  const stored = text(source?.destinationCountryName, 120);
+  const code = countryCode(source?.destinationCountryId, stored);
+  if (language !== "fr" || !code) return stored;
+  try {
+    frenchRegionNames = frenchRegionNames ||
+      new Intl.DisplayNames(["fr"], {type: "region"});
+    const french = frenchRegionNames.of(code);
+    return french && french !== code ? french : stored;
+  } catch (_) {
+    return stored;
+  }
+}
+
+/**
+ * The WhatsApp Cloud API request body for one person and one update. The
+ * template and the order of its variables live in whatsapp_templates.js;
+ * this gathers the values from the records.
+ *
+ * @param {object} args {phone, name, businessName, businessPhone, line,
+ *   container, update, trackingCode}.
+ * @return {object|null} The /messages request body, or null for an update
+ *   that has no message.
  */
 function whatsappUpdateMessage(args) {
   const language = languageForPhone(args.phone);
-  const fr = language === "fr";
-  // The template opens "Hello {{1}}," / "Bonjour {{1}},", and Meta refuses
-  // an empty variable.
-  const name = text(args.name, 60) || (fr ? "à vous" : "there");
-  const status = STATUS_COPY[args.update] || STATUS_COPY.shipped;
-  const parameter = (value) => ({type: "text", text: text(value, 300)});
-  return {
-    messaging_product: "whatsapp",
-    to: text(args.phone, 40).replace(/\D/g, ""),
-    type: "template",
-    template: {
-      name: WHATSAPP_TEMPLATE,
-      language: {code: language},
-      components: [
-        {
-          type: "body",
-          parameters: [
-            parameter(name),
-            parameter(text(args.businessName, 80) || "Laawol"),
-            parameter(describeLine(args.line, language)),
-            parameter(status[language]),
-            parameter(args.trackingCode),
-          ],
-        },
-        {
-          type: "button",
-          sub_type: "url",
-          index: "0",
-          parameters: [parameter(args.trackingCode)],
-        },
-      ],
+  return templateMessage({
+    phone: text(args.phone, 40),
+    update: args.update,
+    language,
+    values: {
+      name: args.name,
+      business: args.businessName,
+      what: describeLine(args.line, language),
+      destination: destinationName(args.line, args.container, language),
+      businessPhone: args.businessPhone,
+      trackingCode: args.trackingCode,
     },
-  };
+  });
 }
 
 /**
@@ -365,10 +399,15 @@ const WHATSAPP_MAX_ATTEMPTS = 5;
 // is marked failed and can be sent again by hand (sendContainerCurrentStatus).
 const WHATSAPP_MAX_EVENT_AGE_MS = 6 * 60 * 60 * 1000;
 
+// How far along each update is. `received` is first: once the box ships,
+// the line's summary moves on to that, and a late "received" finishing its
+// send changes nothing. `at_port` stays ranked for lines summarised before
+// the two arrival moments shared one message.
 const UPDATE_RANK = Object.freeze({
-  [CONTAINER_UPDATE.SHIPPED]: 1,
-  [CONTAINER_UPDATE.AT_PORT]: 2,
-  [CONTAINER_UPDATE.ARRIVED]: 3,
+  [CONTAINER_UPDATE.RECEIVED]: 1,
+  [CONTAINER_UPDATE.SHIPPED]: 2,
+  [CONTAINER_UPDATE.AT_PORT]: 3,
+  [CONTAINER_UPDATE.ARRIVED]: 4,
 });
 
 /**
@@ -493,7 +532,8 @@ const toMillis = (value) => {
 
 /**
  * The container's current update: the furthest one along its timeline, so a
- * late "on the ship" from the carrier never outranks "arrived".
+ * late "on the ship" from the carrier never outranks "arrived". Read as the
+ * message it sends, so the carrier's "at the port" is the arrival.
  *
  * @param {object[]} events trackingEvents rows.
  * @return {string|null} The update, or null when nothing was ever sent.
@@ -503,7 +543,7 @@ function latestCustomerUpdate(events) {
   let bestRank = 0;
   let bestAt = -1;
   for (const event of Array.isArray(events) ? events : []) {
-    const update = text(event?.customerUpdate, 20);
+    const update = messageUpdateFor(event?.customerUpdate) || "";
     const rank = updateRank(update);
     if (!rank) continue;
     const at = toMillis(event?.timestamp);
@@ -565,8 +605,9 @@ module.exports = {
   mergeLastCustomerUpdate,
   CONTAINER_UPDATE,
   CONTAINER_UPDATES,
-  WHATSAPP_TEMPLATE,
-  STATUS_COPY,
+  messageUpdateFor,
+  countryCode,
+  destinationName,
   languageForPhone,
   updateForContainerStatus,
   updateForCarrierStatus,

@@ -19,7 +19,8 @@ const {
   requeueDecision,
   latestCustomerUpdate,
   mergeLastCustomerUpdate,
-  WHATSAPP_TEMPLATE,
+  messageUpdateFor,
+  destinationName,
   languageForPhone,
   updateForContainerStatus,
   updateForCarrierStatus,
@@ -72,6 +73,26 @@ describe("which moments customers hear about", () => {
     assert.equal(
         containerUpdateMessageId("li/ne", "receiver", "at_port"),
         "line_receiver_at_port");
+    assert.equal(containerUpdateMessageId("line1", "sender", "received"),
+        "line1_sender_received");
+  });
+
+  // The carrier's "at the port" and staff's "arrived" are one piece of news
+  // for a customer: they share the arrival's message, so whichever comes
+  // first sends and the other finds the row taken.
+  it("sends the arrival once, whichever source reports it first", () => {
+    assert.equal(messageUpdateFor("at_port"), "arrived");
+    assert.equal(messageUpdateFor("arrived"), "arrived");
+    assert.equal(messageUpdateFor("shipped"), "shipped");
+    assert.equal(messageUpdateFor("received"), "received");
+    assert.equal(messageUpdateFor(null), null);
+    assert.equal(messageUpdateFor("customs"), null);
+    const carrierFirst = containerUpdateMessageId("line1", "receiver",
+        messageUpdateFor(updateForCarrierStatus("grounded", "shipped")));
+    const staffFirst = containerUpdateMessageId("line1", "receiver",
+        messageUpdateFor(updateForContainerStatus("arrived")));
+    assert.equal(carrierFirst, "line1_receiver_arrived");
+    assert.equal(carrierFirst, staffFirst);
   });
 });
 
@@ -153,33 +174,77 @@ describe("what they read", () => {
       description: "boxes of clothes"}, "en"), "2 × boxes of clothes");
   });
 
-  it("fills the approved template's five variables and its button", () => {
-    const body = whatsappUpdateMessage({
-      phone: "+224620000000", name: "Mariama Bah", businessName: "Dala",
-      line: line(), update: "shipped", trackingCode: "CL-K7M4P2",
-    });
+  const message = (update, extra = {}) => whatsappUpdateMessage({
+    phone: "+224620000000", name: "Mariama Bah", businessName: "Dala",
+    businessPhone: "+16465550199", line: line(),
+    container: {destinationCountryId: "gn", destinationCountryName: "Guinea"},
+    update, trackingCode: "CL-K7M4P2", ...extra,
+  });
+  const texts = (body) =>
+    body.template.components[0].parameters.map((p) => p.text);
+
+  it("sends package_received with the line's own destination", () => {
+    const body = message("received", {phone: "+16465550100",
+      line: line({destinationCountryId: "sn",
+        destinationCountryName: "Senegal"})});
     assert.equal(body.messaging_product, "whatsapp");
-    assert.equal(body.to, "224620000000");
-    assert.equal(body.template.name, WHATSAPP_TEMPLATE);
+    assert.equal(body.to, "16465550100");
+    assert.equal(body.template.name, "package_received");
+    assert.equal(body.template.language.code, "en");
+    assert.deepEqual(texts(body),
+        ["Mariama Bah", "Dala", "3 barrels", "Senegal", "CL-K7M4P2"]);
+  });
+
+  it("sends container_departed in French, with the box's destination", () => {
+    const body = message("shipped");
+    assert.equal(body.template.name, "container_departed");
     assert.equal(body.template.language.code, "fr");
-    const [bodyPart, button] = body.template.components;
-    assert.deepEqual(bodyPart.parameters.map((p) => p.text), [
-      "Mariama Bah", "Dala", "3 fûts",
-      "le conteneur a quitté le port et est en route", "CL-K7M4P2",
-    ]);
+    assert.deepEqual(texts(body),
+        ["Mariama Bah", "3 fûts", "Dala", "Guinée", "CL-K7M4P2"]);
+    const [, button] = body.template.components;
     assert.equal(button.sub_type, "url");
     assert.deepEqual(button.parameters.map((p) => p.text), ["CL-K7M4P2"]);
   });
 
+  it("sends container_arrived with the business's phone", () => {
+    for (const update of ["arrived", "at_port"]) {
+      const body = message(update, {phone: "+16465550100"});
+      assert.equal(body.template.name, "container_arrived");
+      assert.deepEqual(texts(body), ["Mariama Bah", "3 barrels", "Dala",
+        "Guinea", "+16465550199", "CL-K7M4P2"]);
+    }
+  });
+
   // Meta refuses a template variable that is empty.
   it("never sends an empty variable", () => {
-    const body = whatsappUpdateMessage({
-      phone: "+16465550100", name: "", businessName: "",
-      line: {kind: "other"}, update: "arrived", trackingCode: "CL-K7M4P2",
-    });
-    for (const p of body.template.components[0].parameters) {
-      assert.ok(p.text.length > 0);
+    for (const update of ["received", "shipped", "arrived"]) {
+      for (const phone of ["+16465550100", "+224620000000"]) {
+        const body = whatsappUpdateMessage({
+          phone, name: "", businessName: "", line: {kind: "other"},
+          container: null, update, trackingCode: "CL-K7M4P2",
+        });
+        for (const part of body.template.components) {
+          for (const p of part.parameters) assert.ok(p.text.length > 0);
+        }
+      }
     }
+  });
+
+  it("names the destination in the reader's language", () => {
+    const guinea = {destinationCountryId: "gn",
+      destinationCountryName: "Guinea"};
+    assert.equal(destinationName(guinea, null, "en"), "Guinea");
+    assert.equal(destinationName(guinea, null, "fr"), "Guinée");
+    // A catalog id, or only a name, still finds the country.
+    assert.equal(destinationName({destinationCountryId: "c-te-d-ivoire",
+      destinationCountryName: "Côte d'Ivoire"}, null, "fr"), "Côte d’Ivoire");
+    assert.equal(destinationName({destinationCountryName: "Senegal"}, null,
+        "fr"), "Sénégal");
+    // A line with none follows its box; one Intl cannot name keeps its own.
+    assert.equal(destinationName({}, guinea, "fr"), "Guinée");
+    assert.equal(destinationName({destinationCountryName: "Atlantis"}, null,
+        "fr"), "Atlantis");
+    assert.equal(destinationName({}, null, "fr"), "");
   });
 
   it("links to the public tracking page for the code", () => {
@@ -313,10 +378,15 @@ describe("sending the current status by hand", () => {
     assert.equal(latestCustomerUpdate([
       {label: "Automatic carrier tracking started", customerUpdate: null},
     ]), null);
+    // The carrier's "at the port" is the arrival's message.
     assert.equal(latestCustomerUpdate([
       {customerUpdate: "shipped", timestamp: at(1)},
       {customerUpdate: "at_port", timestamp: at(2)},
-    ]), "at_port");
+    ]), "arrived");
+    assert.equal(latestCustomerUpdate([
+      {customerUpdate: "at_port", timestamp: at(2)},
+      {customerUpdate: "arrived", timestamp: at(3)},
+    ]), "arrived");
     // The carrier's "on the ship", switched on late, after staff said
     // arrived: the current news is still "arrived".
     assert.equal(latestCustomerUpdate([
@@ -327,6 +397,8 @@ describe("sending the current status by hand", () => {
   });
 
   it("ranks updates in the order a box travels", () => {
+    assert.ok(updateRank("received") > 0);
+    assert.ok(updateRank("received") < updateRank("shipped"));
     assert.ok(updateRank("shipped") < updateRank("at_port"));
     assert.ok(updateRank("at_port") < updateRank("arrived"));
     assert.equal(updateRank("loading"), 0);
@@ -361,6 +433,13 @@ describe("what the line says about its latest news", () => {
         const arrived = {update: "arrived", atMs: 3, results: []};
         assert.equal(mergeLastCustomerUpdate(arrived, "shipped",
             [{role: "sender", status: "sent"}], 4), null);
+        // The drop-off message finishing after the box shipped.
+        assert.equal(mergeLastCustomerUpdate(shipped, "received",
+            [{role: "sender", status: "sent"}], 5), null);
+        // A line summarised as "at the port" before the arrival merged.
+        assert.equal(mergeLastCustomerUpdate(
+            {update: "at_port", atMs: 2, results: []}, "arrived",
+            [{role: "sender", status: "queued"}], 6).update, "arrived");
       });
 
   it("writes nothing when nobody's news changed", () => {
@@ -412,6 +491,38 @@ describe("the server wiring", () => {
         const all = section("async function queueContainerUpdate(", "\n}\n");
         assert.match(all, /inGroups\(lineDocs, 10\)/);
         assert.match(all, /Promise\.all\(/);
+        // Keyed by the message: "at the port" queues the arrival's row.
+        assert.match(body,
+            /const update = messageUpdateFor\(moment\.customerUpdate\)/);
+      });
+
+  it("queues package_received wherever a package is registered", () => {
+    const helper = section("async function queuePackageReceived(", "\n}\n");
+    assert.match(helper, /queueContainerLineUpdate\(db, \{/);
+    assert.match(helper, /update: CONTAINER_UPDATE\.RECEIVED/);
+    assert.match(helper, /containerWhatsAppConfigured\(\)/);
+    assert.match(helper, /CONTAINER_UPDATE_STATUS\.WAITING/);
+    assert.match(helper, /requeue: false/);
+    // A messaging failure never fails the registration.
+    assert.match(helper, /catch \(error\) \{\s*logger\.error/);
+    for (const name of ["addContainerLine", "addWaitingPackage"]) {
+      const body = section(`exports.${name} = onCall(`, "\nexports.");
+      assert.match(body,
+          /secrets: \[whatsappAccessToken, whatsappPhoneNumberId\]/, name);
+      // After the line is written, never inside its transaction.
+      const queued = body.indexOf("await queuePackageReceived(db, {lineRef");
+      assert.ok(queued > body.lastIndexOf("await addLine();"), name);
+    }
+  });
+
+  it("builds each message at send time from the line, box and business",
+      () => {
+        const body = section("exports.deliverContainerCustomerUpdate",
+            "\nexports.");
+        assert.match(body,
+            /db\.collection\("containers"\)\.doc\(containerId\)/);
+        assert.match(body, /businessPhone: business\.phone/);
+        assert.match(body, /if \(!message\) \{/);
       });
 
   it("sends each queued row on its own, claimed, bounded and retried", () => {

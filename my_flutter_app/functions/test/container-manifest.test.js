@@ -1061,15 +1061,20 @@ describe("the container callables and their gates", () => {
     assert.match(helper, /conflictContainerId: conflict/);
   });
 
-  // The plan: no message at drop-off, none when a package is put on a box.
-  // The first thing a customer hears is still that it sailed.
-  it("tells no customer anything when adding or assigning", () => {
-    for (const name of ["addWaitingPackage", "assignContainerLines",
-      "unassignContainerLine"]) {
+  // Registering a package tells its people once (package_received, through
+  // the shared queue); putting it on a box or taking it off tells nobody,
+  // and none of these writes a moment on a container's timeline.
+  it("tells customers only at registration, never when assigning", () => {
+    const silent = new RegExp("recordContainerEvent|trackingEvents|" +
+      "containerUpdates|whatsapp|customerUpdate|queuePackageReceived", "i");
+    for (const name of ["assignContainerLines", "unassignContainerLine"]) {
+      assert.doesNotMatch(callable(name), silent, name);
+    }
+    for (const name of ["addWaitingPackage", "addContainerLine"]) {
       const body = callable(name);
-      assert.doesNotMatch(body, new RegExp("recordContainerEvent|" +
-        "trackingEvents|containerUpdates|whatsapp|customerUpdate", "i"),
-      name);
+      assert.match(body, /await queuePackageReceived\(db, \{lineRef/, name);
+      assert.doesNotMatch(body,
+          /recordContainerEvent|trackingEvents|customerUpdate/, name);
     }
   });
 

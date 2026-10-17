@@ -369,6 +369,8 @@ const {
 } = require("./container_manifest");
 const {
   UPDATE_STATUS: CONTAINER_UPDATE_STATUS,
+  CONTAINER_UPDATE,
+  messageUpdateFor,
   WHATSAPP_SEND_LEASE_MS,
   WHATSAPP_TIMEOUT_MS,
   shouldSendQueuedRow,
@@ -917,7 +919,10 @@ function bookingIdentityFields(request, userRecord, guestIdentity = null) {
 // A tracking code is a bearer reference, not authentication. This endpoint
 // therefore returns an allowlisted status projection only; source documents,
 // milestone notes, identity, destination, provider, vehicle, and payment data
-// remain protected by Firestore rules and never cross this boundary.
+// remain protected by Firestore rules and never cross this boundary. The one
+// addition is a sailed container line's shipping details (shipping line,
+// container and booking numbers - the box's, not the person's), which the
+// WhatsApp "departed" message sends people here to read.
 exports.lookupGuestTracking = onCall(
     GUEST_TRACKING_CALLABLE_OPTIONS,
     async (request) => {
@@ -17278,7 +17283,12 @@ exports.deleteContainer = onCall(
 );
 
 exports.addContainerLine = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      // The package received message is queued here (queuePackageReceived).
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+    },
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
@@ -17385,6 +17395,8 @@ exports.addContainerLine = onCall(
         if (error.code !== 6 && error.code !== "already-exists") throw error;
         await addLine();
       }
+      await queuePackageReceived(db, {lineRef, businessId,
+        containerId: ref.id});
       // The lot's customer memory learns from every line that names one, the
       // way it learns from a parked car or a ledger job.
       if (record.ownerKind === "customer") {
@@ -17802,9 +17814,11 @@ exports.updateContainerLineContacts = onCall(
 // Waiting packages: dropped off at the counter before anyone knows which
 // container they will ride. Same collection as the lines on a container, with
 // no container (`containerId: ""`, `containerStatus: "waiting"`); the code, the
-// label and the car's VIN lock are the line's own and survive the wait. No
-// customer is told anything at drop-off or when a package is added to a box:
-// the first message is still the one that says it sailed.
+// label and the car's VIN lock are the line's own and survive the wait. The
+// people on it hear once that the business has it (package_received, queued
+// at drop-off, as it is for a package added straight onto a box); being put
+// on a box, or taken off one, tells nobody. The next message is that it
+// sailed.
 // -------------------------------------------------------------------------
 
 /**
@@ -17823,7 +17837,12 @@ function containerRefusal(code, lineIds = []) {
 }
 
 exports.addWaitingPackage = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      // The package received message is queued here (queuePackageReceived).
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+    },
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
@@ -17906,6 +17925,7 @@ exports.addWaitingPackage = onCall(
         if (error.code !== 6 && error.code !== "already-exists") throw error;
         await addLine();
       }
+      await queuePackageReceived(db, {lineRef, businessId, containerId: ""});
       await rememberLotCustomer(db, {
         businessId,
         seen: {customerName: record.customerName,
@@ -18598,6 +18618,43 @@ async function queueContainerUpdate(db, lineDocs, args) {
   return total;
 }
 
+/**
+ * Tells the people on a newly registered package that the business has it
+ * (`package_received`): one `containerUpdates/{lineId}_{role}_received` row
+ * each, through the same queue and the same per-person skips as every
+ * other update, `waiting_for_whatsapp` until WhatsApp is connected. The id
+ * is fixed, so a retry never queues a second message.
+ *
+ * Never fails the registration: the package is already written, and a
+ * client that saw an error would register it twice. A failure is logged and
+ * the business can send the current status later.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {lineRef, businessId, containerId}.
+ * @return {Promise<void>}
+ */
+async function queuePackageReceived(db, args) {
+  try {
+    const businessDoc =
+      await db.collection("businesses").doc(args.businessId).get();
+    await queueContainerLineUpdate(db, {
+      lineRef: args.lineRef,
+      businessId: args.businessId,
+      containerId: String(args.containerId || ""),
+      businessName: String(businessDoc.data()?.name || ""),
+      update: CONTAINER_UPDATE.RECEIVED,
+      status: containerWhatsAppConfigured() ?
+        CONTAINER_UPDATE_STATUS.QUEUED : CONTAINER_UPDATE_STATUS.WAITING,
+      requeue: false,
+    });
+  } catch (error) {
+    logger.error("Could not queue the package received message", {
+      lineId: args.lineRef?.id, businessId: args.businessId,
+      error: String(error),
+    });
+  }
+}
+
 exports.sendContainerCustomerUpdates = onDocumentCreated(
     {
       document: "containers/{containerId}/trackingEvents/{eventId}",
@@ -18606,8 +18663,10 @@ exports.sendContainerCustomerUpdates = onDocumentCreated(
     },
     async (event) => {
       const moment = event.data?.data() || {};
-      const update = String(moment.customerUpdate || "");
-      if (!update) return;
+      // Keyed by the message, so the carrier's "at the port" and staff's
+      // "arrived" queue the same row and a person hears it once.
+      const update = messageUpdateFor(moment.customerUpdate);
+      if (!update || update === CONTAINER_UPDATE.RECEIVED) return;
       const db = admin.firestore();
       const containerId = event.params.containerId;
       const containerDoc =
@@ -18729,11 +18788,33 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         return;
       }
       const line = lineDoc.data() || {};
-      const sent = await sendWhatsAppMessage(whatsappUpdateMessage({
-        phone: row.phone, name: row.name, businessName: row.businessName,
-        line, update: row.update,
+      // Read at send time: the destination may only be on the container,
+      // and a waiting package may have been put on one since it was queued.
+      const containerId = String(line.containerId || row.containerId || "");
+      const [containerDoc, businessDoc] = await Promise.all([
+        containerId ?
+          db.collection("containers").doc(containerId).get() : null,
+        row.businessId ?
+          db.collection("businesses").doc(String(row.businessId)).get() :
+          null,
+      ]);
+      const business = businessDoc?.exists ? businessDoc.data() || {} : {};
+      const message = whatsappUpdateMessage({
+        phone: row.phone, name: row.name,
+        businessName: row.businessName || business.name,
+        businessPhone: business.phone,
+        line,
+        container: containerDoc?.exists ? containerDoc.data() || {} : null,
+        update: row.update,
         trackingCode: String(row.trackingCode || line.trackingCode || ""),
-      }));
+      });
+      if (!message) {
+        await recordContainerUpdateAttempt(db, rowRef, row, {
+          status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
+          error: `No WhatsApp template for the update "${row.update}".`});
+        return;
+      }
+      const sent = await sendWhatsAppMessage(message);
       const status = statusAfterAttempt(
           whatsappSendOutcome(sent), claim.attempts);
       await recordContainerUpdateAttempt(db, rowRef, row, {

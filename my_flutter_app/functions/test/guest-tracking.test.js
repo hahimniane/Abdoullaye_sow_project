@@ -5,6 +5,9 @@ const test = require("node:test");
 const {
   GUEST_TRACKING_COLLECTIONS,
   CONTAINER_STAGE_BY_STATUS,
+  CONTAINER_SHIPPING_STAGES,
+  publicContainerShipping,
+  shippedContainerOf,
   WAITING_STAGE,
   WAITING_STAGE_LABEL,
   guestTrackingCandidates,
@@ -154,3 +157,87 @@ test("a package waiting for a container has a public stage of its own", () => {
       ["service", "stage", "trackingCode", "updatedAtMs"]);
   assert.equal(CONTAINER_STAGE_BY_STATUS.waiting, WAITING_STAGE);
 });
+
+// The WhatsApp "departed" message sends people to this page for the ship's
+// details instead of carrying them; the page shows them only once the box
+// has sailed, and nothing of the container beyond them.
+test("a sailed container line shows its shipping details, nothing more",
+    () => {
+      const box = {
+        businessId: "biz", carrierScac: "maeu",
+        containerNumber: "MSKU1234565", bookingReference: "bk-998877",
+        label: "Private working name", notes: "Private notes",
+        destinationCountryName: "Guinea", priceCents: 999,
+        documentToken: "secret-token", ownerName: "Private Owner",
+      };
+      const line = (containerStatus) => ({
+        trackingCode: "CL-K7M4P2", containerStatus, containerId: "box1",
+        businessId: "biz", customerName: "Fatou Diallo",
+        customerPhone: "+16465550100", receiverPhone: "+224620000000",
+        priceCents: 15000,
+      });
+      const record = (status, container = box) => publicGuestTrackingRecord({
+        id: "line1", service: "container", data: line(status), container,
+      });
+      for (const status of ["shipped", "arrived"]) {
+        const result = record(status);
+        assert.deepEqual(result.shipping, {
+          shippingLine: "Maersk", containerNumber: "MSKU1234565",
+          bookingNumber: "BK-998877",
+        }, status);
+        assert.deepEqual(Object.keys(result).sort(),
+            ["service", "shipping", "stage", "trackingCode", "updatedAtMs"]);
+        const text = JSON.stringify(result);
+        for (const secret of ["Private", "secret-token", "Fatou",
+          "+1646", "+224", "15000", "999", "Guinea", "biz", "box1"]) {
+          assert.ok(!text.includes(secret), `${status} leaks ${secret}`);
+        }
+      }
+      // Before it sails: nothing, even with the box at hand.
+      for (const status of ["waiting", "loading"]) {
+        assert.equal(record(status).shipping, undefined, status);
+      }
+    });
+
+test("shipping details name only what is known", () => {
+  assert.deepEqual(publicContainerShipping("in_transit",
+      {containerNumber: "MSKU1234565"}), {containerNumber: "MSKU1234565"});
+  assert.deepEqual(publicContainerShipping("in_transit",
+      {bookingReference: "BK1"}), {bookingNumber: "BK1"});
+  // A carrier the catalog does not know is named by its code.
+  assert.deepEqual(publicContainerShipping("arrived",
+      {carrierScac: "XYZQ"}), {shippingLine: "XYZQ"});
+  assert.equal(publicContainerShipping("in_transit", {}), null);
+  assert.equal(publicContainerShipping("in_transit", null), null);
+  assert.equal(publicContainerShipping("booked",
+      {containerNumber: "MSKU1234565"}), null);
+  assert.deepEqual(CONTAINER_SHIPPING_STAGES, ["in_transit", "arrived"]);
+  // Other services never carry it.
+  assert.equal(publicGuestTrackingRecord({id: "b", service: "barrel",
+    data: {status: "in_transit"}, container: {containerNumber: "X"}})
+      .shipping, undefined);
+});
+
+test("the container is read only once sailed, and only the same business's",
+    async () => {
+      const reads = [];
+      const db = (container) => ({
+        collection: (name) => ({doc: (id) => ({get: async () => {
+          reads.push(`${name}/${id}`);
+          return {exists: Boolean(container), data: () => container};
+        }})}),
+      });
+      const line = (extra) => ({containerId: "box1", businessId: "biz",
+        containerStatus: "shipped", ...extra});
+      assert.equal(await shippedContainerOf(db({businessId: "biz"}),
+          line({containerStatus: "loading"})), null);
+      assert.equal(await shippedContainerOf(db({businessId: "biz"}),
+          line({containerId: ""})), null);
+      assert.deepEqual(reads, []);
+      assert.equal(await shippedContainerOf(db({businessId: "other"}),
+          line()), null);
+      assert.deepEqual(await shippedContainerOf(db({businessId: "biz",
+        containerNumber: "MSKU1234565"}), line()),
+      {businessId: "biz", containerNumber: "MSKU1234565"});
+      assert.deepEqual(reads, ["containers/box1", "containers/box1"]);
+    });

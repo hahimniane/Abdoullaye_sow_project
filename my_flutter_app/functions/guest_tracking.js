@@ -1,6 +1,7 @@
 "use strict";
 
 const {normalizeTrackingCode} = require("./tracking_code");
+const {oceanCarrierName} = require("./ocean_carrier_catalog");
 
 const GUEST_TRACKING_COLLECTIONS = Object.freeze([
   Object.freeze({name: "barrelShipments", prefix: "BS", service: "barrel"}),
@@ -103,7 +104,40 @@ function timestampMillis(value) {
   return 0;
 }
 
-function publicGuestTrackingRecord({id, service, data}) {
+// Once a container line's box has sailed, the page the WhatsApp button
+// opens names the ship's details a customer can follow on the shipping
+// line's own site. Before sailing the box can still change, so nothing.
+const CONTAINER_SHIPPING_STAGES = Object.freeze(["in_transit", "arrived"]);
+
+/**
+ * The shipping details of a container line's box, for the public page:
+ * the shipping line, the container number and the booking number, each
+ * only when known. Nothing else of the container crosses (no label, notes,
+ * price, people or business), and nothing at all before it has shipped.
+ *
+ * @param {string} stage The line's public stage.
+ * @param {object|null} container The line's container.
+ * @return {object|null} {shippingLine?, containerNumber?, bookingNumber?},
+ *   or null when there is nothing to show.
+ */
+function publicContainerShipping(stage, container) {
+  if (!CONTAINER_SHIPPING_STAGES.includes(stage)) return null;
+  if (!container || typeof container !== "object") return null;
+  const shippingLine = oceanCarrierName(container.carrierScac);
+  const containerNumber = cleanText(
+      container.containerNumber || container.trackedContainerNumber, 20)
+      .toUpperCase();
+  const bookingNumber = cleanText(container.bookingReference, 60)
+      .toUpperCase();
+  const shipping = {
+    ...(shippingLine ? {shippingLine} : {}),
+    ...(containerNumber ? {containerNumber} : {}),
+    ...(bookingNumber ? {bookingNumber} : {}),
+  };
+  return Object.keys(shipping).length ? shipping : null;
+}
+
+function publicGuestTrackingRecord({id, service, data, container = null}) {
   const row = data || {};
   const status = service === "transport" ?
     cleanText(row.fulfillmentStatus || row.status, 60).toLowerCase() :
@@ -113,6 +147,8 @@ function publicGuestTrackingRecord({id, service, data}) {
   const stage = (service === "container" ?
     CONTAINER_STAGE_BY_STATUS[status] :
     PUBLIC_STAGE_BY_STATUS[status]) || "booked";
+  const shipping = service === "container" ?
+    publicContainerShipping(stage, container) : null;
   return {
     trackingCode: cleanText(row.trackingCode || id, 60),
     service,
@@ -126,11 +162,39 @@ function publicGuestTrackingRecord({id, service, data}) {
         0,
       quoteStatus: cleanText(row.quoteStatus, 30).toLowerCase(),
     } : {}),
+    ...(shipping ? {shipping} : {}),
     updatedAtMs: Math.max(
         timestampMillis(row.updatedAt),
         timestampMillis(row.createdAt),
     ),
   };
+}
+
+/**
+ * A container line's box, read only once it has sailed (the only time the
+ * public page shows anything of it) and only when it is the same
+ * business's box.
+ *
+ * @param {!FirebaseFirestore.Firestore} db Admin Firestore instance.
+ * @param {object} line The containerLines row.
+ * @return {!Promise<?Object>} The container's data, or null.
+ */
+async function shippedContainerOf(db, line) {
+  const containerId = cleanText(line?.containerId, 128);
+  const stage = CONTAINER_STAGE_BY_STATUS[
+      cleanText(line?.containerStatus, 60).toLowerCase()];
+  if (!containerId || containerId.includes("/") ||
+      !CONTAINER_SHIPPING_STAGES.includes(stage)) {
+    return null;
+  }
+  const doc = await db.collection("containers").doc(containerId).get();
+  const container = doc.exists ? doc.data() || {} : null;
+  if (!container ||
+      cleanText(container.businessId, 128) !==
+        cleanText(line.businessId, 128)) {
+    return null;
+  }
+  return container;
 }
 
 /**
@@ -157,10 +221,13 @@ async function findGuestTrackingRecord(db, candidates) {
     if (snapshot.empty) continue;
     if (snapshot.docs.length !== 1 || match !== null) return null;
     const document = snapshot.docs[0];
+    const data = document.data() || {};
     match = publicGuestTrackingRecord({
       id: document.id,
       service: config.service,
-      data: document.data(),
+      data,
+      container: config.service === "container" ?
+        await shippedContainerOf(db, data) : null,
     });
   }
   return match;
@@ -170,6 +237,9 @@ module.exports = {
   GUEST_TRACKING_COLLECTIONS,
   PUBLIC_STAGE_BY_STATUS,
   CONTAINER_STAGE_BY_STATUS,
+  CONTAINER_SHIPPING_STAGES,
+  publicContainerShipping,
+  shippedContainerOf,
   WAITING_STAGE,
   WAITING_STAGE_LABEL,
   findGuestTrackingRecord,

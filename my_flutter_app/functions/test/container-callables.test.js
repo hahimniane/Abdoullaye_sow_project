@@ -646,8 +646,14 @@ describe("WhatsApp updates", () => {
           assert.equal(sent.get("whatsappMessageId"), "wamid.TEST");
         }
         assert.equal(whatsappCalls.length, 2);
-        assert.equal(whatsappCalls[0].template.name,
-            "container_status_update");
+        assert.equal(whatsappCalls[0].template.name, "container_departed");
+        // name, what, business, destination (the box's), code - in French
+        // for the Guinean receiver.
+        const receiverCall = whatsappCalls.find((c) => c.to === "224620000000");
+        assert.equal(receiverCall.template.language.code, "fr");
+        assert.deepEqual(receiverCall.template.components[0].parameters
+            .map((p) => p.text).slice(0, 4),
+        ["Mariama Bah", "3 fûts", "Dala Shipping", "Guinée"]);
         const line = await db.collection("containerLines").doc(lineId).get();
         assert.deepEqual(line.get("lastCustomerUpdate.results")
             .map((entry) => entry.status), ["sent", "sent"]);
@@ -716,6 +722,101 @@ describe("WhatsApp updates", () => {
     assert.equal(current.get("status"), "failed");
     assert.equal(current.get("error"), "HTTP 503");
     assert.equal(whatsappCalls.length, 0);
+  });
+
+  it("records package_received when a line is added to a box", async () => {
+    const box = await newContainer();
+    const {lineId} = await call("addContainerLine",
+        {containerId: box, line: barrelLine(2)});
+    for (const role of ["sender", "receiver"]) {
+      const received = await row(lineId, role, "received").get();
+      assert.equal(received.get("status"), "waiting_for_whatsapp");
+      assert.equal(received.get("containerId"), box);
+    }
+    // Registering again never happens for one line; asking the queue again
+    // finds the rows and writes nothing new.
+    const before = (await db.collection("containerUpdates")
+        .where("lineId", "==", lineId).get()).size;
+    assert.equal(before, 2);
+  });
+
+  it("sends package_received with the destination and the code", async () => {
+    connectWhatsApp();
+    const box = await newContainer();
+    const {lineId} = await call("addContainerLine",
+        {containerId: box, line: barrelLine(2)});
+    const ref = row(lineId, "sender", "received");
+    assert.equal((await ref.get()).get("status"), "queued");
+    fakeWhatsApp(OK);
+    await deliver(ref.id);
+    assert.equal((await ref.get()).get("status"), "sent");
+    const [sent] = whatsappCalls;
+    assert.equal(sent.to, "16465550100");
+    assert.equal(sent.template.name, "package_received");
+    assert.equal(sent.template.language.code, "en");
+    const code = (await db.collection("containerLines").doc(lineId).get())
+        .get("trackingCode");
+    assert.deepEqual(sent.template.components[0].parameters
+        .map((p) => p.text),
+    ["Fatou Diallo", "Dala Shipping", "2 barrels", "Guinea", code]);
+    assert.deepEqual(sent.template.components[1].parameters
+        .map((p) => p.text), [code]);
+  });
+
+  // The carrier's "at the port" and staff's "Arrived" are one message.
+  it("sends the arrival once, whichever source reports it first",
+      async () => {
+        const {box, lineId} = await shippedBox();
+        const events = db.collection("containers").doc(box)
+            .collection("trackingEvents");
+        await events.doc("carrier_test_grounded").set({
+          label: "Discharged", source: "carrier_api",
+          customerUpdate: "at_port", timestamp: new Date(),
+        });
+        await call("setContainerStatus", {containerId: box,
+          status: "arrived"});
+        await recordMoments(box);
+        await recordMoments(box);
+        const rows = await db.collection("containerUpdates")
+            .where("lineId", "==", lineId).get();
+        assert.deepEqual(rows.docs.map((d) => d.get("update")).sort(), [
+          "arrived", "arrived", "received", "received", "shipped",
+          "shipped"]);
+        assert.ok(!rows.docs.some((d) => d.id.endsWith("_at_port")));
+        const line = await db.collection("containerLines").doc(lineId).get();
+        assert.equal(line.get("lastCustomerUpdate.update"), "arrived");
+        connectWhatsApp();
+        const current = await call("sendContainerCurrentStatus",
+            {containerId: box});
+        assert.equal(current.update, "arrived");
+      });
+
+  it("sends container_arrived with the business's phone", async () => {
+    connectWhatsApp();
+    const {box, lineId} = await shippedBox();
+    await call("setContainerStatus", {containerId: box, status: "arrived"});
+    await recordMoments(box);
+    const ref = row(lineId, "sender", "arrived");
+    fakeWhatsApp(OK, OK);
+    // No phone on the business yet: words that still read in the sentence.
+    await deliver(ref.id);
+    let params = whatsappCalls[0].template.components[0].parameters
+        .map((p) => p.text);
+    assert.equal(whatsappCalls[0].template.name, "container_arrived");
+    assert.equal(params.length, 6);
+    assert.equal(params[4], "the number on your receipt");
+    const business = db.collection("businesses").doc(BIZ);
+    await business.update({phone: "+16465550199"});
+    try {
+      await ref.update({status: "queued", attempts: 0});
+      await deliver(ref.id);
+      params = whatsappCalls[1].template.components[0].parameters
+          .map((p) => p.text);
+      assert.deepEqual(params.slice(1, 5),
+          ["3 barrels", "Dala Shipping", "Guinea", "+16465550199"]);
+    } finally {
+      await business.update({phone: admin.firestore.FieldValue.delete()});
+    }
   });
 
   it("ignores its own writes", async () => {
@@ -824,19 +925,35 @@ describe("waiting packages", () => {
           (error) => error.code === "permission-denied");
     });
 
-    it("tells nobody: no moment on any timeline, no WhatsApp row", async () => {
-      const before = await updatesOf();
-      connectWhatsApp();
-      fakeWhatsApp(OK);
-      const box = await newContainer();
-      const {lineId} = await call("addWaitingPackage", waitingPackage());
-      await call("assignContainerLines", {containerId: box,
-        lineIds: [lineId]});
-      await recordMoments(box);
-      assert.equal(await eventsOf(box), 0);
-      assert.equal(await updatesOf(), before);
-      assert.equal(whatsappCalls.length, 0);
-    });
+    // Registration tells each person once that the business has it; being
+    // put on a box tells nobody, and nothing lands on a box's timeline.
+    it("queues package_received at drop-off, and nothing on assigning",
+        async () => {
+          const before = await updatesOf();
+          connectWhatsApp();
+          fakeWhatsApp(OK);
+          const box = await newContainer();
+          const {lineId} = await call("addWaitingPackage", waitingPackage());
+          const rows = await db.collection("containerUpdates")
+              .where("lineId", "==", lineId).get();
+          assert.deepEqual(rows.docs.map((d) => d.id).sort(),
+              [`${lineId}_receiver_received`, `${lineId}_sender_received`]);
+          for (const doc of rows.docs) {
+            assert.equal(doc.get("status"), "queued");
+            assert.equal(doc.get("update"), "received");
+            assert.equal(doc.get("containerId"), "");
+            assert.equal(doc.get("businessName"), "Dala Shipping");
+          }
+          const line = (await lineRef(lineId).get()).data();
+          assert.equal(line.lastCustomerUpdate.update, "received");
+          await call("assignContainerLines", {containerId: box,
+            lineIds: [lineId]});
+          await recordMoments(box);
+          assert.equal(await eventsOf(box), 0);
+          assert.equal(await updatesOf(), before + 2);
+          // Only queued: the platform's trigger sends, not the callable.
+          assert.equal(whatsappCalls.length, 0);
+        });
 
     it("lets exactly one of two waiting cars of a VIN through", async () => {
       const vin = freshVin();
