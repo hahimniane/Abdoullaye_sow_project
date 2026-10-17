@@ -34,9 +34,13 @@ class BusinessHomeArguments {
   final String? category;
 }
 
-/// The Inventory sales list, opened from a "Sale at ..." notification.
+/// The Inventory sales list, opened from a "Sale at ..." notification - or a
+/// credit one ([kind] `credit`: a credit to collect, or one overdue).
 class InventorySalesArguments {
-  const InventorySalesArguments({this.saleId, this.storeId});
+  const InventorySalesArguments({this.saleId, this.storeId, this.kind});
+
+  /// `credit` for a credit alert; null for a sale alert.
+  final String? kind;
 
   /// The sale the notification was about.
   final String? saleId;
@@ -353,15 +357,25 @@ NotificationRoute? _businessRouteForNotificationData(
     case 'review_request':
       // A business is told about a review left for it, not asked to write one.
       return const NotificationRoute('/business-reviews');
-    // "Sale at Main store": someone else of the store rang up a sale.
+    // "Sale at Main store": someone else of the store rang up a sale. A
+    // credit alert ("You collect $40.00 from ...", "... is overdue") opens
+    // its sale the same way, whether it comes as an `inventory_sale` with
+    // `kind: credit` or with a credit type of its own.
     case 'inventory_sale':
+    case 'inventory_credit':
+    case 'inventory_credit_assigned':
+    case 'inventory_credit_overdue':
+    case 'inventory_credit_payment':
       final saleId = _firstNonEmpty(data, ['saleId', 'relatedId']);
       final storeId = data['storeId']?.toString().trim() ?? '';
+      final kind = data['kind']?.toString().trim() ?? '';
+      final credit = kind == 'credit' || type.startsWith('inventory_credit');
       return NotificationRoute(
         '/inventory-sales',
         arguments: InventorySalesArguments(
           saleId: saleId.isEmpty ? null : saleId,
           storeId: storeId.isEmpty ? null : storeId,
+          kind: credit ? 'credit' : null,
         ),
       );
     default:

@@ -12393,4 +12393,493 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get pkgLabelsTipSystem =>
       'Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side.';
+
+  @override
+  String invCreditMe(String name) {
+    return '$name (me)';
+  }
+
+  @override
+  String get invCreditOnCredit => 'On credit';
+
+  @override
+  String get invCreditOnCreditNote =>
+      'The customer pays part now (or nothing) and owes the rest.';
+
+  @override
+  String get invCreditPaidNow => 'Paid now (US dollars)';
+
+  @override
+  String get invCreditCustomerName => 'Customer name';
+
+  @override
+  String get invCreditCustomerPhone => 'Customer phone';
+
+  @override
+  String get invCreditCollector => 'Who collects the rest';
+
+  @override
+  String get invCreditCollectorPick => 'Choose who collects';
+
+  @override
+  String get invCreditDueDate => 'Due date (optional)';
+
+  @override
+  String get invCreditNoDueDate => 'No due date';
+
+  @override
+  String get invCreditClearDueDate => 'Clear the due date';
+
+  @override
+  String invCreditSplit(String paid, String owed) {
+    return 'Paid now $paid · On credit $owed';
+  }
+
+  @override
+  String get invCreditErrPaidNowInvalid =>
+      'Enter the amount paid now, or leave it empty for nothing.';
+
+  @override
+  String get invCreditErrPaidNowTooLarge =>
+      'On credit, the amount paid now must be less than the total.';
+
+  @override
+  String get invCreditErrPhoneRequired => 'Enter the customer\'s phone number.';
+
+  @override
+  String get invCreditErrCollectorRequired => 'Choose who collects the rest.';
+
+  @override
+  String get invCreditErrCollectorInvalid =>
+      'That person is not in this business.';
+
+  @override
+  String get invCreditErrDueDate => 'Pick a due date from today on.';
+
+  @override
+  String get invCreditFixCheckout => 'Check the payment details above.';
+
+  @override
+  String invCreditOwes(String name, String amount) {
+    return '$name owes $amount';
+  }
+
+  @override
+  String get invCreditFailCustomer =>
+      'A credit sale needs the customer\'s name and phone.';
+
+  @override
+  String get invCreditFailNoCredit => 'This sale has nothing on credit.';
+
+  @override
+  String get invCreditFailHasPayments =>
+      'This sale has credit payments. Revert them before voiding it.';
+
+  @override
+  String get invCreditFailInvalid =>
+      'These credit details are not valid. Check them and try again.';
+
+  @override
+  String get invCreditFailAmountInvalid =>
+      'Enter an amount above zero, to the cent.';
+
+  @override
+  String get invCreditFailPhoneInvalid =>
+      'Enter the customer\'s phone with its country code.';
+
+  @override
+  String get invCreditPaymentOnCredit => 'On credit';
+
+  @override
+  String invSummaryOnCredit(String credit, String owed) {
+    return 'Of which on credit $credit ($owed still owed)';
+  }
+
+  @override
+  String invCreditChipOpen(String amount) {
+    return 'Owed $amount';
+  }
+
+  @override
+  String invCreditChipOverdue(String amount) {
+    return 'Overdue $amount';
+  }
+
+  @override
+  String get invCreditChipPaid => 'Credit paid';
+
+  @override
+  String get invCreditFilterAll => 'All sales';
+
+  @override
+  String get invCreditOwedTitle => 'Credit owed';
+
+  @override
+  String get invCreditOwedHint => 'Customers who still owe';
+
+  @override
+  String invCreditReceivedByName(String name) {
+    return 'Received by $name';
+  }
+
+  @override
+  String get invCreditDetails => 'Credit details';
+
+  @override
+  String invCreditOwedOf(String owed, String credit) {
+    return '$owed owed of $credit';
+  }
+
+  @override
+  String get invCreditPaidOff => 'Paid in full';
+
+  @override
+  String get invCreditCustomer => 'Customer';
+
+  @override
+  String invCreditCall(String name) {
+    return 'Call $name';
+  }
+
+  @override
+  String get invCreditCallFailed => 'The phone could not start the call.';
+
+  @override
+  String invCreditCollectedBy(String name) {
+    return 'Collected by $name';
+  }
+
+  @override
+  String get invCreditNoCollector => 'No one is collecting it yet';
+
+  @override
+  String invCreditDueOn(String date) {
+    return 'Due $date';
+  }
+
+  @override
+  String invCreditOverdueSince(String date) {
+    return 'Overdue since $date';
+  }
+
+  @override
+  String get invCreditChange => 'Change collector or due date';
+
+  @override
+  String get invCreditChanged => 'Credit updated.';
+
+  @override
+  String invCreditPaidAtSale(String amount) {
+    return '$amount paid at the counter';
+  }
+
+  @override
+  String get invCreditVoidedNote => 'This sale was voided: nothing is owed.';
+
+  @override
+  String get invCreditFilterMine => 'Mine';
+
+  @override
+  String get invCreditFilterEveryone => 'Everyone';
+
+  @override
+  String invCreditTotals(int count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count open credits',
+      one: '1 open credit',
+    );
+    return '$_temp0 · $amount owed';
+  }
+
+  @override
+  String invCreditOverdueTotals(int count, String amount) {
+    return '$count overdue · $amount';
+  }
+
+  @override
+  String get invCreditNoneOpen => 'Nothing is owed.';
+
+  @override
+  String get invCreditNoneOpenHint =>
+      'Credit sales still owed show here until they are paid.';
+
+  @override
+  String get invCreditLoadFailed => 'The credits could not be loaded.';
+
+  @override
+  String invCreditSoldOn(String date) {
+    return 'Sold $date';
+  }
+
+  @override
+  String get invCreditNotifications => 'Credit to collect';
+
+  @override
+  String get salesHistTitle => 'Sales history';
+
+  @override
+  String get salesHistHint => 'Day, week, month, year';
+
+  @override
+  String get salesHistDay => 'Day';
+
+  @override
+  String get salesHistWeek => 'Week';
+
+  @override
+  String get salesHistMonth => 'Month';
+
+  @override
+  String get salesHistYear => 'Year';
+
+  @override
+  String get salesHistPrevious => 'Previous period';
+
+  @override
+  String get salesHistNext => 'Next period';
+
+  @override
+  String get salesHistPickDate => 'Pick a date';
+
+  @override
+  String get salesHistRefresh => 'Refresh';
+
+  @override
+  String salesHistCurrent(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'day': 'Today',
+      'week': 'This week',
+      'month': 'This month',
+      'other': 'This year',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String salesHistRange(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
+  String get salesHistTotalSold => 'Total sold';
+
+  @override
+  String salesHistVsPrevious(String change, String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'day': 'vs the day before',
+      'week': 'vs the week before',
+      'month': 'vs the month before',
+      'other': 'vs the year before',
+    });
+    return '$change $_temp0';
+  }
+
+  @override
+  String salesHistNoComparison(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'day': 'No sales the day before',
+      'week': 'No sales the week before',
+      'month': 'No sales the month before',
+      'other': 'No sales the year before',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String salesHistSalesLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'sales',
+      one: 'sale',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get salesHistAverage => 'Average sale';
+
+  @override
+  String salesHistItemsLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'items sold',
+      one: 'item sold',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String salesHistProfitPartial(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lines have no cost and are left out',
+      one: '1 line has no cost and is left out',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String salesHistCollected(String amount) {
+    return 'Credit collected $amount';
+  }
+
+  @override
+  String salesHistVoidedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count voided sales, not counted',
+      one: '1 voided sale, not counted',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String salesHistChartTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'day': 'By hour',
+      'week': 'By day',
+      'month': 'By day',
+      'other': 'By month',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get salesHistChartHint => 'Tap a bar to see its amount.';
+
+  @override
+  String salesHistBarValue(String label, String amount) {
+    return '$label: $amount';
+  }
+
+  @override
+  String get salesHistOpenDay => 'See this day';
+
+  @override
+  String get salesHistOpenMonth => 'See this month';
+
+  @override
+  String get salesHistByStore => 'By store';
+
+  @override
+  String get salesHistBySeller => 'By seller';
+
+  @override
+  String get salesHistByPayment => 'By payment';
+
+  @override
+  String get salesHistTopProducts => 'Top products';
+
+  @override
+  String get salesHistTopBrands => 'Top brands';
+
+  @override
+  String get salesHistTopCategories => 'Top categories';
+
+  @override
+  String salesHistSalesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sales',
+      one: '1 sale',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String salesHistPieces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sold',
+      one: '1 sold',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get salesHistNoStore => 'No store';
+
+  @override
+  String get salesHistUnknownPerson => 'Unknown person';
+
+  @override
+  String get salesHistTimelineTitle => 'What happened';
+
+  @override
+  String salesHistMoreLines(String name, int count) {
+    return '$name + $count more';
+  }
+
+  @override
+  String get salesHistEventSaleFallback => 'Sale';
+
+  @override
+  String get salesHistEventVoided => 'Sale voided';
+
+  @override
+  String get salesHistEventPayment => 'Credit payment';
+
+  @override
+  String get salesHistEventReverted => 'Credit payment reverted';
+
+  @override
+  String salesHistEventAdded(String item) {
+    return 'Stock added: $item';
+  }
+
+  @override
+  String salesHistEventSet(String item) {
+    return 'Count set: $item';
+  }
+
+  @override
+  String salesHistEventMoved(String item) {
+    return 'Stock moved: $item';
+  }
+
+  @override
+  String get salesHistUnknownItem => 'A product';
+
+  @override
+  String get salesHistVoidedTag => 'Voided';
+
+  @override
+  String salesHistByPerson(String name) {
+    return 'by $name';
+  }
+
+  @override
+  String salesHistCountNow(int count) {
+    return 'now $count';
+  }
+
+  @override
+  String get salesHistEmpty => 'No sales in this period';
+
+  @override
+  String get salesHistEmptyHint => 'Pick another day, week, month or year.';
+
+  @override
+  String salesHistTruncated(String count) {
+    return 'Showing the first $count records of this period (the newest). Pick a shorter period to see them all.';
+  }
+
+  @override
+  String get salesHistPartial =>
+      'Some activity could not be loaded, so stock changes, credit payments or older voids may be missing.';
+
+  @override
+  String get salesHistLoadFailed =>
+      'Couldn\'t load this period. Check the connection and try again.';
+
+  @override
+  String get salesHistNothingHappened => 'Nothing happened in this period.';
 }

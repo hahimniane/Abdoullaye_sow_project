@@ -3,11 +3,13 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/callable_data.dart';
 import 'firestore_query_spec.dart';
 import 'inventory.dart';
+import 'inventory_credit.dart';
 import 'inventory_stores.dart';
 import 'lot_ledger.dart' show LotStaff;
 import 'waiting_package_service.dart';
@@ -154,6 +156,124 @@ FirestoreQuerySpec inventoryStockSpec(
 
 /// One page of the sales list.
 const inventorySalesPageSize = 25;
+
+/// The credit sales still owed. Equalities only (`creditStatus == open` is
+/// its own bound: a credit leaves the list when it is paid), sorted on the
+/// phone; staff tied to one store add their store, as for the sales list.
+FirestoreQuerySpec inventoryOpenCreditsSpec(
+  String businessId, {
+  String storeId = '',
+}) => FirestoreQuerySpec(
+  collection: 'inventorySales',
+  filters: [
+    QueryFilterSpec('businessId', QueryFilterOp.equal, businessId),
+    QueryFilterSpec('creditStatus', QueryFilterOp.equal, 'open'),
+    if (storeId.isNotEmpty)
+      QueryFilterSpec('storeId', QueryFilterOp.equal, storeId),
+  ],
+);
+
+/// One credit sale's later payments. Equalities only, sorted on the phone;
+/// staff tied to one store add their store (the rules read it).
+FirestoreQuerySpec inventoryCreditPaymentsSpec(
+  String businessId,
+  String saleId, {
+  String storeId = '',
+}) => FirestoreQuerySpec(
+  collection: 'inventoryCreditPayments',
+  filters: [
+    QueryFilterSpec('businessId', QueryFilterOp.equal, businessId),
+    QueryFilterSpec('saleId', QueryFilterOp.equal, saleId),
+    if (storeId.isNotEmpty)
+      QueryFilterSpec('storeId', QueryFilterOp.equal, storeId),
+  ],
+);
+
+/// The signed-in person's id, '' when there is none (or no Firebase, as in
+/// a widget test). Screens take it as a parameter and fall back to this.
+String inventoryCurrentUserId() {
+  try {
+    return FirebaseAuth.instance.currentUser?.uid ?? '';
+  } catch (_) {
+    return '';
+  }
+}
+
+/// The business's owner as the business document names them: the people
+/// pickers add them (`withBusinessOwner`) even when their own profile does
+/// not name the business.
+typedef InventoryBusinessOwner = ({String uid, String name, String email});
+
+/// What the credit screens read beyond the sales: the open credits, a
+/// credit's payments, and the owner. A separate interface from
+/// [InventorySource] so a screen that sells nothing on credit needs none of
+/// it.
+abstract interface class InventoryCreditSource {
+  /// The credit sales still owed ([storeId]: one store's only).
+  Stream<List<InventorySale>> watchOpenCredits(
+    String businessId, {
+    String storeId = '',
+  });
+
+  /// One credit sale's later payments, newest first.
+  Stream<List<InventoryCreditPayment>> watchCreditPayments(
+    String businessId,
+    String saleId, {
+    String storeId = '',
+  });
+
+  Stream<InventoryBusinessOwner> watchBusinessOwner(String businessId);
+}
+
+class FirestoreInventoryCreditSource implements InventoryCreditSource {
+  FirestoreInventoryCreditSource({FirebaseFirestore? firestore})
+    : _override = firestore;
+
+  final FirebaseFirestore? _override;
+  FirebaseFirestore get _db => _override ?? FirebaseFirestore.instance;
+
+  @override
+  Stream<List<InventorySale>> watchOpenCredits(
+    String businessId, {
+    String storeId = '',
+  }) => inventoryOpenCreditsSpec(businessId, storeId: storeId)
+      .build(_db)
+      .snapshots()
+      .map(
+        (snap) => [
+          for (final d in snap.docs) InventorySale.fromMap(d.id, d.data()),
+        ],
+      );
+
+  @override
+  Stream<List<InventoryCreditPayment>> watchCreditPayments(
+    String businessId,
+    String saleId, {
+    String storeId = '',
+  }) => inventoryCreditPaymentsSpec(businessId, saleId, storeId: storeId)
+      .build(_db)
+      .snapshots()
+      .map(
+        (snap) => sortCreditPaymentsNewestFirst([
+          for (final d in snap.docs)
+            InventoryCreditPayment.fromMap(d.id, d.data()),
+        ]),
+      );
+
+  @override
+  Stream<InventoryBusinessOwner> watchBusinessOwner(String businessId) => _db
+      .collection('businesses')
+      .doc(businessId)
+      .snapshots()
+      .map((doc) {
+        final data = doc.data() ?? const <String, dynamic>{};
+        return (
+          uid: (data['ownerUid'] ?? '').toString(),
+          name: (data['ownerName'] ?? '').toString(),
+          email: (data['ownerEmail'] ?? '').toString(),
+        );
+      });
+}
 
 /// What the screens read, behind an interface so a widget test serves its own
 /// rows. Reads are the business-scoped queries the rules allow; every write is
@@ -449,13 +569,17 @@ class InventoryService {
   );
 
   /// Records the sale. The same [clientRequestId] answers with the same sale,
-  /// so a retry after a lost answer never sells twice.
+  /// so a retry after a lost answer never sells twice. [receivedByStaffId]
+  /// and [credit] (`inventoryCreditRequest`) say who took the money and what
+  /// is left owed.
   Future<InventorySaleResult> recordSale({
     required String businessId,
     required String clientRequestId,
     required String paymentMethod,
     required Basket basket,
     String storeId = '',
+    String receivedByStaffId = '',
+    Map<String, Object?>? credit,
   }) async {
     final result = InventorySaleResult.fromCallable(
       await caller(
@@ -466,12 +590,66 @@ class InventoryService {
           paymentMethod: paymentMethod,
           basket: basket,
           storeId: storeId,
+          receivedByStaffId: receivedByStaffId,
+          credit: credit,
         ),
       ),
     );
     if (result == null) throw StateError('sale not recorded');
     return result;
   }
+
+  // ----- credit ------------------------------------------------------------
+
+  /// Money that came in later against a credit sale (part of it is fine).
+  Future<InventoryCreditPaymentResult> recordCreditPayment({
+    required String businessId,
+    required String saleId,
+    required int amountCents,
+    required String method,
+    required String receivedByStaffId,
+    String note = '',
+  }) async => InventoryCreditPaymentResult.fromCallable(
+    await caller(
+      'recordInventoryCreditPayment',
+      recordInventoryCreditPaymentRequest(
+        businessId: businessId,
+        saleId: saleId,
+        amountCents: amountCents,
+        method: method,
+        receivedByStaffId: receivedByStaffId,
+        note: note,
+      ),
+    ),
+  );
+
+  /// A mistaken payment is struck through; the balance goes back up.
+  Future<InventoryCreditPaymentResult> revertCreditPayment(
+    String businessId,
+    String paymentId,
+  ) async => InventoryCreditPaymentResult.fromCallable(
+    await caller(
+      'revertInventoryCreditPayment',
+      revertInventoryCreditPaymentRequest(businessId, paymentId),
+    ),
+  );
+
+  /// Hands the collecting to someone else, and moves the due date when
+  /// [dueDate] is given ('' clears it).
+  Future<void> setCreditCollector({
+    required String businessId,
+    required String saleId,
+    required String collectorStaffId,
+    String? dueDate,
+  }) => caller(
+    'setInventoryCreditCollector',
+    setInventoryCreditCollectorRequest(
+      businessId: businessId,
+      saleId: saleId,
+      collectorStaffId: collectorStaffId,
+      dueDate: dueDate,
+    ),
+  );
 
   Future<void> voidSale(
     String businessId,

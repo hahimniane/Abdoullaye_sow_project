@@ -21610,6 +21610,684 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side.'**
   String get pkgLabelsTipSystem;
+
+  /// No description provided for @invCreditMe.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (me)'**
+  String invCreditMe(String name);
+
+  /// No description provided for @invCreditOnCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'On credit'**
+  String get invCreditOnCredit;
+
+  /// No description provided for @invCreditOnCreditNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer pays part now (or nothing) and owes the rest.'**
+  String get invCreditOnCreditNote;
+
+  /// No description provided for @invCreditPaidNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid now (US dollars)'**
+  String get invCreditPaidNow;
+
+  /// No description provided for @invCreditCustomerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer name'**
+  String get invCreditCustomerName;
+
+  /// No description provided for @invCreditCustomerPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer phone'**
+  String get invCreditCustomerPhone;
+
+  /// No description provided for @invCreditCollector.
+  ///
+  /// In en, this message translates to:
+  /// **'Who collects the rest'**
+  String get invCreditCollector;
+
+  /// No description provided for @invCreditCollectorPick.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose who collects'**
+  String get invCreditCollectorPick;
+
+  /// No description provided for @invCreditDueDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Due date (optional)'**
+  String get invCreditDueDate;
+
+  /// No description provided for @invCreditNoDueDate.
+  ///
+  /// In en, this message translates to:
+  /// **'No due date'**
+  String get invCreditNoDueDate;
+
+  /// No description provided for @invCreditClearDueDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the due date'**
+  String get invCreditClearDueDate;
+
+  /// No description provided for @invCreditSplit.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid now {paid} · On credit {owed}'**
+  String invCreditSplit(String paid, String owed);
+
+  /// No description provided for @invCreditErrPaidNowInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount paid now, or leave it empty for nothing.'**
+  String get invCreditErrPaidNowInvalid;
+
+  /// No description provided for @invCreditErrPaidNowTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'On credit, the amount paid now must be less than the total.'**
+  String get invCreditErrPaidNowTooLarge;
+
+  /// No description provided for @invCreditErrPhoneRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the customer\'s phone number.'**
+  String get invCreditErrPhoneRequired;
+
+  /// No description provided for @invCreditErrCollectorRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose who collects the rest.'**
+  String get invCreditErrCollectorRequired;
+
+  /// No description provided for @invCreditErrCollectorInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That person is not in this business.'**
+  String get invCreditErrCollectorInvalid;
+
+  /// No description provided for @invCreditErrDueDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a due date from today on.'**
+  String get invCreditErrDueDate;
+
+  /// No description provided for @invCreditFixCheckout.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the payment details above.'**
+  String get invCreditFixCheckout;
+
+  /// No description provided for @invCreditOwes.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} owes {amount}'**
+  String invCreditOwes(String name, String amount);
+
+  /// No description provided for @invCreditFailCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'A credit sale needs the customer\'s name and phone.'**
+  String get invCreditFailCustomer;
+
+  /// No description provided for @invCreditFailNoCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale has nothing on credit.'**
+  String get invCreditFailNoCredit;
+
+  /// No description provided for @invCreditFailHasPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale has credit payments. Revert them before voiding it.'**
+  String get invCreditFailHasPayments;
+
+  /// No description provided for @invCreditFailInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'These credit details are not valid. Check them and try again.'**
+  String get invCreditFailInvalid;
+
+  /// No description provided for @invCreditFailAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount above zero, to the cent.'**
+  String get invCreditFailAmountInvalid;
+
+  /// No description provided for @invCreditFailPhoneInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the customer\'s phone with its country code.'**
+  String get invCreditFailPhoneInvalid;
+
+  /// No description provided for @invCreditPaymentOnCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'On credit'**
+  String get invCreditPaymentOnCredit;
+
+  /// No description provided for @invSummaryOnCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Of which on credit {credit} ({owed} still owed)'**
+  String invSummaryOnCredit(String credit, String owed);
+
+  /// No description provided for @invCreditChipOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed {amount}'**
+  String invCreditChipOpen(String amount);
+
+  /// No description provided for @invCreditChipOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue {amount}'**
+  String invCreditChipOverdue(String amount);
+
+  /// No description provided for @invCreditChipPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit paid'**
+  String get invCreditChipPaid;
+
+  /// No description provided for @invCreditFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All sales'**
+  String get invCreditFilterAll;
+
+  /// No description provided for @invCreditOwedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit owed'**
+  String get invCreditOwedTitle;
+
+  /// No description provided for @invCreditOwedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers who still owe'**
+  String get invCreditOwedHint;
+
+  /// No description provided for @invCreditReceivedByName.
+  ///
+  /// In en, this message translates to:
+  /// **'Received by {name}'**
+  String invCreditReceivedByName(String name);
+
+  /// No description provided for @invCreditDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit details'**
+  String get invCreditDetails;
+
+  /// No description provided for @invCreditOwedOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{owed} owed of {credit}'**
+  String invCreditOwedOf(String owed, String credit);
+
+  /// No description provided for @invCreditPaidOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid in full'**
+  String get invCreditPaidOff;
+
+  /// No description provided for @invCreditCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer'**
+  String get invCreditCustomer;
+
+  /// No description provided for @invCreditCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Call {name}'**
+  String invCreditCall(String name);
+
+  /// No description provided for @invCreditCallFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The phone could not start the call.'**
+  String get invCreditCallFailed;
+
+  /// No description provided for @invCreditCollectedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected by {name}'**
+  String invCreditCollectedBy(String name);
+
+  /// No description provided for @invCreditNoCollector.
+  ///
+  /// In en, this message translates to:
+  /// **'No one is collecting it yet'**
+  String get invCreditNoCollector;
+
+  /// No description provided for @invCreditDueOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {date}'**
+  String invCreditDueOn(String date);
+
+  /// No description provided for @invCreditOverdueSince.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue since {date}'**
+  String invCreditOverdueSince(String date);
+
+  /// No description provided for @invCreditChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change collector or due date'**
+  String get invCreditChange;
+
+  /// No description provided for @invCreditChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit updated.'**
+  String get invCreditChanged;
+
+  /// No description provided for @invCreditPaidAtSale.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} paid at the counter'**
+  String invCreditPaidAtSale(String amount);
+
+  /// No description provided for @invCreditVoidedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale was voided: nothing is owed.'**
+  String get invCreditVoidedNote;
+
+  /// No description provided for @invCreditFilterMine.
+  ///
+  /// In en, this message translates to:
+  /// **'Mine'**
+  String get invCreditFilterMine;
+
+  /// No description provided for @invCreditFilterEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get invCreditFilterEveryone;
+
+  /// No description provided for @invCreditTotals.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 open credit} other{{count} open credits}} · {amount} owed'**
+  String invCreditTotals(int count, String amount);
+
+  /// No description provided for @invCreditOverdueTotals.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} overdue · {amount}'**
+  String invCreditOverdueTotals(int count, String amount);
+
+  /// No description provided for @invCreditNoneOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is owed.'**
+  String get invCreditNoneOpen;
+
+  /// No description provided for @invCreditNoneOpenHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit sales still owed show here until they are paid.'**
+  String get invCreditNoneOpenHint;
+
+  /// No description provided for @invCreditLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The credits could not be loaded.'**
+  String get invCreditLoadFailed;
+
+  /// No description provided for @invCreditSoldOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold {date}'**
+  String invCreditSoldOn(String date);
+
+  /// No description provided for @invCreditNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit to collect'**
+  String get invCreditNotifications;
+
+  /// No description provided for @salesHistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales history'**
+  String get salesHistTitle;
+
+  /// No description provided for @salesHistHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Day, week, month, year'**
+  String get salesHistHint;
+
+  /// No description provided for @salesHistDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day'**
+  String get salesHistDay;
+
+  /// No description provided for @salesHistWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get salesHistWeek;
+
+  /// No description provided for @salesHistMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get salesHistMonth;
+
+  /// No description provided for @salesHistYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get salesHistYear;
+
+  /// No description provided for @salesHistPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous period'**
+  String get salesHistPrevious;
+
+  /// No description provided for @salesHistNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next period'**
+  String get salesHistNext;
+
+  /// No description provided for @salesHistPickDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date'**
+  String get salesHistPickDate;
+
+  /// No description provided for @salesHistRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get salesHistRefresh;
+
+  /// No description provided for @salesHistCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, day{Today} week{This week} month{This month} other{This year}}'**
+  String salesHistCurrent(String kind);
+
+  /// No description provided for @salesHistRange.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} – {end}'**
+  String salesHistRange(String start, String end);
+
+  /// No description provided for @salesHistTotalSold.
+  ///
+  /// In en, this message translates to:
+  /// **'Total sold'**
+  String get salesHistTotalSold;
+
+  /// No description provided for @salesHistVsPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'{change} {kind, select, day{vs the day before} week{vs the week before} month{vs the month before} other{vs the year before}}'**
+  String salesHistVsPrevious(String change, String kind);
+
+  /// No description provided for @salesHistNoComparison.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, day{No sales the day before} week{No sales the week before} month{No sales the month before} other{No sales the year before}}'**
+  String salesHistNoComparison(String kind);
+
+  /// No description provided for @salesHistSalesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{sale} other{sales}}'**
+  String salesHistSalesLabel(int count);
+
+  /// No description provided for @salesHistAverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Average sale'**
+  String get salesHistAverage;
+
+  /// No description provided for @salesHistItemsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{item sold} other{items sold}}'**
+  String salesHistItemsLabel(int count);
+
+  /// No description provided for @salesHistProfitPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 line has no cost and is left out} other{{count} lines have no cost and are left out}}'**
+  String salesHistProfitPartial(int count);
+
+  /// No description provided for @salesHistCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit collected {amount}'**
+  String salesHistCollected(String amount);
+
+  /// No description provided for @salesHistVoidedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 voided sale, not counted} other{{count} voided sales, not counted}}'**
+  String salesHistVoidedCount(int count);
+
+  /// No description provided for @salesHistChartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, day{By hour} week{By day} month{By day} other{By month}}'**
+  String salesHistChartTitle(String kind);
+
+  /// No description provided for @salesHistChartHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a bar to see its amount.'**
+  String get salesHistChartHint;
+
+  /// No description provided for @salesHistBarValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {amount}'**
+  String salesHistBarValue(String label, String amount);
+
+  /// No description provided for @salesHistOpenDay.
+  ///
+  /// In en, this message translates to:
+  /// **'See this day'**
+  String get salesHistOpenDay;
+
+  /// No description provided for @salesHistOpenMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'See this month'**
+  String get salesHistOpenMonth;
+
+  /// No description provided for @salesHistByStore.
+  ///
+  /// In en, this message translates to:
+  /// **'By store'**
+  String get salesHistByStore;
+
+  /// No description provided for @salesHistBySeller.
+  ///
+  /// In en, this message translates to:
+  /// **'By seller'**
+  String get salesHistBySeller;
+
+  /// No description provided for @salesHistByPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'By payment'**
+  String get salesHistByPayment;
+
+  /// No description provided for @salesHistTopProducts.
+  ///
+  /// In en, this message translates to:
+  /// **'Top products'**
+  String get salesHistTopProducts;
+
+  /// No description provided for @salesHistTopBrands.
+  ///
+  /// In en, this message translates to:
+  /// **'Top brands'**
+  String get salesHistTopBrands;
+
+  /// No description provided for @salesHistTopCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'Top categories'**
+  String get salesHistTopCategories;
+
+  /// No description provided for @salesHistSalesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 sale} other{{count} sales}}'**
+  String salesHistSalesCount(int count);
+
+  /// No description provided for @salesHistPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 sold} other{{count} sold}}'**
+  String salesHistPieces(int count);
+
+  /// No description provided for @salesHistNoStore.
+  ///
+  /// In en, this message translates to:
+  /// **'No store'**
+  String get salesHistNoStore;
+
+  /// No description provided for @salesHistUnknownPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown person'**
+  String get salesHistUnknownPerson;
+
+  /// No description provided for @salesHistTimelineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened'**
+  String get salesHistTimelineTitle;
+
+  /// No description provided for @salesHistMoreLines.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} + {count} more'**
+  String salesHistMoreLines(String name, int count);
+
+  /// No description provided for @salesHistEventSaleFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale'**
+  String get salesHistEventSaleFallback;
+
+  /// No description provided for @salesHistEventVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale voided'**
+  String get salesHistEventVoided;
+
+  /// No description provided for @salesHistEventPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit payment'**
+  String get salesHistEventPayment;
+
+  /// No description provided for @salesHistEventReverted.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit payment reverted'**
+  String get salesHistEventReverted;
+
+  /// No description provided for @salesHistEventAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock added: {item}'**
+  String salesHistEventAdded(String item);
+
+  /// No description provided for @salesHistEventSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Count set: {item}'**
+  String salesHistEventSet(String item);
+
+  /// No description provided for @salesHistEventMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock moved: {item}'**
+  String salesHistEventMoved(String item);
+
+  /// No description provided for @salesHistUnknownItem.
+  ///
+  /// In en, this message translates to:
+  /// **'A product'**
+  String get salesHistUnknownItem;
+
+  /// No description provided for @salesHistVoidedTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get salesHistVoidedTag;
+
+  /// No description provided for @salesHistByPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'by {name}'**
+  String salesHistByPerson(String name);
+
+  /// No description provided for @salesHistCountNow.
+  ///
+  /// In en, this message translates to:
+  /// **'now {count}'**
+  String salesHistCountNow(int count);
+
+  /// No description provided for @salesHistEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No sales in this period'**
+  String get salesHistEmpty;
+
+  /// No description provided for @salesHistEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick another day, week, month or year.'**
+  String get salesHistEmptyHint;
+
+  /// No description provided for @salesHistTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the first {count} records of this period (the newest). Pick a shorter period to see them all.'**
+  String salesHistTruncated(String count);
+
+  /// No description provided for @salesHistPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Some activity could not be loaded, so stock changes, credit payments or older voids may be missing.'**
+  String get salesHistPartial;
+
+  /// No description provided for @salesHistLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this period. Check the connection and try again.'**
+  String get salesHistLoadFailed;
+
+  /// No description provided for @salesHistNothingHappened.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing happened in this period.'**
+  String get salesHistNothingHappened;
 }
 
 class _AppLocalizationsDelegate

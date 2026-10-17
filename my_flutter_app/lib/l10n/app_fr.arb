@@ -5456,7 +5456,13 @@
   "inventoryErrStoreName": "Saisissez un nom de magasin.",
   "inventoryErrStoreRequired": "Choisissez un magasin.",
   "inventoryStoreShowing": "Affichage de {store}",
-  "@inventoryStoreShowing": {"placeholders": {"store": {"type": "String"}}},
+  "@inventoryStoreShowing": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
   "inventoryStoreSellingFrom": "Vente depuis {store}",
   "@inventoryStoreSellingFrom": {
     "placeholders": {
@@ -5787,5 +5793,400 @@
         "type": "int"
       }
     }
-  }
+  },
+  "invCreditMe": "{name} (moi)",
+  "@invCreditMe": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOnCredit": "À crédit",
+  "invCreditOnCreditNote": "Le client paie une partie maintenant (ou rien) et doit le reste.",
+  "invCreditPaidNow": "Payé maintenant (dollars US)",
+  "invCreditCustomerName": "Nom du client",
+  "invCreditCustomerPhone": "Téléphone du client",
+  "invCreditCollector": "Qui encaisse le reste",
+  "invCreditCollectorPick": "Choisir qui encaisse",
+  "invCreditDueDate": "Échéance (facultatif)",
+  "invCreditNoDueDate": "Sans échéance",
+  "invCreditClearDueDate": "Effacer l'échéance",
+  "invCreditSplit": "Payé maintenant {paid} · À crédit {owed}",
+  "@invCreditSplit": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditErrPaidNowInvalid": "Saisissez le montant payé maintenant, ou laissez vide pour rien.",
+  "invCreditErrPaidNowTooLarge": "À crédit, le montant payé maintenant doit être inférieur au total.",
+  "invCreditErrPhoneRequired": "Saisissez le numéro de téléphone du client.",
+  "invCreditErrCollectorRequired": "Choisissez qui encaisse le reste.",
+  "invCreditErrCollectorInvalid": "Cette personne ne fait pas partie de cette entreprise.",
+  "invCreditErrDueDate": "Choisissez une échéance à partir d'aujourd'hui.",
+  "invCreditFixCheckout": "Vérifiez les détails du paiement ci-dessus.",
+  "invCreditOwes": "{name} doit {amount}",
+  "@invCreditOwes": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditFailCustomer": "Une vente à crédit demande le nom et le téléphone du client.",
+  "invCreditFailNoCredit": "Cette vente n'a rien à crédit.",
+  "invCreditFailHasPayments": "Cette vente a des paiements de crédit. Annulez-les avant d'annuler la vente.",
+  "invCreditFailInvalid": "Ces informations de crédit ne sont pas valides. Vérifiez-les et réessayez.",
+  "invCreditFailAmountInvalid": "Saisissez un montant supérieur à zéro, au centime près.",
+  "invCreditFailPhoneInvalid": "Saisissez le téléphone du client avec son indicatif pays.",
+  "invCreditPaymentOnCredit": "À crédit",
+  "invSummaryOnCredit": "Dont à crédit {credit} ({owed} encore dû)",
+  "@invSummaryOnCredit": {
+    "placeholders": {
+      "credit": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipOpen": "Dû {amount}",
+  "@invCreditChipOpen": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipOverdue": "En retard {amount}",
+  "@invCreditChipOverdue": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipPaid": "Crédit payé",
+  "invCreditFilterAll": "Toutes les ventes",
+  "invCreditOwedTitle": "Crédit dû",
+  "invCreditOwedHint": "Clients qui doivent encore",
+  "invCreditReceivedByName": "Reçu par {name}",
+  "@invCreditReceivedByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditDetails": "Détails du crédit",
+  "invCreditOwedOf": "{owed} dû sur {credit}",
+  "@invCreditOwedOf": {
+    "placeholders": {
+      "owed": {
+        "type": "String"
+      },
+      "credit": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditPaidOff": "Entièrement payé",
+  "invCreditCustomer": "Client",
+  "invCreditCall": "Appeler {name}",
+  "@invCreditCall": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditCallFailed": "Le téléphone n'a pas pu lancer l'appel.",
+  "invCreditCollectedBy": "Encaissé par {name}",
+  "@invCreditCollectedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNoCollector": "Personne ne l'encaisse encore",
+  "invCreditDueOn": "À payer le {date}",
+  "@invCreditDueOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOverdueSince": "En retard depuis le {date}",
+  "@invCreditOverdueSince": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChange": "Changer l'encaisseur ou l'échéance",
+  "invCreditChanged": "Crédit mis à jour.",
+  "invCreditPaidAtSale": "{amount} payé au comptoir",
+  "@invCreditPaidAtSale": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditVoidedNote": "Cette vente a été annulée : rien n'est dû.",
+  "invCreditFilterMine": "Les miens",
+  "invCreditFilterEveryone": "Tout le monde",
+  "invCreditTotals": "{count, plural, =1{1 crédit ouvert} other{{count} crédits ouverts}} · {amount} dû",
+  "@invCreditTotals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOverdueTotals": "{count} en retard · {amount}",
+  "@invCreditOverdueTotals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNoneOpen": "Rien n'est dû.",
+  "invCreditNoneOpenHint": "Les ventes à crédit encore dues s'affichent ici jusqu'à leur paiement.",
+  "invCreditLoadFailed": "Les crédits n'ont pas pu être chargés.",
+  "invCreditSoldOn": "Vendu le {date}",
+  "@invCreditSoldOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNotifications": "Crédits à encaisser",
+  "salesHistTitle": "Historique des ventes",
+  "salesHistHint": "Jour, semaine, mois, année",
+  "salesHistDay": "Jour",
+  "salesHistWeek": "Semaine",
+  "salesHistMonth": "Mois",
+  "salesHistYear": "Année",
+  "salesHistPrevious": "Période précédente",
+  "salesHistNext": "Période suivante",
+  "salesHistPickDate": "Choisir une date",
+  "salesHistRefresh": "Actualiser",
+  "salesHistCurrent": "{kind, select, day{Aujourd'hui} week{Cette semaine} month{Ce mois-ci} other{Cette année}}",
+  "@salesHistCurrent": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistRange": "{start} – {end}",
+  "@salesHistRange": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistTotalSold": "Total vendu",
+  "salesHistVsPrevious": "{change} {kind, select, day{par rapport à la veille} week{par rapport à la semaine précédente} month{par rapport au mois précédent} other{par rapport à l'année précédente}}",
+  "@salesHistVsPrevious": {
+    "placeholders": {
+      "change": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistNoComparison": "{kind, select, day{Aucune vente la veille} week{Aucune vente la semaine précédente} month{Aucune vente le mois précédent} other{Aucune vente l'année précédente}}",
+  "@salesHistNoComparison": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistSalesLabel": "{count, plural, =0{vente} =1{vente} other{ventes}}",
+  "@salesHistSalesLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistAverage": "Vente moyenne",
+  "salesHistItemsLabel": "{count, plural, =0{article vendu} =1{article vendu} other{articles vendus}}",
+  "@salesHistItemsLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistProfitPartial": "{count, plural, =1{1 ligne sans coût est exclue} other{{count} lignes sans coût sont exclues}}",
+  "@salesHistProfitPartial": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistCollected": "Crédit encaissé {amount}",
+  "@salesHistCollected": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistVoidedCount": "{count, plural, =1{1 vente annulée, non comptée} other{{count} ventes annulées, non comptées}}",
+  "@salesHistVoidedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistChartTitle": "{kind, select, day{Par heure} week{Par jour} month{Par jour} other{Par mois}}",
+  "@salesHistChartTitle": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistChartHint": "Touchez une barre pour voir son montant.",
+  "salesHistBarValue": "{label} : {amount}",
+  "@salesHistBarValue": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistOpenDay": "Voir ce jour",
+  "salesHistOpenMonth": "Voir ce mois",
+  "salesHistByStore": "Par magasin",
+  "salesHistBySeller": "Par vendeur",
+  "salesHistByPayment": "Par paiement",
+  "salesHistTopProducts": "Meilleurs produits",
+  "salesHistTopBrands": "Meilleures marques",
+  "salesHistTopCategories": "Meilleures catégories",
+  "salesHistSalesCount": "{count, plural, =1{1 vente} other{{count} ventes}}",
+  "@salesHistSalesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistPieces": "{count, plural, =1{1 vendu} other{{count} vendus}}",
+  "@salesHistPieces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistNoStore": "Sans magasin",
+  "salesHistUnknownPerson": "Personne inconnue",
+  "salesHistTimelineTitle": "Ce qui s'est passé",
+  "salesHistMoreLines": "{name} + {count} autres",
+  "@salesHistMoreLines": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistEventSaleFallback": "Vente",
+  "salesHistEventVoided": "Vente annulée",
+  "salesHistEventPayment": "Paiement de crédit",
+  "salesHistEventReverted": "Paiement de crédit annulé",
+  "salesHistEventAdded": "Stock ajouté : {item}",
+  "@salesHistEventAdded": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistEventSet": "Comptage : {item}",
+  "@salesHistEventSet": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistEventMoved": "Stock déplacé : {item}",
+  "@salesHistEventMoved": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistUnknownItem": "Un produit",
+  "salesHistVoidedTag": "Annulée",
+  "salesHistByPerson": "par {name}",
+  "@salesHistByPerson": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistCountNow": "maintenant {count}",
+  "@salesHistCountNow": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistEmpty": "Aucune vente sur cette période",
+  "salesHistEmptyHint": "Choisissez un autre jour, une autre semaine, un autre mois ou une autre année.",
+  "salesHistTruncated": "Affichage des {count} premiers enregistrements de cette période (les plus récents). Choisissez une période plus courte pour tout voir.",
+  "@salesHistTruncated": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistPartial": "Une partie de l'activité n'a pas pu être chargée : des mouvements de stock, des paiements de crédit ou des annulations plus anciennes peuvent manquer.",
+  "salesHistLoadFailed": "Impossible de charger cette période. Vérifiez la connexion et réessayez.",
+  "salesHistNothingHappened": "Rien ne s'est passé sur cette période."
 }

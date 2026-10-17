@@ -506,9 +506,14 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final payment in _payments)
-                  _PaymentRow(
+                  RecordedPaymentRow(
                     key: ValueKey('pay-row:${payment.id}'),
-                    payment: payment,
+                    id: payment.id,
+                    amountCents: payment.amountCents,
+                    method: payment.method,
+                    createdAt: payment.createdAt,
+                    note: payment.note,
+                    reverted: payment.reverted,
                     locale: locale,
                     receivedBy: _staffName(payment.receivedByStaffId),
                     // Only when someone else typed it in; older rows have no
@@ -531,10 +536,19 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
   }
 }
 
-class _PaymentRow extends StatelessWidget {
-  const _PaymentRow({
+/// One recorded payment: the amount (struck through once reverted), how it
+/// arrived, when, who took it and who typed it in, and Revert. Shared by the
+/// package money sheet and the credit-sale sheet, so a payment reads the same
+/// wherever money is collected.
+class RecordedPaymentRow extends StatelessWidget {
+  const RecordedPaymentRow({
     super.key,
-    required this.payment,
+    required this.id,
+    required this.amountCents,
+    required this.method,
+    required this.createdAt,
+    required this.note,
+    required this.reverted,
     required this.locale,
     required this.receivedBy,
     required this.enteredBy,
@@ -544,7 +558,12 @@ class _PaymentRow extends StatelessWidget {
     required this.onRevert,
   });
 
-  final ContainerLinePayment payment;
+  final String id;
+  final int amountCents;
+  final String method;
+  final DateTime? createdAt;
+  final String note;
+  final bool reverted;
   final String locale;
   final String receivedBy;
   final String enteredBy;
@@ -556,12 +575,9 @@ class _PaymentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final reverted = payment.reverted;
-    final when = payment.createdAt == null
-        ? ''
-        : displayDateTime(payment.createdAt!, locale);
+    final when = createdAt == null ? '' : displayDateTime(createdAt!, locale);
     final detail = [
-      containerPaymentMethodLabel(l10n, payment.method),
+      containerPaymentMethodLabel(l10n, method),
       if (when.isNotEmpty) when,
       if (receivedBy.isNotEmpty) l10n.wpkReceivedByName(receivedBy),
       if (enteredBy.isNotEmpty) l10n.wpkEnteredBy(enteredBy),
@@ -576,7 +592,7 @@ class _PaymentRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  formatLotCents(payment.amountCents),
+                  formatLotCents(amountCents),
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -593,9 +609,9 @@ class _PaymentRow extends StatelessWidget {
                     color: AppColors.muted,
                   ),
                 ),
-                if (payment.note.isNotEmpty)
+                if (note.isNotEmpty)
                   Text(
-                    payment.note,
+                    note,
                     style: const TextStyle(
                       fontSize: 12,
                       height: 1.35,
@@ -607,7 +623,7 @@ class _PaymentRow extends StatelessWidget {
                     revertedBy.isEmpty
                         ? l10n.wpkRevertedMark
                         : l10n.wpkRevertedBy(revertedBy),
-                    key: Key('pay-reverted:${payment.id}'),
+                    key: Key('pay-reverted:$id'),
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -619,7 +635,7 @@ class _PaymentRow extends StatelessWidget {
           ),
           if (!reverted)
             TextButton(
-              key: Key('pay-revert:${payment.id}'),
+              key: Key('pay-revert:$id'),
               onPressed: busy ? null : onRevert,
               child: reverting
                   ? const SizedBox(

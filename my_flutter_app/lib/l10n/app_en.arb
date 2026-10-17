@@ -5456,7 +5456,13 @@
   "inventoryErrStoreName": "Enter a store name.",
   "inventoryErrStoreRequired": "Choose a store.",
   "inventoryStoreShowing": "Showing {store}",
-  "@inventoryStoreShowing": {"placeholders": {"store": {"type": "String"}}},
+  "@inventoryStoreShowing": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
   "inventoryStoreSellingFrom": "Selling from {store}",
   "@inventoryStoreSellingFrom": {
     "placeholders": {
@@ -5787,5 +5793,400 @@
   "pkgLabelsPrintFailed": "The labels could not be printed. Try again.",
   "pkgLabelsOneNotePrinter": "One label per package: enough for a pickup or a torn label.",
   "pkgLabelsTipPrinter": "Each label carries the QR code, the tracking code, and both names and phone numbers. Set the label size to the roll loaded in the printer.",
-  "pkgLabelsTipSystem": "Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side."
+  "pkgLabelsTipSystem": "Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side.",
+  "invCreditMe": "{name} (me)",
+  "@invCreditMe": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOnCredit": "On credit",
+  "invCreditOnCreditNote": "The customer pays part now (or nothing) and owes the rest.",
+  "invCreditPaidNow": "Paid now (US dollars)",
+  "invCreditCustomerName": "Customer name",
+  "invCreditCustomerPhone": "Customer phone",
+  "invCreditCollector": "Who collects the rest",
+  "invCreditCollectorPick": "Choose who collects",
+  "invCreditDueDate": "Due date (optional)",
+  "invCreditNoDueDate": "No due date",
+  "invCreditClearDueDate": "Clear the due date",
+  "invCreditSplit": "Paid now {paid} · On credit {owed}",
+  "@invCreditSplit": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditErrPaidNowInvalid": "Enter the amount paid now, or leave it empty for nothing.",
+  "invCreditErrPaidNowTooLarge": "On credit, the amount paid now must be less than the total.",
+  "invCreditErrPhoneRequired": "Enter the customer's phone number.",
+  "invCreditErrCollectorRequired": "Choose who collects the rest.",
+  "invCreditErrCollectorInvalid": "That person is not in this business.",
+  "invCreditErrDueDate": "Pick a due date from today on.",
+  "invCreditFixCheckout": "Check the payment details above.",
+  "invCreditOwes": "{name} owes {amount}",
+  "@invCreditOwes": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditFailCustomer": "A credit sale needs the customer's name and phone.",
+  "invCreditFailNoCredit": "This sale has nothing on credit.",
+  "invCreditFailHasPayments": "This sale has credit payments. Revert them before voiding it.",
+  "invCreditFailInvalid": "These credit details are not valid. Check them and try again.",
+  "invCreditFailAmountInvalid": "Enter an amount above zero, to the cent.",
+  "invCreditFailPhoneInvalid": "Enter the customer's phone with its country code.",
+  "invCreditPaymentOnCredit": "On credit",
+  "invSummaryOnCredit": "Of which on credit {credit} ({owed} still owed)",
+  "@invSummaryOnCredit": {
+    "placeholders": {
+      "credit": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipOpen": "Owed {amount}",
+  "@invCreditChipOpen": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipOverdue": "Overdue {amount}",
+  "@invCreditChipOverdue": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipPaid": "Credit paid",
+  "invCreditFilterAll": "All sales",
+  "invCreditOwedTitle": "Credit owed",
+  "invCreditOwedHint": "Customers who still owe",
+  "invCreditReceivedByName": "Received by {name}",
+  "@invCreditReceivedByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditDetails": "Credit details",
+  "invCreditOwedOf": "{owed} owed of {credit}",
+  "@invCreditOwedOf": {
+    "placeholders": {
+      "owed": {
+        "type": "String"
+      },
+      "credit": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditPaidOff": "Paid in full",
+  "invCreditCustomer": "Customer",
+  "invCreditCall": "Call {name}",
+  "@invCreditCall": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditCallFailed": "The phone could not start the call.",
+  "invCreditCollectedBy": "Collected by {name}",
+  "@invCreditCollectedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNoCollector": "No one is collecting it yet",
+  "invCreditDueOn": "Due {date}",
+  "@invCreditDueOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOverdueSince": "Overdue since {date}",
+  "@invCreditOverdueSince": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChange": "Change collector or due date",
+  "invCreditChanged": "Credit updated.",
+  "invCreditPaidAtSale": "{amount} paid at the counter",
+  "@invCreditPaidAtSale": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditVoidedNote": "This sale was voided: nothing is owed.",
+  "invCreditFilterMine": "Mine",
+  "invCreditFilterEveryone": "Everyone",
+  "invCreditTotals": "{count, plural, =1{1 open credit} other{{count} open credits}} · {amount} owed",
+  "@invCreditTotals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOverdueTotals": "{count} overdue · {amount}",
+  "@invCreditOverdueTotals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNoneOpen": "Nothing is owed.",
+  "invCreditNoneOpenHint": "Credit sales still owed show here until they are paid.",
+  "invCreditLoadFailed": "The credits could not be loaded.",
+  "invCreditSoldOn": "Sold {date}",
+  "@invCreditSoldOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNotifications": "Credit to collect",
+  "salesHistTitle": "Sales history",
+  "salesHistHint": "Day, week, month, year",
+  "salesHistDay": "Day",
+  "salesHistWeek": "Week",
+  "salesHistMonth": "Month",
+  "salesHistYear": "Year",
+  "salesHistPrevious": "Previous period",
+  "salesHistNext": "Next period",
+  "salesHistPickDate": "Pick a date",
+  "salesHistRefresh": "Refresh",
+  "salesHistCurrent": "{kind, select, day{Today} week{This week} month{This month} other{This year}}",
+  "@salesHistCurrent": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistRange": "{start} – {end}",
+  "@salesHistRange": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistTotalSold": "Total sold",
+  "salesHistVsPrevious": "{change} {kind, select, day{vs the day before} week{vs the week before} month{vs the month before} other{vs the year before}}",
+  "@salesHistVsPrevious": {
+    "placeholders": {
+      "change": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistNoComparison": "{kind, select, day{No sales the day before} week{No sales the week before} month{No sales the month before} other{No sales the year before}}",
+  "@salesHistNoComparison": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistSalesLabel": "{count, plural, =1{sale} other{sales}}",
+  "@salesHistSalesLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistAverage": "Average sale",
+  "salesHistItemsLabel": "{count, plural, =1{item sold} other{items sold}}",
+  "@salesHistItemsLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistProfitPartial": "{count, plural, =1{1 line has no cost and is left out} other{{count} lines have no cost and are left out}}",
+  "@salesHistProfitPartial": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistCollected": "Credit collected {amount}",
+  "@salesHistCollected": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistVoidedCount": "{count, plural, =1{1 voided sale, not counted} other{{count} voided sales, not counted}}",
+  "@salesHistVoidedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistChartTitle": "{kind, select, day{By hour} week{By day} month{By day} other{By month}}",
+  "@salesHistChartTitle": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistChartHint": "Tap a bar to see its amount.",
+  "salesHistBarValue": "{label}: {amount}",
+  "@salesHistBarValue": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistOpenDay": "See this day",
+  "salesHistOpenMonth": "See this month",
+  "salesHistByStore": "By store",
+  "salesHistBySeller": "By seller",
+  "salesHistByPayment": "By payment",
+  "salesHistTopProducts": "Top products",
+  "salesHistTopBrands": "Top brands",
+  "salesHistTopCategories": "Top categories",
+  "salesHistSalesCount": "{count, plural, =1{1 sale} other{{count} sales}}",
+  "@salesHistSalesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistPieces": "{count, plural, =1{1 sold} other{{count} sold}}",
+  "@salesHistPieces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistNoStore": "No store",
+  "salesHistUnknownPerson": "Unknown person",
+  "salesHistTimelineTitle": "What happened",
+  "salesHistMoreLines": "{name} + {count} more",
+  "@salesHistMoreLines": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistEventSaleFallback": "Sale",
+  "salesHistEventVoided": "Sale voided",
+  "salesHistEventPayment": "Credit payment",
+  "salesHistEventReverted": "Credit payment reverted",
+  "salesHistEventAdded": "Stock added: {item}",
+  "@salesHistEventAdded": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistEventSet": "Count set: {item}",
+  "@salesHistEventSet": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistEventMoved": "Stock moved: {item}",
+  "@salesHistEventMoved": {
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistUnknownItem": "A product",
+  "salesHistVoidedTag": "Voided",
+  "salesHistByPerson": "by {name}",
+  "@salesHistByPerson": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistCountNow": "now {count}",
+  "@salesHistCountNow": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "salesHistEmpty": "No sales in this period",
+  "salesHistEmptyHint": "Pick another day, week, month or year.",
+  "salesHistTruncated": "Showing the first {count} records of this period (the newest). Pick a shorter period to see them all.",
+  "@salesHistTruncated": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "salesHistPartial": "Some activity could not be loaded, so stock changes, credit payments or older voids may be missing.",
+  "salesHistLoadFailed": "Couldn't load this period. Check the connection and try again.",
+  "salesHistNothingHappened": "Nothing happened in this period."
 }

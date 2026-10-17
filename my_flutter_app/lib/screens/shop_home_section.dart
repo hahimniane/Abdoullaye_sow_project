@@ -16,6 +16,8 @@ import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import 'inventory_credit_screen.dart';
+import 'sales_history_screen.dart';
 import 'inventory_item_screen.dart';
 import 'inventory_item_sheets.dart';
 import 'inventory_sales_screen.dart';
@@ -307,6 +309,24 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
     ),
   );
 
+  void _openCredit() => _push(
+    InventoryCreditScreen(
+      businessId: widget.businessId,
+      source: _source,
+      service: widget.service,
+      access: widget.access,
+    ),
+  );
+
+  void _openHistory() => _push(
+    SalesHistoryScreen(
+      businessId: widget.businessId,
+      source: _source,
+      service: widget.service,
+      access: widget.access,
+    ),
+  );
+
   void _openItem(String itemId) => _push(
     InventoryItemScreen(
       businessId: widget.businessId,
@@ -493,6 +513,20 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
               title: l10n.inventoryAddProduct,
               caption: l10n.shopHomeAddHint,
               onTap: _addProduct,
+            ),
+            _QuickLink(
+              tileKey: const Key('shop-open-credit'),
+              icon: Icons.handshake_outlined,
+              title: l10n.invCreditOwedTitle,
+              caption: l10n.invCreditOwedHint,
+              onTap: _openCredit,
+            ),
+            _QuickLink(
+              tileKey: const Key('shop-open-history'),
+              icon: Icons.insights_outlined,
+              title: l10n.salesHistTitle,
+              caption: l10n.salesHistHint,
+              onTap: _openHistory,
             ),
           ],
         ),
@@ -897,6 +931,17 @@ class _TodayCard extends StatelessWidget {
               ],
             ),
           ),
+          if (s != null && s.creditCents > 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              l10n.invSummaryOnCredit(
+                formatLotCents(s.creditCents),
+                formatLotCents(s.creditOutstandingCents),
+              ),
+              key: const Key('shop-today-credit'),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+            ),
+          ],
         ],
       ),
     );

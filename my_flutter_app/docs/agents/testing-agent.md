@@ -503,3 +503,7 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   (`npm run test:inventory`): wiping Firestore between runs inside one emulator
   gives constant false failures. If 8080/9099 are held by another session's
   suite, run on a scratch `firebase.json` with other ports instead of killing it.
+- Calling `pumpWidget` twice in one test with the same screen type keeps the
+  first State (`didUpdateWidget`, not `initState`), so `late final` fields built
+  from `widget.source` keep the first fake and the second setup is silently
+  ignored. Give each setup its own `testWidgets` (or a new `Key`).
