@@ -20,6 +20,8 @@ import {
   emptyIntakeMoney,
   emptyWaitingPackageDraft,
   filterWaitingPackages,
+  firstInvalidWaitingPackageField,
+  WAITING_PACKAGE_FIELD_ORDER,
   intakeMoneyAvailable,
   intakePaymentPayload,
   mainDestinationChanges,
@@ -49,11 +51,13 @@ import {
   volumeCubicFeet,
   waitingCountText,
   waitingPackageDraftFromRow,
+  waitingPackageFieldMessage,
   waitingPackageMessage,
   waitingPackageRow,
   wholeBalanceInput,
   type WaitingPackageDraft,
 } from "./waiting-packages.ts";
+import { revealField } from "./reveal-field.ts";
 
 const guinea = { id: "guinea", name: "Guinea" };
 
@@ -635,4 +639,54 @@ test("a package call keeps the busy flag honest and hands a refusal over with it
   );
   assert.deepEqual(failures.map((f) => [f.message, f.offendingLineIds]), [[CONTAINER_MESSAGES.destination_mismatch, ["w2"]]]);
   assert.deepEqual(busy.slice(2), [true, false], "busy resolves on the failing path too");
+});
+
+// ---------------------------------------------------------------------------
+// A refused save points at the field to fix.
+// ---------------------------------------------------------------------------
+
+test("money received with nobody chosen points at Received by, with its own sentence", () => {
+  // The live repro: "Money received now?" on, no "Received by" picked.
+  const refused = switchIntakeMoney(draft({ price: "150" }), true);
+  const errors = validateWaitingPackage(refused, ["cashier"]);
+  assert.deepEqual(errors, ["received_by_required"]);
+  assert.equal(firstInvalidWaitingPackageField(errors), "wpk-received-by");
+  assert.equal(waitingPackageFieldMessage(errors, "wpk-received-by"), CONTAINER_MESSAGES.received_by_required);
+  assert.equal(waitingPackageFieldMessage(errors, "wpk-price"), "");
+});
+
+test("the first invalid field is the first on screen, not the first refusal listed", () => {
+  assert.equal(firstInvalidWaitingPackageField(["receiver_phone_invalid", "received_by_required", "price_invalid"]), "wpk-price");
+  assert.equal(firstInvalidWaitingPackageField(["customer_name_required", "quantity_required"]), "wpk-quantity");
+  assert.equal(firstInvalidWaitingPackageField(["received_by_invalid", "amount_required"]), "wpk-money-amount");
+  // A refusal with no field of its own leaves focus alone; the message is beside the buttons.
+  assert.equal(firstInvalidWaitingPackageField(["line_kind_invalid"]), null);
+  assert.equal(firstInvalidWaitingPackageField([]), null);
+});
+
+test("every refusal the register form can produce that names a field maps to one the form renders", () => {
+  const fields = new Set<string>(WAITING_PACKAGE_FIELD_ORDER);
+  const everything = validateWaitingPackage(
+    {
+      ...draft({ kind: "car", vinNumber: "", customerName: "", customerPhone: "12", receiverPhone: "12", lengthIn: "3", price: "x", destinationCountryId: "" }),
+      money: { ...emptyIntakeMoney(), received: true, amount: "", method: "barter" as never, receivedByStaffId: "" },
+    },
+    ["cashier"],
+  );
+  assert.ok(everything.length >= 5, everything.join());
+  for (const code of everything) {
+    const field = firstInvalidWaitingPackageField([code]);
+    if (field) assert.ok(fields.has(field), code);
+  }
+});
+
+test("revealing a field scrolls it into view and then focuses it without a second jump", () => {
+  const calls: string[] = [];
+  const field = {
+    scrollIntoView: (options?: ScrollIntoViewOptions) => calls.push(`scroll:${options?.block}`),
+    focus: (options?: FocusOptions) => calls.push(`focus:${options?.preventScroll}`),
+  };
+  assert.equal(revealField(field), true);
+  assert.deepEqual(calls, ["scroll:center", "focus:true"]);
+  assert.equal(revealField(null), false);
 });

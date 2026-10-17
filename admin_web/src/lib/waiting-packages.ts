@@ -572,6 +572,65 @@ export function waitingPackageMessage(codes: readonly WaitingPackageError[]): st
   return containerMessage(codes);
 }
 
+/**
+ * The register form's field for each refusal, as the element id it renders,
+ * listed in the order the fields appear on screen. A failed save brings the
+ * first one into view and focuses it: the modal scrolls, and a message at its
+ * top is off-screen by the time the person reaches Save.
+ */
+export const WAITING_PACKAGE_FIELD_ORDER = [
+  "wpk-vin",
+  "wpk-quantity",
+  "wpk-description",
+  "wpk-length",
+  "wpk-destination",
+  "wpk-price",
+  "wpk-money-amount",
+  "wpk-money-method",
+  "wpk-received-by",
+  "wpk-customer-name",
+  "wpk-customer-phone",
+  "wpk-receiver-phone",
+] as const;
+
+export type WaitingPackageField = (typeof WAITING_PACKAGE_FIELD_ORDER)[number];
+
+const WAITING_PACKAGE_ERROR_FIELD: Partial<Record<WaitingPackageError, WaitingPackageField>> = {
+  vin_required: "wpk-vin",
+  quantity_required: "wpk-quantity",
+  description_required: "wpk-description",
+  size_invalid: "wpk-length",
+  package_destination_required: "wpk-destination",
+  price_invalid: "wpk-price",
+  price_required: "wpk-price",
+  amount_required: "wpk-money-amount",
+  amount_too_large: "wpk-money-amount",
+  payment_exceeds_balance: "wpk-money-amount",
+  payment_method_invalid: "wpk-money-method",
+  received_by_required: "wpk-received-by",
+  received_by_invalid: "wpk-received-by",
+  customer_name_required: "wpk-customer-name",
+  customer_phone_invalid: "wpk-customer-phone",
+  receiver_phone_invalid: "wpk-receiver-phone",
+};
+
+/** The field a refusal belongs to, or null for one with no field (e.g. a bad kind). */
+export function waitingPackageErrorField(code: WaitingPackageError): WaitingPackageField | null {
+  return WAITING_PACKAGE_ERROR_FIELD[code] ?? null;
+}
+
+/** The first field on screen with a problem, or null when none of the refusals has a field. */
+export function firstInvalidWaitingPackageField(codes: readonly WaitingPackageError[]): WaitingPackageField | null {
+  const fields = new Set(codes.map(waitingPackageErrorField));
+  return WAITING_PACKAGE_FIELD_ORDER.find((field) => fields.has(field)) ?? null;
+}
+
+/** The sentence shown under one field: only that field's refusals, or "" when it has none. */
+export function waitingPackageFieldMessage(codes: readonly WaitingPackageError[], field: WaitingPackageField): string {
+  const own = codes.filter((code) => waitingPackageErrorField(code) === field);
+  return own.length ? containerMessage(own) : "";
+}
+
 /** What a package carries beyond its line: country, size, price. Only what was entered. */
 function packageExtras(draft: WaitingPackageDraft, withPrice = true) {
   const { sides } = readSides(draft);

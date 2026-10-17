@@ -14,6 +14,7 @@ import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/
 import {
   cleanVin,
   containerLineTitle,
+  containerLineTitleIsCopy,
   containerLineWhatsApp,
   containerLineWhatsAppText,
   phoneCountryForDestination,
@@ -32,6 +33,7 @@ import {
   destinationPlace,
   emptyWaitingPackageDraft,
   filterWaitingPackages,
+  firstInvalidWaitingPackageField,
   intakeMoneyAvailable,
   nextPackageForSameCustomer,
   packagePriceChanged,
@@ -46,12 +48,15 @@ import {
   parseInches,
   waitingCountText,
   waitingPackageDraftFromRow,
+  waitingPackageFieldMessage,
   waitingPackageMessage,
   waitingPackageRow,
   type DestinationRef,
   type IntakeMoneyDraft,
   type WaitingPackageDraft,
+  type WaitingPackageField,
 } from "@/lib/waiting-packages";
+import { revealField } from "@/lib/reveal-field";
 import {
   VIN_LOOKING_UP,
   VIN_SERVICE_UNREACHABLE,
@@ -137,12 +142,16 @@ export function WaitingPackagesPanel({
   enabled,
 }: WaitingPackagesPanelProps) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
+  // A decimal comma in French; readMoneyInput reads "45,50" and "45.50" alike.
+  const moneyPlaceholder = lang === "fr" ? "0,00" : "0.00";
   const [filter, setFilter] = useState("");
   const [modal, setModal] = useState<Modal>("");
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<WaitingPackageDraft>(() => emptyWaitingPackageDraft(defaultDestination));
   const [editingId, setEditingId] = useState("");
   const [draftError, setDraftError] = useState("");
+  // After a refused save, each field shows its own problem, live, until fixed.
+  const [triedSave, setTriedSave] = useState(false);
   const [addedThisSitting, setAddedThisSitting] = useState<string[]>([]);
   const [vinHint, setVinHint] = useState("");
   const lastVinRef = useRef("");
@@ -174,6 +183,17 @@ export function WaitingPackagesPanel({
   const moneyAvailable = intakeMoneyAvailable(draft);
   const staffIds = useMemo(() => staffOptions.map((s) => s.id), [staffOptions]);
   const setMoney = (patch: Partial<IntakeMoneyDraft>) => setDraft((d) => ({ ...d, money: { ...d.money, ...patch } }));
+  const fieldErrors = triedSave ? validateWaitingPackage(draft, staffIds) : [];
+  const fieldError = (field: WaitingPackageField) => waitingPackageFieldMessage(fieldErrors, field);
+  // aria-invalid + aria-describedby for a field that shows its own message.
+  const invalidProps = (field: WaitingPackageField) => {
+    const message = fieldError(field);
+    return message ? { "aria-invalid": true, "aria-describedby": `${field}-error` } : {};
+  };
+  const fieldErrorNote = (field: WaitingPackageField) => {
+    const message = fieldError(field);
+    return message ? <small className="lst-field-error" id={`${field}-error`}>{message}</small> : null;
+  };
 
   function closeModal() {
     setModal("");
@@ -185,6 +205,7 @@ export function WaitingPackagesPanel({
 
   function resetFormState() {
     setDraftError("");
+    setTriedSave(false);
     setVinHint("");
     lastVinRef.current = "";
     setCustomerPick(null);
@@ -273,6 +294,10 @@ export function WaitingPackagesPanel({
     const errors = validateWaitingPackage(draft, staffIds);
     if (errors.length) {
       setDraftError(waitingPackageMessage(errors));
+      setTriedSave(true);
+      // The modal scrolls: take the person to the first field to fix.
+      const field = firstInvalidWaitingPackageField(errors);
+      if (field) window.requestAnimationFrame(() => revealField(document.getElementById(field)));
       return;
     }
     const fail = (failure: { message: string }) => setDraftError(failure.message);
@@ -359,7 +384,8 @@ export function WaitingPackagesPanel({
               return (
                 <div className="mini-table-row" id={`wpk-line-${id}`} key={id}>
                   <span>
-                    <strong data-no-translate>{title}</strong>
+                    {/* "2 barrels" is copy and reads in French; a make, VIN or description is typed. */}
+                    <strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>
                     {vin && vin !== title && <small data-no-translate>{vin}</small>}
                     <PackageSize line={row} />
                     {line.trackingCode && (
@@ -415,10 +441,6 @@ export function WaitingPackagesPanel({
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
-              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
-              {addedThisSitting.length > 0 && (
-                <p className="lst-hint" role="status">Added so far: <span data-no-translate>{addedThisSitting.join("; ")}</span>.</p>
-              )}
               <fieldset className="lst-fieldset">
                 <label className="lst-radio"><input type="radio" name="wpkkind" checked={draft.kind === "car"} onChange={() => setKind("car")} /><span>A car</span></label>
                 <label className="lst-radio"><input type="radio" name="wpkkind" checked={draft.kind === "barrels"} onChange={() => setKind("barrels")} /><span>Barrels</span></label>
@@ -427,7 +449,7 @@ export function WaitingPackagesPanel({
               <div className="lst-form-grid">
                 {carFieldsVisible && (
                   <>
-                    <label className="lst-field wide"><span>VIN</span><input value={draft.vinNumber} onChange={(e) => applyVin(e.target.value)} placeholder="17 characters" autoFocus />{vinHint && <small className="lst-hint" style={{ color: "var(--money)" }}>{vinHint}</small>}</label>
+                    <label className="lst-field wide"><span>VIN</span><input id="wpk-vin" {...invalidProps("wpk-vin")} value={draft.vinNumber} onChange={(e) => applyVin(e.target.value)} placeholder="17 characters" autoFocus />{vinHint && <small className="lst-hint" style={{ color: "var(--money)" }}>{vinHint}</small>}{fieldErrorNote("wpk-vin")}</label>
                     <label className="lst-field"><span>Car make</span>
                       <select value={canonicalMake(draft.carMake) || draft.carMake} onChange={(e) => setDraft((d) => ({ ...d, carMake: e.target.value, carModel: "", carYear: "" }))}>
                         <option value="">Select a make</option>
@@ -449,26 +471,27 @@ export function WaitingPackagesPanel({
                   </>
                 )}
                 {draft.kind === "barrels" && (
-                  <label className="lst-field"><span>How many barrels</span><input inputMode="numeric" value={draft.quantity} onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))} autoFocus /></label>
+                  <label className="lst-field"><span>How many barrels</span><input id="wpk-quantity" {...invalidProps("wpk-quantity")} inputMode="numeric" value={draft.quantity} onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))} autoFocus />{fieldErrorNote("wpk-quantity")}</label>
                 )}
                 {draft.kind === "other" && (
                   <>
-                    <label className="lst-field"><span>What it is</span><input value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="e.g. tires, a generator" autoFocus /></label>
-                    <label className="lst-field"><span>How many</span><input inputMode="numeric" value={draft.quantity} onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))} /></label>
+                    <label className="lst-field"><span>What it is</span><input id="wpk-description" {...invalidProps("wpk-description")} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="e.g. tires, a generator" autoFocus />{fieldErrorNote("wpk-description")}</label>
+                    <label className="lst-field"><span>How many</span><input id="wpk-quantity" {...invalidProps("wpk-quantity")} inputMode="numeric" value={draft.quantity} onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))} />{fieldErrorNote("wpk-quantity")}</label>
                   </>
                 )}
               </div>
 
               <div className="lst-form-grid wpk-size-grid">
-                <label className="lst-field"><span>Length (in)</span><input inputMode="decimal" value={draft.lengthIn} onChange={(e) => setDraft((d) => ({ ...d, lengthIn: e.target.value }))} placeholder="0" /></label>
+                <label className="lst-field"><span>Length (in)</span><input id="wpk-length" {...invalidProps("wpk-length")} inputMode="decimal" value={draft.lengthIn} onChange={(e) => setDraft((d) => ({ ...d, lengthIn: e.target.value }))} placeholder="0" /></label>
                 <label className="lst-field"><span>Width (in)</span><input inputMode="decimal" value={draft.widthIn} onChange={(e) => setDraft((d) => ({ ...d, widthIn: e.target.value }))} placeholder="0" /></label>
                 <label className="lst-field"><span>Height (in)</span><input inputMode="decimal" value={draft.heightIn} onChange={(e) => setDraft((d) => ({ ...d, heightIn: e.target.value }))} placeholder="0" /></label>
                 <p className="lst-hint wpk-volume" data-no-translate>{volume === null ? "" : `${volume} ft³`}</p>
+                {fieldErrorNote("wpk-length")}
               </div>
 
               <div className="lst-form-grid">
                 <label className="lst-field"><span>Destination</span>
-                  <select value={draft.destinationCountryId} onChange={(e) => pickDestination(e.target.value)}>
+                  <select id="wpk-destination" {...invalidProps("wpk-destination")} value={draft.destinationCountryId} onChange={(e) => pickDestination(e.target.value)}>
                     <option value="">Not chosen yet</option>
                     {draft.destinationCountryId && !destinationOptions.all.some((o) => o.id === draft.destinationCountryId) && (
                       <option value={draft.destinationCountryId}>{draft.destinationCountryName ? destinationCountryName(draft.destinationCountryId, lang) : draft.destinationCountryId}</option>
@@ -486,9 +509,10 @@ export function WaitingPackagesPanel({
                       destinationOptions.rest.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))
                     )}
                   </select>
+                  {fieldErrorNote("wpk-destination")}
                 </label>
                 <div className="wpk-price-cell">
-                  <label className="lst-field"><span>Price ($)</span><input inputMode="decimal" value={draft.price} onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))} placeholder="0.00" /></label>
+                  <label className="lst-field"><span>Price ($)</span><input id="wpk-price" {...invalidProps("wpk-price")} inputMode="decimal" value={draft.price} onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))} placeholder={moneyPlaceholder} />{fieldErrorNote("wpk-price")}</label>
                   <label className="ctn-notify wpk-pay-arrival">
                     <input type="checkbox" checked={draft.payOnArrival} onChange={(e) => setDraft((d) => ({ ...d, payOnArrival: e.target.checked }))} />
                     <span>Pay on arrival</span>
@@ -513,18 +537,21 @@ export function WaitingPackagesPanel({
                   {draft.money.received && (
                     <div className="lst-form-grid wpk-payment-form">
                       <label className="lst-field"><span>Amount ($)</span>
-                        <input inputMode="decimal" value={draft.money.amount} onChange={(e) => setMoney({ amount: e.target.value })} placeholder="0.00" disabled={busy} />
+                        <input id="wpk-money-amount" {...invalidProps("wpk-money-amount")} inputMode="decimal" value={draft.money.amount} onChange={(e) => setMoney({ amount: e.target.value })} placeholder={moneyPlaceholder} disabled={busy} />
+                        {fieldErrorNote("wpk-money-amount")}
                       </label>
                       <label className="lst-field"><span>How it arrived</span>
-                        <select value={draft.money.method} disabled={busy} onChange={(e) => setMoney({ method: e.target.value as InvoicePaymentMethod })}>
+                        <select id="wpk-money-method" {...invalidProps("wpk-money-method")} value={draft.money.method} disabled={busy} onChange={(e) => setMoney({ method: e.target.value as InvoicePaymentMethod })}>
                           {INVOICE_PAYMENT_METHODS.map((m) => (<option key={m} value={m}>{INVOICE_PAYMENT_METHOD_LABELS[m]}</option>))}
                         </select>
+                        {fieldErrorNote("wpk-money-method")}
                       </label>
                       <label className="lst-field"><span>Received by</span>
-                        <select value={draft.money.receivedByStaffId} disabled={busy} onChange={(e) => setMoney({ receivedByStaffId: e.target.value })}>
+                        <select id="wpk-received-by" {...invalidProps("wpk-received-by")} value={draft.money.receivedByStaffId} disabled={busy} onChange={(e) => setMoney({ receivedByStaffId: e.target.value })}>
                           <option value="">Choose staff</option>
-                          {staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                          {staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
                         </select>
+                        {fieldErrorNote("wpk-received-by")}
                       </label>
                       <label className="lst-field wide"><span>Note</span>
                         <input value={draft.money.note} onChange={(e) => setMoney({ note: e.target.value })} placeholder="optional" disabled={busy} />
@@ -536,7 +563,7 @@ export function WaitingPackagesPanel({
 
               <div className="lst-form-grid">
                 <label className="lst-field" style={{ position: "relative" }}><span>Customer</span>
-                  <input value={draft.customerName} autoComplete="off" onFocus={() => setCustomerMenuOpen(true)} onBlur={() => window.setTimeout(() => setCustomerMenuOpen(false), 150)} onChange={(e) => { setCustomerPick(null); setCustomerMenuOpen(true); setDraft((d) => ({ ...d, customerName: e.target.value })); }} />
+                  <input id="wpk-customer-name" {...invalidProps("wpk-customer-name")} value={draft.customerName} autoComplete="off" onFocus={() => setCustomerMenuOpen(true)} onBlur={() => window.setTimeout(() => setCustomerMenuOpen(false), 150)} onChange={(e) => { setCustomerPick(null); setCustomerMenuOpen(true); setDraft((d) => ({ ...d, customerName: e.target.value })); }} />
                   {customerMatches.length > 0 && (
                     <ul className="lst-suggest" role="listbox" aria-label="Saved customers">
                       {customerMatches.map((c) => (
@@ -544,6 +571,7 @@ export function WaitingPackagesPanel({
                       ))}
                     </ul>
                   )}
+                  {fieldErrorNote("wpk-customer-name")}
                 </label>
                 <ContactPhone
                   id="wpk-customer-phone"
@@ -570,6 +598,11 @@ export function WaitingPackagesPanel({
               {!editingId && <p className="lst-hint">The customer and the receiver get a WhatsApp message when the package is registered, when the container ships and when it arrives. Adding it to a container sends nothing.</p>}
             </div>
             <footer className="lst-modal-foot wpk-foot">
+              {/* Beside the buttons, not at the top of a scrolled body: a refusal or a confirmation is always in view. */}
+              {draftError && <div className="lst-form-error wpk-foot-note" role="alert">{draftError}</div>}
+              {addedThisSitting.length > 0 && (
+                <p className="lst-hint wpk-foot-note" role="status" aria-live="polite">Added so far: <span data-no-translate>{addedThisSitting.join("; ")}</span>.</p>
+              )}
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
               {!editingId && (
                 <>
