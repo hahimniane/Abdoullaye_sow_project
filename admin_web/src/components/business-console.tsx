@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 
 import {AssistantWidget} from "@/components/business/assistant-widget";
+import {BankZelleCard} from "@/components/business/bank-zelle-card";
+import {canManageBank} from "@/lib/zelle-check";
 import {ContainersPanel} from "@/components/business/containers-panel";
 import {containerDeepLinkFromSearch, type ContainerDeepLink} from "@/lib/package-staff";
 import {InventoryPanel} from "@/components/business/inventory-panel";
@@ -623,6 +625,9 @@ export function BusinessConsole({
           {activeTab === "profile" && (
             <>
               <BusinessProfilePanel businessId={businessId} business={business} />
+              {canManageBank(profile, businessId) && !previewMode && (
+                <BankZelleCard businessId={businessId} enabled={enabled} />
+              )}
               <NotificationPreferencesPanel profile={profile} showInventory={visibleTabs.some((tab) => tab.id === "inventory")} />
             </>
           )}

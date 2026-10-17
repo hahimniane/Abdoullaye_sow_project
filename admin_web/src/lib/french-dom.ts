@@ -5540,6 +5540,80 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Choose who received the money": "Choisissez qui a reçu l’argent",
 });
 
+// Zelle bank check (docs/ZELLE_BANK_CHECK.md): the owner's bank card, the
+// Check Zelle button on payment rows, and the server's refusals.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Bank for Zelle checks": "Banque pour vérifier les Zelle",
+  "Connect the business's bank so staff can check a Zelle payment at the counter without calling you. Laawol only reads deposits; it cannot move money. Staff never see your balance or other transactions.":
+    "Connectez la banque de l’entreprise pour que l’équipe puisse vérifier un paiement Zelle au comptoir sans vous appeler. Laawol lit seulement les dépôts ; il ne peut pas déplacer d’argent. L’équipe ne voit jamais votre solde ni vos autres opérations.",
+  "Connect bank": "Connecter la banque",
+  Reconnect: "Reconnecter",
+  Disconnect: "Déconnecter la banque",
+  "Connecting…": "Connexion…",
+  "Check window": "Fenêtre de vérification",
+  "Staff look for a deposit of exactly the payment's amount, this many minutes before or after it was recorded.":
+    "L’équipe cherche un dépôt du montant exact du paiement, jusqu’à ce nombre de minutes avant ou après son enregistrement.",
+  "Disconnect the bank? Staff can no longer check Zelle payments until you connect it again.":
+    "Déconnecter la banque ? L’équipe ne pourra plus vérifier les paiements Zelle tant que vous ne la reconnectez pas.",
+  "Bank connected.": "Banque connectée.",
+  "Bank disconnected.": "Banque déconnectée.",
+  "Check window saved.": "Fenêtre de vérification enregistrée.",
+  "Last read": "Dernière lecture",
+  "Not read yet": "Pas encore lue",
+  "The bank needs you to sign in again before staff can check Zelle payments.":
+    "La banque vous demande de vous reconnecter avant que l’équipe puisse vérifier les paiements Zelle.",
+  "The bank connected, but its history is still being prepared. Checks work in a few minutes.":
+    "La banque est connectée, mais son historique est encore en préparation. Les vérifications fonctionneront dans quelques minutes.",
+  "Loading the bank…": "Chargement de la banque…",
+  Connected: "Connectée",
+  "Sign in again": "Reconnexion nécessaire",
+  "Not connected": "Non connectée",
+  "Check Zelle": "Vérifier le Zelle",
+  "Checking…": "Vérification…",
+  "Zelle confirmed": "Zelle confirmé",
+  "Not found yet": "Pas encore trouvé",
+  "Check again": "Vérifier à nouveau",
+  "No deposit of this amount has arrived yet. Ask the customer to wait a minute, then check again.":
+    "Aucun dépôt de ce montant n’est encore arrivé. Demandez au client de patienter une minute, puis vérifiez à nouveau.",
+  "Several deposits of this amount arrived. Pick the one from this customer:":
+    "Plusieurs dépôts de ce montant sont arrivés. Choisissez celui de ce client :",
+  "This one": "Celui-ci",
+  "The bank check did not finish. Try again.": "La vérification bancaire n’a pas abouti. Réessayez.",
+  // The server's refusals (zelle-check.ts ZELLE_MESSAGES).
+  "Only the business owner can manage the bank connection.":
+    "Seul le propriétaire de l’entreprise peut gérer la connexion bancaire.",
+  "This account cannot use the bank check for this business.":
+    "Ce compte ne peut pas utiliser la vérification bancaire de cette entreprise.",
+  "No bank is connected for Zelle checks. Ask the owner to connect one.":
+    "Aucune banque n’est connectée pour vérifier les Zelle. Demandez au propriétaire d’en connecter une.",
+  "The bank needs the owner to sign in to it again.":
+    "La banque demande au propriétaire de s’y reconnecter.",
+  "That payment was not recorded as Zelle.": "Ce paiement n’a pas été enregistré comme Zelle.",
+  "That payment could not be found.": "Ce paiement est introuvable.",
+  "That payment was voided or reverted.": "Ce paiement a été annulé.",
+  "That kind of payment cannot be checked.": "Ce type de paiement ne peut pas être vérifié.",
+  "The check window must be between 2 and 60 minutes.":
+    "La fenêtre de vérification doit être comprise entre 2 et 60 minutes.",
+  "Say which app is connecting: ios, android or web.":
+    "Indiquez quelle application se connecte : ios, android ou web.",
+  "The bank sign-in did not finish. Try connecting again.":
+    "La connexion à la banque n’a pas abouti. Réessayez de connecter.",
+  "That bank login has no checking or savings account.":
+    "Cet accès bancaire n’a ni compte courant ni compte d’épargne.",
+  "That deposit does not match this payment.": "Ce dépôt ne correspond pas à ce paiement.",
+  "That deposit already confirmed another payment.": "Ce dépôt a déjà confirmé un autre paiement.",
+  "The bank could not be reached. Try again.": "Impossible de joindre la banque. Réessayez.",
+  "You can only check payments of your own store.":
+    "Vous ne pouvez vérifier que les paiements de votre propre magasin.",
+  "Inventory is not switched on for this business.":
+    "L’inventaire n’est pas activé pour cette entreprise.",
+  "You do not have access to this payment.": "Vous n’avez pas accès à ce paiement.",
+  "The check did not reach Laawol. Check the connection and try again.":
+    "La vérification n’a pas atteint Laawol. Vérifiez la connexion et réessayez.",
+  "The bank sign-in window could not open. Try again.":
+    "La fenêtre de connexion à la banque n’a pas pu s’ouvrir. Réessayez.",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Inventory service": "Service d’inventaire",
   "17 characters": "17 caractères",

@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, RefreshCw, Undo2 } from "lucide-react";
 
 import { InventoryCreditBlock } from "@/components/business/inventory-credit-block";
 import { InventoryStoreFilter } from "@/components/business/inventory-store-filter";
+import { ZelleCheckButton } from "@/components/business/zelle-check-button";
 import { LoadMoreButton } from "@/components/show-more";
 import { useInventorySales, useLiveDocRead } from "@/lib/business-data";
 import { currentLanguage, formatDateTime } from "@/lib/format";
@@ -35,6 +36,7 @@ import {
   type SaleCreditFilter,
 } from "@/lib/inventory-credit";
 import { statusPillClass } from "@/lib/status-pill";
+import { zelleCheckable } from "@/lib/zelle-check";
 
 /**
  * The counter's sales, newest first, a page at a time. Each sale opens to its
@@ -230,6 +232,11 @@ export function InventorySalesList({
                         <p className="ivt-void-note" data-no-translate>
                           {voidedByText(voider, lang)} · {formatDateTime(sale.voidedAt)}{sale.voidReason ? ` · ${sale.voidReason}` : ""}
                         </p>
+                      )}
+                      {zelleCheckable({ method: sale.paymentMethod, amountCents: sale.paidNowCents, voided: sale.voided }) && (
+                        <div className="ivt-zelle-paid-now">
+                          <ZelleCheckButton businessId={businessId} kind="inventory_sale" id={sale.id} bankCheck={sale.bankCheck} enabled={enabled} />
+                        </div>
                       )}
                       {sale.credit && (
                         <InventoryCreditBlock

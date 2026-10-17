@@ -414,5 +414,6 @@ test("/i/<CODE> redirects to the notice without carrying the code, and the app c
     applinks: { details: Array<{ appIDs: string[]; components: Array<{ "/": string }> }> };
   };
   const paths = aasa.applinks.details.flatMap((detail) => detail.components.map((component) => component["/"]));
-  assert.deepEqual(paths, ["/t/*", "/i/*"]);
+  // /plaid/* is the bank's OAuth return to the app (docs/ZELLE_BANK_CHECK.md).
+  assert.deepEqual(paths, ["/t/*", "/i/*", "/plaid/*"]);
 });

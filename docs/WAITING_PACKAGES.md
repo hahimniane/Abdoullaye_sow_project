@@ -224,3 +224,7 @@ for a container"). Do not offer "jump to container" for `"waiting"`.
 stage `waiting_container` (text: "Received, waiting for a container";
 `WAITING_STAGE_LABEL`). Clients that do not know the stage should treat it as
 before-booked; `loading` is still `booked`.
+
+## Zelle bank check
+
+A package payment recorded as Zelle (`method: "zelle"`) can be checked against the owner's connected bank (docs/ZELLE_BANK_CHECK.md, kind `container_line_payment`, needs the `containers` section). The server writes `bankCheck` on the `containerLinePayments` row: `{status: "confirmed", creditId, amountCents, atMs, timeKnown, senderName, institutionName, checkedByUid, checkedAt}` or `{status: "not_found", checkedByUid, checkedAt}`.
