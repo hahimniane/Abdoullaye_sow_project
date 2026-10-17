@@ -90,8 +90,15 @@ createdAt, syncedAt`, and on a pending deposit that posted:
 A sync never writes `consumedBy` or `removed: false`: both are **absent until
 set** (absent = null / false), so a sync can never undo a confirmation.
 
+Times: `lastSyncAt` (in the status answer), `atMs` and `bankCheck.atMs` are
+epoch milliseconds; `bankCheck.checkedAt` is a Firestore Timestamp (server
+time).
+
 `bankCheck` on `inventorySales`, `inventoryCreditPayments`,
-`containerLinePayments` (written only by the server, read with the record):
+`containerLinePayments` (written only by the server; read with the record by
+whoever may already read it - those collections' existing read rules,
+`inventoryStoreRead` / `lotLedgerRead`, cover every field, so no rule
+changed; client writes stay denied):
 `{status: "confirmed", creditId, amountCents, atMs, timeKnown, senderName,
 institutionName, checkedByUid, checkedAt}` or `{status: "not_found",
 checkedByUid, checkedAt}`.
@@ -115,9 +122,12 @@ signed-in callers only. Refusals are `HttpsError` with the English message and
    depository account), seals the token, keeps the owner's window, removes the
    **old** login at Plaid when it was a different item, then syncs once
    (`synced: false` when the first read failed - the bank is still connected;
-   Plaid often needs a few minutes before history is ready). After an
-   update-mode Link, calling it again with the new public token is safe: the
-   same item keeps its cursor and is set active.
+   Plaid often needs a few minutes before history is ready). **After a
+   Reconnect** (update mode) the app calls it again with Link's public token:
+   the same item is kept (never removed), keeps its cursor and is set active.
+   If Plaid refuses to exchange an update-mode token, a link in
+   `needs_reauth` is synced with its stored login and, when that works, set
+   active with the same answer.
 3. `getBusinessBankStatus {businessId}` -> owner `{connected, status,
    windowMinutes, institutionName, accountMask, accountName, lastSyncAt (ms |
    null), lastErrorCode}`; staff `{connected, status, windowMinutes}`.
@@ -193,12 +203,14 @@ section refusal for package payments.
    add `com.laawoldigital.app` (from `android/app/build.gradle`
    `applicationId`).
 3. **Allowed redirect URIs**: add `https://customer.laawoldigital.com/plaid/oauth`.
-   **TODO (not done):** the iOS universal link needs an
-   `apple-app-site-association` file on `customer.laawoldigital.com` that
-   covers `/plaid/oauth` for the iOS app's team + bundle id, and the app's
-   Associated Domains entitlement must list `applinks:customer.laawoldigital.com`.
-   Until then OAuth banks (Chase, Bank of America, Wells Fargo...) may not hand
-   the owner back to the iOS app; non-OAuth banks and the web console work.
+   The universal link: `admin_web/public/.well-known/apple-app-site-association`
+   now claims `/plaid/*` for `GRKB7BXVZK.com.laawoldigital.app`, and the app's
+   entitlements already list `applinks:customer.laawoldigital.com`.
+   **TODO:** that file only takes effect once the static site is deployed to
+   `customer.laawoldigital.com` (iOS caches the AASA; a reinstall picks up the
+   new path). Until then OAuth banks (Chase, Bank of America, Wells Fargo...)
+   may not hand the owner back to the iOS app; non-OAuth banks and the web
+   console work.
 4. **Webhook**: nothing to paste - every Link token carries
    `https://us-central1-<project id>.cloudfunctions.net/plaidWebhook` for the
    project the functions run in (e.g. `car-selling-flutter-app`, or

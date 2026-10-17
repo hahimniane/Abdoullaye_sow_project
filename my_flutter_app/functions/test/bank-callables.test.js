@@ -87,6 +87,9 @@ function installPlaid() {
         return json(200, {link_token: "link-sandbox-abc",
           expiration: "2026-10-17T12:00:00Z"});
       case "/item/public_token/exchange":
+        if (plaid.exchangeError) {
+          return json(400, {error_code: plaid.exchangeError});
+        }
         return json(200, {access_token: plaid.accessToken,
           item_id: plaid.itemId});
       case "/accounts/get":
@@ -470,7 +473,32 @@ describe("checking a Zelle payment", () => {
     assert.equal(token.mode, "update");
     assert.equal(callsTo("/link/token/create").pop().body.access_token,
         "access-sandbox-1");
+    // The app calls connectBusinessBank after Reconnect too: the same item
+    // is kept (never removed) and set active.
+    plaid.syncError = null;
+    const repaired = await connect();
+    assert.equal(repaired.status, "active");
+    assert.equal(callsTo("/item/remove").length, 0);
+    assert.equal((await db.collection("businessBankLinks").doc(BIZ).get())
+        .data().status, "active");
   });
+
+  it("repairs even when Plaid will not exchange an update-mode token",
+      async () => {
+        await connect();
+        await db.collection("businessBankLinks").doc(BIZ).update({
+          status: "needs_reauth", lastErrorCode: "ITEM_LOGIN_REQUIRED"});
+        plaid.exchangeError = "INVALID_PUBLIC_TOKEN";
+        const answer = await connect();
+        assert.equal(answer.status, "active");
+        assert.equal(answer.synced, true);
+        const link = (await db.collection("businessBankLinks").doc(BIZ)
+            .get()).data();
+        assert.equal(link.status, "active");
+        assert.equal(link.itemId, "item-1");
+        // Without a broken login to repair, the refusal stands.
+        assert.equal(await reasonOf(connect()), "bank_error");
+      });
 
   it("asks the bank to refresh at most once a minute", async () => {
     await connect();

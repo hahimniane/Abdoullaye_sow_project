@@ -38982,6 +38982,35 @@ async function syncBankLink(db, businessId, link, accessToken) {
   }
 }
 
+/**
+ * A Reconnect whose public token Plaid would not exchange: the stored login
+ * is synced; if that works the link is active again.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} link The stored link (status needs_reauth).
+ * @return {Promise<?object>} connectBusinessBank's answer, or null when the
+ *   login still does not work.
+ */
+async function repairBankWithoutExchange(db, businessId, link) {
+  let accessToken;
+  try {
+    accessToken = openBankToken(link, businessId);
+  } catch (_) {
+    return null;
+  }
+  const sync = await syncBankLink(db, businessId, link, accessToken);
+  if (!sync.ok) return null;
+  const ok = await bankSync.updateLinkIfCurrent(db,
+      bankLinkRef(db, businessId), link.itemId, {status: "active",
+        lastErrorCode: null,
+        updatedAt: FirestoreFieldValue.serverTimestamp()});
+  if (!ok) return null;
+  return {status: "active", institutionName: String(link.institutionName || ""),
+    accountMask: String(link.accountMask || ""),
+    accountName: String(link.accountName || ""), synced: true};
+}
+
 exports.createBankLinkToken = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       secrets: BANK_SECRETS},
@@ -39025,12 +39054,19 @@ exports.connectBusinessBank = onCall(
       const plaid = bankPlaidClient();
       const ref = bankLinkRef(db, businessId);
       const before = await ref.get();
-      const oldItemId = before.exists ? String(before.data()?.itemId || "") :
-        "";
+      const stored = before.exists ? before.data() || {} : null;
+      const oldItemId = String(stored?.itemId || "");
       let exchanged;
       try {
         exchanged = await plaid.exchangePublicToken(publicToken);
       } catch (error) {
+        // After a Reconnect (update mode) Plaid does not require the public
+        // token to be exchanged. If it refuses, the stored login is the one
+        // that was repaired: a sync that works proves it.
+        const repaired = stored && stored.status === "needs_reauth" &&
+          stored.accessTokenEnc ? await repairBankWithoutExchange(db,
+              businessId, stored) : null;
+        if (repaired) return repaired;
         throw bankHttpsError(error, {businessId, step: "exchange"});
       }
       const accessToken = String(exchanged.access_token || "");

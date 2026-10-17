@@ -5,7 +5,8 @@
         "appIDs": ["GRKB7BXVZK.com.laawoldigital.app"],
         "components": [
           {"/": "/t/*", "comment": "Package and shipment tracking links (labels, WhatsApp updates)"},
-          {"/": "/i/*", "comment": "Inventory tag links (the QR on a shop's product tags)"}
+          {"/": "/i/*", "comment": "Inventory tag links (the QR on a shop's product tags)"},
+          {"/": "/plaid/*", "comment": "Plaid Link OAuth return (the owner connecting the bank for Zelle checks)"}
         ]
       }
     ]
