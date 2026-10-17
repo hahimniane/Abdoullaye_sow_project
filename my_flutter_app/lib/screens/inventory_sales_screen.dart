@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../services/inventory.dart';
 import '../services/inventory_context.dart';
+import '../services/inventory_credit.dart';
 import '../services/inventory_service.dart';
 import '../services/inventory_stores.dart';
+import '../services/inventory_team.dart';
 import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -16,6 +18,7 @@ import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import 'inventory_credit_sheet.dart';
 
 /// The sales recorded at the counter, newest first, one page at a time. Each
 /// shows what was sold, at what price, how it was paid and by whom. A sale is
@@ -30,6 +33,10 @@ import '../widgets/lot_sheets.dart';
 /// and shows it first, briefly highlighted, above the list. A sale that does
 /// not exist, or that the person may not see (another store's, for staff tied
 /// to one), is never shown: the list opens as usual with a short note.
+///
+/// A credit sale carries a chip (Owed $40.00, red once overdue, or Credit
+/// paid) and opens its credit sheet; the chips above the list narrow to the
+/// credits still owed or paid.
 class InventorySalesScreen extends StatefulWidget {
   const InventorySalesScreen({
     super.key,
@@ -38,12 +45,21 @@ class InventorySalesScreen extends StatefulWidget {
     this.service = const InventoryService(),
     this.access = const InventoryAccess.owner(),
     this.saleId,
+    this.creditSource,
+    this.currentUserId,
+    this.clock = DateTime.now,
   });
 
   final String businessId;
   final InventorySource? source;
   final InventoryService service;
   final InventoryAccess access;
+
+  /// The owner (for the pickers) and a credit's payments; null reads
+  /// Firestore.
+  final InventoryCreditSource? creditSource;
+  final String? currentUserId;
+  final DateTime Function() clock;
 
   /// The sale to open first (from a notification); null or blank: just the
   /// list.
@@ -94,7 +110,17 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
   String _storeFilter = '';
 
   List<InventorySale> _sales = const [];
-  List<LotStaff> _staff = const [];
+  late final InventoryTeamWatcher _team = InventoryTeamWatcher(
+    source: _source,
+    creditSource: widget.creditSource,
+    businessId: widget.businessId,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+  );
+  List<LotStaff> get _staff => _team.people;
+  InventoryCreditFilter _creditFilter = InventoryCreditFilter.all;
+  late final String _me = widget.currentUserId ?? inventoryCurrentUserId();
   int _pages = 1;
   bool _loaded = false;
   bool _failed = false;
@@ -107,11 +133,7 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     _watcher.start();
     _listenSales();
     _listenFocus();
-    _subs.add(
-      _source.watchStaff(widget.businessId).listen((staff) {
-        if (mounted) setState(() => _staff = staff);
-      }, onError: (_) {}),
-    );
+    _team.start();
   }
 
   @override
@@ -122,6 +144,7 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     _focusSub?.cancel();
     _salesSub?.cancel();
     _watcher.dispose();
+    _team.dispose();
     for (final s in _subs) {
       s.cancel();
     }
@@ -296,6 +319,26 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     }
   }
 
+  /// The credit sheet of [sale]: payments, collector, due date.
+  Future<void> _openCredit(InventorySale sale) {
+    final scope = inventorySalesScope(
+      widget.access,
+      _watcher.context,
+      storesLoaded: _watcher.storesLoaded,
+    );
+    return showInventoryCreditSheet(
+      context,
+      businessId: widget.businessId,
+      sale: sale,
+      staff: _staff,
+      service: widget.service,
+      creditSource: widget.creditSource,
+      paymentsStoreId: scope.storeId,
+      currentUserId: _me,
+      clock: widget.clock,
+    );
+  }
+
   /// The notification's sale, when it is loaded, still the viewer's to see,
   /// and inside the store filter (someone who narrowed to another store does
   /// not see it pinned on top).
@@ -335,6 +378,8 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     canVoid: _voiding.isEmpty,
     onVoid: () => _void(sale),
     highlighted: highlighted,
+    today: widget.clock(),
+    onCredit: sale.isOnCredit ? () => _openCredit(sale) : null,
   );
 
   @override
@@ -342,9 +387,12 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     final l10n = AppLocalizations.of(context)!;
     final locale = dateLocaleOf(context);
     final stores = _watcher.context;
-    final shown = stores.viewerSeesAll
-        ? inventorySalesForStore(_sales, _storeFilter)
-        : _sales;
+    final shown = inventorySalesForCredit(
+      stores.viewerSeesAll
+          ? inventorySalesForStore(_sales, _storeFilter)
+          : _sales,
+      _creditFilter,
+    );
     final focused = _focusedShown(stores);
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -394,6 +442,34 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
                 onSelected: (id) => setState(() => _storeFilter = id),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              0,
+            ),
+            child: InventoryChoiceChips(
+              keyPrefix: 'inv-sales-credit',
+              options: [
+                (id: '', label: l10n.invCreditFilterAll),
+                (id: 'open', label: l10n.invCreditOwedTitle),
+                (id: 'paid', label: l10n.invCreditChipPaid),
+              ],
+              selected: switch (_creditFilter) {
+                InventoryCreditFilter.all => '',
+                InventoryCreditFilter.open => 'open',
+                InventoryCreditFilter.paid => 'paid',
+              },
+              onSelected: (id) => setState(
+                () => _creditFilter = switch (id) {
+                  'open' => InventoryCreditFilter.open,
+                  'paid' => InventoryCreditFilter.paid,
+                  _ => InventoryCreditFilter.all,
+                },
+              ),
+            ),
+          ),
           Expanded(
             child: !_loaded || _focusPending
                 ? const Center(child: CircularProgressIndicator())
@@ -488,9 +564,17 @@ class InventorySaleCard extends StatelessWidget {
     this.canVoid = true,
     this.storeName = '',
     this.highlighted = false,
+    this.today,
+    this.onCredit,
   });
 
   final InventorySale sale;
+
+  /// For the credit chip's overdue reading (null: now).
+  final DateTime? today;
+
+  /// Opens the credit sheet; null for a sale paid in full.
+  final VoidCallback? onCredit;
   final String locale;
   final List<LotStaff> staff;
   final VoidCallback onVoid;
@@ -511,6 +595,7 @@ class InventorySaleCard extends StatelessWidget {
         ? ''
         : displayDateTime(sale.createdAt!, locale);
     final soldBy = inventoryStaffName(staff, sale.soldByStaffId);
+    final receivedBy = inventoryStaffName(staff, sale.moneyReceivedBy);
     final voidedBy = inventoryStaffName(staff, sale.voidedByStaffId);
     final voidedWhen = sale.voidedAt == null
         ? ''
@@ -554,6 +639,12 @@ class InventorySaleCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if (sale.isOnCredit && !sale.voided)
+                InventoryCreditChip(
+                  key: Key('inv-credit-chip-${sale.id}'),
+                  sale: sale,
+                  today: today ?? DateTime.now(),
+                ),
               if (sale.voided)
                 InventoryChip(
                   key: Key('inv-voided-${sale.id}'),
@@ -602,13 +693,37 @@ class InventorySaleCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             [
-              inventoryPaymentLabel(l10n, sale.paymentMethod),
+              // Nothing paid at the counter: no method to name.
+              if (!sale.isOnCredit || sale.paidAtSaleCents > 0)
+                inventoryPaymentLabel(l10n, sale.paymentMethod),
               if (soldBy.isNotEmpty) l10n.inventorySoldBy(soldBy),
+              if (receivedBy.isNotEmpty &&
+                  sale.moneyReceivedBy != sale.soldByStaffId)
+                l10n.invCreditReceivedByName(receivedBy),
               if (storeName.isNotEmpty) l10n.inventoryStoreOf(storeName),
             ].join(' · '),
             key: Key('inv-sale-meta-${sale.id}'),
             style: const TextStyle(fontSize: 12, color: AppColors.muted),
           ),
+          if (sale.isOnCredit) ...[
+            const SizedBox(height: 2),
+            Text(
+              [
+                l10n.invCreditSplit(
+                  formatLotCents(sale.paidAtSaleCents),
+                  formatLotCents(sale.creditCents),
+                ),
+                if ((sale.credit?.customerName ?? '').isNotEmpty)
+                  sale.credit!.customerName,
+              ].join(' · '),
+              key: Key('inv-sale-credit-${sale.id}'),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.ink,
+              ),
+            ),
+          ],
           if (sale.voided)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -627,21 +742,34 @@ class InventorySaleCard extends StatelessWidget {
           else
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
-                key: Key('inv-void-${sale.id}'),
-                onPressed: canVoid ? onVoid : null,
-                child: voiding
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(
-                        l10n.inventoryVoidSale,
-                        style: TextStyle(
-                          color: canVoid ? AppColors.errorRed : AppColors.muted,
-                        ),
-                      ),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                children: [
+                  if (onCredit != null)
+                    TextButton(
+                      key: Key('inv-credit-open-${sale.id}'),
+                      onPressed: onCredit,
+                      child: Text(l10n.invCreditDetails),
+                    ),
+                  TextButton(
+                    key: Key('inv-void-${sale.id}'),
+                    onPressed: canVoid ? onVoid : null,
+                    child: voiding
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            l10n.inventoryVoidSale,
+                            style: TextStyle(
+                              color: canVoid
+                                  ? AppColors.errorRed
+                                  : AppColors.muted,
+                            ),
+                          ),
+                  ),
+                ],
               ),
             ),
         ],

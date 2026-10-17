@@ -24,6 +24,20 @@ void main() {
           .inventorySales,
       isTrue,
     );
+    expect(prefs.inventoryCredit, isTrue);
+    expect(
+      NotificationPreferences.fromMap({'inventorySales': false})
+          .inventoryCredit,
+      isTrue,
+    );
+    final creditOff =
+        NotificationPreferences.defaults.copyWith(inventoryCredit: false);
+    expect(creditOff.toMap()['inventoryCredit'], isFalse);
+    expect(
+      NotificationPreferences.fromMap(creditOff.toMap()).inventoryCredit,
+      isFalse,
+    );
+    expect(creditOff.inventorySales, isTrue);
   });
 
   test('notification preferences serialize and preserve disabled values', () {
@@ -45,6 +59,7 @@ void main() {
       'supportEscalations': true,
       'supportCaseUpdates': true,
       'inventorySales': true,
+      'inventoryCredit': true,
     });
     expect(
       NotificationPreferences.fromMap(prefs.toMap()).shipmentActivity,

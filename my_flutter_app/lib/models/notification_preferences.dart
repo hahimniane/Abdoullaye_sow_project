@@ -12,6 +12,7 @@ class NotificationPreferences {
     this.supportEscalations = true,
     this.supportCaseUpdates = true,
     this.inventorySales = true,
+    this.inventoryCredit = true,
   });
 
   final bool pushNotifications;
@@ -29,6 +30,11 @@ class NotificationPreferences {
   /// Inventory "Sales at my store": a push when someone else of this
   /// person's store (or business) rings up a sale. On unless switched off.
   final bool inventorySales;
+
+  /// Inventory credit: a push when this person is made the collector of a
+  /// credit sale, and when one they collect is overdue. On unless switched
+  /// off.
+  final bool inventoryCredit;
 
   static const defaults = NotificationPreferences();
 
@@ -52,6 +58,7 @@ class NotificationPreferences {
           data['supportCaseUpdates'] != false &&
           data['supportActivity'] != false,
       inventorySales: data['inventorySales'] != false,
+      inventoryCredit: data['inventoryCredit'] != false,
     );
   }
 
@@ -69,6 +76,7 @@ class NotificationPreferences {
       'supportEscalations': supportEscalations,
       'supportCaseUpdates': supportCaseUpdates,
       'inventorySales': inventorySales,
+      'inventoryCredit': inventoryCredit,
     };
   }
 
@@ -85,6 +93,7 @@ class NotificationPreferences {
     bool? supportEscalations,
     bool? supportCaseUpdates,
     bool? inventorySales,
+    bool? inventoryCredit,
   }) {
     return NotificationPreferences(
       pushNotifications: pushNotifications ?? this.pushNotifications,
@@ -99,6 +108,7 @@ class NotificationPreferences {
       supportEscalations: supportEscalations ?? this.supportEscalations,
       supportCaseUpdates: supportCaseUpdates ?? this.supportCaseUpdates,
       inventorySales: inventorySales ?? this.inventorySales,
+      inventoryCredit: inventoryCredit ?? this.inventoryCredit,
     );
   }
 }

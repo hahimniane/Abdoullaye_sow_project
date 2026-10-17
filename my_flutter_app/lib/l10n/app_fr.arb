@@ -5786,5 +5786,178 @@
         "type": "int"
       }
     }
-  }
+  },
+  "invCreditMe": "{name} (moi)",
+  "@invCreditMe": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOnCredit": "À crédit",
+  "invCreditOnCreditNote": "Le client paie une partie maintenant (ou rien) et doit le reste.",
+  "invCreditPaidNow": "Payé maintenant (dollars US)",
+  "invCreditCustomerName": "Nom du client",
+  "invCreditCustomerPhone": "Téléphone du client",
+  "invCreditCollector": "Qui encaisse le reste",
+  "invCreditCollectorPick": "Choisir qui encaisse",
+  "invCreditDueDate": "Échéance (facultatif)",
+  "invCreditNoDueDate": "Sans échéance",
+  "invCreditClearDueDate": "Effacer l'échéance",
+  "invCreditSplit": "Payé maintenant {paid} · À crédit {owed}",
+  "@invCreditSplit": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditErrPaidNowInvalid": "Saisissez le montant payé maintenant, ou laissez vide pour rien.",
+  "invCreditErrPaidNowTooLarge": "À crédit, le montant payé maintenant doit être inférieur au total.",
+  "invCreditErrPhoneRequired": "Saisissez le numéro de téléphone du client.",
+  "invCreditErrCollectorRequired": "Choisissez qui encaisse le reste.",
+  "invCreditErrCollectorInvalid": "Cette personne ne fait pas partie de cette entreprise.",
+  "invCreditErrDueDate": "Choisissez une échéance à partir d'aujourd'hui.",
+  "invCreditFixCheckout": "Vérifiez les détails du paiement ci-dessus.",
+  "invCreditOwes": "{name} doit {amount}",
+  "@invCreditOwes": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditFailCustomer": "Une vente à crédit demande le nom et le téléphone du client.",
+  "invCreditFailNoCredit": "Cette vente n'a rien à crédit.",
+  "invCreditFailHasPayments": "Cette vente a des paiements de crédit. Annulez-les avant d'annuler la vente.",
+  "invCreditChipOpen": "Dû {amount}",
+  "@invCreditChipOpen": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipOverdue": "En retard {amount}",
+  "@invCreditChipOverdue": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipPaid": "Crédit payé",
+  "invCreditFilterAll": "Toutes les ventes",
+  "invCreditOwedTitle": "Crédit dû",
+  "invCreditOwedHint": "Clients qui doivent encore",
+  "invCreditReceivedByName": "Reçu par {name}",
+  "@invCreditReceivedByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditDetails": "Détails du crédit",
+  "invCreditOwedOf": "{owed} dû sur {credit}",
+  "@invCreditOwedOf": {
+    "placeholders": {
+      "owed": {
+        "type": "String"
+      },
+      "credit": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditPaidOff": "Entièrement payé",
+  "invCreditCustomer": "Client",
+  "invCreditCall": "Appeler {name}",
+  "@invCreditCall": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditCallFailed": "Le téléphone n'a pas pu lancer l'appel.",
+  "invCreditCollectedBy": "Encaissé par {name}",
+  "@invCreditCollectedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNoCollector": "Personne ne l'encaisse encore",
+  "invCreditDueOn": "À payer le {date}",
+  "@invCreditDueOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOverdueSince": "En retard depuis le {date}",
+  "@invCreditOverdueSince": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChange": "Changer l'encaisseur ou l'échéance",
+  "invCreditChanged": "Crédit mis à jour.",
+  "invCreditPaidAtSale": "{amount} payé au comptoir",
+  "@invCreditPaidAtSale": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditVoidedNote": "Cette vente a été annulée : rien n'est dû.",
+  "invCreditFilterMine": "Les miens",
+  "invCreditFilterEveryone": "Tout le monde",
+  "invCreditTotals": "{count, plural, =1{1 crédit ouvert} other{{count} crédits ouverts}} · {amount} dû",
+  "@invCreditTotals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOverdueTotals": "{count} en retard · {amount}",
+  "@invCreditOverdueTotals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNoneOpen": "Rien n'est dû.",
+  "invCreditNoneOpenHint": "Les ventes à crédit encore dues s'affichent ici jusqu'à leur paiement.",
+  "invCreditLoadFailed": "Les crédits n'ont pas pu être chargés.",
+  "invCreditSoldOn": "Vendu le {date}",
+  "@invCreditSoldOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNotifications": "Crédits à encaisser"
 }

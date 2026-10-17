@@ -19,6 +19,7 @@ import 'inventory_brands_screen.dart';
 import 'inventory_categories_screen.dart';
 import 'inventory_item_screen.dart';
 import 'inventory_item_sheets.dart';
+import 'inventory_credit_screen.dart';
 import 'inventory_sales_screen.dart';
 import 'inventory_sell_screen.dart';
 import 'inventory_stores_screen.dart';
@@ -377,6 +378,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ContainerActionButton(
+                  key: const Key('inv-open-credit'),
+                  icon: Icons.handshake_outlined,
+                  label: l10n.invCreditOwedTitle,
+                  onTap: () => _push(
+                    InventoryCreditScreen(
+                      businessId: widget.businessId,
+                      source: _source,
+                      service: widget.service,
+                      access: widget.access,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 if (stores.viewerSeesAll) ...[

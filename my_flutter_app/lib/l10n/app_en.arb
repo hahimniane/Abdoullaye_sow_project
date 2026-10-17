@@ -5786,5 +5786,178 @@
   "pkgLabelsPrintFailed": "The labels could not be printed. Try again.",
   "pkgLabelsOneNotePrinter": "One label per package: enough for a pickup or a torn label.",
   "pkgLabelsTipPrinter": "Each label carries the QR code, the tracking code, and both names and phone numbers. Set the label size to the roll loaded in the printer.",
-  "pkgLabelsTipSystem": "Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side."
+  "pkgLabelsTipSystem": "Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side.",
+  "invCreditMe": "{name} (me)",
+  "@invCreditMe": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOnCredit": "On credit",
+  "invCreditOnCreditNote": "The customer pays part now (or nothing) and owes the rest.",
+  "invCreditPaidNow": "Paid now (US dollars)",
+  "invCreditCustomerName": "Customer name",
+  "invCreditCustomerPhone": "Customer phone",
+  "invCreditCollector": "Who collects the rest",
+  "invCreditCollectorPick": "Choose who collects",
+  "invCreditDueDate": "Due date (optional)",
+  "invCreditNoDueDate": "No due date",
+  "invCreditClearDueDate": "Clear the due date",
+  "invCreditSplit": "Paid now {paid} · On credit {owed}",
+  "@invCreditSplit": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditErrPaidNowInvalid": "Enter the amount paid now, or leave it empty for nothing.",
+  "invCreditErrPaidNowTooLarge": "On credit, the amount paid now must be less than the total.",
+  "invCreditErrPhoneRequired": "Enter the customer's phone number.",
+  "invCreditErrCollectorRequired": "Choose who collects the rest.",
+  "invCreditErrCollectorInvalid": "That person is not in this business.",
+  "invCreditErrDueDate": "Pick a due date from today on.",
+  "invCreditFixCheckout": "Check the payment details above.",
+  "invCreditOwes": "{name} owes {amount}",
+  "@invCreditOwes": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditFailCustomer": "A credit sale needs the customer's name and phone.",
+  "invCreditFailNoCredit": "This sale has nothing on credit.",
+  "invCreditFailHasPayments": "This sale has credit payments. Revert them before voiding it.",
+  "invCreditChipOpen": "Owed {amount}",
+  "@invCreditChipOpen": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipOverdue": "Overdue {amount}",
+  "@invCreditChipOverdue": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChipPaid": "Credit paid",
+  "invCreditFilterAll": "All sales",
+  "invCreditOwedTitle": "Credit owed",
+  "invCreditOwedHint": "Customers who still owe",
+  "invCreditReceivedByName": "Received by {name}",
+  "@invCreditReceivedByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditDetails": "Credit details",
+  "invCreditOwedOf": "{owed} owed of {credit}",
+  "@invCreditOwedOf": {
+    "placeholders": {
+      "owed": {
+        "type": "String"
+      },
+      "credit": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditPaidOff": "Paid in full",
+  "invCreditCustomer": "Customer",
+  "invCreditCall": "Call {name}",
+  "@invCreditCall": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditCallFailed": "The phone could not start the call.",
+  "invCreditCollectedBy": "Collected by {name}",
+  "@invCreditCollectedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNoCollector": "No one is collecting it yet",
+  "invCreditDueOn": "Due {date}",
+  "@invCreditDueOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOverdueSince": "Overdue since {date}",
+  "@invCreditOverdueSince": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditChange": "Change collector or due date",
+  "invCreditChanged": "Credit updated.",
+  "invCreditPaidAtSale": "{amount} paid at the counter",
+  "@invCreditPaidAtSale": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditVoidedNote": "This sale was voided: nothing is owed.",
+  "invCreditFilterMine": "Mine",
+  "invCreditFilterEveryone": "Everyone",
+  "invCreditTotals": "{count, plural, =1{1 open credit} other{{count} open credits}} · {amount} owed",
+  "@invCreditTotals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditOverdueTotals": "{count} overdue · {amount}",
+  "@invCreditOverdueTotals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNoneOpen": "Nothing is owed.",
+  "invCreditNoneOpenHint": "Credit sales still owed show here until they are paid.",
+  "invCreditLoadFailed": "The credits could not be loaded.",
+  "invCreditSoldOn": "Sold {date}",
+  "@invCreditSoldOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "invCreditNotifications": "Credit to collect"
 }

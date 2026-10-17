@@ -16,6 +16,7 @@ import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import 'inventory_credit_screen.dart';
 import 'inventory_item_screen.dart';
 import 'inventory_item_sheets.dart';
 import 'inventory_sales_screen.dart';
@@ -307,6 +308,15 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
     ),
   );
 
+  void _openCredit() => _push(
+    InventoryCreditScreen(
+      businessId: widget.businessId,
+      source: _source,
+      service: widget.service,
+      access: widget.access,
+    ),
+  );
+
   void _openItem(String itemId) => _push(
     InventoryItemScreen(
       businessId: widget.businessId,
@@ -493,6 +503,13 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
               title: l10n.inventoryAddProduct,
               caption: l10n.shopHomeAddHint,
               onTap: _addProduct,
+            ),
+            _QuickLink(
+              tileKey: const Key('shop-open-credit'),
+              icon: Icons.handshake_outlined,
+              title: l10n.invCreditOwedTitle,
+              caption: l10n.invCreditOwedHint,
+              onTap: _openCredit,
             ),
           ],
         ),

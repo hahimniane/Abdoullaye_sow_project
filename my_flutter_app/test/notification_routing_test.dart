@@ -383,6 +383,33 @@ void businessRoutingTests() {
       );
     });
 
+    test('a credit alert opens its sale, marked as credit', () {
+      // An inventory_sale with kind credit, or a credit type of its own.
+      for (final data in [
+        {'type': 'inventory_sale', 'kind': 'credit', 'saleId': 'sale-9'},
+        {'type': 'inventory_credit', 'relatedId': 'sale-9'},
+        {'type': 'inventory_credit_overdue', 'saleId': 'sale-9',
+            'storeId': 'store-north'},
+      ]) {
+        final route = routeForNotificationData(data, audience: business);
+        expect(route?.name, '/inventory-sales', reason: '$data');
+        final args = route?.arguments as InventorySalesArguments;
+        expect(args.saleId, 'sale-9');
+        expect(args.kind, 'credit');
+      }
+      // A sale alert stays a sale alert.
+      final sale = routeForNotificationData(
+        {'type': 'inventory_sale', 'saleId': 's1'},
+        audience: business,
+      );
+      expect((sale?.arguments as InventorySalesArguments).kind, isNull);
+      // A customer has no sales list.
+      expect(
+        routeForNotificationData({'type': 'inventory_credit', 'saleId': 's'}),
+        isNull,
+      );
+    });
+
     test('a customer still gets the customer screens for shared types', () {
       expect(routeForNotificationData({'type': 'car_viewing_status'})?.name,
           '/my-viewings');

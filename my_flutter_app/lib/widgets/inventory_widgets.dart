@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../screens/package_payment_sheet.dart' show containerPaymentMethodLabel;
 import '../services/inventory.dart';
+import '../services/inventory_credit.dart';
 import '../services/inventory_stores.dart';
-import '../services/lot_ledger.dart' show LotStaff;
+import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import 'app_back_button.dart';
@@ -43,7 +44,67 @@ String inventoryFailureText(AppLocalizations l10n, InventoryFailure failure) =>
       InventoryFailure.brandNameTaken => l10n.inventoryFailBrandNameTaken,
       InventoryFailure.brandNotFound => l10n.inventoryFailBrandNotFound,
       InventoryFailure.brandTooLong => l10n.inventoryFailBrandTooLong,
+      InventoryFailure.receivedByInvalid => l10n.wpkErrReceivedByInvalid,
+      InventoryFailure.creditCustomerRequired => l10n.invCreditFailCustomer,
+      InventoryFailure.collectorInvalid => l10n.invCreditErrCollectorInvalid,
+      InventoryFailure.dueDateInvalid => l10n.invCreditErrDueDate,
+      InventoryFailure.paymentExceedsBalance => l10n.wpkErrExceedsBalance,
+      InventoryFailure.noCredit => l10n.invCreditFailNoCredit,
+      InventoryFailure.creditHasPayments => l10n.invCreditFailHasPayments,
+      InventoryFailure.paymentNotFound => l10n.wpkErrPaymentNotFound,
+      InventoryFailure.paymentReverted => l10n.wpkErrPaymentReverted,
     };
+
+/// The checkout's and a credit payment's refusal codes
+/// (`validateInventoryCheckout`, `validateInventoryCreditPayment`), in words.
+String inventoryCreditErrorText(AppLocalizations l10n, String code) =>
+    switch (code) {
+      'received_by_invalid' => l10n.wpkErrReceivedByInvalid,
+      'received_by_required' => l10n.wpkErrReceivedByRequired,
+      'payment_method_invalid' => l10n.wpkErrMethodInvalid,
+      'paid_now_invalid' => l10n.invCreditErrPaidNowInvalid,
+      'paid_now_too_large' => l10n.invCreditErrPaidNowTooLarge,
+      'customer_name_required' => l10n.lotErrCustomerName,
+      'customer_phone_required' => l10n.invCreditErrPhoneRequired,
+      'customer_phone_invalid' => l10n.ctrErrCustomerPhoneInvalid,
+      'collector_required' => l10n.invCreditErrCollectorRequired,
+      'collector_invalid' => l10n.invCreditErrCollectorInvalid,
+      'due_date_invalid' => l10n.invCreditErrDueDate,
+      'amount_required' => l10n.wpkErrAmountRequired,
+      'amount_too_large' => l10n.inventoryProblemTooLarge,
+      'payment_exceeds_balance' => l10n.wpkErrExceedsBalance,
+      _ => l10n.inventoryFailInvalid,
+    };
+
+/// A credit sale's chip: what is still owed (red once overdue), or paid.
+/// Nothing for a sale paid in full at the counter.
+class InventoryCreditChip extends StatelessWidget {
+  const InventoryCreditChip({super.key, required this.sale, required this.today});
+
+  final InventorySale sale;
+  final DateTime today;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final owed = formatLotCents(sale.creditBalanceCents);
+    return switch (inventoryCreditStanding(sale, today: today)) {
+      InventoryCreditStanding.none => const SizedBox.shrink(),
+      InventoryCreditStanding.open => InventoryChip(
+        label: l10n.invCreditChipOpen(owed),
+        color: AppColors.warn,
+      ),
+      InventoryCreditStanding.overdue => InventoryChip(
+        label: l10n.invCreditChipOverdue(owed),
+        color: AppColors.errorRed,
+      ),
+      InventoryCreditStanding.paid => InventoryChip(
+        label: l10n.invCreditChipPaid,
+        color: AppColors.sage,
+      ),
+    };
+  }
+}
 
 /// The product form's refusal codes, in words.
 String inventoryFieldErrorText(AppLocalizations l10n, String code) =>

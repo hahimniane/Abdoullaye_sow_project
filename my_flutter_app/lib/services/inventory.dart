@@ -306,6 +306,8 @@ class InventorySaleLine {
     this.countWasOff = false,
     this.brand = '',
     this.brandId = '',
+    this.category = '',
+    this.categoryId = '',
   });
 
   factory InventorySaleLine.fromMap(Map<String, dynamic> data) =>
@@ -320,6 +322,8 @@ class InventorySaleLine {
         countWasOff: data['countWasOff'] == true,
         brand: _text(data['brand'], inventoryMaxBrand),
         brandId: _text(data['brandId'], 128),
+        category: _text(data['category'], inventoryMaxCategory),
+        categoryId: _text(data['categoryId'], 128),
       );
 
   final String itemId;
@@ -328,6 +332,10 @@ class InventorySaleLine {
   final int quantity;
   final int listPriceCents;
   final int soldPriceCents;
+
+  /// The category as it was at sale time (blank: none, or an old sale).
+  final String category;
+  final String categoryId;
   final int? costCents;
   final bool countWasOff;
 
@@ -365,6 +373,13 @@ class InventorySale {
     this.createdAt,
     this.storeId = '',
     this.storeName = '',
+    this.receivedByStaffId = '',
+    this.paidNowCents,
+    this.creditCents = 0,
+    this.credit,
+    this.creditPaidCents = 0,
+    this.creditStatus = 'none',
+    this.voidReason = '',
   });
 
   factory InventorySale.fromMap(String id, Map<String, dynamic> data) {
@@ -388,6 +403,21 @@ class InventorySale {
       createdAt: lotDateOf(data['createdAt']),
       storeId: _text(data['storeId'], 128),
       storeName: _text(data['storeName'], inventoryMaxName),
+      receivedByStaffId: _text(data['receivedByStaffId'], 128),
+      paidNowCents: _optionalInt(data['paidNowCents']),
+      creditCents: _int(data['creditCents']) < 0 ? 0 : _int(data['creditCents']),
+      credit: data['credit'] is Map
+          ? InventorySaleCredit.fromMap(callableMap(data['credit']))
+          : null,
+      creditPaidCents: _int(data['creditPaidCents']) < 0
+          ? 0
+          : _int(data['creditPaidCents']),
+      creditStatus: switch (_text(data['creditStatus'], 10)) {
+        'open' => 'open',
+        'paid' => 'paid',
+        _ => 'none',
+      },
+      voidReason: _text(data['voidReason'], 300),
     );
   }
 
@@ -408,10 +438,82 @@ class InventorySale {
   final String storeId;
   final String storeName;
 
+  /// Who took the money at the counter. Blank on a sale from before this
+  /// was recorded: the seller took it ([moneyReceivedBy]).
+  final String receivedByStaffId;
+
+  /// What was paid at the counter; null on an old sale (all of it was).
+  final int? paidNowCents;
+
+  /// What was left owed when the sale was rung up (0: paid in full).
+  final int creditCents;
+
+  /// The customer who owes it and who collects it; null without credit.
+  final InventorySaleCredit? credit;
+
+  /// What has come in since against [creditCents] (reverted payments out).
+  final int creditPaidCents;
+
+  /// `none` (paid in full, every old sale), `open` or `paid`.
+  final String creditStatus;
+  final String voidReason;
+
   int get itemCount => lines.fold(0, (sum, line) => sum + line.quantity);
   int get discountCents =>
       lines.fold(0, (sum, line) => sum + line.discountCents);
   bool get hadCountWasOff => lines.any((line) => line.countWasOff);
+
+  /// The person who took the money: the one chosen, else the seller.
+  String get moneyReceivedBy =>
+      receivedByStaffId.isNotEmpty ? receivedByStaffId : soldByStaffId;
+
+  /// Paid at the counter: the stored figure, or the whole total on a sale
+  /// from before credit.
+  int get paidAtSaleCents {
+    final paid = paidNowCents;
+    if (paid != null) return paid < 0 ? 0 : paid;
+    return isOnCredit ? totalCents - creditCents : totalCents;
+  }
+
+  /// Sold on credit: part (or all) left for the customer to pay later.
+  bool get isOnCredit => creditStatus != 'none' && creditCents > 0;
+
+  /// Still owed (never negative).
+  int get creditBalanceCents {
+    if (!isOnCredit) return 0;
+    final left = creditCents - creditPaidCents;
+    return left > 0 ? left : 0;
+  }
+
+  /// Money is still to be collected on it (a voided sale is owed nothing).
+  bool get creditOpen =>
+      isOnCredit && !voided && creditStatus == 'open' && creditBalanceCents > 0;
+}
+
+/// The credit side of a sale: who owes, how to reach them, who collects and
+/// by when.
+class InventorySaleCredit {
+  const InventorySaleCredit({
+    this.customerName = '',
+    this.customerPhone = '',
+    this.collectorStaffId = '',
+    this.dueDate = '',
+  });
+
+  factory InventorySaleCredit.fromMap(Map<String, dynamic> data) =>
+      InventorySaleCredit(
+        customerName: _text(data['customerName'], 120),
+        customerPhone: _text(data['customerPhone'], 40),
+        collectorStaffId: _text(data['collectorStaffId'], 128),
+        dueDate: _text(data['dueDate'], 10),
+      );
+
+  final String customerName;
+  final String customerPhone;
+  final String collectorStaffId;
+
+  /// "YYYY-MM-DD", or blank for no due date.
+  final String dueDate;
 }
 
 /// The kinds of stock movement the server records.
@@ -749,9 +851,15 @@ class SaleAttempt {
   String _id = '';
 
   /// The id to send for [basket] paid by [paymentMethod] from [storeId]
-  /// (another store is another sale).
-  String idFor(Basket basket, String paymentMethod, {String storeId = ''}) {
-    final signature = '${basket.signature}#$paymentMethod#$storeId';
+  /// (another store is another sale). [details] - who took the money, the
+  /// credit terms - is part of the sale too: changing it is another sale.
+  String idFor(
+    Basket basket,
+    String paymentMethod, {
+    String storeId = '',
+    String details = '',
+  }) {
+    final signature = '${basket.signature}#$paymentMethod#$storeId#$details';
     if (_id.isEmpty || signature != _signature) {
       _id = newId();
       _signature = signature;
@@ -1073,21 +1181,32 @@ Map<String, Object?> deleteInventoryItemRequest(
 ) => {'businessId': businessId, 'itemId': itemId, 'confirm': true};
 
 /// `recordInventorySale`: one line per product, the price actually charged.
+///
+/// [receivedByStaffId] - who took the money - goes only when it is someone
+/// (the server defaults to the caller). [credit] - the part left owed, built
+/// by `inventoryCreditRequest` - makes it a credit sale; with nothing paid
+/// now there is no payment method to send.
 Map<String, Object?> recordInventorySaleRequest({
   required String businessId,
   required String clientRequestId,
   required String paymentMethod,
   required Basket basket,
   String storeId = '',
+  String receivedByStaffId = '',
+  Map<String, Object?>? credit,
 }) => {
   'businessId': businessId,
   'clientRequestId': clientRequestId,
   // Only a person who chose a store sends one; left out, the server sells
   // from the caller's home store (the only store of a single-store shop).
   if (storeId.isNotEmpty) 'storeId': storeId,
-  'paymentMethod': inventoryPaymentMethods.contains(paymentMethod)
-      ? paymentMethod
-      : 'other',
+  if (credit == null || ((credit['paidNowCents'] as int?) ?? 0) > 0)
+    'paymentMethod': inventoryPaymentMethods.contains(paymentMethod)
+        ? paymentMethod
+        : 'other',
+  if (receivedByStaffId.trim().isNotEmpty)
+    'receivedByStaffId': receivedByStaffId.trim(),
+  'credit': ?credit,
   'lines': [
     for (final line in basket.lines)
       {
@@ -1202,9 +1321,11 @@ class InventorySaleResult {
     required this.saleId,
     required this.totalCents,
     this.warnings = const [],
+    this.creditCents = 0,
   });
 
-  /// Reads `{saleId, totalCents, warnings:[{itemId, reason}]}`; null when
+  /// Reads `{saleId, totalCents, creditCents?, warnings:[{itemId, reason}]}`;
+  /// null when
   /// there is no sale id (the answer is not a recorded sale).
   static InventorySaleResult? fromCallable(Object? data) {
     final map = callableMap(data);
@@ -1214,6 +1335,8 @@ class InventorySaleResult {
     return InventorySaleResult(
       saleId: saleId,
       totalCents: _int(map['totalCents']),
+      // Left owed by the customer; an older server sends none (paid in full).
+      creditCents: _int(map['creditCents']) < 0 ? 0 : _int(map['creditCents']),
       warnings: [
         if (rawWarnings is Iterable)
           for (final w in rawWarnings)
@@ -1229,6 +1352,7 @@ class InventorySaleResult {
   final String saleId;
   final int totalCents;
   final List<InventorySaleWarning> warnings;
+  final int creditCents;
 
   /// The products whose count a sale found wrong.
   List<String> get countWasOffItemIds => [
@@ -1506,6 +1630,17 @@ enum InventoryFailure {
   brandNameTaken,
   brandNotFound,
   brandTooLong,
+
+  // Who took the money, and credit sales.
+  receivedByInvalid,
+  creditCustomerRequired,
+  collectorInvalid,
+  dueDateInvalid,
+  paymentExceedsBalance,
+  noCredit,
+  creditHasPayments,
+  paymentNotFound,
+  paymentReverted,
 }
 
 /// The v2 and v3 refusal codes (`details.reason`) and the failure each one is.
@@ -1526,6 +1661,15 @@ const inventoryFailureReasons = <String, InventoryFailure>{
   'brand_name_taken': InventoryFailure.brandNameTaken,
   'brand_not_found': InventoryFailure.brandNotFound,
   'brand_too_long': InventoryFailure.brandTooLong,
+  'received_by_invalid': InventoryFailure.receivedByInvalid,
+  'credit_customer_required': InventoryFailure.creditCustomerRequired,
+  'collector_invalid': InventoryFailure.collectorInvalid,
+  'due_date_invalid': InventoryFailure.dueDateInvalid,
+  'payment_exceeds_balance': InventoryFailure.paymentExceedsBalance,
+  'no_credit': InventoryFailure.noCredit,
+  'credit_has_payments': InventoryFailure.creditHasPayments,
+  'payment_not_found': InventoryFailure.paymentNotFound,
+  'payment_already_reverted': InventoryFailure.paymentReverted,
 };
 
 /// Reads a failure from the parts of a `FirebaseFunctionsException`: its

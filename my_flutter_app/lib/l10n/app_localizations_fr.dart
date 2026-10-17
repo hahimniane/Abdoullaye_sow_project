@@ -12575,4 +12575,211 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get pkgLabelsTipSystem =>
       'Choisissez l’imprimante 4 × 6 dans la fenêtre et imprimez en taille réelle (100 %). Deux étiquettes par colis, une pour chaque côté.';
+
+  @override
+  String invCreditMe(String name) {
+    return '$name (moi)';
+  }
+
+  @override
+  String get invCreditOnCredit => 'À crédit';
+
+  @override
+  String get invCreditOnCreditNote =>
+      'Le client paie une partie maintenant (ou rien) et doit le reste.';
+
+  @override
+  String get invCreditPaidNow => 'Payé maintenant (dollars US)';
+
+  @override
+  String get invCreditCustomerName => 'Nom du client';
+
+  @override
+  String get invCreditCustomerPhone => 'Téléphone du client';
+
+  @override
+  String get invCreditCollector => 'Qui encaisse le reste';
+
+  @override
+  String get invCreditCollectorPick => 'Choisir qui encaisse';
+
+  @override
+  String get invCreditDueDate => 'Échéance (facultatif)';
+
+  @override
+  String get invCreditNoDueDate => 'Sans échéance';
+
+  @override
+  String get invCreditClearDueDate => 'Effacer l\'échéance';
+
+  @override
+  String invCreditSplit(String paid, String owed) {
+    return 'Payé maintenant $paid · À crédit $owed';
+  }
+
+  @override
+  String get invCreditErrPaidNowInvalid =>
+      'Saisissez le montant payé maintenant, ou laissez vide pour rien.';
+
+  @override
+  String get invCreditErrPaidNowTooLarge =>
+      'À crédit, le montant payé maintenant doit être inférieur au total.';
+
+  @override
+  String get invCreditErrPhoneRequired =>
+      'Saisissez le numéro de téléphone du client.';
+
+  @override
+  String get invCreditErrCollectorRequired =>
+      'Choisissez qui encaisse le reste.';
+
+  @override
+  String get invCreditErrCollectorInvalid =>
+      'Cette personne ne fait pas partie de cette entreprise.';
+
+  @override
+  String get invCreditErrDueDate =>
+      'Choisissez une échéance à partir d\'aujourd\'hui.';
+
+  @override
+  String get invCreditFixCheckout =>
+      'Vérifiez les détails du paiement ci-dessus.';
+
+  @override
+  String invCreditOwes(String name, String amount) {
+    return '$name doit $amount';
+  }
+
+  @override
+  String get invCreditFailCustomer =>
+      'Une vente à crédit demande le nom et le téléphone du client.';
+
+  @override
+  String get invCreditFailNoCredit => 'Cette vente n\'a rien à crédit.';
+
+  @override
+  String get invCreditFailHasPayments =>
+      'Cette vente a des paiements de crédit. Annulez-les avant d\'annuler la vente.';
+
+  @override
+  String invCreditChipOpen(String amount) {
+    return 'Dû $amount';
+  }
+
+  @override
+  String invCreditChipOverdue(String amount) {
+    return 'En retard $amount';
+  }
+
+  @override
+  String get invCreditChipPaid => 'Crédit payé';
+
+  @override
+  String get invCreditFilterAll => 'Toutes les ventes';
+
+  @override
+  String get invCreditOwedTitle => 'Crédit dû';
+
+  @override
+  String get invCreditOwedHint => 'Clients qui doivent encore';
+
+  @override
+  String invCreditReceivedByName(String name) {
+    return 'Reçu par $name';
+  }
+
+  @override
+  String get invCreditDetails => 'Détails du crédit';
+
+  @override
+  String invCreditOwedOf(String owed, String credit) {
+    return '$owed dû sur $credit';
+  }
+
+  @override
+  String get invCreditPaidOff => 'Entièrement payé';
+
+  @override
+  String get invCreditCustomer => 'Client';
+
+  @override
+  String invCreditCall(String name) {
+    return 'Appeler $name';
+  }
+
+  @override
+  String get invCreditCallFailed => 'Le téléphone n\'a pas pu lancer l\'appel.';
+
+  @override
+  String invCreditCollectedBy(String name) {
+    return 'Encaissé par $name';
+  }
+
+  @override
+  String get invCreditNoCollector => 'Personne ne l\'encaisse encore';
+
+  @override
+  String invCreditDueOn(String date) {
+    return 'À payer le $date';
+  }
+
+  @override
+  String invCreditOverdueSince(String date) {
+    return 'En retard depuis le $date';
+  }
+
+  @override
+  String get invCreditChange => 'Changer l\'encaisseur ou l\'échéance';
+
+  @override
+  String get invCreditChanged => 'Crédit mis à jour.';
+
+  @override
+  String invCreditPaidAtSale(String amount) {
+    return '$amount payé au comptoir';
+  }
+
+  @override
+  String get invCreditVoidedNote =>
+      'Cette vente a été annulée : rien n\'est dû.';
+
+  @override
+  String get invCreditFilterMine => 'Les miens';
+
+  @override
+  String get invCreditFilterEveryone => 'Tout le monde';
+
+  @override
+  String invCreditTotals(int count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count crédits ouverts',
+      one: '1 crédit ouvert',
+    );
+    return '$_temp0 · $amount dû';
+  }
+
+  @override
+  String invCreditOverdueTotals(int count, String amount) {
+    return '$count en retard · $amount';
+  }
+
+  @override
+  String get invCreditNoneOpen => 'Rien n\'est dû.';
+
+  @override
+  String get invCreditNoneOpenHint =>
+      'Les ventes à crédit encore dues s\'affichent ici jusqu\'à leur paiement.';
+
+  @override
+  String get invCreditLoadFailed => 'Les crédits n\'ont pas pu être chargés.';
+
+  @override
+  String invCreditSoldOn(String date) {
+    return 'Vendu le $date';
+  }
+
+  @override
+  String get invCreditNotifications => 'Crédits à encaisser';
 }
