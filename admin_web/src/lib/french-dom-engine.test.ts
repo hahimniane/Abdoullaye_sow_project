@@ -94,6 +94,38 @@ test("translate=\"no\" below <html> opts out too, but <html translate=\"no\"> do
   assert.notEqual(copy.textContent, "Delivered");
 });
 
+test("the business console header keeps the business's and the person's names as typed", () => {
+  // Regression from the live click-through: "Conakry Express Shipping" read
+  // "Conakry Express Expédition" and "Test Owner" read "Test Propriétaire".
+  assert.equal(translateValue("Conakry Express Shipping", "fr"), "Conakry Express Expédition", "unmarked, the dictionary would rewrite it");
+  const business = h("span", { "data-no-translate": "" }, "Conakry Express Shipping");
+  const person = h("span", { "data-no-translate": "" }, "Test Owner");
+  const role = h("span", {}, "Owner");
+  const staff = h("option", { value: "s1", "data-no-translate": "" }, "Test Owner");
+  const header = h("header", {}, h("h1", {}, business), h("div", {}, person, role), h("select", {}, staff));
+  translateSubtree(header, "fr");
+  assert.equal(business.textContent, "Conakry Express Shipping");
+  assert.equal(person.textContent, "Test Owner");
+  assert.equal(staff.textContent, "Test Owner");
+  assert.notEqual(role.textContent, "Owner", "the role tag is copy and still translates");
+
+  const source = readFileSync("src/components/business-console.tsx", "utf8");
+  assert.match(source, /<h1>\s*<UserText value=\{text\(business\?\.name \?\? profile\.businessName, ""\)\} fallback="Business" \/>\s*<\/h1>/);
+  assert.match(source, /<span className="admin-chip-name">\s*<UserText value=\{text\(profile\.fullName \?\? firebaseUser\.email, ""\)\} fallback="Business user" \/>/);
+  assert.doesNotMatch(source, /<h1>\{businessName\}<\/h1>/);
+});
+
+test("staff names in every Received by / Paid by list are not translated", () => {
+  for (const file of [
+    "src/components/business/waiting-packages-panel.tsx",
+    "src/components/business/package-payment-dialog.tsx",
+    "src/components/business/operations-panels.tsx",
+  ]) {
+    const source = readFileSync(file, "utf8");
+    assert.doesNotMatch(source, /<option key=\{s\.id\} value=\{s\.id\}>\{s\.name\}<\/option>/, file);
+  }
+});
+
 test("scripts, styles and text areas are never rewritten", () => {
   const script = h("script", {}, "Cancelled");
   const style = h("style", {}, "Cancelled");
@@ -264,6 +296,8 @@ test("the consoles mark user-entered values as data-no-translate", () => {
     "src/components/support/support-cases-panel.tsx": 4,
     "src/components/admin-console.tsx": 4,
     "src/components/customer-console.tsx": 2,
+    "src/components/business-console.tsx": 3,
+    "src/components/business/waiting-packages-panel.tsx": 6,
   };
   for (const [file, atLeast] of Object.entries(minimum)) {
     const count = (readFileSync(file, "utf8").match(/data-no-translate|<UserText\b/g) ?? []).length;

@@ -1058,6 +1058,19 @@ export function containerLineTitle(line: unknown): string {
   return qty > 1 ? `${qty} × ${what}` : what;
 }
 
+/**
+ * Whether containerLineTitle is console copy ("2 barrels", "Car") rather
+ * than what someone typed (a make and model, a VIN, a description). Copy is
+ * translated in French; typed values render inside data-no-translate.
+ */
+export function containerLineTitleIsCopy(line: unknown): boolean {
+  const r = asRow(line);
+  const kind = text(r.kind, 20);
+  if (kind === "barrels") return true;
+  if (kind !== "car") return false;
+  return containerLineTitle(line) === "Car";
+}
+
 export function containerLineIsStock(line: unknown): boolean {
   return text(asRow(line).ownerKind, 20) === "stock";
 }

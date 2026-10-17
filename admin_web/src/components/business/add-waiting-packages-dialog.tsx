@@ -8,6 +8,7 @@ import {
   MAX_ASSIGN_LINES,
   CONTAINER_MESSAGES,
   containerLineTitle,
+  containerLineTitleIsCopy,
   containerTitle,
 } from "@/lib/container-manifest";
 import { functions } from "@/lib/firebase";
@@ -150,7 +151,7 @@ export function AddWaitingPackagesDialog({
                             onChange={() => toggle(entry.id)}
                           />
                           <span className="wpk-pick-main">
-                            <strong data-no-translate>{containerLineTitle(line)}</strong>
+                            <strong data-no-translate={containerLineTitleIsCopy(line) ? undefined : true}>{containerLineTitle(line)}</strong>
                             <small data-no-translate>
                               {[text(line.customerName, ""), text(line.customerPhone, "")].filter(Boolean).join(" · ")}
                             </small>

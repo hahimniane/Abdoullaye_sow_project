@@ -57,6 +57,7 @@ import {
 import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import { NotificationBell } from "@/components/notification-bell";
+import { UserText } from "@/components/user-text";
 import { ToggleRow } from "@/components/toggle-row";
 import {
   inventoryNotificationPreferenceFields,
@@ -472,6 +473,7 @@ export function BusinessConsole({
               <img
                 src={text(business?.profileImageUrl, "")}
                 alt={businessName}
+                data-no-translate
                 width={20}
                 height={20}
                 style={{ borderRadius: 5, display: "block", objectFit: "cover" }}
@@ -483,7 +485,12 @@ export function BusinessConsole({
             )}
           </div>
           <div className="topbar-heading">
-            <h1>{businessName}</h1>
+            {/* The business's own name and the person's: user data, never
+                run through the French dictionary ("Conakry Express Shipping"
+                is not "Conakry Express Expédition"). */}
+            <h1>
+              <UserText value={text(business?.name ?? profile.businessName, "")} fallback="Business" />
+            </h1>
             <p>
               Business dashboard ·{" "}
               <span className={`biz-status ${isApproved ? "ok" : "pending"}`}>
@@ -496,7 +503,7 @@ export function BusinessConsole({
           <div className="admin-chip" title="Signed-in account">
             <UserCog size={18} />
             <span className="admin-chip-name">
-              {text(profile.fullName ?? firebaseUser.email, "Business user")}
+              <UserText value={text(profile.fullName ?? firebaseUser.email, "")} fallback="Business user" />
             </span>
             <span className="admin-role-tag">
               {profile.role === "businessOwner" ? "Owner" : "Staff"}
@@ -1579,7 +1586,7 @@ function ProfileView({
           <div className="person-block owner-block">
             <span>Name</span>
             <strong>
-              {text(business?.name ?? profile.businessName, "Business")}
+              <UserText value={text(business?.name ?? profile.businessName, "")} fallback="Business" />
             </strong>
             <small>
               {text(

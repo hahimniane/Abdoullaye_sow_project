@@ -58,6 +58,7 @@ import {
   containerLineIsStock,
   containerLinePayload,
   containerLineTitle,
+  containerLineTitleIsCopy,
   containerLineWhatsApp,
   containerLineWhatsAppText,
   contactPhoneReach,
@@ -1050,7 +1051,7 @@ export function ContainersPanel({
                       id={`ctn-line-${String(row.id)}`}
                       key={String(row.id)}
                     >
-                      <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} /></span>
+                      <span><strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} /></span>
                       <span>
                         {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(row.customerName, "")}</strong>}
                         {!stock && <small data-no-translate>{text(row.customerPhone, "")}</small>}
@@ -1144,7 +1145,7 @@ export function ContainersPanel({
                         onClick={open}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
                       >
-                        <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(hit.line.trackingCode, "")} /></span>
+                        <span><strong data-no-translate={containerLineTitleIsCopy(hit.line) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(hit.line.trackingCode, "")} /></span>
                         <span>
                           {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(hit.line.customerName, "")}</strong>}
                           {!stock && <small data-no-translate>{text(hit.line.customerPhone, "")}</small>}

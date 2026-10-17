@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { translateValue } from "./french-dom.ts";
 import {
+  containerLineTitleIsCopy,
   CONTAINER_LINE_KINDS,
   CONTAINER_LABEL_CHOICE_KEY,
   CONTAINER_MESSAGES,
@@ -409,6 +410,25 @@ test("titles: the number when known, else the working name", () => {
   assert.equal(containerLineTitle({ kind: "other", description: "tires", quantity: 4 }), "4 × tires");
   assert.equal(containerLineTitle({ kind: "other", description: "generator", quantity: 1 }), "generator");
   assert.equal(cleanVin(" 1hg-cm82633a004352xx "), "1HGCM82633A004352");
+});
+
+test("a barrel count is copy that reads in French; a typed title is not", () => {
+  // Regression: "1 barrel" / "2 barrels" sat inside data-no-translate and stayed English.
+  assert.equal(containerLineTitleIsCopy({ kind: "barrels", quantity: 1 }), true);
+  assert.equal(translateValue(containerLineTitle({ kind: "barrels", quantity: 1 }), "fr"), "1 baril");
+  assert.equal(translateValue(containerLineTitle({ kind: "barrels", quantity: 3 }), "fr"), "3 barils");
+  assert.equal(containerLineTitleIsCopy({ kind: "car" }), true, "the bare 'Car' fallback");
+  assert.equal(containerLineTitleIsCopy({ kind: "car", carMake: "Toyota" }), false);
+  assert.equal(containerLineTitleIsCopy({ kind: "car", vinNumber: "1HGCM82633A004352" }), false);
+  assert.equal(containerLineTitleIsCopy({ kind: "other", description: "Shipping boxes" }), false);
+  for (const file of [
+    "../components/business/waiting-packages-panel.tsx",
+    "../components/business/containers-panel.tsx",
+    "../components/business/add-waiting-packages-dialog.tsx",
+  ]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(source, /<strong data-no-translate=\{containerLineTitleIsCopy\(/, file);
+  }
 });
 
 // Regression: the "Added so far" tally built `${quantity} barrels` by hand

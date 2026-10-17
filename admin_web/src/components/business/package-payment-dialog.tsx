@@ -174,7 +174,7 @@ export function PackagePaymentDialog({
                 <label className="lst-field"><span>Received by</span>
                   <select value={draft.receivedByStaffId} disabled={busy} onChange={(e) => setDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}>
                     <option value="">Choose staff</option>
-                    {staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                    {staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
                   </select>
                 </label>
                 <label className="lst-field wide"><span>Note</span>
