@@ -187,6 +187,29 @@ section refusal for package payments.
 - A sync that finishes after the owner disconnected or connected another bank
   does not write over the link (it checks `itemId` in a transaction).
 
+## Console (admin_web)
+
+- **Settings tab, owner only** (`role == businessOwner` of this business):
+  "Bank for Zelle checks" card (`components/business/bank-zelle-card.tsx`).
+  Connect opens Plaid Link for the web; the official script
+  `https://cdn.plaid.com/link/v2/stable/link-initialize.js` is loaded only
+  when Connect is pressed (15 s limit). It shows the bank, the account mask,
+  the status and when the bank was last read; Reconnect when the bank needs
+  the owner to sign in again (update mode); Disconnect behind a confirmation;
+  the check window as a select (2 to 60 minutes). Platform admins work from
+  the admin console, which does not show this card.
+- **Check Zelle** (`components/business/zelle-check-button.tsx`) on: an
+  opened inventory sale paid now by Zelle, each standing Zelle credit
+  payment of a sale, and each standing Zelle package payment (Record a
+  payment dialog). Confirmed shows a chip with amount, time (date only when
+  the bank gave no time), sender and bank; not found says so with Check
+  again; several deposits are listed by sender and time with "This one".
+  The records are live, so a confirmation made in the app shows here too.
+- Pure logic in `src/lib/zelle-check.ts` (tests `zelle-check.test.ts`);
+  `bankCheck` is read into `InventorySale` and `PackagePaymentEntry`; every
+  string is in `french-dom.ts`. The AASA
+  (`public/.well-known/apple-app-site-association`) claims `/plaid/*`.
+
 ## Not in this version
 
 - No notifications.

@@ -30,6 +30,8 @@ import {
   type PackagePaymentDraft,
 } from "@/lib/waiting-packages";
 import { statusPillClass } from "@/lib/status-pill";
+import { zelleCheckable } from "@/lib/zelle-check";
+import { ZelleCheckButton } from "@/components/business/zelle-check-button";
 
 type Row = Record<string, unknown>;
 
@@ -224,6 +226,9 @@ export function PackagePaymentDialog({
                           <span>Reverted</span>
                           {revertedBy && <> · <span data-no-translate>{revertedBy}</span></>}
                         </small>
+                      )}
+                      {zelleCheckable({ method: entry.method, amountCents: entry.amountCents, voided: entry.reverted }) && (
+                        <ZelleCheckButton businessId={businessId} kind="container_line_payment" id={entry.id} bankCheck={entry.bankCheck} enabled={!busy} />
                       )}
                     </div>
                     {!entry.reverted && (

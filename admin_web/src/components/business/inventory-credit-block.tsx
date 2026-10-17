@@ -6,6 +6,7 @@ import { Banknote, Undo2, UserCheck } from "lucide-react";
 
 import { InventoryCollectorDialog } from "@/components/business/inventory-collector-dialog";
 import { InventoryCreditPaymentDialog } from "@/components/business/inventory-credit-payment-dialog";
+import { ZelleCheckButton } from "@/components/business/zelle-check-button";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import { useInventoryCreditPayments } from "@/lib/business-data";
 import { functions } from "@/lib/firebase";
@@ -26,6 +27,7 @@ import {
   revertInventoryCreditPaymentRequest,
 } from "@/lib/inventory-credit";
 import { statusPillClass } from "@/lib/status-pill";
+import { zelleCheckable } from "@/lib/zelle-check";
 
 /**
  * The credit part of an opened sale: who owes it, who collects it, by when,
@@ -141,6 +143,9 @@ export function InventoryCreditBlock({
                       <span>Reverted</span>
                       {revertedBy && <> · <span data-no-translate>{revertedBy}</span></>}
                     </small>
+                  )}
+                  {zelleCheckable({ method: entry.method, amountCents: entry.amountCents, voided: entry.reverted }) && (
+                    <ZelleCheckButton businessId={businessId} kind="inventory_credit_payment" id={entry.id} bankCheck={entry.bankCheck} enabled={enabled} />
                   )}
                 </div>
                 {!entry.reverted && (

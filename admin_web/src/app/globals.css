@@ -14466,3 +14466,25 @@ html[data-lang-pending] body {
   .ivt-event { grid-template-columns: 52px 18px minmax(0, 1fr); padding: 8px 10px; }
   .ivt-history-bar .service-segments { width: 100%; }
 }
+
+/* Zelle bank check (docs/ZELLE_BANK_CHECK.md): the Check Zelle button on payment rows and the owner's bank card. */
+.lst-form-ok {
+  background: var(--mist);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  color: var(--brand-strong);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-bottom: 16px;
+  padding: 11px 13px;
+}
+.zelle-check { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; min-width: 0; }
+.zelle-check small { overflow-wrap: anywhere; }
+.zelle-check .lst-form-error { margin-bottom: 0; padding: 6px 10px; }
+.zelle-candidates { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.zelle-candidates ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.zelle-candidates li { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.bank-zelle-account { display: flex; flex-direction: column; gap: 2px; margin: 0 0 12px; }
+.bank-zelle-window { margin-top: 14px; max-width: 420px; }
+.bank-zelle-window small { color: var(--muted); }
