@@ -185,6 +185,7 @@ test("container History sentences translate around the typed values", () => {
     ["Changed receiver's phone for Awa Diallo", "Modification : téléphone du destinataire pour Awa Diallo"],
     ["Changed customer's name, receiver's WhatsApp updates", "Modification : nom du client, mises à jour WhatsApp du destinataire"],
     ["Changed label, notes", "Modification : nom, notes"],
+    ["Changed notes, carrierScac", "Modification : notes, compagnie maritime"],
     // updateContainerLine (container_manifest.js containerLineEditAudit).
     ["Edited 5 barrels (was 3 barrels): quantity for Fatou", "Modification de 5 barils (auparavant 3 barils) : quantité pour Fatou"],
     ["Edited car 1HGCM82633A004352: make, model for Pickup Express", "Modification de la voiture 1HGCM82633A004352 : marque, modèle pour Pickup Express"],

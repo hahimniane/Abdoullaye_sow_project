@@ -5,6 +5,7 @@ import {
   OCEAN_CARRIERS,
   OTHER_CARRIER_VALUE,
   isKnownCarrierScac,
+  oceanCarrierLabel,
   oceanCarrierOptions,
 } from "./ocean-carrier-catalog.ts";
 import { filterSearchableOptions } from "./searchable-options.ts";
@@ -84,4 +85,13 @@ test("isKnownCarrierScac tolerates the casing people actually type", () => {
   assert.ok(isKnownCarrierScac("  MAEU  "));
   assert.equal(isKnownCarrierScac("XXXX"), false);
   assert.equal(isKnownCarrierScac(""), false);
+});
+
+test("oceanCarrierLabel names a known line with its code, else the code", () => {
+  assert.equal(oceanCarrierLabel("MSCU"), "MSC · MSCU");
+  assert.equal(oceanCarrierLabel(" mscu "), "MSC · MSCU");
+  // A line the carrier feed filled in, outside the curated catalog.
+  assert.equal(oceanCarrierLabel("SUDU"), "SUDU");
+  assert.equal(oceanCarrierLabel(""), "");
+  assert.equal(oceanCarrierLabel(undefined), "");
 });

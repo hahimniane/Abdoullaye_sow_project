@@ -4848,6 +4848,14 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Vos destinations viennent de Services et couverture.",
   "Four letters and seven digits, when the shipping line sends it.":
     "Quatre lettres et sept chiffres, quand la compagnie maritime l’envoie.",
+  // The container's shipping line (containers-panel.tsx).
+  "Not sure — guess from the container number":
+    "Pas sûr — la deviner à partir du numéro de conteneur",
+  "Tracking couldn't find the shipping line — choose it to start tracking.":
+    "Le suivi n’a pas trouvé la compagnie maritime — choisissez-la pour lancer le suivi.",
+  "Choose shipping line": "Choisir la compagnie maritime",
+  "Choose the shipping line from the list.":
+    "Choisissez la compagnie maritime dans la liste.",
   "Give it a working name now; the container number can come later.":
     "Donnez-lui un nom de travail maintenant ; le numéro de conteneur peut venir plus tard.",
   "Name, number, reference and destination stay editable until it ships.":

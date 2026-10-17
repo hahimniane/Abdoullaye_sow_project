@@ -71,3 +71,15 @@ export function isKnownCarrierScac(value: string): boolean {
   const scac = value.trim().toUpperCase();
   return OCEAN_CARRIERS.some((carrier) => carrier.scac === scac);
 }
+
+/**
+ * How a shipping line reads in a list or a detail: "MSC · MSCU" for one the
+ * catalog knows, the code itself for one it does not (a line the carrier
+ * feed filled in), "" for none.
+ */
+export function oceanCarrierLabel(value: unknown): string {
+  const scac = String(value ?? "").trim().toUpperCase();
+  if (!scac) return "";
+  const carrier = OCEAN_CARRIERS.find((entry) => entry.scac === scac);
+  return carrier ? `${carrier.name} · ${carrier.scac}` : scac;
+}

@@ -24,6 +24,8 @@ import {
   containerLineWhatsAppText,
   containerDeleteRefusal,
   containerDraftFromRow,
+  containerCarrierNeedsChoice,
+  containerCarrierScac,
   containerLabelChoice,
   containerLabelsRequest,
   containerIsOpen,
@@ -135,12 +137,16 @@ test("the payload trims, upper-cases the number and the reference, and caps the 
     destinationCountryId: "guinea",
     destinationCountryName: "Guinea",
     notes: "x".repeat(600),
+    carrierScac: " mscu ",
   });
   assert.equal(payload.label, "Sailing 3 Oct, box 2");
   assert.equal(payload.containerNumber, "MSKU1234567");
   assert.equal(payload.bookingReference, "BL-778");
   assert.equal(payload.destinationCountryId, "guinea");
   assert.equal(payload.notes.length, 500);
+  assert.equal(payload.carrierScac, "MSCU");
+  // No line chosen: "" asks the server to guess it from the number.
+  assert.equal(containerPayload(emptyContainerDraft).carrierScac, "");
 });
 
 test("a stored row round-trips into the edit form", () => {
@@ -152,6 +158,7 @@ test("a stored row round-trips into the edit form", () => {
     destinationCountryName: "Guinea",
     notes: "n",
     status: "shipped",
+    carrierScac: "CMDU",
   });
   assert.deepEqual(draft, {
     label: "Box 2",
@@ -160,7 +167,42 @@ test("a stored row round-trips into the edit form", () => {
     destinationCountryId: "guinea",
     destinationCountryName: "Guinea",
     notes: "n",
+    carrierScac: "CMDU",
   });
+  assert.equal(containerDraftFromRow({}).carrierScac, "");
+});
+
+// Real container TCKU6418832: tracking could not tell its line from the
+// leasing prefix, and nothing on screen said so or let anyone choose it.
+test("a container whose line could not be guessed asks for it until one is chosen", () => {
+  const failed = {
+    containerNumber: "TCKU6418832",
+    status: "shipped",
+    carrierTrackingError: "carrier_unknown",
+    carrierTrackingFailedFor: "TCKU6418832",
+  };
+  assert.equal(containerCarrierNeedsChoice(failed), true);
+  assert.equal(containerCarrierNeedsChoice({ ...failed, status: "loading" }), true);
+  // Chosen: the server tries again, so the notice goes.
+  assert.equal(containerCarrierNeedsChoice({ ...failed, carrierScac: "MSCU" }), false);
+  // A different number gets its own try; the old failure is not about it.
+  assert.equal(containerCarrierNeedsChoice({ ...failed, containerNumber: "MSKU1234565" }), false);
+  // Another kind of failure, an arrived box, or one already followed.
+  assert.equal(containerCarrierNeedsChoice({ ...failed, carrierTrackingError: "Not found" }), false);
+  assert.equal(containerCarrierNeedsChoice({ ...failed, status: "arrived" }), false);
+  assert.equal(
+    containerCarrierNeedsChoice({ ...failed, trackingProvider: "carrier_api", trackedContainerNumber: "TCKU6418832" }),
+    false,
+  );
+  assert.equal(containerCarrierNeedsChoice({}), false);
+  assert.equal(containerCarrierNeedsChoice(null), false);
+});
+
+test("a shipping line is stored the way the server stores it", () => {
+  assert.equal(containerCarrierScac(" msc-u "), "MSCU");
+  assert.equal(containerCarrierScac(undefined), "");
+  assert.match(serverSource, /function containerCarrierScac\(value\)/);
+  assert.match(serverSource, /\.replace\(\/\[\^A-Z0-9\]\/g, ""\)\.slice\(0, 10\)/);
 });
 
 test("a container only moves forward, and ships only with a destination and cargo", () => {
