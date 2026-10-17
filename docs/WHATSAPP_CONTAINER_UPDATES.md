@@ -27,7 +27,8 @@ business can see who *would* have been told.
    - the Terminal49 carrier feed reports it on the vessel, discharged, or
      available (`pollContainerTracking`, every 4 hours). Tracking starts by
      itself as soon as the container has a real ISO number
-     (`startContainerCarrierTracking`).
+     (`startContainerCarrierTracking`); see *Carrier tracking and the
+     shipping line* below.
 3. Moments customers care about carry `customerUpdate` (`shipped`,
    `at_port`, `arrived`). The timeline keeps `at_port` as its own moment,
    but its message is the arrival's: `messageUpdateFor` turns `at_port` into
@@ -58,6 +59,48 @@ Rules live in `my_flutter_app/functions/container_updates.js` and are tested
 in `test/container-updates.test.js` (pure rules and wiring) and
 `test/container-callables.test.js` (against the Firestore emulator:
 `npm run test:containers`).
+
+## Carrier tracking and the shipping line
+
+Terminal49 follows a container only when it knows the shipping line (its
+SCAC). `startContainerCarrierTracking` uses the line staff chose
+(`carrierScac` on the container) and otherwise asks Terminal49 to guess it
+from the number. The guess fails for leasing-company prefixes (TCKU, TGHU,
+CAIU…), which belong to no shipping line. The container is then stamped
+`carrierTrackingError: "carrier_unknown"`.
+
+- **Choosing the line.** The container form in the console and the app has
+  an optional **Shipping line** picker. It lists the ocean carrier catalog
+  (`admin_web/src/lib/ocean-carrier-catalog.ts`, mirrored by
+  `functions/ocean_carrier_catalog.js` and the app's
+  `lib/data/ocean_carrier_catalog.dart`). The empty choice is *Not sure —
+  guess from the container number*. `createContainer` and `updateContainer`
+  take `carrierScac`. It must be a catalog SCAC, or `""` to clear it;
+  anything else is refused with `carrier_invalid`. A change is checked only
+  when the value actually changes: a line Terminal49 filled in itself may be
+  outside the catalog, and sending it back unchanged is fine. The line is
+  not part of the declared list, so it stays editable after the container
+  ships (that is when tracking matters most). A change is written to the
+  container's History as `Changed carrierScac`.
+- **When tracking is retried.** Every failed attempt records
+  `carrierTrackingFailedFor` (the number) and `carrierTrackingFailedScac`
+  (the line chosen at the time; `""` when it was guessed). The trigger
+  skips a container only when **both** still match: the same number and the
+  same chosen line. A new number, or a line chosen or changed after a
+  failure, gets a new attempt. So choosing the line on a `carrier_unknown`
+  container starts tracking. Failures recorded before this field existed
+  read as "guessed", so they are not retried until someone chooses a line.
+  A container already followed under its number (`trackingProvider:
+  "carrier_api"` and `trackedContainerNumber` equal to the number) or one
+  that has arrived is never retried. The rule is `shouldStartCarrierTracking`
+  in `functions/container_manifest.js`, unit-tested in
+  `test/container-manifest.test.js`.
+- **What staff see.** While a container's tracking failed with
+  `carrier_unknown` and no line is chosen, the console and the app show
+  *Tracking couldn't find the shipping line — choose it to start tracking.*
+  on the container and in its form. The public tracking page names the
+  chosen line as soon as it is saved (`guest_tracking.js`, via
+  `oceanCarrierName`), even before Terminal49 has found the container.
 
 ## The send queue
 
