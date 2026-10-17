@@ -691,4 +691,51 @@ void main() {
       expect(refusal.codes, ['container_empty']);
     });
   });
+
+  // Real container TCKU6418832: a leasing prefix, so tracking could not tell
+  // its shipping line and nothing on the phone let anyone choose it.
+  group('the shipping line', () {
+    ShippingContainer failed([Map<String, Object?> extra = const {}]) =>
+        ShippingContainer.fromMap('c1', {
+          'containerNumber': 'TCKU6418832',
+          'status': containerStatusShipped,
+          'carrierTrackingError': 'carrier_unknown',
+          'carrierTrackingFailedFor': 'TCKU6418832',
+          ...extra,
+        });
+
+    test('is read, stored the way the server stores it', () {
+      expect(containerCarrierScac(' msc-u '), 'MSCU');
+      expect(containerCarrierScac(null), '');
+      expect(failed({'carrierScac': 'cmdu'}).carrierScac, 'CMDU');
+      expect(box().carrierScac, '');
+      expect(containerRefusalCodes, contains('carrier_invalid'));
+    });
+
+    test('is asked for after tracking failed to guess it, until chosen', () {
+      expect(containerCarrierNeedsChoice(failed()), isTrue);
+      expect(containerCarrierNeedsChoice(failed({'status': 'loading'})),
+          isTrue);
+      expect(containerCarrierNeedsChoice(failed({'carrierScac': 'MSCU'})),
+          isFalse);
+      expect(
+          containerCarrierNeedsChoice(
+              failed({'containerNumber': 'MSKU1234565'})),
+          isFalse);
+      expect(
+          containerCarrierNeedsChoice(
+              failed({'carrierTrackingError': 'Not found'})),
+          isFalse);
+      expect(containerCarrierNeedsChoice(failed({'status': 'arrived'})),
+          isFalse);
+      expect(
+          containerCarrierNeedsChoice(failed({
+            'trackingProvider': 'carrier_api',
+            'trackedContainerNumber': 'TCKU6418832',
+          })),
+          isFalse);
+      expect(containerCarrierNeedsChoice(box()), isFalse);
+      expect(containerCarrierNeedsChoice(null), isFalse);
+    });
+  });
 }

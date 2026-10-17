@@ -8925,11 +8925,25 @@ class AppLocalizationsFr extends AppLocalizations {
   String get ctrDestinationUnset => 'Pas encore de destination';
 
   @override
+  String get ctrShippingLine => 'Compagnie maritime';
+
+  @override
+  String get ctrShippingLineGuess =>
+      'Pas sûr — la deviner à partir du numéro de conteneur';
+
+  @override
+  String get ctrSearchShippingLines => 'Rechercher une compagnie maritime';
+
+  @override
+  String get ctrShippingLineNeeded =>
+      'Le suivi n\'a pas trouvé la compagnie maritime — choisissez-la pour lancer le suivi.';
+
+  @override
   String get ctrNotes => 'Notes';
 
   @override
   String get ctrLockedNote =>
-      'Expédié. La liste est le relevé de ce qui est parti ; seules les notes restent modifiables.';
+      'Expédié. La liste est le relevé de ce qui est parti ; seules les notes et la compagnie maritime restent modifiables.';
 
   @override
   String get ctrNoContainers => 'Aucun conteneur pour le moment.';
@@ -9198,6 +9212,10 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get ctrErrNumberInvalid =>
       'Un numéro de conteneur, c\'est quatre lettres et sept chiffres, comme MSKU1234567. Les numéros de booking et les connaissements vont dans le champ référence.';
+
+  @override
+  String get ctrErrCarrierInvalid =>
+      'Choisissez la compagnie maritime dans la liste.';
 
   @override
   String get ctrErrStatusInvalid =>

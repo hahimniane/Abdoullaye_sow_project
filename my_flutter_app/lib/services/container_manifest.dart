@@ -123,6 +123,8 @@ const containerRefusalCodes = <String>[
   'payment_exceeds_balance',
   'payment_not_found',
   'payment_already_reverted',
+  // A shipping line outside lib/data/ocean_carrier_catalog.dart.
+  'carrier_invalid',
 ];
 
 String _text(Object? value, [int max = containerMaxText]) {
@@ -287,6 +289,11 @@ class ShippingContainer {
     required this.arrivedByStaffId,
     required this.createdAt,
     required this.updatedAt,
+    this.carrierScac = '',
+    this.carrierTrackingError = '',
+    this.carrierTrackingFailedFor = '',
+    this.trackingProvider = '',
+    this.trackedContainerNumber = '',
   });
 
   final String id;
@@ -298,6 +305,19 @@ class ShippingContainer {
   final String destinationCountryName;
   final String status;
   final String notes;
+
+  /// The shipping line's SCAC: chosen by staff, or filled in by carrier
+  /// tracking once it found the box. "" when neither.
+  final String carrierScac;
+
+  /// Why carrier tracking last failed for [carrierTrackingFailedFor]
+  /// ("carrier_unknown" when it could not tell the line from the number).
+  final String carrierTrackingError;
+  final String carrierTrackingFailedFor;
+
+  /// 'carrier_api' once the carrier feed follows [trackedContainerNumber].
+  final String trackingProvider;
+  final String trackedContainerNumber;
   final int lineCount;
   final int carCount;
   final int barrelCount;
@@ -336,6 +356,11 @@ class ShippingContainer {
       arrivedByStaffId: _text(d['arrivedByStaffId'], containerMaxLabel),
       createdAt: lotDateOf(d['createdAt']),
       updatedAt: lotDateOf(d['updatedAt']),
+      carrierScac: containerCarrierScac(d['carrierScac']),
+      carrierTrackingError: _text(d['carrierTrackingError'], 300),
+      carrierTrackingFailedFor: _text(d['carrierTrackingFailedFor'], 20),
+      trackingProvider: _text(d['trackingProvider'], 40),
+      trackedContainerNumber: _text(d['trackedContainerNumber'], 20),
     );
   }
 
@@ -351,6 +376,31 @@ class ShippingContainer {
       : (label.isNotEmpty ? label : bookingReference);
 
   bool get isEmpty => lineCount <= 0;
+}
+
+/// A SCAC as the server stores it. Mirrors `containerCarrierScac`.
+String containerCarrierScac(Object? value) {
+  final code =
+      _text(value, 40).toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  return code.length > 10 ? code.substring(0, 10) : code;
+}
+
+/// Whether carrier tracking gave up on [container] because it could not tell
+/// the shipping line from the number (a leasing prefix such as TCKU) and
+/// nobody has chosen one since. Choosing it starts tracking: the server's
+/// `shouldStartCarrierTracking` retries when the chosen line changed.
+/// Mirrors the console's `containerCarrierNeedsChoice`.
+bool containerCarrierNeedsChoice(ShippingContainer? container) {
+  if (container == null) return false;
+  final number = container.containerNumber;
+  if (number.isEmpty || container.isArrived) return false;
+  if (container.trackingProvider == 'carrier_api' &&
+      container.trackedContainerNumber == number) {
+    return false;
+  }
+  return container.carrierTrackingError == 'carrier_unknown' &&
+      container.carrierTrackingFailedFor == number &&
+      container.carrierScac.isEmpty;
 }
 
 /// Whether the container may move from its current state to the next one.

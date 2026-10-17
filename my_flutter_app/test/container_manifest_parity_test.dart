@@ -63,6 +63,19 @@ void main() {
     }
   });
 
+  // Real container TCKU6418832: tracking could not guess its line and no
+  // screen let anyone choose it. Both callables take it; the form sends it
+  // in every state, as the console does.
+  test('the container form sends the shipping line it picked', () {
+    expect(screen, contains("'carrierScac': _carrierScac,"));
+    expect(
+        RegExp(r"'carrierScac': _carrierScac,").allMatches(screen).length, 2);
+    expect(screen, contains('pickContainerCarrier(context'));
+    expect(screen, contains('for (final c in oceanCarriers)'));
+    expect(screen, contains('containerCarrierNeedsChoice('));
+    expect(backend, contains('function shouldStartCarrierTracking('));
+  });
+
   test('it reads the business own collections, scoped and unordered', () {
     // No orderBy on either query, so neither needs a composite index; the
     // module sorts. The destination picker leads with the business's own

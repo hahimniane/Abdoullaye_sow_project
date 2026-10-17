@@ -15576,6 +15576,30 @@ abstract class AppLocalizations {
   /// **'No destination yet'**
   String get ctrDestinationUnset;
 
+  /// No description provided for @ctrShippingLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping line'**
+  String get ctrShippingLine;
+
+  /// No description provided for @ctrShippingLineGuess.
+  ///
+  /// In en, this message translates to:
+  /// **'Not sure — guess from the container number'**
+  String get ctrShippingLineGuess;
+
+  /// No description provided for @ctrSearchShippingLines.
+  ///
+  /// In en, this message translates to:
+  /// **'Search shipping lines'**
+  String get ctrSearchShippingLines;
+
+  /// No description provided for @ctrShippingLineNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking couldn\'t find the shipping line — choose it to start tracking.'**
+  String get ctrShippingLineNeeded;
+
   /// No description provided for @ctrNotes.
   ///
   /// In en, this message translates to:
@@ -15585,7 +15609,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctrLockedNote.
   ///
   /// In en, this message translates to:
-  /// **'Shipped. The list is the record of what went; only the notes stay open.'**
+  /// **'Shipped. The list is the record of what went; only the notes and the shipping line stay open.'**
   String get ctrLockedNote;
 
   /// No description provided for @ctrNoContainers.
@@ -16007,6 +16031,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A container number is four letters and seven digits, like MSKU1234567. Booking numbers and bills of lading go in the reference field.'**
   String get ctrErrNumberInvalid;
+
+  /// No description provided for @ctrErrCarrierInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the shipping line from the list.'**
+  String get ctrErrCarrierInvalid;
 
   /// No description provided for @ctrErrStatusInvalid.
   ///

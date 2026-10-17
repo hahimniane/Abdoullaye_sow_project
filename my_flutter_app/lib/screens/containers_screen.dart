@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/calling_code_catalog.dart';
 import '../data/country_catalog.dart';
+import '../data/ocean_carrier_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/business_activity_queries.dart';
@@ -1770,6 +1771,16 @@ class _DetailFacts extends StatelessWidget {
               label: l10n.ctrBookingReference,
               value: c.bookingReference,
             ),
+          if (c.carrierScac.isNotEmpty)
+            _FactRow(
+              icon: Icons.directions_boat_outlined,
+              label: l10n.ctrShippingLine,
+              value: oceanCarrierLabel(c.carrierScac),
+            ),
+          if (containerCarrierNeedsChoice(c)) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _CarrierNeededNote(text: l10n.ctrShippingLineNeeded),
+          ],
           for (final d in dates)
             _FactRow(icon: Icons.event_outlined, label: '', value: d),
           if (!c.isLoading) ...[
@@ -2456,6 +2467,9 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
   final _notes = TextEditingController();
   String _destinationId = '';
   String _destinationName = '';
+
+  /// The shipping line's SCAC; '' lets tracking guess it from the number.
+  String _carrierScac = '';
   bool _busy = false;
   Set<String> _errors = {};
 
@@ -2479,6 +2493,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
     _notes.text = existing.notes;
     _destinationId = existing.destinationCountryId;
     _destinationName = existing.destinationCountryName;
+    _carrierScac = existing.carrierScac;
   }
 
   @override
@@ -2506,6 +2521,15 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
       _destinationId = picked.id;
       _destinationName = picked.name;
       _errors = {..._errors}..remove('destination_required');
+    });
+  }
+
+  Future<void> _pickCarrier() async {
+    final picked = await pickContainerCarrier(context, selected: _carrierScac);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _carrierScac = picked;
+      _errors = {..._errors}..remove('carrier_invalid');
     });
   }
 
@@ -2539,13 +2563,18 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
         await functions.httpsCallable('updateContainer').call<Object?>({
           'businessId': widget.businessId,
           'containerId': id,
-          // Structural fields only while loading; the notes always.
-          'changes': _open ? record : {'notes': record['notes']},
+          // Structural fields only while loading; the notes and the
+          // shipping line always (carrier tracking needs it after sailing).
+          'changes': {
+            ...(_open ? record : {'notes': record['notes']}),
+            'carrierScac': _carrierScac,
+          },
         });
       } else {
         final result = await functions.httpsCallable('createContainer').call<Object?>({
           'businessId': widget.businessId,
           ...record,
+          'carrierScac': _carrierScac,
         });
         final data = result.data;
         id = data is Map ? (data['containerId'] ?? '').toString() : '';
@@ -2585,6 +2614,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
     'container_label_required',
     'container_number_invalid',
     'destination_required',
+    'carrier_invalid',
   };
 
   @override
@@ -2674,6 +2704,25 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
                 style: const TextStyle(fontSize: 15, color: AppColors.muted),
               ),
             ),
+          const SizedBox(height: AppSpacing.md),
+          // Optional, and open in every state: empty lets carrier tracking
+          // guess the line from the number, which fails for leasing
+          // prefixes such as TCKU - then this is how tracking starts.
+          if (containerCarrierNeedsChoice(widget.existing) &&
+              _carrierScac.isEmpty) ...[
+            _CarrierNeededNote(text: l10n.ctrShippingLineNeeded),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          LotPickerField(
+            key: const Key('container-carrier'),
+            label: l10n.ctrShippingLine,
+            value: _carrierScac.isEmpty
+                ? null
+                : oceanCarrierLabel(_carrierScac),
+            placeholder: l10n.ctrShippingLineGuess,
+            onTap: _pickCarrier,
+            error: errorFor('carrier_invalid'),
+          ),
           const SizedBox(height: AppSpacing.md),
           TextField(
             key: const Key('container-notes'),
@@ -4669,6 +4718,48 @@ class _KindChips extends StatelessWidget {
   }
 }
 
+/// Carrier tracking could not tell the shipping line from the number: asked
+/// for on the container and in its form until one is chosen.
+class _CarrierNeededNote extends StatelessWidget {
+  const _CarrierNeededNote({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('container-carrier-needed'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.warn.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: AppColors.warn.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.directions_boat_outlined,
+              size: 16, color: AppColors.warn),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 12.5,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+                color: AppColors.ink,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// A refusal that belongs to no one field, said above the button that was
 /// pressed rather than in a snackbar at the far end of the screen.
 class _RefusalNote extends StatelessWidget {
@@ -4853,6 +4944,7 @@ String containerErrorText(
     'payment_exceeds_balance' => l10n.wpkErrExceedsBalance,
     'payment_not_found' => l10n.wpkErrPaymentNotFound,
     'payment_already_reverted' => l10n.wpkErrPaymentReverted,
+    'carrier_invalid' => l10n.ctrErrCarrierInvalid,
     _ => l10n.lotCouldNotSave,
   };
 }
@@ -4949,6 +5041,33 @@ Future<({String id, String name})?> pickContainerDestination(
       .where((d) => d.id == picked)
       .firstOrNull;
   return (id: picked, name: country?.name ?? picked);
+}
+
+/// Picks the shipping line a container sails with, from the ocean carrier
+/// catalog the server checks against. '' (the first choice) leaves it to
+/// carrier tracking to guess from the number. Null when dismissed.
+Future<String?> pickContainerCarrier(
+  BuildContext context, {
+  String selected = '',
+}) {
+  final l10n = AppLocalizations.of(context)!;
+  return pickLotSearchableOption<String>(
+    context,
+    title: l10n.ctrShippingLine,
+    searchHint: l10n.ctrSearchShippingLines,
+    selected: selected,
+    sections: [
+      LotOptionSection(l10n.ctrShippingLine, [
+        LotOption('', l10n.ctrShippingLineGuess),
+        // A line the carrier feed filled in, outside the catalog: kept
+        // choosable so opening the sheet never loses it.
+        if (selected.isNotEmpty &&
+            !oceanCarriers.any((c) => c.scac == selected))
+          LotOption(selected, selected),
+        for (final c in oceanCarriers) LotOption(c.scac, c.name, detail: c.scac),
+      ]),
+    ],
+  );
 }
 
 /// Opens the contacts sheet for [line]; on a save, confirms it and returns
