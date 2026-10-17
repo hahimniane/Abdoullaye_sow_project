@@ -769,6 +769,14 @@ service cloud.firestore {
         resource.data.businessId, resource.data.get('storeId', ''));
       allow write: if false;
     }
+    // Money collected later on a credit sale (v4): read by whoever may read
+    // the sale (each row carries the sale's storeId), written only by the
+    // credit callables.
+    match /inventoryCreditPayments/{paymentId} {
+      allow read: if inventoryStoreRead(
+        resource.data.businessId, resource.data.get('storeId', ''));
+      allow write: if false;
+    }
     // Invoices and receipts the business writes by hand: read by the
     // business's managers, written only through the invoice callables.
     match /invoices/{invoiceId} {

@@ -2919,3 +2919,447 @@ describe("sale notifications", () => {
     assert.equal(inbox.docs[0].data().title, "Nouvelle vente");
   });
 });
+
+// ---------------------------------------------------------------------------
+// v4: who received the money, credit sales, later payments, reminders.
+// ---------------------------------------------------------------------------
+
+describe("credit sales and who received the money", () => {
+  const CB = "inv-credit-biz";
+  const OWN = "inv-credit-owner";
+  const CLERK = "inv-credit-clerk";
+  const COLLECTOR = "inv-credit-collector";
+  const MUTED = "inv-credit-muted";
+  const OUTSIDER = "inv-credit-outsider";
+  const s = callIn(CB);
+  let itemId;
+  // Far enough ahead to stay valid whatever day the suite runs.
+  const LATER = "2099-12-31";
+  const creditOf = (extra = {}) => ({paidNowCents: 2000,
+    customerName: "Fatou Bah", customerPhone: "+1 207 555 0100",
+    collectorStaffId: COLLECTOR, dueDate: LATER, ...extra});
+  const sellIn = (extra = {}, uid = CLERK) => s("recordInventorySale", {
+    clientRequestId: requestId(), paymentMethod: "cash",
+    lines: [{itemId, quantity: 1, soldPriceCents: 6000}], ...extra}, uid);
+  const saleOf = async (id) => (await db.collection("inventorySales")
+      .doc(id).get()).data();
+  const paymentsOf = async (saleId) => (await db.collection(
+      "inventoryCreditPayments").where("businessId", "==", CB)
+      .where("saleId", "==", saleId).get()).docs
+      .map((d) => ({id: d.id, ...d.data()}));
+  const pushesFor = async (saleId) => (await db.collection(
+      "notificationDeliveries").where("data.saleId", "==", saleId)
+      .where("preferenceKey", "==", "inventoryCredit").get()).docs
+      .map((d) => d.data());
+
+  before(async () => {
+    const clerk = {role: "staff", businessId: CB,
+      businessPermissions: ["inventory"]};
+    await seedBusiness(CB, {
+      [OWN]: {role: "businessOwner", businessId: CB, fullName: "Dala Owner"},
+      [CLERK]: {...clerk, fullName: "Awa Cashier"},
+      [COLLECTOR]: {role: "staff", businessId: CB,
+        businessPermissions: ["ledger"], fullName: "Mamadou Diallo"},
+      [MUTED]: {...clerk, notificationPreferences: {inventoryCredit: false}},
+      [OUTSIDER]: {role: "staff", businessId: "inv-credit-elsewhere",
+        businessPermissions: ["inventory"]},
+    });
+    await db.collection("businesses").doc(CB).set({ownerUid: OWN},
+        {merge: true});
+    itemId = (await s("createInventoryItem", {name: "Boubou",
+      priceCents: 6000, quantity: 100}, OWN)).itemId;
+  });
+
+  describe("received by", () => {
+    it("defaults to the seller and is paid in full", async () => {
+      const sold = await sellIn();
+      assert.equal(sold.creditCents, 0);
+      const sale = await saleOf(sold.saleId);
+      assert.equal(sale.receivedByStaffId, CLERK);
+      assert.equal(sale.paidNowCents, 6000);
+      assert.equal(sale.creditCents, 0);
+      assert.equal(sale.creditPaidCents, 0);
+      assert.equal(sale.creditStatus, "none");
+      assert.equal(sale.credit, undefined);
+    });
+
+    it("takes another person of the business, the owner included",
+        async () => {
+          for (const who of [COLLECTOR, OWN]) {
+            const sold = await sellIn({receivedByStaffId: who});
+            assert.equal((await saleOf(sold.saleId)).receivedByStaffId, who);
+          }
+        });
+
+    it("refuses someone of another business, or no one at all", async () => {
+      for (const who of [OUTSIDER, "inv-credit-nobody", "a/b", 7]) {
+        await assert.rejects(sellIn({receivedByStaffId: who}),
+            refusal("received_by_invalid", "invalid-argument"), String(who));
+      }
+    });
+  });
+
+  describe("selling on credit", () => {
+    it("records part now, the rest owed, and tells the collector",
+        async () => {
+          const before = (await itemDoc(itemId)).quantity;
+          const sold = await sellIn({credit: creditOf()});
+          assert.equal(sold.creditCents, 4000);
+          assert.equal(sold.replayed, false);
+          const sale = await saleOf(sold.saleId);
+          assert.equal(sale.paidNowCents, 2000);
+          assert.equal(sale.creditCents, 4000);
+          assert.equal(sale.creditPaidCents, 0);
+          assert.equal(sale.creditStatus, "open");
+          assert.equal(sale.paymentMethod, "cash");
+          assert.equal(sale.receivedByStaffId, CLERK);
+          assert.deepEqual(sale.credit, {customerName: "Fatou Bah",
+            customerPhone: "+12075550100", collectorStaffId: COLLECTOR,
+            dueDate: LATER});
+          // A credit sale still takes the goods off the shelf.
+          assert.equal((await itemDoc(itemId)).quantity, before - 1);
+          const [push, ...more] = await pushesFor(sold.saleId);
+          assert.equal(more.length, 0);
+          assert.equal(push.recipientUid, COLLECTOR);
+          assert.equal(push.channel, "push");
+          assert.equal(push.title, "Credit to collect");
+          assert.equal(push.body, "Fatou Bah owes $40.00 · sale");
+          assert.deepEqual(push.data, {type: "inventory_sale",
+            kind: "credit", businessId: CB, saleId: sold.saleId,
+            storeId: "", relatedCollection: "inventorySales",
+            relatedId: sold.saleId});
+        });
+
+    it("sells entirely on credit without a payment method", async () => {
+      const sold = await sellIn({paymentMethod: "",
+        credit: creditOf({paidNowCents: 0, dueDate: ""})});
+      const sale = await saleOf(sold.saleId);
+      assert.equal(sale.paymentMethod, "");
+      assert.equal(sale.paidNowCents, 0);
+      assert.equal(sale.creditCents, 6000);
+      assert.equal(sale.credit.dueDate, "");
+    });
+
+    it("tells nobody when the seller collects it or switched it off",
+        async () => {
+          const own = await sellIn({credit: creditOf({
+            collectorStaffId: CLERK})});
+          assert.deepEqual(await pushesFor(own.saleId), []);
+          const muted = await sellIn({credit: creditOf({
+            collectorStaffId: MUTED})});
+          assert.deepEqual(await pushesFor(muted.saleId), []);
+        });
+
+    it("refuses what a credit sale cannot be", async () => {
+      const cases = [
+        [{paidNowCents: 6000}, "paid_now_invalid"],
+        [{paidNowCents: -1}, "paid_now_invalid"],
+        [{customerName: ""}, "credit_customer_required"],
+        [{customerPhone: ""}, "credit_customer_required"],
+        [{customerPhone: "207 555 0100"}, "customer_phone_invalid"],
+        [{collectorStaffId: ""}, "collector_invalid"],
+        [{collectorStaffId: OUTSIDER}, "collector_invalid"],
+        [{dueDate: "2020-01-01"}, "due_date_invalid"],
+        [{dueDate: "2099-02-30"}, "due_date_invalid"],
+      ];
+      for (const [bad, code] of cases) {
+        await assert.rejects(sellIn({credit: creditOf(bad)}),
+            refusal(code, "invalid-argument"), JSON.stringify(bad));
+      }
+      // Paying something now still needs the method.
+      await assert.rejects(sellIn({paymentMethod: "", credit: creditOf()}),
+          refusal("payment_method_invalid"));
+    });
+
+    it("answers a retried credit sale as the same sale", async () => {
+      const clientRequestId = requestId();
+      const data = {clientRequestId, paymentMethod: "cash",
+        lines: [{itemId, quantity: 1, soldPriceCents: 6000}],
+        credit: creditOf()};
+      const first = await s("recordInventorySale", data, CLERK);
+      const stock = (await itemDoc(itemId)).quantity;
+      const again = await s("recordInventorySale", data, CLERK);
+      assert.equal(again.replayed, true);
+      assert.equal(again.saleId, first.saleId);
+      assert.equal(again.creditCents, 4000);
+      assert.equal((await itemDoc(itemId)).quantity, stock);
+      assert.equal((await pushesFor(first.saleId)).length, 1);
+    });
+  });
+
+  describe("collecting later", () => {
+    let saleId;
+    before(async () => {
+      saleId = (await sellIn({credit: creditOf()})).saleId;
+    });
+
+    it("takes partial payments until paid, then refuses more", async () => {
+      const first = await s("recordInventoryCreditPayment", {saleId,
+        amountCents: 1500, method: "zelle", receivedByStaffId: COLLECTOR,
+        note: "first half"}, CLERK);
+      assert.deepEqual([first.creditPaidCents, first.creditStatus],
+          [1500, "open"]);
+      // More than is left is a typo, refused.
+      await assert.rejects(s("recordInventoryCreditPayment", {saleId,
+        amountCents: 2501, method: "cash"}, CLERK),
+      refusal("payment_exceeds_balance", "invalid-argument"));
+      const last = await s("recordInventoryCreditPayment", {saleId,
+        amountCents: 2500, method: "cash"}, OWN);
+      assert.deepEqual([last.creditPaidCents, last.creditStatus],
+          [4000, "paid"]);
+      await assert.rejects(s("recordInventoryCreditPayment", {saleId,
+        amountCents: 1, method: "cash"}, OWN),
+      refusal("payment_exceeds_balance"));
+      const sale = await saleOf(saleId);
+      assert.deepEqual([sale.creditPaidCents, sale.creditStatus],
+          [4000, "paid"]);
+      const rows = await paymentsOf(saleId);
+      assert.equal(rows.length, 2);
+      const byAmount = Object.fromEntries(rows.map((r) => [r.amountCents, r]));
+      assert.equal(byAmount[1500].receivedByStaffId, COLLECTOR);
+      assert.equal(byAmount[1500].recordedByStaffId, CLERK);
+      assert.equal(byAmount[1500].note, "first half");
+      assert.equal(byAmount[1500].storeId, "");
+      // Nobody named: the person entering it held the money.
+      assert.equal(byAmount[2500].receivedByStaffId, OWN);
+      assert.equal(byAmount[2500].reverted, false);
+    });
+
+    it("reverts a payment and opens the credit again", async () => {
+      const rows = await paymentsOf(saleId);
+      const target = rows.find((r) => r.amountCents === 2500);
+      const out = await s("revertInventoryCreditPayment",
+          {paymentId: target.id}, CLERK);
+      assert.deepEqual([out.creditPaidCents, out.creditStatus, out.saleId],
+          [1500, "open", saleId]);
+      const row = (await db.collection("inventoryCreditPayments")
+          .doc(target.id).get()).data();
+      assert.equal(row.reverted, true);
+      assert.equal(row.revertedByStaffId, CLERK);
+      assert.ok(row.revertedAt);
+      await assert.rejects(s("revertInventoryCreditPayment",
+          {paymentId: target.id}, CLERK),
+      refusal("payment_already_reverted", "failed-precondition"));
+      await assert.rejects(s("revertInventoryCreditPayment",
+          {paymentId: "nope"}, CLERK),
+      refusal("payment_not_found", "not-found"));
+    });
+
+    it("refuses a void while money collected on it stands", async () => {
+      await assert.rejects(s("voidInventorySale", {saleId}, OWN),
+          refusal("credit_has_payments", "failed-precondition"));
+      for (const row of await paymentsOf(saleId)) {
+        if (!row.reverted) {
+          await s("revertInventoryCreditPayment", {paymentId: row.id}, OWN);
+        }
+      }
+      await s("voidInventorySale", {saleId}, OWN);
+      const sale = await saleOf(saleId);
+      assert.equal(sale.voided, true);
+      // A voided sale leaves the open-credit list.
+      assert.equal(sale.creditStatus, "none");
+      await assert.rejects(s("recordInventoryCreditPayment", {saleId,
+        amountCents: 100, method: "cash"}, OWN),
+      refusal("sale_voided", "failed-precondition"));
+    });
+
+    it("refuses payments on a normal sale, bad amounts and strangers",
+        async () => {
+          const plain = (await sellIn()).saleId;
+          await assert.rejects(s("recordInventoryCreditPayment", {
+            saleId: plain, amountCents: 100, method: "cash"}, OWN),
+          refusal("no_credit", "failed-precondition"));
+          const open = (await sellIn({credit: creditOf()})).saleId;
+          await assert.rejects(s("recordInventoryCreditPayment", {
+            saleId: open, amountCents: 0, method: "cash"}, OWN),
+          refusal("amount_invalid"));
+          await assert.rejects(s("recordInventoryCreditPayment", {
+            saleId: open, amountCents: 100, method: "bitcoin"}, OWN),
+          refusal("payment_method_invalid"));
+          await assert.rejects(s("recordInventoryCreditPayment", {
+            saleId: open, amountCents: 100, method: "cash",
+            receivedByStaffId: OUTSIDER}, OWN),
+          refusal("received_by_invalid"));
+          await assert.rejects(s("recordInventoryCreditPayment", {
+            saleId: "nope", amountCents: 100, method: "cash"}, OWN),
+          refusal("sale_not_found", "not-found"));
+          // A sale of this business is not another business's to touch.
+          await assert.rejects(functions.recordInventoryCreditPayment.run({
+            auth: {uid: OUTSIDER, token: {}}, data: {businessId: CB,
+              saleId: open, amountCents: 100, method: "cash"}}),
+          (error) => error.code === "permission-denied");
+        });
+
+    it("never overpays when two payments race", async () => {
+      const open = (await sellIn({credit: creditOf()})).saleId;
+      const results = await Promise.allSettled([3000, 3000].map((amount) =>
+        s("recordInventoryCreditPayment", {saleId: open,
+          amountCents: amount, method: "cash"}, OWN)));
+      assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+      assert.equal((await saleOf(open)).creditPaidCents, 3000);
+    });
+  });
+
+  describe("changing the collector", () => {
+    it("reassigns, moves the due date, tells the new collector", async () => {
+      const saleId = (await sellIn({credit: creditOf({
+        collectorStaffId: CLERK})})).saleId;
+      const out = await s("setInventoryCreditCollector", {saleId,
+        collectorStaffId: COLLECTOR, dueDate: "2099-06-01"}, OWN);
+      assert.deepEqual([out.collectorStaffId, out.dueDate, out.changed],
+          [COLLECTOR, "2099-06-01", true]);
+      const sale = await saleOf(saleId);
+      assert.equal(sale.credit.collectorStaffId, COLLECTOR);
+      assert.equal(sale.credit.dueDate, "2099-06-01");
+      assert.equal(sale.credit.customerName, "Fatou Bah");
+      assert.equal(sale.creditUpdatedByStaffId, OWN);
+      const pushes = await pushesFor(saleId);
+      assert.deepEqual(pushes.map((p) => p.recipientUid), [COLLECTOR]);
+      // Leaving dueDate out keeps it; "" clears it.
+      await s("setInventoryCreditCollector", {saleId,
+        collectorStaffId: COLLECTOR}, OWN);
+      assert.equal((await saleOf(saleId)).credit.dueDate, "2099-06-01");
+      await s("setInventoryCreditCollector", {saleId,
+        collectorStaffId: COLLECTOR, dueDate: ""}, OWN);
+      assert.equal((await saleOf(saleId)).credit.dueDate, "");
+      // Neither of those changed the collector: no new push.
+      assert.equal((await pushesFor(saleId)).length, 1);
+      const history = await db.collection("lotLedgerAudit")
+          .where("businessId", "==", CB).where("entityId", "==", saleId)
+          .where("action", "==", "credit_collector_changed").get();
+      assert.equal(history.size, 2);
+    });
+
+    it("refuses an outsider, a past date and a sale without credit",
+        async () => {
+          const saleId = (await sellIn({credit: creditOf()})).saleId;
+          await assert.rejects(s("setInventoryCreditCollector", {saleId,
+            collectorStaffId: OUTSIDER}, OWN), refusal("collector_invalid"));
+          await assert.rejects(s("setInventoryCreditCollector", {saleId,
+            collectorStaffId: COLLECTOR, dueDate: "2020-01-01"}, OWN),
+          refusal("due_date_invalid"));
+          const plain = (await sellIn()).saleId;
+          await assert.rejects(s("setInventoryCreditCollector", {
+            saleId: plain, collectorStaffId: COLLECTOR}, OWN),
+          refusal("no_credit"));
+        });
+  });
+
+  describe("overdue reminders", () => {
+    it("reminds the collector and the owner once every 3 days",
+        async () => {
+          const saleId = (await sellIn({credit: creditOf()})).saleId;
+          // Due in the past (a client can only pick today or later).
+          await db.collection("inventorySales").doc(saleId)
+              .update({"credit.dueDate": "2026-01-02"});
+          const overdue = async () => (await db.collection(
+              "notificationDeliveries").where("data.saleId", "==", saleId)
+              .where("title", "==", "Credit overdue").get()).docs
+              .map((d) => d.data());
+          await functions.remindOverdueInventoryCredit.run();
+          const first = await overdue();
+          assert.deepEqual(first.map((p) => p.recipientUid).sort(),
+              [COLLECTOR, OWN].sort());
+          assert.equal(first[0].body,
+              "Fatou Bah owes $40.00 · sale · due 01/02/2026");
+          assert.ok((await saleOf(saleId)).lastCreditReminderAt);
+          // The next morning: nothing new.
+          await functions.remindOverdueInventoryCredit.run();
+          assert.equal((await overdue()).length, first.length);
+          // Three days later, again.
+          await db.collection("inventorySales").doc(saleId).update({
+            lastCreditReminderAt: admin.firestore.Timestamp.fromMillis(
+                Date.now() - 3 * 24 * 60 * 60 * 1000)});
+          await functions.remindOverdueInventoryCredit.run();
+          assert.equal((await overdue()).length, first.length * 2);
+          // Paid off: never again.
+          await s("recordInventoryCreditPayment", {saleId,
+            amountCents: 4000, method: "cash"}, OWN);
+          await db.collection("inventorySales").doc(saleId)
+              .update({lastCreditReminderAt: null});
+          await functions.remindOverdueInventoryCredit.run();
+          assert.equal((await overdue()).length, first.length * 2);
+        });
+  });
+
+  describe("in a business with several stores", () => {
+    const MB = "inv-credit-stores";
+    const MOWN = "inv-credit-stores-owner";
+    const MAIN_CLERK = "inv-credit-stores-main";
+    const ANNEX_CLERK = "inv-credit-stores-annex";
+    const m = callIn(MB);
+    let saleId;
+    let annex;
+
+    before(async () => {
+      const clerk = {role: "staff", businessId: MB,
+        businessPermissions: ["inventory"]};
+      await seedBusiness(MB, {
+        [MOWN]: {role: "businessOwner", businessId: MB},
+        [MAIN_CLERK]: clerk, [ANNEX_CLERK]: clerk,
+      });
+      const product = (await m("createInventoryItem", {name: "Pagne",
+        priceCents: 5000, quantity: 10}, MOWN)).itemId;
+      annex = (await m("createInventoryStore", {name: "Annex"}, MOWN)).storeId;
+      await m("setInventoryStaffAccess", {userId: MAIN_CLERK,
+        homeStoreId: `${MB}_main`, allStores: false}, MOWN);
+      await m("setInventoryStaffAccess", {userId: ANNEX_CLERK,
+        homeStoreId: annex, allStores: false}, MOWN);
+      saleId = (await m("recordInventorySale", {clientRequestId: requestId(),
+        paymentMethod: "cash", lines: [{itemId: product, quantity: 1,
+          soldPriceCents: 5000}], credit: {paidNowCents: 1000,
+          customerName: "Aminata", customerPhone: "+224620000000",
+          collectorStaffId: ANNEX_CLERK}}, MAIN_CLERK)).saleId;
+    });
+
+    it("names the store to the collector", async () => {
+      const [push] = await pushesFor(saleId);
+      assert.equal(push.recipientUid, ANNEX_CLERK);
+      assert.equal(push.body, "Aminata owes $40.00 · Main store");
+      assert.equal(push.data.storeId, `${MB}_main`);
+    });
+
+    it("keeps another store's staff out of the sale's credit", async () => {
+      await assert.rejects(m("recordInventoryCreditPayment", {saleId,
+        amountCents: 100, method: "cash"}, ANNEX_CLERK),
+      refusal("store_not_allowed", "permission-denied"));
+      await assert.rejects(m("setInventoryCreditCollector", {saleId,
+        collectorStaffId: MAIN_CLERK}, ANNEX_CLERK),
+      refusal("store_not_allowed"));
+      const paid = await m("recordInventoryCreditPayment", {saleId,
+        amountCents: 1000, method: "cash"}, MAIN_CLERK);
+      assert.equal(paid.creditPaidCents, 1000);
+      const [row] = await (await db.collection("inventoryCreditPayments")
+          .where("businessId", "==", MB).where("saleId", "==", saleId).get())
+          .docs.map((d) => ({id: d.id, ...d.data()}));
+      assert.equal(row.storeId, `${MB}_main`);
+      await assert.rejects(m("revertInventoryCreditPayment",
+          {paymentId: row.id}, ANNEX_CLERK), refusal("store_not_allowed"));
+      await m("revertInventoryCreditPayment", {paymentId: row.id}, MOWN);
+    });
+  });
+
+  it("splits the summary into paid now and on credit", async () => {
+    const SB = "inv-credit-summary";
+    const SOWN = "inv-credit-summary-owner";
+    const x = callIn(SB);
+    await seedBusiness(SB, {[SOWN]: {role: "businessOwner", businessId: SB}});
+    const product = (await x("createInventoryItem", {name: "Cap",
+      priceCents: 1000, quantity: 10}, SOWN)).itemId;
+    const line = [{itemId: product, quantity: 1, soldPriceCents: 1000}];
+    await x("recordInventorySale", {clientRequestId: requestId(),
+      paymentMethod: "cash", lines: line}, SOWN);
+    const credit = await x("recordInventorySale", {clientRequestId:
+      requestId(), paymentMethod: "cash", lines: line, credit: {
+      paidNowCents: 400, customerName: "Awa", customerPhone: "+12075550101",
+      collectorStaffId: SOWN}}, SOWN);
+    await x("recordInventoryCreditPayment", {saleId: credit.saleId,
+      amountCents: 100, method: "cash"}, SOWN);
+    const summary = await x("getInventorySummary", {range: "today",
+      timeZone: "America/New_York"}, SOWN);
+    assert.equal(summary.revenueCents, 2000);
+    assert.equal(summary.paidNowCents, 1400);
+    assert.equal(summary.creditCents, 600);
+    assert.equal(summary.creditOutstandingCents, 500);
+  });
+});

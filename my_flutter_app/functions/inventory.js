@@ -21,6 +21,7 @@
 const crypto = require("node:crypto");
 const {INVOICE_PAYMENT_METHODS, MAX_CENTS} = require("./invoice_ledger");
 const {recipientLanguage} = require("./notification_settings");
+const {normalizePhoneNumber} = require("./phone_number");
 
 const INVENTORY_PAYMENT_METHODS = INVOICE_PAYMENT_METHODS;
 
@@ -115,17 +116,37 @@ const INVENTORY_MESSAGES = Object.freeze({
   user_not_found: "That staff member was not found in this business.",
   all_stores_invalid: "Say whether the staff member sees all stores " +
     "(true) or only their own (false).",
+  // Credit sales and who received the money (v4).
+  received_by_invalid: "The person who received the money must be someone " +
+    "of this business.",
+  credit_invalid: "The credit part of the sale could not be read.",
+  paid_now_invalid: "The amount paid now must be a whole number of cents, " +
+    "from zero up to less than the sale total.",
+  credit_customer_required: "A sale on credit needs the customer's name " +
+    "and phone number.",
+  customer_phone_invalid: "The customer's phone number must include the " +
+    "country code (for example +1 207 555 0100).",
+  collector_invalid: "Pick who collects the rest: someone of this business.",
+  due_date_invalid: "The due date must be a real date, today or later.",
+  amount_invalid: "The amount must be a whole number of cents above zero.",
+  payment_exceeds_balance: "That is more than the customer still owes.",
+  no_credit: "That sale was not made on credit.",
+  credit_has_payments: "Money was already collected on this credit. Revert " +
+    "those payments first.",
+  payment_not_found: "That payment was not found.",
+  payment_already_reverted: "That payment was already reverted.",
 });
 
 /** Codes answered as `not-found`; the rest of the state refusals below. */
 const NOT_FOUND_CODES = Object.freeze(
     ["business_not_found", "item_not_found", "sale_not_found",
       "category_not_found", "brand_not_found", "store_not_found",
-      "user_not_found"]);
+      "user_not_found", "payment_not_found"]);
 const PRECONDITION_CODES = Object.freeze(
     ["service_disabled", "item_archived", "sale_voided", "store_archived",
       "store_has_stock", "last_store_active", "home_store_required",
-      "insufficient_stock"]);
+      "insufficient_stock", "no_credit", "credit_has_payments",
+      "payment_already_reverted"]);
 const PERMISSION_CODES = Object.freeze(["store_not_allowed", "owner_only"]);
 const ALREADY_EXISTS_CODES = Object.freeze(
     ["category_name_taken", "brand_name_taken"]);
@@ -514,17 +535,19 @@ function saleDocId(businessId, clientRequestId) {
 
 /**
  * @param {object} data The recordInventorySale data.
- * @return {object} {errors, lines} - the lines normalised (itemId, quantity,
- *   soldPriceCents) when there are no errors.
+ * @param {string} [todayKey] Today as "YYYY-MM-DD" (America/New_York), so a
+ *   credit's due date in the past is refused; "" skips that check.
+ * @return {object} {errors, lines, totalCents, credit, paidNowCents} - the
+ *   lines normalised (itemId, quantity, soldPriceCents); `credit` is null
+ *   for a normal sale (else see cleanCreditInput) and `paidNowCents` is the
+ *   money taken at the counter (the whole total for a normal sale).
  */
-function cleanSaleInput(data) {
+function cleanSaleInput(data, todayKey = "") {
   const row = data && typeof data === "object" ? data : {};
+  const head = [];
   const errors = [];
   if (!cleanClientRequestId(row.clientRequestId)) {
-    errors.push("client_request_id_invalid");
-  }
-  if (!INVENTORY_PAYMENT_METHODS.includes(text(row.paymentMethod, 40))) {
-    errors.push("payment_method_invalid");
+    head.push("client_request_id_invalid");
   }
   const raw = Array.isArray(row.lines) ? row.lines : [];
   if (raw.length === 0) errors.push("lines_required");
@@ -544,12 +567,28 @@ function cleanSaleInput(data) {
       lines.push({itemId, quantity, soldPriceCents});
     }
   }
+  let totalCents = null;
   if (errors.length === 0) {
-    const total = lines.reduce(
+    totalCents = lines.reduce(
         (sum, l) => sum + l.quantity * l.soldPriceCents, 0);
-    if (total > MAX_CENTS) errors.push("total_too_large");
+    if (totalCents > MAX_CENTS) errors.push("total_too_large");
   }
-  return {errors: [...new Set(errors)], lines};
+  const credit = cleanCreditInput(row.credit, totalCents, todayKey);
+  // How the shop was paid matters only when it took money now: a sale
+  // entirely on credit took nothing at the counter.
+  const nothingNow = credit.given && credit.paidNowCents === 0;
+  if (!nothingNow &&
+      !INVENTORY_PAYMENT_METHODS.includes(text(row.paymentMethod, 40))) {
+    head.push("payment_method_invalid");
+  }
+  return {
+    errors: [...new Set([...head, ...errors, ...credit.errors])],
+    lines,
+    totalCents: totalCents ?? 0,
+    credit: credit.credit,
+    paidNowCents: credit.credit ? credit.credit.paidNowCents :
+      (totalCents ?? 0),
+  };
 }
 
 /**
@@ -781,10 +820,17 @@ function summarizeSales(sales) {
   let knownCostRevenueCents = 0;
   let discountCents = 0;
   let linesWithoutCost = 0;
+  // Of the revenue: taken at the counter vs put on credit (v4). A sale from
+  // before v4 was paid in full at the counter.
+  let creditCents = 0;
+  let creditOutstandingCents = 0;
   const byItem = new Map();
   for (const sale of Array.isArray(sales) ? sales : []) {
     if (!sale || sale.voided === true) continue;
     salesCount += 1;
+    const standing = creditStanding(sale);
+    creditCents += standing.creditCents;
+    creditOutstandingCents += standing.remainingCents;
     for (const line of Array.isArray(sale.lines) ? sale.lines : []) {
       const quantity = Number(line.quantity) || 0;
       const sold = Number(line.soldPriceCents) || 0;
@@ -821,6 +867,9 @@ function summarizeSales(sales) {
     discountCents,
     linesWithoutCost,
     best,
+    paidNowCents: Math.max(0, revenueCents - creditCents),
+    creditCents,
+    creditOutstandingCents,
   };
 }
 
@@ -1779,7 +1828,468 @@ function planSaleNotification({sale, users, sellerUid, seller, multiStore}) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Credit sales and who received the money (v4, docs/INVENTORY.md).
+//
+// Every sale says who took the money paid at the counter
+// (`receivedByStaffId`, the seller unless someone else is named). A sale on
+// credit takes part of the total now (or nothing) and the customer owes the
+// rest: a named person of the business collects it, later payments are
+// recorded one by one (struck through when reverted, never erased) until it
+// is paid. Sales from before v4 carry none of these fields and read as fully
+// paid, received by the seller.
+// ---------------------------------------------------------------------------
+
+const CREDIT_STATUS = Object.freeze({NONE: "none", OPEN: "open",
+  PAID: "paid"});
+/** The notification preference that switches credit pushes off. */
+const CREDIT_NOTIFICATION_PREFERENCE = "inventoryCredit";
+/** An overdue credit is pushed again at most this often. */
+const CREDIT_REMINDER_EVERY_MS = 3 * 24 * 60 * 60 * 1000;
+// The daily job starts at about the same minute every morning; this slack
+// keeps "every 3 days" from slipping to 4 when one run starts a little
+// earlier than the run it is measured against.
+const CREDIT_REMINDER_SLACK_MS = 2 * 60 * 60 * 1000;
+/** Dates (due dates, "today") are read in the shops' zone. */
+const CREDIT_ZONE = "America/New_York";
+const MAX_CUSTOMER_NAME = 120;
+const MAX_STAFF_ID = 200;
+const MAX_CREDIT_NOTE = 200;
+/** The most people one overdue reminder reaches (collector + owners). */
+const MAX_CREDIT_REMINDER_RECIPIENTS = 20;
+
+/**
+ * @param {*} value A date as the clients send it.
+ * @return {boolean} True for a real calendar date "YYYY-MM-DD".
+ */
+function dateKeyValid(value) {
+  if (typeof value !== "string") return false;
+  const key = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 &&
+    date.getUTCDate() === d;
+}
+
+/**
+ * @param {Date} [now] The instant.
+ * @param {string} [zone] IANA zone.
+ * @return {string} That day's date there, "YYYY-MM-DD".
+ */
+function todayKeyIn(now = new Date(), zone = CREDIT_ZONE) {
+  return rangeBounds("today", zone, now).startKey;
+}
+
+/**
+ * @param {*} value A due date: "" / missing for none, else "YYYY-MM-DD".
+ * @param {string} [todayKey] Today; a date before it is refused.
+ * @return {{value: string, error: ?string}} The date ("" for none).
+ */
+function cleanDueDate(value, todayKey = "") {
+  if (value === undefined || value === null ||
+      (typeof value === "string" && value.trim() === "")) {
+    return {value: "", error: null};
+  }
+  if (!dateKeyValid(value)) return {value: "", error: "due_date_invalid"};
+  const key = value.trim();
+  if (todayKey && key < todayKey) return {value: "", error: "due_date_invalid"};
+  return {value: key, error: null};
+}
+
+/**
+ * @param {*} value A phone number as typed through the country phone field.
+ * @return {string} "+<code><number>" (formatting dropped), or "" when it is
+ *   not a number with its country code.
+ */
+function cleanCustomerPhone(value) {
+  const phone = normalizePhoneNumber(value);
+  return /^\+\d{7,15}$/.test(phone) ? phone : "";
+}
+
+/**
+ * @param {*} value A person's uid from a client.
+ * @return {string} It trimmed, "" when empty, too long or holding a slash.
+ */
+function cleanStaffId(value) {
+  if (typeof value !== "string") return "";
+  const id = value.trim();
+  return id && !id.includes("/") && id.length <= MAX_STAFF_ID ? id : "";
+}
+
+/**
+ * The credit half of recordInventorySale.
+ *
+ * @param {*} raw `data.credit`: absent or null for a normal sale.
+ * @param {?number} totalCents The sale total (null when the lines are bad).
+ * @param {string} [todayKey] Today, for the due date.
+ * @return {object} {given, errors, paidNowCents, credit}; `credit` =
+ *   {paidNowCents, creditCents, customerName, customerPhone,
+ *   collectorStaffId, dueDate} when everything is right, else null. Whether
+ *   the collector is really one of the business's people is the caller's
+ *   (it needs a read).
+ */
+function cleanCreditInput(raw, totalCents, todayKey = "") {
+  if (raw === undefined || raw === null) {
+    return {given: false, errors: [], paidNowCents: null, credit: null};
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return {given: true, errors: ["credit_invalid"], paidNowCents: null,
+      credit: null};
+  }
+  const errors = [];
+  const paidNowCents = wholeNumber(raw.paidNowCents, 0, MAX_CENTS);
+  // Paying it all now is a normal sale, not a credit.
+  if (paidNowCents === null ||
+      (Number.isInteger(totalCents) && paidNowCents >= totalCents)) {
+    errors.push("paid_now_invalid");
+  }
+  const customerName = text(raw.customerName, MAX_CUSTOMER_NAME);
+  const phoneTyped = text(raw.customerPhone, 40);
+  const customerPhone = cleanCustomerPhone(phoneTyped);
+  if (!customerName || !phoneTyped) errors.push("credit_customer_required");
+  else if (!customerPhone) errors.push("customer_phone_invalid");
+  const collectorStaffId = cleanStaffId(raw.collectorStaffId);
+  if (!collectorStaffId) errors.push("collector_invalid");
+  const due = cleanDueDate(raw.dueDate, todayKey);
+  if (due.error) errors.push(due.error);
+  const ok = errors.length === 0 && Number.isInteger(totalCents);
+  return {
+    given: true,
+    errors,
+    paidNowCents,
+    credit: ok ? {paidNowCents, creditCents: totalCents - paidNowCents,
+      customerName, customerPhone, collectorStaffId,
+      dueDate: due.value} : null,
+  };
+}
+
+/**
+ * The money fields a new sale stores.
+ *
+ * @param {object} args {totalCents, credit (cleanCreditInput's, or null),
+ *   receivedByStaffId}.
+ * @return {object} receivedByStaffId, paidNowCents, creditCents,
+ *   creditPaidCents, creditStatus, plus `credit` and `lastCreditReminderAt`
+ *   on a credit sale.
+ */
+function saleMoneyFields({totalCents, credit, receivedByStaffId}) {
+  const total = Math.max(0, Math.round(Number(totalCents) || 0));
+  const base = {receivedByStaffId: text(receivedByStaffId, MAX_STAFF_ID),
+    creditPaidCents: 0};
+  if (!credit || !(Number(credit.creditCents) > 0)) {
+    return {...base, paidNowCents: total, creditCents: 0,
+      creditStatus: CREDIT_STATUS.NONE};
+  }
+  return {
+    ...base,
+    paidNowCents: credit.paidNowCents,
+    creditCents: credit.creditCents,
+    creditStatus: CREDIT_STATUS.OPEN,
+    credit: {
+      customerName: credit.customerName,
+      customerPhone: credit.customerPhone,
+      collectorStaffId: credit.collectorStaffId,
+      dueDate: credit.dueDate,
+    },
+    lastCreditReminderAt: null,
+  };
+}
+
+/**
+ * @param {number} creditCents What was put on credit.
+ * @param {number} paidCents What has been collected since.
+ * @return {string} The credit status.
+ */
+function creditStatusFor(creditCents, paidCents) {
+  if (!(creditCents > 0)) return CREDIT_STATUS.NONE;
+  return paidCents >= creditCents ? CREDIT_STATUS.PAID : CREDIT_STATUS.OPEN;
+}
+
+/**
+ * Where a sale's credit stands. A sale from before v4 has no credit.
+ *
+ * @param {object} sale A stored sale.
+ * @return {{creditCents: number, creditPaidCents: number,
+ *   remainingCents: number, status: string}} The standing.
+ */
+function creditStanding(sale) {
+  const creditCents = Math.min(MAX_CENTS,
+      Math.max(0, Math.round(Number(sale?.creditCents) || 0)));
+  const paid = Math.min(creditCents,
+      Math.max(0, Math.round(Number(sale?.creditPaidCents) || 0)));
+  return {
+    creditCents,
+    creditPaidCents: paid,
+    remainingCents: creditCents - paid,
+    status: creditStatusFor(creditCents, paid),
+  };
+}
+
+/**
+ * Why a later payment cannot be recorded on this sale at all (its state), or
+ * null.
+ *
+ * @param {object} sale The stored sale.
+ * @return {?string} `sale_voided` or `no_credit`.
+ */
+function creditStateRefusal(sale) {
+  if (sale?.voided === true) return "sale_voided";
+  if (creditStanding(sale).creditCents <= 0) return "no_credit";
+  return null;
+}
+
+/**
+ * Errors of a later payment's fields, judged against what the live
+ * payments really add up to (read in the same transaction).
+ *
+ * @param {object} input {amountCents, method}.
+ * @param {object} sale The stored sale.
+ * @param {number} livePaidCents The sum of its payments not reverted.
+ * @return {string[]} Refusal codes.
+ */
+function creditPaymentErrors(input, sale, livePaidCents) {
+  const errors = [];
+  const creditCents = creditStanding(sale).creditCents;
+  const amount = wholeNumber(input?.amountCents, 1, MAX_CENTS);
+  if (amount === null) errors.push("amount_invalid");
+  else if (amount > creditCents - Math.max(0, Number(livePaidCents) || 0)) {
+    errors.push("payment_exceeds_balance");
+  }
+  if (!INVENTORY_PAYMENT_METHODS.includes(text(input?.method, 40))) {
+    errors.push("payment_method_invalid");
+  }
+  return errors;
+}
+
+/**
+ * The body of an `inventoryCreditPayments` row (the caller adds createdAt).
+ *
+ * @param {object} args {businessId, sale ({id, storeId}), input ({amountCents,
+ *   method, note}), receivedByStaffId, recordedByStaffId}.
+ * @return {object} The row.
+ */
+function creditPaymentRecord({businessId, sale, input, receivedByStaffId,
+  recordedByStaffId}) {
+  return {
+    businessId: text(businessId, 200),
+    saleId: text(sale?.id, 200),
+    storeId: text(sale?.storeId, 200),
+    amountCents: Number(wholeNumber(input?.amountCents, 1, MAX_CENTS)),
+    method: text(input?.method, 40),
+    receivedByStaffId: text(receivedByStaffId, MAX_STAFF_ID),
+    recordedByStaffId: text(recordedByStaffId, MAX_STAFF_ID),
+    note: text(input?.note, MAX_CREDIT_NOTE),
+    reverted: false,
+    revertedByStaffId: "",
+    revertedAt: null,
+  };
+}
+
+/**
+ * setInventoryCreditCollector's fields.
+ *
+ * @param {object} data {collectorStaffId, dueDate?}; a missing `dueDate`
+ *   keeps the one the sale has, "" clears it.
+ * @param {string} [todayKey] Today.
+ * @return {{errors: string[], collectorStaffId: string,
+ *   dueDate: (string|undefined)}} The cleaned fields.
+ */
+function cleanCollectorChange(data, todayKey = "") {
+  const errors = [];
+  const collectorStaffId = cleanStaffId(data?.collectorStaffId);
+  if (!collectorStaffId) errors.push("collector_invalid");
+  let dueDate;
+  if (data && Object.prototype.hasOwnProperty.call(data, "dueDate")) {
+    const due = cleanDueDate(data.dueDate, todayKey);
+    if (due.error) errors.push(due.error);
+    dueDate = due.value;
+  }
+  return {errors, collectorStaffId, dueDate};
+}
+
+/**
+ * @param {string} key "YYYY-MM-DD".
+ * @param {"en"|"fr"} language The reader's language.
+ * @return {string} "10/14/2026" in English, "14/10/2026" in French.
+ */
+function dueDateText(key, language) {
+  if (!dateKeyValid(key)) return "";
+  const [y, m, d] = key.trim().split("-");
+  return language === "fr" ? `${d}/${m}/${y}` : `${m}/${d}/${y}`;
+}
+
+/**
+ * The words of one credit push in one language.
+ *
+ * @param {object} args {sale, kind ("assigned"|"overdue"), named (the store
+ *   is named: a multi-store business), language}.
+ * @return {{title: string, body: string}} The copy.
+ */
+function creditNotificationCopy({sale, kind, named, language}) {
+  const fr = language === "fr";
+  const name = text(sale?.credit?.customerName, MAX_CUSTOMER_NAME) ||
+    (fr ? "Un client" : "A customer");
+  const owed = moneyText(creditStanding(sale).remainingCents);
+  const store = named ? text(sale?.storeName, MAX_NAME) : "";
+  const where = store || (fr ? "vente" : "sale");
+  const overdue = kind === "overdue";
+  const dueKey = text(sale?.credit?.dueDate, 10);
+  const due = overdue && dateKeyValid(dueKey) ?
+    (fr ? ` · échéance ${dueDateText(dueKey, "fr")}` :
+      ` · due ${dueDateText(dueKey, "en")}`) : "";
+  if (fr) {
+    return {
+      title: overdue ? "Crédit en retard" : "Crédit à encaisser",
+      body: `${name} doit ${owed} · ${where}${due}`,
+    };
+  }
+  return {
+    title: overdue ? "Credit overdue" : "Credit to collect",
+    body: `${name} owes ${owed} · ${where}${due}`,
+  };
+}
+
+/**
+ * Who hears about a credit, and what they read.
+ *
+ * `assigned` (a credit sale, or a new collector): the collector alone,
+ * unless they are the person who just did it. `overdue` (the morning job):
+ * the collector and the business owner(s). Never anyone who switched credit
+ * pushes off (`notificationPreferences.inventoryCredit == false`), never
+ * someone of another business.
+ *
+ * @param {object} input The plan's inputs.
+ * @param {object} input.sale The sale: id, businessId, storeId, storeName,
+ *   credit {customerName, collectorStaffId, dueDate}, creditCents,
+ *   creditPaidCents.
+ * @param {Array<object>} input.users Profiles, each with its `id` (the
+ *   collector's, and for `overdue` the business's owners); blocked accounts
+ *   already left out.
+ * @param {string} [input.actorUid] Who did it ("" for the job).
+ * @param {"assigned"|"overdue"} input.kind Which push.
+ * @param {boolean} [input.multiStore] The business has two or more active
+ *   stores (the body then names the store).
+ * @param {string[]} [input.ownerUids] The business document's `ownerUid`.
+ * @return {object} {recipients: [{uid, language, title, body}], copy,
+ *   data}.
+ */
+function planCreditNotification({sale, users, actorUid = "", kind,
+  multiStore = false, ownerUids = []}) {
+  const businessId = text(sale?.businessId, 200);
+  const saleId = text(sale?.id, 200);
+  const storeId = text(sale?.storeId, 200);
+  const collector = text(sale?.credit?.collectorStaffId, MAX_STAFF_ID);
+  const actor = text(actorUid, MAX_STAFF_ID);
+  const owners = new Set((Array.isArray(ownerUids) ? ownerUids : [])
+      .map((uid) => text(uid, MAX_STAFF_ID)).filter(Boolean));
+  const people = new Map();
+  for (const user of Array.isArray(users) ? users : []) {
+    const uid = text(user?.id, MAX_STAFF_ID);
+    if (uid && !people.has(uid)) people.set(uid, user);
+  }
+  const targets = [collector];
+  if (kind === "overdue") {
+    const ownerIds = [...people.entries()]
+        .filter(([uid, user]) => user?.role === "businessOwner" ||
+          owners.has(uid))
+        .map(([uid]) => uid).sort();
+    targets.push(...ownerIds);
+  }
+  const chosen = [];
+  for (const uid of targets) {
+    if (!uid || uid === actor || chosen.some((c) => c.uid === uid)) continue;
+    const user = people.get(uid);
+    if (!user) continue;
+    if (text(user.businessId, 200) !== businessId && !owners.has(uid)) {
+      continue;
+    }
+    if (user.notificationPreferences?.[CREDIT_NOTIFICATION_PREFERENCE] ===
+        false) {
+      continue;
+    }
+    chosen.push({uid, user});
+  }
+  const named = multiStore === true && Boolean(storeId);
+  const copy = {
+    en: creditNotificationCopy({sale, kind, named, language: "en"}),
+    fr: creditNotificationCopy({sale, kind, named, language: "fr"}),
+  };
+  return {
+    recipients: chosen.slice(0, MAX_CREDIT_REMINDER_RECIPIENTS)
+        .map(({uid, user}) => {
+          const language = recipientLanguage(user);
+          return {uid, language, ...copy[language]};
+        }),
+    copy,
+    data: {
+      type: "inventory_sale",
+      kind: "credit",
+      businessId,
+      saleId,
+      storeId,
+      relatedCollection: "inventorySales",
+      relatedId: saleId,
+    },
+  };
+}
+
+/**
+ * @param {*} value A stored time (Firestore Timestamp, Date, millis).
+ * @return {?number} Its milliseconds, or null.
+ */
+function millisOf(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Whether the morning job pushes an overdue reminder for this sale now:
+ * credit still open, a due date before today, not voided, and no reminder
+ * in the last 3 days.
+ *
+ * @param {object} sale The stored sale.
+ * @param {string} todayKey Today, "YYYY-MM-DD".
+ * @param {number} nowMs The current instant.
+ * @return {boolean} True to remind.
+ */
+function shouldRemindCredit(sale, todayKey, nowMs) {
+  if (!sale || sale.voided === true) return false;
+  if (creditStanding(sale).status !== CREDIT_STATUS.OPEN) return false;
+  const due = text(sale.credit?.dueDate, 10);
+  if (!dateKeyValid(due) || !(due < todayKey)) return false;
+  const last = millisOf(sale.lastCreditReminderAt);
+  return last === null ||
+    nowMs - last >= CREDIT_REMINDER_EVERY_MS - CREDIT_REMINDER_SLACK_MS;
+}
+
 module.exports = {
+  CREDIT_STATUS,
+  CREDIT_NOTIFICATION_PREFERENCE,
+  CREDIT_REMINDER_EVERY_MS,
+  CREDIT_ZONE,
+  MAX_CUSTOMER_NAME,
+  MAX_CREDIT_NOTE,
+  dateKeyValid,
+  todayKeyIn,
+  cleanDueDate,
+  cleanCustomerPhone,
+  cleanStaffId,
+  cleanCreditInput,
+  saleMoneyFields,
+  creditStatusFor,
+  creditStanding,
+  creditStateRefusal,
+  creditPaymentErrors,
+  creditPaymentRecord,
+  cleanCollectorChange,
+  dueDateText,
+  creditNotificationCopy,
+  planCreditNotification,
+  shouldRemindCredit,
   SALE_NOTIFICATION_PREFERENCE,
   MAX_SALE_NOTIFICATION_RECIPIENTS,
   planSaleNotification,

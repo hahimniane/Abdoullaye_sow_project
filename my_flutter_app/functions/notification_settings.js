@@ -14,6 +14,9 @@ function defaultNotificationPreferences() {
     // Inventory: "Sales at my store" - a push when someone else of the
     // store (or business) rings up a sale. On unless switched off.
     inventorySales: true,
+    // Inventory credit: "Credit I collect" - a push when a credit sale is
+    // put on someone to collect, and when it is overdue. On unless off.
+    inventoryCredit: true,
   };
 }
 
@@ -46,6 +49,8 @@ function normalizeNotificationPreferences(raw) {
         defaults.supportCaseUpdates,
     inventorySales:
       prefs.inventorySales !== false && defaults.inventorySales,
+    inventoryCredit:
+      prefs.inventoryCredit !== false && defaults.inventoryCredit,
   };
 }
 

@@ -132,6 +132,17 @@ before(async () => {
         put(`inventoryMovements/${biz}-move-${store}`, {businessId: biz,
           itemId: `${biz}-item`, type: "sale", createdAt: ts("2026-09-02"),
           storeId: `${biz}-${store}`});
+        // Credit sales and their later payments (v4).
+        put(`inventorySales/${biz}-credit-${store}`, {businessId: biz,
+          voided: false, totalCents: 5000, createdAt: ts("2026-09-04"),
+          lines: [], storeId: `${biz}-${store}`, creditCents: 4000,
+          creditPaidCents: 1000, creditStatus: "open",
+          credit: {customerName: "Fatou", customerPhone: "+12075550100",
+            collectorStaffId: "owner-a", dueDate: "2026-09-30"}});
+        put(`inventoryCreditPayments/${biz}-pay-${store}`, {businessId: biz,
+          saleId: `${biz}-credit-${store}`, storeId: `${biz}-${store}`,
+          amountCents: 1000, method: "cash", reverted: false,
+          createdAt: ts("2026-09-05")});
       }
       put(`inventoryMovements/${biz}-transfer`, {businessId: biz,
         itemId: `${biz}-item`, type: "transfer_out", transferId: "t1",
@@ -272,6 +283,54 @@ const SHAPES = [
   ["inventory: the two sides of a transfer", (db, b) =>
     db.collection("inventoryMovements").where("businessId", "==", b)
         .where("transferId", "==", "t1")],
+  // Credit sales (v4) and the sales history.
+  ["inventory: open credit", (db, b) =>
+    db.collection("inventorySales").where("businessId", "==", b)
+        .where("creditStatus", "==", "open").limit(500)],
+  ["inventory: a store's open credit", (db, b) =>
+    db.collection("inventorySales").where("businessId", "==", b)
+        .where("storeId", "==", `${b}-annex`)
+        .where("creditStatus", "==", "open").limit(500)],
+  ["inventory: a sale's credit payments", (db, b) =>
+    db.collection("inventoryCreditPayments").where("businessId", "==", b)
+        .where("saleId", "==", `${b}-credit-main`)],
+  ["inventory: a store sale's credit payments", (db, b) =>
+    db.collection("inventoryCreditPayments").where("businessId", "==", b)
+        .where("storeId", "==", `${b}-annex`)
+        .where("saleId", "==", `${b}-credit-annex`)],
+  ["inventory: sales in a period", (db, b) =>
+    db.collection("inventorySales").where("businessId", "==", b)
+        .where("createdAt", ">=", ts("2026-09-01"))
+        .where("createdAt", "<", ts("2026-10-01"))
+        .orderBy("createdAt", "desc").limit(1000)],
+  ["inventory: a store's sales in a period", (db, b) =>
+    db.collection("inventorySales").where("businessId", "==", b)
+        .where("storeId", "==", `${b}-annex`)
+        .where("createdAt", ">=", ts("2026-09-01"))
+        .where("createdAt", "<", ts("2026-10-01"))
+        .orderBy("createdAt", "desc").limit(1000)],
+  ["inventory: stock movements in a period", (db, b) =>
+    db.collection("inventoryMovements").where("businessId", "==", b)
+        .where("createdAt", ">=", ts("2026-09-01"))
+        .where("createdAt", "<", ts("2026-10-01"))
+        .orderBy("createdAt", "desc").limit(500)],
+  ["inventory: a store's stock movements in a period", (db, b) =>
+    db.collection("inventoryMovements").where("businessId", "==", b)
+        .where("storeId", "==", `${b}-annex`)
+        .where("createdAt", ">=", ts("2026-09-01"))
+        .where("createdAt", "<", ts("2026-10-01"))
+        .orderBy("createdAt", "desc").limit(500)],
+  ["inventory: credit payments in a period", (db, b) =>
+    db.collection("inventoryCreditPayments").where("businessId", "==", b)
+        .where("createdAt", ">=", ts("2026-09-01"))
+        .where("createdAt", "<", ts("2026-10-01"))
+        .orderBy("createdAt", "desc").limit(500)],
+  ["inventory: a store's credit payments in a period", (db, b) =>
+    db.collection("inventoryCreditPayments").where("businessId", "==", b)
+        .where("storeId", "==", `${b}-annex`)
+        .where("createdAt", ">=", ts("2026-09-01"))
+        .where("createdAt", "<", ts("2026-10-01"))
+        .orderBy("createdAt", "desc").limit(500)],
   ["activity list, ranged, typed, owed", (db, b) =>
     db.collection("lotActivities").where("businessId", "==", b)
         .where("activityTypeId", "==", "title")
@@ -337,6 +396,25 @@ describe("console query shapes pass the rules for their own business", () => {
             .where("businessId", "==", b)
             .where("itemId", "==", `${b}-item`);
         return store ? q.where("storeId", "==", store) : q;
+      }],
+      ["open credit", (db, b, store) => {
+        const q = db.collection("inventorySales").where("businessId", "==", b);
+        return (store ? q.where("storeId", "==", store) : q)
+            .where("creditStatus", "==", "open");
+      }],
+      ["credit payments in a period", (db, b, store) => {
+        const q = db.collection("inventoryCreditPayments")
+            .where("businessId", "==", b);
+        return (store ? q.where("storeId", "==", store) : q)
+            .where("createdAt", ">=", ts("2026-09-01"))
+            .orderBy("createdAt", "desc");
+      }],
+      ["stock movements in a period", (db, b, store) => {
+        const q = db.collection("inventoryMovements")
+            .where("businessId", "==", b);
+        return (store ? q.where("storeId", "==", store) : q)
+            .where("createdAt", ">=", ts("2026-09-01"))
+            .orderBy("createdAt", "desc");
       }],
     ];
 

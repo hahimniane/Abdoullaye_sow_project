@@ -37,7 +37,29 @@ describe("notification settings helpers", () => {
           supportEscalations: false,
           supportCaseUpdates: false,
           inventorySales: true,
+          inventoryCredit: true,
         },
+    );
+  });
+
+  it("keeps Credit I collect on unless it is switched off", () => {
+    assert.equal(normalizeNotificationPreferences(undefined).inventoryCredit,
+        true);
+    assert.equal(
+        normalizeNotificationPreferences({inventoryCredit: false})
+            .inventoryCredit,
+        false,
+    );
+    // Silencing sale alerts leaves credit pushes on, and vice versa.
+    assert.equal(
+        normalizeNotificationPreferences({inventorySales: false})
+            .inventoryCredit,
+        true,
+    );
+    assert.equal(
+        normalizeNotificationPreferences({inventoryCredit: false})
+            .inventorySales,
+        true,
     );
   });
 

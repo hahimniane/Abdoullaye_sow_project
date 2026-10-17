@@ -414,7 +414,8 @@ describe("inventory: summary", () => {
   it("is all zeros when there are no sales", () => {
     assert.deepEqual(inv.summarizeSales([]), {
       salesCount: 0, itemsSold: 0, revenueCents: 0, costCents: 0,
-      profitCents: 0, discountCents: 0, linesWithoutCost: 0, best: []});
+      profitCents: 0, discountCents: 0, linesWithoutCost: 0, best: [],
+      paidNowCents: 0, creditCents: 0, creditOutstandingCents: 0});
   });
 
   it("lists low and 'count was off' products, hiding archived ones", () => {
@@ -1702,5 +1703,347 @@ describe("inventory: sale notifications", () => {
 
   it("tells nobody when the seller is alone", () => {
     assert.deepEqual(plan({users: [people[0]]}).recipients, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v4: credit sales and who received the money.
+// ---------------------------------------------------------------------------
+
+describe("inventory: credit sale input", () => {
+  const TODAY = "2026-10-16";
+  const base = {clientRequestId: "req-credit-1", paymentMethod: "cash",
+    lines: [{itemId: "a", quantity: 2, soldPriceCents: 3000}]};
+  const credit = (extra = {}) => ({paidNowCents: 2000,
+    customerName: "Fatou Bah", customerPhone: "+1 (207) 555-0100",
+    collectorStaffId: "collector-1", dueDate: "2026-10-30", ...extra});
+  const clean = (extra) => inv.cleanSaleInput({...base, ...extra}, TODAY);
+
+  it("leaves a normal sale as it was: paid in full at the counter", () => {
+    const out = clean({});
+    assert.deepEqual(out.errors, []);
+    assert.equal(out.credit, null);
+    assert.equal(out.totalCents, 6000);
+    assert.equal(out.paidNowCents, 6000);
+    assert.equal(inv.cleanSaleInput({...base, credit: null}).credit, null);
+  });
+
+  it("reads a credit sale: part now, the rest owed", () => {
+    const out = clean({credit: credit()});
+    assert.deepEqual(out.errors, []);
+    assert.deepEqual(out.credit, {paidNowCents: 2000, creditCents: 4000,
+      customerName: "Fatou Bah", customerPhone: "+12075550100",
+      collectorStaffId: "collector-1", dueDate: "2026-10-30"});
+    assert.equal(out.paidNowCents, 2000);
+  });
+
+  it("needs no payment method when nothing is paid now", () => {
+    const out = clean({paymentMethod: "", credit: credit({paidNowCents: 0})});
+    assert.deepEqual(out.errors, []);
+    assert.equal(out.credit.creditCents, 6000);
+    // Something paid now still needs the method.
+    assert.deepEqual(clean({paymentMethod: "", credit: credit()}).errors,
+        ["payment_method_invalid"]);
+    // A normal sale still needs it.
+    assert.deepEqual(clean({paymentMethod: ""}).errors,
+        ["payment_method_invalid"]);
+  });
+
+  it("keeps paid-now from zero to below the total", () => {
+    for (const bad of [6000, 7000, -1, 1.5, "", "abc", null]) {
+      assert.deepEqual(clean({credit: credit({paidNowCents: bad})}).errors,
+          ["paid_now_invalid"], String(bad));
+    }
+    assert.deepEqual(clean({credit: credit({paidNowCents: 5999})}).errors,
+        []);
+    assert.deepEqual(clean({credit: credit({paidNowCents: "0"})}).errors,
+        []);
+  });
+
+  it("needs the customer's name and a phone with its country code", () => {
+    assert.deepEqual(clean({credit: credit({customerName: " "})}).errors,
+        ["credit_customer_required"]);
+    assert.deepEqual(clean({credit: credit({customerPhone: ""})}).errors,
+        ["credit_customer_required"]);
+    assert.deepEqual(clean({credit: credit({customerPhone: "207 555 0100"})})
+        .errors, ["customer_phone_invalid"]);
+    assert.deepEqual(clean({credit: credit({customerPhone: "+1 call me"})})
+        .errors, ["customer_phone_invalid"]);
+  });
+
+  it("needs a collector id", () => {
+    for (const bad of ["", "  ", "a/b", 7, null]) {
+      assert.deepEqual(clean({credit: credit({collectorStaffId: bad})})
+          .errors, ["collector_invalid"], String(bad));
+    }
+  });
+
+  it("takes an optional due date, today or later", () => {
+    assert.equal(clean({credit: credit({dueDate: ""})}).credit.dueDate, "");
+    assert.equal(clean({credit: credit({dueDate: undefined})}).credit.dueDate,
+        "");
+    assert.equal(clean({credit: credit({dueDate: TODAY})}).credit.dueDate,
+        TODAY);
+    for (const bad of ["2026-10-15", "2026-02-30", "10/30/2026", "2026-1-5",
+      20261030]) {
+      assert.deepEqual(clean({credit: credit({dueDate: bad})}).errors,
+          ["due_date_invalid"], String(bad));
+    }
+  });
+
+  it("refuses a credit that is not an object, and lists every problem", () => {
+    assert.deepEqual(clean({credit: "yes"}).errors, ["credit_invalid"]);
+    assert.deepEqual(clean({credit: [1]}).errors, ["credit_invalid"]);
+    assert.deepEqual(clean({credit: {}}).errors.sort(), ["collector_invalid",
+      "credit_customer_required", "paid_now_invalid"]);
+  });
+
+  it("dates today in New York", () => {
+    // 03:30 UTC on Oct 17 is still Oct 16 in New York.
+    assert.equal(inv.todayKeyIn(new Date("2026-10-17T03:30:00Z")),
+        "2026-10-16");
+    assert.equal(inv.todayKeyIn(new Date("2026-10-17T04:30:00Z")),
+        "2026-10-17");
+  });
+});
+
+describe("inventory: credit money fields", () => {
+  it("stores a normal sale as paid in full", () => {
+    assert.deepEqual(inv.saleMoneyFields({totalCents: 6000, credit: null,
+      receivedByStaffId: "seller"}), {receivedByStaffId: "seller",
+      creditPaidCents: 0, paidNowCents: 6000, creditCents: 0,
+      creditStatus: "none"});
+  });
+
+  it("stores a credit sale as open", () => {
+    const credit = inv.cleanSaleInput({clientRequestId: "req-credit-2",
+      lines: [{itemId: "a", quantity: 1, soldPriceCents: 5000}],
+      credit: {paidNowCents: 0, customerName: "Fatou",
+        customerPhone: "+224620000000", collectorStaffId: "c"}}).credit;
+    assert.deepEqual(inv.saleMoneyFields({totalCents: 5000, credit,
+      receivedByStaffId: "other"}), {receivedByStaffId: "other",
+      creditPaidCents: 0, paidNowCents: 0, creditCents: 5000,
+      creditStatus: "open", credit: {customerName: "Fatou",
+        customerPhone: "+224620000000", collectorStaffId: "c", dueDate: ""},
+      lastCreditReminderAt: null});
+  });
+
+  it("reads where a credit stands; old sales owe nothing", () => {
+    assert.deepEqual(inv.creditStanding({totalCents: 900}),
+        {creditCents: 0, creditPaidCents: 0, remainingCents: 0,
+          status: "none"});
+    assert.deepEqual(inv.creditStanding({creditCents: 4000,
+      creditPaidCents: 1500}), {creditCents: 4000, creditPaidCents: 1500,
+      remainingCents: 2500, status: "open"});
+    assert.equal(inv.creditStanding({creditCents: 4000,
+      creditPaidCents: 4000}).status, "paid");
+    assert.equal(inv.creditStatusFor(0, 0), "none");
+  });
+
+  it("refuses later payments on a voided or non-credit sale", () => {
+    assert.equal(inv.creditStateRefusal({voided: true, creditCents: 10}),
+        "sale_voided");
+    assert.equal(inv.creditStateRefusal({totalCents: 10}), "no_credit");
+    assert.equal(inv.creditStateRefusal({creditCents: 10}), null);
+    assert.equal(inv.refusalKind("sale_voided"), "failed-precondition");
+    assert.equal(inv.refusalKind("no_credit"), "failed-precondition");
+    assert.equal(inv.refusalKind("credit_has_payments"),
+        "failed-precondition");
+    assert.equal(inv.refusalKind("payment_not_found"), "not-found");
+    assert.equal(inv.refusalKind("received_by_invalid"), "invalid-argument");
+    assert.equal(inv.refusalKind("payment_exceeds_balance"),
+        "invalid-argument");
+  });
+
+  it("takes a payment from one cent up to what is still owed", () => {
+    const sale = {creditCents: 4000};
+    const errors = (amountCents, live = 0, method = "cash") =>
+      inv.creditPaymentErrors({amountCents, method}, sale, live);
+    assert.deepEqual(errors(4000), []);
+    assert.deepEqual(errors(1), []);
+    assert.deepEqual(errors(2500, 1500), []);
+    assert.deepEqual(errors(2501, 1500), ["payment_exceeds_balance"]);
+    assert.deepEqual(errors(1, 4000), ["payment_exceeds_balance"]);
+    for (const bad of [0, -5, 1.5, "", null]) {
+      assert.deepEqual(errors(bad), ["amount_invalid"], String(bad));
+    }
+    assert.deepEqual(errors(100, 0, "bitcoin"), ["payment_method_invalid"]);
+  });
+
+  it("records who received and who typed it in", () => {
+    assert.deepEqual(inv.creditPaymentRecord({businessId: "b",
+      sale: {id: "s", storeId: "st"}, input: {amountCents: "1500",
+        method: "zelle", note: " later "}, receivedByStaffId: "r",
+      recordedByStaffId: "u"}), {businessId: "b", saleId: "s", storeId: "st",
+      amountCents: 1500, method: "zelle", receivedByStaffId: "r",
+      recordedByStaffId: "u", note: "later", reverted: false,
+      revertedByStaffId: "", revertedAt: null});
+  });
+
+  it("changes the collector and, only when sent, the due date", () => {
+    assert.deepEqual(inv.cleanCollectorChange({collectorStaffId: "c2"},
+        "2026-10-16"), {errors: [], collectorStaffId: "c2",
+      dueDate: undefined});
+    assert.deepEqual(inv.cleanCollectorChange({collectorStaffId: "c2",
+      dueDate: ""}, "2026-10-16").dueDate, "");
+    assert.deepEqual(inv.cleanCollectorChange({collectorStaffId: "",
+      dueDate: "2026-10-01"}, "2026-10-16").errors,
+    ["collector_invalid", "due_date_invalid"]);
+  });
+
+  it("splits a range's money into paid now and on credit", () => {
+    const line = {itemId: "a", name: "A", quantity: 1, soldPriceCents: 5000,
+      listPriceCents: 5000, costCents: null};
+    const s = inv.summarizeSales([
+      {totalCents: 5000, lines: [line]},
+      {totalCents: 5000, lines: [line], creditCents: 3000,
+        creditPaidCents: 1000},
+      {totalCents: 5000, lines: [line], creditCents: 5000, voided: true},
+    ]);
+    assert.equal(s.revenueCents, 10000);
+    assert.equal(s.paidNowCents, 7000);
+    assert.equal(s.creditCents, 3000);
+    assert.equal(s.creditOutstandingCents, 2000);
+  });
+});
+
+describe("inventory: credit notifications", () => {
+  const sale = {id: "sale-1", businessId: "biz", storeId: "annex",
+    storeName: "Annex", creditCents: 5000, creditPaidCents: 1000,
+    credit: {customerName: "Fatou Bah", collectorStaffId: "col",
+      dueDate: "2026-10-10"}};
+  const person = (id, extra = {}) => ({id, businessId: "biz", role: "staff",
+    ...extra});
+
+  it("tells the collector what is owed, and where", () => {
+    const out = inv.planCreditNotification({sale, users: [person("col")],
+      actorUid: "seller", kind: "assigned", multiStore: true});
+    assert.deepEqual(out.recipients, [{uid: "col", language: "en",
+      title: "Credit to collect", body: "Fatou Bah owes $40.00 · Annex"}]);
+    assert.deepEqual(out.copy.fr, {title: "Crédit à encaisser",
+      body: "Fatou Bah doit $40.00 · Annex"});
+    assert.deepEqual(out.data, {type: "inventory_sale", kind: "credit",
+      businessId: "biz", saleId: "sale-1", storeId: "annex",
+      relatedCollection: "inventorySales", relatedId: "sale-1"});
+  });
+
+  it("says 'sale' when the business has one store", () => {
+    const out = inv.planCreditNotification({sale, users: [person("col",
+        {preferredLanguage: "fr"})], kind: "assigned", multiStore: false});
+    assert.deepEqual(out.recipients[0], {uid: "col", language: "fr",
+      title: "Crédit à encaisser", body: "Fatou Bah doit $40.00 · vente"});
+    assert.equal(inv.planCreditNotification({sale, users: [person("col")],
+      kind: "assigned"}).recipients[0].body, "Fatou Bah owes $40.00 · sale");
+  });
+
+  it("tells nobody when the collector did it, switched it off, or is " +
+      "someone else's", () => {
+    const quiet = (users, actorUid = "") => inv.planCreditNotification({
+      sale, users, actorUid, kind: "assigned"}).recipients;
+    assert.deepEqual(quiet([person("col")], "col"), []);
+    assert.deepEqual(quiet([person("col", {notificationPreferences:
+      {inventoryCredit: false}})]), []);
+    assert.deepEqual(quiet([person("col", {businessId: "other"})]), []);
+    assert.deepEqual(quiet([]), []);
+    // Muting sale alerts does not mute credit.
+    assert.equal(quiet([person("col", {notificationPreferences:
+      {inventorySales: false}})]).length, 1);
+  });
+
+  it("reminds the collector and the owners when overdue", () => {
+    const out = inv.planCreditNotification({sale, kind: "overdue",
+      multiStore: true, ownerUids: ["named-owner"],
+      users: [person("col"), person("own", {role: "businessOwner"}),
+        person("other-staff"), {id: "named-owner", role: "businessOwner"}]});
+    assert.deepEqual(out.recipients.map((r) => r.uid),
+        ["col", "named-owner", "own"]);
+    assert.equal(out.recipients[0].title, "Credit overdue");
+    assert.equal(out.recipients[0].body,
+        "Fatou Bah owes $40.00 · Annex · due 10/10/2026");
+    assert.deepEqual(out.copy.fr, {title: "Crédit en retard",
+      body: "Fatou Bah doit $40.00 · Annex · échéance 10/10/2026"});
+    // The collector being an owner is told once.
+    const once = inv.planCreditNotification({sale, kind: "overdue",
+      users: [person("col", {role: "businessOwner"})]});
+    assert.deepEqual(once.recipients.map((r) => r.uid), ["col"]);
+  });
+
+  it("reminds an open overdue credit at most every 3 days", () => {
+    const now = Date.parse("2026-10-16T12:00:00Z");
+    const day = 24 * 60 * 60 * 1000;
+    const open = {...sale, creditStatus: "open"};
+    assert.equal(inv.shouldRemindCredit(open, "2026-10-16", now), true);
+    assert.equal(inv.shouldRemindCredit({...open,
+      lastCreditReminderAt: now - day}, "2026-10-16", now), false);
+    assert.equal(inv.shouldRemindCredit({...open,
+      lastCreditReminderAt: now - 3 * day}, "2026-10-16", now), true);
+    // The daily run may start a few minutes earlier than three days ago.
+    assert.equal(inv.shouldRemindCredit({...open,
+      lastCreditReminderAt: {toMillis: () => now - 3 * day + 60 * 1000}},
+    "2026-10-16", now), true);
+    // Due today is not overdue yet; no due date never is.
+    assert.equal(inv.shouldRemindCredit({...open, credit: {...sale.credit,
+      dueDate: "2026-10-16"}}, "2026-10-16", now), false);
+    assert.equal(inv.shouldRemindCredit({...open, credit: {...sale.credit,
+      dueDate: ""}}, "2026-10-16", now), false);
+    assert.equal(inv.shouldRemindCredit({...open, voided: true},
+        "2026-10-16", now), false);
+    assert.equal(inv.shouldRemindCredit({...open, creditPaidCents: 5000},
+        "2026-10-16", now), false);
+  });
+
+  it("writes due dates month first in English, day first in French", () => {
+    assert.equal(inv.dueDateText("2026-03-04", "en"), "03/04/2026");
+    assert.equal(inv.dueDateText("2026-03-04", "fr"), "04/03/2026");
+    assert.equal(inv.dueDateText("nope", "en"), "");
+  });
+});
+
+describe("inventory: credit sources", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "index.js"),
+      "utf8");
+  const between = (start, end) => {
+    const from = source.indexOf(start);
+    assert.ok(from >= 0, start);
+    const to = end ? source.indexOf(end, from) : source.indexOf("\n);\n", from);
+    assert.ok(to > from, end || start);
+    return source.slice(from, to);
+  };
+
+  it("pushes credit only, through the credit preference", () => {
+    const fn = between("async function notifyInventoryCredit(",
+        "exports.recordInventoryCreditPayment = ");
+    assert.match(fn,
+        /preferenceKey: inventory\.CREDIT_NOTIFICATION_PREFERENCE/);
+    assert.match(fn, /pushOnly: true/);
+  });
+
+  it("claims an overdue reminder before sending it", () => {
+    const fn = between("async function remindInventoryCredit(",
+        "exports.remindOverdueInventoryCredit = ");
+    assert.ok(fn.indexOf("lastCreditReminderAt") <
+      fn.indexOf("notifyInventoryCredit("));
+  });
+
+  it("pages the morning job across businesses by due date", () => {
+    const fn = between("exports.remindOverdueInventoryCredit = ");
+    assert.match(fn,
+        /where\("creditStatus", "==", inventory\.CREDIT_STATUS\.OPEN\)/);
+    assert.match(fn, /where\("credit\.dueDate", "<", todayKey\)/);
+    assert.match(fn, /orderBy\("credit\.dueDate"\)/);
+    assert.match(fn, /drainPages\(/);
+    assert.match(fn, /timeZone: inventory\.CREDIT_ZONE/);
+  });
+
+  it("recomputes the collected total from the live payments", () => {
+    for (const name of ["recordInventoryCreditPayment",
+      "revertInventoryCreditPayment"]) {
+      const fn = between(`exports.${name} = `);
+      assert.match(fn, /runTransaction/);
+      assert.match(fn, /sumContainerLivePayments\(/);
+      assert.match(fn, /requireInventorySaleStoreIn\(/);
+    }
+    assert.match(between("exports.voidInventorySale = "),
+        /credit_has_payments/);
   });
 });
