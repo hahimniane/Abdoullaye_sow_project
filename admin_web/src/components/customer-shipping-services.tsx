@@ -38,6 +38,8 @@ import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { PaymentHoldNotice } from "@/components/payment-hold-notice";
 import { RecipientNameField } from "@/components/recipient-name-field";
 import { ServiceRequestForm } from "@/components/service-request-form";
+import { PackageRequestForm } from "@/components/package-request-form";
+import type { RequestOption } from "@/lib/package-requests";
 import { SearchableSelect } from "@/components/searchable-select";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import {
@@ -255,6 +257,8 @@ type CustomerShippingServicesProps = {
     id: string;
     trackingCode: string;
   }) => void;
+  /** `/r/<slug>`: the request form opens on that business. */
+  requestSlug?: string;
 };
 
 const SENT_QUOTE_REQUEST_KEY = "laawol:sent-freight-quote-request";
@@ -519,6 +523,7 @@ export function CustomerShippingServices({
   guestReady = false,
   onAuthenticationRequired,
   onTransportCreated,
+  requestSlug = "",
 }: CustomerShippingServicesProps) {
   const [service, setService] = useState<ShippingService>(initialService);
   const [destinationOptions, setDestinationOptions] = useState<
@@ -651,8 +656,8 @@ export function CustomerShippingServices({
         <ServiceTab
           active={service === "barrel"}
           icon={<Box size={20} />}
-          label="Barrel shipping"
-          note="Send one or more barrels"
+          label="Send a package"
+          note="Barrels, boxes and more"
           onClick={() => setService("barrel")}
         />
         <ServiceTab
@@ -690,12 +695,13 @@ export function CustomerShippingServices({
       ) : (
         <>
           {service === "barrel" && (
-            <BarrelOrderForm
+            <BarrelRequestEntry
               authenticated={authenticated}
+              barrelOptions={barrelOptions}
               guestReady={guestReady}
               onAuthenticationRequired={onAuthenticationRequired}
-              options={barrelOptions}
               profile={profile}
+              requestSlug={requestSlug}
             />
           )}
           {service === "freight" && (
@@ -723,6 +729,64 @@ export function CustomerShippingServices({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * "Send a package" (docs/PACKAGE_REQUESTS.md §2): the request flow - an
+ * estimate first, payment at drop-off or pickup. A business that keeps card
+ * booking for barrels lets the customer choose to pay barrels now by card,
+ * which is the existing barrel order, narrowed to that business and country.
+ */
+function BarrelRequestEntry({
+  authenticated,
+  barrelOptions,
+  guestReady,
+  onAuthenticationRequired,
+  profile,
+  requestSlug,
+}: {
+  authenticated: boolean;
+  barrelOptions: DestinationOption[];
+  guestReady: boolean;
+  onAuthenticationRequired?: () => void | boolean | Promise<boolean | void>;
+  profile: UserProfile;
+  requestSlug: string;
+}) {
+  const [card, setCard] = useState<RequestOption | null>(null);
+  if (card) {
+    const options = barrelOptions.filter(
+      (option) =>
+        option.businessId === card.businessId &&
+        option.country.id === card.country.id,
+    );
+    return (
+      <>
+        <button
+          className="text-button"
+          onClick={() => setCard(null)}
+          type="button"
+        >
+          Back to pay at drop-off or pickup
+        </button>
+        <BarrelOrderForm
+          authenticated={authenticated}
+          guestReady={guestReady}
+          onAuthenticationRequired={onAuthenticationRequired}
+          options={options}
+          profile={profile}
+        />
+      </>
+    );
+  }
+  const signedIn = authenticated && profile.role === "customer";
+  return (
+    <PackageRequestForm
+      onPayByCard={setCard}
+      senderName={signedIn ? text(profile.fullName, "") : ""}
+      senderPhone={signedIn ? text(profile.phone, "") : ""}
+      slug={requestSlug}
+    />
   );
 }
 
