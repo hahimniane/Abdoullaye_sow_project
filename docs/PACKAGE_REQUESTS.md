@@ -237,3 +237,381 @@ link — never the code alone), `handoff: bring_in|collect`, `locationId` +
   4 hours EN, 5 business, 6 pieces FR, 7 hours FR, 8 request code; button
   `/e/{{1}}`.
 - Sends wait (waiting_for_template on Meta 132001) until approved.
+
+## 8. API contract (phase 2)
+
+The contract every client (customer website, business console, Flutter app)
+builds against. Server: `my_flutter_app/functions` — pure rules in
+`package_requests.js`, the line the "Received" tap writes in
+`request_receive.js`, callables and the sweep in `index.js`. If this section
+and the code disagree, the code is wrong: fix it, or change both together.
+
+### 8.1 Conventions
+
+- Every callable is an `onCall` with `{enforceAppCheck, cors: true,
+  invoker: "public"}` (App Check enforced in production; the emulator skips
+  it). All of them need a signed-in caller (`unauthenticated` otherwise); a
+  web customer with no account signs in **anonymously** first
+  (`signInAnonymously`), exactly as guest checkout does.
+- Money is US dollars in **whole cents** (int). Dates a person picks are
+  `"YYYY-MM-DD"` strings in the **business's time zone**
+  (`America/New_York` unless the business's settings say otherwise).
+  Timestamps in callable responses are ISO-8601 strings; in Firestore they
+  are Timestamps.
+- Phones are E.164 (`^\+[1-9]\d{7,14}$`), entered with the shared country
+  picker (`customer-phone-field.tsx` / `country_phone_field.dart`).
+- Refusals are `HttpsError`s with an English `message` and
+  `details.reason` (one code). Validation failures are `invalid-argument`
+  with `details.reasons: string[]` (every problem at once) and
+  `details.reason` = the first one. Clients map the code to their own copy
+  (both languages); never show `message` raw to a French reader.
+- Staff callables take `{businessId, requestId, ...}` and need the
+  **containers** section (`requireBusinessPermission`; owners and admins
+  hold every section). `permission-denied` otherwise; a request of another
+  business is `not-found` `request_not_found`.
+
+### 8.2 Statuses
+
+| status | meaning | open? |
+| --- | --- | --- |
+| `new` | sent by the customer, no estimate yet (some piece has no price) | yes |
+| `estimate_sent` | an estimate version is waiting for the customer | yes |
+| `confirmed` | the customer (or staff by phone, or a card payment) agreed: **Expected** in the Waiting list | yes |
+| `received` | staff tapped Received; `lineId` names the `containerLines` line | no |
+| `declined` | the business declined (`declineReason`) | no |
+| `customer_declined` | the customer said "No thanks" | no |
+| `cancelled` | staff cancelled (`declineReason`), or the card order was refunded/cancelled | no |
+| `expired` | a timer ran out (§7 Timers) | no |
+
+A request whose pieces are **all barrels with a barrel price** for the
+destination is created already `estimate_sent` with an automatic version 1
+(`estimate.auto: true`, `sentByName: ""`), and its estimate WhatsApp is
+queued at once. A barrel with no price for the destination is a piece that
+needs an estimate (`estimateCents: null`).
+
+### 8.3 Firestore
+
+`packageRequests/{requestId}` — **server writes only** (`allow write: if
+false`). Read by: the business's people with the containers section
+(`canManageBusinessSection(uid, businessId, 'containers')`, so a staff query
+must filter `where businessId == b`), platform admins, and the signed-in
+customer who sent it (`sender.uid == auth.uid`; anonymous web senders have
+no `sender.uid` and read through `getPackageRequestByToken`). Fields:
+
+| field | type | notes |
+| --- | --- | --- |
+| `businessId`, `businessName` | string | name is a snapshot for lists |
+| `code` | string | `R-XXXXX` (5 of `23456789BCDFGHJKMNPQRSTVWXYZ`), unique |
+| `token` | string | 43-char base64url (256 bits); the `/e/<token>` link |
+| `handoff` | `bring_in` \| `collect` | |
+| `locationId`, `location` | string, `{id, label, address}` | bring_in only; snapshot of the drop-off |
+| `plannedDate` | `"YYYY-MM-DD"` \| `""` | bring_in only |
+| `pickup` | `{address, date, window, note}` \| null | collect only; `window`: `morning` \| `afternoon` \| `evening` |
+| `sender` | `{name, phoneE164, uid?}` | `uid` only for a non-anonymous caller |
+| `receiver` | `{name, phoneE164}` | |
+| `submittedByUid` | string | the session that sent it (owner of its photo uploads) |
+| `destinationCountryId`, `destinationCountryName` | string | |
+| `pieces[]` | `{id, kind, description, sizeIn, photoPaths[], estimateCents}` | `id` `p1`…`p20`; `kind` `barrel` \| `box` \| `other`; `sizeIn` `{l,w,h}` inches or null; `estimateCents` int \| null (prefill: barrel price) |
+| `pieceCount`, `barrelPieces`, `packagePieces` | int | box + other = packages |
+| `status` | §8.2 | |
+| `estimate` | `{version, totalCents, pieces[{id,cents}], pickupFeeCents, pickupSchedule, note, sentByUid, sentByName, sentAt, auto}` \| null | latest version; `pickupSchedule` `{date, window}` \| null (collect) |
+| `estimateHistory[]` | same shape | every version ever sent, oldest first |
+| `confirmedVersion`, `confirmedAt`, `confirmedVia` | int \| null, Timestamp \| null, `link` \| `staff_phone` \| `card` \| "" | |
+| `confirmedTotalCents` | int \| null | total of the confirmed version |
+| `priceDropped` | bool | a version at or below the confirmed total was sent after confirmation (request stayed confirmed; the `/e/` page says so) |
+| `lock` | `{uid, name, untilMs}` \| null | estimate lock; live while `untilMs > now` |
+| `reminders` | `{estimate24hAt?, dropoff3dAt?, staffAlert3dAt?}` | each sent at most once |
+| `expiresAt` | Timestamp \| null | when an open request expires (§7 Timers) |
+| `nextAction`, `nextActionAt` | string, Timestamp \| null | server timer bookkeeping (ignore in clients) |
+| `lineId`, `trackingCode`, `receivedAt` | string, string, Timestamp | set by Received |
+| `payment` | `{timing: at_handoff \| card, paidCents}` | card = paid online (card barrel order) |
+| `cardOrder` | `{orderId, shipmentId}` \| null | card barrel orders only |
+| `language` | `en` \| `fr` | the page language the customer used |
+| `idempotencyKey` | string | |
+| `declineReason` | string | decline / cancel / customer's "No thanks" note |
+| `whatsapp` | `{update, status, error, atMs}` \| null | the last request message's state (`containerUpdates` statuses) |
+| `whatsappUnreachable` | bool | the last request message failed for good: show "Customer not reachable on WhatsApp" |
+| `history[]` | `{atMs, action, byUid, byName, version?, totalCents?, reason?}` | newest last, capped at 100; `action`: `submitted`, `estimate_sent`, `confirmed_link`, `confirmed_phone`, `confirmed_card`, `customer_declined`, `declined`, `cancelled`, `expired`, `received`, `lock_taken_over`, `reminder_sent` |
+| `closedAt` | Timestamp \| null | when it left the open statuses |
+| `photosDeletedAt` | Timestamp \| null | |
+| `createdAt`, `updatedAt` | Timestamp | |
+
+Queries the clients run (indexes in `firestore.indexes.json`):
+- Console/app Requests and Expected: `packageRequests where businessId == b and status in ["new","estimate_sent","confirmed"] orderBy createdAt desc` (index `businessId, status, createdAt desc`).
+- App "My requests": `packageRequests where sender.uid == uid orderBy createdAt desc` (index `sender.uid, createdAt desc`).
+
+Business settings live on `businesses/{id}` (already server-write only;
+read by the business's people) and are written only by
+`setPackageRequestSettings`:
+
+| field | type |
+| --- | --- |
+| `requestSlug` | string, `[a-z0-9-]{3,40}`, unique (claim doc `packageRequestSlugs/{slug}` = `{businessId}`) |
+| `requestSlugEdits` | int, 0 or 1 (the owner may change the slug once) |
+| `packageRequestSettings.acceptRequests` | bool |
+| `packageRequestSettings.openingHours` | `{[locationId]: {mon..sun: {open: bool, from: "HH:MM", to: "HH:MM"}}}`; location ids are active `officeLocations` ids, or `default` for the headquarters address when the business has none |
+| `packageRequestSettings.pickup` | `{enabled: bool, areas: string}` (areas ≤ 300 chars, required when enabled) |
+| `packageRequestSettings.cardBarrelBooking` | bool, default false |
+| `packageRequestSettings.timeZone` | IANA zone, default `America/New_York` |
+
+Server-only bookkeeping (no client access): `packageRequestSlugs/{slug}`,
+`packageRequestCodes/{code}`, `packageRequestKeys/{hash}` (idempotency).
+
+WhatsApp rows for requests use the existing queue,
+`containerUpdates/req_{requestId}_{update}`, with `requestId`, `lineId: ""`,
+`role: "sender"`, `update` = `estimate_v{n}` | `estimate_reminder` |
+`dropoff_reminder`, and the same statuses (`queued` → `sent`,
+`waiting_for_whatsapp`, `waiting_for_template` until Meta approves, …).
+Readable by the business's people as today.
+
+### 8.4 Storage (photos)
+
+Path: `packageRequestPhotos/{businessId}/{uploaderUid}/{fileId}` where
+`fileId` is `[A-Za-z0-9_-]{8,64}` plus `.jpg`/`.jpeg`/`.png`/`.webp`.
+- **Upload** (before submitting): the customer's own session — an anonymous
+  one on the website, the account on the app — uploads each compressed
+  image (≤ 1.5 MB target; the rule refuses ≥ 2 MB; `image/jpeg`,
+  `image/png` or `image/webp` only) to its own `uploaderUid` folder.
+  `create` only (no overwrite, no delete).
+- **Submit** passes the paths per piece (`photoPaths`, ≤ 5 per piece). The
+  server refuses (`photo_invalid`) a path outside
+  `packageRequestPhotos/{businessId}/{callerUid}/`, a missing file, or a
+  wrong type/size, then tags each file with `metadata.requestId`.
+- **Read**: the uploader, the business's owner and staff with the
+  containers section (token claims), operations admins.
+- **Deleted** by the server 90 days after the line is ready for pickup, or
+  after the request was declined / customer-declined / cancelled / expired.
+
+### 8.5 Customer callables
+
+#### `listPackageRequestOptions`
+`{slug?: string}` → `{business: Business | null, options: Option[]}`.
+Without `slug`: every eligible business × destination. With `slug`: only
+that business (`business` filled for the preselected header; `not-found`
+`business_not_found` for an unknown slug; a business that stopped accepting
+returns `business` with `options: []` and `business.acceptRequests: false`).
+Eligible: business `approved`, `acceptRequests` on, destination
+`isActive == true`, and at least one handoff available.
+```
+Business = {businessId, name, phone, profileImageUrl, slug, acceptRequests}
+Option = {businessId, businessName, businessPhone, profileImageUrl, slug,
+  country: {id, name},
+  barrelPriceCents: int | null,          // null: barrels need an estimate
+  cardBarrelBooking: bool,               // offer "pay now by card" (barrels only)
+  bringIn: {available: bool, locations: [{id, label, address,
+    hours: {mon..sun: {open, from, to}}}]},   // only locations with hours
+  collect: {available: bool, areas: string},
+  timeZone: string}
+```
+
+#### `submitPackageRequest`
+```
+{businessId, destinationCountryId, handoff: "bring_in"|"collect",
+ locationId?, plannedDate?,                       // bring_in
+ pickup?: {address, date, window, note?},         // collect
+ sender: {name, phoneE164}, receiver: {name, phoneE164},
+ pieces: [{kind: "barrel"|"box"|"other", description?, sizeIn?: {l,w,h},
+           photoPaths?: string[]}],               // 1..20
+ language: "en"|"fr", idempotencyKey: string}     // key: 8..80 [A-Za-z0-9_-]
+```
+→ `{success, requestId, code, token, status, totalCents | null, replayed}`.
+The same `idempotencyKey` from the same session within 10 minutes returns
+the first request (`replayed: true`) and writes nothing. Limits: 5 requests
+per hour per sender phone, 20 per hour per address (IP), App Check.
+Refusals:
+- `failed-precondition`: `business_unavailable` (missing / not approved),
+  `requests_off`, `destination_unavailable`, `bring_in_unavailable` (no
+  location with hours), `collect_unavailable`.
+- `invalid-argument` (`details.reasons`): `handoff_invalid`,
+  `location_invalid`, `planned_date_invalid` (not today..+60 days in the
+  business's zone), `planned_day_closed` (the location is closed that
+  weekday), `pickup_address_required`, `pickup_date_invalid`,
+  `pickup_window_invalid`, `sender_name_required`, `sender_phone_invalid`,
+  `receiver_name_required`, `receiver_phone_invalid`, `pieces_required`,
+  `too_many_pieces` (> 20), `piece_kind_invalid`,
+  `piece_description_required` (box/other), `text_too_long` (name 80,
+  description 120, address 200, note 300), `size_invalid` (0 < n ≤ 600, all
+  three or none), `too_many_photos` (> 5 per piece), `photo_invalid`,
+  `language_invalid`, `idempotency_key_invalid`.
+- `resource-exhausted` `rate_limited`.
+
+#### `getPackageRequestByToken`
+`{token}` → `{request: PublicRequest}`; `not-found` `request_not_found`.
+Rate-limited per address. The projection holds no phone numbers of the
+customer:
+```
+PublicRequest = {id, code, status, handoff, language,
+  business: {id, name, phone},
+  destination: {id, name},
+  location: {id, label, address, hours} | null, plannedDate,
+  pickup: {address, date, window, note} | null,
+  sender: {name}, receiver: {name},
+  pieces: [{id, kind, description, sizeIn, photoCount}],
+  estimate: {version, totalCents, pieces: [{id, cents}], pickupFeeCents,
+    pickupSchedule, note, sentAt} | null,
+  confirmedVersion, confirmedAt, confirmedVia, priceDropped,
+  declineReason, expiresAt,
+  payment: {timing, paidCents}, trackingCode, receivedAt, timeZone}
+```
+Page states: `estimate_sent` (Confirm / No thanks), `new` (waiting for the
+estimate), `confirmed` (+ `priceDropped` info), `received` (tracking code
+link `/t/<code>`), `declined` / `cancelled` (+ reason), `customer_declined`,
+`expired`.
+
+#### `confirmPackageEstimate`
+`{token, version: int}` → `{success, status: "confirmed", confirmedVersion,
+alreadyConfirmed: bool}`. `version` is the version the page showed.
+- Already `confirmed` → success with `alreadyConfirmed: true` (nothing is
+  written).
+- `estimate_sent` and `version != estimate.version` → `failed-precondition`
+  `estimate_changed` with `details.currentVersion` ("This estimate changed —
+  see the new one").
+- `new` (nothing to confirm) → `failed-precondition` `estimate_missing`.
+- Closed → `failed-precondition` `request_closed` with `details.status`.
+
+#### `declinePackageEstimate`
+`{token, reason?}` (reason ≤ 300) → `{success, status: "customer_declined"}`.
+Open requests only (`request_closed` otherwise; idempotent when already
+`customer_declined`). Card-paid requests: `card_order` (cancel the card
+order instead).
+
+### 8.6 Business callables
+
+#### `setPackageRequestSettings` (owner or admin only)
+`{businessId, acceptRequests: bool, openingHours, pickup: {enabled, areas},
+cardBarrelBooking: bool, requestSlug?: string}` → `{success, requestSlug,
+requestLink, settings}`. The slug is assigned from the business name on the
+first save when none exists; sending a different `requestSlug` changes it
+once. `permission-denied` for staff. Reasons (`invalid-argument` unless
+noted): `slug_invalid`, `slug_taken` (`already-exists`), `slug_locked`
+(`failed-precondition`, already changed once), `hours_invalid`,
+`location_unknown`, `pickup_areas_required`, `text_too_long`.
+Turning `acceptRequests` off (or deactivating a destination) never touches
+open requests: they continue; only new submissions are refused.
+`requestLink` = `https://laawoldigital.com/r/<slug>` (redirects to
+`https://customer.laawoldigital.com/r/<slug>`).
+
+#### `getPackageRequestLinkQr`
+`{businessId}` → `{url, pngDataUrl}` (a 1024 px PNG QR of the link). Needs
+the containers section. `failed-precondition` `slug_missing` before the
+first settings save.
+
+#### `startPackageEstimate`
+`{businessId, requestId, takeover?: bool}` → `{success, lock: {uid, name,
+untilMs}, version}` (current estimate version, 0 when none). Takes or
+extends the lock for 15 minutes; call again (heartbeat, e.g. every 5
+minutes while the editor is open) to keep it. Another person's live lock:
+`failed-precondition` `estimate_locked` with `details.lockedByName`,
+`details.untilMs`. An expired lock (15 minutes idle) is simply taken, and
+the takeover is recorded in History. Closed requests: `request_closed`;
+card-paid: `card_order`.
+
+#### `releasePackageEstimate`
+`{businessId, requestId}` → `{success}`. Drops the caller's own lock (no-op
+otherwise).
+
+#### `sendPackageEstimate`
+`{businessId, requestId, baseVersion: int, pieces: [{id, cents: int}],
+pickupFeeCents?: int, pickupSchedule?: {date, window}, note?: string}` →
+`{success, version, status, totalCents, reconfirmRequired, priceDropped}`.
+One transaction: nobody else may hold a live lock (`estimate_locked`);
+`baseVersion` must equal the current version (`estimate_stale`,
+`details.currentVersion`); status must be open and not card-paid
+(`request_closed`, `card_order`). Every piece needs a price
+(`estimate_piece_missing`; unknown ids `estimate_piece_unknown`; cents 0 ..
+10,000,000 `amount_invalid`; `pickup_fee_invalid` (collect only);
+`pickup_schedule_invalid`; note ≤ 300 `text_too_long`). Writes version + 1,
+appends `estimateHistory` and History, releases the lock, and queues
+`package_estimate_2lang`. Status after: `estimate_sent`, except a
+`confirmed` request whose new total is **≤ the confirmed total** stays
+`confirmed` (`priceDropped: true`; the message still goes so the customer
+is told); a higher total sends it back to `estimate_sent`
+(`reconfirmRequired: true`).
+
+#### `confirmPackageRequestByPhone`
+`{businessId, requestId, version: int}` → `{success, status: "confirmed",
+alreadyConfirmed}`. "Customer agreed by phone": `estimate_sent` with
+`version == estimate.version` (`estimate_changed` otherwise,
+`estimate_missing` for `new`). `confirmedVia: "staff_phone"`, History names
+who.
+
+#### `declinePackageRequest` / `cancelPackageRequest`
+`{businessId, requestId, reason}` (1..300 chars, `reason_required`) →
+`{success, status}`. Decline: `new` / `estimate_sent` → `declined`
+(`request_closed` for others). Cancel: any open status → `cancelled`.
+Card-paid requests: `card_order` (refund the barrel order instead; that
+cancels the request). No WhatsApp; the reason shows on the `/e/` page and
+in the app.
+
+#### `receivePackageRequest`
+`{businessId, requestId, pieces: [{id, priceCents: int | null}],
+payOnArrival?: bool, payment?: {amountCents, method, receivedByStaffId,
+note?}}` → `{success, lineId, trackingCode, paidCents, paymentId,
+alreadyReceived}`. Any open status (a customer may walk in before
+confirming). One transaction creates ONE `containerLines` line, waiting
+(`containerId: ""`, `containerStatus: "waiting"`), with the counter's
+fields plus `pieces[] {id, kind, description, sizeIn, priceCents}`,
+`pieceCount`, `barrelPieces`, `packagePieces`, `carPieces: 0`,
+`source: "request"` (`"card_order"` for card-paid), `requestId`,
+`receivedAt`, `rootLineId` = its own id, `partIndex: 1`; `priceCents` = sum
+of the piece prices (null when none is priced; `price_required` when some
+but not all are); summary `kind` `barrels` when every piece is a barrel,
+else `other`, `quantity` = piece count. The optional payment follows
+`addWaitingPackage`'s rules and reasons. A card-paid request records its
+online payment as a `containerLinePayments` row (`method: "other"`, note
+"Paid online by card") and cannot also take `payment`. A second tap returns
+the same line (`alreadyReceived: true`). Then the bilingual `received`
+WhatsApp is queued for sender and receiver as for any new package.
+
+### 8.7 Notifications (bell + push)
+
+To the business owner (`ownerUid`) and every staff member of the business
+with the containers section, through `sendPreferenceNotification`
+(`preferenceKey: "businessActivity"`, push + inbox, no email/SMS):
+`users/{uid}/notifications/{id}` = `{title, body, read: false, createdAt,
+data}` with
+```
+data = {type: "package_request", event, requestId, businessId, code,
+        relatedCollection: "packageRequests", relatedId: requestId}
+event = "new" | "confirmed" | "customer_declined" | "stale_new" | "card_paid"
+```
+Title/body in the recipient's language (`recipientLanguage`). A tap opens
+the Requests view (console: Containers → Requests) on that request.
+
+### 8.8 Links and pages
+
+- `https://laawoldigital.com/r/<slug>` → 302 to
+  `https://customer.laawoldigital.com/r/<slug>` (public_site/.htaccess).
+- `https://customer.laawoldigital.com/r/<slug>`: the request form with that
+  business chosen (also `?service=package-request&r=<slug>`).
+- `https://customer.laawoldigital.com/?service=package-request`: the form
+  from the country step.
+- `https://customer.laawoldigital.com/e/<token>`: the estimate page (also
+  `?service=package-estimate&t=<token>`); the WhatsApp button's URL.
+- The customer host serves `index.html` for these paths as it does for
+  `/t/` and `/i/`; the router reads the path.
+
+### 8.9 Scheduled work
+
+`sweepPackageRequests` (every 60 minutes, America/New_York) processes
+requests whose `nextActionAt` has passed (ordered, paged, under a deadline):
+the 24 h estimate reminder (once), expiry 14 days after the last version,
+the 3-day staff alert for `new` (once), expiry 30 days after creation for
+`new`, the drop-off reminder (`package_dropoff_reminder_2lang`, bring_in,
+3 days after `plannedDate` in the business zone, once), expiry of
+`confirmed` 30 days after `plannedDate` / pickup date or confirmation,
+whichever is later (card-paid requests do not expire), and photo deletion
+(§8.4). Expiry writes `status: "expired"`, `closedAt`, History.
+
+### 8.10 Card barrel orders
+
+For a business with `cardBarrelBooking` on, the customer may pay barrels by
+card through the existing barrel order (`createBarrelOrderPaymentIntent`).
+When a `barrelShipments` record of that business becomes paid
+(`paymentStatus` → `succeeded`), the server creates
+`packageRequests/card_{shipmentId}`: `status: "confirmed"`,
+`confirmedVia: "card"`, `payment {timing: "card", paidCents}`, the barrels
+as pieces priced at the paid unit price, `cardOrder {orderId, shipmentId}`
+— it shows in Expected as "Paid online". When that shipment is cancelled or
+refunded (`status` or `paymentStatus` `cancelled`/`refunded`), the request
+(if still open) becomes `cancelled`.
