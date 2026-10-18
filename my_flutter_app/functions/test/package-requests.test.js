@@ -11,6 +11,7 @@ const {describe, it} = require("node:test");
 
 const pr = require("../package_requests");
 const rr = require("../request_receive");
+const volume = require("../volume_counts");
 const {
   REQUEST_TEMPLATE,
   REQUEST_TEMPLATE_VARIABLES,
@@ -884,21 +885,73 @@ describe("the line Received writes (§7 line fields)", () => {
     assert.equal(line.source, "card_order");
   });
 
-  it("carries a collected request's pickup fee inside the piece prices", () => {
+  it("keeps a collected request's pickup fee beside the pieces", () => {
     const collect = {...request, handoff: "collect",
       estimate: {...request.estimate, pickupFeeCents: 2501}};
-    // Spread over the priced pieces, the odd cent on the first: the line
-    // total is still the sum of its pieces, so an edit or a split keeps it.
+    // Owner decision 2026-10-18: the pieces open on the estimate's own
+    // prices, the fee is the line's own amount (the same numbers in the
+    // console's and the app's suites).
     assert.deepEqual([...rr.receivePrefillCents(collect)],
-        [["p1", 16251], ["p2", 5750]]);
+        [["p1", 15000], ["p2", 4500]]);
+    assert.equal(rr.receivePrefillPickupFeeCents(collect), 2501);
     const out = rr.cleanReceivePieces([], collect);
-    assert.equal(rr.receivedTotalCents(out.pieces), 22001);
-    // A bring-in request has no fee to carry.
+    const fee = rr.cleanReceivePickupFee(undefined, collect);
+    assert.deepEqual(fee, {pickupFeeCents: 2501, errors: []});
+    assert.equal(rr.receivedTotalCents(out.pieces, fee.pickupFeeCents),
+        22001);
+    const line = rr.requestLineRecord(collect, {lineId: "l", requestId: "r",
+      pieces: out.pieces, staffUid: "s", receivedAt: "TS"});
+    assert.equal(line.pickupFeeCents, 2501);
+    assert.equal(line.priceCents, 22001);
+    assert.deepEqual(line.pieces.map((p) => p.priceCents), [15000, 4500]);
+    // Staff may change it, to anything whole and not negative.
+    assert.deepEqual(rr.cleanReceivePickupFee(2000, collect),
+        {pickupFeeCents: 2000, errors: []});
+    assert.deepEqual(rr.cleanReceivePickupFee(0, collect),
+        {pickupFeeCents: 0, errors: []});
+    for (const bad of [-1, 12.5, "", "abc"]) {
+      assert.deepEqual(rr.cleanReceivePickupFee(bad, collect).errors,
+          ["pickup_fee_invalid"], String(bad));
+    }
+    const typed = rr.requestLineRecord(collect, {lineId: "l", requestId: "r",
+      pieces: out.pieces, pickupFeeCents: 2000, staffUid: "s",
+      receivedAt: "TS"});
+    assert.equal(typed.priceCents, 21500);
+    // A bring-in request has no fee: none prefilled, none taken.
     assert.deepEqual([...rr.receivePrefillCents(request)],
         [["p1", 15000], ["p2", 4500]]);
-    // Nothing priced: nothing to carry it on; staff type the prices.
+    assert.equal(rr.receivePrefillPickupFeeCents(request), 0);
+    assert.deepEqual(rr.cleanReceivePickupFee(2000, request).errors,
+        ["pickup_fee_invalid"]);
+    assert.deepEqual(rr.cleanReceivePickupFee(0, request),
+        {pickupFeeCents: 0, errors: []});
+    // Nothing priced yet: the fee waits on the line, no total until the
+    // pieces have prices.
     const unpriced = {...collect, estimate: {pickupFeeCents: 2500},
       pieces: [{id: "p1", kind: "box", description: "TV"}]};
     assert.deepEqual([...rr.receivePrefillCents(unpriced)], [["p1", null]]);
+    const waiting = rr.requestLineRecord(unpriced, {lineId: "l",
+      requestId: "r", staffUid: "s", receivedAt: "TS"});
+    assert.equal(waiting.pickupFeeCents, 2500);
+    assert.equal(waiting.priceCents, null);
+  });
+
+  it("counts the same pieces with or without a pickup fee", () => {
+    const collect = {...request, handoff: "collect",
+      estimate: {...request.estimate, pickupFeeCents: 2000}};
+    const withFee = rr.requestLineRecord(collect, {lineId: "l",
+      requestId: "r", staffUid: "s", receivedAt: "TS"});
+    const without = rr.requestLineRecord(collect, {lineId: "l",
+      requestId: "r", pickupFeeCents: 0, staffUid: "s", receivedAt: "TS"});
+    for (const key of ["pieceCount", "barrelPieces", "packagePieces",
+      "carPieces", "quantity"]) {
+      assert.equal(withFee[key], without[key], key);
+    }
+    assert.deepEqual(volume.linePieces(withFee), volume.linePieces(without));
+    // Changing only the fee touches no month's rollup and no container's.
+    const stored = {...without, businessId: "b1", createdAt: new Date()};
+    assert.deepEqual(volume.lineWriteTargets({before: stored,
+      after: {...stored, pickupFeeCents: 2000, priceCents: 21500},
+      id: "l"}), {months: [], containerIds: []});
   });
 });

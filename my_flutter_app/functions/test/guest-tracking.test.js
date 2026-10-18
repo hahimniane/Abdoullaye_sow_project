@@ -169,8 +169,8 @@ test("a container line shows every part of its group and the group's money",
         {trackingCode: "CL-K7M4P2-2", stage: "waiting_container",
           pieceCount: 1, priceCents: 10000},
       ]);
-      assert.deepEqual(result.payment,
-          {priceCents: 30000, paidCents: 25000, balanceCents: 5000});
+      assert.deepEqual(result.payment, {priceCents: 30000,
+        pickupFeeCents: 0, paidCents: 25000, balanceCents: 5000});
       assert.ok(!JSON.stringify(result).includes("box1"));
       // A legacy line alone: its own pieces, price and paid.
       const legacy = publicGuestTrackingRecord({id: "old",
@@ -180,8 +180,29 @@ test("a container line shows every part of its group and the group's money",
       assert.equal(legacy.pieceCount, 3);
       assert.deepEqual(legacy.parts, [{trackingCode: "CL-B2C3D4",
         stage: "booked", pieceCount: 3, priceCents: 9000}]);
-      assert.deepEqual(legacy.payment,
-          {priceCents: 9000, paidCents: 3000, balanceCents: 6000});
+      assert.deepEqual(legacy.payment, {priceCents: 9000,
+        pickupFeeCents: 0, paidCents: 3000, balanceCents: 6000});
+    });
+
+test("a collected package's pickup fee is told apart, once, on the page",
+    () => {
+      // Barrel $90 on the root with the $20 fee; the box $40 split off.
+      const root = {rootLineId: "root", trackingCode: "CL-K7M4P2",
+        containerStatus: "loading", containerId: "box1", priceCents: 11000,
+        pickupFeeCents: 2000, paidCents: 5000,
+        pieces: [{kind: "barrel", priceCents: 9000}]};
+      const part = {rootLineId: "root", partIndex: 2,
+        trackingCode: "CL-K7M4P2-2", containerStatus: "waiting",
+        priceCents: 4000, pickupFeeCents: 0,
+        pieces: [{kind: "box", description: "Clothes", priceCents: 4000}]};
+      const group = lineGroupSummary([{id: "root", line: root},
+        {id: "part", line: part}], "root");
+      for (const [id, data] of [["root", root], ["part", part]]) {
+        const result = publicGuestTrackingRecord({id, service: "container",
+          data, group});
+        assert.deepEqual(result.payment, {priceCents: 15000,
+          pickupFeeCents: 2000, paidCents: 5000, balanceCents: 10000});
+      }
     });
 
 test("a part code is found typed without its dashes", () => {

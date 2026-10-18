@@ -980,6 +980,298 @@
    "expected": null
   },
   {
+   "fn": "lineTotalCents",
+   "args": [
+    [
+     {
+      "priceCents": 9000
+     },
+     {
+      "priceCents": 4000
+     }
+    ],
+    2000
+   ],
+   "note": "pieces plus the pickup fee: 90 + 40 + 20",
+   "expected": 15000
+  },
+  {
+   "fn": "lineTotalCents",
+   "args": [
+    [
+     {
+      "priceCents": 9000
+     },
+     {
+      "priceCents": 4000
+     }
+    ],
+    null
+   ],
+   "note": "no fee is the pieces' sum",
+   "expected": 13000
+  },
+  {
+   "fn": "lineTotalCents",
+   "args": [
+    [
+     {
+      "priceCents": null
+     }
+    ],
+    2000
+   ],
+   "note": "a fee alone is not a price",
+   "expected": null
+  },
+  {
+   "fn": "lineTotalCents",
+   "args": [
+    [
+     {
+      "priceCents": 0
+     }
+    ],
+    2000
+   ],
+   "note": "free pieces, the fee is the total",
+   "expected": 2000
+  },
+  {
+   "fn": "lineTotalCents",
+   "args": [
+    [
+     {
+      "priceCents": 0
+     }
+    ],
+    0
+   ],
+   "note": "nothing at all is no price",
+   "expected": null
+  },
+  {
+   "fn": "lineTotalCents",
+   "args": [
+    [
+     {
+      "priceCents": 9000
+     }
+    ],
+    -5
+   ],
+   "note": "a bad fee counts as none",
+   "expected": 9000
+  },
+  {
+   "fn": "pickupFeeOf",
+   "args": [
+    2000
+   ],
+   "note": "whole cents",
+   "expected": 2000
+  },
+  {
+   "fn": "pickupFeeOf",
+   "args": [
+    null
+   ],
+   "note": "absent is no fee",
+   "expected": 0
+  },
+  {
+   "fn": "pickupFeeOf",
+   "args": [
+    12.5
+   ],
+   "note": "a fraction is no fee",
+   "expected": 0
+  },
+  {
+   "fn": "pickupFeeOf",
+   "args": [
+    -100
+   ],
+   "note": "negative is no fee",
+   "expected": 0
+  },
+  {
+   "fn": "pickupFeeErrors",
+   "args": [
+    null
+   ],
+   "note": "absent is fine",
+   "expected": []
+  },
+  {
+   "fn": "pickupFeeErrors",
+   "args": [
+    0
+   ],
+   "note": "zero is fine",
+   "expected": []
+  },
+  {
+   "fn": "pickupFeeErrors",
+   "args": [
+    -1
+   ],
+   "note": "negative refused",
+   "expected": [
+    "pickup_fee_invalid"
+   ]
+  },
+  {
+   "fn": "pickupFeeErrors",
+   "args": [
+    12.5
+   ],
+   "note": "a fraction refused",
+   "expected": [
+    "pickup_fee_invalid"
+   ]
+  },
+  {
+   "fn": "pickupFeeErrors",
+   "args": [
+    ""
+   ],
+   "note": "blank text refused",
+   "expected": [
+    "pickup_fee_invalid"
+   ]
+  },
+  {
+   "fn": "linePickupFeeCents",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel",
+       "priceCents": 9000
+      }
+     ],
+     "pickupFeeCents": 2000,
+     "priceCents": 11000
+    }
+   ],
+   "note": "a line with pieces carries its fee",
+   "expected": 2000
+  },
+  {
+   "fn": "linePickupFeeCents",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel"
+      }
+     ]
+    }
+   ],
+   "note": "no fee stored",
+   "expected": 0
+  },
+  {
+   "fn": "linePickupFeeCents",
+   "args": [
+    {
+     "kind": "car",
+     "pickupFeeCents": 2000,
+     "priceCents": 500000
+    }
+   ],
+   "note": "a car never has one",
+   "expected": 0
+  },
+  {
+   "fn": "linePickupFeeCents",
+   "args": [
+    {
+     "kind": "barrels",
+     "quantity": 2,
+     "pickupFeeCents": 2000
+    }
+   ],
+   "note": "a legacy line never has one",
+   "expected": 0
+  },
+  {
+   "fn": "piecesLineFields",
+   "args": [
+    [
+     {
+      "kind": "barrel",
+      "priceCents": 9000
+     },
+     {
+      "kind": "box",
+      "description": "Clothes",
+      "priceCents": 4000
+     }
+    ],
+    2000
+   ],
+   "note": "the fee is its own field, inside the total, not in the pieces",
+   "expected": {
+    "pieces": [
+     {
+      "id": "p1",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 9000
+     },
+     {
+      "id": "p2",
+      "kind": "box",
+      "description": "Clothes",
+      "sizeIn": null,
+      "priceCents": 4000
+     }
+    ],
+    "pieceCount": 2,
+    "barrelPieces": 1,
+    "packagePieces": 1,
+    "carPieces": 0,
+    "kind": "other",
+    "quantity": 2,
+    "description": "Barrel, Clothes",
+    "pickupFeeCents": 2000,
+    "priceCents": 15000,
+    "lengthIn": null,
+    "widthIn": null,
+    "heightIn": null
+   }
+  },
+  {
+   "fn": "lineCounts",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel",
+       "priceCents": 9000
+      },
+      {
+       "kind": "box",
+       "description": "Clothes",
+       "priceCents": 4000
+      }
+     ],
+     "pickupFeeCents": 2000,
+     "priceCents": 15000
+    }
+   ],
+   "note": "a pickup fee is no piece",
+   "expected": {
+    "pieceCount": 2,
+    "barrelPieces": 1,
+    "packagePieces": 1,
+    "carPieces": 0
+   }
+  },
+  {
    "fn": "piecesSummaryFields",
    "args": [
     [
@@ -1316,6 +1608,7 @@
     "partCount": 3,
     "pieceCount": 4,
     "priceCents": 30000,
+    "pickupFeeCents": 0,
     "paidCents": 25000,
     "balanceCents": 5000,
     "payOnArrival": false,
@@ -1372,6 +1665,7 @@
     "partCount": 1,
     "pieceCount": 2,
     "priceCents": 5000,
+    "pickupFeeCents": 0,
     "paidCents": 5000,
     "balanceCents": 0,
     "payOnArrival": false,
@@ -1409,6 +1703,7 @@
     "partCount": 1,
     "pieceCount": 2,
     "priceCents": null,
+    "pickupFeeCents": 0,
     "paidCents": 0,
     "balanceCents": 0,
     "payOnArrival": true,
@@ -1418,6 +1713,127 @@
       "trackingCode": "",
       "partIndex": 1,
       "pieceCount": 2,
+      "priceCents": null,
+      "containerId": "",
+      "containerStatus": ""
+     }
+    ]
+   }
+  },
+  {
+   "fn": "lineGroupSummary",
+   "args": [
+    [
+     {
+      "id": "root",
+      "line": {
+       "rootLineId": "root",
+       "partIndex": 1,
+       "trackingCode": "CL-K7M4P2",
+       "priceCents": 11000,
+       "pickupFeeCents": 2000,
+       "paidCents": 5000,
+       "containerId": "box1",
+       "containerStatus": "loading",
+       "pieces": [
+        {
+         "kind": "barrel",
+         "priceCents": 9000
+        }
+       ]
+      }
+     },
+     {
+      "id": "part2",
+      "line": {
+       "rootLineId": "root",
+       "partIndex": 2,
+       "trackingCode": "CL-K7M4P2-2",
+       "priceCents": 4000,
+       "pickupFeeCents": 0,
+       "paidCents": 0,
+       "containerId": "",
+       "containerStatus": "waiting",
+       "pieces": [
+        {
+         "kind": "box",
+         "description": "Clothes",
+         "priceCents": 4000
+        }
+       ]
+      }
+     }
+    ],
+    "root"
+   ],
+   "note": "the pickup fee counts once, on the root",
+   "expected": {
+    "rootLineId": "root",
+    "partCount": 2,
+    "pieceCount": 2,
+    "priceCents": 15000,
+    "pickupFeeCents": 2000,
+    "paidCents": 5000,
+    "balanceCents": 10000,
+    "payOnArrival": false,
+    "parts": [
+     {
+      "id": "root",
+      "trackingCode": "CL-K7M4P2",
+      "partIndex": 1,
+      "pieceCount": 1,
+      "priceCents": 11000,
+      "containerId": "box1",
+      "containerStatus": "loading"
+     },
+     {
+      "id": "part2",
+      "trackingCode": "CL-K7M4P2-2",
+      "partIndex": 2,
+      "pieceCount": 1,
+      "priceCents": 4000,
+      "containerId": "",
+      "containerStatus": "waiting"
+     }
+    ]
+   }
+  },
+  {
+   "fn": "lineGroupSummary",
+   "args": [
+    [
+     {
+      "id": "solo",
+      "line": {
+       "pieces": [
+        {
+         "kind": "barrel",
+         "priceCents": null
+        }
+       ],
+       "pickupFeeCents": 2000,
+       "priceCents": null
+      }
+     }
+    ],
+    "solo"
+   ],
+   "note": "an unpriced line's fee is not owed yet",
+   "expected": {
+    "rootLineId": "solo",
+    "partCount": 1,
+    "pieceCount": 1,
+    "priceCents": null,
+    "pickupFeeCents": 0,
+    "paidCents": 0,
+    "balanceCents": 0,
+    "payOnArrival": false,
+    "parts": [
+     {
+      "id": "solo",
+      "trackingCode": "",
+      "partIndex": 1,
+      "pieceCount": 1,
       "priceCents": null,
       "containerId": "",
       "containerStatus": ""

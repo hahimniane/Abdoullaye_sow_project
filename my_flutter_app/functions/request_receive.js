@@ -11,7 +11,9 @@
  * so a received request and a counter line holding the same pieces are the
  * same document: pieces normalised, the denormalised counts, the
  * `kind`/`quantity`/`description` summary old apps read, `priceCents` the
- * sum of the pieces, `rootLineId` its own id, `partIndex` 1. Labels ("1 of
+ * sum of the pieces plus the line's own `pickupFeeCents` (a collected
+ * request's fee, never spread into the pieces), `rootLineId` its own id,
+ * `partIndex` 1. Labels ("1 of
  * N"), splitting across containers and monthly volume then treat it like
  * any other line. Only `source` ("request" / "card_order") and `requestId`
  * say where it came from.
@@ -23,11 +25,12 @@
 const {containerLineRecord, lineReceiptFields, LINE_STATUS_WAITING} =
   require("./container_manifest");
 const {
-  distributeCents,
+  lineTotalCents,
   normalizePieces,
+  pickupFeeErrors,
+  pickupFeeOf,
   pieceErrors,
   piecePriceOf,
-  piecesTotalCents,
 } = require("./line_pieces");
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
@@ -37,7 +40,8 @@ const asRow = (value) => value && typeof value === "object" ? value : {};
 // Listed so a test can check nothing is missing.
 const REQUEST_LINE_FIELDS = Object.freeze([
   "pieces", "pieceCount", "barrelPieces", "packagePieces", "carPieces",
-  "source", "requestId", "receivedAt", "rootLineId", "partIndex",
+  "pickupFeeCents", "source", "requestId", "receivedAt", "rootLineId",
+  "partIndex",
 ]);
 
 // The request's own cap (§4 "max 20 pieces per request"); the load that
@@ -58,11 +62,10 @@ const RECEIVE_ERROR_CODES = Object.freeze({
 
 /**
  * What each request piece is priced at before staff touch anything: the
- * estimate's price for it (else the piece's own `estimateCents`), and - for
- * a collected request - the estimate's pickup fee spread over the priced
- * pieces (distributeCents: the odd cents on the first ones). A line's total
- * is the sum of its pieces (§1), so the fee rides inside the piece prices
- * rather than beside them, where an edit or a split would lose it.
+ * estimate's price for it, else the piece's own `estimateCents`. The pickup
+ * fee is NOT in here: it is the line's own amount beside the pieces
+ * (receivePrefillPickupFeeCents, owner decision 2026-10-18), so the bill
+ * reads "Barrel $90 · Box $40 · Pickup fee $20 · Total $150".
  *
  * The console's `receivePrefillCents` (package-requests.ts) and the app's
  * mirror use the same rule, so the Received form opens on these numbers.
@@ -75,17 +78,45 @@ function receivePrefillCents(request) {
   const requested = Array.isArray(row.pieces) ? row.pieces.map(asRow) : [];
   const estimate = new Map((asRow(row.estimate).pieces || [])
       .map((p) => [asRow(p).id, piecePriceOf(asRow(p).cents)]));
-  const prices = new Map(requested.map((piece) => [piece.id,
+  return new Map(requested.map((piece) => [piece.id,
     estimate.has(piece.id) ? estimate.get(piece.id) :
       piecePriceOf(piece.estimateCents)]));
-  const fee = row.handoff === "collect" ?
-    piecePriceOf(asRow(row.estimate).pickupFeeCents) || 0 : 0;
-  const priced = [...prices.keys()].filter((id) => prices.get(id) !== null);
-  if (fee > 0 && priced.length > 0) {
-    const shares = distributeCents(fee, priced.length);
-    priced.forEach((id, i) => prices.set(id, prices.get(id) + shares[i]));
+}
+
+/**
+ * The pickup fee the Received form opens on: the estimate's, for a
+ * collected request; a request brought in has none.
+ *
+ * @param {object} request The stored request.
+ * @return {number} Whole cents, 0 for none.
+ */
+function receivePrefillPickupFeeCents(request) {
+  const row = asRow(request);
+  return row.handoff === "collect" ?
+    pickupFeeOf(asRow(row.estimate).pickupFeeCents) : 0;
+}
+
+/**
+ * The pickup fee staff confirm at Received: absent (or null) keeps the
+ * prefilled one; a collected request takes any whole cents >= 0; a request
+ * brought in takes none but 0.
+ *
+ * @param {*} raw The callable's `pickupFeeCents`.
+ * @param {object} request The stored request.
+ * @return {{pickupFeeCents: number, errors: string[]}} The fee and
+ *   `pickup_fee_invalid` when it cannot be taken.
+ */
+function cleanReceivePickupFee(raw, request) {
+  if (raw === undefined || raw === null) {
+    return {pickupFeeCents: receivePrefillPickupFeeCents(request),
+      errors: []};
   }
-  return prices;
+  const errors = pickupFeeErrors(raw);
+  const fee = errors.length ? 0 : pickupFeeOf(raw);
+  if (!errors.length && fee > 0 && asRow(request).handoff !== "collect") {
+    errors.push("pickup_fee_invalid");
+  }
+  return {pickupFeeCents: errors.length ? 0 : fee, errors};
 }
 
 /**
@@ -181,11 +212,12 @@ function cleanReceivePieces(raw, request) {
 
 /**
  * @param {object[]} pieces From cleanReceivePieces.
- * @return {?number} The line's price: the pieces' sum, as the counter
- *   computes it (null when nothing is priced).
+ * @param {number} [pickupFeeCents] From cleanReceivePickupFee.
+ * @return {?number} The line's price: the pieces' sum plus the pickup fee,
+ *   as the line writer computes it (null when no piece is priced).
  */
-function receivedTotalCents(pieces) {
-  return piecesTotalCents(pieces);
+function receivedTotalCents(pieces, pickupFeeCents = 0) {
+  return lineTotalCents(pieces, pickupFeeCents);
 }
 
 /**
@@ -193,19 +225,24 @@ function receivedTotalCents(pieces) {
  *
  * @param {object} request The stored request.
  * @param {object} args {lineId, requestId, pieces (from cleanReceivePieces;
- *   default: the request's at their prefilled prices), payOnArrival,
- *   staffUid, receivedAt (a Timestamp or server-timestamp sentinel)}.
+ *   default: the request's at their prefilled prices), pickupFeeCents
+ *   (default: the prefilled one), payOnArrival, staffUid, receivedAt (a
+ *   Timestamp or server-timestamp sentinel)}.
  * @return {object} The line, ready to write (the caller adds trackingCode,
  *   paidCents, createdAt, updatedAt and businessId).
  */
 function requestLineRecord(request, args) {
   const pieces = Array.isArray(args.pieces) ? args.pieces :
     cleanReceivePieces([], request).pieces;
+  const pickupFeeCents = args.pickupFeeCents === undefined ||
+    args.pickupFeeCents === null ? receivePrefillPickupFeeCents(request) :
+    pickupFeeOf(args.pickupFeeCents);
   const record = containerLineRecord({
     // In pieces mode the pieces decide the kind; "other" only says "not a
     // car".
     kind: "other",
     pieces,
+    pickupFeeCents,
     ownerKind: "customer",
     customerName: request?.sender?.name,
     customerPhone: request?.sender?.phoneE164,
@@ -236,6 +273,8 @@ module.exports = {
   REQUEST_LINE_FIELDS,
   MAX_RECEIVE_PIECES,
   receivePrefillCents,
+  receivePrefillPickupFeeCents,
+  cleanReceivePickupFee,
   cleanReceivePieces,
   receivedTotalCents,
   requestLineRecord,

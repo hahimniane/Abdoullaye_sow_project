@@ -43,8 +43,10 @@ const {
   pieceErrors,
   pieceSummaryText,
   piecesLineFields,
-  piecesTotalCents,
   normalizePieces,
+  lineTotalCents,
+  pickupFeeErrors,
+  pickupFeeOf,
 } = require("./line_pieces");
 
 const CONTAINER_STATUS = Object.freeze({
@@ -356,9 +358,11 @@ function validateContainerLine(input, paidCents = 0) {
   }
   errors.push(...contactPhoneErrors(input, owner));
   if (pieced) {
-    // Sizes are each piece's own; the price is the sum of the pieces.
-    errors.push(...priceErrors(
-        piecesTotalCents(normalizePieces(input.pieces)), paidCents));
+    // Sizes are each piece's own; the price is the sum of the pieces plus
+    // the line's own pickup fee (never spread into them).
+    errors.push(...pickupFeeErrors(input.pickupFeeCents));
+    errors.push(...priceErrors(lineTotalCents(normalizePieces(input.pieces),
+        input.pickupFeeCents), paidCents));
   } else {
     errors.push(...sizeErrors(input));
     errors.push(...priceErrors(input?.priceCents, paidCents));
@@ -571,11 +575,15 @@ function containerLineRecord(input, opts = {}) {
     // A car, or a line in the old kind/quantity form, has no pieces of its
     // own: readers expand it (linePieces).
     pieces: null,
+    // A collected request's pickup fee: its own amount beside the pieces,
+    // inside priceCents. Only a line with pieces carries one.
+    pickupFeeCents: 0,
   };
   if (pieced) {
     // The pieces decide what the line is, its total and (for one piece) its
     // size; kind/quantity/description are the summary older apps read.
-    Object.assign(record, piecesLineFields(input.pieces));
+    Object.assign(record, piecesLineFields(input.pieces,
+        pickupFeeOf(input.pickupFeeCents)));
   }
   // The counts every line carries, so volume is counted without pieces.
   return {...record, ...lineCounts(record)};
@@ -796,8 +804,10 @@ const LINE_SUBSTANCE_FIELDS = Object.freeze([
 // price is agreed or changed after the box has sailed as often as before.
 // `piecePrices` is the price of each piece: an edit key, never a field (the
 // prices are written inside `pieces`).
+// `pickupFeeCents` is a collected request's pickup fee, kept beside the
+// pieces (an edit that leaves it out keeps the stored one).
 const LINE_PRICE_FIELDS = Object.freeze(
-    ["priceCents", "payOnArrival", "piecePrices"]);
+    ["priceCents", "payOnArrival", "piecePrices", "pickupFeeCents"]);
 const LINE_EDIT_FIELDS = Object.freeze(
     [...LINE_SUBSTANCE_FIELDS, ...LINE_PRICE_FIELDS, ...LINE_CONTACT_FIELDS]);
 
@@ -828,6 +838,7 @@ const LINE_FIELD_LABELS = Object.freeze({
   priceCents: "price",
   payOnArrival: "pay on arrival",
   piecePrices: "piece prices",
+  pickupFeeCents: "pickup fee",
   ...CONTACT_FIELD_LABELS,
 });
 
@@ -1245,6 +1256,8 @@ const CONTAINER_MESSAGES = Object.freeze({
     "Payments are recorded for this package. Revert them first.",
   price_invalid: "Enter the price in dollars, more than zero.",
   price_below_paid: "The price can't be less than what has been paid.",
+  price_below_pickup_fee: "The price can't be less than the pickup fee.",
+  pickup_fee_invalid: "Enter a valid pickup fee.",
   price_required: "Set a price before recording a payment.",
   amount_required: "Enter the amount received.",
   amount_too_large: "That amount is larger than a package can carry.",

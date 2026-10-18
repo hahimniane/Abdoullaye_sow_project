@@ -310,6 +310,68 @@ function piecesTotalCents(pieces) {
   return priced && total > 0 ? Math.min(total, MAX_CENTS) : null;
 }
 
+/**
+ * A pickup fee as stored on a line or typed by staff: whole cents, zero
+ * allowed. Anything else (absent, negative, a fraction) reads as no fee.
+ *
+ * @param {*} value The stored or typed pickupFeeCents.
+ * @return {number} Whole cents, 0 for none.
+ */
+function pickupFeeOf(value) {
+  if (!given(value)) return 0;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= MAX_CENTS ? n : 0;
+}
+
+/**
+ * @param {*} value A typed pickup fee (absent: no fee).
+ * @return {string[]} ["pickup_fee_invalid"] unless it is whole cents >= 0.
+ */
+function pickupFeeErrors(value) {
+  if (value === null || value === undefined) return [];
+  const n = typeof value === "string" && value.trim() === "" ? NaN :
+    Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= MAX_CENTS ? [] :
+    ["pickup_fee_invalid"];
+}
+
+/**
+ * A line's own pickup fee (a collected request's, docs/PACKAGE_REQUESTS.md
+ * §8.6): a line with pieces may carry one beside its pieces; a car or a
+ * legacy line never does. It is never spread into the piece prices and a
+ * split never moves it off the root.
+ *
+ * @param {object} line A stored line.
+ * @return {number} Whole cents, 0 for none.
+ */
+function linePickupFeeCents(line) {
+  const row = asRow(line);
+  return lineHasPieces(row) ? pickupFeeOf(row.pickupFeeCents) : 0;
+}
+
+/**
+ * The line total: the pieces' prices plus the line's pickup fee. Null while
+ * no piece has a price (a fee alone is not a price for the load), or when it
+ * all adds up to nothing.
+ *
+ * @param {object[]} pieces The pieces.
+ * @param {*} [pickupFeeCents] The line's pickup fee (0 by default).
+ * @return {number|null} Whole cents.
+ */
+function lineTotalCents(pieces, pickupFeeCents = 0) {
+  let total = 0;
+  let priced = false;
+  for (const piece of Array.isArray(pieces) ? pieces : []) {
+    const cents = piecePriceOf(asRow(piece).priceCents);
+    if (cents === null) continue;
+    priced = true;
+    total += cents;
+  }
+  if (!priced) return null;
+  total += pickupFeeOf(pickupFeeCents);
+  return total > 0 ? Math.min(total, MAX_CENTS) : null;
+}
+
 const KIND_NAMES = Object.freeze({
   barrel: "Barrel",
   box: "Box",
@@ -345,20 +407,24 @@ function piecesSummaryFields(pieces) {
 
 /**
  * Everything a line stores about its pieces, from validated pieces: the
- * pieces, the counts, the summary for old apps, the total, and - for a
- * single piece - its size as the line's size.
+ * pieces, the counts, the summary for old apps, the pickup fee, the total
+ * (pieces + fee, lineTotalCents), and - for a single piece - its size as
+ * the line's size.
  *
  * @param {*} raw Validated request pieces.
+ * @param {*} [pickupFeeCents] The line's pickup fee (0 by default).
  * @return {object} The fields to merge into the line.
  */
-function piecesLineFields(raw) {
+function piecesLineFields(raw, pickupFeeCents = 0) {
   const pieces = normalizePieces(raw);
   const single = pieces.length === 1 ? pieces[0].sizeIn : null;
+  const fee = pickupFeeOf(pickupFeeCents);
   return {
     pieces,
     ...pieceCounts(pieces),
     ...piecesSummaryFields(pieces),
-    priceCents: piecesTotalCents(pieces),
+    pickupFeeCents: fee,
+    priceCents: lineTotalCents(pieces, fee),
     lengthIn: single ? single.l : null,
     widthIn: single ? single.w : null,
     heightIn: single ? single.h : null,
@@ -491,6 +557,7 @@ function partIndexOf(line) {
  * @param {object[]} entries The group's lines, [{id, line}].
  * @param {string} rootId The root's id.
  * @return {object} {rootLineId, partCount, pieceCount, priceCents,
+ *   pickupFeeCents (the part of priceCents that is the pickup fee),
  *   paidCents, balanceCents, payOnArrival, parts: [{id, trackingCode,
  *   partIndex, pieceCount, priceCents, containerId, containerStatus}]}.
  */
@@ -506,6 +573,7 @@ function lineGroupSummary(entries, rootId) {
   let total = 0;
   let priced = false;
   let paid = 0;
+  let fee = 0;
   let payOnArrival = false;
   for (const {id, line} of rows) {
     if (seen.has(id)) continue;
@@ -514,6 +582,9 @@ function lineGroupSummary(entries, rootId) {
     if (price !== null) {
       priced = true;
       total += price;
+      // Inside that line's price already (it stays on the root): told
+      // apart, never added again.
+      fee += Math.min(linePickupFeeCents(line), price);
     }
     if (id === root) {
       const p = Math.round(Number(line.paidCents));
@@ -538,6 +609,7 @@ function lineGroupSummary(entries, rootId) {
     partCount: parts.length,
     pieceCount: parts.reduce((sum, part) => sum + part.pieceCount, 0),
     priceCents,
+    pickupFeeCents: priceCents === null ? 0 : Math.min(fee, priceCents),
     paidCents: paid,
     balanceCents: priceCents === null ? 0 : Math.max(0, priceCents - paid),
     payOnArrival,
@@ -644,6 +716,10 @@ module.exports = {
   pieceCounts,
   lineCounts,
   piecesTotalCents,
+  pickupFeeOf,
+  pickupFeeErrors,
+  linePickupFeeCents,
+  lineTotalCents,
   piecesSummaryFields,
   piecesLineFields,
   pieceSummaryText,

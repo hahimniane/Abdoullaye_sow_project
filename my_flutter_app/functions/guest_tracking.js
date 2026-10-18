@@ -145,14 +145,16 @@ function publicContainerShipping(stage, container) {
 /**
  * What the public page shows of a container line's group: every part of the
  * package (its code, stage, pieces and price - a part may sail while the
- * rest waits) and, for the whole group, the final price, what was paid and
- * what is still owed (payments live on the root). Nothing about the people.
+ * rest waits) and, for the whole group, the final price (and the pickup fee
+ * inside it), what was paid and what is still owed (payments live on the
+ * root). Nothing about the people.
  *
  * @param {object} line The line that was looked up.
  * @param {object|null} group lineGroupSummary of its group, or null (the
  *   line alone).
  * @param {string} id The line's id.
- * @return {object} {pieceCount, parts, payment}.
+ * @return {object} {pieceCount, parts, payment: {priceCents,
+ *   pickupFeeCents, paidCents, balanceCents}}.
  */
 function publicContainerGroup(line, group, id) {
   const summary = group && Array.isArray(group.parts) && group.parts.length ?
@@ -169,6 +171,8 @@ function publicContainerGroup(line, group, id) {
     })),
     payment: {
       priceCents: summary.priceCents,
+      // The pickup fee inside priceCents, so the page itemises it.
+      pickupFeeCents: summary.pickupFeeCents || 0,
       paidCents: summary.paidCents,
       balanceCents: summary.balanceCents,
     },

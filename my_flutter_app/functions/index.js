@@ -416,6 +416,7 @@ const {
   lineCounts,
   lineGroupSummary,
   lineHasPieces,
+  linePickupFeeCents,
   linePieces,
   lineSourceOf,
   nextPartIndex,
@@ -18256,7 +18257,10 @@ exports.assignContainerLines = onCall(
           lastIndex.set(rootId, index);
           const rootCode = String(root.trackingCode ||
             plan.line.trackingCode || "");
-          const going = piecesLineFields(plan.going);
+          // The pickup fee stays on the line that goes (the root keeps it;
+          // a part never had one); the part that stays has none.
+          const going = piecesLineFields(plan.going,
+              linePickupFeeCents(plan.line));
           const staying = piecesLineFields(plan.staying);
           const isRoot = rootId === plan.id;
           tx.update(lineRef, {
@@ -18445,7 +18449,9 @@ exports.unassignContainerLine = onCall(
 // a whole: its payments are on the root, and the other parts cover some of
 // them. A package with pieces carries its price on its pieces: a changed
 // total is spread evenly over them (the clients edit each piece's price with
-// updateContainerLine; this keeps older app versions working).
+// updateContainerLine; this keeps older app versions working). A pickup fee
+// on the line stays as it is: only what is above it is spread, and the
+// price may not go below it.
 exports.setContainerLinePrice = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -18469,6 +18475,10 @@ exports.setContainerLinePrice = onCall(
         const group = await txLineGroup(tx, db, businessId, lineId, row);
         const floor = paidFloorForLine(groupWith(group, lineId, row), lineId);
         const errors = containerPriceErrors(data.priceCents, floor);
+        const fee = linePickupFeeCents(row);
+        if (fee > 0 && next.priceCents !== null && next.priceCents < fee) {
+          errors.push("price_below_pickup_fee");
+        }
         if (errors.length > 0) {
           throw new HttpsError("invalid-argument", containerMessage(errors),
               {reasons: errors});
@@ -18477,7 +18487,8 @@ exports.setContainerLinePrice = onCall(
         const before = Number.isInteger(row.priceCents) ? row.priceCents : null;
         if (lineHasPieces(row) && before !== next.priceCents) {
           const pieces = linePieces(row);
-          const prices = distributeCents(next.priceCents, pieces.length);
+          const prices = distributeCents(next.priceCents === null ? null :
+            next.priceCents - fee, pieces.length);
           write.pieces = pieces.map((piece, i) =>
             ({...piece, priceCents: prices[i]}));
         }
@@ -41176,7 +41187,11 @@ exports.receivePackageRequest = onCall(
           !Array.isArray(data.pieces)) {
         errors.push("pieces_required");
       }
-      const totalCents = requestReceive.receivedTotalCents(pieces);
+      const fee = requestReceive.cleanReceivePickupFee(
+          data.pickupFeeCents, first);
+      errors.push(...fee.errors);
+      const totalCents = requestReceive.receivedTotalCents(pieces,
+          fee.pickupFeeCents);
       const payment = containerRegistrationPayment(data);
       if (payment && card) errors.push("card_order");
       if (payment && !card) {
@@ -41233,6 +41248,8 @@ exports.receivePackageRequest = onCall(
           lineId: lineRef.id,
           requestId: ref.id,
           pieces: final.pieces,
+          pickupFeeCents: requestReceive.cleanReceivePickupFee(
+              data.pickupFeeCents, row).pickupFeeCents,
           payOnArrival: data.payOnArrival === true,
           staffUid: uid,
           receivedAt: FirestoreTimestamp.fromMillis(nowMs),

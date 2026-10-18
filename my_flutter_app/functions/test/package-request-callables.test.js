@@ -710,6 +710,105 @@ describe("Received", () => {
     assert.equal(mine.reduce((n, l) => n + l.pieceCount, 0), 3);
   });
 
+  it("keeps a collected request's pickup fee as the line's own amount",
+      async () => {
+        // Owner decision 2026-10-18: Barrel $90 · Box $40 · Pickup fee $20
+        // · Total $150.
+        const {requestId, token} = await submit({handoff: "collect",
+          locationId: "", plannedDate: "",
+          pickup: {address: "410 E 138th St, Bronx", date: todayPlus(2),
+            window: "morning", note: ""}});
+        await staff("sendPackageEstimate", {requestId, baseVersion: 0,
+          pieces: [{id: "p1", cents: 9000}, {id: "p2", cents: 4000}],
+          pickupFeeCents: 2000}, MARIAMA);
+        await call("confirmPackageEstimate", {token, version: 1});
+        // A fee that is not whole cents is refused.
+        assert.equal(await reasonOf(staff("receivePackageRequest", {requestId,
+          pieces: [], pickupFeeCents: -5}, MARIAMA)), "pickup_fee_invalid");
+        // More than pieces + fee is more than is owed.
+        assert.equal(await reasonOf(staff("receivePackageRequest", {requestId,
+          pieces: [{id: "p1"}, {id: "p2"}],
+          payment: {amountCents: 15001, method: "cash",
+            receivedByStaffId: MARIAMA}}, MARIAMA)),
+        "payment_exceeds_balance");
+        // Prices and fee left as prefilled; $150 is all of it.
+        const received = await staff("receivePackageRequest", {requestId,
+          pieces: [{id: "p1"}, {id: "p2"}],
+          payment: {amountCents: 5000, method: "cash",
+            receivedByStaffId: MARIAMA}}, MARIAMA);
+        const lineId = received.lineId;
+        const lineOf = async (id) =>
+          (await db.collection("containerLines").doc(id).get()).data();
+        const line = await lineOf(lineId);
+        assert.deepEqual(line.pieces.map((p) => p.priceCents), [9000, 4000]);
+        assert.equal(line.pickupFeeCents, 2000);
+        assert.equal(line.priceCents, 15000);
+        assert.equal(line.pieceCount, 2);
+        assert.equal(line.paidCents, 5000);
+        const history = (await requestDoc(requestId)).history;
+        assert.equal(history.find((h) => h.action === "received").totalCents,
+            15000);
+
+        // The public page itemises it.
+        const track = async (code) => (await functions.lookupGuestTracking
+            .run({data: {identifier: code}, rawRequest: {}})).record;
+        assert.deepEqual((await track(line.trackingCode)).payment,
+            {priceCents: 15000, pickupFeeCents: 2000, paidCents: 5000,
+              balanceCents: 10000});
+
+        // An edit of the pieces keeps the fee; the edit form may change it.
+        await staff("updateContainerLine", {lineId, line: {pieces:
+          line.pieces.map((p) => ({...p,
+            priceCents: p.id === "p2" ? 5000 : p.priceCents}))}}, MARIAMA);
+        let edited = await lineOf(lineId);
+        assert.equal(edited.pickupFeeCents, 2000);
+        assert.equal(edited.priceCents, 16000);
+        await staff("updateContainerLine", {lineId,
+          line: {pickupFeeCents: 2500}}, MARIAMA);
+        edited = await lineOf(lineId);
+        assert.equal(edited.pickupFeeCents, 2500);
+        assert.equal(edited.priceCents, 16500);
+        await staff("updateContainerLine", {lineId,
+          line: {pickupFeeCents: 2000, pieces: line.pieces}}, MARIAMA);
+
+        // A total set the old way spreads only what is above the fee.
+        const refused = await staff("setContainerLinePrice", {lineId,
+          priceCents: 1500}, MARIAMA).then(() => null, (e) => e);
+        assert.deepEqual(refused?.details?.reasons,
+            ["price_below_paid", "price_below_pickup_fee"]);
+        await staff("setContainerLinePrice", {lineId, priceCents: 16000},
+            MARIAMA);
+        edited = await lineOf(lineId);
+        assert.deepEqual(edited.pieces.map((p) => p.priceCents), [7000, 7000]);
+        assert.equal(edited.pickupFeeCents, 2000);
+        assert.equal(edited.priceCents, 16000);
+        await staff("updateContainerLine", {lineId,
+          line: {pieces: line.pieces}}, MARIAMA);
+
+        // Split: the barrel goes with the fee on the root, the box waits
+        // as -2 with none; the group owes the fee once.
+        const {containerId} = await staff("createContainer", {
+          label: "Pickup box", destinationCountryId: "gn",
+          destinationCountryName: "Guinea"});
+        const split = await staff("assignContainerLines", {containerId,
+          lineIds: [lineId], pieceCounts: {[lineId]: 1}});
+        const root = await lineOf(lineId);
+        const part = await lineOf(split.parts[0].partLineId);
+        assert.equal(root.pickupFeeCents, 2000);
+        assert.equal(root.priceCents, 11000);
+        assert.deepEqual(root.pieces.map((p) => p.priceCents), [9000]);
+        assert.equal(part.pickupFeeCents, 0);
+        assert.equal(part.priceCents, 4000);
+        assert.equal(root.pieceCount + part.pieceCount, 2);
+        for (const code of [root.trackingCode, part.trackingCode]) {
+          const payment = (await track(code)).payment;
+          assert.equal(payment.priceCents, root.priceCents + part.priceCents);
+          assert.equal(payment.pickupFeeCents, 2000);
+          assert.equal(payment.balanceCents,
+              root.priceCents + part.priceCents - 5000);
+        }
+      });
+
   it("is refused on a closed request", async () => {
     const {requestId} = await submit();
     await staff("cancelPackageRequest", {requestId, reason: "No"}, MARIAMA);

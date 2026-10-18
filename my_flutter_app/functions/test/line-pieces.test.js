@@ -34,7 +34,8 @@ describe("the shared line-pieces cases", () => {
       "linePieces", "lineCounts", "piecesTotalCents", "piecesSummaryFields",
       "pieceSummaryText", "linePiecesWhat", "lineGroupSummary",
       "paidFloorForLine", "splitPieces", "nextPartIndex",
-      "partTrackingCode"]) {
+      "partTrackingCode", "lineTotalCents", "pickupFeeOf", "pickupFeeErrors",
+      "linePickupFeeCents", "piecesLineFields"]) {
       assert.ok(covered.has(fn), `${fn} has no shared case`);
     }
   });
@@ -176,6 +177,15 @@ describe("editing a line with pieces", () => {
         []);
   });
 
+  it("a legacy line has no pickup fee and keeps its price", () => {
+    const legacy = containerLineRecord({...customer, kind: "barrels",
+      quantity: 2, priceCents: 20000});
+    assert.equal(legacy.pickupFeeCents, 0);
+    assert.equal(legacy.priceCents, 20000);
+    assert.equal(pieces.linePickupFeeCents({kind: "barrels", quantity: 2,
+      priceCents: 20000}), 0);
+  });
+
   it("a legacy line edited with pieces takes them", () => {
     const legacy = {...customer, kind: "barrels", quantity: 2,
       priceCents: 20000};
@@ -185,5 +195,89 @@ describe("editing a line with pieces", () => {
     const changes = containerLineEditChanges(legacy, next);
     assert.ok(changes.includes("pieces"));
     assert.ok(!changes.includes("priceCents"));
+  });
+});
+
+describe("a line with a pickup fee (owner decision 2026-10-18)", () => {
+  // Barrel $90 · Box $40 · Pickup fee $20 · Total $150.
+  const asked = {...customer, pickupFeeCents: 2000, pieces: [
+    {kind: "barrel", priceCents: 9000},
+    {kind: "box", description: "Clothes", priceCents: 4000},
+  ]};
+  const stored = containerLineRecord(asked, {containerStatus: "waiting"});
+
+  it("stores the fee beside the pieces, inside the total", () => {
+    assert.equal(stored.pickupFeeCents, 2000);
+    assert.equal(stored.priceCents, 15000);
+    assert.deepEqual(stored.pieces.map((p) => p.priceCents), [9000, 4000]);
+    // The fee is no piece: the counts are the pieces'.
+    assert.equal(stored.pieceCount, 2);
+    assert.equal(stored.barrelPieces, 1);
+    assert.equal(stored.packagePieces, 1);
+    assert.deepEqual(validateContainerLine(asked), []);
+    assert.deepEqual(validateContainerLine({...asked, pickupFeeCents: -1}),
+        ["pickup_fee_invalid"]);
+    assert.ok(CONTAINER_MESSAGES.pickup_fee_invalid);
+    assert.ok(CONTAINER_MESSAGES.price_below_pickup_fee);
+  });
+
+  it("an edit that leaves the fee out keeps it", () => {
+    const edit = {pieces: stored.pieces.map((p) =>
+      ({...p, priceCents: p.kind === "box" ? 5000 : p.priceCents}))};
+    const next = containerLineEditTarget(stored, edit, false);
+    assert.equal(next.pickupFeeCents, 2000);
+    assert.equal(next.priceCents, 16000);
+    assert.deepEqual(containerLineEditChanges(stored, next),
+        ["priceCents", "piecePrices"]);
+  });
+
+  it("staff may change the fee in the edit, open in every state", () => {
+    const next = containerLineEditTarget(stored, {pickupFeeCents: 2500},
+        false);
+    assert.equal(next.priceCents, 15500);
+    const changes = containerLineEditChanges(stored, next);
+    assert.deepEqual(changes, ["priceCents", "pickupFeeCents"]);
+    assert.equal(containerLineEditRefusal({status: "shipped"}, changes), null);
+    const {summary} = containerLineEditAudit(stored, next, changes);
+    assert.match(summary, /price, pickup fee for Fatou Diallo$/);
+    const removed = containerLineEditTarget(stored, {pickupFeeCents: 0},
+        false);
+    assert.equal(removed.priceCents, 13000);
+  });
+
+  it("judges what was paid against pieces plus fee", () => {
+    // $150 paid: dropping the box to $30 leaves $140 < $150.
+    const cheaper = {pieces: stored.pieces.map((p) =>
+      ({...p, priceCents: p.kind === "box" ? 3000 : p.priceCents}))};
+    assert.deepEqual(validateContainerLineEdit({...stored, paidCents: 15000},
+        cheaper, false), ["price_below_paid"]);
+    // $140 paid: still covered, the fee counts.
+    assert.deepEqual(validateContainerLineEdit({...stored, paidCents: 14000},
+        cheaper, false), []);
+    // Taking the fee away under what was paid is refused too.
+    assert.deepEqual(validateContainerLineEdit({...stored, paidCents: 15000},
+        {pickupFeeCents: 0}, false), ["price_below_paid"]);
+  });
+
+  it("a split keeps the fee on the root and counts it once", () => {
+    const plan = pieces.splitPieces(stored, 1);
+    const going = pieces.piecesLineFields(plan.going,
+        pieces.linePickupFeeCents(stored));
+    const staying = pieces.piecesLineFields(plan.staying);
+    assert.equal(going.pickupFeeCents, 2000);
+    assert.equal(going.priceCents, 11000);
+    assert.equal(staying.pickupFeeCents, 0);
+    assert.equal(staying.priceCents, 4000);
+    const group = pieces.lineGroupSummary([
+      {id: "root", line: {...stored, ...going, rootLineId: "root",
+        partIndex: 1, paidCents: 5000}},
+      {id: "part", line: {...staying, rootLineId: "root", partIndex: 2}},
+    ], "root");
+    assert.equal(group.priceCents, 15000);
+    assert.equal(group.pickupFeeCents, 2000);
+    assert.equal(group.balanceCents, 10000);
+    // The part's floor: $50 paid, the root's $110 covers it all.
+    assert.equal(pieces.paidFloorForLine(group, "part"), 0);
+    assert.equal(pieces.paidFloorForLine(group, "root"), 1000);
   });
 });
