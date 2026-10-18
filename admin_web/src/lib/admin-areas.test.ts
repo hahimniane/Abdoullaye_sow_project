@@ -5,10 +5,12 @@ import test from "node:test";
 import {
   adminAreaIds,
   adminAreas,
+  followingAreas,
   nonGrantableAreas,
   roleCapabilityAreas,
   roleEditableAreas,
   roleGrantableAreas,
+  withFollowingTabs,
 } from "./admin-areas.ts";
 
 const consoleSource = readFileSync("src/components/admin-console.tsx", "utf8");
@@ -20,7 +22,7 @@ test("every area declares how access to it is decided", () => {
     assert.ok(area.id, "an area has no id");
     assert.ok(area.label, `${area.id} has no label`);
     assert.ok(
-      ["always", "role", "capability", "superAdmin"].includes(area.governance),
+      ["always", "role", "capability", "superAdmin", "follows"].includes(area.governance),
       `${area.id} has no governance`,
     );
   }
@@ -81,4 +83,21 @@ test("areas outside the role editor are deliberate, not forgotten", () => {
     nonGrantableAreas.map((area) => area.id).sort(),
     ["settings", "today", "tools"],
   );
+});
+
+test("an area that follows another follows a real role area", () => {
+  assert.deepEqual(followingAreas.map((area) => area.id), ["volume"]);
+  for (const area of followingAreas) {
+    assert.ok(
+      roleEditableAreas.some((other) => other.id === area.follows),
+      `${area.id} follows ${area.follows}, which no role can be granted`,
+    );
+    assert.equal(area.cap, undefined, `${area.id} must not confer a capability of its own`);
+  }
+});
+
+test("Volume opens for whoever can open Finance, and only them", () => {
+  assert.deepEqual(withFollowingTabs(["today", "finance"]), ["today", "finance", "volume"]);
+  assert.deepEqual(withFollowingTabs(["today", "operations"]), ["today", "operations"]);
+  assert.match(consoleSource, /tabs: withFollowingTabs\(allowedTabs\)/);
 });
