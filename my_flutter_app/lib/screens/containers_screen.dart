@@ -20,6 +20,8 @@ import '../services/label_printer.dart' show LabelPrinterController;
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/package_labels.dart' show PackageLabelsTarget;
+import '../services/package_request_feed.dart';
+import '../services/package_request_service.dart';
 import '../services/vin_decoder_service.dart';
 import '../services/invoice_ledger.dart'
     show invoiceCentsToInput, invoicePaymentMethods;
@@ -38,6 +40,7 @@ import '../widgets/lot_sheets.dart';
 import '../widgets/package_money.dart';
 import '../widgets/waiting_package_fields.dart';
 import 'add_waiting_packages_sheet.dart';
+import 'business_requests_screen.dart';
 import 'label_printer_settings_screen.dart';
 import 'package_payment_sheet.dart';
 import 'package_result_screen.dart';
@@ -138,6 +141,9 @@ class _ContainersScreenState extends State<ContainersScreen> {
   /// The containers and lines, shared with every detail opened from here.
   late final ContainerFeed _feed;
 
+  /// The open package requests, shared by Requests and the Waiting list.
+  late final PackageRequestFeed _requests;
+
   void _onFeed() {
     if (mounted) setState(() {});
   }
@@ -214,6 +220,8 @@ class _ContainersScreenState extends State<ContainersScreen> {
   void _listen() {
     final id = widget.businessId;
     _feed = ContainerFeed(id)..addListener(_onFeed);
+    _requests = PackageRequestFeed(id, service: FirebasePackageRequestService())
+      ..addListener(_onFeed);
 
     _subs.add(_db
         .collection('users')
@@ -314,7 +322,22 @@ class _ContainersScreenState extends State<ContainersScreen> {
     _feed
       ..removeListener(_onFeed)
       ..dispose();
+    _requests
+      ..removeListener(_onFeed)
+      ..dispose();
     super.dispose();
+  }
+
+  /// Requests customers sent: estimate them, or confirm for them.
+  void _openRequests() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BusinessRequestsScreen(
+          businessId: widget.businessId,
+          feed: _requests,
+        ),
+      ),
+    );
   }
 
   void _openDetail(String containerId) {
@@ -366,6 +389,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
           destinations: _destinations,
           businessCountryCode: _businessCountryCode,
           onCustomerRecorded: _loadCustomers,
+          requestFeed: _requests,
         ),
       ),
     );
@@ -426,8 +450,11 @@ class _ContainersScreenState extends State<ContainersScreen> {
               setState(() => _filter = v);
             },
             showFilter: !searching,
-            waitingCount: _lines.where((l) => l.isWaiting).length,
+            waitingCount: _lines.where((l) => l.isWaiting).length +
+                _requests.expected.length,
             onOpenWaiting: _openWaiting,
+            requestsCount: _requests.openCount,
+            onOpenRequests: _openRequests,
           ),
           Expanded(
             child: Stack(
@@ -488,6 +515,8 @@ class _ContainersHeader extends StatelessWidget {
     required this.showFilter,
     required this.waitingCount,
     required this.onOpenWaiting,
+    required this.requestsCount,
+    required this.onOpenRequests,
   });
 
   final String businessName;
@@ -500,6 +529,8 @@ class _ContainersHeader extends StatelessWidget {
   final bool showFilter;
   final int waitingCount;
   final VoidCallback onOpenWaiting;
+  final int requestsCount;
+  final VoidCallback onOpenRequests;
 
   @override
   Widget build(BuildContext context) {
@@ -617,6 +648,9 @@ class _ContainersHeader extends StatelessWidget {
                           const SizedBox(height: AppSpacing.sm),
                           WaitingEntryRow(
                               count: waitingCount, onTap: onOpenWaiting),
+                          const SizedBox(height: AppSpacing.sm),
+                          RequestsEntryRow(
+                              count: requestsCount, onTap: onOpenRequests),
                         ],
                       ),
                     )
