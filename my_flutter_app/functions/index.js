@@ -39978,8 +39978,9 @@ exports.plaidWebhook = onRequest(
 // the months a line or container write touched - a recount, never an
 // increment, so retries and bursts converge - and the screens read only the
 // rollups. docs/PACKAGE_REQUESTS.md "Monthly volume - as built".
-// A small budget (two instances, one for the rebuild): the regional CPU
-// quota is shared by every function.
+// A small budget (two instances for the triggers and the business view, one
+// for the admin view and the rebuild): the regional CPU quota is shared by
+// every function.
 const volume = require("./volume_rollup").createVolumeHandlers({
   admin,
   HttpsError,
@@ -39998,9 +39999,10 @@ exports.rollupVolumeOnContainerWrite = onDocumentWritten(
     {document: "containers/{containerId}", maxInstances: 2,
       timeoutSeconds: 120},
     volume.rollupVolumeOnContainerWrite);
+// Finance admins only: one instance serves them (80 concurrent at 1 CPU).
 exports.getPlatformVolume = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
-      maxInstances: 2},
+      maxInstances: 1},
     volume.getPlatformVolume);
 exports.getBusinessVolume = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
@@ -40831,8 +40833,12 @@ exports.declinePackageEstimate = onCall(
     },
 );
 
+// One instance (80 concurrent requests at 1 CPU): an owner saves these a
+// few times ever. The project-wide reserved-CPU budget is the reason
+// (test/scaling-contract.test.js "function instance budget").
 exports.setPackageRequestSettings = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      maxInstances: 1},
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
@@ -40915,8 +40921,10 @@ exports.setPackageRequestSettings = onCall(
     },
 );
 
+// One instance: the printable QR is fetched once per poster.
 exports.getPackageRequestLinkQr = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      maxInstances: 1},
     async (request) => {
       const uid = requireAuth(request);
       const businessId = String(request.data?.businessId || "").trim();
@@ -41495,6 +41503,9 @@ exports.sweepPackageRequests = onSchedule(
       schedule: "every 60 minutes",
       timeZone: "America/New_York",
       timeoutSeconds: 300,
+      // An hourly run is one invocation at a time; a second instance would
+      // only race the first over the same due timers.
+      maxInstances: 1,
       secrets: [whatsappAccessToken, whatsappPhoneNumberId],
     },
     async () => {
