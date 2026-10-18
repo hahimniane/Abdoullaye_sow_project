@@ -19,7 +19,13 @@ export type AdminAreaGovernance =
   /** A standalone capability, granted or not - no view/manage distinction. */
   | "capability"
   /** Super admin only; not offered to custom roles at all. */
-  | "superAdmin";
+  | "superAdmin"
+  /**
+   * Whoever can open the area named in `follows` opens this one too; it is
+   * not granted on its own. Volume follows Finance: it is the count the
+   * platform bills on, read by the people who read its earnings.
+   */
+  | "follows";
 
 export type AdminCapability =
   | "users"
@@ -35,8 +41,10 @@ export type AdminArea = {
   id: string;
   label: string;
   governance: AdminAreaGovernance;
-  /** The capability "manage" on this area confers. Required unless always/superAdmin. */
+  /** The capability "manage" on this area confers. Required unless always/superAdmin/follows. */
   cap?: AdminCapability;
+  /** For governance "follows": the area whose access this one shares. */
+  follows?: string;
 };
 
 /**
@@ -49,6 +57,7 @@ export const adminAreas: AdminArea[] = [
   {id: "marketplace", label: "Marketplace", governance: "role", cap: "marketplace"},
   {id: "operations", label: "Operations", governance: "role", cap: "operations"},
   {id: "finance", label: "Finance", governance: "role", cap: "finance"},
+  {id: "volume", label: "Volume", governance: "follows", follows: "finance"},
   {id: "support", label: "Reply to support requests", governance: "capability", cap: "support"},
   {id: "website", label: "Website", governance: "role", cap: "website"},
   {id: "tools", label: "Tools", governance: "superAdmin"},
@@ -83,3 +92,22 @@ export const roleGrantableAreas = adminAreas.filter(
 export const nonGrantableAreas = adminAreas.filter(
   (area) => area.governance === "always" || area.governance === "superAdmin",
 );
+
+/**
+ * Areas that share another area's access (governance "follows"). A role that
+ * can open `follows` opens these too; the server checks the same thing.
+ */
+export const followingAreas = adminAreas.filter(
+  (area) => area.governance === "follows",
+);
+
+/** The tabs a set of open tabs also opens through "follows". */
+export function withFollowingTabs(tabs: readonly string[]): string[] {
+  const out = [...tabs];
+  for (const area of followingAreas) {
+    if (area.follows && out.includes(area.follows) && !out.includes(area.id)) {
+      out.push(area.id);
+    }
+  }
+  return out;
+}

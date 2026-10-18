@@ -519,3 +519,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   schedule in a pure counter (`ZelleRetryCountdown`) and show a static icon,
   not a spinner, while waiting: widget tests drive it with `pump(Duration)`,
   and a spinner running between checks would make `pumpAndSettle` time out.
+- Firestore triggers are tested on the emulator by calling
+  `exports.<trigger>.run({params, data: {before, after}})` with
+  `{exists, data()}` snapshots after writing the document yourself
+  (`test/volume-callables.test.js`); the exec'd emulator suites run no
+  functions emulator, so nothing fires on its own. Recount-style rollups
+  must be asserted idempotent (same event twice, then a rebuild, same
+  numbers) and under a concurrent burst.
+- `security-contract.test.js` counts `enforceAppCheck: ENFORCE_APP_CHECK`
+  occurrences against `= onCall(` exports. A new callable writes its options
+  inline (or the test's shared-options offset must be extended); a new
+  shared options object breaks the count.

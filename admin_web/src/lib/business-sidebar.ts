@@ -10,6 +10,7 @@ export type BusinessTab =
   | "parking"
   | "ledger"
   | "containers"
+  | "volume"
   | "invoices"
   | "inventory"
   | "destinations"
@@ -101,6 +102,9 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   // one, so it shows when ANY shipping service is on (owners and staff
   // alike), plus the permission.
   {id: "containers", label: "Containers", description: "Loading lists and sailings", group: "transport", services: shippingServiceIds, permission: "containers"},
+  // The month's pieces received and containers shipped: the same people as
+  // Containers (owner, staff holding "containers"), the same service gate.
+  {id: "volume", label: "Volume", description: "Pieces received and containers shipped", group: "transport", services: shippingServiceIds, permission: "containers"},
   // Invoices are written by hand for anything the business sold, on the
   // platform or off it, so no service gate. Its own "invoices" permission;
   // "ledger" implies it (businessPermissionImplies), so the people who work

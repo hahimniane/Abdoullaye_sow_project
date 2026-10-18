@@ -35,8 +35,18 @@ describe("business sidebar navigation", () => {
     assert.equal(transport?.label, "Transport & shipping");
     assert.deepEqual(
       transport?.tabs.map((tab) => tab.id),
-      ["barrels", "freight", "transport", "parking", "ledger", "containers"],
+      ["barrels", "freight", "transport", "parking", "ledger", "containers", "volume"],
     );
+  });
+
+  it("shows Volume to whoever sees Containers, and to no one else", () => {
+    const tab = businessSidebarTabs.find((entry) => entry.id === "volume");
+    assert.deepEqual(tab?.services, shippingServiceIds);
+    assert.equal(tab?.permission, "containers");
+    assert.equal(visibleTabIds(["barrelShipping"], "owner").includes("volume"), true);
+    assert.equal(visibleTabIds(["barrelShipping"], ["containers"]).includes("volume"), true);
+    assert.equal(visibleTabIds(["barrelShipping"], ["ledger"]).includes("volume"), false);
+    assert.equal(visibleTabIds(["inventory"], "owner").includes("volume"), false);
   });
 
   it("lists Inventory under Manage, gated on its own service and permission", () => {

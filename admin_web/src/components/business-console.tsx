@@ -36,6 +36,7 @@ import {AssistantWidget} from "@/components/business/assistant-widget";
 import {BankZelleCard} from "@/components/business/bank-zelle-card";
 import {canManageBank} from "@/lib/zelle-check";
 import {ContainersPanel} from "@/components/business/containers-panel";
+import {BusinessVolumePanel} from "@/components/volume-views";
 import {containerDeepLinkFromSearch, type ContainerDeepLink} from "@/lib/package-staff";
 import {InventoryPanel} from "@/components/business/inventory-panel";
 import {InvoicesPanel} from "@/components/business/invoices-panel";
@@ -713,6 +714,9 @@ export function BusinessConsole({
               focusContainerId={containerLink?.containerId ?? ""}
               focusLineId={containerLink?.lineId ?? ""}
             />
+          )}
+          {activeTab === "volume" && (
+            <BusinessVolumePanel businessId={businessId} previewMode={previewMode} />
           )}
           {activeTab === "invoices" && (
             <InvoicesPanel
@@ -1706,6 +1710,7 @@ function tabIcon(tab: BusinessTab) {
     parking: <ParkingCircle {...props} />,
     ledger: <BookOpen {...props} />,
     containers: <Container {...props} />,
+    volume: <BarChart3 {...props} />,
     invoices: <Receipt {...props} />,
     inventory: <Boxes {...props} />,
     destinations: <MapPinned {...props} />,

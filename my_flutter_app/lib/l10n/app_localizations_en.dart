@@ -6114,6 +6114,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tryAgain => 'Try again';
 
   @override
+  String get volumeThisMonth => 'This month';
+
+  @override
+  String volumeThisMonthNamed(String month) {
+    return 'This month · $month';
+  }
+
+  @override
+  String volumePiecesReceived(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString pieces received',
+      one: '1 piece received',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String volumeContainersShipped(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString containers shipped',
+      one: '1 container shipped',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get volumeLoadFailed => 'Couldn\'t load this month\'s volume.';
+
+  @override
   String get notProvided => 'Not provided';
 
   @override

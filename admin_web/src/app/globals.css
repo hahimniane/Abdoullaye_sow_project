@@ -1364,6 +1364,234 @@ button[data-loading="true"]::before {
   text-overflow: ellipsis;
 }
 
+/* Volume pages (volume-views.tsx): a month picker in the top bar, the tiles,
+   a By business table that scrolls inside its box on a phone, a container
+   list and the 12-month bars (shared with the commission chart). */
+.vol-topbar {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(204, 251, 241, 0.34));
+  border: 1px solid rgba(13, 148, 136, 0.18);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.vol-topbar h2 {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+.vol-topbar p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.35;
+  margin: 0;
+  max-width: 560px;
+}
+
+.vol-topbar-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vol-month-picker {
+  align-items: center;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.vol-month-label {
+  font-size: 15px;
+  min-width: 132px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.vol-month-picker .icon-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.vol-tiles.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.vol-tiles .metric strong.vol-split {
+  font-size: 26px;
+  white-space: nowrap;
+}
+
+.vol-change {
+  display: inline !important;
+  font-size: 12px !important;
+  margin: 0 !important;
+}
+
+.vol-change.up {
+  color: var(--money);
+}
+
+.vol-change.down {
+  color: var(--danger);
+}
+
+.vol-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.vol-table {
+  min-width: 620px;
+}
+
+.vol-table tbody tr {
+  cursor: pointer;
+}
+
+.vol-table tbody tr:hover,
+.vol-table tbody tr.selected {
+  background: var(--paper-soft);
+}
+
+.vol-table tfoot th,
+.vol-table tfoot td {
+  border-bottom: 0;
+  border-top: 2px solid var(--rule-strong);
+  font-weight: 800;
+  padding: 7px 8px;
+  text-align: right;
+}
+
+.vol-table tfoot th {
+  text-align: left;
+}
+
+.vol-row-button {
+  background: none;
+  border: 0;
+  color: var(--brand-strong);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vol-row-button:hover,
+.vol-row-button:focus-visible {
+  text-decoration: underline;
+}
+
+.vol-container-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vol-container-list li {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.vol-container-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vol-container-head strong {
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vol-container-head .status-pill {
+  margin-left: auto;
+}
+
+.vol-container-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.vol-container-counts {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 6px 16px;
+}
+
+.vol-container-counts > span > span:first-child {
+  color: var(--muted);
+}
+
+.vol-container-total {
+  font-weight: 800;
+}
+
+.vol-drawer-body {
+  display: grid;
+  gap: 14px;
+  padding: 18px 22px 24px;
+}
+
+.vol-drawer h2 {
+  font-size: 18px;
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.vol-note,
+.vol-footer {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.vol-recount {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .vol-topbar {
+    padding: 14px 16px;
+  }
+
+  .vol-tiles.three {
+    grid-template-columns: 1fr;
+  }
+
+  .vol-month-label {
+    min-width: 110px;
+  }
+}
+
 /* Fixed layout so a long business name ellipsizes instead of shoving the
    record count off the edge of the card. */
 .commission-bar-table {

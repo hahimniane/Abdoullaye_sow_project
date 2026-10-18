@@ -33,6 +33,7 @@ import '../utils/action_confirmation.dart';
 import '../utils/vin_utils.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/container_volume_card.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/label_print_sheet.dart';
 import '../widgets/lot_sheets.dart';
@@ -438,6 +439,17 @@ class _ContainersScreenState extends State<ContainersScreen> {
             showFilter: !searching,
             waitingCount: _lines.where((l) => l.isWaiting).length,
             onOpenWaiting: _openWaiting,
+          ),
+          // This month's pieces and sailings; kept (not rebuilt) while a
+          // search hides it, so clearing the search does not ask again.
+          Visibility(
+            visible: !searching,
+            maintainState: true,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+              child: ContainerVolumeCard(businessId: widget.businessId),
+            ),
           ),
           Expanded(
             child: Stack(

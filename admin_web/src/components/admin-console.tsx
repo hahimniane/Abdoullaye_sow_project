@@ -44,6 +44,7 @@ import {
   Activity,
   ArrowUpRight,
   BadgeDollarSign,
+  BarChart3,
   Building2,
   Car,
   Check,
@@ -146,8 +147,10 @@ import {
   adminAreaIds,
   roleCapabilityAreas,
   roleEditableAreas,
+  withFollowingTabs,
   type AdminCapability,
 } from "@/lib/admin-areas";
+import { AdminVolumeView } from "@/components/volume-views";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
 import { buildBusinessDirectory, buildUserDirectory } from "@/lib/admin-directory";
 import { FieldInfo } from "@/components/field-info";
@@ -189,7 +192,7 @@ const navGroups: Array<{ label: string; tabs: Tab[] }> = [
   { label: "Network", tabs: ["businesses", "people"] },
   {
     label: "Queues",
-    tabs: ["marketplace", "operations", "finance", "support"],
+    tabs: ["marketplace", "operations", "finance", "volume", "support"],
   },
   { label: "System", tabs: ["website", "tools", "settings"] },
 ];
@@ -379,7 +382,8 @@ function resolvePerms(
   return {
     role: effective,
     label: role.label,
-    tabs: allowedTabs,
+    // Volume opens with Finance (admin-areas.ts "follows").
+    tabs: withFollowingTabs(allowedTabs),
     can: (capability) => caps.has(capability),
     services,
     canService: (serviceId) =>
@@ -2670,6 +2674,12 @@ export function AdminConsole() {
               runAction={runAction}
               canManage={perms.can("finance")}
               canSendSupport={perms.can("support")}
+              previewMode={previewMode}
+            />
+          )}
+          {activeTab === "volume" && (
+            <AdminVolumeView
+              canRebuild={perms.can("finance")}
               previewMode={previewMode}
             />
           )}
@@ -13584,6 +13594,7 @@ function tabLabel(tab: Tab) {
     operations: "Operations",
     marketplace: "Marketplace",
     finance: "Finance",
+    volume: "Volume",
     support: "Support",
     website: "Website",
     tools: "Tools",
@@ -13599,6 +13610,7 @@ function tabHint(tab: Tab) {
     operations: "Barrels, freight, transport, parking",
     marketplace: "Listings by business",
     finance: "Commission & returns",
+    volume: "Pieces and containers by month",
     support: "Escalated cases",
     website: "Site content",
     tools: "Setup utilities",
@@ -13615,6 +13627,7 @@ function tabIcon(tab: Tab) {
     operations: <Truck {...props} />,
     marketplace: <Car {...props} />,
     finance: <BadgeDollarSign {...props} />,
+    volume: <BarChart3 {...props} />,
     support: <LifeBuoy {...props} />,
     website: <Store {...props} />,
     tools: <DatabaseZap {...props} />,

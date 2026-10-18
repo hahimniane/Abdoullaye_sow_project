@@ -3650,6 +3650,41 @@ Object.assign(TEXT_TRANSLATIONS, {
     "La date de fin ne peut pas précéder la date de début.",
 });
 
+// Monthly volume (volume-views.tsx; the admin and business Volume pages).
+// "Volume" is the same word in French, so it has no entry. Months render
+// already formatted for the page's language, outside the dictionary.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Pieces and containers by month": "Pièces et conteneurs par mois",
+  "Pieces received and containers shipped": "Pièces reçues et conteneurs expédiés",
+  "Pieces received": "Pièces reçues",
+  "Barrels · Packages · Cars": "Barils · Colis · Voitures",
+  "Containers shipped": "Conteneurs expédiés",
+  "Customer lines": "Envois clients",
+  "By business": "Par entreprise",
+  Packages: "Colis",
+  Cars: "Voitures",
+  Pieces: "Pièces",
+  "Avg / container": "Moy. / conteneur",
+  "Pieces received, last 12 months": "Pièces reçues, 12 derniers mois",
+  "Your volume this month": "Votre volume ce mois-ci",
+  "Containers shipped in": "Conteneurs expédiés en",
+  "No containers shipped in": "Aucun conteneur expédié en",
+  "Nothing was received or shipped in": "Rien n’a été reçu ni expédié en",
+  "vs previous month": "par rapport au mois précédent",
+  "No earlier month to compare": "Aucun mois précédent à comparer",
+  "avg pieces per container": "pièces en moyenne par conteneur",
+  "customer loads received": "envois clients reçus",
+  "containers in": "conteneurs en",
+  "Recount the last 12 months": "Recompter les 12 derniers mois",
+  "Recounting…": "Recomptage…",
+  "Recounted.": "Recomptage terminé.",
+  "Could not recount. Try again.": "Le recomptage a échoué. Réessayez.",
+  "Showing the first 200 containers.": "Affichage des 200 premiers conteneurs.",
+  "Pieces count in the month they were received; containers in the month they sailed (New York time).":
+    "Les pièces comptent le mois de leur réception ; les conteneurs, le mois de leur départ (heure de New York).",
+  "Pieces by month": "Pièces par mois",
+});
+
 // Business assistant chat panel (assistant-panel.tsx). "Assistant" is spelled
 // the same in both languages, so it is deliberately absent - an identity entry
 // would break the convergence guarantee this file's test enforces.
@@ -5782,6 +5817,8 @@ export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
 // than one English source must name its English here; french-dom.test.ts fails
 // on any new ambiguous pair that is not resolved in this table.
 export const REVERSE_PREFERENCES: Record<string, string> = {
+  // "Packages" (the Volume pages) and "Package" share "Colis".
+  "Colis": "Package",
   "Suspendu": "Suspended",
   "Ajouter une destination": "Add destination",
   "Adresse exacte de collecte (facultatif)": "Exact pickup address (optional)",
