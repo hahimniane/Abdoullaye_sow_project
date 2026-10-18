@@ -463,6 +463,11 @@ button[data-loading="true"]::before {
     height: auto;
     min-height: 0;
     overflow-y: auto;
+    /* A fixed-height scrolling grid gives implicit rows their min-content
+       height, and a .panel (overflow: hidden) has none - so a panel under a
+       tall one collapsed to 2px (the Zelle bank card, notification
+       preferences). Rows take their content's height; .content scrolls. */
+    grid-auto-rows: max-content;
   }
 }
 

@@ -17,12 +17,14 @@ const crypto = require("crypto");
 /** Link shows this name to the owner. Also set in the Plaid dashboard. */
 const LINK_CLIENT_NAME = "Laawol";
 /**
- * The Link customization (Plaid dashboard -> Link -> Customization) every
- * Link token names: the team is shared with the sister apps, so Laawol's own
- * look is picked by name. PLAID_LINK_CUSTOMIZATION overrides it; an empty
- * value sends none (Plaid's default customization).
+ * The Link customization (Plaid dashboard -> Link -> Customization) a Link
+ * token names. None by default: production refused the dashboard's "laawol"
+ * customization (INVALID_LINK_CUSTOMIZATION), and a named customization must
+ * also match the request's language, so a French owner would fail too.
+ * Plaid's default look still says "Laawol uses Plaid" from client_name.
+ * PLAID_LINK_CUSTOMIZATION names one when a matching set exists.
  */
-const DEFAULT_LINK_CUSTOMIZATION = "laawol";
+const DEFAULT_LINK_CUSTOMIZATION = "";
 /**
  * Registered in the Plaid dashboard (Allowed redirect URIs) and covered by the
  * apple-app-site-association file, so a bank's OAuth page hands the owner

@@ -256,12 +256,14 @@ retried within the 5 minutes either (a failed refresh is not billed).
 
 ## Setup for the owner of the Plaid account
 
-1. **Plaid dashboard -> Link -> Customization**: the customization named
-   exactly **`laawol`** (United States, English) - done. Every Link token
-   sends `link_customization_name: "laawol"` and `client_name: "Laawol"`.
-   `PLAID_LINK_CUSTOMIZATION` (functions env) changes the name; an empty
-   value sends none (Plaid's default customization). The team is shared with
-   Wouri and Dala, so never edit their customizations for Laawol.
+1. **Link look**: Link tokens send `client_name: "Laawol"` and **no**
+   `link_customization_name`, so Plaid's default look says "Laawol uses
+   Plaid". Production refused the dashboard's `laawol` customization
+   (`INVALID_LINK_CUSTOMIZATION`, 2026-10-18), and a named customization must
+   also match the request's language (an English-only one fails a French
+   owner). `PLAID_LINK_CUSTOMIZATION` (functions env) can name one later if a
+   working set exists for every language Link is opened in. The team is
+   shared with Wouri and Dala, so never edit their customizations for Laawol.
 2. **Plaid dashboard -> Developers -> API -> Allowed Android package names**:
    add `com.laawoldigital.app` (from `android/app/build.gradle`
    `applicationId`).
@@ -296,7 +298,7 @@ retried within the 5 minutes either (a failed refresh is not billed).
 7. **PLAID_ENV**: `sandbox` (default) or `production`, a functions
    environment variable. The production project's values are committed in
    `my_flutter_app/functions/.env.car-selling-flutter-app`
-   (`PLAID_ENV=production`, `PLAID_LINK_CUSTOMIZATION=laawol`; no secrets;
+   (`PLAID_ENV=production`; no secrets;
    un-ignored in `functions/.gitignore`), which `firebase deploy` loads for
    that project id only. Every other project (staging, `demo-*` emulator
    projects) has no such file and is sandbox. `plaidEnvironment` also forces
@@ -315,7 +317,7 @@ retried within the 5 minutes either (a failed refresh is not billed).
 
 - Unit (`npm run test:unit`): `test/bank-token-crypto.test.js` (round trip,
   tamper, wrong key/business), `test/plaid-client.test.js` (errors, Link
-  request incl. the `laawol` customization, environment incl. the emulator
+  request (no customization by default), environment incl. the emulator
   guard and the committed production env file, webhook URL, fetch client,
   webhook verification ported from Wouri),
   `test/bank-sync.test.js` (sign flip, pending kept, account filter, removed,

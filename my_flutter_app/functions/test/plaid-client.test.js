@@ -80,11 +80,16 @@ describe("Link token request", () => {
         `applicationId "${ANDROID_PACKAGE_NAME.replace(/\./g, "\\.")}"`));
   });
 
-  it("names the laawol Link customization unless told otherwise", () => {
-    assert.equal(DEFAULT_LINK_CUSTOMIZATION, "laawol");
+  it("sends no Link customization unless one is named", () => {
+    // Production refused "laawol" (INVALID_LINK_CUSTOMIZATION) and a named
+    // customization must match the language, so none is the safe default.
+    assert.equal(DEFAULT_LINK_CUSTOMIZATION, "");
     const plain = linkTokenRequest({uid: "u1", platform: "web"});
-    assert.equal(plain.link_customization_name, "laawol");
+    assert.equal("link_customization_name" in plain, false);
     assert.equal(plain.client_name, "Laawol");
+    const french = linkTokenRequest({uid: "u1", platform: "web",
+      language: "fr"});
+    assert.equal("link_customization_name" in french, false);
     assert.equal(linkTokenRequest({uid: "u1", platform: "ios",
       linkCustomizationName: " dala "}).link_customization_name, "dala");
     // "" (PLAID_LINK_CUSTOMIZATION= in the env) sends none at all.
@@ -92,13 +97,13 @@ describe("Link token request", () => {
       linkCustomizationName: ""});
     assert.equal("link_customization_name" in none, false);
     assert.equal(none.client_name, "Laawol");
-    // Update mode keeps the look too.
-    assert.equal(linkTokenRequest({uid: "u1", platform: "android",
-      accessToken: "access-x"}).link_customization_name, "laawol");
+    // Update mode sends none either.
+    assert.equal("link_customization_name" in linkTokenRequest({uid: "u1",
+      platform: "android", accessToken: "access-x"}), false);
   });
 
   it("reads the customization from PLAID_LINK_CUSTOMIZATION", () => {
-    assert.equal(linkCustomizationName({}), "laawol");
+    assert.equal(linkCustomizationName({}), "");
     assert.equal(linkCustomizationName({PLAID_LINK_CUSTOMIZATION: "x"}), "x");
     assert.equal(linkCustomizationName({PLAID_LINK_CUSTOMIZATION: " "}), "");
     assert.equal(linkCustomizationName({PLAID_LINK_CUSTOMIZATION: ""}), "");
@@ -147,7 +152,8 @@ describe("Plaid environment and webhook URL", () => {
     };
     const prod = read(".env.car-selling-flutter-app");
     assert.equal(prod.PLAID_ENV, "production");
-    assert.equal(prod.PLAID_LINK_CUSTOMIZATION, "laawol");
+    // No customization in production (see DEFAULT_LINK_CUSTOMIZATION).
+    assert.equal("PLAID_LINK_CUSTOMIZATION" in prod, false);
     // Secrets stay in Secret Manager, never in a committed file.
     for (const key of ["PLAID_CLIENT_ID", "PLAID_SECRET", "BANK_TOKEN_KEY"]) {
       assert.equal(key in prod, false, `${key} is not in the env file`);
