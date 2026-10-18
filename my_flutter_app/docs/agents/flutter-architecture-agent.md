@@ -325,4 +325,21 @@ Add future project conventions and repeated architectural decisions here.
   `BankLinkLauncher`; only the owner opens `BankZelleSettingsScreen`. A new
   Zelle payment surface uses `offersZelleCheck` / `showsBankConfirmedChip`
   and `showZelleCheckSheet` with its `ZelleCheckKind`, never its own rules.
+- Package requests (docs/PACKAGE_REQUESTS.md §8): pure rules in
+  `lib/services/package_requests.dart` (one `PackageRequest` reads both the
+  Firestore doc and the `getPackageRequestByToken` projection), calls behind
+  `PackageRequestService` (fake: `test/fixtures/fake_package_requests.dart`),
+  refusals mapped by `details.reason` in `requestRefusalText` - never the
+  server's English `message`. The containers screen owns one
+  `PackageRequestFeed` shared by Requests and the Waiting list's Expected
+  section (like `ContainerFeed`). Only the token projection carries the
+  business phone and hours, so the customer estimate page reads by token
+  and uses the sender's own doc as a change trigger. `/e/` and `/r/` links
+  ride `PackageLinkService` (parked until `AppLaunchGate`). Received takes
+  exactly the request's pieces by id (the server refuses an unknown id), so
+  the counter edits prices, not the piece list.
+- Calendar-day windows ("today .. +60 days") are counted with
+  `DateTime(y, m, d + n)`, never `add(Duration(days: n))`: across the end of
+  daylight time the Duration lands on the evening before and a day-picker's
+  `day()` drops the last day.
 

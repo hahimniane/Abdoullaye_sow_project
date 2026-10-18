@@ -507,6 +507,16 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   first State (`didUpdateWidget`, not `initState`), so `late final` fields built
   from `widget.source` keep the first fake and the second setup is silently
   ignored. Give each setup its own `testWidgets` (or a new `Key`).
+- Run `dart format` on the files you wrote, never on a directory: the repo
+  is not uniformly formatted, and `dart format lib/services` rewrote 30+
+  unrelated files (a merge-conflict magnet for parallel agents). Check
+  `git diff --stat` before committing.
+- Widget-test traps met on package requests: a `SwitchListTile` inside a
+  coloured `Container` asserts ("ink splashes may be invisible") - wrap it in
+  a `Material`; a button left spinning while its dialog is open makes
+  `pumpAndSettle` time out - clear the busy flag before `showDialog`; a
+  validation SnackBar queues ahead of the success one, so a test looking for
+  "Saved" finds nothing - show field errors inline instead.
 - Timed re-check UIs (the Zelle sheet's 20 s / 3 min countdown) keep the
   schedule in a pure counter (`ZelleRetryCountdown`) and show a static icon,
   not a spinner, while waiting: widget tests drive it with `pump(Duration)`,
