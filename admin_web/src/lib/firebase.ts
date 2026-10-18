@@ -127,8 +127,14 @@ if (
 ) {
   (globalThis as { __laawolEmulatorsConnected?: boolean }).__laawolEmulatorsConnected = true;
   const host = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST ?? "127.0.0.1";
-  connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
-  connectFirestoreEmulator(db, host, 8080);
-  connectFunctionsEmulator(functions, host, 5001);
-  connectStorageEmulator(storage, host, 9199);
+  // The ports default to firebase.json's; a second emulator suite on one
+  // machine (parallel work in another checkout) runs on its own ports.
+  const port = (value: string | undefined, fallback: number) => {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  };
+  connectAuthEmulator(auth, `http://${host}:${port(process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_PORT, 9099)}`, { disableWarnings: true });
+  connectFirestoreEmulator(db, host, port(process.env.NEXT_PUBLIC_FIREBASE_FIRESTORE_EMULATOR_PORT, 8080));
+  connectFunctionsEmulator(functions, host, port(process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_EMULATOR_PORT, 5001));
+  connectStorageEmulator(storage, host, port(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_EMULATOR_PORT, 9199));
 }

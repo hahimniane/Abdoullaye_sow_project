@@ -415,5 +415,8 @@ test("/i/<CODE> redirects to the notice without carrying the code, and the app c
   };
   const paths = aasa.applinks.details.flatMap((detail) => detail.components.map((component) => component["/"]));
   // /plaid/* is the bank's OAuth return to the app (docs/ZELLE_BANK_CHECK.md).
-  assert.deepEqual(paths, ["/t/*", "/i/*", "/plaid/*"]);
+  // /e/* and /r/* are package request links (docs/PACKAGE_REQUESTS.md §8.8).
+  assert.deepEqual(paths, ["/t/*", "/i/*", "/plaid/*", "/e/*", "/r/*"]);
+  assert.match(htaccess, /RewriteRule \^r\/\(\[A-Za-z0-9-\]\{3,40\}\)\/\?\$ \/\?service=package-request&r=\$1 \[R=302,L\]/);
+  assert.match(htaccess, /RewriteRule \^e\/\(\[A-Za-z0-9_-\]\{43\}\)\/\?\$ \/\?service=package-estimate&t=\$1 \[R=302,L\]/);
 });
