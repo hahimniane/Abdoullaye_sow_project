@@ -7174,5 +7174,13 @@
   "prqErrAppCheck": "L’appli n’a pas pu être vérifiée. Réessayez dans un instant.",
   "prqErrPermission": "Vous n’avez pas accès à cela.",
   "prqErrGeneric": "Cela n’a pas fonctionné. Réessayez.",
-  "prqReceiveFeeIncluded": "Les prix incluent les frais de ramassage de l’estimation : {fee}."
+  "prqReceiveFeeIncluded": "Les prix incluent les frais de ramassage de l’estimation : {fee}.",
+  "@prqReceiveFeeIncluded": {
+    "description": "Received sheet: a collected request's pickup fee is spread over the piece prices.",
+    "placeholders": {
+      "fee": {
+        "type": "String"
+      }
+    }
+  }
 }

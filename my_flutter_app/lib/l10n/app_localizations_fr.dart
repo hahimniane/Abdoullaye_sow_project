@@ -14694,6 +14694,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String prqReceiveFeeIncluded(String fee) {
-    return 'Les prix incluent les frais de collecte de l’estimation : $fee.';
+    return 'Les prix incluent les frais de ramassage de l’estimation : $fee.';
   }
 }
