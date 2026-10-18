@@ -61,6 +61,9 @@ function normalizeTrackingCode(input) {
   const body = `[${TRACKING_ALPHABET}]{${TRACKING_CODE_LENGTH}}`;
   const match = stripped.match(new RegExp(`^([A-Z]{2})(${body})$`));
   if (match) return `${match[1]}-${match[2]}`;
+  // A part of a package split across containers: CL-K7M4P2-2.
+  const part = stripped.match(new RegExp(`^([A-Z]{2})(${body})([1-9]\\d?)$`));
+  if (part) return `${part[1]}-${part[2]}-${part[3]}`;
   const legacy = stripped.match(/^([A-Z]{2})([A-Z0-9]{8})([A-Z0-9]{6})$/);
   return legacy ? `${legacy[1]}-${legacy[2]}-${legacy[3]}` : stripped;
 }

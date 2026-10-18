@@ -129,3 +129,19 @@ describe("what the loading list prints", () => {
     assert.match(html, /&lt;script&gt;/);
   });
 });
+
+describe("a line with pieces on the loading list", () => {
+  it("names its pieces and counts them; legacy lines read as before", () => {
+    const model = containerDocumentModel({container: box(), business, lines: [
+      ...lines,
+      {kind: "other", quantity: 3, description: "Barrel, Clothes",
+        ownerKind: "customer", customerName: "Awa",
+        pieces: [{kind: "barrel"}, {kind: "barrel"},
+          {kind: "box", description: "Clothes"}]},
+    ]});
+    assert.deepEqual(model.lines.map((l) => [l.what, l.quantity]),
+        [["2003 Honda Accord", 1], ["Barrels", 8], ["2 barrels, 1 box", 3]]);
+    assert.deepEqual(model.counts,
+        {lineCount: 3, carCount: 1, barrelCount: 10, otherCount: 1});
+  });
+});

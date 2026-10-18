@@ -13,6 +13,7 @@ const {
   guestTrackingCandidates,
   publicGuestTrackingRecord,
 } = require("../guest_tracking");
+const {lineGroupSummary} = require("../line_pieces");
 
 test(
     "guest tracking searches every customer tracking collection",
@@ -135,8 +136,58 @@ test("a container line follows its box, and shows nothing personal", () => {
   assert.equal(record("loading").stage, "booked");
   assert.equal(record("shipped").stage, "in_transit");
   assert.equal(record("arrived").stage, "arrived");
+  // Its pieces, its parts and what is owed (docs/PACKAGE_REQUESTS.md §2:
+  // the page shows the final price, paid and balance) - no people.
   assert.deepEqual(Object.keys(record("shipped")).sort(),
-      ["service", "stage", "trackingCode", "updatedAtMs"]);
+      ["parts", "payment", "pieceCount", "service", "stage", "trackingCode",
+        "updatedAtMs"]);
+  const text = JSON.stringify(record("shipped"));
+  for (const secret of ["Fatou", "+1646", "+224", "line1"]) {
+    assert.ok(!text.includes(secret), `leaks ${secret}`);
+  }
+});
+
+test("a container line shows every part of its group and the group's money",
+    () => {
+      const line = {trackingCode: "CL-K7M4P2-2", containerStatus: "waiting",
+        rootLineId: "root", partIndex: 2, priceCents: 10000,
+        pieces: [{kind: "barrel", priceCents: 10000}],
+        customerName: "Fatou Diallo"};
+      const group = lineGroupSummary([
+        {id: "root", line: {rootLineId: "root", trackingCode: "CL-K7M4P2",
+          containerStatus: "shipped", containerId: "box1", priceCents: 20000,
+          paidCents: 25000, pieces: [{kind: "barrel"}, {kind: "barrel"}]}},
+        {id: "part", line},
+      ], "root");
+      const result = publicGuestTrackingRecord({id: "part",
+        service: "container", data: line, group});
+      assert.equal(result.stage, "waiting_container");
+      assert.equal(result.pieceCount, 1);
+      assert.deepEqual(result.parts, [
+        {trackingCode: "CL-K7M4P2", stage: "in_transit", pieceCount: 2,
+          priceCents: 20000},
+        {trackingCode: "CL-K7M4P2-2", stage: "waiting_container",
+          pieceCount: 1, priceCents: 10000},
+      ]);
+      assert.deepEqual(result.payment,
+          {priceCents: 30000, paidCents: 25000, balanceCents: 5000});
+      assert.ok(!JSON.stringify(result).includes("box1"));
+      // A legacy line alone: its own pieces, price and paid.
+      const legacy = publicGuestTrackingRecord({id: "old",
+        service: "container", data: {trackingCode: "CL-B2C3D4",
+          containerStatus: "loading", kind: "barrels", quantity: 3,
+          priceCents: 9000, paidCents: 3000}});
+      assert.equal(legacy.pieceCount, 3);
+      assert.deepEqual(legacy.parts, [{trackingCode: "CL-B2C3D4",
+        stage: "booked", pieceCount: 3, priceCents: 9000}]);
+      assert.deepEqual(legacy.payment,
+          {priceCents: 9000, paidCents: 3000, balanceCents: 6000});
+    });
+
+test("a part code is found typed without its dashes", () => {
+  assert.ok(guestTrackingCandidates("clk7m4p22").includes("CL-K7M4P2-2"));
+  assert.ok(guestTrackingCandidates("CL-K7M4P2-12")
+      .includes("CL-K7M4P2-12"));
 });
 
 test("a package waiting for a container has a public stage of its own", () => {
@@ -154,7 +205,9 @@ test("a package waiting for a container has a public stage of its own", () => {
   assert.equal(result.stage, "waiting_container");
   assert.equal(WAITING_STAGE_LABEL, "Received, waiting for a container");
   assert.deepEqual(Object.keys(result).sort(),
-      ["service", "stage", "trackingCode", "updatedAtMs"]);
+      ["parts", "payment", "pieceCount", "service", "stage", "trackingCode",
+        "updatedAtMs"]);
+  assert.ok(!JSON.stringify(result).includes("Fatou"));
   assert.equal(CONTAINER_STAGE_BY_STATUS.waiting, WAITING_STAGE);
 });
 
@@ -186,10 +239,13 @@ test("a sailed container line shows its shipping details, nothing more",
           bookingNumber: "BK-998877",
         }, status);
         assert.deepEqual(Object.keys(result).sort(),
-            ["service", "shipping", "stage", "trackingCode", "updatedAtMs"]);
+            ["parts", "payment", "pieceCount", "service", "shipping",
+              "stage", "trackingCode", "updatedAtMs"]);
+        // The line's own price is the page's to show; the box's is not.
+        assert.equal(result.payment.priceCents, 15000);
         const text = JSON.stringify(result);
         for (const secret of ["Private", "secret-token", "Fatou",
-          "+1646", "+224", "15000", "999", "Guinea", "biz", "box1"]) {
+          "+1646", "+224", "999", "Guinea", "biz", "box1"]) {
           assert.ok(!text.includes(secret), `${status} leaks ${secret}`);
         }
       }

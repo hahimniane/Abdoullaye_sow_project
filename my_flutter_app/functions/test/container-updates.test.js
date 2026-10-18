@@ -196,6 +196,47 @@ describe("what they read", () => {
       description: "boxes of clothes"}, "en"), "2 × boxes of clothes");
   });
 
+  it("names a line's pieces, and a split part's share of the whole", () => {
+    const pieced = {kind: "other", quantity: 3, pieces: [
+      {kind: "barrel"}, {kind: "barrel"}, {kind: "box", description: "x"}]};
+    assert.equal(describeLine(pieced, "en"), "2 barrels, 1 box");
+    assert.equal(describeLine(pieced, "fr"), "2 fûts, 1 colis");
+    const group = {partCount: 2, pieceCount: 5};
+    assert.equal(describeLine(pieced, "en", group), "3 of your 5 pieces");
+    assert.equal(describeLine(pieced, "fr", group), "3 de vos 5 colis");
+    // A group of one, or a legacy line, reads as before.
+    assert.equal(describeLine(pieced, "en", {partCount: 1, pieceCount: 3}),
+        "2 barrels, 1 box");
+    assert.equal(describeLine(line(), "en", group), "3 barrels");
+    // A car is a car.
+    assert.equal(describeLine({kind: "car", vinNumber: "1HGCM82633A004352",
+      pieces: [{kind: "barrel"}]}, "en", group), "the car (VIN …004352)");
+  });
+
+  it("fills both languages' what for a part, in every template", () => {
+    const part = {kind: "barrels", quantity: 2, rootLineId: "root",
+      partIndex: 2, pieces: [{kind: "barrel"}, {kind: "barrel"}]};
+    const group = {partCount: 2, pieceCount: 4};
+    const departed = whatsappUpdateMessage({phone: "+224620000000",
+      name: "Mariama Bah", businessName: "Dala", line: part, group,
+      container: {destinationCountryId: "gn",
+        destinationCountryName: "Guinea"},
+      update: "shipped", trackingCode: "CL-K7M4P2-2"});
+    assert.deepEqual(
+        departed.template.components[0].parameters.map((p) => p.text),
+        ["Mariama Bah", "2 of your 4 pieces", "Dala", "Guinea",
+          "2 de vos 4 colis", "Dala", "Guinée", "CL-K7M4P2-2"]);
+    const legacy = whatsappUpdateMessage({phone: "+224620000000",
+      name: "Mariama Bah", businessName: "Dala", line: part, group,
+      container: {destinationCountryId: "gn",
+        destinationCountryName: "Guinea"},
+      update: "shipped", trackingCode: "CL-K7M4P2-2",
+      templateSet: "legacy"});
+    // The legacy template is in the reader's language (French here).
+    assert.equal(legacy.template.components[0].parameters[1].text,
+        "2 de vos 4 colis");
+  });
+
   const message = (update, extra = {}) => whatsappUpdateMessage({
     phone: "+224620000000", name: "Mariama Bah", businessName: "Dala",
     businessPhone: "+16465550199", line: line(),

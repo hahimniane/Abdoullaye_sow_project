@@ -2072,3 +2072,494 @@ describe("setMainDestination", () => {
   });
 });
 
+
+// Pieces on lines and packages split across containers
+// (docs/PACKAGE_REQUESTS.md §1, §4 and §7; docs/WAITING_PACKAGES.md
+// "Pieces" and "Split across containers").
+describe("pieces on lines", () => {
+  const lineRef = (id) => db.collection("containerLines").doc(id);
+  const lineOf = async (id) => (await lineRef(id).get()).data();
+  const GUINEA = {destinationCountryId: "gn",
+    destinationCountryName: "Guinea"};
+  const people = {ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000", ...GUINEA};
+  // Two barrels at $100, a box of clothes at $50, a TV not priced yet.
+  const fourPieces = () => [
+    {kind: "barrel", priceCents: 10000},
+    {kind: "barrel", priceCents: 10000},
+    {kind: "box", description: "Clothes", priceCents: 5000,
+      sizeIn: {l: 20, w: 20, h: 20}},
+    {kind: "other", description: "TV", priceCents: null},
+  ];
+  const counter = (extra = {}) => ({...people, pieces: fourPieces(),
+    ...extra});
+  const tallies = async (id) => {
+    const row = (await db.collection("containers").doc(id).get()).data();
+    return {lineCount: row.lineCount, carCount: row.carCount,
+      barrelCount: row.barrelCount, otherCount: row.otherCount};
+  };
+  const groupOf = async (rootId) => (await db.collection("containerLines")
+      .where("businessId", "==", BIZ).where("rootLineId", "==", rootId)
+      .get()).docs;
+  const audits = async (entityId, action) => {
+    const snap = await db.collection("lotLedgerAudit")
+        .where("entityId", "==", entityId).where("action", "==", action).get();
+    return snap.docs.map((d) => d.data());
+  };
+  const track = (identifier) =>
+    functions.lookupGuestTracking.run({data: {identifier}});
+
+  it("registers a package piece by piece at the counter", async () => {
+    const result = await call("addWaitingPackage", counter({
+      // What an old form would send beside the pieces is not what counts.
+      kind: "barrels", quantity: 9, priceCents: 1,
+      payment: {amountCents: 20000, method: "cash",
+        receivedByStaffId: RECEIVER},
+    }));
+    assert.equal(result.pieceCount, 4);
+    assert.equal(result.paidCents, 20000);
+    const line = await lineOf(result.lineId);
+    assert.deepEqual(line.pieces.map((p) => [p.id, p.kind, p.priceCents]), [
+      ["p1", "barrel", 10000], ["p2", "barrel", 10000], ["p3", "box", 5000],
+      ["p4", "other", null]]);
+    assert.deepEqual(line.pieces[2].sizeIn, {l: 20, w: 20, h: 20});
+    assert.equal(line.priceCents, 25000);
+    assert.equal(line.kind, "other");
+    assert.equal(line.quantity, 4);
+    assert.equal(line.description, "Barrel, Clothes, TV");
+    assert.deepEqual([line.pieceCount, line.barrelPieces, line.packagePieces,
+      line.carPieces], [4, 2, 2, 0]);
+    assert.equal(line.source, "counter");
+    assert.equal(line.requestId, "");
+    assert.ok(line.receivedAt && typeof line.receivedAt.toMillis ===
+      "function", "receivedAt is a server timestamp");
+    assert.equal(line.rootLineId, result.lineId);
+    assert.equal(line.partIndex, 1);
+    const [received] = await audits(result.lineId, "line_added");
+    assert.match(received.summary,
+        /^Received 2 barrels, 1 box, TV for Fatou Diallo/);
+  });
+
+  it("refuses bad pieces, every problem at once, before writing", async () => {
+    const before = (await db.collection("containerLines").get()).size;
+    await assert.rejects(call("addWaitingPackage", counter({pieces: [
+      {kind: "box"}, {kind: "crate", description: "x"},
+      {kind: "barrel", priceCents: -5},
+      {kind: "other", description: "y".repeat(121)},
+    ]})), (error) => error.code === "invalid-argument" &&
+      ["piece_description_required", "piece_kind_invalid",
+        "piece_price_invalid", "piece_description_too_long"]
+          .every((code) => error.details.reasons.includes(code)));
+    await assert.rejects(call("addWaitingPackage", counter({pieces: []})),
+        (error) => error.details?.reasons?.includes("pieces_required"));
+    await assert.rejects(call("addWaitingPackage", counter({
+      pieces: Array.from({length: 61}, () => ({kind: "barrel"}))})),
+    (error) => error.details?.reasons?.includes("pieces_too_many"));
+    // Money is judged against the total of the pieces.
+    await assert.rejects(call("addWaitingPackage", counter({payment: {
+      amountCents: 25001, method: "cash", receivedByStaffId: RECEIVER}})),
+    (error) => error.details?.reasons?.includes("payment_exceeds_balance"));
+    assert.equal((await db.collection("containerLines").get()).size, before);
+  });
+
+  it("adds pieces straight onto a container, and counts them", async () => {
+    const box = await newContainer();
+    const {lineId, pieceCount} = await call("addContainerLine",
+        {containerId: box, line: {...people, pieces: fourPieces()}});
+    assert.equal(pieceCount, 4);
+    assert.deepEqual(await tallies(box),
+        {lineCount: 1, carCount: 0, barrelCount: 2, otherCount: 2});
+    const line = await lineOf(lineId);
+    assert.equal(line.rootLineId, lineId);
+    assert.equal(line.source, "counter");
+  });
+
+  it("prints one label per piece, naming each", async () => {
+    const {lineId} = await call("addWaitingPackage", counter());
+    const {labels} = await call("getPackageLabels",
+        {lineIds: [lineId], copies: 1});
+    assert.deepEqual(labels.map((l) => [l.packageNumber, l.packageCount,
+      l.what, l.size]), [
+      [1, 4, "Barrel", ""], [2, 4, "Barrel", ""],
+      [3, 4, "Clothes", "20 × 20 × 20 in"], [4, 4, "TV", ""]]);
+    // A legacy line still prints its quantity.
+    const legacy = await call("addWaitingPackage",
+        {...people, kind: "barrels", quantity: 2});
+    const old = await call("getPackageLabels",
+        {lineIds: [legacy.lineId], copies: 1});
+    assert.deepEqual(old.labels.map((l) => [l.packageNumber, l.what]),
+        [[1, "Barrel"], [2, "Barrel"]]);
+  });
+
+  it("edits pieces after receipt: counts follow, History says so",
+      async () => {
+        const box = await newContainer();
+        const {lineId} = await call("addContainerLine",
+            {containerId: box, line: {...people, pieces: fourPieces()}});
+        const stored = await lineOf(lineId);
+        await call("updateContainerLine", {containerId: box, lineId,
+          line: {...people, pieces: [...stored.pieces,
+            {kind: "barrel", priceCents: 10000}]}});
+        const line = await lineOf(lineId);
+        assert.equal(line.pieceCount, 5);
+        assert.equal(line.barrelPieces, 3);
+        assert.equal(line.priceCents, 35000);
+        assert.deepEqual(line.pieces.map((p) => p.id),
+            ["p1", "p2", "p3", "p4", "p5"]);
+        assert.deepEqual(await tallies(box),
+            {lineCount: 1, carCount: 0, barrelCount: 3, otherCount: 2});
+        const [edited] = await audits(box, "line_edited");
+        assert.equal(edited.summary, "Edited 3 barrels, 1 box, TV (was 2 " +
+          "barrels, 1 box, TV): pieces, price for Fatou Diallo");
+        // After sailing only the prices may change.
+        await call("setContainerStatus", {containerId: box,
+          status: "shipped"});
+        await assert.rejects(call("updateContainerLine", {containerId: box,
+          lineId, line: {...people, pieces: line.pieces.slice(0, 4)}}),
+        (error) => error.details?.reason === "container_locked");
+        await call("updateContainerLine", {containerId: box, lineId,
+          line: {...people, pieces: line.pieces.map((p) =>
+            p.id === "p4" ? {...p, priceCents: 7000} : p)}});
+        assert.equal((await lineOf(lineId)).priceCents, 42000);
+      });
+
+  it("spreads a total typed by an older app over the pieces", async () => {
+    const {lineId} = await call("addWaitingPackage", counter());
+    await call("setContainerLinePrice", {lineId, priceCents: 40000,
+      payOnArrival: false});
+    const line = await lineOf(lineId);
+    assert.deepEqual(line.pieces.map((p) => p.priceCents),
+        [10000, 10000, 10000, 10000]);
+    assert.equal(line.priceCents, 40000);
+    // The same total only toggles pay on arrival.
+    await call("setContainerLinePrice", {lineId, priceCents: 40000,
+      payOnArrival: true});
+    const after = await lineOf(lineId);
+    assert.equal(after.payOnArrival, true);
+    assert.deepEqual(after.pieces, line.pieces);
+  });
+
+  describe("split across containers", () => {
+    // Drop off 4 pieces, $200 paid; 2 go in, 2 stay waiting.
+    async function splitOne(extra = {}) {
+      const box = await newContainer();
+      const root = await call("addWaitingPackage", counter({payment: {
+        amountCents: 20000, method: "cash", receivedByStaffId: RECEIVER},
+      ...extra}));
+      const result = await call("assignContainerLines", {containerId: box,
+        lineIds: [root.lineId], pieceCounts: {[root.lineId]: 2}});
+      return {box, root, result, part: result.parts[0]};
+    }
+
+    it("moves the chosen pieces and leaves the rest as a part", async () => {
+      const {box, root, result, part} = await splitOne();
+      assert.equal(result.assigned, 1);
+      assert.equal(result.alreadyAssigned, 0);
+      assert.equal(part.lineId, root.lineId);
+      assert.equal(part.trackingCode, `${root.trackingCode}-2`);
+      assert.equal(part.pieceCount, 2);
+      const going = await lineOf(root.lineId);
+      assert.equal(going.containerId, box);
+      assert.equal(going.trackingCode, root.trackingCode);
+      assert.deepEqual(going.pieces.map((p) => p.id), ["p1", "p2"]);
+      assert.equal(going.priceCents, 20000);
+      assert.equal(going.paidCents, 20000);
+      assert.equal(going.pieceCount, 2);
+      assert.equal(going.lastPartIndex, 2);
+      const staying = await lineOf(part.partLineId);
+      assert.equal(staying.containerId, "");
+      assert.equal(staying.containerStatus, "waiting");
+      assert.equal(staying.trackingCode, part.trackingCode);
+      assert.deepEqual(staying.pieces.map((p) => [p.id, p.priceCents]),
+          [["p3", 5000], ["p4", null]]);
+      assert.equal(staying.priceCents, 5000);
+      assert.equal(staying.paidCents, 0);
+      assert.equal(staying.rootLineId, root.lineId);
+      assert.equal(staying.partIndex, 2);
+      assert.equal(staying.splitFromLineId, root.lineId);
+      for (const key of ["customerName", "customerPhone", "receiverName",
+        "receiverPhone", "destinationCountryId", "notifyCustomer",
+        "notifyReceiver", "source", "ownerKind"]) {
+        assert.equal(staying[key], going[key], key);
+      }
+      assert.deepEqual([staying.barrelPieces, staying.packagePieces],
+          [0, 2]);
+      // Counted once, in the box only for what went in.
+      assert.deepEqual(await tallies(box),
+          {lineCount: 1, carCount: 0, barrelCount: 2, otherCount: 0});
+      const [split] = await audits(root.lineId, "line_split");
+      assert.match(split.summary, new RegExp(`^Split ${root.trackingCode}: ` +
+        `2 of 4 pieces to Test box \\d+, 2 stay waiting as ` +
+        `${part.trackingCode}$`));
+      const [from] = await audits(part.partLineId, "line_split");
+      assert.equal(from.summary, `Split from ${root.trackingCode}: 2 pieces ` +
+        "waiting for a container");
+      // No message for a split.
+      const queued = await db.collection("containerUpdates")
+          .doc(`${part.partLineId}_sender_received`).get();
+      assert.equal(queued.exists, false);
+    });
+
+    it("gives the part the root's receivedAt", async () => {
+      const {root, part} = await splitOne();
+      const rootLine = await lineOf(root.lineId);
+      const partLine = await lineOf(part.partLineId);
+      assert.ok(rootLine.receivedAt);
+      assert.equal(partLine.receivedAt.toMillis(),
+          rootLine.receivedAt.toMillis());
+    });
+
+    it("is idempotent when the same request is sent again", async () => {
+      const {box, root} = await splitOne();
+      const again = await call("assignContainerLines", {containerId: box,
+        lineIds: [root.lineId], pieceCounts: {[root.lineId]: 2}});
+      assert.deepEqual(again, {success: true, assigned: 0,
+        alreadyAssigned: 1, parts: []});
+      assert.equal((await groupOf(root.lineId)).length, 2);
+      assert.deepEqual(await tallies(box),
+          {lineCount: 1, carCount: 0, barrelCount: 2, otherCount: 0});
+    });
+
+    it("refuses a count that is not one of the pieces, and never splits " +
+      "a car", async () => {
+      const box = await newContainer();
+      const {lineId} = await call("addWaitingPackage", counter());
+      for (const count of [0, 5, 1.5, "two"]) {
+        await assert.rejects(call("assignContainerLines", {containerId: box,
+          lineIds: [lineId], pieceCounts: {[lineId]: count}}),
+        (error) => error.code === "invalid-argument" &&
+          error.details?.reason === "piece_count_invalid" &&
+          error.details?.lineIds?.[0] === lineId);
+      }
+      assert.equal((await lineOf(lineId)).containerId, "");
+      const car = await call("addWaitingPackage", {...people, kind: "car",
+        vinNumber: freshVin(), carMake: "Honda", carModel: "Accord",
+        carYear: "2003"});
+      await assert.rejects(call("assignContainerLines", {containerId: box,
+        lineIds: [car.lineId], pieceCounts: {[car.lineId]: 2}}),
+      (error) => error.details?.reason === "piece_count_invalid");
+      // All of them is no split.
+      const whole = await call("assignContainerLines", {containerId: box,
+        lineIds: [lineId], pieceCounts: {[lineId]: 4}});
+      assert.deepEqual(whole.parts, []);
+      assert.equal((await lineOf(lineId)).pieceCount, 4);
+    });
+
+    it("splits a legacy line as pieces, its price spread", async () => {
+      const box = await newContainer();
+      const {lineId, trackingCode} = await call("addWaitingPackage",
+          {...people, kind: "barrels", quantity: 3, priceCents: 30000});
+      const {parts: [part]} = await call("assignContainerLines",
+          {containerId: box, lineIds: [lineId], pieceCounts: {[lineId]: 1}});
+      const going = await lineOf(lineId);
+      const staying = await lineOf(part.partLineId);
+      assert.equal(going.priceCents, 10000);
+      assert.equal(going.pieceCount, 1);
+      assert.equal(going.kind, "barrels");
+      assert.equal(staying.priceCents, 20000);
+      assert.equal(staying.quantity, 2);
+      assert.equal(staying.trackingCode, `${trackingCode}-2`);
+      assert.deepEqual(await tallies(box),
+          {lineCount: 1, carCount: 0, barrelCount: 1, otherCount: 0});
+    });
+
+    it("splits a part again, never reusing a cancelled part's code",
+        async () => {
+          const first = await newContainer();
+          const second = await newContainer();
+          const root = await call("addWaitingPackage", counter());
+          const code = root.trackingCode;
+          const {parts: [p2]} = await call("assignContainerLines", {
+            containerId: first, lineIds: [root.lineId],
+            pieceCounts: {[root.lineId]: 1}});
+          assert.equal(p2.trackingCode, `${code}-2`);
+          assert.equal(p2.pieceCount, 3);
+          const {parts: [p3]} = await call("assignContainerLines", {
+            containerId: second, lineIds: [p2.partLineId],
+            pieceCounts: {[p2.partLineId]: 2}});
+          assert.equal(p3.trackingCode, `${code}-3`);
+          assert.equal((await lineOf(p3.partLineId)).rootLineId, root.lineId);
+          assert.equal((await lineOf(root.lineId)).lastPartIndex, 3);
+          assert.deepEqual(await tallies(second),
+              {lineCount: 1, carCount: 0, barrelCount: 1, otherCount: 1});
+          // Cancel -3 (the TV went home), take -2 off its box and split it
+          // again: the new part is -4, never a second -3.
+          await call("removeContainerLine", {lineId: p3.partLineId});
+          await call("unassignContainerLine", {lineId: p2.partLineId});
+          assert.deepEqual(await tallies(second),
+              {lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0});
+          const {parts: [p4]} = await call("assignContainerLines", {
+            containerId: second, lineIds: [p2.partLineId],
+            pieceCounts: {[p2.partLineId]: 1}});
+          assert.equal(p4.trackingCode, `${code}-4`);
+          assert.equal((await lineOf(p4.partLineId)).partIndex, 4);
+          assert.deepEqual((await groupOf(root.lineId))
+              .map((d) => d.data().trackingCode).sort(),
+          [code, `${code}-2`, `${code}-4`]);
+          // Sending a part back never re-merges it.
+          await call("unassignContainerLine", {lineId: p2.partLineId});
+          const back = await lineOf(p2.partLineId);
+          assert.equal(back.containerStatus, "waiting");
+          assert.equal(back.pieceCount, 1);
+          assert.equal((await lineOf(p4.partLineId)).pieceCount, 1);
+          assert.deepEqual(await tallies(second),
+              {lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0});
+        });
+
+    it("keeps the money on the root and the balance for the group",
+        async () => {
+          const {root, part} = await splitOne();
+          // $250 for the group, $200 paid: $50 owed, taken from the part.
+          await assert.rejects(pay({lineId: part.partLineId,
+            amountCents: 5001, method: "cash"}),
+          (error) => error.details?.reasons?.includes(
+              "payment_exceeds_balance"));
+          const paid = await pay({lineId: part.partLineId, amountCents: 5000,
+            method: "zelle"});
+          assert.equal(paid.lineId, root.lineId);
+          assert.equal(paid.paidCents, 25000);
+          const row = (await db.collection("containerLinePayments")
+              .doc(paid.paymentId).get()).data();
+          assert.equal(row.lineId, root.lineId);
+          assert.equal((await lineOf(root.lineId)).paidCents, 25000);
+          assert.equal((await lineOf(part.partLineId)).paidCents, 0);
+          assert.equal((await audits(part.partLineId, "payment")).length, 1);
+          // Paid in full: no part may be priced below its share now.
+          await assert.rejects(call("setContainerLinePrice", {
+            lineId: part.partLineId, priceCents: null, payOnArrival: false}),
+          (error) => error.details?.reasons?.includes("price_below_paid"));
+          const staying = await lineOf(part.partLineId);
+          await assert.rejects(call("updateContainerLine", {
+            lineId: part.partLineId, line: {...people, pieces: staying.pieces
+                .map((p) => ({...p, priceCents: 0}))}}),
+          (error) => error.details?.reasons?.includes("price_below_paid"));
+          // Raising a part's price is fine and leaves a balance on the group.
+          await call("updateContainerLine", {lineId: part.partLineId,
+            line: {...people, pieces: staying.pieces.map((p) =>
+              p.id === "p4" ? {...p, priceCents: 3000} : p)}});
+          const found = await track(`${root.trackingCode}-2`);
+          assert.deepEqual(found.record.payment,
+              {priceCents: 28000, paidCents: 25000, balanceCents: 3000});
+          // Cancelling the part now would leave the group overpaid.
+          await assert.rejects(call("removeContainerLine",
+              {lineId: part.partLineId}),
+          (error) => error.details?.reason === "line_has_payments");
+        });
+
+    it("cancels an unpaid part, but not a root that has parts", async () => {
+      const box = await newContainer();
+      const root = await call("addWaitingPackage", counter());
+      const {parts: [part]} = await call("assignContainerLines", {
+        containerId: box, lineIds: [root.lineId],
+        pieceCounts: {[root.lineId]: 3}});
+      await assert.rejects(call("removeContainerLine",
+          {containerId: box, lineId: root.lineId}),
+      (error) => error.details?.reason === "line_has_parts");
+      await call("removeContainerLine", {lineId: part.partLineId});
+      assert.equal((await lineRef(part.partLineId).get()).exists, false);
+      // With its part gone the root stands alone again.
+      await call("removeContainerLine", {containerId: box,
+        lineId: root.lineId});
+      assert.deepEqual(await tallies(box),
+          {lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0});
+    });
+
+    it("ships one part while the rest waits; tracking shows both",
+        async () => {
+          const {box, root, part} = await splitOne();
+          await call("setContainerStatus", {containerId: box,
+            status: "shipped"});
+          assert.equal((await lineOf(root.lineId)).containerStatus,
+              "shipped");
+          assert.equal((await lineOf(part.partLineId)).containerStatus,
+              "waiting");
+          for (const code of [root.trackingCode,
+            `${root.trackingCode}-2`.replace(/-/g, "").toLowerCase()]) {
+            const {found, record} = await track(code);
+            assert.equal(found, true, code);
+            assert.deepEqual(record.parts.map((p) =>
+              [p.trackingCode, p.stage, p.pieceCount, p.priceCents]), [
+              [root.trackingCode, "in_transit", 2, 20000],
+              [`${root.trackingCode}-2`, "waiting_container", 2, 5000]]);
+            assert.deepEqual(record.payment,
+                {priceCents: 25000, paidCents: 20000, balanceCents: 5000});
+            assert.ok(!JSON.stringify(record).includes("Fatou"));
+          }
+        });
+
+    it("tells each part which share of the whole it is", async () => {
+      connectWhatsApp();
+      const {box, root} = await splitOne();
+      await call("setContainerStatus", {containerId: box, status: "shipped"});
+      await recordMoments(box);
+      fakeWhatsApp(OK);
+      const rowId = `${root.lineId}_receiver_shipped`;
+      await deliver(rowId);
+      const sent = whatsappCalls.find((c) => c.to === "224620000000");
+      const texts = sent.template.components[0].parameters.map((p) => p.text);
+      assert.equal(texts[1], "2 of your 4 pieces");
+      assert.equal(texts[4], "2 de vos 4 colis");
+    });
+  });
+
+  it("an unsplit package's message names its pieces", async () => {
+    const box = await newContainer();
+    const {lineId} = await call("addContainerLine", {containerId: box,
+      line: {...people, pieces: [{kind: "barrel"}, {kind: "barrel"},
+        {kind: "box", description: "Shoes"}]}});
+    connectWhatsApp();
+    await call("setContainerStatus", {containerId: box, status: "shipped"});
+    await recordMoments(box);
+    fakeWhatsApp(OK);
+    await deliver(`${lineId}_receiver_shipped`);
+    const texts = whatsappCalls[0].template.components[0].parameters
+        .map((p) => p.text);
+    assert.equal(texts[1], "2 barrels, 1 box");
+    assert.equal(texts[4], "2 fûts, 1 colis");
+  });
+
+  it("ships a part while the original line still waits", async () => {
+    connectWhatsApp();
+    const first = await newContainer();
+    const second = await newContainer();
+    const root = await call("addWaitingPackage", {...people,
+      pieces: fourPieces()});
+    const {parts: [part]} = await call("assignContainerLines", {
+      containerId: first, lineIds: [root.lineId],
+      pieceCounts: {[root.lineId]: 2}});
+    // The original comes back off its box; the part goes on another one
+    // and sails without it.
+    await call("unassignContainerLine", {lineId: root.lineId});
+    await call("assignContainerLines", {containerId: second,
+      lineIds: [part.partLineId]});
+    await call("setContainerStatus", {containerId: second,
+      status: "shipped"});
+    assert.equal((await lineOf(root.lineId)).containerStatus, "waiting");
+    assert.equal((await lineOf(part.partLineId)).containerStatus, "shipped");
+    assert.deepEqual(await tallies(first),
+        {lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0});
+    assert.deepEqual(await tallies(second),
+        {lineCount: 1, carCount: 0, barrelCount: 0, otherCount: 2});
+    const {record} = await track(root.trackingCode);
+    assert.deepEqual(record.parts.map((p) => p.stage),
+        ["waiting_container", "in_transit"]);
+    // Its own departed message, naming its share.
+    await recordMoments(second);
+    fakeWhatsApp(OK);
+    await deliver(`${part.partLineId}_receiver_shipped`);
+    const texts = whatsappCalls[0].template.components[0].parameters
+        .map((p) => p.text);
+    assert.equal(texts[1], "2 of your 4 pieces");
+    assert.equal(texts[7], part.trackingCode);
+    // Nothing was said about the root, still waiting.
+    assert.equal((await db.collection("containerUpdates")
+        .doc(`${root.lineId}_receiver_shipped`).get()).exists, false);
+    // Money for the shipped part still lands on the root.
+    await call("setContainerLinePrice", {lineId: root.lineId,
+      priceCents: 20000, payOnArrival: false});
+    const paid = await pay({lineId: part.partLineId, amountCents: 25000,
+      method: "cash"});
+    assert.equal(paid.lineId, root.lineId);
+  });
+});

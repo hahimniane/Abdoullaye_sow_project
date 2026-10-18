@@ -66,6 +66,15 @@ describe("tracking codes", () => {
     assert.notEqual(normalizeTrackingCode("BS-MS9TTES1-OMVYTL"), "");
   });
 
+  it("reads a split part's code however it is typed", () => {
+    for (const typed of ["CL-K7M4P2-2", "cl k7m4p2 2", "clk7m4p22"]) {
+      assert.equal(normalizeTrackingCode(typed), "CL-K7M4P2-2");
+    }
+    assert.equal(normalizeTrackingCode("CLK7M4P212"), "CL-K7M4P2-12");
+    // The whole code without a part is still the whole code.
+    assert.equal(normalizeTrackingCode("CLK7M4P2"), "CL-K7M4P2");
+  });
+
   it("returns empty for unusable input", () => {
     assert.equal(normalizeTrackingCode(""), "");
     assert.equal(normalizeTrackingCode("   "), "");

@@ -35,6 +35,7 @@ const {
   storedGuestIdentity,
 } = require("./guest_contact");
 const {
+  containerLineGroup,
   findGuestTrackingRecord,
   guestTrackingCandidates,
 } = require("./guest_tracking");
@@ -399,6 +400,21 @@ const {
   PICKUP_MESSAGES,
   validateDestinationPickup,
 } = require("./destination_pickup");
+const {
+  distributeCents,
+  groupRootId,
+  lineCounts,
+  lineGroupSummary,
+  lineHasPieces,
+  linePieces,
+  lineSourceOf,
+  nextPartIndex,
+  paidFloorForLine,
+  partIndexOf,
+  partTrackingCode,
+  piecesLineFields,
+  splitPieces,
+} = require("./line_pieces");
 const {
   priceErrors: containerPriceErrors,
   linePriceRecord: containerLinePriceRecord,
@@ -17175,6 +17191,90 @@ function containerLineTitle(row) {
   return containerLineWhat(row) + (name ? ` for ${name}` : "");
 }
 
+/**
+ * The fields a line gets when its pieces are received at the counter
+ * (docs/PACKAGE_REQUESTS.md §7): where it came from, when the pieces were
+ * physically received (monthly volume counts by it), and its place as the
+ * root of its own group.
+ *
+ * @param {string} lineId The new line's id.
+ * @return {object} Fields to merge into the new line.
+ */
+function counterReceiptFields(lineId) {
+  return {
+    source: "counter",
+    requestId: "",
+    receivedAt: FirestoreFieldValue.serverTimestamp(),
+    rootLineId: lineId,
+    partIndex: 1,
+  };
+}
+
+/**
+ * Whether a line was ever split: a part, or a root that has had parts.
+ * Only those need their group read; any other line is a group of one.
+ *
+ * @param {object} row The line.
+ * @return {boolean} True when its group has (or had) other parts.
+ */
+function lineWasSplit(row) {
+  return partIndexOf(row) > 1 || Number(row?.lastPartIndex || 0) > 1;
+}
+
+/**
+ * A line's group read inside a transaction: the root and every part, one
+ * business's only. A line never split is its own group and costs no read.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} lineId The line.
+ * @param {object} row The line as read in the same transaction.
+ * @return {Promise<object>} {rootId, entries: [{id, line}], root (the root
+ *   line, or null if gone)}.
+ */
+async function txLineGroup(tx, db, businessId, lineId, row) {
+  const rootId = groupRootId(row, lineId);
+  if (!lineWasSplit(row) && rootId === lineId) {
+    return {rootId, entries: [{id: lineId, line: row}], root: row};
+  }
+  const snap = await tx.get(db.collection("containerLines")
+      .where("businessId", "==", businessId)
+      .where("rootLineId", "==", rootId));
+  const entries = snap.docs.map((d) => ({id: d.id, line: d.data() || {}}));
+  let root = entries.find((entry) => entry.id === rootId)?.line || null;
+  if (!root && rootId !== lineId) {
+    const rootDoc = await tx.get(
+        db.collection("containerLines").doc(rootId));
+    if (rootDoc.exists && String(rootDoc.data()?.businessId) === businessId) {
+      root = rootDoc.data() || {};
+      entries.push({id: rootId, line: {...root, rootLineId: rootId}});
+    }
+  }
+  if (rootId === lineId && !root) root = row;
+  if (!entries.some((entry) => entry.id === lineId)) {
+    entries.push({id: lineId, line: {...row, rootLineId: rootId}});
+  }
+  return {rootId, entries, root};
+}
+
+/**
+ * The group's summary with one line replaced by what it would become (or
+ * left out, `next` null), so a change is judged against the whole group.
+ *
+ * @param {object} group From txLineGroup.
+ * @param {string} lineId The line changing.
+ * @param {object|null} next The line after the change, null when removed.
+ * @return {object} lineGroupSummary.
+ */
+function groupWith(group, lineId, next) {
+  const entries = group.entries
+      .filter((entry) => entry.id !== lineId)
+      .concat(next ? [{id: lineId,
+        line: {...next, rootLineId: group.rootId}}] : []);
+  return lineGroupSummary(entries, group.rootId);
+}
+
 exports.createContainer = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -17406,6 +17506,7 @@ exports.addContainerLine = onCall(
         tx.set(lineRef, {
           businessId,
           ...record,
+          ...counterReceiptFields(lineRef.id),
           trackingCode,
           createdAt: FirestoreFieldValue.serverTimestamp(),
           updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -17440,9 +17541,28 @@ exports.addContainerLine = onCall(
           `Added ${containerLineWhat(record)}` + (record.customerName ?
             ` for ${record.customerName}` : " (business stock)") +
           (record.receiverName ? `, to ${record.receiverName}` : ""));
-      return {success: true, lineId: lineRef.id, containerId: ref.id};
+      return {success: true, lineId: lineRef.id, containerId: ref.id,
+        pieceCount: record.pieceCount};
     },
 );
+
+/**
+ * Whether a line may be removed from its group: a root keeps its parts'
+ * money, so it goes last (`line_has_parts`); a part may go (the customer
+ * took those pieces back) unless the rest of the group would then be priced
+ * below what was paid (`line_has_payments`: revert first).
+ *
+ * @param {object} group From txLineGroup.
+ * @param {string} lineId The line being removed.
+ * @return {string|null} The refusal code, or null.
+ */
+function groupRemovalRefusal(group, lineId) {
+  if (group.entries.length <= 1) return null;
+  if (lineId === group.rootId) return "line_has_parts";
+  const rest = groupWith(group, lineId, null);
+  return (rest.priceCents || 0) < rest.paidCents ? "line_has_payments" :
+    null;
+}
 
 /**
  * Removes a package that is still waiting (no container): the line, and its
@@ -17472,6 +17592,12 @@ async function removeWaitingLine(db, args) {
       throw new HttpsError("failed-precondition",
           CONTAINER_MESSAGES.line_has_payments,
           {reason: "line_has_payments"});
+    }
+    const group = await txLineGroup(tx, db, businessId, lineId, row);
+    const groupRefusal = groupRemovalRefusal(group, lineId);
+    if (groupRefusal) {
+      throw new HttpsError("failed-precondition",
+          CONTAINER_MESSAGES[groupRefusal], {reason: groupRefusal});
     }
     const lockRef = row.kind === "car" ?
       containerVinLockRef(db, businessId, row.vinNumber) : null;
@@ -17528,6 +17654,12 @@ exports.removeContainerLine = onCall(
               CONTAINER_MESSAGES.line_has_payments,
               {reason: "line_has_payments"});
         }
+        const group = await txLineGroup(tx, db, businessId, lineId, row);
+        const groupRefusal = groupRemovalRefusal(group, lineId);
+        if (groupRefusal) {
+          throw new HttpsError("failed-precondition",
+              CONTAINER_MESSAGES[groupRefusal], {reason: groupRefusal});
+        }
         const lockRef = row.kind === "car" ?
           containerVinLockRef(db, businessId, row.vinNumber) : null;
         const lock = lockRef ? await tx.get(lockRef) : null;
@@ -17543,8 +17675,9 @@ exports.removeContainerLine = onCall(
       });
       await containerAudit(businessId, ref.id, "line_removed", uid,
           `Removed ${line.kind === "car" ? `car ${line.vinNumber}` :
-            (line.kind === "barrels" ? barrelsLabel(line.quantity) :
-              String(line.description || "a line"))}`);
+            (lineHasPieces(line) ? containerLineWhat(line) :
+              (line.kind === "barrels" ? barrelsLabel(line.quantity) :
+                String(line.description || "a line")))}`);
       return {success: true, containerId: ref.id};
     },
 );
@@ -17672,7 +17805,14 @@ async function editContainerLine(db, args) {
         (containerId && String(row.containerId) !== containerId)) {
       throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
     }
-    const errors = validateContainerLineEdit(row, input, contactsOnly);
+    // A part of a split package is priced against its whole group: the
+    // root holds the payments, the other parts cover some of them.
+    const group = contactsOnly ? null :
+      await txLineGroup(tx, db, businessId, lineId, row);
+    const paidFloor = group ?
+      paidFloorForLine(groupWith(group, lineId, row), lineId) : null;
+    const errors = validateContainerLineEdit(row, input, contactsOnly,
+        paidFloor);
     if (errors.length > 0) {
       throw new HttpsError("invalid-argument", containerMessage(errors),
           {reasons: errors});
@@ -17737,9 +17877,15 @@ async function editContainerLine(db, args) {
       }
     }
     const update = {};
-    for (const key of changes) update[key] = next[key];
+    // `piecePrices` is an edit key, not a field: the prices live in pieces.
+    for (const key of changes) {
+      if (key !== "piecePrices") update[key] = next[key];
+    }
+    if (changes.includes("piecePrices")) update.pieces = next.pieces;
     tx.update(lineRef, {
       ...update,
+      // The counts always follow the pieces the line has now.
+      ...(contactsOnly ? {} : lineCounts(next)),
       editedByStaffId: uid,
       updatedAt: FirestoreFieldValue.serverTimestamp(),
     });
@@ -17878,11 +18024,12 @@ exports.addWaitingPackage = onCall(
       await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
       const errors = validateWaitingPackage(data);
       // Money taken at the counter as it is dropped off: judged by the same
-      // rules as any later payment, against the price in this request.
+      // rules as any later payment, against the price in this request (the
+      // sum of the pieces, for a package registered piece by piece).
       const payment = containerRegistrationPayment(data);
       if (payment) {
         errors.push(...validateContainerLinePayment(payment, {
-          priceCents: containerLinePriceRecord(data).priceCents,
+          priceCents: containerLineRecord(data).priceCents,
           paidCents: 0,
         }));
       }
@@ -17929,6 +18076,7 @@ exports.addWaitingPackage = onCall(
         tx.set(lineRef, {
           businessId,
           ...record,
+          ...counterReceiptFields(lineRef.id),
           paidCents,
           trackingCode,
           createdAt: FirestoreFieldValue.serverTimestamp(),
@@ -17973,9 +18121,27 @@ exports.addWaitingPackage = onCall(
                 {record: paymentRecord, row: record, paidCents}));
       }
       return {success: true, lineId: lineRef.id, trackingCode, paidCents,
-        paymentId: payRef ? payRef.id : ""};
+        paymentId: payRef ? payRef.id : "", pieceCount: record.pieceCount};
     },
 );
+
+/**
+ * The piece counts an assign asks for, by line: `pieceCounts` names how
+ * many of a line's pieces go (the rest stay waiting as a new part). Lines
+ * it does not name go whole.
+ *
+ * @param {*} raw The request's `pieceCounts`.
+ * @return {Map<string, *>} The asked count by line id.
+ */
+function requestedPieceCounts(raw) {
+  const out = new Map();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [id, count] of Object.entries(raw)) {
+    if (count === null || count === undefined || count === "") continue;
+    out.set(String(id).trim(), count);
+  }
+  return out;
+}
 
 exports.assignContainerLines = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
@@ -17991,10 +18157,25 @@ exports.assignContainerLines = onCall(
         throw new HttpsError("invalid-argument", containerMessage(errors),
             {reasons: errors});
       }
+      const asked = requestedPieceCounts(data.pieceCounts);
       const lineRefs = ids.map((id) => db.collection("containerLines").doc(id));
+      // A split names the part by its root's code, so a line that is about
+      // to be split needs one (waiting packages always have it; this is the
+      // repair for one that somehow does not).
+      if (ids.some((id) => asked.has(id))) {
+        const splitting = (await db.getAll(...lineRefs.filter((r) =>
+          asked.has(r.id)))).filter((d) => d.exists &&
+          String(d.data()?.businessId) === businessId);
+        await assignMissingLineCodes(db, splitting);
+      }
+      // Minted outside the transaction: an auto id reads nothing.
+      const partRefs = new Map(ids.filter((id) => asked.has(id))
+          .map((id) => [id, db.collection("containerLines").doc()]));
       // All or none: every package is re-read with the container inside one
       // transaction, so a box that shipped, or a package taken by another
-      // box a moment ago, refuses the whole request.
+      // box a moment ago, refuses the whole request. A package already on
+      // THIS box is left alone, so a retry of a request that landed (its
+      // answer lost on the way) changes nothing and creates no second part.
       const placed = await db.runTransaction(async (tx) => {
         const box = await tx.get(ref);
         if (!box.exists || String(box.data()?.businessId) !== businessId) {
@@ -18003,10 +18184,36 @@ exports.assignContainerLines = onCall(
         }
         const boxData = box.data() || {};
         const docs = await tx.getAll(...lineRefs);
-        const entries = docs.map((d) =>
+        const all = docs.map((d) =>
           ({id: d.id, line: d.exists ? d.data() || {} : null}));
-        const refusal = containerAssignRefusal(boxData, entries, businessId);
+        const already = all.filter(({line}) => line &&
+          String(line.businessId) === businessId &&
+          String(line.containerId || "") === ref.id);
+        const entries = all.filter((entry) => !already.includes(entry));
+        const refusal = entries.length === 0 ? null :
+          containerAssignRefusal(boxData, entries, businessId);
         if (refusal) throw containerRefusal(refusal.code, refusal.lineIds);
+        // How each line goes: whole, or the first n of its pieces.
+        const plans = entries.map((entry) => ({...entry,
+          ...splitPieces(entry.line, asked.get(entry.id))}));
+        const badCounts = plans.filter((plan) => plan.error)
+            .map((plan) => plan.id);
+        if (badCounts.length > 0) {
+          throw new HttpsError("invalid-argument",
+              containerMessage(["piece_count_invalid"]),
+              {reason: "piece_count_invalid",
+                reasons: ["piece_count_invalid"], lineIds: badCounts});
+        }
+        // Reads first, as a transaction requires: each split line's group
+        // (for the next part number) and the cars' VIN locks.
+        const groups = new Map();
+        for (const plan of plans.filter((p) => p.split)) {
+          const rootId = groupRootId(plan.line, plan.id);
+          if (!groups.has(rootId)) {
+            groups.set(rootId,
+                await txLineGroup(tx, db, businessId, plan.id, plan.line));
+          }
+        }
         const lockRefs = entries
             .filter(({line}) => line.kind === "car")
             .map(({id, line}) => ({id, lockRef: containerVinLockRef(
@@ -18015,39 +18222,115 @@ exports.assignContainerLines = onCall(
         const locks = lockRefs.length > 0 ?
           await tx.getAll(...lockRefs.map(({lockRef}) => lockRef)) : [];
         const status = String(boxData.status || CONTAINER_STATUS.LOADING);
-        for (const {id} of entries) {
-          tx.update(db.collection("containerLines").doc(id), {
+        const now = FirestoreFieldValue.serverTimestamp();
+        const lastIndex = new Map();
+        const loaded = [];
+        const parts = [];
+        for (const plan of plans) {
+          const lineRef = db.collection("containerLines").doc(plan.id);
+          if (!plan.split) {
+            tx.update(lineRef, {containerId: ref.id, containerStatus: status,
+              updatedAt: now});
+            loaded.push({id: plan.id, line: plan.line});
+            continue;
+          }
+          const rootId = groupRootId(plan.line, plan.id);
+          const group = groups.get(rootId);
+          const root = group.root || plan.line;
+          const index = Math.max(lastIndex.get(rootId) || 0,
+              nextPartIndex(root, group.entries.map((e) => e.line)) - 1) + 1;
+          lastIndex.set(rootId, index);
+          const rootCode = String(root.trackingCode ||
+            plan.line.trackingCode || "");
+          const going = piecesLineFields(plan.going);
+          const staying = piecesLineFields(plan.staying);
+          const isRoot = rootId === plan.id;
+          tx.update(lineRef, {
             containerId: ref.id,
             containerStatus: status,
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
+            ...going,
+            rootLineId: rootId,
+            partIndex: partIndexOf(plan.line),
+            ...(isRoot ? {lastPartIndex: index} : {}),
+            updatedAt: now,
           });
+          if (!isRoot) {
+            tx.update(db.collection("containerLines").doc(rootId),
+                {lastPartIndex: index, updatedAt: now});
+          }
+          const partRef = partRefs.get(plan.id);
+          const line = plan.line;
+          const code = partTrackingCode(rootCode, index);
+          // Same customer, receiver, phones, switches, destination and
+          // receipt as the line it came from; nothing paid on it (payments
+          // stay on the root); waiting for a container of its own.
+          tx.set(partRef, {
+            businessId,
+            containerId: "",
+            containerStatus: LINE_STATUS_WAITING,
+            vinNumber: "", carMake: "", carModel: "", carYear: "",
+            ownerKind: String(line.ownerKind || "customer"),
+            customerName: String(line.customerName || ""),
+            customerPhone: String(line.customerPhone || ""),
+            receiverName: String(line.receiverName || ""),
+            receiverPhone: String(line.receiverPhone || ""),
+            notifyCustomer: line.notifyCustomer !== false,
+            notifyReceiver: line.notifyReceiver !== false,
+            destinationCountryId: String(line.destinationCountryId || ""),
+            destinationCountryName: String(line.destinationCountryName || ""),
+            payOnArrival: line.payOnArrival === true,
+            ...staying,
+            paidCents: 0,
+            source: lineSourceOf(line.source || root.source),
+            requestId: String(line.requestId || root.requestId || ""),
+            // Received when the root was: volume counts each piece once,
+            // in the month it came in.
+            receivedAt: root.receivedAt || root.createdAt ||
+              line.receivedAt || line.createdAt || now,
+            rootLineId: rootId,
+            partIndex: index,
+            splitFromLineId: plan.id,
+            trackingCode: code,
+            addedByStaffId: uid,
+            createdAt: now,
+            updatedAt: now,
+          });
+          loaded.push({id: plan.id, line: {...plan.line, ...going}});
+          parts.push({lineId: plan.id, partLineId: partRef.id,
+            trackingCode: code, pieceCount: staying.pieceCount,
+            fromCode: String(plan.line.trackingCode || ""),
+            going: going.pieceCount,
+            total: going.pieceCount + staying.pieceCount,
+            line: plan.line});
         }
         locks.forEach((lock, i) => {
           if (lock.exists && String(lock.data()?.lineId || "") ===
               lockRefs[i].id) {
-            tx.update(lock.ref, {containerId: ref.id,
-              updatedAt: FirestoreFieldValue.serverTimestamp()});
+            tx.update(lock.ref, {containerId: ref.id, updatedAt: now});
           }
         });
-        const increments = {};
-        for (const [key, value] of Object.entries(
-            containerLinesCountsDelta(entries.map(({line}) => line), 1))) {
-          increments[key] = FirestoreFieldValue.increment(value);
+        if (loaded.length > 0) {
+          // The tallies count only the pieces that went in.
+          const increments = {};
+          for (const [key, value] of Object.entries(
+              containerLinesCountsDelta(loaded.map(({line}) => line), 1))) {
+            increments[key] = FirestoreFieldValue.increment(value);
+          }
+          tx.set(ref, {...increments, updatedAt: now}, {merge: true});
         }
-        tx.set(ref, {
-          ...increments,
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        }, {merge: true});
-        return {box: boxData, entries};
+        return {box: boxData, entries: loaded, parts,
+          alreadyAssigned: already.length};
       });
       const label = String(placed.box.label || ref.id);
-      const names = placed.entries.slice(0, 5)
-          .map(({line}) => containerLineTitle(line)).join("; ");
-      await containerAudit(businessId, ref.id, "lines_assigned", uid,
-          `Added ${placed.entries.length} waiting package` +
-          `${placed.entries.length === 1 ? "" : "s"}: ${names}` +
-          (placed.entries.length > 5 ?
-            ` and ${placed.entries.length - 5} more` : ""));
+      if (placed.entries.length > 0) {
+        const names = placed.entries.slice(0, 5)
+            .map(({line}) => containerLineTitle(line)).join("; ");
+        await containerAudit(businessId, ref.id, "lines_assigned", uid,
+            `Added ${placed.entries.length} waiting package` +
+            `${placed.entries.length === 1 ? "" : "s"}: ${names}` +
+            (placed.entries.length > 5 ?
+              ` and ${placed.entries.length - 5} more` : ""));
+      }
       for (const group of inGroups(placed.entries, 20)) {
         await Promise.all(group.map(({id, line}) => writeLotLedgerAudit({
           businessId, entityType: "container_line", entityId: id,
@@ -18055,7 +18338,30 @@ exports.assignContainerLines = onCall(
           summary: `Added ${containerLineTitle(line)} to ${label}`,
         })));
       }
-      return {success: true, assigned: placed.entries.length};
+      for (const part of placed.parts) {
+        await writeLotLedgerAudit({
+          businessId, entityType: "container_line", entityId: part.lineId,
+          action: "line_split", byStaffId: uid, changes: [],
+          summary: `Split ${part.fromCode}: ${part.going} of ${part.total} ` +
+            `pieces to ${label}, ${part.pieceCount} stay waiting as ` +
+            `${part.trackingCode}`,
+        });
+        await writeLotLedgerAudit({
+          businessId, entityType: "container_line",
+          entityId: part.partLineId,
+          action: "line_split", byStaffId: uid, changes: [],
+          summary: `Split from ${part.fromCode}: ${part.pieceCount} ` +
+            `piece${part.pieceCount === 1 ? "" : "s"} waiting for a ` +
+            "container",
+        });
+      }
+      return {
+        success: true,
+        assigned: placed.entries.length,
+        alreadyAssigned: placed.alreadyAssigned,
+        parts: placed.parts.map(({lineId, partLineId, trackingCode,
+          pieceCount}) => ({lineId, partLineId, trackingCode, pieceCount})),
+      };
     },
 );
 
@@ -18121,7 +18427,11 @@ exports.unassignContainerLine = onCall(
 
 // What a package costs. Any time, whatever state it is in: the price is
 // agreed or corrected after the box has sailed as often as before - but never
-// below what has already been paid.
+// below what has already been paid. A package split into parts is judged as
+// a whole: its payments are on the root, and the other parts cover some of
+// them. A package with pieces carries its price on its pieces: a changed
+// total is spread evenly over them (the clients edit each piece's price with
+// updateContainerLine; this keeps older app versions working).
 exports.setContainerLinePrice = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -18142,13 +18452,23 @@ exports.setContainerLinePrice = onCall(
         if (!row || String(row.businessId) !== businessId) {
           throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
         }
-        const errors = containerPriceErrors(data.priceCents, row.paidCents);
+        const group = await txLineGroup(tx, db, businessId, lineId, row);
+        const floor = paidFloorForLine(groupWith(group, lineId, row), lineId);
+        const errors = containerPriceErrors(data.priceCents, floor);
         if (errors.length > 0) {
           throw new HttpsError("invalid-argument", containerMessage(errors),
               {reasons: errors});
         }
+        const write = {...next};
+        const before = Number.isInteger(row.priceCents) ? row.priceCents : null;
+        if (lineHasPieces(row) && before !== next.priceCents) {
+          const pieces = linePieces(row);
+          const prices = distributeCents(next.priceCents, pieces.length);
+          write.pieces = pieces.map((piece, i) =>
+            ({...piece, priceCents: prices[i]}));
+        }
         tx.update(lineRef, {
-          ...next,
+          ...write,
           editedByStaffId: uid,
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
@@ -18187,7 +18507,8 @@ exports.setContainerLinePrice = onCall(
 
 // Money received for one package, any amount up to what is still owed. The
 // line's paid total is recomputed from its payments in the same transaction,
-// so two staff recording at once cannot overpay it.
+// so two staff recording at once cannot overpay it. A part of a split
+// package records on its root, against what the whole group still owes.
 exports.recordContainerLinePayment = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -18196,11 +18517,11 @@ exports.recordContainerLinePayment = onCall(
       const businessId = String(data.businessId || "").trim();
       await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
       const db = admin.firestore();
-      const lineId = String(data.lineId || "").trim();
-      if (!lineId) {
+      const askedId = String(data.lineId || "").trim();
+      if (!askedId) {
         throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
       }
-      const lineRef = db.collection("containerLines").doc(lineId);
+      const askedRef = db.collection("containerLines").doc(askedId);
       const payRef = db.collection("containerLinePayments").doc();
       // Whether the person named may be credited, read once before the
       // transaction; refused after the payment's own checks, so a blank
@@ -18208,9 +18529,15 @@ exports.recordContainerLinePayment = onCall(
       const receiverKnown = Boolean(await businessPersonProfile(
           db, businessId, data.receivedByStaffId));
       const done = await db.runTransaction(async (tx) => {
-        const lineDoc = await tx.get(lineRef);
-        const row = lineDoc.exists ? lineDoc.data() || {} : null;
-        if (!row || String(row.businessId) !== businessId) {
+        const askedDoc = await tx.get(askedRef);
+        const asked = askedDoc.exists ? askedDoc.data() || {} : null;
+        if (!asked || String(asked.businessId) !== businessId) {
+          throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+        }
+        const group = await txLineGroup(tx, db, businessId, askedId, asked);
+        const lineId = group.rootId;
+        const row = group.root;
+        if (!row) {
           throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
         }
         const payments = await tx.get(db.collection("containerLinePayments")
@@ -18219,8 +18546,10 @@ exports.recordContainerLinePayment = onCall(
         const paidCents = sumContainerLivePayments(
             payments.docs.map((d) => d.data() || {}));
         // Judged against what the payments really add up to, not against a
-        // total that may have drifted.
-        const errors = validateContainerLinePayment(data, {...row, paidCents});
+        // total that may have drifted - and against the whole group's price.
+        const priceCents = groupWith(group, askedId, asked).priceCents;
+        const errors = validateContainerLinePayment(data,
+            {...row, priceCents, paidCents});
         if (errors.length > 0) {
           throw new HttpsError("invalid-argument", containerMessage(errors),
               {reasons: errors});
@@ -18236,24 +18565,32 @@ exports.recordContainerLinePayment = onCall(
           createdAt: FirestoreFieldValue.serverTimestamp(),
         });
         const after = paidCents + record.amountCents;
-        tx.update(lineRef, {
+        tx.update(db.collection("containerLines").doc(lineId), {
           paidCents: after,
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
-        return {row, record, paidCents: after};
+        return {row: {...row, priceCents}, record, paidCents: after, lineId};
       });
       // Who took the money, and who typed it in when that is someone else.
       const summary = await containerPaymentSummary(db, businessId, uid,
           {record: done.record, row: done.row, paidCents: done.paidCents});
-      await containerLineAudit(businessId, lineId, done.row,
+      await containerLineAudit(businessId, done.lineId, done.row,
           "payment", uid, summary);
       if (done.row.containerId) {
         await writeLotLedgerAudit({
-          businessId, entityType: "container_line", entityId: lineId,
+          businessId, entityType: "container_line", entityId: done.lineId,
           action: "payment", byStaffId: uid, summary, changes: [],
         });
       }
-      return {success: true, paymentId: payRef.id, paidCents: done.paidCents};
+      if (askedId !== done.lineId) {
+        // Taken from a part: the part's own history says so too.
+        await writeLotLedgerAudit({
+          businessId, entityType: "container_line", entityId: askedId,
+          action: "payment", byStaffId: uid, summary, changes: [],
+        });
+      }
+      return {success: true, paymentId: payRef.id, paidCents: done.paidCents,
+        lineId: done.lineId};
     },
 );
 
@@ -18864,7 +19201,13 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
       const pickupDestination = row.update === CONTAINER_UPDATE.ARRIVED ?
         await loadPickupDestination(db, String(row.businessId || ""), line,
             container) : null;
+      // A part of a package split across containers says which share of
+      // the whole it is ("2 of your 4 pieces"); read at send time, so the
+      // message counts the parts as they are now.
+      const group = lineWasSplit(line) ?
+        await containerLineGroup(db, lineDoc.id, line) : null;
       const message = whatsappUpdateMessage({
+        group,
         phone: row.phone, name: row.name,
         businessName: row.businessName || business.name,
         businessPhone: business.phone,

@@ -2,6 +2,11 @@
 
 const {normalizeTrackingCode} = require("./tracking_code");
 const {oceanCarrierName} = require("./ocean_carrier_catalog");
+const {
+  groupRootId,
+  lineCounts,
+  lineGroupSummary,
+} = require("./line_pieces");
 
 const GUEST_TRACKING_COLLECTIONS = Object.freeze([
   Object.freeze({name: "barrelShipments", prefix: "BS", service: "barrel"}),
@@ -137,7 +142,41 @@ function publicContainerShipping(stage, container) {
   return Object.keys(shipping).length ? shipping : null;
 }
 
-function publicGuestTrackingRecord({id, service, data, container = null}) {
+/**
+ * What the public page shows of a container line's group: every part of the
+ * package (its code, stage, pieces and price - a part may sail while the
+ * rest waits) and, for the whole group, the final price, what was paid and
+ * what is still owed (payments live on the root). Nothing about the people.
+ *
+ * @param {object} line The line that was looked up.
+ * @param {object|null} group lineGroupSummary of its group, or null (the
+ *   line alone).
+ * @param {string} id The line's id.
+ * @return {object} {pieceCount, parts, payment}.
+ */
+function publicContainerGroup(line, group, id) {
+  const summary = group && Array.isArray(group.parts) && group.parts.length ?
+    group : lineGroupSummary([{id, line}], groupRootId(line, id));
+  const stageOf = (status) => CONTAINER_STAGE_BY_STATUS[
+      cleanText(status, 60).toLowerCase()] || "booked";
+  return {
+    pieceCount: lineCounts(line).pieceCount,
+    parts: summary.parts.map((part) => ({
+      trackingCode: cleanText(part.trackingCode, 60),
+      stage: stageOf(part.containerStatus),
+      pieceCount: part.pieceCount,
+      priceCents: part.priceCents,
+    })),
+    payment: {
+      priceCents: summary.priceCents,
+      paidCents: summary.paidCents,
+      balanceCents: summary.balanceCents,
+    },
+  };
+}
+
+function publicGuestTrackingRecord({id, service, data, container = null,
+  group = null}) {
   const row = data || {};
   const status = service === "transport" ?
     cleanText(row.fulfillmentStatus || row.status, 60).toLowerCase() :
@@ -163,6 +202,8 @@ function publicGuestTrackingRecord({id, service, data, container = null}) {
       quoteStatus: cleanText(row.quoteStatus, 30).toLowerCase(),
     } : {}),
     ...(shipping ? {shipping} : {}),
+    ...(service === "container" ?
+      publicContainerGroup(row, group, id) : {}),
     updatedAtMs: Math.max(
         timestampMillis(row.updatedAt),
         timestampMillis(row.createdAt),
@@ -198,6 +239,41 @@ async function shippedContainerOf(db, line) {
 }
 
 /**
+ * The group a container line belongs to - itself and every part split from
+ * the same root, one business's only - as lineGroupSummary reads it. A line
+ * never split is a group of one and costs no read.
+ *
+ * @param {!FirebaseFirestore.Firestore} db Admin Firestore instance.
+ * @param {string} id The line's id.
+ * @param {object} line The line.
+ * @return {!Promise<?Object>} The summary.
+ */
+async function containerLineGroup(db, id, line) {
+  const rootId = groupRootId(line, id);
+  const businessId = cleanText(line?.businessId, 128);
+  if (!cleanText(line?.rootLineId, 200) || !businessId ||
+      rootId.includes("/")) {
+    return lineGroupSummary([{id, line}], rootId);
+  }
+  const [parts, rootDoc] = await Promise.all([
+    db.collection("containerLines")
+        .where("businessId", "==", businessId)
+        .where("rootLineId", "==", rootId)
+        .limit(100)
+        .get(),
+    db.collection("containerLines").doc(rootId).get(),
+  ]);
+  const entries = parts.docs.map((d) => ({id: d.id, line: d.data() || {}}));
+  if (rootDoc.exists &&
+      cleanText(rootDoc.data()?.businessId, 128) === businessId &&
+      !entries.some((entry) => entry.id === rootId)) {
+    entries.push({id: rootId, line: {...rootDoc.data(), rootLineId: rootId}});
+  }
+  if (!entries.some((entry) => entry.id === id)) entries.push({id, line});
+  return lineGroupSummary(entries, rootId);
+}
+
+/**
  * Finds one exact booking reference without ever returning a Firestore row.
  * Prefixes make cross-collection collisions extremely unlikely; collection
  * order is stable so a legacy collision still resolves deterministically.
@@ -222,12 +298,14 @@ async function findGuestTrackingRecord(db, candidates) {
     if (snapshot.docs.length !== 1 || match !== null) return null;
     const document = snapshot.docs[0];
     const data = document.data() || {};
+    const container = config.service === "container";
     match = publicGuestTrackingRecord({
       id: document.id,
       service: config.service,
       data,
-      container: config.service === "container" ?
-        await shippedContainerOf(db, data) : null,
+      container: container ? await shippedContainerOf(db, data) : null,
+      group: container ? await containerLineGroup(db, document.id, data) :
+        null,
     });
   }
   return match;
@@ -240,6 +318,8 @@ module.exports = {
   CONTAINER_SHIPPING_STAGES,
   publicContainerShipping,
   shippedContainerOf,
+  containerLineGroup,
+  publicContainerGroup,
   WAITING_STAGE,
   WAITING_STAGE_LABEL,
   findGuestTrackingRecord,

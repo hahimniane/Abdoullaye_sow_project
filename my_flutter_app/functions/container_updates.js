@@ -34,6 +34,7 @@ const {
   whatsappTemplateSet,
 } = require("./whatsapp_templates");
 const {pickupDetails, pickupPlace} = require("./destination_pickup");
+const {lineHasPieces, linePiecesWhat} = require("./line_pieces");
 
 const CONTAINER_UPDATE = Object.freeze({
   // The package is registered: dropped off to wait for a container, or
@@ -154,14 +155,22 @@ function carrierTrackingFinished(carrierStatus) {
  * What is on the line, as a person would say it - no possessive, because
  * the receiver hears the same words as the sender.
  *
+ * A line with pieces says what its pieces are ("2 barrels, 1 box"), or -
+ * once it has been split across containers - which share of the whole this
+ * part is ("2 of your 4 pieces" / "2 de vos 4 colis"; line_pieces.js).
+ *
  * @param {object} line A containerLines row.
  * @param {"en"|"fr"} language The language.
+ * @param {object|null} [group] lineGroupSummary of the line's group.
  * @return {string} e.g. "3 barrels", "2015 Toyota Camry (VIN …004352)".
  */
-function describeLine(line, language) {
+function describeLine(line, language, group = null) {
   const row = line && typeof line === "object" ? line : {};
   const fr = language === "fr";
   const kind = text(row.kind, 20);
+  if (kind !== "car" && lineHasPieces(row)) {
+    return linePiecesWhat(row, fr ? "fr" : "en", group);
+  }
   if (kind === "car") {
     const car = [row.carYear, row.carMake, row.carModel]
         .map((part) => text(part, 80)).filter(Boolean).join(" ");
@@ -372,7 +381,9 @@ function pickupDestinationIds(line, container) {
  *
  * @param {object} args {phone, name, businessName, businessPhone, business,
  *   line, container, pickupDestination, update, trackingCode,
- *   templateSet?}. `pickupDestination` is the destinationCountries record
+ *   templateSet?, group?}. `group` is lineGroupSummary of a split line's
+ *   group (the "what" then says which share this part is).
+ *   `pickupDestination` is the destinationCountries record
  *   (pickupCity, pickupAddress, pickupPhone); `business` the business
  *   record (its address and phone are the pickup fallbacks).
  * @return {object|null} The /messages request body, or null for an update
@@ -396,12 +407,12 @@ function whatsappUpdateMessage(args) {
     values: {
       name: args.name,
       business: args.businessName,
-      what: describeLine(args.line, language),
+      what: describeLine(args.line, language, args.group),
       destination: language === "fr" ? destinationFr : destinationEn,
       businessPhone: business.phone,
       trackingCode: args.trackingCode,
-      whatEn: describeLine(args.line, "en"),
-      whatFr: describeLine(args.line, "fr"),
+      whatEn: describeLine(args.line, "en", args.group),
+      whatFr: describeLine(args.line, "fr", args.group),
       destinationEn,
       destinationFr,
       pickupPlaceEn: pickupPlace(pickup.city, destinationEn),

@@ -14,6 +14,11 @@
  */
 
 const {containerCounts} = require("./container_manifest");
+const {
+  lineCounts,
+  lineHasPieces,
+  pieceSummaryText,
+} = require("./line_pieces");
 const {documentLogo, formatBusinessAddress} = require("./parking_document");
 
 const LOGO_URL = "https://laawoldigital.com/assets/logo.png";
@@ -93,6 +98,9 @@ function containerDocumentModel({container, lines, business}) {
       if (kind === "car") {
         what = [r.carYear, r.carMake, r.carModel]
             .map((v) => text(v, 80)).filter(Boolean).join(" ") || "Car";
+      } else if (lineHasPieces(r)) {
+        // What its pieces are: "2 barrels, 1 box".
+        what = pieceSummaryText(r.pieces, "en");
       } else if (kind === "barrels") {
         what = "Barrels";
       } else {
@@ -103,7 +111,8 @@ function containerDocumentModel({container, lines, business}) {
         kind,
         what,
         vin: kind === "car" ? text(r.vinNumber, 17) : "",
-        quantity: kind === "car" ? 1 : Math.max(1, Number(r.quantity) || 1),
+        // Pieces on this line (a split part counts only its own).
+        quantity: kind === "car" ? 1 : lineCounts(r).pieceCount,
         whose: stock ? "Business stock" : text(r.customerName, 120),
         phone: stock ? "" : text(r.customerPhone, 40),
         // The name on the barrel: whoever collects it at the port.

@@ -250,6 +250,8 @@ Every reader (counts, labels, WhatsApp, tracking, lists) goes through it.
 present on a line that is not a car, `kind`/`quantity`/`description`/size/
 `priceCents` in the request are ignored and recomputed from the pieces. A
 request without `pieces` (older app versions) still writes the old form.
+Both add callables answer with `pieceCount` too, and money received at
+drop-off is judged against the sum of the pieces.
 New refusal codes (`invalid-argument`, `details.reasons`): `pieces_required`,
 `pieces_too_many`, `piece_kind_invalid`, `piece_description_required`,
 `piece_description_too_long`, `piece_size_invalid`, `piece_price_invalid`.

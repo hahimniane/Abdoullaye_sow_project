@@ -268,6 +268,15 @@ only parameter is the tracking code. Every person gets the same message,
 whatever their phone's country. The French values (what, destination,
 place) are built server-side in French, the English ones in English.
 
+**What** (`describeLine` in `container_updates.js`, pieces rules in
+`line_pieces.js`): a line with pieces names them ("2 barrels, 1 box" /
+"2 fûts, 1 colis"; items sharing one description as "2 × TV"); a part of a
+package split across containers names its share of the whole, "2 of your 4
+pieces" / "2 de vos 4 colis", read at send time from its group
+(`rootLineId`). Each part gets its own departed and ready-for-pickup
+messages (rows are keyed by line); a split itself sends nothing. Lines from
+before pieces read as they always did ("3 barrels", "2 × tires", the car).
+
 ### `shipment_received_2lang`
 
 Sent once per person when the package is registered (`received`).
