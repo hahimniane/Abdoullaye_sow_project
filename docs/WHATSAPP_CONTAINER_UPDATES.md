@@ -3,13 +3,46 @@
 Everyone with goods on a container hears about them on WhatsApp: the
 customer who handed the goods in (the **sender**) and the person collecting
 them at the other end (the **receiver**). Each person gets at most three
-messages per package:
+messages per package, each **one bilingual message** (an English block, then
+a French block):
 
 | Moment | Template | Fires when |
 | --- | --- | --- |
-| `received` | `package_received` | The package is registered: dropped off to wait for a container (`addWaitingPackage`) or added straight onto one (`addContainerLine`). Assigning a waiting package to a box, or taking it off one, sends nothing. |
-| `shipped` | `container_departed` | Staff mark the container **Shipped**, or the carrier feed reports it on the vessel — whichever comes first. |
-| `arrived` | `container_arrived` | The carrier feed reports it discharged/available at the destination port, or staff mark it **Arrived** — whichever comes first. The other sends nothing. |
+| `received` | `shipment_received_2lang` | The package is registered: dropped off to wait for a container (`addWaitingPackage`) or added straight onto one (`addContainerLine`). Assigning a waiting package to a box, or taking it off one, sends nothing. |
+| `shipped` | `shipment_departed_2lang` | Staff mark the container **Shipped**, or the carrier feed reports it on the vessel — whichever comes first. |
+| `arrived` | `shipment_ready_pickup_2lang` | Staff mark the container **Ready for pickup**. Only staff: the carrier's "discharged / available at the port" is recorded on the timeline and sends nothing, because a box at the port cannot be collected yet. |
+
+### "Arrived" now means ready for pickup (2026-10-18)
+
+The container's last status is still stored as `arrived` (no data
+migration), but it now means **ready for pickup**: staff mark it only when
+the goods can be collected. Every staff-facing label says so — "Ready for
+pickup" / "Mark ready for pickup" in English, "Prêt à récupérer" /
+"Marquer prêt à récupérer" in French — in the console, the app and the
+public tracking page's last stage. For the same reason the carrier feed no
+longer moves a container to `arrived` by itself; it only moves a loading box
+to `shipped` when the vessel sails (`containerStatusFromCarrier` in
+`container_updates.js`). The server writes the moment as "Ready for pickup"
+and the History entry as "Marked ready for pickup" (older entries keep
+"Marked arrived").
+
+### Template set switch
+
+The legacy one-language-per-message templates (`package_received`,
+`container_departed`, `container_arrived`, below) are kept in the code as a
+fallback. One environment variable picks the set, read at send time:
+
+```
+WHATSAPP_TEMPLATE_SET=bilingual   # default (unset or anything else)
+WHATSAPP_TEMPLATE_SET=legacy      # the old per-language templates
+```
+
+To flip, put the line in `my_flutter_app/functions/.env` (or the
+function's runtime environment) and redeploy `deliverContainerCustomerUpdate`,
+`sendContainerCustomerUpdates` and `sendContainerCurrentStatus`. In the
+legacy set the carrier's "at the port" sends `container_arrived` again, as
+it did before. Rows waiting for a template are rebuilt at send time, so
+after a flip the next sweep sends them with the other set.
 
 Nothing is sent until the setup below is done. Until then every update is
 recorded in `containerUpdates` with status `waiting_for_whatsapp`, so the
@@ -23,32 +56,36 @@ business can see who *would* have been told.
    fails the registration (the client would register the package twice).
 2. **Container moments.** A moment is written to
    `containers/{id}/trackingEvents`:
-   - staff mark the container **Shipped** or **Arrived** (`setContainerStatus`), or
+   - staff mark the container **Shipped** or **Ready for pickup** (`setContainerStatus`), or
    - the Terminal49 carrier feed reports it on the vessel, discharged, or
      available (`pollContainerTracking`, every 4 hours). Tracking starts by
      itself as soon as the container has a real ISO number
      (`startContainerCarrierTracking`); see *Carrier tracking and the
      shipping line* below.
 3. Moments customers care about carry `customerUpdate` (`shipped`,
-   `at_port`, `arrived`). The timeline keeps `at_port` as its own moment,
-   but its message is the arrival's: `messageUpdateFor` turns `at_port` into
-   `arrived`, so `sendContainerCustomerUpdates` **queues** one `arrived`
-   message per person per line; it sends nothing itself.
+   `at_port`, `arrived`). The timeline keeps `at_port` as its own moment.
+   With the bilingual templates it sends nothing (`messageUpdateFor` returns
+   null); with the legacy ones it is the arrival's message. For each
+   message `sendContainerCustomerUpdates` **queues** one row per person per
+   line; it sends nothing itself.
 4. Each message is one `containerUpdates/{lineId}_{role}_{update}` document
    (`update` is `received`, `shipped` or `arrived`), created only if it does
    not exist yet. Staff tapping Shipped and the carrier reporting `on_ship`
-   are the same update, and so are the carrier's "at the port" and staff's
-   "Arrived": whoever comes first queues it and the other finds it already
-   there.
+   are the same update: whoever comes first queues it and the other finds
+   it already there.
 5. `deliverContainerCustomerUpdate` sends each row on its own, as soon as the
    row becomes `queued` (see *The send queue* below). It builds the message
-   at send time from the line, its container (for the destination) and the
-   business (for its phone).
+   at send time from the line, its container (for the destination), the
+   business (for its name, address and phone) and, for ready for pickup,
+   the business's destination record (for the pickup city, address and
+   phone; see *Pickup details per destination* below).
 6. A person is skipped (and the line says why) when they have no phone,
    staff switched them off, or the number has no country code.
 
 Rows written before the arrival merge may still carry `update: "at_port"`;
-they are sent (if ever re-queued) as `container_arrived`.
+in the legacy set they are sent (if ever re-queued) as `container_arrived`;
+in the bilingual set they have no message (a box at the port is not ready
+for pickup).
 
 Each line carries `lastCustomerUpdate` — the latest update and, per person,
 `queued`, `sent`, `retrying`, `failed`, `waiting_for_whatsapp` or `skipped`
@@ -134,8 +171,8 @@ customers start hearing from the next moment after connection onward.
 When a business does want to catch everyone up on a container, the callable
 `sendContainerCurrentStatus({businessId, containerId})` sends each person
 the container's **current** update — the furthest one along its timeline
-(`arrived` beats `shipped`; the carrier's `at_port` counts as `arrived`),
-not every update it missed:
+(`arrived` beats `shipped`; in the legacy set the carrier's `at_port`
+counts as `arrived`), not every update it missed:
 
 - It refuses (`failed-precondition`, `reason: whatsapp_not_configured`)
   until WhatsApp is connected, and (`reason: no_customer_update`) when the
@@ -155,10 +192,46 @@ not every update it missed:
 
 There is no button for it in the console or the app yet.
 
+## Pickup details per destination
+
+Each business destination (`businesses/{id}/destinationCountries/{country}`)
+has three optional fields, set by the owner (or staff with the
+**destinations** permission) in the destination form of the console
+(*Destinations* → edit a country → *Pickup in this country*) and of the app
+(*Destination countries* → edit):
+
+| Field | Example | Rule |
+| --- | --- | --- |
+| `pickupCity` | `Conakry` | One line, at most 80 characters. |
+| `pickupAddress` | `Madina, near the market` | One line, at most 200 characters. |
+| `pickupPhone` | `+224620000000` | E.164 (a plus, the country code, digits); entered with the shared country phone picker. |
+
+They are written only by the callable
+`setDestinationPickup({businessId, countryId, pickupCity, pickupAddress,
+pickupPhone})` (permission: **destinations**; blank clears a field;
+refusals `pickup_city_too_long`, `pickup_address_too_long`,
+`pickup_phone_invalid`, `pickup_field_invalid`, `destination_not_found`).
+The rules are in `functions/destination_pickup.js`, tested in
+`test/destination-pickup.test.js` and against the emulator in
+`test/container-callables.test.js`. The forms save the coverage first and
+then call it, so a new destination exists before its pickup details.
+
+The ready-for-pickup message reads them at send time from the destination
+the line goes to (its own, else its container's):
+
+| Variable | Source | Fallback |
+| --- | --- | --- |
+| pickup place (EN / FR) | `pickupCity` + the country's name ("Conakry, Guinea" / "Conakry, Guinée"); the country alone when no city | `the destination country` / `destination` |
+| pickup address | `pickupAddress` | the business's own address (its headquarters, then `address`), else `—` |
+| pickup phone | `pickupPhone` (re-checked: only an E.164 value is used) | the business phone, else `—` |
+
 ## Templates still in review
 
 A template that Meta has not approved yet answers every send with error
-`132001`. Such a row is not failed: it becomes `waiting_for_template`, the
+`132001` ("template name does not exist in the translation"). Meta gives the
+same code for a name that is still in review and for one that does not
+exist, so this also covers the three bilingual templates submitted on
+2026-10-18 — the check is by error code, not by template name. Such a row is not failed: it becomes `waiting_for_template`, the
 try does not count towards the 5-attempt limit, and the scheduled function
 `requeueTemplateWaitingUpdates` (every 30 minutes) puts every waiting row back
 to `queued`, which sends it again. The first sweep after Meta approves the
@@ -176,12 +249,112 @@ message". Rules: `container_updates.js` (`whatsappSendOutcome`,
 
 Status (2026-10-07): business portfolio **Laawol Digital LLC** (id 4527476690814512), Meta app **Laawol** (id 1850257899484218), test WhatsApp Business Account 3377183529120403.
 
-Status (2026-10-16): the three templates below, in English and French (six in all), are submitted in WhatsApp Business Account **992521863149970**.
+Status (2026-10-16): the three legacy templates below, in English and French (six in all), are submitted in WhatsApp Business Account **992521863149970**.
+
+Status (2026-10-18): the three bilingual templates (`shipment_received_2lang`, `shipment_departed_2lang`, `shipment_ready_pickup_2lang`; language `en`, category Utility) are submitted and **pending** review in the same account. A first submission with flag emojis (`*_bilingual`) was deleted; those names no longer exist and nothing sends them.
 
 WhatsApp only lets a business start a conversation with a template Meta has
 approved, and only after the Meta Business account is verified.
 
 ### 2. The templates
+
+#### The bilingual templates (default)
+
+Three templates, each registered **once, under language `en`**, category
+**Utility**, whose body holds the English text, then a separator, then the
+French text. Each has one button: *Visit website*, text `Track · Suivre`,
+URL type **Dynamic**, `https://customer.laawoldigital.com/t/{{1}}`, whose
+only parameter is the tracking code. Every person gets the same message,
+whatever their phone's country. The French values (what, destination,
+place) are built server-side in French, the English ones in English.
+
+### `shipment_received_2lang`
+
+Sent once per person when the package is registered (`received`).
+Variables: {{1}} name, {{2}} business, {{3}} what (EN), {{4}} destination
+(EN), {{5}} business, {{6}} what (FR), {{7}} destination (FR), {{8}}
+tracking code.
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+{{2}} has received your shipment of {{3}} going to {{4}}. We will message you here when it leaves and when it is ready for pickup.
+
+—————
+*FRANÇAIS*
+{{5}} a bien reçu votre envoi de {{6}} à destination de {{7}}. Nous vous écrirons ici quand il partira et quand il sera prêt à récupérer.
+
+🔎 Tracking code / Code de suivi : {{8}}
+
+Tap the button below to follow it.
+Appuyez sur le bouton ci-dessous pour le suivre.
+```
+
+Sample values: `Fatou`, `Dala Shipping`, `3 barrels`, `Guinea`,
+`Dala Shipping`, `3 fûts`, `Guinée`, `CL-K7M4P2`.
+
+### `shipment_departed_2lang`
+
+Sent once per person when the container sails (`shipped`). Variables:
+{{1}} name, {{2}} what (EN), {{3}} business, {{4}} destination (EN), {{5}}
+what (FR), {{6}} business, {{7}} destination (FR), {{8}} tracking code.
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+Your shipment of {{2}} from {{3}} has left and is on its way to {{4}}. We will message you again when it is ready for pickup.
+
+—————
+*FRANÇAIS*
+Votre envoi de {{5}} confié à {{6}} est parti et fait route vers {{7}}. Nous vous écrirons quand il sera prêt à récupérer.
+
+🔎 Tracking code / Code de suivi : {{8}}
+
+Tap the button below to follow it.
+Appuyez sur le bouton ci-dessous pour le suivre.
+```
+
+Sample values: `Fatou`, `3 barrels`, `Dala Shipping`, `Guinea`, `3 fûts`,
+`Dala Shipping`, `Guinée`, `CL-K7M4P2`.
+
+### `shipment_ready_pickup_2lang`
+
+Sent once per person when staff mark the container ready for pickup
+(`arrived`). Variables: {{1}} name, {{2}} what (EN), {{3}} business, {{4}}
+pickup place (EN), {{5}} what (FR), {{6}} business, {{7}} pickup place
+(FR), {{8}} pickup address, {{9}} pickup phone, {{10}} tracking code.
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+Good news: your shipment of {{2}} from {{3}} is ready for pickup in {{4}}.
+
+—————
+*FRANÇAIS*
+Bonne nouvelle : votre envoi de {{5}} confié à {{6}} est prêt à être récupéré à {{7}}.
+
+📍 Pickup address / Adresse : {{8}}
+📞 Phone / Téléphone : {{9}}
+🔎 Tracking code / Code de suivi : {{10}}
+
+Tap the button below to follow it.
+Appuyez sur le bouton ci-dessous pour le suivre.
+```
+
+Sample values: `Fatou`, `3 barrels`, `Dala Shipping`, `Conakry, Guinea`,
+`3 fûts`, `Dala Shipping`, `Conakry, Guinée`,
+`Madina, near the market, Conakry`, `+224 620 00 00 00`, `CL-K7M4P2`.
+
+Blanks in the bilingual templates: name → `Client` ("Hello / Bonjour
+Client"), business → `Laawol`, what → `goods` / `marchandises`, destination
+→ `its destination country` / `son pays de destination`, the pickup
+fallbacks are in *Pickup details per destination* above, tracking code →
+`-`.
+
+#### The legacy templates (fallback, `WHATSAPP_TEMPLATE_SET=legacy`)
 
 In WhatsApp Manager → Message templates there are **three templates**, each
 in two languages (`en` and `fr`), category **Utility**. Every one has the
@@ -247,9 +420,9 @@ Bonjour {{1}}, votre envoi de {{2}} confié à {{3}} est parti et fait route ver
 
 ### `container_arrived`
 
-Sent once per person when the container reaches the destination
-(`arrived`: the carrier's "at the port" or staff's "Arrived", whichever is
-first). Variables: {{1}} name, {{2}} what, {{3}} business, {{4}}
+Legacy set only. Sent once per person when the container reaches the
+destination (`arrived`: the carrier's "at the port" or staff's "Ready for
+pickup", whichever is first). Variables: {{1}} name, {{2}} what, {{3}} business, {{4}}
 destination country, {{5}} business phone, {{6}} tracking code.
 
 English (`en`):
@@ -264,7 +437,7 @@ French (`fr`):
 Bonjour {{1}}, bonne nouvelle : votre envoi de {{2}} confié à {{3}} est arrivé à destination ({{4}}). L'équipe vous préviendra quand il sera prêt à récupérer ; vous pouvez la joindre au {{5}}. Votre code de suivi est {{6}}. Appuyez sur le bouton ci-dessous pour voir les détails.
 ```
 
-### Where each value comes from, and what fills a blank
+### Where each value comes from, and what fills a blank (legacy set)
 
 WhatsApp refuses an empty parameter, so every variable has a fallback that
 still reads inside the sentence:
@@ -281,9 +454,10 @@ still reads inside the sentence:
 Line breaks, tabs and runs of spaces in a value are collapsed to one space
 (WhatsApp refuses them too).
 
-The language per person is chosen from the phone's country code: French for
-French-speaking countries (France, Belgium, Guinea, Senegal, Côte d'Ivoire,
-...), English for everyone else.
+In the legacy set the language per person is chosen from the phone's
+country code: French for French-speaking countries (France, Belgium,
+Guinea, Senegal, Côte d'Ivoire, ...), English for everyone else. The
+bilingual set sends everyone the same two-language message.
 
 Sample values for Meta's review: `Fatou`, `Dala Shipping`, `3 barrels`,
 `Guinea`, `+1 646 555 0199` (arrived only), `CL-K7M4P2`. For the button,
@@ -315,7 +489,7 @@ deploy needs them to exist, and the code treats `unset` as "not connected".
 Register a test package with your own number as the receiver: the line
 should show "received" and "sent", and `containerUpdates` should hold
 `{lineId}_receiver_received` with `status: "sent"` and a
-`whatsappMessageId`. Then ship and arrive a test container the same way. A
+`whatsappMessageId`. Then ship a test container and mark it ready for pickup the same way. A
 `failed` row carries Meta's error text in `error`. The usual causes are a
 template name or language that doesn't match, a variable count that
 differs from the approved body, or a template still pending review. A row

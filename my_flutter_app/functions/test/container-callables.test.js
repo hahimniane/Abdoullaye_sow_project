@@ -152,6 +152,7 @@ before(async () => {
 afterEach(() => {
   global.fetch = realFetch;
   disconnectWhatsApp();
+  delete process.env.WHATSAPP_TEMPLATE_SET;
 });
 
 describe("one car, one open container", () => {
@@ -646,14 +647,16 @@ describe("WhatsApp updates", () => {
           assert.equal(sent.get("whatsappMessageId"), "wamid.TEST");
         }
         assert.equal(whatsappCalls.length, 2);
-        assert.equal(whatsappCalls[0].template.name, "container_departed");
-        // name, what, business, destination (the box's), code - in French
-        // for the Guinean receiver.
+        assert.equal(whatsappCalls[0].template.name,
+            "shipment_departed_2lang");
+        // name, then what, business, destination (the box's) in English and
+        // in French, then the code - one "en" message for everyone.
         const receiverCall = whatsappCalls.find((c) => c.to === "224620000000");
-        assert.equal(receiverCall.template.language.code, "fr");
+        assert.equal(receiverCall.template.language.code, "en");
         assert.deepEqual(receiverCall.template.components[0].parameters
-            .map((p) => p.text).slice(0, 4),
-        ["Mariama Bah", "3 fûts", "Dala Shipping", "Guinée"]);
+            .map((p) => p.text).slice(0, 7),
+        ["Mariama Bah", "3 barrels", "Dala Shipping", "Guinea",
+          "3 fûts", "Dala Shipping", "Guinée"]);
         const line = await db.collection("containerLines").doc(lineId).get();
         assert.deepEqual(line.get("lastCustomerUpdate.results")
             .map((entry) => entry.status), ["sent", "sent"]);
@@ -752,20 +755,52 @@ describe("WhatsApp updates", () => {
     assert.equal((await ref.get()).get("status"), "sent");
     const [sent] = whatsappCalls;
     assert.equal(sent.to, "16465550100");
-    assert.equal(sent.template.name, "package_received");
+    assert.equal(sent.template.name, "shipment_received_2lang");
     assert.equal(sent.template.language.code, "en");
     const code = (await db.collection("containerLines").doc(lineId).get())
         .get("trackingCode");
     assert.deepEqual(sent.template.components[0].parameters
         .map((p) => p.text),
-    ["Fatou Diallo", "Dala Shipping", "2 barrels", "Guinea", code]);
+    ["Fatou Diallo", "Dala Shipping", "2 barrels", "Guinea",
+      "Dala Shipping", "2 fûts", "Guinée", code]);
     assert.deepEqual(sent.template.components[1].parameters
         .map((p) => p.text), [code]);
   });
 
-  // The carrier's "at the port" and staff's "Arrived" are one message.
-  it("sends the arrival once, whichever source reports it first",
+  // "Arrived" is ready for pickup: the carrier's "at the port" alone tells
+  // nobody anything, and staff marking it sends one message.
+  it("sends ready for pickup only when staff mark it", async () => {
+    const {box, lineId} = await shippedBox();
+    await db.collection("containers").doc(box).collection("trackingEvents")
+        .doc("carrier_test_grounded").set({
+          label: "Discharged", source: "carrier_api",
+          customerUpdate: "at_port", timestamp: new Date(),
+        });
+    await recordMoments(box);
+    let rows = await db.collection("containerUpdates")
+        .where("lineId", "==", lineId).get();
+    assert.ok(!rows.docs.some((d) => d.get("update") === "arrived"));
+    assert.equal((await db.collection("containers").doc(box).get())
+        .get("status"), "shipped");
+    connectWhatsApp();
+    assert.equal((await call("sendContainerCurrentStatus",
+        {containerId: box})).update, "shipped");
+    await call("setContainerStatus", {containerId: box, status: "arrived"});
+    await recordMoments(box);
+    rows = await db.collection("containerUpdates")
+        .where("lineId", "==", lineId).get();
+    assert.equal(rows.docs.filter((d) => d.get("update") === "arrived")
+        .length, 2);
+    const moment = await db.collection("containers").doc(box)
+        .collection("trackingEvents").doc("staff_arrived").get();
+    assert.equal(moment.get("label"), "Ready for pickup");
+  });
+
+  // Legacy set: the carrier's "at the port" and staff's mark are one
+  // message.
+  it("sends the legacy arrival once, whichever source reports it first",
       async () => {
+        process.env.WHATSAPP_TEMPLATE_SET = "legacy";
         const {box, lineId} = await shippedBox();
         const events = db.collection("containers").doc(box)
             .collection("trackingEvents");
@@ -791,7 +826,57 @@ describe("WhatsApp updates", () => {
         assert.equal(current.update, "arrived");
       });
 
-  it("sends container_arrived with the business's phone", async () => {
+  it("sends ready for pickup with the destination's pickup details",
+      async () => {
+        connectWhatsApp();
+        const destination = db.collection("businesses").doc(BIZ)
+            .collection("destinationCountries").doc("gn");
+        await destination.set({businessId: BIZ, name: "Guinea"},
+            {merge: true});
+        const {box, lineId} = await shippedBox();
+        await call("setContainerStatus",
+            {containerId: box, status: "arrived"});
+        await recordMoments(box);
+        const ref = row(lineId, "receiver", "arrived");
+        fakeWhatsApp(OK, OK);
+        const params = (i) => whatsappCalls[i].template.components[0]
+            .parameters.map((p) => p.text);
+        try {
+          // Nothing set yet, and no business phone or address: the country
+          // and dashes.
+          await deliver(ref.id);
+          assert.equal(whatsappCalls[0].template.name,
+              "shipment_ready_pickup_2lang");
+          assert.equal(whatsappCalls[0].template.language.code, "en");
+          assert.equal(params(0).length, 10);
+          assert.deepEqual(params(0).slice(1, 9), ["3 barrels",
+            "Dala Shipping", "Guinea", "3 fûts", "Dala Shipping", "Guinée",
+            "—", "—"]);
+          await call("setDestinationPickup", {countryId: "gn",
+            pickupCity: "Conakry", pickupAddress: "Madina, near the market",
+            pickupPhone: "+224 620 11 22 33"});
+          await ref.update({status: "queued", attempts: 0});
+          await deliver(ref.id);
+          assert.deepEqual(params(1).slice(1, 9), ["3 barrels",
+            "Dala Shipping", "Conakry, Guinea", "3 fûts", "Dala Shipping",
+            "Conakry, Guinée", "Madina, near the market", "+224620112233"]);
+          const code = (await db.collection("containerLines").doc(lineId)
+              .get()).get("trackingCode");
+          assert.equal(params(1)[9], code);
+          assert.deepEqual(whatsappCalls[1].template.components[1]
+              .parameters.map((p) => p.text), [code]);
+        } finally {
+          await destination.delete();
+        }
+      });
+
+  it("sends container_arrived with the business's phone (legacy set)",
+      async () => {
+        process.env.WHATSAPP_TEMPLATE_SET = "legacy";
+        await legacyArrivedSendsBusinessPhone();
+      });
+
+  async function legacyArrivedSendsBusinessPhone() {
     connectWhatsApp();
     const {box, lineId} = await shippedBox();
     await call("setContainerStatus", {containerId: box, status: "arrived"});
@@ -817,7 +902,7 @@ describe("WhatsApp updates", () => {
     } finally {
       await business.update({phone: admin.firestore.FieldValue.delete()});
     }
-  });
+  }
 
   it("ignores its own writes", async () => {
     connectWhatsApp();
@@ -1895,6 +1980,75 @@ describe("waiting packages", () => {
 });
 
 // node:test runs the suites above when this file is executed directly.
+
+describe("setDestinationPickup", () => {
+  const col = () => db.collection("businesses").doc(BIZ)
+      .collection("destinationCountries");
+
+  it("stores the pickup city, address and E.164 phone, and clears blanks",
+      async () => {
+        await col().doc("sn").set({businessId: BIZ, name: "Senegal"},
+            {merge: true});
+        const saved = await call("setDestinationPickup", {countryId: "sn",
+          pickupCity: " Dakar ", pickupAddress: "Plateau\n rue 10",
+          pickupPhone: "+221 77 123 45 67"});
+        assert.deepEqual(saved, {countryId: "sn", pickupCity: "Dakar",
+          pickupAddress: "Plateau rue 10", pickupPhone: "+221771234567"});
+        let doc = (await col().doc("sn").get()).data();
+        assert.equal(doc.pickupCity, "Dakar");
+        assert.equal(doc.pickupAddress, "Plateau rue 10");
+        assert.equal(doc.pickupPhone, "+221771234567");
+        assert.equal(doc.name, "Senegal");
+        await call("setDestinationPickup", {countryId: "sn",
+          pickupCity: "Thiès", pickupAddress: "", pickupPhone: ""});
+        doc = (await col().doc("sn").get()).data();
+        assert.equal(doc.pickupCity, "Thiès");
+        assert.ok(!("pickupAddress" in doc));
+        assert.ok(!("pickupPhone" in doc));
+      });
+
+  it("refuses a phone without its country code, or text that is too long",
+      async () => {
+        await col().doc("sn").set({businessId: BIZ, name: "Senegal"},
+            {merge: true});
+        await assert.rejects(
+            call("setDestinationPickup", {countryId: "sn",
+              pickupPhone: "771234567"}),
+            (error) => error.code === "invalid-argument" &&
+              error.details?.reason === "pickup_phone_invalid");
+        await assert.rejects(
+            call("setDestinationPickup", {countryId: "sn",
+              pickupAddress: "x".repeat(201)}),
+            (error) => error.details?.reason === "pickup_address_too_long");
+        await assert.rejects(
+            call("setDestinationPickup", {countryId: "sn",
+              pickupCity: 7}),
+            (error) => error.details?.reason === "pickup_field_invalid");
+        // Nothing was written by a refused call.
+        assert.notEqual((await col().doc("sn").get()).get("pickupPhone"),
+            "771234567");
+      });
+
+  it("refuses a destination the business does not have", async () => {
+    await assert.rejects(
+        call("setDestinationPickup", {countryId: "nowhere",
+          pickupCity: "X"}),
+        (error) => error.code === "not-found");
+    await assert.rejects(
+        call("setDestinationPickup", {countryId: "", pickupCity: "X"}),
+        (error) => error.details?.reason === "destination_required");
+  });
+
+  it("is for staff with the destinations section only", async () => {
+    await assert.rejects(
+        call("setDestinationPickup", {countryId: "sn", pickupCity: "X"},
+            NO_CONTAINERS),
+        (error) => error.code === "permission-denied");
+    await assert.rejects(
+        call("setDestinationPickup", {countryId: "sn", pickupCity: "X"},
+            OTHER_BIZ_STAFF));
+  });
+});
 
 describe("setMainDestination", () => {
   it("keeps one main destination, moves it, and clears it", async () => {

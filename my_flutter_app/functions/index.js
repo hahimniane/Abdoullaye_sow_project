@@ -391,9 +391,14 @@ const {
   carrierTrackingFinished,
   recipientsForLine,
   containerUpdateMessageId,
+  pickupDestinationIds,
   whatsappUpdateMessage,
   whatsappConfigured,
 } = require("./container_updates");
+const {
+  PICKUP_MESSAGES,
+  validateDestinationPickup,
+} = require("./destination_pickup");
 const {
   priceErrors: containerPriceErrors,
   linePriceRecord: containerLinePriceRecord,
@@ -18463,8 +18468,9 @@ exports.setContainerStatus = onCall(
       // The moment tells customers, so it is written before the audit and
       // on the repair path too; its fixed id makes a repeat write nothing.
       await recordContainerEvent(ref, `staff_${next}`, {
+        // "arrived" is stored as before; it now means ready for pickup.
         label: next === CONTAINER_STATUS.SHIPPED ?
-          "Container shipped" : "Container arrived",
+          "Container shipped" : "Ready for pickup",
         source: "staff",
         createdBy: uid,
         customerUpdate: updateForContainerStatus(next),
@@ -18473,7 +18479,7 @@ exports.setContainerStatus = onCall(
         await containerAudit(businessId, ref.id, next, uid,
             next === CONTAINER_STATUS.SHIPPED ?
               `Shipped with ${lineCount} line${lineCount === 1 ? "" : "s"}` :
-              "Marked arrived");
+              "Marked ready for pickup");
       } else if (lagging) {
         await containerAudit(businessId, ref.id, next, uid,
             `Finished marking ${lineCount} line${lineCount === 1 ? "" : "s"} ` +
@@ -18741,6 +18747,34 @@ async function recordContainerUpdateAttempt(db, rowRef, row, fields) {
   });
 }
 
+/**
+ * The business destination a line's goods are collected from, for the
+ * ready-for-pickup message's place, address and phone.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} line The line.
+ * @param {object|null} container Its container.
+ * @return {Promise<object|null>} The destinationCountries record, or null.
+ */
+async function loadPickupDestination(db, businessId, line, container) {
+  const ids = pickupDestinationIds(line, container);
+  if (!businessId || ids.length === 0) return null;
+  try {
+    const col = db.collection("businesses").doc(businessId)
+        .collection("destinationCountries");
+    const docs = await db.getAll(...ids.map((id) => col.doc(id)));
+    const found = docs.find((doc) => doc.exists);
+    return found ? found.data() || {} : null;
+  } catch (error) {
+    // The message still goes, with the business's own address and phone.
+    logger.warn("Could not read the pickup destination", {
+      businessId, error: String(error),
+    });
+    return null;
+  }
+}
+
 // Sends one queued WhatsApp update. Fires when a row becomes `queued`
 // (created by sendContainerCustomerUpdates, or re-queued by
 // sendContainerCurrentStatus); the row is claimed in a transaction with a
@@ -18823,12 +18857,21 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
           null,
       ]);
       const business = businessDoc?.exists ? businessDoc.data() || {} : {};
+      const container = containerDoc?.exists ? containerDoc.data() || {} : null;
+      // Ready for pickup names where to collect: the destination's own
+      // pickup details, read at send time so an edit made after the box was
+      // marked still reaches the customer.
+      const pickupDestination = row.update === CONTAINER_UPDATE.ARRIVED ?
+        await loadPickupDestination(db, String(row.businessId || ""), line,
+            container) : null;
       const message = whatsappUpdateMessage({
         phone: row.phone, name: row.name,
         businessName: row.businessName || business.name,
         businessPhone: business.phone,
+        business,
         line,
-        container: containerDoc?.exists ? containerDoc.data() || {} : null,
+        container,
+        pickupDestination,
         update: row.update,
         trackingCode: String(row.trackingCode || line.trackingCode || ""),
       });
@@ -19677,6 +19720,46 @@ exports.setMainDestination = onCall(
       }
       await batch.commit();
       return {countryId};
+    },
+);
+
+// Where customers collect their goods in one destination country: the
+// city, address and phone the ready-for-pickup WhatsApp message gives. Kept
+// here and not as a client write, like setMainDestination: it is validated
+// in one place (destination_pickup.js) and the destination rule's
+// expression budget is left alone. Blank fields clear the stored value.
+exports.setDestinationPickup = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, "destinations");
+      const countryId = String(data.countryId || "").trim();
+      if (!countryId || countryId.includes("/") || countryId.length > 120) {
+        throw new HttpsError("invalid-argument", "Choose a destination.",
+            {reason: "destination_required"});
+      }
+      const {value, errors} = validateDestinationPickup(data);
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument",
+            errors.map((code) => PICKUP_MESSAGES[code] || code).join(" "),
+            {reason: errors[0], errors});
+      }
+      const db = admin.firestore();
+      const ref = db.collection("businesses").doc(businessId)
+          .collection("destinationCountries").doc(countryId);
+      const doc = await ref.get();
+      if (!doc.exists) {
+        throw new HttpsError("not-found", "Destination not found",
+            {reason: "destination_not_found"});
+      }
+      const update = {updatedAt: FirestoreFieldValue.serverTimestamp()};
+      for (const [field, text] of Object.entries(value)) {
+        update[field] = text || FirestoreFieldValue.delete();
+      }
+      await ref.update(update);
+      return {countryId, ...value};
     },
 );
 

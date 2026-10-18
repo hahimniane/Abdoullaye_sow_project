@@ -30,6 +30,7 @@ const {
   recipientsForLine,
   containerUpdateMessageId,
   trackingLink,
+  pickupDestinationIds,
   whatsappUpdateMessage,
   whatsappConfigured,
 } = require("../container_updates");
@@ -77,31 +78,52 @@ describe("which moments customers hear about", () => {
         "line1_sender_received");
   });
 
-  // The carrier's "at the port" and staff's "arrived" are one piece of news
-  // for a customer: they share the arrival's message, so whichever comes
-  // first sends and the other finds the row taken.
-  it("sends the arrival once, whichever source reports it first", () => {
-    assert.equal(messageUpdateFor("at_port"), "arrived");
-    assert.equal(messageUpdateFor("arrived"), "arrived");
-    assert.equal(messageUpdateFor("shipped"), "shipped");
-    assert.equal(messageUpdateFor("received"), "received");
-    assert.equal(messageUpdateFor(null), null);
-    assert.equal(messageUpdateFor("customs"), null);
-    const carrierFirst = containerUpdateMessageId("line1", "receiver",
-        messageUpdateFor(updateForCarrierStatus("grounded", "shipped")));
-    const staffFirst = containerUpdateMessageId("line1", "receiver",
-        messageUpdateFor(updateForContainerStatus("arrived")));
-    assert.equal(carrierFirst, "line1_receiver_arrived");
-    assert.equal(carrierFirst, staffFirst);
+  // "arrived" now means ready for pickup, which only staff can say: with
+  // the bilingual templates the carrier's "at the port" sends nothing.
+  it("sends ready for pickup only when staff mark it", () => {
+    assert.equal(messageUpdateFor("at_port", "bilingual"), null);
+    assert.equal(messageUpdateFor("arrived", "bilingual"), "arrived");
+    assert.equal(messageUpdateFor("shipped", "bilingual"), "shipped");
+    assert.equal(messageUpdateFor("received", "bilingual"), "received");
+    assert.equal(messageUpdateFor(null, "bilingual"), null);
+    assert.equal(messageUpdateFor("customs", "bilingual"), null);
+    // The default is the bilingual set.
+    assert.equal(messageUpdateFor("at_port"), null);
   });
+
+  // With the legacy templates the carrier's "at the port" and staff's
+  // "arrived" are one piece of news: they share the arrival's message, so
+  // whichever comes first sends and the other finds the row taken.
+  it("sends the legacy arrival once, whichever source reports it first",
+      () => {
+        assert.equal(messageUpdateFor("at_port", "legacy"), "arrived");
+        assert.equal(messageUpdateFor("arrived", "legacy"), "arrived");
+        const carrierFirst = containerUpdateMessageId("line1", "receiver",
+            messageUpdateFor(updateForCarrierStatus("grounded", "shipped"),
+                "legacy"));
+        const staffFirst = containerUpdateMessageId("line1", "receiver",
+            messageUpdateFor(updateForContainerStatus("arrived"), "legacy"));
+        assert.equal(carrierFirst, "line1_receiver_arrived");
+        assert.equal(carrierFirst, staffFirst);
+      });
 });
 
 describe("the carrier moves the container forward, never back", () => {
   it("ships a loading box the carrier has put on a vessel", () => {
     assert.equal(containerStatusFromCarrier("on_ship", "loading"), "shipped");
-    assert.equal(containerStatusFromCarrier("grounded", "shipped"), "arrived");
-    assert.equal(containerStatusFromCarrier("available", "loading"),
-        "arrived");
+  });
+
+  // Regression guard: "arrived" is READY FOR PICKUP, a staff decision. A box
+  // discharged at the port, or collected from it by the business, is not
+  // yet ready for the customer.
+  it("never marks a box ready for pickup by itself", () => {
+    for (const carrier of ["grounded", "available", "picked_up", "delivered",
+      "empty_returned"]) {
+      for (const status of ["loading", "shipped"]) {
+        assert.equal(containerStatusFromCarrier(carrier, status), null,
+            `${carrier} from ${status}`);
+      }
+    }
   });
 
   it("leaves a box alone when the report is old news", () => {
@@ -183,51 +205,133 @@ describe("what they read", () => {
   const texts = (body) =>
     body.template.components[0].parameters.map((p) => p.text);
 
-  it("sends package_received with the line's own destination", () => {
+  it("sends shipment_received_2lang in English and French, with the " +
+      "line's own destination", () => {
     const body = message("received", {phone: "+16465550100",
       line: line({destinationCountryId: "sn",
         destinationCountryName: "Senegal"})});
     assert.equal(body.messaging_product, "whatsapp");
     assert.equal(body.to, "16465550100");
-    assert.equal(body.template.name, "package_received");
+    assert.equal(body.template.name, "shipment_received_2lang");
     assert.equal(body.template.language.code, "en");
-    assert.deepEqual(texts(body),
-        ["Mariama Bah", "Dala", "3 barrels", "Senegal", "CL-K7M4P2"]);
+    assert.deepEqual(texts(body), ["Mariama Bah",
+      "Dala", "3 barrels", "Senegal",
+      "Dala", "3 fûts", "Sénégal",
+      "CL-K7M4P2"]);
   });
 
-  it("sends container_departed in French, with the box's destination", () => {
-    const body = message("shipped");
-    assert.equal(body.template.name, "container_departed");
-    assert.equal(body.template.language.code, "fr");
-    assert.deepEqual(texts(body),
-        ["Mariama Bah", "3 fûts", "Dala", "Guinée", "CL-K7M4P2"]);
-    const [, button] = body.template.components;
+  it("sends shipment_departed_2lang with the box's destination, the same " +
+      "to a French and an English reader", () => {
+    const fr = message("shipped");
+    const en = message("shipped", {phone: "+16465550100"});
+    assert.equal(fr.template.name, "shipment_departed_2lang");
+    assert.equal(fr.template.language.code, "en");
+    assert.deepEqual(texts(fr), ["Mariama Bah",
+      "3 barrels", "Dala", "Guinea",
+      "3 fûts", "Dala", "Guinée",
+      "CL-K7M4P2"]);
+    assert.deepEqual(texts(en), texts(fr));
+    const [, button] = fr.template.components;
     assert.equal(button.sub_type, "url");
     assert.deepEqual(button.parameters.map((p) => p.text), ["CL-K7M4P2"]);
   });
 
-  it("sends container_arrived with the business's phone", () => {
-    for (const update of ["arrived", "at_port"]) {
-      const body = message(update, {phone: "+16465550100"});
-      assert.equal(body.template.name, "container_arrived");
-      assert.deepEqual(texts(body), ["Mariama Bah", "3 barrels", "Dala",
-        "Guinea", "+16465550199", "CL-K7M4P2"]);
-    }
+  it("sends shipment_ready_pickup_2lang with the destination's pickup " +
+      "details", () => {
+    const body = message("arrived", {pickupDestination: {
+      pickupCity: "Conakry", pickupAddress: "Madina, near the market",
+      pickupPhone: "+224 620 11 22 33"}});
+    assert.equal(body.template.name, "shipment_ready_pickup_2lang");
+    assert.equal(body.template.language.code, "en");
+    assert.deepEqual(texts(body), ["Mariama Bah",
+      "3 barrels", "Dala", "Conakry, Guinea",
+      "3 fûts", "Dala", "Conakry, Guinée",
+      "Madina, near the market", "+224620112233", "CL-K7M4P2"]);
+  });
+
+  it("falls back to the country, the business's address and its phone",
+      () => {
+        const body = message("arrived", {pickupDestination: null,
+          business: {addressLine1: "12 Main St", city: "Bronx",
+            state: "NY", country: "United States"}});
+        assert.deepEqual(texts(body).slice(3, 10), ["Guinea",
+          "3 fûts", "Dala", "Guinée",
+          "12 Main St, Bronx, NY, United States", "+16465550199",
+          "CL-K7M4P2"]);
+        const bare = message("arrived", {businessPhone: "", business: {},
+          container: null});
+        assert.deepEqual(texts(bare).slice(3, 10), [
+          "the destination country", "3 fûts", "Dala", "destination",
+          "—", "—", "CL-K7M4P2"]);
+      });
+
+  it("has no message for the carrier's 'at the port' in the bilingual set",
+      () => {
+        assert.equal(message("at_port"), null);
+      });
+
+  describe("with WHATSAPP_TEMPLATE_SET=legacy", () => {
+    const legacy = (update, extra = {}) =>
+      message(update, {templateSet: "legacy", ...extra});
+
+    it("sends package_received with the line's own destination", () => {
+      const body = legacy("received", {phone: "+16465550100",
+        line: line({destinationCountryId: "sn",
+          destinationCountryName: "Senegal"})});
+      assert.equal(body.template.name, "package_received");
+      assert.equal(body.template.language.code, "en");
+      assert.deepEqual(texts(body),
+          ["Mariama Bah", "Dala", "3 barrels", "Senegal", "CL-K7M4P2"]);
+    });
+
+    it("sends container_departed in French, with the box's destination",
+        () => {
+          const body = legacy("shipped");
+          assert.equal(body.template.name, "container_departed");
+          assert.equal(body.template.language.code, "fr");
+          assert.deepEqual(texts(body),
+              ["Mariama Bah", "3 fûts", "Dala", "Guinée", "CL-K7M4P2"]);
+        });
+
+    it("sends container_arrived with the business's phone", () => {
+      for (const update of ["arrived", "at_port"]) {
+        const body = legacy(update, {phone: "+16465550100"});
+        assert.equal(body.template.name, "container_arrived");
+        assert.deepEqual(texts(body), ["Mariama Bah", "3 barrels", "Dala",
+          "Guinea", "+16465550199", "CL-K7M4P2"]);
+      }
+    });
   });
 
   // Meta refuses a template variable that is empty.
   it("never sends an empty variable", () => {
-    for (const update of ["received", "shipped", "arrived"]) {
-      for (const phone of ["+16465550100", "+224620000000"]) {
-        const body = whatsappUpdateMessage({
-          phone, name: "", businessName: "", line: {kind: "other"},
-          container: null, update, trackingCode: "CL-K7M4P2",
-        });
-        for (const part of body.template.components) {
-          for (const p of part.parameters) assert.ok(p.text.length > 0);
+    for (const templateSet of ["bilingual", "legacy"]) {
+      for (const update of ["received", "shipped", "arrived"]) {
+        for (const phone of ["+16465550100", "+224620000000"]) {
+          const body = whatsappUpdateMessage({
+            phone, name: "", businessName: "", line: {kind: "other"},
+            container: null, update, trackingCode: "CL-K7M4P2", templateSet,
+          });
+          for (const part of body.template.components) {
+            for (const p of part.parameters) assert.ok(p.text.length > 0);
+          }
         }
       }
     }
+  });
+
+  it("finds the destination record the goods are collected from", () => {
+    assert.deepEqual(pickupDestinationIds(
+        {destinationCountryId: "senegal", destinationCountryName: "Senegal"},
+        {destinationCountryId: "gn"}), ["senegal", "sn"]);
+    // A line with none follows its box; an ISO code also tries the catalog
+    // id the seed writes.
+    assert.deepEqual(pickupDestinationIds({},
+        {destinationCountryId: "gn", destinationCountryName: "Guinea"}),
+    ["gn", "guinea"]);
+    assert.deepEqual(pickupDestinationIds({}, null), []);
+    assert.deepEqual(pickupDestinationIds({destinationCountryId: "a/b"},
+        null), []);
   });
 
   it("names the destination in the reader's language", () => {
@@ -378,11 +482,16 @@ describe("sending the current status by hand", () => {
     assert.equal(latestCustomerUpdate([
       {label: "Automatic carrier tracking started", customerUpdate: null},
     ]), null);
-    // The carrier's "at the port" is the arrival's message.
+    // The carrier's "at the port" is not ready for pickup; in the legacy
+    // set it is the arrival's message.
     assert.equal(latestCustomerUpdate([
       {customerUpdate: "shipped", timestamp: at(1)},
       {customerUpdate: "at_port", timestamp: at(2)},
-    ]), "arrived");
+    ]), "shipped");
+    assert.equal(latestCustomerUpdate([
+      {customerUpdate: "shipped", timestamp: at(1)},
+      {customerUpdate: "at_port", timestamp: at(2)},
+    ], "legacy"), "arrived");
     assert.equal(latestCustomerUpdate([
       {customerUpdate: "at_port", timestamp: at(2)},
       {customerUpdate: "arrived", timestamp: at(3)},

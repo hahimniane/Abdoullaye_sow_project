@@ -28,7 +28,12 @@
 
 const {isInternationalPhone} = require("./container_manifest");
 const {ALL_COUNTRIES} = require("./country_catalog");
-const {templateMessage} = require("./whatsapp_templates");
+const {
+  TEMPLATE_SET,
+  templateMessage,
+  whatsappTemplateSet,
+} = require("./whatsapp_templates");
+const {pickupDetails, pickupPlace} = require("./destination_pickup");
 
 const CONTAINER_UPDATE = Object.freeze({
   // The package is registered: dropped off to wait for a container, or
@@ -54,14 +59,11 @@ const UPDATE_BY_CARRIER_STATUS = Object.freeze({
 });
 
 // The carrier statuses that move the container's own state forward, so the
-// business's list agrees with the sea without anyone tapping a button.
+// business's list agrees with the sea without anyone tapping a button. Only
+// sailing: "arrived" now means READY FOR PICKUP, which only staff can say -
+// a box discharged at the port is not yet something a customer can collect.
 const CONTAINER_STATUS_BY_CARRIER_STATUS = Object.freeze({
   on_ship: "shipped",
-  grounded: "arrived",
-  available: "arrived",
-  picked_up: "arrived",
-  delivered: "arrived",
-  empty_returned: "arrived",
 });
 
 // Past these the carrier has nothing more to say about the box.
@@ -259,23 +261,38 @@ function trackingLink(consoleUrl, trackingCode) {
 }
 
 /**
- * The update a moment's message is keyed by. The carrier's "at the port"
- * and staff's "arrived" are the same news for a customer - the goods are
- * there - so both are the `arrived` message: whichever is reported first
- * queues it, and the other finds the row already written.
+ * The update a moment's message is keyed by.
+ *
+ * With the bilingual templates (the default) `arrived` is the
+ * ready-for-pickup message, which only staff send by marking the container
+ * ready for pickup; the carrier's "at the port" stays on the timeline and
+ * sends nothing, since a box at the port cannot be collected yet.
+ *
+ * With the legacy templates the carrier's "at the port" and staff's
+ * "arrived" are the same news (container_arrived: "it has arrived; the team
+ * will tell you when it is ready"), so both are the `arrived` message:
+ * whichever is reported first queues it, and the other finds the row
+ * already written.
  *
  * @param {string} update A moment's customerUpdate.
+ * @param {string} [templateSet] "bilingual" or "legacy"; the switch when
+ *   omitted.
  * @return {string|null} The message's update, or null for none.
  */
-function messageUpdateFor(update) {
+function messageUpdateFor(update, templateSet = whatsappTemplateSet()) {
   const value = text(update, 20);
-  if (value === CONTAINER_UPDATE.AT_PORT) return CONTAINER_UPDATE.ARRIVED;
+  if (value === CONTAINER_UPDATE.AT_PORT) {
+    return templateSet === TEMPLATE_SET.LEGACY ?
+      CONTAINER_UPDATE.ARRIVED : null;
+  }
   return CONTAINER_UPDATES.includes(value) ? value : null;
 }
 
 const COUNTRY_BY_ID = new Map(ALL_COUNTRIES.map((c) => [c.id, c]));
 const COUNTRY_BY_NAME = new Map(
     ALL_COUNTRIES.map((c) => [c.name.toLowerCase(), c]));
+const CATALOG_NAME_BY_CODE = new Map(
+    ALL_COUNTRIES.map((c) => [c.code, c.name]));
 let frenchRegionNames = null;
 
 /**
@@ -309,8 +326,10 @@ function destinationName(line, container, language) {
   const own = text(line?.destinationCountryName, 120) ||
     text(line?.destinationCountryId, 60);
   const source = own ? line : (container || {});
-  const stored = text(source?.destinationCountryName, 120);
-  const code = countryCode(source?.destinationCountryId, stored);
+  const code = countryCode(source?.destinationCountryId,
+      source?.destinationCountryName);
+  const stored = text(source?.destinationCountryName, 120) ||
+    (CATALOG_NAME_BY_CODE.get(code) || "");
   if (language !== "fr" || !code) return stored;
   try {
     frenchRegionNames = frenchRegionNames ||
@@ -323,28 +342,72 @@ function destinationName(line, container, language) {
 }
 
 /**
+ * The business destination record a line's goods are collected from: the
+ * line's own destination (a waiting package carries one), else its
+ * container's. Records are keyed by the id the destination picker stores;
+ * a stored ISO code or name is also tried as the catalog id.
+ *
+ * @param {object} line A containerLines row.
+ * @param {object|null} container Its container, if any.
+ * @return {string[]} Candidate destinationCountries ids, best first.
+ */
+function pickupDestinationIds(line, container) {
+  const own = text(line?.destinationCountryId, 60) ||
+    text(line?.destinationCountryName, 120);
+  const source = own ? line : (container || {});
+  const id = text(source?.destinationCountryId, 60);
+  const code = countryCode(id, source?.destinationCountryName);
+  const catalog = code ? ALL_COUNTRIES.find((c) => c.code === code) : null;
+  const ids = [id, catalog ? catalog.id : "", code.toLowerCase()]
+      .filter((value) => value && !value.includes("/"));
+  return [...new Set(ids)];
+}
+
+/**
  * The WhatsApp Cloud API request body for one person and one update. The
  * template and the order of its variables live in whatsapp_templates.js;
- * this gathers the values from the records.
+ * this gathers the values from the records - each in the reader's language
+ * for the legacy templates, and in both English and French for the
+ * bilingual ones.
  *
- * @param {object} args {phone, name, businessName, businessPhone, line,
- *   container, update, trackingCode}.
+ * @param {object} args {phone, name, businessName, businessPhone, business,
+ *   line, container, pickupDestination, update, trackingCode,
+ *   templateSet?}. `pickupDestination` is the destinationCountries record
+ *   (pickupCity, pickupAddress, pickupPhone); `business` the business
+ *   record (its address and phone are the pickup fallbacks).
  * @return {object|null} The /messages request body, or null for an update
  *   that has no message.
  */
 function whatsappUpdateMessage(args) {
   const language = languageForPhone(args.phone);
+  const destinationEn = destinationName(args.line, args.container, "en");
+  const destinationFr = destinationName(args.line, args.container, "fr");
+  const business = {
+    ...(args.business && typeof args.business === "object" ?
+      args.business : {}),
+    phone: text(args.businessPhone, 40) || text(args.business?.phone, 40),
+  };
+  const pickup = pickupDetails(args.pickupDestination, business);
   return templateMessage({
     phone: text(args.phone, 40),
     update: args.update,
     language,
+    templateSet: args.templateSet,
     values: {
       name: args.name,
       business: args.businessName,
       what: describeLine(args.line, language),
-      destination: destinationName(args.line, args.container, language),
-      businessPhone: args.businessPhone,
+      destination: language === "fr" ? destinationFr : destinationEn,
+      businessPhone: business.phone,
       trackingCode: args.trackingCode,
+      whatEn: describeLine(args.line, "en"),
+      whatFr: describeLine(args.line, "fr"),
+      destinationEn,
+      destinationFr,
+      pickupPlaceEn: pickupPlace(pickup.city, destinationEn),
+      pickupPlaceFr: pickupPlace(pickup.city, destinationFr),
+      pickupAddress: pickup.address,
+      pickupPhone: pickup.phone,
     },
   });
 }
@@ -575,14 +638,16 @@ const toMillis = (value) => {
  * message it sends, so the carrier's "at the port" is the arrival.
  *
  * @param {object[]} events trackingEvents rows.
+ * @param {string} [templateSet] "bilingual" or "legacy"; the switch when
+ *   omitted (see messageUpdateFor).
  * @return {string|null} The update, or null when nothing was ever sent.
  */
-function latestCustomerUpdate(events) {
+function latestCustomerUpdate(events, templateSet = whatsappTemplateSet()) {
   let best = null;
   let bestRank = 0;
   let bestAt = -1;
   for (const event of Array.isArray(events) ? events : []) {
-    const update = messageUpdateFor(event?.customerUpdate) || "";
+    const update = messageUpdateFor(event?.customerUpdate, templateSet) || "";
     const rank = updateRank(update);
     if (!rank) continue;
     const at = toMillis(event?.timestamp);
@@ -659,6 +724,7 @@ module.exports = {
   recipientsForLine,
   containerUpdateMessageId,
   trackingLink,
+  pickupDestinationIds,
   whatsappUpdateMessage,
   whatsappConfigured,
 };

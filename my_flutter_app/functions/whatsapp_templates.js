@@ -9,31 +9,57 @@
  * approved template's numbered variables. Meta numbers variables in the
  * order they appear in the body, so the order here must follow the
  * approved wording exactly (docs/WHATSAPP_CONTAINER_UPDATES.md carries the
- * full English and French text of each one).
+ * full text of each one).
  *
- *   package_received    - the package is registered (drop-off, or added
- *                         straight onto a container).
- *   container_departed  - the container has sailed.
- *   container_arrived   - the container reached the destination (whichever
- *                         of the carrier's "at the port" or staff's
- *                         "arrived" came first; one message, not two).
+ * Two sets of templates exist; WHATSAPP_TEMPLATE_SET picks one.
+ *
+ * "bilingual" (the default) - ONE message per update with an English block
+ * and then a French block, registered in Meta under language "en":
+ *   shipment_received_2lang      - the package is registered.
+ *   shipment_departed_2lang      - the container has sailed.
+ *   shipment_ready_pickup_2lang  - staff marked it ready for pickup; carries
+ *                                  the pickup place, address and phone.
+ *
+ * "legacy" - one template per update, in the reader's language (en or fr),
+ * kept as the fallback in case Meta rejects the bilingual set:
+ *   package_received, container_departed, container_arrived.
  *
  * Every template carries one dynamic URL button,
  * https://customer.laawoldigital.com/t/{{1}}, whose only parameter is the
- * tracking code. The template `container_status_update` (one template with
- * a "what happened" sentence) is retired; nothing sends it any more.
+ * tracking code. The template `container_status_update` is retired.
  *
  * Pure: no Firestore, no network.
  */
 
 const TEMPLATE = Object.freeze({
+  // Bilingual (default).
+  SHIPMENT_RECEIVED_2LANG: "shipment_received_2lang",
+  SHIPMENT_DEPARTED_2LANG: "shipment_departed_2lang",
+  SHIPMENT_READY_PICKUP_2LANG: "shipment_ready_pickup_2lang",
+  // Legacy, one language per message.
   PACKAGE_RECEIVED: "package_received",
   CONTAINER_DEPARTED: "container_departed",
   CONTAINER_ARRIVED: "container_arrived",
 });
 
+const TEMPLATE_SET = Object.freeze({
+  BILINGUAL: "bilingual",
+  LEGACY: "legacy",
+});
+
+const BILINGUAL_TEMPLATES = Object.freeze([
+  TEMPLATE.SHIPMENT_RECEIVED_2LANG,
+  TEMPLATE.SHIPMENT_DEPARTED_2LANG,
+  TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
+]);
+const LEGACY_TEMPLATES = Object.freeze([
+  TEMPLATE.PACKAGE_RECEIVED,
+  TEMPLATE.CONTAINER_DEPARTED,
+  TEMPLATE.CONTAINER_ARRIVED,
+]);
+
 // The variables a template can carry, by the name the builder fills them
-// from.
+// from. The *_EN / *_FR ones are always in that language, whoever reads.
 const VARIABLE = Object.freeze({
   NAME: "name",
   BUSINESS: "business",
@@ -41,10 +67,47 @@ const VARIABLE = Object.freeze({
   DESTINATION: "destination",
   BUSINESS_PHONE: "businessPhone",
   TRACKING_CODE: "trackingCode",
+  WHAT_EN: "whatEn",
+  WHAT_FR: "whatFr",
+  DESTINATION_EN: "destinationEn",
+  DESTINATION_FR: "destinationFr",
+  PICKUP_PLACE_EN: "pickupPlaceEn",
+  PICKUP_PLACE_FR: "pickupPlaceFr",
+  PICKUP_ADDRESS: "pickupAddress",
+  PICKUP_PHONE: "pickupPhone",
+});
+
+// A variable that is always written in one language, whatever the template
+// or the reader.
+const VARIABLE_LANGUAGE = Object.freeze({
+  [VARIABLE.WHAT_EN]: "en",
+  [VARIABLE.WHAT_FR]: "fr",
+  [VARIABLE.DESTINATION_EN]: "en",
+  [VARIABLE.DESTINATION_FR]: "fr",
+  [VARIABLE.PICKUP_PLACE_EN]: "en",
+  [VARIABLE.PICKUP_PLACE_FR]: "fr",
 });
 
 // {{1}}, {{2}}, ... in the order the approved body uses them.
 const TEMPLATE_VARIABLES = Object.freeze({
+  [TEMPLATE.SHIPMENT_RECEIVED_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_EN, VARIABLE.DESTINATION_EN,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_FR, VARIABLE.DESTINATION_FR,
+    VARIABLE.TRACKING_CODE,
+  ]),
+  [TEMPLATE.SHIPMENT_DEPARTED_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.WHAT_EN, VARIABLE.BUSINESS, VARIABLE.DESTINATION_EN,
+    VARIABLE.WHAT_FR, VARIABLE.BUSINESS, VARIABLE.DESTINATION_FR,
+    VARIABLE.TRACKING_CODE,
+  ]),
+  [TEMPLATE.SHIPMENT_READY_PICKUP_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.WHAT_EN, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_EN,
+    VARIABLE.WHAT_FR, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_FR,
+    VARIABLE.PICKUP_ADDRESS, VARIABLE.PICKUP_PHONE, VARIABLE.TRACKING_CODE,
+  ]),
   [TEMPLATE.PACKAGE_RECEIVED]: Object.freeze([
     VARIABLE.NAME, VARIABLE.BUSINESS, VARIABLE.WHAT, VARIABLE.DESTINATION,
     VARIABLE.TRACKING_CODE,
@@ -59,32 +122,58 @@ const TEMPLATE_VARIABLES = Object.freeze({
   ]),
 });
 
-// The update a row is about -> its template. `at_port` is a legacy row
-// written before the two arrival moments shared one message; it reads as
-// the arrival.
+// The update a row is about -> its template, in the default (bilingual)
+// set. `arrived` now means ready for pickup: staff mark it when the goods
+// can be collected. The carrier's "at the port" is not ready for pickup,
+// so it has no bilingual message (see messageUpdateFor in
+// container_updates.js); an old `at_port` row sends nothing.
 const TEMPLATE_BY_UPDATE = Object.freeze({
+  received: TEMPLATE.SHIPMENT_RECEIVED_2LANG,
+  shipped: TEMPLATE.SHIPMENT_DEPARTED_2LANG,
+  arrived: TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
+});
+
+// The fallback set. `at_port` is a legacy row written before the two
+// arrival moments shared one message; it reads as the arrival.
+const LEGACY_TEMPLATE_BY_UPDATE = Object.freeze({
   received: TEMPLATE.PACKAGE_RECEIVED,
   shipped: TEMPLATE.CONTAINER_DEPARTED,
   at_port: TEMPLATE.CONTAINER_ARRIVED,
   arrived: TEMPLATE.CONTAINER_ARRIVED,
 });
 
+// Legacy templates exist in each reader's language; the bilingual ones are
+// registered once, under "en".
 const TEMPLATE_LANGUAGES = Object.freeze(["en", "fr"]);
+const BILINGUAL_TEMPLATE_LANGUAGE = "en";
 
 // What a variable reads as when the record has nothing for it. WhatsApp
 // refuses an empty parameter, so each one has words that still read right
-// inside the approved sentence, in both languages.
+// inside the approved sentence: `en`/`fr` for the legacy templates (and the
+// fixed-language variables), `both` for a shared variable in a bilingual
+// template ("Hello / Bonjour {{1}}").
 const FALLBACK = Object.freeze({
-  // "Hello there," / "Bonjour à vous,"
-  [VARIABLE.NAME]: {en: "there", fr: "à vous"},
-  [VARIABLE.BUSINESS]: {en: "Laawol", fr: "Laawol"},
+  // "Hello there," / "Bonjour à vous," / "Hello / Bonjour Client"
+  [VARIABLE.NAME]: {en: "there", fr: "à vous", both: "Client"},
+  [VARIABLE.BUSINESS]: {en: "Laawol", fr: "Laawol", both: "Laawol"},
   [VARIABLE.WHAT]: {en: "goods", fr: "marchandises"},
+  [VARIABLE.WHAT_EN]: {en: "goods"},
+  [VARIABLE.WHAT_FR]: {fr: "marchandises"},
   // "going to its destination country" / "à destination de son pays de
   // destination" - only for a box that has no destination yet.
   [VARIABLE.DESTINATION]: {
     en: "its destination country",
     fr: "son pays de destination",
   },
+  [VARIABLE.DESTINATION_EN]: {en: "its destination country"},
+  [VARIABLE.DESTINATION_FR]: {fr: "son pays de destination"},
+  // "ready for pickup in the destination country" / "prêt à être récupéré
+  // à destination".
+  [VARIABLE.PICKUP_PLACE_EN]: {en: "the destination country"},
+  [VARIABLE.PICKUP_PLACE_FR]: {fr: "destination"},
+  // "Pickup address / Adresse : —"
+  [VARIABLE.PICKUP_ADDRESS]: {en: "—", fr: "—", both: "—"},
+  [VARIABLE.PICKUP_PHONE]: {en: "—", fr: "—", both: "—"},
   // "you can reach them on the number on your receipt" / "vous pouvez la
   // joindre au numéro indiqué sur votre reçu" - the French body reads
   // "joindre au {{5}}", so the fallback starts after "au".
@@ -92,14 +181,22 @@ const FALLBACK = Object.freeze({
     en: "the number on your receipt",
     fr: "numéro indiqué sur votre reçu",
   },
-  [VARIABLE.TRACKING_CODE]: {en: "-", fr: "-"},
+  [VARIABLE.TRACKING_CODE]: {en: "-", fr: "-", both: "-"},
 });
 
 const MAX_PARAMETER = {
   [VARIABLE.NAME]: 60,
   [VARIABLE.BUSINESS]: 80,
   [VARIABLE.WHAT]: 160,
+  [VARIABLE.WHAT_EN]: 160,
+  [VARIABLE.WHAT_FR]: 160,
   [VARIABLE.DESTINATION]: 80,
+  [VARIABLE.DESTINATION_EN]: 80,
+  [VARIABLE.DESTINATION_FR]: 80,
+  [VARIABLE.PICKUP_PLACE_EN]: 120,
+  [VARIABLE.PICKUP_PLACE_FR]: 120,
+  [VARIABLE.PICKUP_ADDRESS]: 200,
+  [VARIABLE.PICKUP_PHONE]: 40,
   [VARIABLE.BUSINESS_PHONE]: 40,
   [VARIABLE.TRACKING_CODE]: 40,
 };
@@ -113,13 +210,39 @@ const clean = (value, max) => String(value ?? "")
     .slice(0, max);
 
 /**
+ * Which set of templates to send. One switch, read at send time, so a
+ * rejected bilingual set is undone by setting WHATSAPP_TEMPLATE_SET=legacy
+ * and redeploying the sender - no code change.
+ *
+ * @param {object} [env] The environment (process.env).
+ * @return {"bilingual"|"legacy"} Anything but "legacy" is bilingual.
+ */
+function whatsappTemplateSet(env = process.env) {
+  const value = String(env?.WHATSAPP_TEMPLATE_SET ?? "").trim().toLowerCase();
+  return value === TEMPLATE_SET.LEGACY ?
+    TEMPLATE_SET.LEGACY : TEMPLATE_SET.BILINGUAL;
+}
+
+/**
+ * @param {string} template A TEMPLATE name.
+ * @return {boolean} Whether it is one of the bilingual templates.
+ */
+function isBilingualTemplate(template) {
+  return BILINGUAL_TEMPLATES.includes(template);
+}
+
+/**
  * @param {string} update A row's update (received, shipped, at_port,
  *   arrived).
+ * @param {string} [templateSet] "bilingual" or "legacy"; the switch when
+ *   omitted.
  * @return {string|null} The template's name, or null for an update that has
  *   no message.
  */
-function templateForUpdate(update) {
-  return TEMPLATE_BY_UPDATE[String(update ?? "").trim()] || null;
+function templateForUpdate(update, templateSet = whatsappTemplateSet()) {
+  const map = templateSet === TEMPLATE_SET.LEGACY ?
+    LEGACY_TEMPLATE_BY_UPDATE : TEMPLATE_BY_UPDATE;
+  return map[String(update ?? "").trim()] || null;
 }
 
 /**
@@ -135,13 +258,18 @@ function templateLanguage(language) {
  *
  * @param {string} variable A VARIABLE.
  * @param {object} values The values by variable name.
- * @param {"en"|"fr"} language The language.
+ * @param {"en"|"fr"|"both"} language The reader's language, or "both" for
+ *   a bilingual template. A fixed-language variable ignores it.
  * @return {string} Never empty.
  */
 function variableText(variable, values, language) {
   const max = MAX_PARAMETER[variable] || 120;
+  const fallback = FALLBACK[variable] || {};
+  const own = VARIABLE_LANGUAGE[variable];
+  const lang = own || (language === "both" ? "both" :
+    templateLanguage(language));
   return clean(values?.[variable], max) ||
-    FALLBACK[variable][templateLanguage(language)];
+    fallback[lang] || fallback.en || "-";
 }
 
 /**
@@ -149,20 +277,21 @@ function variableText(variable, values, language) {
  * approved order and the tracking button.
  *
  * @param {string} template A TEMPLATE name.
- * @param {object} values {name, business, what, destination, businessPhone,
- *   trackingCode}; blanks fall back.
- * @param {"en"|"fr"} language The language.
+ * @param {object} values By VARIABLE name; blanks fall back.
+ * @param {"en"|"fr"} language The reader's language (ignored by a bilingual
+ *   template, which fills both).
  * @return {object[]} The Cloud API components.
  */
 function templateComponents(template, values, language) {
   const order = TEMPLATE_VARIABLES[template];
   if (!order) throw new Error(`Unknown WhatsApp template: ${template}`);
+  const lang = isBilingualTemplate(template) ? "both" : language;
   const parameter = (text) => ({type: "text", text});
   return [
     {
       type: "body",
       parameters: order.map((variable) =>
-        parameter(variableText(variable, values, language))),
+        parameter(variableText(variable, values, lang))),
     },
     {
       // https://customer.laawoldigital.com/t/{{1}}
@@ -170,7 +299,7 @@ function templateComponents(template, values, language) {
       sub_type: "url",
       index: "0",
       parameters: [parameter(
-          variableText(VARIABLE.TRACKING_CODE, values, language))],
+          variableText(VARIABLE.TRACKING_CODE, values, lang))],
     },
   ];
 }
@@ -178,14 +307,16 @@ function templateComponents(template, values, language) {
 /**
  * The whole /messages request body for one person and one update.
  *
- * @param {object} args {phone, update, language, values}.
+ * @param {object} args {phone, update, language, values, templateSet?}.
  * @return {object|null} The request body, or null for an update that has no
  *   template.
  */
 function templateMessage(args) {
-  const template = templateForUpdate(args?.update);
+  const templateSet = args?.templateSet || whatsappTemplateSet();
+  const template = templateForUpdate(args?.update, templateSet);
   if (!template) return null;
-  const language = templateLanguage(args.language);
+  const language = isBilingualTemplate(template) ?
+    BILINGUAL_TEMPLATE_LANGUAGE : templateLanguage(args.language);
   return {
     messaging_product: "whatsapp",
     to: String(args.phone ?? "").replace(/\D/g, ""),
@@ -200,11 +331,19 @@ function templateMessage(args) {
 
 module.exports = {
   TEMPLATE,
+  TEMPLATE_SET,
+  BILINGUAL_TEMPLATES,
+  LEGACY_TEMPLATES,
   VARIABLE,
+  VARIABLE_LANGUAGE,
   TEMPLATE_VARIABLES,
   TEMPLATE_BY_UPDATE,
+  LEGACY_TEMPLATE_BY_UPDATE,
   TEMPLATE_LANGUAGES,
+  BILINGUAL_TEMPLATE_LANGUAGE,
   FALLBACK,
+  whatsappTemplateSet,
+  isBilingualTemplate,
   templateForUpdate,
   templateLanguage,
   variableText,
