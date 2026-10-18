@@ -190,7 +190,7 @@ function renderContainerLabels(model, opts = {}) {
     <div class="qr">${qr[label.code] || ""}</div>
     <div class="info">
       <div class="code">${escape(label.code)}${label.packageCount > 1 ?
-    `<span class="of"> &middot; ${escape(label.packageNumber)} of ${
+    `<span class="of"><i> &middot; </i>${escape(label.packageNumber)} of ${
       escape(label.packageCount)}</span>` : ""}</div>
       <div class="pkg">${escape(label.what)}</div>
       ${label.vin ? `<div class="sub">VIN ${escape(label.vin)}</div>` : ""}
@@ -259,9 +259,10 @@ function renderContainerLabels(model, opts = {}) {
     ${big ? "text-align:center;" : ""}}
   .code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     font-weight:800;font-size:${big ? "30pt" : "17pt"};letter-spacing:1px;
-    line-height:1.1}
-  .code .of{font-size:${big ? "17pt" : "11pt"};letter-spacing:0;
-    white-space:nowrap}
+    line-height:1.1;white-space:nowrap}
+  .code .of{display:block;font-size:${big ? "17pt" : "11pt"};
+    letter-spacing:0}
+  .code .of i{display:none}
   .pkg{font-weight:700;font-size:${big ? "15pt" : "10.5pt"}}
   .to{font-weight:800;font-size:${big ? "17pt" : "12pt"};line-height:1.15;
     overflow-wrap:anywhere}
