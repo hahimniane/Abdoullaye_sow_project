@@ -91,9 +91,60 @@ export function composeInternationalPhone(
   callingCode: string,
   nationalNumber: string,
 ) {
+  // Idempotent: a value that already carries its own "+" is international.
+  // Prefixing it again is how "+224" got stacked onto a number repeatedly.
+  if (nationalNumber.trim().startsWith("+")) {
+    const digits = nationalNumber.replace(/\D/g, "");
+    return digits ? `+${digits}` : "";
+  }
   const code = callingCode.replace(/\D/g, "");
   const national = nationalNumber.replace(/\D/g, "");
   return code && national ? `+${code}${national}` : "";
+}
+
+/**
+ * The country a phone field shows. The stored number wins when it names one
+ * (a saved recipient, an existing record); otherwise the country the person
+ * picked; only when they have picked nothing, the form's default (e.g. the
+ * destination). An empty number never discards the person's pick.
+ */
+export function phoneFieldCountry(
+  value: string,
+  chosenCountry: string | null | undefined,
+  fallbackCountry: string,
+) {
+  const chosen = chosenCountry ? callingCodeOptionForCountry(chosenCountry) : undefined;
+  const fallback =
+    callingCodeOptionForCountry(fallbackCountry) ??
+    callingCodeOptionForCountry("US") ??
+    CALLING_CODE_OPTIONS[0];
+  const preferred = chosen ?? fallback;
+  const normalized = value.trim().replace(/[\s().-]/g, "");
+  if (!normalized.startsWith("+")) return preferred.code;
+  const digits = normalized.slice(1).replace(/\D/g, "");
+  if (!digits || digits.startsWith(preferred.callingCode)) return preferred.code;
+  const named = callingCodeOptionForPhone(normalized, preferred.code);
+  return named && digits.startsWith(named.callingCode) ? named.code : preferred.code;
+}
+
+/**
+ * What the number input shows for a stored value under the country showing.
+ * Round-trips: feeding it back through phoneFromTyped stores the same value,
+ * so re-rendering or retyping can never add the calling code twice. A stored
+ * "+" number that does not match the country is shown whole, "+" included,
+ * rather than as national digits that would get another code in front.
+ */
+export function phoneFieldNationalNumber(
+  value: string,
+  selected: { callingCode: string },
+) {
+  const normalized = value.trim().replace(/[\s().-]/g, "");
+  const digits = normalized.replace(/\D/g, "");
+  if (!normalized.startsWith("+")) return digits;
+  if (!digits) return "";
+  return digits.startsWith(selected.callingCode)
+    ? digits.slice(selected.callingCode.length)
+    : `+${digits}`;
 }
 
 /**

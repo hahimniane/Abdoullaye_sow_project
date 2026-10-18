@@ -35,6 +35,7 @@ const CONTAINER_FIELDS: Record<string, string> = {
   destinationCountryId: "pays de destination",
   destinationCountryName: "pays de destination",
   notes: "notes",
+  carrierScac: "compagnie maritime",
 };
 
 // container_manifest.js LINE_FIELD_LABELS: what an edited line names.

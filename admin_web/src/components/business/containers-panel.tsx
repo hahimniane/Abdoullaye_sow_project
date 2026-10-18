@@ -49,6 +49,7 @@ import {
   buildVinPlacementIndex,
   cleanVin,
   containerCallableFailure,
+  containerCarrierNeedsChoice,
   containerDeleteRefusal,
   containerDraftFromRow,
   containerIsOpen,
@@ -57,6 +58,7 @@ import {
   containerLineIsStock,
   containerLinePayload,
   containerLineTitle,
+  containerLineTitleIsCopy,
   containerLineWhatsApp,
   containerLineWhatsAppText,
   contactPhoneReach,
@@ -93,6 +95,7 @@ import {
   type ParkedCarPick,
 } from "@/lib/container-manifest";
 import { defaultWaitingDestination } from "@/lib/waiting-packages";
+import { OCEAN_CARRIERS, isKnownCarrierScac, oceanCarrierLabel } from "@/lib/ocean-carrier-catalog";
 import {
   DESTINATION_COUNTRIES,
   destinationCountryName,
@@ -510,7 +513,9 @@ export function ContainersPanel({
         // A shipped container only takes a note; sending its identity back
         // unchanged is harmless, but sending only what may change keeps the
         // audit line honest.
-        const changes = wasOpen ? payload : { notes: payload.notes };
+        // The shipping line stays choosable after sailing: that is when
+        // carrier tracking needs it.
+        const changes = wasOpen ? payload : { notes: payload.notes, carrierScac: payload.carrierScac };
         await httpsCallable(functions, "updateContainer")({ businessId, containerId: editing, changes });
       } else {
         const response = await httpsCallable(functions, "createContainer")({ businessId, ...payload });
@@ -1003,6 +1008,7 @@ export function ContainersPanel({
               <div><span>Container number</span><b data-no-translate>{text(selected.containerNumber, "—")}</b></div>
               <div><span>Booking / BL reference</span><b data-no-translate>{text(selected.bookingReference, "—")}</b></div>
               <div><span>Destination</span><b>{destinationLabel(selected) || "—"}</b></div>
+              <div><span>Shipping line</span>{oceanCarrierLabel(selected.carrierScac) ? <b data-no-translate>{oceanCarrierLabel(selected.carrierScac)}</b> : <b>Not chosen yet</b>}</div>
               <div><span>Started</span><b>{formatDate(selected.createdAt) || "—"}</b></div>
               {Boolean(selected.sailedAt) && <div><span>Sailed</span><b>{formatDate(selected.sailedAt)}</b></div>}
               {Boolean(selected.arrivedAt) && <div><span>Arrived</span><b>{formatDate(selected.arrivedAt)}</b></div>}
@@ -1010,6 +1016,12 @@ export function ContainersPanel({
                 <div><span>On board</span><b>{selectedCounts.carCount} · {selectedCounts.barrelCount} · {selectedCounts.otherCount}</b><small>cars · barrels · other</small></div>
               )}
             </div>
+            {containerCarrierNeedsChoice(selected) && (
+              <p className="ctn-carrier-notice" role="status">
+                Tracking couldn&apos;t find the shipping line — choose it to start tracking.{" "}
+                <button type="button" disabled={busy} onClick={() => openEdit(selected)}>Choose shipping line</button>
+              </p>
+            )}
             {text(selected.notes, "") && <p className="ctn-notes" data-no-translate>{text(selected.notes, "")}</p>}
           </div>
 
@@ -1039,7 +1051,7 @@ export function ContainersPanel({
                       id={`ctn-line-${String(row.id)}`}
                       key={String(row.id)}
                     >
-                      <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} /></span>
+                      <span><strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} /></span>
                       <span>
                         {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(row.customerName, "")}</strong>}
                         {!stock && <small data-no-translate>{text(row.customerPhone, "")}</small>}
@@ -1133,7 +1145,7 @@ export function ContainersPanel({
                         onClick={open}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
                       >
-                        <span><strong data-no-translate>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(hit.line.trackingCode, "")} /></span>
+                        <span><strong data-no-translate={containerLineTitleIsCopy(hit.line) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(hit.line.trackingCode, "")} /></span>
                         <span>
                           {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(hit.line.customerName, "")}</strong>}
                           {!stock && <small data-no-translate>{text(hit.line.customerPhone, "")}</small>}
@@ -1259,6 +1271,22 @@ export function ContainersPanel({
                     </label>
                   </>
                 )}
+                {/* The shipping line: optional, and still choosable after
+                    sailing, since carrier tracking needs it most then. Empty
+                    lets tracking guess it from the container number, which
+                    fails for leasing prefixes such as TCKU. */}
+                {editingContainerId && containerCarrierNeedsChoice(containerById.get(editingContainerId)) && !containerDraft.carrierScac && (
+                  <p className="ctn-carrier-notice" role="status">Tracking couldn&apos;t find the shipping line — choose it to start tracking.</p>
+                )}
+                <label className="lst-field wide"><span>Shipping line</span>
+                  <select value={containerDraft.carrierScac} onChange={(e) => setContainerDraft((d) => ({ ...d, carrierScac: e.target.value }))}>
+                    <option value="">Not sure — guess from the container number</option>
+                    {containerDraft.carrierScac && !isKnownCarrierScac(containerDraft.carrierScac) && (
+                      <option value={containerDraft.carrierScac} data-no-translate>{containerDraft.carrierScac}</option>
+                    )}
+                    {OCEAN_CARRIERS.map((carrier) => (<option key={carrier.scac} value={carrier.scac} data-no-translate>{`${carrier.name} · ${carrier.scac}`}</option>))}
+                  </select>
+                </label>
                 <label className="lst-field wide"><span>Notes</span><textarea rows={3} value={containerDraft.notes} onChange={(e) => setContainerDraft((d) => ({ ...d, notes: e.target.value }))} /></label>
               </div>
             </div>

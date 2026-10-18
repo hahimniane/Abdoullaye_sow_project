@@ -239,7 +239,8 @@ export type ContainerRefusal =
   | "received_by_invalid"
   | "payment_exceeds_balance"
   | "payment_not_found"
-  | "payment_already_reverted";
+  | "payment_already_reverted"
+  | "carrier_invalid";
 
 export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   container_label_required: "Give the container a working name, or its container or booking number.",
@@ -300,6 +301,7 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   payment_exceeds_balance: "That is more than what is still owed.",
   payment_not_found: "That payment no longer exists.",
   payment_already_reverted: "That payment was already reverted.",
+  carrier_invalid: "Choose the shipping line from the list.",
 };
 
 export function containerMessage(codes: readonly ContainerRefusal[]): string {
@@ -320,6 +322,8 @@ export type ContainerDraft = {
   destinationCountryId: string;
   destinationCountryName: string;
   notes: string;
+  /** The shipping line's SCAC; "" = guess it from the container number. */
+  carrierScac: string;
 };
 
 export const emptyContainerDraft: ContainerDraft = {
@@ -329,7 +333,33 @@ export const emptyContainerDraft: ContainerDraft = {
   destinationCountryId: "",
   destinationCountryName: "",
   notes: "",
+  carrierScac: "",
 };
+
+/** A SCAC as the server stores it (`containerCarrierScac`). */
+export function containerCarrierScac(value: unknown): string {
+  return text(value, 40).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+}
+
+/**
+ * Whether carrier tracking gave up on this container because it could not
+ * tell the shipping line from the number (a leasing prefix such as TCKU)
+ * and nobody has chosen one since: the console asks staff to choose it, and
+ * choosing it starts tracking (`shouldStartCarrierTracking` on the server).
+ */
+export function containerCarrierNeedsChoice(row: unknown): boolean {
+  const r = asRow(row);
+  const number = text(r.containerNumber, 20);
+  if (!number || containerStatus(r) === "arrived") return false;
+  if (text(r.trackingProvider, 40) === "carrier_api" && text(r.trackedContainerNumber, 20) === number) {
+    return false;
+  }
+  return (
+    text(r.carrierTrackingError, 300) === "carrier_unknown" &&
+    text(r.carrierTrackingFailedFor, 20) === number &&
+    !containerCarrierScac(r.carrierScac)
+  );
+}
 
 export type ContainerError =
   | "container_label_required"
@@ -350,7 +380,10 @@ export function validateContainerDraft(draft: ContainerDraft): ContainerError[] 
   return errors;
 }
 
-/** The fields a business may set, shaped as the server's `containerRecord`. */
+/**
+ * The fields a business may set, shaped as the server's `containerRecord`
+ * plus the shipping line (`carrierScac`), which both callables take apart.
+ */
 export function containerPayload(draft: ContainerDraft) {
   return {
     label: text(draft.label, MAX_LABEL),
@@ -359,6 +392,7 @@ export function containerPayload(draft: ContainerDraft) {
     destinationCountryId: text(draft.destinationCountryId, 60),
     destinationCountryName: text(draft.destinationCountryName, MAX_LABEL),
     notes: text(draft.notes, MAX_NOTE),
+    carrierScac: containerCarrierScac(draft.carrierScac),
   };
 }
 
@@ -371,6 +405,7 @@ export function containerDraftFromRow(row: Row): ContainerDraft {
     destinationCountryId: text(row.destinationCountryId, 60),
     destinationCountryName: text(row.destinationCountryName, MAX_LABEL),
     notes: text(row.notes, MAX_NOTE),
+    carrierScac: containerCarrierScac(row.carrierScac),
   };
 }
 
@@ -1021,6 +1056,19 @@ export function containerLineTitle(line: unknown): string {
   if (kind === "barrels") return `${qty} ${qty === 1 ? "barrel" : "barrels"}`;
   const what = text(r.description, MAX_LABEL);
   return qty > 1 ? `${qty} × ${what}` : what;
+}
+
+/**
+ * Whether containerLineTitle is console copy ("2 barrels", "Car") rather
+ * than what someone typed (a make and model, a VIN, a description). Copy is
+ * translated in French; typed values render inside data-no-translate.
+ */
+export function containerLineTitleIsCopy(line: unknown): boolean {
+  const r = asRow(line);
+  const kind = text(r.kind, 20);
+  if (kind === "barrels") return true;
+  if (kind !== "car") return false;
+  return containerLineTitle(line) === "Car";
 }
 
 export function containerLineIsStock(line: unknown): boolean {

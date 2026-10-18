@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { SearchableSelect } from "@/components/searchable-select";
 import {
   CALLING_CODE_OPTIONS,
   callingCodeOptionForCountry,
-  callingCodeOptionForPhone,
   composeInternationalPhone,
+  phoneFieldCountry,
+  phoneFieldNationalNumber,
   phoneFromTyped,
 } from "@/lib/calling-code-catalog";
 import { currentWebLanguage } from "@/lib/language";
@@ -35,38 +36,16 @@ export function CustomerPhoneField({
   required = false,
   initialCountryCode = "US",
 }: CustomerPhoneFieldProps) {
-  const inferred = callingCodeOptionForPhone(value, initialCountryCode);
-  const [countryCode, setCountryCode] = useState(
-    inferred?.code ?? initialCountryCode,
-  );
-  useEffect(() => {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      setCountryCode(initialCountryCode);
-      return;
-    }
-    // A value set from outside the field - picking a saved recipient, loading
-    // an existing record - can belong to a different country than the one
-    // showing. Typing never lands here: the input always composes the value
-    // with the calling code already selected, so it always agrees.
-    const normalizedValue = trimmed.replace(/[\s().-]/g, "");
-    if (!normalizedValue.startsWith("+")) return;
-    const digitsOnly = normalizedValue.slice(1).replace(/\D/g, "");
-    const selected = callingCodeOptionForCountry(countryCode);
-    if (selected && digitsOnly.startsWith(selected.callingCode)) return;
-    const next = callingCodeOptionForPhone(trimmed, initialCountryCode);
-    if (next && next.code !== countryCode) setCountryCode(next.code);
-  }, [countryCode, initialCountryCode, value]);
+  // The country the person picked, kept apart from the digits. It is never
+  // overwritten by the form's default (initialCountryCode), and an empty
+  // number keeps it: picking "United States (+1)" before typing must stick.
+  const [chosenCountry, setChosenCountry] = useState<string | null>(null);
+  // Derived every render, no effect: a value set from outside the field
+  // (a saved recipient, an existing record) shows its own country.
+  const countryCode = phoneFieldCountry(value, chosenCountry, initialCountryCode);
   const option =
-    callingCodeOptionForCountry(countryCode) ??
-    inferred ??
-    CALLING_CODE_OPTIONS[0];
-  const normalized = value.trim().replace(/[\s().-]/g, "");
-  const allDigits = normalized.replace(/\D/g, "");
-  const nationalNumber =
-    normalized.startsWith("+") && allDigits.startsWith(option.callingCode)
-      ? allDigits.slice(option.callingCode.length)
-      : allDigits;
+    callingCodeOptionForCountry(countryCode) ?? CALLING_CODE_OPTIONS[0];
+  const nationalNumber = phoneFieldNationalNumber(value, option);
   const language = currentWebLanguage() === "fr" ? "fr" : "en";
   const displayNames = useMemo(
     () =>
@@ -91,7 +70,7 @@ export function CustomerPhoneField({
           onChange={(country) => {
             const next = callingCodeOptionForCountry(country);
             if (!next) return;
-            setCountryCode(next.code);
+            setChosenCountry(next.code);
             onChange(
               composeInternationalPhone(next.callingCode, nationalNumber),
             );
@@ -121,8 +100,8 @@ export function CustomerPhoneField({
               phoneFromTyped(
                 event.target.value,
                 option,
-                initialCountryCode,
-                setCountryCode,
+                option.code,
+                setChosenCountry,
               ),
             )
           }
@@ -134,7 +113,8 @@ export function CustomerPhoneField({
         />
       </span>
       <small>
-        <span>International number:</span> {value || option.dialCode}
+        <span>International number:</span>{" "}
+        <span data-no-translate>{value || option.dialCode}</span>
       </small>
       {error && (
         <small className="customer-field-error" id={id ? `${id}-error` : undefined}>

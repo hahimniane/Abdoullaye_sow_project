@@ -35,6 +35,7 @@ const {
   priceErrors,
   linePriceRecord,
 } = require("./container_payments");
+const {OCEAN_CARRIERS} = require("./ocean_carrier_catalog");
 
 const CONTAINER_STATUS = Object.freeze({
   LOADING: "loading",
@@ -146,7 +147,89 @@ function validateContainer(input) {
   if (number && !ISO_CONTAINER_NUMBER.test(number)) {
     errors.push("container_number_invalid");
   }
+  // The shipping line is optional; when one is sent it must be a line the
+  // catalog knows, or "" to go back to guessing from the number.
+  if (input?.carrierScac !== undefined && input?.carrierScac !== null &&
+      carrierScacRefusal(input.carrierScac)) {
+    errors.push("carrier_invalid");
+  }
   return errors;
+}
+
+// -------------------------------------------------------------------------
+// The shipping line, and when carrier tracking is (re)tried.
+// -------------------------------------------------------------------------
+
+const CARRIER_SCACS = new Set(OCEAN_CARRIERS.map((c) => c.scac));
+
+/**
+ * A SCAC as it is stored: upper case, letters and digits only.
+ *
+ * @param {*} value Raw input.
+ * @return {string} The code, or "" for none.
+ */
+function containerCarrierScac(value) {
+  return String(value ?? "").trim().toUpperCase()
+      .replace(/[^A-Z0-9]/g, "").slice(0, 10);
+}
+
+/**
+ * Whether staff may choose this shipping line: one of the ocean carrier
+ * catalog's SCACs, or "" (none chosen: tracking guesses from the number).
+ *
+ * @param {*} value Raw input.
+ * @return {string|null} "carrier_invalid", or null when allowed.
+ */
+function carrierScacRefusal(value) {
+  const scac = containerCarrierScac(value);
+  if (!scac) return null;
+  return CARRIER_SCACS.has(scac) ? null : "carrier_invalid";
+}
+
+/**
+ * Whether `startContainerCarrierTracking` should ask the carrier feed to
+ * follow this container now: a real ISO number on a box that has not
+ * arrived, not already followed under that number, and not already tried
+ * for that number with the same shipping line. Choosing (or changing) the
+ * line after a failed try - "carrier_unknown" for a leasing prefix such as
+ * TCKU - is a new try. Each failure records the number and the line that
+ * was chosen at the time (`carrierTrackingFailedScac`, "" when the line was
+ * guessed from the number), which is also what keeps the trigger from
+ * retrying on its own write.
+ *
+ * @param {object} after The container as written.
+ * @return {boolean} True to start tracking.
+ */
+function shouldStartCarrierTracking(after) {
+  const row = after && typeof after === "object" ? after : {};
+  const number = String(row.containerNumber || "");
+  if (!ISO_CONTAINER_NUMBER.test(number)) return false;
+  if (row.status === CONTAINER_STATUS.ARRIVED) return false;
+  if (row.trackingProvider === "carrier_api" &&
+      row.trackedContainerNumber === number) return false;
+  if (row.carrierTrackingFailedFor === number &&
+      containerCarrierScac(row.carrierTrackingFailedScac) ===
+        containerCarrierScac(row.carrierScac)) return false;
+  return true;
+}
+
+/**
+ * What a failed try writes on the container, so the same try is not made
+ * again until the number or the chosen shipping line changes.
+ *
+ * @param {object} after The container as written.
+ * @param {string} error Why it failed ("carrier_unknown", or the feed's
+ *   own words).
+ * @return {object} The fields to merge.
+ */
+function carrierTrackingFailure(after, error) {
+  const row = after && typeof after === "object" ? after : {};
+  return {
+    carrierTrackingFailedFor: String(row.containerNumber || ""),
+    carrierTrackingFailedScac: containerCarrierScac(row.carrierScac),
+    carrierTrackingError: String(error || "tracking_request_failed")
+        .slice(0, 300),
+  };
 }
 
 /**
@@ -1056,6 +1139,7 @@ const CONTAINER_MESSAGES = Object.freeze({
   payment_exceeds_balance: "That is more than what is still owed.",
   payment_not_found: "That payment no longer exists.",
   payment_already_reverted: "That payment was already reverted.",
+  carrier_invalid: "Choose the shipping line from the list.",
 });
 
 module.exports = {
@@ -1071,6 +1155,10 @@ module.exports = {
   CONTAINER_MESSAGES,
   validateContainer,
   containerRecord,
+  containerCarrierScac,
+  carrierScacRefusal,
+  shouldStartCarrierTracking,
+  carrierTrackingFailure,
   containerTransitionRefusal,
   containerIsOpen,
   containerDeleteRefusal,

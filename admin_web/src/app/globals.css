@@ -14066,6 +14066,30 @@ html[data-lang-pending] body {
   white-space: pre-wrap;
   font-size: 13px;
 }
+/* Carrier tracking could not tell the shipping line from the number: ask for
+   it, on the container and in its form, until one is chosen. */
+.ctn-carrier-notice {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.ctn-carrier-notice button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.lst-form-grid > .ctn-carrier-notice { grid-column: 1 / -1; margin: 0; }
 /* The cross-link under a car in the parking list and the ledger: where the
    car is now, if it was loaded. */
 /* "Is this car parked in your lot?" — the car form's first question, and the
@@ -14138,6 +14162,10 @@ html[data-lang-pending] body {
 .wpk-price-cell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .wpk-pay-arrival { align-items: center; }
 .wpk-foot { flex-wrap: wrap; }
+/* The refusal and the "Added so far" line sit beside the buttons, full width. */
+.wpk-foot .wpk-foot-note { flex: 1 1 100%; margin: 0; }
+.lst-field-error { color: var(--danger, #b91c1c); font-size: 12.5px; font-weight: 700; }
+.lst-field [aria-invalid="true"] { border-color: var(--danger, #b91c1c); }
 .wpk-money-line { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .wpk-money-line small { color: var(--muted); }
 .wpk-inline-actions { display: flex; gap: 8px; margin: 10px 0 4px; }

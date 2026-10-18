@@ -337,6 +337,10 @@ const {
   WAITING_HOLDER,
   validateContainer,
   containerRecord,
+  containerCarrierScac,
+  carrierScacRefusal,
+  shouldStartCarrierTracking,
+  carrierTrackingFailure,
   containerTransitionRefusal,
   containerIsOpen,
   containerDeleteRefusal,
@@ -17184,6 +17188,9 @@ exports.createContainer = onCall(
       await ref.set({
         businessId,
         ...record,
+        // The shipping line staff chose ("" = guess it from the number);
+        // startContainerCarrierTracking reads it.
+        carrierScac: containerCarrierScac(data.carrierScac),
         status: CONTAINER_STATUS.LOADING,
         lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0,
         createdByStaffId: uid,
@@ -17209,6 +17216,19 @@ exports.updateContainer = onCall(
         data.changes : {};
       const merged = containerRecord({...current, ...changes});
       const errors = validateContainer(merged);
+      // The shipping line is not part of the declared list, so it stays
+      // choosable after sailing - that is when tracking matters most. Only
+      // a change is checked: a line the carrier feed filled in itself may
+      // be outside the catalog, and re-sending it unchanged is no choice.
+      const carrierSent = changes.carrierScac !== undefined &&
+        changes.carrierScac !== null;
+      const carrierBefore = containerCarrierScac(current.carrierScac);
+      const carrierAfter = carrierSent ?
+        containerCarrierScac(changes.carrierScac) : carrierBefore;
+      const carrierChanged = carrierAfter !== carrierBefore;
+      if (carrierChanged && carrierScacRefusal(carrierAfter)) {
+        errors.push("carrier_invalid");
+      }
       if (errors.length > 0) {
         throw new HttpsError("invalid-argument", containerMessage(errors),
             {reasons: errors});
@@ -17239,11 +17259,13 @@ exports.updateContainer = onCall(
       }
       await ref.set({
         ...merged,
+        ...(carrierChanged ? {carrierScac: carrierAfter} : {}),
         editedByStaffId: uid,
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       }, {merge: true});
       const touched = [...changed,
-        ...(String(current.notes || "") !== merged.notes ? ["notes"] : [])];
+        ...(String(current.notes || "") !== merged.notes ? ["notes"] : []),
+        ...(carrierChanged ? ["carrierScac"] : [])];
       if (touched.length > 0) {
         await containerAudit(businessId, ref.id, "edited", uid,
             `Changed ${touched.join(", ")}`);
@@ -18957,24 +18979,19 @@ exports.startContainerCarrierTracking = onDocumentWritten(
     async (event) => {
       const after = event.data?.after?.data();
       if (!after) return;
-      const number = String(after.containerNumber || "");
-      if (!/^[A-Z]{4}\d{7}$/.test(number)) return;
-      if (after.status === CONTAINER_STATUS.ARRIVED) return;
-      // Already followed, or already tried for this exact number and the
-      // carrier could not be found - a new number gets a new try.
-      if (after.trackingProvider === "carrier_api" &&
-          after.trackedContainerNumber === number) return;
-      if (after.carrierTrackingFailedFor === number) return;
+      // Already followed, or already tried for this exact number with this
+      // exact shipping line - a new number, or a line chosen after a failed
+      // try, gets a new try (container_manifest.js).
+      if (!shouldStartCarrierTracking(after)) return;
       if (!terminal49Configured()) return;
+      const number = String(after.containerNumber || "");
       const ref = event.data.after.ref;
-      let scac = String(after.carrierScac || "").toUpperCase();
+      let scac = containerCarrierScac(after.carrierScac);
       try {
         if (!scac) scac = await inferContainerCarrierScac(number);
         if (!scac) {
-          await ref.set({
-            carrierTrackingFailedFor: number,
-            carrierTrackingError: "carrier_unknown",
-          }, {merge: true});
+          await ref.set(carrierTrackingFailure(after, "carrier_unknown"),
+              {merge: true});
           return;
         }
         const {ok, data} = await terminal49Request("/tracking_requests", {
@@ -18985,12 +19002,9 @@ exports.startContainerCarrierTracking = onDocumentWritten(
         });
         const parsed = ok ? parseTrackingRequestResponse(data) : null;
         if (!parsed) {
-          await ref.set({
-            carrierTrackingFailedFor: number,
-            carrierTrackingError: String(
-                data?.errors?.[0]?.detail || "tracking_request_failed")
-                .slice(0, 300),
-          }, {merge: true});
+          await ref.set(carrierTrackingFailure(after,
+              data?.errors?.[0]?.detail || "tracking_request_failed"),
+          {merge: true});
           return;
         }
         await ref.set({

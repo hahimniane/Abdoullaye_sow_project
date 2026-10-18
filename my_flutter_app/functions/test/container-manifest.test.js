@@ -53,6 +53,10 @@ const {
   containerStatusIsRepeat,
   linesLagStatus,
   inGroups,
+  containerCarrierScac,
+  carrierScacRefusal,
+  shouldStartCarrierTracking,
+  carrierTrackingFailure,
 } = require("../container_manifest");
 
 const VIN = "1HGCM82633A004352";
@@ -1183,4 +1187,147 @@ describe("the container callables and their gates", () => {
     const locks = rules.slice(rules.indexOf("match /containerVinLocks/"));
     assert.match(locks.slice(0, 120), /allow read, write: if false;/);
   });
+});
+
+// Real container TCKU6418832: a leasing prefix, so the carrier feed could
+// not guess the line, the box was stamped "carrier_unknown", and nothing
+// could ever start tracking it again.
+describe("the shipping line and when tracking is tried again", () => {
+  const box = (extra = {}) => ({
+    containerNumber: "TCKU6418832", status: "loading", ...extra});
+
+  it("takes a catalog line, or none, and refuses anything else", () => {
+    assert.equal(containerCarrierScac(" mscu "), "MSCU");
+    assert.equal(containerCarrierScac(null), "");
+    assert.equal(carrierScacRefusal("MSCU"), null);
+    assert.equal(carrierScacRefusal("mscu"), null);
+    assert.equal(carrierScacRefusal(""), null);
+    assert.equal(carrierScacRefusal(undefined), null);
+    assert.equal(carrierScacRefusal("XXXX"), "carrier_invalid");
+    assert.equal(carrierScacRefusal("TCKU"), "carrier_invalid");
+    assert.deepEqual(
+        validateContainer({label: "x", carrierScac: "MAEU"}), []);
+    assert.deepEqual(validateContainer({label: "x", carrierScac: ""}), []);
+    assert.deepEqual(validateContainer({label: "x"}), []);
+    assert.deepEqual(validateContainer({label: "x", carrierScac: "NOPE"}),
+        ["carrier_invalid"]);
+    assert.ok(CONTAINER_MESSAGES.carrier_invalid);
+  });
+
+  it("tries a new number", () => {
+    assert.equal(shouldStartCarrierTracking(box()), true);
+    // A number that failed before, then changed.
+    assert.equal(shouldStartCarrierTracking(box({
+      carrierTrackingFailedFor: "MSKU1234565",
+      carrierTrackingError: "carrier_unknown",
+    })), true);
+  });
+
+  it("does not try the same number with the same line twice", () => {
+    // Failures written before the line was recorded read as "guessed".
+    assert.equal(shouldStartCarrierTracking(box({
+      carrierTrackingFailedFor: "TCKU6418832",
+      carrierTrackingError: "carrier_unknown",
+    })), false);
+    assert.equal(shouldStartCarrierTracking(box({
+      carrierScac: "MSCU",
+      carrierTrackingFailedFor: "TCKU6418832",
+      carrierTrackingFailedScac: "mscu",
+    })), false);
+    // What a failure writes is itself a skip: the trigger cannot loop on
+    // its own write, whether the line was chosen or guessed.
+    for (const chosen of ["", "MSCU"]) {
+      const after = box({carrierScac: chosen});
+      const failed = {...after,
+        ...carrierTrackingFailure(after, "carrier_unknown")};
+      assert.equal(shouldStartCarrierTracking(failed), false);
+    }
+  });
+
+  it("tries again once a line is chosen or changed after a failure", () => {
+    assert.equal(shouldStartCarrierTracking(box({
+      carrierScac: "MSCU",
+      carrierTrackingFailedFor: "TCKU6418832",
+      carrierTrackingError: "carrier_unknown",
+    })), true);
+    assert.equal(shouldStartCarrierTracking(box({
+      carrierScac: "CMDU",
+      carrierTrackingFailedFor: "TCKU6418832",
+      carrierTrackingFailedScac: "MSCU",
+    })), true);
+    // Clearing the line goes back to guessing: a new try too.
+    assert.equal(shouldStartCarrierTracking(box({
+      carrierScac: "",
+      carrierTrackingFailedFor: "TCKU6418832",
+      carrierTrackingFailedScac: "MSCU",
+    })), true);
+  });
+
+  it("leaves a followed, arrived or unnumbered box alone", () => {
+    assert.equal(shouldStartCarrierTracking(box({
+      trackingProvider: "carrier_api",
+      trackedContainerNumber: "TCKU6418832",
+      carrierScac: "CMDU",
+    })), false);
+    assert.equal(shouldStartCarrierTracking(box({status: "arrived"})), false);
+    assert.equal(shouldStartCarrierTracking(box({status: "shipped"})), true);
+    for (const containerNumber of ["", "TCKU641883", "tcku6418832",
+      "BOOKING-77"]) {
+      assert.equal(shouldStartCarrierTracking(box({containerNumber})), false);
+    }
+    assert.equal(shouldStartCarrierTracking(null), false);
+  });
+
+  it("records the number, the line tried and why", () => {
+    assert.deepEqual(
+        carrierTrackingFailure(box({carrierScac: "mscu"}), "Not found"),
+        {carrierTrackingFailedFor: "TCKU6418832",
+          carrierTrackingFailedScac: "MSCU",
+          carrierTrackingError: "Not found"});
+    assert.equal(carrierTrackingFailure(box(), "").carrierTrackingError,
+        "tracking_request_failed");
+    assert.equal(
+        carrierTrackingFailure(box(), "x".repeat(400))
+            .carrierTrackingError.length, 300);
+  });
+
+  const {readFileSync} = require("node:fs");
+  const path = require("node:path");
+  const source = readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  const section = (start) => {
+    const at = source.indexOf(start);
+    assert.ok(at > -1, `${start} not found`);
+    const next = source.indexOf("\nexports.", at + 1);
+    return source.slice(at, next === -1 ? undefined : next);
+  };
+
+  it("the trigger decides with the rule and records failures with it", () => {
+    const body = section("exports.startContainerCarrierTracking =");
+    assert.match(body, /if \(!shouldStartCarrierTracking\(after\)\) return;/);
+    assert.doesNotMatch(body,
+        /if \(after\.carrierTrackingFailedFor === number\) return;/);
+    assert.equal(
+        (body.match(/carrierTrackingFailure\(after,/g) || []).length, 2);
+    assert.doesNotMatch(body, /carrierTrackingFailedFor: number/);
+  });
+
+  it("create stores the chosen line; update checks a change and audits it",
+      () => {
+        const create = section("exports.createContainer =");
+        assert.match(create, /validateContainer\(data\)/);
+        assert.match(create,
+            /carrierScac: containerCarrierScac\(data\.carrierScac\)/);
+        const update = section("exports.updateContainer =");
+        assert.match(update, new RegExp(
+            "if \\(carrierChanged && carrierScacRefusal\\(carrierAfter\\)\\)" +
+            " \\{\\s*errors\\.push\\(\"carrier_invalid\"\\);"));
+        assert.match(update,
+            /\.\.\.\(carrierChanged \? \{carrierScac: carrierAfter\} : \{\}\)/);
+        assert.match(update,
+            /\.\.\.\(carrierChanged \? \["carrierScac"\] : \[\]\)/);
+        // Not part of the declared list: still choosable after sailing.
+        const structural = update.slice(update.indexOf("const structural"),
+            update.indexOf("const changed"));
+        assert.doesNotMatch(structural, /carrierScac/);
+      });
 });

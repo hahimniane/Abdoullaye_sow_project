@@ -8785,11 +8785,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctrDestinationUnset => 'No destination yet';
 
   @override
+  String get ctrShippingLine => 'Shipping line';
+
+  @override
+  String get ctrShippingLineGuess =>
+      'Not sure — guess from the container number';
+
+  @override
+  String get ctrSearchShippingLines => 'Search shipping lines';
+
+  @override
+  String get ctrShippingLineNeeded =>
+      'Tracking couldn\'t find the shipping line — choose it to start tracking.';
+
+  @override
   String get ctrNotes => 'Notes';
 
   @override
   String get ctrLockedNote =>
-      'Shipped. The list is the record of what went; only the notes stay open.';
+      'Shipped. The list is the record of what went; only the notes and the shipping line stay open.';
 
   @override
   String get ctrNoContainers => 'No containers yet.';
@@ -9054,6 +9068,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get ctrErrNumberInvalid =>
       'A container number is four letters and seven digits, like MSKU1234567. Booking numbers and bills of lading go in the reference field.';
+
+  @override
+  String get ctrErrCarrierInvalid => 'Choose the shipping line from the list.';
 
   @override
   String get ctrErrStatusInvalid =>

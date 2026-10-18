@@ -5,7 +5,7 @@ import ts from "typescript";
 
 import { ATTRIBUTE_TRANSLATIONS, TEXT_TRANSLATIONS, translateValue } from "./french-dom.ts";
 import { INVOICE_PAYMENT_METHOD_LABELS } from "./invoice-ledger.ts";
-import { PACKAGE_PAYMENT_LABELS } from "./waiting-packages.ts";
+import { PACKAGE_PAYMENT_LABELS, WAITING_PACKAGE_FIELD_ORDER } from "./waiting-packages.ts";
 import { CONTAINER_MESSAGES, LINE_STAGE_LABELS } from "./container-manifest.ts";
 
 // The console wiring the waiting-packages feature depends on, pinned by
@@ -241,6 +241,33 @@ test("a package with no container reads 'Waiting for a container', never 'Contai
 test("the destinations list sets the main destination through the server, one at a time", () => {
   assert.match(operationsSource, /const changes = mainDestinationChanges\(destinations\.rows, row\.isMain === true \? "" : row\.id\);/);
   assert.match(operationsSource, /httpsCallable\(functions, "setMainDestination"\)\(\{ businessId, countryId: row\.isMain === true \? "" : row\.id \}\)/);
+});
+
+test("a refused save brings the first bad field into view, and refusals sit beside the buttons", () => {
+  // Regression: the refusal rendered at the top of a scrolled modal, so Save looked dead.
+  assert.match(panelSource, /const field = firstInvalidWaitingPackageField\(errors\);\s*if \(field\) window\.requestAnimationFrame\(\(\) => revealField\(document\.getElementById\(field\)\)\);/);
+  // Every field the helper can name is an element id the form renders.
+  for (const field of WAITING_PACKAGE_FIELD_ORDER) {
+    if (field === "wpk-customer-phone" || field === "wpk-receiver-phone") {
+      assert.match(panelSource, new RegExp(`<ContactPhone\\s+id="${field}"`));
+    } else {
+      assert.match(panelSource, new RegExp(`id="${field}" \\{\\.\\.\\.invalidProps\\("${field}"\\)\\}`), field);
+    }
+  }
+  // "Received by" shows its own sentence under it.
+  assert.match(panelSource, /<select id="wpk-received-by"[\s\S]*?<\/select>\s*\{fieldErrorNote\("wpk-received-by"\)\}/);
+  // The refusal and "Added so far" live in the footer (which never scrolls), not the body.
+  const footer = panelSource.slice(panelSource.indexOf('<footer className="lst-modal-foot wpk-foot">'));
+  const body = panelSource.slice(panelSource.indexOf('<div className="lst-modal-body">'), panelSource.indexOf('<footer className="lst-modal-foot wpk-foot">'));
+  assert.match(footer, /\{draftError && <div className="lst-form-error wpk-foot-note" role="alert">\{draftError\}<\/div>\}/);
+  assert.match(footer, /role="status" aria-live="polite">Added so far:/);
+  assert.doesNotMatch(body, /draftError &&|Added so far/);
+});
+
+test("the price and amount placeholders use a decimal comma in French", () => {
+  assert.match(panelSource, /const moneyPlaceholder = lang === "fr" \? "0,00" : "0\.00";/);
+  assert.equal((panelSource.match(/placeholder=\{moneyPlaceholder\}/g) ?? []).length, 2);
+  assert.doesNotMatch(panelSource, /placeholder="0\.00"/);
 });
 
 test("the destinations page lists only the countries in use; Add country brings others in", () => {

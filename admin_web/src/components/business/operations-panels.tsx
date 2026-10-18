@@ -8915,7 +8915,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
                     {activityDraft.paymentReceived && (
                       <div className="lst-form-grid">
                         <label className="lst-field"><span>How it was paid</span><select value={activityDraft.receivedVia} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedVia: e.target.value }))}>{LOT_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}</select></label>
-                        <label className="lst-field"><span>Received by</span><select value={activityDraft.receivedByStaffId} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
+                        <label className="lst-field"><span>Received by</span><select value={activityDraft.receivedByStaffId} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}</select></label>
                       </div>
                     )}
                     {!activityDraft.paymentReceived && (
@@ -8986,7 +8986,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
               )}
               <div className="lst-form-grid">
                 <label className="lst-field"><span>How it was paid</span><select value={chaseVia} onChange={(e) => setChaseVia(e.target.value)}>{LOT_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}</select></label>
-                <label className="lst-field"><span>Received by</span><select value={chaseStaff} onChange={(e) => setChaseStaff(e.target.value)}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
+                <label className="lst-field"><span>Received by</span><select value={chaseStaff} onChange={(e) => setChaseStaff(e.target.value)}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}</select></label>
               </div>
               {/* How much came in. The question is asked first and the amount
                   field appears only once the answer needs it. */}
@@ -9041,7 +9041,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
               <div className="lst-form-grid">
                 <label className="lst-field"><span>Amount</span><input inputMode="decimal" value={purchase.amount} onChange={(e) => setPurchase((d) => ({ ...d, amount: e.target.value }))} /></label>
                 <label className="lst-field"><span>Date</span><input type="date" value={purchase.spentAt} onChange={(e) => setPurchase((d) => ({ ...d, spentAt: e.target.value }))} /></label>
-                <label className="lst-field"><span>Paid by</span><select value={purchase.paidByStaffId} onChange={(e) => setPurchase((d) => ({ ...d, paidByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></label>
+                <label className="lst-field"><span>Paid by</span><select value={purchase.paidByStaffId} onChange={(e) => setPurchase((d) => ({ ...d, paidByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}</select></label>
                 <label className="lst-field wide"><span>Note</span><input value={purchase.note} onChange={(e) => setPurchase((d) => ({ ...d, note: e.target.value }))} /></label>
                 <label className="lst-field wide"><span>Receipt</span><input type="file" accept="image/*,application/pdf" onChange={(e) => setPurchaseFile(e.target.files?.[0] ?? null)} /><small className="lst-hint">{modal === "edit-purchase" && purchase.hasProof && !purchaseFile ? "A receipt is on file — choose a new one only to replace it. " : ""}{expenseProofRequired(purchaseCents, proofThreshold) ? `This is at or above ${lotFormatCents(proofThreshold)}, so a receipt is required.` : `Below ${lotFormatCents(proofThreshold)} — a receipt is optional, attach one anyway if you have it.`}</small></label>
               </div>
@@ -9398,7 +9398,7 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
           <>
             <select value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} aria-label="Received by">
               <option value="">Received by…</option>
-              {staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+              {staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
             </select>
             <button className="secondary-button" type="button" disabled={busy} onClick={received}>Payment received in person</button>
           </>
@@ -9415,7 +9415,7 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
         <div className="pk-partpay-row">
           <select value={settleReceivedBy} onChange={(e) => setSettleReceivedBy(e.target.value)} aria-label="Received by">
             <option value="">Received by…</option>
-            {staffOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+            {staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
           </select>
           <button className="primary-button" type="button" disabled={busy} onClick={markFullyPaid}>
             Mark as fully paid ({lotFormatCents(outstandingCents)})
