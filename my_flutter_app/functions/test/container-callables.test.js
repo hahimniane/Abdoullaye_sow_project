@@ -2440,7 +2440,8 @@ describe("pieces on lines", () => {
               p.id === "p4" ? {...p, priceCents: 3000} : p)}});
           const found = await track(`${root.trackingCode}-2`);
           assert.deepEqual(found.record.payment,
-              {priceCents: 28000, paidCents: 25000, balanceCents: 3000});
+              {priceCents: 28000, pickupFeeCents: 0, paidCents: 25000,
+                balanceCents: 3000});
           // Cancelling the part now would leave the group overpaid.
           await assert.rejects(call("removeContainerLine",
               {lineId: part.partLineId}),
@@ -2483,7 +2484,8 @@ describe("pieces on lines", () => {
               [root.trackingCode, "in_transit", 2, 20000],
               [`${root.trackingCode}-2`, "waiting_container", 2, 5000]]);
             assert.deepEqual(record.payment,
-                {priceCents: 25000, paidCents: 20000, balanceCents: 5000});
+                {priceCents: 25000, pickupFeeCents: 0, paidCents: 20000,
+                  balanceCents: 5000});
             assert.ok(!JSON.stringify(record).includes("Fatou"));
           }
         });
