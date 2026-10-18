@@ -360,6 +360,7 @@ Rules:
 | **Package label printing** (barrels, boxes, cars) | `lib/services/package_labels.dart` (`packageLabelsRequest`, `PackageLabelSet`, `layoutPackageLabel`, `buildPackageLabelsPdf`), `lib/services/package_label_bitmap.dart` (M221 dots); UI `lib/widgets/label_print_sheet.dart` via `showContainerLabelSheet` | functions `container_labels.js` (`containerLabelsModel`, `getPackageLabels`) | One layout for every size: QR (H) of the server's `link`, code and phones never cut. The package label size is its own saved setting (`LabelPrinterSettings.packageSizeId`), apart from the tag size; same printer stack as tags. |
 | **Ocean carriers** (CURATED, SCAC → name) | n/a | `src/lib/ocean-carrier-catalog.ts` (source of truth); functions port `ocean_carrier_catalog.js` (`oceanCarrierName`) | Not exhaustive; an unknown SCAC shows as its code. `test/ocean-carrier-catalog.test.js` fails when the port drifts. |
 | **WhatsApp templates** (names + variable order) | n/a | functions `whatsapp_templates.js` (`templateMessage`, `TEMPLATE_VARIABLES`) | The only place a template name or `{{n}}` order lives; approved text in `docs/WHATSAPP_CONTAINER_UPDATES.md`. |
+| **Pieces on a line** (kinds, legacy read, counts, groups, split) | `lib/services/line_pieces.dart` | `src/lib/line-pieces.ts` | Mirrors of functions `line_pieces.js`; all three run `functions/test/fixtures/line-pieces-cases.json`. Every reader of a line's contents goes through `linePieces` (a legacy `{kind, quantity}` line reads as pieces) - never re-derive counts from `quantity`. |
 | **Displayed dates** | `lib/utils/date_display.dart` (`displayDate`, `displayDateTime`, … with `dateLocaleOf(context)`) | `src/lib/format.ts` | US month-first 12-hour in English, French form in French. A `DateFormat` with no locale fails `test/date_display_test.dart`. |
 
 If the thing you need is not in this table and is reference data or a reusable
@@ -502,6 +503,11 @@ Definition of Done, checked on **every** implementation.
 - When two English strings share one French value, name the English it should
   read back as in `REVERSE_PREFERENCES` (`french-dom-engine.test.ts` fails on
   any unresolved pair).
+- The runtime translator sees new nodes and text changes, **not attributes
+  edited in place**: a `placeholder`/`title`/`aria-label` that React changes
+  on an existing element stays English on a French page. Give such an
+  element a `key` that changes with it (the pieces editor keys its
+  description input on the piece's kind) so it is remounted and translated.
 - The dictionary loads only for French pages (`french-dom-runtime.ts`). Never
   import `french-dom.ts` statically, and render English in the markup — an
   English page no longer runs the dictionary at all.

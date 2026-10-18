@@ -176,7 +176,11 @@ is counted.
 ## 6. Build phases
 1. Pieces on lines: model + read-compat, counter form (console + app),
    labels "1 of N", split across containers, `receivedAt`, WhatsApp "what"
-   for pieces/parts, tracking page.
+   for pieces/parts, tracking page. **Built 2026-10-18** (branch
+   `feat/pieces`; contract and fields in docs/WAITING_PACKAGES.md "Pieces"
+   and "Split across containers"; pure rules `functions/line_pieces.js`
+   with console and app mirrors over one shared case file). Not yet
+   deployed.
 2. Requests: business settings, customer request page + app, photos,
    estimates + lock + history, estimate template + confirm page + reminders
    + expiry, Expected in Waiting list + Received, request link + QR, card

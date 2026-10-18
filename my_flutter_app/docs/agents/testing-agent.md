@@ -503,6 +503,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   (`npm run test:inventory`): wiping Firestore between runs inside one emulator
   gives constant false failures. If 8080/9099 are held by another session's
   suite, run on a scratch `firebase.json` with other ports instead of killing it.
+- Rules mirrored in three languages (server JS, console TS, app Dart) are
+  pinned by ONE case file the three suites all run, not by three hand-copied
+  test lists: `functions/test/fixtures/line-pieces-cases.json` holds
+  `{fn, args, expected}` generated from the JS module and reviewed by hand,
+  and `line-pieces.test.js`, `line-pieces.test.ts` and
+  `line_pieces_test.dart` each replay every case (JSON null = null or
+  absent). A rule change regenerates the file and all three must pass.
+  Doubles are part of the contract: include a rounding case (20.555 in).
 - Calling `pumpWidget` twice in one test with the same screen type keeps the
   first State (`didUpdateWidget`, not `initState`), so `late final` fields built
   from `widget.source` keep the first fake and the second setup is silently
