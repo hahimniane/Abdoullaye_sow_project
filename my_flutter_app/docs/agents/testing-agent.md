@@ -511,3 +511,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   schedule in a pure counter (`ZelleRetryCountdown`) and show a static icon,
   not a spinner, while waiting: widget tests drive it with `pump(Duration)`,
   and a spinner running between checks would make `pumpAndSettle` time out.
+
+- Parallel worktrees share one machine: another agent's emulator suite may
+  hold the default ports (8080/9099/5001/4400/4500). Run emulator suites with
+  a private `--config` file (same rules/indexes by absolute path, other
+  ports, `ui` off; a `functions.source` must be RELATIVE to the config file's
+  directory) and set a short private `TMPDIR` (the Storage emulator keeps its
+  blobs under the OS temp dir, so two Storage emulators delete each other's
+  files; and the Functions emulator's worker sockets fail with EADDRINUSE
+  when the TMPDIR path is longer than ~100 characters). The console reads
+  `NEXT_PUBLIC_FIREBASE_{AUTH,FIRESTORE,FUNCTIONS,STORAGE}_EMULATOR_PORT`
+  for those ports.
