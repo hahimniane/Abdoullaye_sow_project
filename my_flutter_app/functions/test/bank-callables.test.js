@@ -274,7 +274,8 @@ describe("connecting the bank", () => {
     assert.equal(answer.mode, "connect");
     const [sent] = callsTo("/link/token/create");
     assert.equal(sent.body.client_name, "Laawol");
-    assert.equal(sent.body.link_customization_name, "laawol");
+    // No named customization: production refused "laawol" (see plaid_client).
+    assert.equal("link_customization_name" in sent.body, false);
     assert.equal(sent.body.android_package_name, "com.laawoldigital.app");
     assert.match(sent.body.webhook, /cloudfunctions\.net\/plaidWebhook$/);
     assert.equal(await reasonOf(call("createBankLinkToken",
