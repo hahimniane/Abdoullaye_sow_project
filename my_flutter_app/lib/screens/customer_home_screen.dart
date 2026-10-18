@@ -20,6 +20,9 @@ import 'request_transport_screen.dart';
 import 'tracking_screen.dart';
 import 'my_purchases_screen.dart';
 import 'orders_screen.dart';
+import 'my_package_requests_screen.dart';
+import 'package_request_detail_screen.dart';
+import 'package_request_form_screen.dart';
 import 'freight_quote_details_screen.dart';
 import 'review_composer_screen.dart';
 import 'business_management_screen.dart';
@@ -120,6 +123,27 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
       break;
     case '/favorite-cars':
       page = const FavoriteCarsScreen();
+      break;
+    // Package requests (Shipping: Send a package; Activity: My requests).
+    case '/package-request':
+      final formArgs = settings.arguments;
+      page = PackageRequestFormScreen(
+        slug: formArgs is PackageRequestFormArguments ? formArgs.slug : '',
+      );
+      break;
+    case '/my-requests':
+      page = const MyPackageRequestsScreen();
+      break;
+    case '/package-request-detail':
+      final detailArgs = settings.arguments;
+      page = PackageRequestDetailScreen(
+        requestId: detailArgs is PackageRequestDetailArguments
+            ? detailArgs.requestId
+            : '',
+        token: detailArgs is PackageRequestDetailArguments
+            ? detailArgs.token
+            : '',
+      );
       break;
     case '/account-profile':
       page = const AccountProfileScreen();

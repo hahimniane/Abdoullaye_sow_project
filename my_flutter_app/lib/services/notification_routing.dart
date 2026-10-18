@@ -1,3 +1,5 @@
+import '../screens/business_requests_screen.dart'
+    show BusinessRequestsArguments;
 import '../screens/review_composer_screen.dart';
 import '../screens/tracking_screen.dart';
 
@@ -84,6 +86,7 @@ const _typeCollections = <String, String>{
   'parking_reservation_status': 'parkedCars',
   'car_purchase_status': 'carPurchases',
   'car_viewing_status': 'carPurchases',
+  'package_request': 'packageRequests',
 };
 
 String collectionForNotificationType(String type) =>
@@ -349,6 +352,15 @@ NotificationRoute? _businessRouteForNotificationData(
       return const NotificationRoute('/purchase-management');
     case 'business_support_request':
       return const NotificationRoute('/business-support');
+    // "New request from Fatou: 2 pieces", "... confirmed", "... said no":
+    // the Requests view, opened on that request (§8.7).
+    case 'package_request':
+      return NotificationRoute(
+        '/business-requests',
+        arguments: BusinessRequestsArguments(
+          requestId: _firstNonEmpty(data, ['requestId', 'relatedId']),
+        ),
+      );
     case 'business_verification_document':
     case 'business_verification_review':
     case 'business_application_status':

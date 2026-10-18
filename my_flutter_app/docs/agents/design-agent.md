@@ -173,6 +173,13 @@ Return:
 - Admin Today overviews prioritize actionable queues first, operational
   summaries second, and compact analytics last. Returning to Today must reset
   stale document scroll so the sticky header never obscures the KPI row.
+- Package requests in the app follow the approved artboards: progressive
+  disclosure (country → businesses with their barrel price → Bring it in /
+  Collect from me choice cards → that handoff's fields), Expected requests
+  as amber cards above "In the shop" in the Waiting list, and request
+  screens built from the shared `RequestPageHeader` / `RequestCard` /
+  `RequestBanner` primitives so they read as one family with the Waiting
+  list.
 - Admin People management is one dense, searchable master-detail directory
   across platform admins, business owners/staff, customers, invitations,
   missing profiles, suspensions, and deletion requests. Keep business-specific

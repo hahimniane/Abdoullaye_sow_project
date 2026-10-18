@@ -8,6 +8,9 @@ import '../services/container_packages.dart';
 import '../services/line_pieces.dart' show LineGroupSummary;
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart' show LotKnownCar, LotStaff;
+import '../services/package_request_feed.dart';
+import '../services/package_request_service.dart';
+import '../services/package_requests.dart';
 import '../services/waiting_package_service.dart';
 import '../services/waiting_packages.dart';
 import '../theme/app_colors.dart';
@@ -19,9 +22,12 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_money.dart';
+import '../widgets/package_request_widgets.dart';
 import 'containers_screen.dart';
+import 'package_estimate_screen.dart';
 import 'package_payment_sheet.dart';
 import 'package_result_screen.dart';
+import 'receive_request_sheet.dart';
 
 /// The way into the waiting list from the containers screen: how many
 /// packages have been dropped off with no container yet, one tap from the
@@ -106,10 +112,15 @@ class WaitingPackagesScreen extends StatefulWidget {
     this.onCustomerRecorded,
     this.caller = callContainerCallable,
     this.labelOpener = openContainerLabels,
+    this.requestFeed,
   });
 
   final String businessId;
   final ContainerFeed feed;
+
+  /// The business's open package requests: the confirmed ones show as
+  /// Expected above the packages already in the shop.
+  final PackageRequestFeed? requestFeed;
   final List<LotStaff> staff;
   final List<LotCustomer> customers;
   final List<LotKnownCar> knownCars;
@@ -135,13 +146,119 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
   void initState() {
     super.initState();
     widget.feed.addListener(_onFeed);
+    widget.requestFeed?.addListener(_onFeed);
   }
 
   @override
   void dispose() {
     widget.feed.removeListener(_onFeed);
+    widget.requestFeed?.removeListener(_onFeed);
     _filter.dispose();
     super.dispose();
+  }
+
+  /// Expected requests matching the search, soonest first.
+  List<PackageRequest> _expected(String query) {
+    final all = widget.requestFeed?.expected ?? const <PackageRequest>[];
+    final q = query.trim().toLowerCase();
+    if (q.length < 2) return all;
+    return [
+      for (final r in all)
+        if ([
+          r.senderName,
+          r.senderPhone,
+          r.receiverName,
+          r.code,
+        ].any((s) => s.toLowerCase().contains(q)))
+          r,
+    ];
+  }
+
+  Future<void> _receive(PackageRequest request) async {
+    final l10n = AppLocalizations.of(context)!;
+    final service = widget.requestFeed?.service;
+    if (service == null || _busy.isNotEmpty) return;
+    final received = await showReceiveRequestSheet(
+      context,
+      businessId: widget.businessId,
+      request: request,
+      service: service,
+      staff: widget.staff,
+    );
+    if (received == null || !mounted) return;
+    showSuccessSnackBar(
+      context,
+      received.alreadyReceived
+          ? l10n.prqAlreadyReceived(received.trackingCode)
+          : l10n.prqReceivedDone(received.trackingCode),
+    );
+    if (received.lineId.isEmpty) return;
+    // Labels, one per piece ("CODE · 1 of N"), from the server's own label
+    // set for the new line - the same sheet as any waiting package.
+    final line =
+        widget.feed.lines.where((l) => l.id == received.lineId).firstOrNull ??
+        ContainerLine.fromMap(received.lineId, {
+          'businessId': widget.businessId,
+          'containerId': '',
+          'containerStatus': containerLineStatusWaiting,
+          'kind': request.pieces.every((p) => p.isBarrel)
+              ? containerLineKindBarrels
+              : containerLineKindOther,
+          'quantity': request.pieces.length,
+          'customerName': request.senderName,
+          'customerPhone': request.senderPhone,
+          'receiverName': request.receiverName,
+          'receiverPhone': request.receiverPhone,
+          'trackingCode': received.trackingCode,
+          'destinationCountryId': request.destinationCountryId,
+          'destinationCountryName': request.destinationCountryName,
+        });
+    await _printLabel(line);
+  }
+
+  Future<void> _cancelRequest(PackageRequest request) async {
+    final l10n = AppLocalizations.of(context)!;
+    final service = widget.requestFeed?.service;
+    if (service == null || _busy.isNotEmpty) return;
+    final reason = await askRequestReason(
+      context,
+      title: l10n.prqCancelTitle,
+      message: l10n.prqCancelMessage,
+      confirmLabel: l10n.prqCancelRequest,
+    );
+    if (reason == null || !mounted) return;
+    setState(() => _busy = request.id);
+    try {
+      await service.cancel(
+        businessId: widget.businessId,
+        requestId: request.id,
+        reason: reason,
+      );
+      if (!mounted) return;
+      AppHaptics.commit();
+      showSuccessSnackBar(context, l10n.prqCancelledDone);
+    } on RequestFailure catch (failure) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      showErrorSnackBar(context, requestRefusalText(l10n, failure.refusal));
+    } finally {
+      if (mounted) setState(() => _busy = '');
+    }
+  }
+
+  void _openRequest(PackageRequest request) {
+    final service = widget.requestFeed?.service;
+    if (service == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PackageEstimateScreen(
+          businessId: widget.businessId,
+          requestId: request.id,
+          initial: request,
+          service: service,
+        ),
+      ),
+    );
   }
 
   void _onFeed() {
@@ -435,6 +552,11 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                     searching: searching,
                     onTap: _busy.isNotEmpty ? null : _actions,
                     onPrint: _busy.isNotEmpty ? null : _printLabel,
+                    expected: _expected(_filter.text),
+                    busyRequestId: _busy,
+                    onReceived: _receive,
+                    onCancelRequest: _cancelRequest,
+                    onOpenRequest: _openRequest,
                   ),
                 Positioned(
                   left: 0,
@@ -467,6 +589,11 @@ class WaitingPackagesList extends StatelessWidget {
     required this.onTap,
     required this.onPrint,
     this.groups = const {},
+    this.expected = const [],
+    this.onReceived,
+    this.onCancelRequest,
+    this.onOpenRequest,
+    this.busyRequestId = '',
   });
 
   /// What to show, already filtered, newest first.
@@ -483,9 +610,18 @@ class WaitingPackagesList extends StatelessWidget {
   final ValueChanged<ContainerLine>? onTap;
   final ValueChanged<ContainerLine>? onPrint;
 
+  /// Confirmed package requests not yet handed over: "Expected", above the
+  /// packages already in the shop.
+  final List<PackageRequest> expected;
+  final ValueChanged<PackageRequest>? onReceived;
+  final ValueChanged<PackageRequest>? onCancelRequest;
+  final ValueChanged<PackageRequest>? onOpenRequest;
+  final String busyRequestId;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    if (expected.isNotEmpty) return _withExpected(context, l10n);
     if (lines.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(
@@ -518,6 +654,257 @@ class WaitingPackagesList extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  /// "Expected · N" above "In the shop · N": what customers confirmed they
+  /// will bring (or the business will collect), then what is already here.
+  Widget _withExpected(BuildContext context, AppLocalizations l10n) {
+    Widget header(String text, Key key) => Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.sm),
+      child: Text(
+        text,
+        key: key,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+          color: AppColors.muted,
+        ),
+      ),
+    );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        120,
+      ),
+      children: [
+        header(
+          l10n.prqExpectedTitle(expected.length),
+          const Key('waiting-expected-title'),
+        ),
+        for (final request in expected)
+          ExpectedRequestCard(
+            key: ValueKey('expected:${request.id}'),
+            request: request,
+            busy: busyRequestId == request.id,
+            onReceived: onReceived == null ? null : () => onReceived!(request),
+            onCancel: onCancelRequest == null || request.isCardOrder
+                ? null
+                : () => onCancelRequest!(request),
+            onOpen: onOpenRequest == null
+                ? null
+                : () => onOpenRequest!(request),
+          ),
+        header(
+          l10n.prqInShopTitle(lines.length),
+          const Key('waiting-in-shop-title'),
+        ),
+        if (lines.isEmpty)
+          LotEmptyState(
+            key: const Key('waiting-empty'),
+            icon: Icons.inventory_2_outlined,
+            title: anyAtAll && searching ? l10n.wpkNoMatch : l10n.wpkEmptyTitle,
+          )
+        else
+          for (final line in lines)
+            WaitingPackageCard(
+              key: ValueKey(line.id),
+              line: line,
+              staff: staff,
+              onTap: onTap == null ? null : () => onTap!(line),
+              onPrint: onPrint == null ? null : () => onPrint!(line),
+            ),
+      ],
+    );
+  }
+}
+
+/// A confirmed request in the Waiting list, amber so it reads as "not here
+/// yet": who, when (planned day or pickup window), what, the estimate - and
+/// Received (or "Picked up · Received" for a collection) and Cancel.
+class ExpectedRequestCard extends StatelessWidget {
+  const ExpectedRequestCard({
+    super.key,
+    required this.request,
+    this.onReceived,
+    this.onCancel,
+    this.onOpen,
+    this.busy = false,
+  });
+
+  final PackageRequest request;
+  final VoidCallback? onReceived;
+  final VoidCallback? onCancel;
+  final VoidCallback? onOpen;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final locale = dateLocaleOf(context);
+    final when = request.isCollect
+        ? (request.handoffDay.isEmpty
+              ? l10n.prqNoDay
+              : l10n.prqCollectOn(
+                  requestDayText(request.handoffDay, locale),
+                  requestWindowLabel(l10n, request.handoffWindow),
+                ))
+        : (request.plannedDate.isEmpty
+              ? l10n.prqNoDay
+              : l10n.prqPlannedDayShort(
+                  requestDayText(request.plannedDate, locale),
+                ));
+    final where = request.isCollect
+        ? request.pickup?.address ?? ''
+        : request.location?.title ?? '';
+    final total = request.totalCents;
+    return PressableScale(
+      scale: 0.985,
+      onTap: onOpen == null
+          ? null
+          : () {
+              AppHaptics.selection();
+              onOpen!();
+            },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.saffron.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: AppColors.saffron.withValues(alpha: 0.45)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  request.isCollect
+                      ? Icons.local_shipping_outlined
+                      : Icons.schedule_outlined,
+                  size: 20,
+                  color: AppColors.warn,
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        request.senderName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      Text(
+                        [when, if (where.isNotEmpty) where].join(' · '),
+                        key: const Key('expected-when'),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      Text(
+                        [
+                          requestPiecesSummary(
+                            l10n,
+                            countRequestPieces(request),
+                          ),
+                          if (request.destinationCountryName.isNotEmpty)
+                            request.destinationCountryName,
+                          request.code,
+                        ].where((s) => s.isNotEmpty).join(' · '),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                      if (total != null)
+                        Text(
+                          l10n.prqEstimateTotal(formatRequestCents(total)),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.cobaltDeep,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (request.isCardOrder || request.whatsappUnreachable)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (request.isCardOrder)
+                      RequestBadge(
+                        key: const Key('expected-paid-online'),
+                        icon: Icons.credit_card,
+                        label: l10n.prqPaidOnline,
+                        color: AppColors.sage,
+                      ),
+                    if (request.whatsappUnreachable)
+                      RequestBadge(
+                        icon: Icons.phone_disabled_outlined,
+                        label: l10n.prqNotReachable,
+                        color: AppColors.errorRed,
+                      ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilledButton.icon(
+                  key: ValueKey('expected-received:${request.id}'),
+                  onPressed: busy ? null : onReceived,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.inventory_2_outlined, size: 16),
+                  label: Text(
+                    request.isCollect
+                        ? l10n.prqPickedUpReceived
+                        : l10n.prqReceived,
+                  ),
+                ),
+                if (onCancel != null)
+                  TextButton(
+                    key: ValueKey('expected-cancel:${request.id}'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.errorRed,
+                    ),
+                    onPressed: busy ? null : onCancel,
+                    child: Text(l10n.prqCancelRequest),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

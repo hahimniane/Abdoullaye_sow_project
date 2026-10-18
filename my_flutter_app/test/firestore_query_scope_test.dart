@@ -181,6 +181,7 @@ void main() {
         'home: ${c.path} history page': businessHistoryPageSpec(c, _business),
       'open containers': openContainersSpec(_business),
       'open container lines': openContainerLinesSpec(_business),
+      'package requests: open': packageRequestsOpenSpec(_business),
       for (final spec in knownCarRecentSpecs(_business))
         'VIN memory: recent ${spec.collection}': spec,
       for (final spec in knownCarVinSpecs(_business, '1HGCM82633A004352'))

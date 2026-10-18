@@ -13644,4 +13644,1051 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pcsTrackingBalance => 'Reste dû';
+
+  @override
+  String get prqSendPackage => 'Envoyer un colis';
+
+  @override
+  String get prqSendPackageSubtitle =>
+      'Demandez à une entreprise et recevez une estimation';
+
+  @override
+  String get prqMyRequests => 'Mes demandes';
+
+  @override
+  String get prqMyRequestsSubtitle => 'Estimations et réponses des entreprises';
+
+  @override
+  String get prqSignInTitle => 'Connectez-vous pour envoyer une demande';
+
+  @override
+  String get prqSignInHint =>
+      'Vos demandes et estimations sont gardées dans votre compte.';
+
+  @override
+  String get prqSignIn => 'Se connecter';
+
+  @override
+  String get prqRetry => 'Réessayer';
+
+  @override
+  String get prqCouldNotLoad =>
+      'Chargement impossible. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get prqStepCountry => 'Où va-t-il ?';
+
+  @override
+  String get prqPickCountry => 'Choisissez un pays';
+
+  @override
+  String get prqSearchCountry => 'Rechercher un pays';
+
+  @override
+  String get prqStepBusiness => 'Qui s’en charge ?';
+
+  @override
+  String get prqNoBusinesses =>
+      'Aucune entreprise ne prend encore de demandes pour ce pays.';
+
+  @override
+  String get prqNoOptions =>
+      'Aucune entreprise ne prend de demandes d’envoi pour le moment.';
+
+  @override
+  String prqBusinessStopped(String name) {
+    return '$name ne prend pas de demandes pour le moment.';
+  }
+
+  @override
+  String prqBarrelPrice(String price) {
+    return '$price par baril';
+  }
+
+  @override
+  String get prqBarrelOnEstimate => 'Barils sur estimation';
+
+  @override
+  String get prqStepHandoff => 'Comment le leur remettre ?';
+
+  @override
+  String get prqBringIn => 'Je l’apporte';
+
+  @override
+  String get prqBringInNote => 'Je le dépose chez l’entreprise';
+
+  @override
+  String get prqCollect => 'Venez le chercher';
+
+  @override
+  String get prqCollectNote => 'L’entreprise vient le récupérer';
+
+  @override
+  String get prqUnavailableNote => 'Non proposé par cette entreprise';
+
+  @override
+  String get prqDropOffAt => 'Lieu de dépôt';
+
+  @override
+  String get prqPlannedDay => 'Jour où vous prévoyez de venir';
+
+  @override
+  String get prqPickDay => 'Choisissez un jour';
+
+  @override
+  String prqHoursOn(String from, String to) {
+    return 'Ouvert de $from à $to ce jour-là. Venez à tout moment pendant ces heures.';
+  }
+
+  @override
+  String get prqClosedThatDay => 'Fermé ce jour-là. Choisissez un autre jour.';
+
+  @override
+  String get prqPlanNote => 'C’est un projet, pas un rendez-vous.';
+
+  @override
+  String get prqPickupAddress => 'Adresse de ramassage';
+
+  @override
+  String get prqPickupDay => 'Jour souhaité';
+
+  @override
+  String get prqPickupWindow => 'Moment de la journée';
+
+  @override
+  String get prqWindowMorning => 'Matin';
+
+  @override
+  String get prqWindowAfternoon => 'Après-midi';
+
+  @override
+  String get prqWindowEvening => 'Soir';
+
+  @override
+  String get prqPickupNote => 'Note pour le chauffeur (facultatif)';
+
+  @override
+  String prqCollectAreas(String areas) {
+    return 'Ramasse à : $areas';
+  }
+
+  @override
+  String get prqCollectTimeNote =>
+      'L’entreprise fixe l’heure exacte et les frais de ramassage éventuels dans son estimation.';
+
+  @override
+  String get prqSender => 'Vous (expéditeur)';
+
+  @override
+  String get prqSenderName => 'Votre nom';
+
+  @override
+  String get prqSenderPhone => 'Votre numéro WhatsApp';
+
+  @override
+  String get prqSenderPhoneHint => 'L’estimation arrive sur WhatsApp.';
+
+  @override
+  String get prqReceiver => 'Destinataire';
+
+  @override
+  String get prqReceiverName => 'Nom du destinataire';
+
+  @override
+  String get prqReceiverPhone => 'Téléphone du destinataire';
+
+  @override
+  String get prqPieces => 'Qu’envoyez-vous ?';
+
+  @override
+  String prqPieceN(int n) {
+    return 'Colis $n';
+  }
+
+  @override
+  String get prqKindBarrel => 'Baril';
+
+  @override
+  String get prqKindBox => 'Carton';
+
+  @override
+  String get prqKindOther => 'Autre';
+
+  @override
+  String get prqWhatIsIt => 'Qu’est-ce que c’est ?';
+
+  @override
+  String get prqWhatIsItHint => 'ex. télé, valise, carton de vêtements';
+
+  @override
+  String get prqBarrelInside => 'Contenu (facultatif)';
+
+  @override
+  String get prqAddPhoto => 'Ajouter une photo';
+
+  @override
+  String prqPhotosCount(int count, int max) {
+    return 'Photos : $count sur $max';
+  }
+
+  @override
+  String get prqTakePhoto => 'Prendre une photo';
+
+  @override
+  String get prqChoosePhoto => 'Choisir dans les photos';
+
+  @override
+  String get prqPhotoFailed => 'Échec de l’envoi. Touchez pour réessayer.';
+
+  @override
+  String get prqPhotoTooLarge =>
+      'Cette photo est trop lourde. Essayez-en une autre.';
+
+  @override
+  String get prqPhotoNotImage =>
+      'Seules les photos peuvent être ajoutées (JPEG, PNG ou WebP).';
+
+  @override
+  String get prqRemovePhoto => 'Retirer la photo';
+
+  @override
+  String get prqRemovePiece => 'Retirer ce colis';
+
+  @override
+  String get prqAddPiece => '+ Ajouter un autre colis';
+
+  @override
+  String get prqEstimateNoteBring =>
+      'L’entreprise vous envoie une estimation sur WhatsApp avant toute décision. Vous payez au dépôt.';
+
+  @override
+  String get prqEstimateNoteCollect =>
+      'L’entreprise vous envoie une estimation sur WhatsApp avant toute décision. Vous payez au ramassage.';
+
+  @override
+  String get prqSendRequest => 'Envoyer la demande';
+
+  @override
+  String get prqSending => 'Envoi…';
+
+  @override
+  String get prqWaitPhotos => 'Attendez la fin de l’envoi des photos.';
+
+  @override
+  String get prqFixErrors => 'Vérifiez les champs signalés.';
+
+  @override
+  String get prqSentTitle => 'Demande envoyée';
+
+  @override
+  String get prqSentCode => 'Votre code de demande';
+
+  @override
+  String prqSentTo(String business) {
+    return 'Envoyée à $business';
+  }
+
+  @override
+  String get prqNextSteps => 'La suite';
+
+  @override
+  String prqNext1(String business) {
+    return '$business examine vos colis et vous envoie une estimation sur WhatsApp.';
+  }
+
+  @override
+  String get prqNext1Ready =>
+      'Votre estimation est déjà prête : ouvrez-la pour voir les prix.';
+
+  @override
+  String get prqNext2 =>
+      'Ouvrez l’estimation et touchez Confirmer si elle vous convient.';
+
+  @override
+  String get prqNext3Bring =>
+      'Apportez vos colis le jour prévu et payez sur place.';
+
+  @override
+  String get prqNext3Collect =>
+      'L’entreprise récupère vos colis et vous payez à ce moment-là.';
+
+  @override
+  String get prqSeeRequest => 'Voir ma demande';
+
+  @override
+  String get prqMineEmptyTitle => 'Aucune demande pour l’instant';
+
+  @override
+  String get prqMineEmptyHint =>
+      'Envoyez un colis pour obtenir une estimation d’une entreprise.';
+
+  @override
+  String get prqNewRequest => 'Nouvelle demande';
+
+  @override
+  String get prqStatusNew => 'Estimation en attente';
+
+  @override
+  String get prqStatusEstimateSent => 'Estimation prête';
+
+  @override
+  String get prqStatusConfirmed => 'Confirmée';
+
+  @override
+  String get prqStatusReceived => 'Reçue';
+
+  @override
+  String get prqStatusDeclined => 'Refusée';
+
+  @override
+  String get prqStatusYouDeclined => 'Vous avez refusé';
+
+  @override
+  String get prqStatusCustomerDeclined => 'Le client a refusé';
+
+  @override
+  String get prqStatusCancelled => 'Annulée';
+
+  @override
+  String get prqStatusExpired => 'Expirée';
+
+  @override
+  String prqDetailTitle(String code) {
+    return 'Demande $code';
+  }
+
+  @override
+  String prqStateWaiting(String business) {
+    return '$business prépare votre estimation.';
+  }
+
+  @override
+  String get prqStateWaitingHint => 'Vous la recevrez sur WhatsApp et ici.';
+
+  @override
+  String get prqStateAwaiting => 'Votre estimation est prête';
+
+  @override
+  String get prqStateAwaitingHint =>
+      'Confirmez-la si elle vous convient. Rien n’est payé maintenant.';
+
+  @override
+  String get prqStateConfirmed => 'Vous avez confirmé cette estimation';
+
+  @override
+  String prqStateConfirmedByPhone(String business) {
+    return 'Confirmée par téléphone avec $business';
+  }
+
+  @override
+  String get prqPriceDropped =>
+      'Le prix a baissé depuis votre confirmation. Rien d’autre à faire.';
+
+  @override
+  String prqStateReceived(String business) {
+    return '$business a reçu vos colis';
+  }
+
+  @override
+  String prqTrackingCode(String code) {
+    return 'Code de suivi $code';
+  }
+
+  @override
+  String get prqTrack => 'Suivre';
+
+  @override
+  String prqStateDeclined(String business) {
+    return '$business a refusé cette demande';
+  }
+
+  @override
+  String prqStateCancelled(String business) {
+    return '$business a annulé cette demande';
+  }
+
+  @override
+  String prqReason(String reason) {
+    return 'Motif : $reason';
+  }
+
+  @override
+  String get prqStateCustomerDeclined => 'Vous avez refusé cette estimation';
+
+  @override
+  String get prqStateExpired => 'Cette demande a expiré';
+
+  @override
+  String get prqStateExpiredHint =>
+      'Envoyez une nouvelle demande si vous avez encore besoin d’expédier.';
+
+  @override
+  String get prqChangedBanner =>
+      'Cette estimation a changé — voyez la nouvelle ci-dessous.';
+
+  @override
+  String prqAnswerBy(String date) {
+    return 'Répondez avant le $date';
+  }
+
+  @override
+  String get prqConfirm => 'Confirmer';
+
+  @override
+  String get prqNoThanks => 'Non merci';
+
+  @override
+  String get prqNoThanksTitle => 'Refuser cette estimation ?';
+
+  @override
+  String get prqNoThanksMessage =>
+      'L’entreprise en est informée. Vous pouvez dire pourquoi (facultatif).';
+
+  @override
+  String get prqReasonOptional => 'Motif (facultatif)';
+
+  @override
+  String get prqConfirmedDone => 'Estimation confirmée.';
+
+  @override
+  String get prqAlreadyConfirmed =>
+      'Vous aviez déjà confirmé cette estimation.';
+
+  @override
+  String get prqDeclinedDone => 'C’est fait. L’entreprise est informée.';
+
+  @override
+  String get prqTotal => 'Total';
+
+  @override
+  String get prqPickupFee => 'Frais de ramassage';
+
+  @override
+  String get prqPriceToCome => 'Prix à venir';
+
+  @override
+  String get prqWhereWhen => 'Où et quand';
+
+  @override
+  String get prqBringTo => 'À déposer à';
+
+  @override
+  String prqPlannedFor(String day) {
+    return 'Prévu le $day';
+  }
+
+  @override
+  String get prqPickupAt => 'Ramassage à';
+
+  @override
+  String prqDayWindow(String day, String window) {
+    return '$day, $window';
+  }
+
+  @override
+  String prqCallBusiness(String business) {
+    return 'Appeler $business';
+  }
+
+  @override
+  String get prqBusinessNote => 'Note de l’entreprise';
+
+  @override
+  String get prqPayAtDropOff => 'Vous payez au dépôt.';
+
+  @override
+  String get prqPayAtPickup => 'Vous payez au ramassage.';
+
+  @override
+  String get prqNotBinding =>
+      'Le prix final est fixé quand l’entreprise voit vos colis.';
+
+  @override
+  String prqToReceiver(String name, String country) {
+    return 'Pour $name · $country';
+  }
+
+  @override
+  String prqBarrelsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count barils',
+      one: '1 baril',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String prqBoxesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cartons',
+      one: '1 carton',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String prqOthersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count autres articles',
+      one: '1 autre article',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String prqPiecesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count colis',
+      one: '1 colis',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get prqRequestsTitle => 'Demandes';
+
+  @override
+  String prqEntryCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count demandes ouvertes',
+      one: '1 demande ouverte',
+      zero: 'Aucune demande ouverte',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get prqEntryHint => 'Les clients demandent, vous envoyez l’estimation';
+
+  @override
+  String prqChipNeedsEstimate(int count) {
+    return 'À estimer · $count';
+  }
+
+  @override
+  String prqChipWaitingCustomer(int count) {
+    return 'En attente du client · $count';
+  }
+
+  @override
+  String get prqEmptyNeedsEstimate => 'Rien à estimer';
+
+  @override
+  String get prqEmptyWaiting => 'Aucune estimation en attente de réponse';
+
+  @override
+  String get prqEmptyHint => 'Les demandes de vos clients apparaissent ici.';
+
+  @override
+  String prqBringsItOn(String day) {
+    return 'L’apporte le $day';
+  }
+
+  @override
+  String prqCollectOn(String day, String window) {
+    return 'Ramassage $day, $window';
+  }
+
+  @override
+  String get prqNoDay => 'Aucun jour indiqué';
+
+  @override
+  String prqLockedBy(String name) {
+    return '$name rédige l’estimation';
+  }
+
+  @override
+  String get prqAgreedByPhone => 'Le client a accepté par téléphone';
+
+  @override
+  String get prqAgreedByPhoneTitle => 'Le client a accepté par téléphone ?';
+
+  @override
+  String prqAgreedByPhoneMessage(int version, String total) {
+    return 'Cela confirme la version $version de l’estimation ($total) pour le client. L’historique indique que c’est vous.';
+  }
+
+  @override
+  String get prqAgreedDone => 'Confirmée pour le client.';
+
+  @override
+  String get prqNotReachable => 'Client injoignable sur WhatsApp';
+
+  @override
+  String prqSentOn(String date) {
+    return 'Envoyée le $date';
+  }
+
+  @override
+  String prqEstimateTotal(String total) {
+    return 'Estimation $total';
+  }
+
+  @override
+  String get prqSettings => 'Réglages des demandes';
+
+  @override
+  String get prqCustomer => 'Client';
+
+  @override
+  String get prqEstimateTitle => 'Estimation';
+
+  @override
+  String get prqLockMine =>
+      'Vous rédigez cette estimation. Les autres la voient verrouillée.';
+
+  @override
+  String prqLockOther(String name, String time) {
+    return '$name rédige l’estimation jusqu’à $time. Vous pouvez la lire.';
+  }
+
+  @override
+  String prqLockLapsed(String name) {
+    return '$name a cessé d’écrire. Vous pouvez reprendre.';
+  }
+
+  @override
+  String get prqTakeOver => 'Reprendre';
+
+  @override
+  String get prqLockLost => 'Quelqu’un d’autre a repris cette estimation.';
+
+  @override
+  String get prqStaleBanner => 'Cette demande a changé pendant votre saisie.';
+
+  @override
+  String get prqRefresh => 'Actualiser';
+
+  @override
+  String get prqPriceField => 'Prix (\$)';
+
+  @override
+  String get prqPriceRequired => 'Indiquez un prix.';
+
+  @override
+  String get prqPriceInvalid => 'Indiquez un montant comme 45 ou 45,50.';
+
+  @override
+  String get prqPickupFeeField => 'Frais de ramassage (\$, facultatif)';
+
+  @override
+  String get prqPickupScheduleDay => 'Jour de ramassage prévu';
+
+  @override
+  String get prqNoteToCustomer => 'Note au client (facultatif)';
+
+  @override
+  String get prqSendEstimate => 'Envoyer l’estimation sur WhatsApp';
+
+  @override
+  String get prqEstimateSentDone => 'Estimation envoyée.';
+
+  @override
+  String get prqEstimateReconfirm =>
+      'Estimation envoyée. Le total a augmenté : le client doit confirmer à nouveau.';
+
+  @override
+  String get prqEstimatePriceDropped =>
+      'Estimation envoyée. Le total a baissé ; la demande reste confirmée.';
+
+  @override
+  String get prqDecline => 'Refuser la demande';
+
+  @override
+  String get prqDeclineTitle => 'Refuser cette demande ?';
+
+  @override
+  String get prqDeclineMessage => 'Le client voit votre motif sur sa demande.';
+
+  @override
+  String get prqReasonLabel => 'Motif';
+
+  @override
+  String get prqDeclined => 'Demande refusée.';
+
+  @override
+  String prqPhotoOf(int n, int count) {
+    return 'Photo $n sur $count';
+  }
+
+  @override
+  String get prqAutoEstimate => 'Prix des barils envoyé automatiquement';
+
+  @override
+  String prqVersionBy(int version, String name) {
+    return 'Version $version · $name';
+  }
+
+  @override
+  String get prqClosed => 'Cette demande est close.';
+
+  @override
+  String get prqActSubmitted => 'Envoyée par le client';
+
+  @override
+  String prqActEstimateSent(int version, String total) {
+    return 'Estimation v$version envoyée · $total';
+  }
+
+  @override
+  String get prqActConfirmedLink => 'Le client a confirmé';
+
+  @override
+  String get prqActConfirmedPhone => 'Confirmée par téléphone';
+
+  @override
+  String get prqActConfirmedCard => 'Payée en ligne par carte';
+
+  @override
+  String get prqActCustomerDeclined => 'Le client a refusé';
+
+  @override
+  String get prqActDeclined => 'Refusée';
+
+  @override
+  String get prqActCancelled => 'Annulée';
+
+  @override
+  String get prqActExpired => 'Expirée';
+
+  @override
+  String get prqActReceived => 'Reçue';
+
+  @override
+  String get prqActLockTakenOver => 'A repris l’estimation';
+
+  @override
+  String get prqActReminderSent => 'Rappel envoyé';
+
+  @override
+  String get prqActOther => 'Mise à jour';
+
+  @override
+  String prqExpectedTitle(int count) {
+    return 'Attendus · $count';
+  }
+
+  @override
+  String prqInShopTitle(int count) {
+    return 'En boutique · $count';
+  }
+
+  @override
+  String get prqReceived => 'Reçu';
+
+  @override
+  String get prqPickedUpReceived => 'Ramassé · Reçu';
+
+  @override
+  String get prqCancelRequest => 'Annuler la demande';
+
+  @override
+  String get prqCancelTitle => 'Annuler cette demande ?';
+
+  @override
+  String get prqCancelMessage => 'Le client voit votre motif sur sa demande.';
+
+  @override
+  String get prqCancelledDone => 'Demande annulée.';
+
+  @override
+  String get prqPaidOnline => 'Payé en ligne';
+
+  @override
+  String prqPlannedDayShort(String day) {
+    return 'Prévu le $day';
+  }
+
+  @override
+  String get prqReceiveTitle => 'Colis reçus';
+
+  @override
+  String prqReceiveSubtitle(String code) {
+    return '$code · confirmez le prix final de chaque colis';
+  }
+
+  @override
+  String get prqFinalPrice => 'Prix final (\$)';
+
+  @override
+  String get prqPriceAllOrNone =>
+      'Indiquez le prix de chaque colis, ou d’aucun.';
+
+  @override
+  String prqLineTotal(String total) {
+    return 'Total $total';
+  }
+
+  @override
+  String get prqReceiveAndPrint => 'Reçu · imprimer les étiquettes';
+
+  @override
+  String get prqSaving => 'Enregistrement…';
+
+  @override
+  String prqReceivedDone(String code) {
+    return 'Reçu. Code de suivi $code.';
+  }
+
+  @override
+  String prqAlreadyReceived(String code) {
+    return 'Déjà reçu sous $code.';
+  }
+
+  @override
+  String prqPaidOnlineNote(String amount) {
+    return 'Payé en ligne par carte : $amount. Aucun paiement à encaisser.';
+  }
+
+  @override
+  String get prqDescriptionField => 'Description';
+
+  @override
+  String get prqPayOnArrivalSwitch => 'Le destinataire paie à l’arrivée';
+
+  @override
+  String get prqSettingsTitle => 'Demandes d’envoi';
+
+  @override
+  String get prqAccept => 'Accepter les demandes d’envoi';
+
+  @override
+  String get prqAcceptNote =>
+      'Les clients peuvent vous envoyer des demandes depuis le site et l’appli.';
+
+  @override
+  String get prqLinkTitle => 'Votre lien de demande';
+
+  @override
+  String get prqLinkNone => 'Enregistrez une fois pour obtenir votre lien.';
+
+  @override
+  String get prqCopy => 'Copier';
+
+  @override
+  String get prqCopied => 'Lien copié.';
+
+  @override
+  String get prqShare => 'Partager';
+
+  @override
+  String get prqShowQr => 'Code QR';
+
+  @override
+  String get prqQrHint =>
+      'Imprimez-le pour votre comptoir. Il ouvre votre formulaire de demande.';
+
+  @override
+  String get prqSlugField => 'Nom du lien';
+
+  @override
+  String get prqSlugHint =>
+      'Lettres minuscules, chiffres et tirets. Modifiable une seule fois.';
+
+  @override
+  String get prqSlugLocked => 'Le nom du lien a déjà été modifié une fois.';
+
+  @override
+  String get prqHoursTitle => 'Heures d’ouverture';
+
+  @override
+  String get prqHoursHint =>
+      'Les clients apportent leurs colis pendant ces heures. Un lieu sans jour ouvert n’est pas proposé pour le dépôt.';
+
+  @override
+  String get prqHeadquarters => 'Adresse principale';
+
+  @override
+  String get prqDayClosed => 'Fermé';
+
+  @override
+  String prqHoursRange(String from, String to) {
+    return '$from – $to';
+  }
+
+  @override
+  String get prqPickupSettingsTitle => 'Nous ramassons';
+
+  @override
+  String get prqPickupSettingsNote =>
+      'Proposez « Venez le chercher » aux clients des zones que vous couvrez.';
+
+  @override
+  String get prqAreas => 'Zones couvertes';
+
+  @override
+  String get prqAreasHint => 'ex. Bronx, Harlem, Newark';
+
+  @override
+  String get prqCardBarrels => 'Paiement par carte pour les barils';
+
+  @override
+  String get prqCardBarrelsNote =>
+      'Les clients peuvent payer les barils en ligne ; ces commandes apparaissent comme attendues et payées en ligne.';
+
+  @override
+  String get prqSaved => 'Réglages enregistrés.';
+
+  @override
+  String get prqOwnerOnly => 'Seul le propriétaire peut modifier ces réglages.';
+
+  @override
+  String get prqErrBusinessNotFound =>
+      'Ce lien de demande ne correspond à aucune entreprise.';
+
+  @override
+  String get prqErrBusinessUnavailable =>
+      'Cette entreprise ne peut pas prendre de demandes pour le moment.';
+
+  @override
+  String get prqErrRequestsOff => 'Cette entreprise ne prend plus de demandes.';
+
+  @override
+  String get prqErrDestinationUnavailable =>
+      'Cette entreprise n’expédie plus vers ce pays.';
+
+  @override
+  String get prqErrBringInUnavailable =>
+      'Cette entreprise ne propose plus le dépôt.';
+
+  @override
+  String get prqErrCollectUnavailable =>
+      'Cette entreprise ne propose plus le ramassage.';
+
+  @override
+  String get prqErrHandoff => 'Choisissez Je l’apporte ou Venez le chercher.';
+
+  @override
+  String get prqErrLocation => 'Choisissez un lieu de dépôt.';
+
+  @override
+  String get prqErrPlannedDate =>
+      'Choisissez un jour entre aujourd’hui et dans 60 jours.';
+
+  @override
+  String get prqErrPlannedDayClosed => 'L’entreprise est fermée ce jour-là.';
+
+  @override
+  String get prqErrPickupAddress => 'Indiquez l’adresse de ramassage.';
+
+  @override
+  String get prqErrPickupDate =>
+      'Choisissez un jour de ramassage entre aujourd’hui et dans 60 jours.';
+
+  @override
+  String get prqErrPickupWindow => 'Choisissez matin, après-midi ou soir.';
+
+  @override
+  String get prqErrSenderName => 'Indiquez votre nom.';
+
+  @override
+  String get prqErrSenderPhone =>
+      'Indiquez votre numéro WhatsApp avec l’indicatif du pays.';
+
+  @override
+  String get prqErrReceiverName => 'Indiquez le nom du destinataire.';
+
+  @override
+  String get prqErrReceiverPhone =>
+      'Indiquez le téléphone du destinataire avec l’indicatif du pays.';
+
+  @override
+  String get prqErrPiecesRequired => 'Ajoutez au moins un colis.';
+
+  @override
+  String get prqErrTooManyPieces => '20 colis au maximum par demande.';
+
+  @override
+  String get prqErrPieceKind =>
+      'Choisissez baril, carton ou autre pour chaque colis.';
+
+  @override
+  String get prqErrPieceDescription => 'Dites ce que c’est.';
+
+  @override
+  String get prqErrTextTooLong => 'Un texte est trop long. Raccourcissez-le.';
+
+  @override
+  String get prqErrTooManyPhotos => '5 photos au maximum par colis.';
+
+  @override
+  String get prqErrPhotoInvalid =>
+      'Une photo n’a pas pu être utilisée. Retirez-la et ajoutez-la de nouveau.';
+
+  @override
+  String get prqErrRateLimited =>
+      'Trop de demandes en peu de temps. Réessayez dans une heure.';
+
+  @override
+  String get prqErrNotFound => 'Cette demande est introuvable.';
+
+  @override
+  String get prqErrEstimateMissing =>
+      'Il n’y a pas encore d’estimation à confirmer.';
+
+  @override
+  String get prqErrCardOrder =>
+      'Cette commande a été payée par carte. Annulez-la ou remboursez-la depuis sa commande de baril.';
+
+  @override
+  String get prqErrSlugInvalid =>
+      'Utilisez 3 à 40 lettres minuscules, chiffres ou tirets.';
+
+  @override
+  String get prqErrSlugTaken =>
+      'Ce nom de lien est déjà pris. Essayez-en un autre.';
+
+  @override
+  String get prqErrHoursInvalid =>
+      'Chaque jour ouvert doit avoir une heure de début avant l’heure de fin.';
+
+  @override
+  String get prqErrLocationUnknown =>
+      'Un des lieux n’existe plus. Rechargez et réessayez.';
+
+  @override
+  String get prqErrPickupAreas => 'Indiquez les zones que vous couvrez.';
+
+  @override
+  String get prqErrLocked => 'Quelqu’un d’autre rédige cette estimation.';
+
+  @override
+  String get prqErrPieceMissing => 'Chaque colis doit avoir un prix.';
+
+  @override
+  String get prqErrPieceUnknown =>
+      'Les colis ont changé. Actualisez et réessayez.';
+
+  @override
+  String get prqErrPickupFee => 'Indiquez des frais de ramassage valides.';
+
+  @override
+  String get prqErrPickupSchedule => 'Choisissez un jour de ramassage valide.';
+
+  @override
+  String get prqErrReasonRequired => 'Indiquez un motif.';
+
+  @override
+  String get prqErrOffline =>
+      'Vous êtes hors ligne. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get prqErrAppCheck =>
+      'L’appli n’a pas pu être vérifiée. Réessayez dans un instant.';
+
+  @override
+  String get prqErrPermission => 'Vous n’avez pas accès à cela.';
+
+  @override
+  String get prqErrGeneric => 'Cela n’a pas fonctionné. Réessayez.';
 }

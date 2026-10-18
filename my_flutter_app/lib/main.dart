@@ -64,6 +64,10 @@ import 'screens/barrel_shipment_details_screen.dart';
 import 'models/transport_request.dart';
 import 'screens/transport_request_details_screen.dart';
 import 'screens/freight_quote_details_screen.dart';
+import 'screens/business_requests_screen.dart';
+import 'screens/my_package_requests_screen.dart';
+import 'screens/package_request_detail_screen.dart';
+import 'screens/package_request_form_screen.dart';
 import 'services/notification_routing.dart';
 import 'services/stripe_config_service.dart';
 import 'widgets/profile_language_sync_host.dart';
@@ -391,6 +395,31 @@ class MyApp extends StatelessWidget {
                 final businessId =
                     context.read<AuthProvider>().businessId ?? '';
                 return BusinessReviewsScreen(businessId: businessId);
+              },
+              // A package request notification: Requests, on that request.
+              '/business-requests': (context) {
+                final args = ModalRoute.of(context)?.settings.arguments;
+                return BusinessRequestsScreen(
+                  businessId: context.read<AuthProvider>().businessId ?? '',
+                  focusRequestId:
+                      args is BusinessRequestsArguments ? args.requestId : '',
+                );
+              },
+              '/package-request': (context) {
+                final args = ModalRoute.of(context)?.settings.arguments;
+                return PackageRequestFormScreen(
+                  slug: args is PackageRequestFormArguments ? args.slug : '',
+                );
+              },
+              '/my-requests': (context) => const MyPackageRequestsScreen(),
+              '/package-request-detail': (context) {
+                final args = ModalRoute.of(context)?.settings.arguments;
+                return PackageRequestDetailScreen(
+                  requestId: args is PackageRequestDetailArguments
+                      ? args.requestId
+                      : '',
+                  token: args is PackageRequestDetailArguments ? args.token : '',
+                );
               },
               '/user-management': (context) => const UserManagementScreen(),
               '/add-staff': (context) => const AddStaffScreen(),

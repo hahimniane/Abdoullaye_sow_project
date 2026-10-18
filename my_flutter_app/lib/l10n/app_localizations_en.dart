@@ -13443,4 +13443,1044 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pcsTrackingBalance => 'Still owed';
+
+  @override
+  String get prqSendPackage => 'Send a package';
+
+  @override
+  String get prqSendPackageSubtitle =>
+      'Ask a business to take it and get an estimate';
+
+  @override
+  String get prqMyRequests => 'My requests';
+
+  @override
+  String get prqMyRequestsSubtitle => 'Estimates and answers from businesses';
+
+  @override
+  String get prqSignInTitle => 'Sign in to send a request';
+
+  @override
+  String get prqSignInHint =>
+      'Your requests and estimates are kept in your account.';
+
+  @override
+  String get prqSignIn => 'Sign in';
+
+  @override
+  String get prqRetry => 'Try again';
+
+  @override
+  String get prqCouldNotLoad =>
+      'Couldn\'t load. Check your connection and try again.';
+
+  @override
+  String get prqStepCountry => 'Where is it going?';
+
+  @override
+  String get prqPickCountry => 'Choose a country';
+
+  @override
+  String get prqSearchCountry => 'Search a country';
+
+  @override
+  String get prqStepBusiness => 'Who takes it?';
+
+  @override
+  String get prqNoBusinesses =>
+      'No business takes requests for this country yet.';
+
+  @override
+  String get prqNoOptions => 'No business takes package requests right now.';
+
+  @override
+  String prqBusinessStopped(String name) {
+    return '$name is not taking requests right now.';
+  }
+
+  @override
+  String prqBarrelPrice(String price) {
+    return '$price per barrel';
+  }
+
+  @override
+  String get prqBarrelOnEstimate => 'Barrels priced on estimate';
+
+  @override
+  String get prqStepHandoff => 'How does it get to them?';
+
+  @override
+  String get prqBringIn => 'Bring it in';
+
+  @override
+  String get prqBringInNote => 'I drop it off at the business';
+
+  @override
+  String get prqCollect => 'Collect from me';
+
+  @override
+  String get prqCollectNote => 'The business picks it up';
+
+  @override
+  String get prqUnavailableNote => 'Not offered by this business';
+
+  @override
+  String get prqDropOffAt => 'Drop-off location';
+
+  @override
+  String get prqPlannedDay => 'Day you plan to come';
+
+  @override
+  String get prqPickDay => 'Choose a day';
+
+  @override
+  String prqHoursOn(String from, String to) {
+    return 'Open $from – $to that day. Come any time in those hours.';
+  }
+
+  @override
+  String get prqClosedThatDay => 'Closed that day. Pick another day.';
+
+  @override
+  String get prqPlanNote => 'This is a plan, not an appointment.';
+
+  @override
+  String get prqPickupAddress => 'Pickup address';
+
+  @override
+  String get prqPickupDay => 'Preferred day';
+
+  @override
+  String get prqPickupWindow => 'Time of day';
+
+  @override
+  String get prqWindowMorning => 'Morning';
+
+  @override
+  String get prqWindowAfternoon => 'Afternoon';
+
+  @override
+  String get prqWindowEvening => 'Evening';
+
+  @override
+  String get prqPickupNote => 'Note for the driver (optional)';
+
+  @override
+  String prqCollectAreas(String areas) {
+    return 'Picks up in: $areas';
+  }
+
+  @override
+  String get prqCollectTimeNote =>
+      'The business sets the real time and any pickup fee in its estimate.';
+
+  @override
+  String get prqSender => 'You (sender)';
+
+  @override
+  String get prqSenderName => 'Your name';
+
+  @override
+  String get prqSenderPhone => 'Your WhatsApp number';
+
+  @override
+  String get prqSenderPhoneHint => 'The estimate comes on WhatsApp.';
+
+  @override
+  String get prqReceiver => 'Receiver';
+
+  @override
+  String get prqReceiverName => 'Receiver’s name';
+
+  @override
+  String get prqReceiverPhone => 'Receiver’s phone';
+
+  @override
+  String get prqPieces => 'What are you sending?';
+
+  @override
+  String prqPieceN(int n) {
+    return 'Piece $n';
+  }
+
+  @override
+  String get prqKindBarrel => 'Barrel';
+
+  @override
+  String get prqKindBox => 'Box';
+
+  @override
+  String get prqKindOther => 'Other';
+
+  @override
+  String get prqWhatIsIt => 'What is it?';
+
+  @override
+  String get prqWhatIsItHint => 'e.g. TV, suitcase, box of clothes';
+
+  @override
+  String get prqBarrelInside => 'What’s inside (optional)';
+
+  @override
+  String get prqAddPhoto => 'Add photo';
+
+  @override
+  String prqPhotosCount(int count, int max) {
+    return 'Photos: $count of $max';
+  }
+
+  @override
+  String get prqTakePhoto => 'Take a photo';
+
+  @override
+  String get prqChoosePhoto => 'Choose from photos';
+
+  @override
+  String get prqPhotoFailed => 'Couldn\'t upload. Tap to retry.';
+
+  @override
+  String get prqPhotoTooLarge => 'That photo is too large. Try another one.';
+
+  @override
+  String get prqPhotoNotImage =>
+      'Only photos can be added (JPEG, PNG or WebP).';
+
+  @override
+  String get prqRemovePhoto => 'Remove photo';
+
+  @override
+  String get prqRemovePiece => 'Remove piece';
+
+  @override
+  String get prqAddPiece => '+ Add another piece';
+
+  @override
+  String get prqEstimateNoteBring =>
+      'The business sends you an estimate on WhatsApp before anything is decided. You pay when you drop it off.';
+
+  @override
+  String get prqEstimateNoteCollect =>
+      'The business sends you an estimate on WhatsApp before anything is decided. You pay when it is collected.';
+
+  @override
+  String get prqSendRequest => 'Send request';
+
+  @override
+  String get prqSending => 'Sending…';
+
+  @override
+  String get prqWaitPhotos => 'Wait for the photos to finish uploading.';
+
+  @override
+  String get prqFixErrors => 'Check the highlighted fields.';
+
+  @override
+  String get prqSentTitle => 'Request sent';
+
+  @override
+  String get prqSentCode => 'Your request code';
+
+  @override
+  String prqSentTo(String business) {
+    return 'Sent to $business';
+  }
+
+  @override
+  String get prqNextSteps => 'What happens next';
+
+  @override
+  String prqNext1(String business) {
+    return '$business looks at your pieces and sends an estimate on WhatsApp.';
+  }
+
+  @override
+  String get prqNext1Ready =>
+      'Your estimate is ready already: open it to see the prices.';
+
+  @override
+  String get prqNext2 => 'Open the estimate and tap Confirm if it suits you.';
+
+  @override
+  String get prqNext3Bring =>
+      'Bring your pieces on the day you planned and pay there.';
+
+  @override
+  String get prqNext3Collect =>
+      'The business collects your pieces and you pay then.';
+
+  @override
+  String get prqSeeRequest => 'See my request';
+
+  @override
+  String get prqMineEmptyTitle => 'No requests yet';
+
+  @override
+  String get prqMineEmptyHint =>
+      'Send a package to get an estimate from a business.';
+
+  @override
+  String get prqNewRequest => 'New request';
+
+  @override
+  String get prqStatusNew => 'Waiting for estimate';
+
+  @override
+  String get prqStatusEstimateSent => 'Estimate ready';
+
+  @override
+  String get prqStatusConfirmed => 'Confirmed';
+
+  @override
+  String get prqStatusReceived => 'Received';
+
+  @override
+  String get prqStatusDeclined => 'Declined';
+
+  @override
+  String get prqStatusYouDeclined => 'You said no';
+
+  @override
+  String get prqStatusCustomerDeclined => 'Customer said no';
+
+  @override
+  String get prqStatusCancelled => 'Cancelled';
+
+  @override
+  String get prqStatusExpired => 'Expired';
+
+  @override
+  String prqDetailTitle(String code) {
+    return 'Request $code';
+  }
+
+  @override
+  String prqStateWaiting(String business) {
+    return '$business is preparing your estimate.';
+  }
+
+  @override
+  String get prqStateWaitingHint => 'You will get it on WhatsApp and here.';
+
+  @override
+  String get prqStateAwaiting => 'Your estimate is ready';
+
+  @override
+  String get prqStateAwaitingHint =>
+      'Confirm it if it suits you. Nothing is paid now.';
+
+  @override
+  String get prqStateConfirmed => 'You confirmed this estimate';
+
+  @override
+  String prqStateConfirmedByPhone(String business) {
+    return 'Confirmed by phone with $business';
+  }
+
+  @override
+  String get prqPriceDropped =>
+      'The price went down since you confirmed. Nothing else to do.';
+
+  @override
+  String prqStateReceived(String business) {
+    return '$business received your pieces';
+  }
+
+  @override
+  String prqTrackingCode(String code) {
+    return 'Tracking code $code';
+  }
+
+  @override
+  String get prqTrack => 'Track it';
+
+  @override
+  String prqStateDeclined(String business) {
+    return '$business declined this request';
+  }
+
+  @override
+  String prqStateCancelled(String business) {
+    return '$business cancelled this request';
+  }
+
+  @override
+  String prqReason(String reason) {
+    return 'Reason: $reason';
+  }
+
+  @override
+  String get prqStateCustomerDeclined => 'You said no to this estimate';
+
+  @override
+  String get prqStateExpired => 'This request expired';
+
+  @override
+  String get prqStateExpiredHint =>
+      'Send a new request if you still need to ship.';
+
+  @override
+  String get prqChangedBanner =>
+      'This estimate changed — see the new one below.';
+
+  @override
+  String prqAnswerBy(String date) {
+    return 'Answer by $date';
+  }
+
+  @override
+  String get prqConfirm => 'Confirm';
+
+  @override
+  String get prqNoThanks => 'No thanks';
+
+  @override
+  String get prqNoThanksTitle => 'Say no to this estimate?';
+
+  @override
+  String get prqNoThanksMessage =>
+      'The business is told. You can say why (optional).';
+
+  @override
+  String get prqReasonOptional => 'Reason (optional)';
+
+  @override
+  String get prqConfirmedDone => 'Estimate confirmed.';
+
+  @override
+  String get prqAlreadyConfirmed => 'You had already confirmed this estimate.';
+
+  @override
+  String get prqDeclinedDone => 'Done. The business is told.';
+
+  @override
+  String get prqTotal => 'Total';
+
+  @override
+  String get prqPickupFee => 'Pickup fee';
+
+  @override
+  String get prqPriceToCome => 'Price to come';
+
+  @override
+  String get prqWhereWhen => 'Where and when';
+
+  @override
+  String get prqBringTo => 'Bring it to';
+
+  @override
+  String prqPlannedFor(String day) {
+    return 'Planned for $day';
+  }
+
+  @override
+  String get prqPickupAt => 'Pickup at';
+
+  @override
+  String prqDayWindow(String day, String window) {
+    return '$day, $window';
+  }
+
+  @override
+  String prqCallBusiness(String business) {
+    return 'Call $business';
+  }
+
+  @override
+  String get prqBusinessNote => 'Note from the business';
+
+  @override
+  String get prqPayAtDropOff => 'You pay at drop-off.';
+
+  @override
+  String get prqPayAtPickup => 'You pay when it is collected.';
+
+  @override
+  String get prqNotBinding =>
+      'The final price is set when the business sees your pieces.';
+
+  @override
+  String prqToReceiver(String name, String country) {
+    return 'To $name · $country';
+  }
+
+  @override
+  String prqBarrelsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count barrels',
+      one: '1 barrel',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String prqBoxesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count boxes',
+      one: '1 box',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String prqOthersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count other items',
+      one: '1 other item',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String prqPiecesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces',
+      one: '1 piece',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get prqRequestsTitle => 'Requests';
+
+  @override
+  String prqEntryCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count open requests',
+      one: '1 open request',
+      zero: 'No open requests',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get prqEntryHint => 'Customers ask, you send the estimate';
+
+  @override
+  String prqChipNeedsEstimate(int count) {
+    return 'Needs estimate · $count';
+  }
+
+  @override
+  String prqChipWaitingCustomer(int count) {
+    return 'Waiting for customer · $count';
+  }
+
+  @override
+  String get prqEmptyNeedsEstimate => 'Nothing to estimate';
+
+  @override
+  String get prqEmptyWaiting => 'No estimate waiting for an answer';
+
+  @override
+  String get prqEmptyHint => 'Requests customers send you appear here.';
+
+  @override
+  String prqBringsItOn(String day) {
+    return 'Brings it $day';
+  }
+
+  @override
+  String prqCollectOn(String day, String window) {
+    return 'Collect $day, $window';
+  }
+
+  @override
+  String get prqNoDay => 'No day given';
+
+  @override
+  String prqLockedBy(String name) {
+    return '$name is writing the estimate';
+  }
+
+  @override
+  String get prqAgreedByPhone => 'Customer agreed by phone';
+
+  @override
+  String get prqAgreedByPhoneTitle => 'Customer agreed by phone?';
+
+  @override
+  String prqAgreedByPhoneMessage(int version, String total) {
+    return 'This confirms estimate version $version ($total) for the customer. History records that you did it.';
+  }
+
+  @override
+  String get prqAgreedDone => 'Confirmed for the customer.';
+
+  @override
+  String get prqNotReachable => 'Customer not reachable on WhatsApp';
+
+  @override
+  String prqSentOn(String date) {
+    return 'Sent $date';
+  }
+
+  @override
+  String prqEstimateTotal(String total) {
+    return 'Estimate $total';
+  }
+
+  @override
+  String get prqSettings => 'Request settings';
+
+  @override
+  String get prqCustomer => 'Customer';
+
+  @override
+  String get prqEstimateTitle => 'Estimate';
+
+  @override
+  String get prqLockMine =>
+      'You are writing this estimate. Others see it as locked.';
+
+  @override
+  String prqLockOther(String name, String time) {
+    return '$name is writing the estimate until $time. You can read it.';
+  }
+
+  @override
+  String prqLockLapsed(String name) {
+    return '$name stopped writing. You can take over.';
+  }
+
+  @override
+  String get prqTakeOver => 'Take over';
+
+  @override
+  String get prqLockLost => 'Someone else took over this estimate.';
+
+  @override
+  String get prqStaleBanner => 'This request changed while you were editing.';
+
+  @override
+  String get prqRefresh => 'Refresh';
+
+  @override
+  String get prqPriceField => 'Price (\$)';
+
+  @override
+  String get prqPriceRequired => 'Enter a price.';
+
+  @override
+  String get prqPriceInvalid => 'Enter an amount like 45 or 45.50.';
+
+  @override
+  String get prqPickupFeeField => 'Pickup fee (\$, optional)';
+
+  @override
+  String get prqPickupScheduleDay => 'Pickup day you will come';
+
+  @override
+  String get prqNoteToCustomer => 'Note to the customer (optional)';
+
+  @override
+  String get prqSendEstimate => 'Send estimate on WhatsApp';
+
+  @override
+  String get prqEstimateSentDone => 'Estimate sent.';
+
+  @override
+  String get prqEstimateReconfirm =>
+      'Estimate sent. The total went up, so the customer must confirm again.';
+
+  @override
+  String get prqEstimatePriceDropped =>
+      'Estimate sent. The total went down; the request stays confirmed.';
+
+  @override
+  String get prqDecline => 'Decline request';
+
+  @override
+  String get prqDeclineTitle => 'Decline this request?';
+
+  @override
+  String get prqDeclineMessage =>
+      'The customer sees your reason on their request.';
+
+  @override
+  String get prqReasonLabel => 'Reason';
+
+  @override
+  String get prqDeclined => 'Request declined.';
+
+  @override
+  String prqPhotoOf(int n, int count) {
+    return 'Photo $n of $count';
+  }
+
+  @override
+  String get prqAutoEstimate => 'Barrel price sent automatically';
+
+  @override
+  String prqVersionBy(int version, String name) {
+    return 'Version $version · $name';
+  }
+
+  @override
+  String get prqClosed => 'This request is closed.';
+
+  @override
+  String get prqActSubmitted => 'Sent by the customer';
+
+  @override
+  String prqActEstimateSent(int version, String total) {
+    return 'Estimate v$version sent · $total';
+  }
+
+  @override
+  String get prqActConfirmedLink => 'Customer confirmed';
+
+  @override
+  String get prqActConfirmedPhone => 'Confirmed by phone';
+
+  @override
+  String get prqActConfirmedCard => 'Paid online by card';
+
+  @override
+  String get prqActCustomerDeclined => 'Customer said no';
+
+  @override
+  String get prqActDeclined => 'Declined';
+
+  @override
+  String get prqActCancelled => 'Cancelled';
+
+  @override
+  String get prqActExpired => 'Expired';
+
+  @override
+  String get prqActReceived => 'Received';
+
+  @override
+  String get prqActLockTakenOver => 'Took over the estimate';
+
+  @override
+  String get prqActReminderSent => 'Reminder sent';
+
+  @override
+  String get prqActOther => 'Updated';
+
+  @override
+  String prqExpectedTitle(int count) {
+    return 'Expected · $count';
+  }
+
+  @override
+  String prqInShopTitle(int count) {
+    return 'In the shop · $count';
+  }
+
+  @override
+  String get prqReceived => 'Received';
+
+  @override
+  String get prqPickedUpReceived => 'Picked up · Received';
+
+  @override
+  String get prqCancelRequest => 'Cancel request';
+
+  @override
+  String get prqCancelTitle => 'Cancel this request?';
+
+  @override
+  String get prqCancelMessage =>
+      'The customer sees your reason on their request.';
+
+  @override
+  String get prqCancelledDone => 'Request cancelled.';
+
+  @override
+  String get prqPaidOnline => 'Paid online';
+
+  @override
+  String prqPlannedDayShort(String day) {
+    return 'Planned $day';
+  }
+
+  @override
+  String get prqReceiveTitle => 'Pieces received';
+
+  @override
+  String prqReceiveSubtitle(String code) {
+    return '$code · confirm the final price of each piece';
+  }
+
+  @override
+  String get prqFinalPrice => 'Final price (\$)';
+
+  @override
+  String get prqPriceAllOrNone => 'Price every piece, or none.';
+
+  @override
+  String prqLineTotal(String total) {
+    return 'Total $total';
+  }
+
+  @override
+  String get prqReceiveAndPrint => 'Received · print labels';
+
+  @override
+  String get prqSaving => 'Saving…';
+
+  @override
+  String prqReceivedDone(String code) {
+    return 'Received. Tracking code $code.';
+  }
+
+  @override
+  String prqAlreadyReceived(String code) {
+    return 'Already received as $code.';
+  }
+
+  @override
+  String prqPaidOnlineNote(String amount) {
+    return 'Paid online by card: $amount. No payment to take.';
+  }
+
+  @override
+  String get prqDescriptionField => 'Description';
+
+  @override
+  String get prqPayOnArrivalSwitch => 'Receiver pays on arrival';
+
+  @override
+  String get prqSettingsTitle => 'Package requests';
+
+  @override
+  String get prqAccept => 'Accept package requests';
+
+  @override
+  String get prqAcceptNote =>
+      'Customers can send you requests from the website and the app.';
+
+  @override
+  String get prqLinkTitle => 'Your request link';
+
+  @override
+  String get prqLinkNone => 'Save once to get your link.';
+
+  @override
+  String get prqCopy => 'Copy';
+
+  @override
+  String get prqCopied => 'Link copied.';
+
+  @override
+  String get prqShare => 'Share';
+
+  @override
+  String get prqShowQr => 'QR code';
+
+  @override
+  String get prqQrHint =>
+      'Print it for your counter. It opens your request form.';
+
+  @override
+  String get prqSlugField => 'Link name';
+
+  @override
+  String get prqSlugHint =>
+      'Lowercase letters, numbers and dashes. You can change it once.';
+
+  @override
+  String get prqSlugLocked => 'The link name was already changed once.';
+
+  @override
+  String get prqHoursTitle => 'Opening hours';
+
+  @override
+  String get prqHoursHint =>
+      'Customers bring pieces in these hours. A location with no open day is not offered for drop-off.';
+
+  @override
+  String get prqHeadquarters => 'Main address';
+
+  @override
+  String get prqDayClosed => 'Closed';
+
+  @override
+  String prqHoursRange(String from, String to) {
+    return '$from – $to';
+  }
+
+  @override
+  String get prqPickupSettingsTitle => 'We pick up';
+
+  @override
+  String get prqPickupSettingsNote =>
+      'Offer “Collect from me” to customers in the areas you cover.';
+
+  @override
+  String get prqAreas => 'Areas you cover';
+
+  @override
+  String get prqAreasHint => 'e.g. Bronx, Harlem, Newark';
+
+  @override
+  String get prqCardBarrels => 'Card payment for barrels';
+
+  @override
+  String get prqCardBarrelsNote =>
+      'Customers can pay barrels online; those orders show as Expected and paid online.';
+
+  @override
+  String get prqSaved => 'Settings saved.';
+
+  @override
+  String get prqOwnerOnly => 'Only the owner can change these settings.';
+
+  @override
+  String get prqErrBusinessNotFound =>
+      'This request link doesn’t match any business.';
+
+  @override
+  String get prqErrBusinessUnavailable =>
+      'This business can’t take requests right now.';
+
+  @override
+  String get prqErrRequestsOff => 'This business stopped taking requests.';
+
+  @override
+  String get prqErrDestinationUnavailable =>
+      'This business no longer ships to that country.';
+
+  @override
+  String get prqErrBringInUnavailable =>
+      'This business no longer offers drop-off.';
+
+  @override
+  String get prqErrCollectUnavailable =>
+      'This business no longer offers pickup.';
+
+  @override
+  String get prqErrHandoff => 'Choose Bring it in or Collect from me.';
+
+  @override
+  String get prqErrLocation => 'Choose a drop-off location.';
+
+  @override
+  String get prqErrPlannedDate =>
+      'Choose a day between today and 60 days from now.';
+
+  @override
+  String get prqErrPlannedDayClosed => 'The business is closed that day.';
+
+  @override
+  String get prqErrPickupAddress => 'Enter the pickup address.';
+
+  @override
+  String get prqErrPickupDate =>
+      'Choose a pickup day between today and 60 days from now.';
+
+  @override
+  String get prqErrPickupWindow => 'Choose morning, afternoon or evening.';
+
+  @override
+  String get prqErrSenderName => 'Enter your name.';
+
+  @override
+  String get prqErrSenderPhone =>
+      'Enter your WhatsApp number with its country code.';
+
+  @override
+  String get prqErrReceiverName => 'Enter the receiver’s name.';
+
+  @override
+  String get prqErrReceiverPhone =>
+      'Enter the receiver’s phone with its country code.';
+
+  @override
+  String get prqErrPiecesRequired => 'Add at least one piece.';
+
+  @override
+  String get prqErrTooManyPieces => '20 pieces at most per request.';
+
+  @override
+  String get prqErrPieceKind => 'Choose barrel, box or other for each piece.';
+
+  @override
+  String get prqErrPieceDescription => 'Say what it is.';
+
+  @override
+  String get prqErrTextTooLong => 'Some text is too long. Shorten it.';
+
+  @override
+  String get prqErrTooManyPhotos => '5 photos at most per piece.';
+
+  @override
+  String get prqErrPhotoInvalid =>
+      'A photo couldn’t be used. Remove it and add it again.';
+
+  @override
+  String get prqErrRateLimited =>
+      'Too many requests in a short time. Try again in an hour.';
+
+  @override
+  String get prqErrNotFound => 'This request can’t be found.';
+
+  @override
+  String get prqErrEstimateMissing => 'There is no estimate to confirm yet.';
+
+  @override
+  String get prqErrCardOrder =>
+      'This order was paid by card. Cancel or refund it from its barrel order.';
+
+  @override
+  String get prqErrSlugInvalid =>
+      'Use 3 to 40 lowercase letters, numbers or dashes.';
+
+  @override
+  String get prqErrSlugTaken => 'That link name is taken. Try another one.';
+
+  @override
+  String get prqErrHoursInvalid =>
+      'Each open day needs a start time before its end time.';
+
+  @override
+  String get prqErrLocationUnknown =>
+      'One of the locations no longer exists. Reload and try again.';
+
+  @override
+  String get prqErrPickupAreas => 'Say which areas you cover.';
+
+  @override
+  String get prqErrLocked => 'Someone else is writing this estimate.';
+
+  @override
+  String get prqErrPieceMissing => 'Every piece needs a price.';
+
+  @override
+  String get prqErrPieceUnknown => 'The pieces changed. Refresh and try again.';
+
+  @override
+  String get prqErrPickupFee => 'Enter a valid pickup fee.';
+
+  @override
+  String get prqErrPickupSchedule => 'Choose a valid pickup day.';
+
+  @override
+  String get prqErrReasonRequired => 'Give a reason.';
+
+  @override
+  String get prqErrOffline =>
+      'You’re offline. Check your connection and try again.';
+
+  @override
+  String get prqErrAppCheck =>
+      'This app couldn’t be verified. Try again in a moment.';
+
+  @override
+  String get prqErrPermission => 'You don’t have access to this.';
+
+  @override
+  String get prqErrGeneric => 'That didn’t work. Try again.';
 }
