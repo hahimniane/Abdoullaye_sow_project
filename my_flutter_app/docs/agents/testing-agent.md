@@ -530,3 +530,13 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   occurrences against `= onCall(` exports. A new callable writes its options
   inline (or the test's shared-options offset must be extended); a new
   shared options object breaks the count.
+- Parallel worktrees share one machine: another agent's emulator suite may
+  hold the default ports (8080/9099/5001/4400/4500). Run emulator suites with
+  a private `--config` file (same rules/indexes by absolute path, other
+  ports, `ui` off; a `functions.source` must be RELATIVE to the config file's
+  directory) and set a short private `TMPDIR` (the Storage emulator keeps its
+  blobs under the OS temp dir, so two Storage emulators delete each other's
+  files; and the Functions emulator's worker sockets fail with EADDRINUSE
+  when the TMPDIR path is longer than ~100 characters). The console reads
+  `NEXT_PUBLIC_FIREBASE_{AUTH,FIRESTORE,FUNCTIONS,STORAGE}_EMULATOR_PORT`
+  for those ports.

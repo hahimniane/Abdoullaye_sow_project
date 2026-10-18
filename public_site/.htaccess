@@ -16,6 +16,11 @@
   # the destination is never cached by a browser or an operator.
   RewriteRule ^p$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
   RewriteRule ^d$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingDocument [QSA,R=302,L]
+
+  # A business's package request link (docs/PACKAGE_REQUESTS.md §8.8): the
+  # printed QR and shared link read laawoldigital.com/r/<slug>; the form
+  # lives on the customer host. 302 so a renamed slug is never cached.
+  RewriteRule ^r/([A-Za-z0-9-]{3,40})/?$ https://customer.laawoldigital.com/r/$1 [R=302,L]
 </IfModule>
 
 # Default document

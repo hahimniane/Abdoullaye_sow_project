@@ -17,4 +17,9 @@
   # plain notice. The code is deliberately NOT carried over: that page shows
   # nothing about any product.
   RewriteRule ^i/([A-Za-z0-9-]{4,40})/?$ /?service=item-tag [R=302,L]
+  # Package requests (docs/PACKAGE_REQUESTS.md §8.8): a business's request
+  # link /r/<slug> and the WhatsApp estimate button /e/<token>. The app
+  # claims both; without it the browser lands on the form or the estimate.
+  RewriteRule ^r/([A-Za-z0-9-]{3,40})/?$ /?service=package-request&r=$1 [R=302,L]
+  RewriteRule ^e/([A-Za-z0-9_-]{43})/?$ /?service=package-estimate&t=$1 [R=302,L]
 </IfModule>

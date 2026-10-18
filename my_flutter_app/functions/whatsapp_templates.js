@@ -75,6 +75,15 @@ const VARIABLE = Object.freeze({
   PICKUP_PLACE_FR: "pickupPlaceFr",
   PICKUP_ADDRESS: "pickupAddress",
   PICKUP_PHONE: "pickupPhone",
+  // Package requests (docs/PACKAGE_REQUESTS.md §7 "WhatsApp templates").
+  TOTAL_EN: "totalEn",
+  TOTAL_FR: "totalFr",
+  PIECES_EN: "piecesEn",
+  PIECES_FR: "piecesFr",
+  HOURS_EN: "hoursEn",
+  HOURS_FR: "hoursFr",
+  REQUEST_CODE: "requestCode",
+  TOKEN: "token",
 });
 
 // A variable that is always written in one language, whatever the template
@@ -86,6 +95,12 @@ const VARIABLE_LANGUAGE = Object.freeze({
   [VARIABLE.DESTINATION_FR]: "fr",
   [VARIABLE.PICKUP_PLACE_EN]: "en",
   [VARIABLE.PICKUP_PLACE_FR]: "fr",
+  [VARIABLE.TOTAL_EN]: "en",
+  [VARIABLE.TOTAL_FR]: "fr",
+  [VARIABLE.PIECES_EN]: "en",
+  [VARIABLE.PIECES_FR]: "fr",
+  [VARIABLE.HOURS_EN]: "en",
+  [VARIABLE.HOURS_FR]: "fr",
 });
 
 // {{1}}, {{2}}, ... in the order the approved body uses them.
@@ -182,6 +197,16 @@ const FALLBACK = Object.freeze({
     fr: "numéro indiqué sur votre reçu",
   },
   [VARIABLE.TRACKING_CODE]: {en: "-", fr: "-", both: "-"},
+  // "your estimate of to be confirmed" never reads; a request always has a
+  // total when its estimate is sent. These keep a blank from being refused.
+  [VARIABLE.TOTAL_EN]: {en: "to be confirmed"},
+  [VARIABLE.TOTAL_FR]: {fr: "à confirmer"},
+  [VARIABLE.PIECES_EN]: {en: "your goods"},
+  [VARIABLE.PIECES_FR]: {fr: "vos colis"},
+  [VARIABLE.HOURS_EN]: {en: "during opening hours"},
+  [VARIABLE.HOURS_FR]: {fr: "aux heures d'ouverture"},
+  [VARIABLE.REQUEST_CODE]: {en: "-", fr: "-", both: "-"},
+  [VARIABLE.TOKEN]: {en: "-", fr: "-", both: "-"},
 });
 
 const MAX_PARAMETER = {
@@ -199,6 +224,14 @@ const MAX_PARAMETER = {
   [VARIABLE.PICKUP_PHONE]: 40,
   [VARIABLE.BUSINESS_PHONE]: 40,
   [VARIABLE.TRACKING_CODE]: 40,
+  [VARIABLE.TOTAL_EN]: 40,
+  [VARIABLE.TOTAL_FR]: 40,
+  [VARIABLE.PIECES_EN]: 160,
+  [VARIABLE.PIECES_FR]: 160,
+  [VARIABLE.HOURS_EN]: 200,
+  [VARIABLE.HOURS_FR]: 200,
+  [VARIABLE.REQUEST_CODE]: 20,
+  [VARIABLE.TOKEN]: 80,
 };
 
 // WhatsApp also refuses a parameter with a newline, a tab, or more than
@@ -329,6 +362,94 @@ function templateMessage(args) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Package requests (docs/PACKAGE_REQUESTS.md §7, §8.3). Two bilingual
+// templates (language "en", category Utility), each with one dynamic URL
+// button https://customer.laawoldigital.com/e/{{1}} whose parameter is the
+// request's token (never its code). They are not part of TEMPLATE above:
+// that set is the container updates', and its rows are about lines.
+// ---------------------------------------------------------------------------
+
+const REQUEST_TEMPLATE = Object.freeze({
+  PACKAGE_ESTIMATE_2LANG: "package_estimate_2lang",
+  PACKAGE_DROPOFF_REMINDER_2LANG: "package_dropoff_reminder_2lang",
+});
+
+const REQUEST_TEMPLATE_VARIABLES = Object.freeze({
+  // 1 name, 2 business, 3 total EN, 4 pieces EN, 5 destination EN,
+  // 6 business, 7 total FR, 8 pieces FR, 9 destination FR, 10 request code.
+  [REQUEST_TEMPLATE.PACKAGE_ESTIMATE_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.TOTAL_EN, VARIABLE.PIECES_EN,
+    VARIABLE.DESTINATION_EN,
+    VARIABLE.BUSINESS, VARIABLE.TOTAL_FR, VARIABLE.PIECES_FR,
+    VARIABLE.DESTINATION_FR,
+    VARIABLE.REQUEST_CODE,
+  ]),
+  // 1 name, 2 business, 3 pieces EN, 4 hours EN, 5 business, 6 pieces FR,
+  // 7 hours FR, 8 request code.
+  [REQUEST_TEMPLATE.PACKAGE_DROPOFF_REMINDER_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.PIECES_EN, VARIABLE.HOURS_EN,
+    VARIABLE.BUSINESS, VARIABLE.PIECES_FR, VARIABLE.HOURS_FR,
+    VARIABLE.REQUEST_CODE,
+  ]),
+});
+
+/**
+ * @param {string} update A request row's update: `estimate_v{n}`,
+ *   `estimate_reminder` or `dropoff_reminder`.
+ * @return {string|null} Its template, or null.
+ */
+function requestTemplateForUpdate(update) {
+  const value = String(update ?? "").trim();
+  if (/^estimate_v\d+$/.test(value) || value === "estimate_reminder") {
+    return REQUEST_TEMPLATE.PACKAGE_ESTIMATE_2LANG;
+  }
+  if (value === "dropoff_reminder") {
+    return REQUEST_TEMPLATE.PACKAGE_DROPOFF_REMINDER_2LANG;
+  }
+  return null;
+}
+
+/**
+ * The /messages body for one request message.
+ *
+ * @param {object} args {phone, update, values} - values by VARIABLE name,
+ *   `token` for the button.
+ * @return {object|null} The request body, or null for an unknown update.
+ */
+function requestTemplateMessage(args) {
+  const template = requestTemplateForUpdate(args?.update);
+  if (!template) return null;
+  const values = args.values || {};
+  const parameter = (value) => ({type: "text", text: value});
+  return {
+    messaging_product: "whatsapp",
+    to: String(args.phone ?? "").replace(/\D/g, ""),
+    type: "template",
+    template: {
+      name: template,
+      language: {code: BILINGUAL_TEMPLATE_LANGUAGE},
+      components: [
+        {
+          type: "body",
+          parameters: REQUEST_TEMPLATE_VARIABLES[template].map((variable) =>
+            parameter(variableText(variable, values, "both"))),
+        },
+        {
+          // https://customer.laawoldigital.com/e/{{1}}
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [parameter(variableText(VARIABLE.TOKEN, values,
+              "both"))],
+        },
+      ],
+    },
+  };
+}
+
 module.exports = {
   TEMPLATE,
   TEMPLATE_SET,
@@ -349,4 +470,8 @@ module.exports = {
   variableText,
   templateComponents,
   templateMessage,
+  REQUEST_TEMPLATE,
+  REQUEST_TEMPLATE_VARIABLES,
+  requestTemplateForUpdate,
+  requestTemplateMessage,
 };

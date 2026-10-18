@@ -678,6 +678,30 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // Customer package requests (docs/PACKAGE_REQUESTS.md §8.3). Every write
+    // is a callable (submit, estimate, confirm, receive, ...), so a client can
+    // never confirm, price or receive a request itself. Read by the business's
+    // people who work containers (the query filters businessId), platform
+    // admins, and the signed-in customer who sent it (sender.uid; anonymous
+    // web senders read through getPackageRequestByToken instead).
+    match /packageRequests/{requestId} {
+      allow read: if request.auth != null && (
+        isAdmin(request.auth.uid) ||
+        canManageBusinessSection(request.auth.uid, resource.data.businessId,
+            'containers') ||
+        resource.data.get('sender', {}).get('uid', '') == request.auth.uid);
+      allow write: if false;
+    }
+    // Request bookkeeping: slug claims, unique codes, idempotency keys.
+    match /packageRequestSlugs/{slug} {
+      allow read, write: if false;
+    }
+    match /packageRequestCodes/{code} {
+      allow read, write: if false;
+    }
+    match /packageRequestKeys/{keyId} {
+      allow read, write: if false;
+    }
     // One lock per business and VIN, taken by addContainerLine inside the
     // transaction that adds a car, so the same car cannot be loaded twice by
     // two quick adds. Server bookkeeping only: no client reads or writes it.

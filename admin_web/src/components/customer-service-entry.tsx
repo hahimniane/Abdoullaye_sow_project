@@ -29,12 +29,18 @@ const GuestTracking = dynamic(
 // Owners and staff scanning a package label get their staff view above the
 // public result. Only their sessions ever load it: customers and guests are
 // told apart before render, so they never download the staff code.
+// The WhatsApp estimate button's page: only that link ever downloads it.
+const PackageEstimatePage = dynamic(
+  () => import("@/components/package-estimate-page").then((m) => m.PackageEstimatePage),
+  { ssr: false },
+);
 const PackageStaffView = dynamic(
   () => import("@/components/package-staff-view").then((m) => m.PackageStaffView),
   { ssr: false },
 );
 import { recallGuestContact } from "@/lib/guest-contact";
 import { packageCodeFrom, packageStaffCandidate } from "@/lib/package-staff";
+import { estimateTokenFromLocation, requestSlugFromLocation } from "@/lib/package-requests";
 import type { CustomerService } from "@/lib/customer-service-intent";
 import type { UserProfile } from "@/types/admin";
 
@@ -131,6 +137,15 @@ export function CustomerServiceEntry({
       isAnonymous: firebaseUser?.isAnonymous === true,
     });
   const cars = usePublicCars(initialService === "cars");
+  // A request link (/r/<slug>) opens the barrel tab's request form on that
+  // business; the estimate link (/e/<token>) opens the estimate page.
+  const [{requestSlug, estimateToken}] = useState(() => {
+    if (typeof window === "undefined") return {requestSlug: "", estimateToken: ""};
+    return {
+      requestSlug: requestSlugFromLocation(window.location.pathname, window.location.search),
+      estimateToken: estimateTokenFromLocation(window.location.pathname, window.location.search),
+    };
+  });
   const shippingService:
     | "barrel"
     | "freight"
@@ -138,6 +153,8 @@ export function CustomerServiceEntry({
     | null =
     initialService === "barrel" || initialService === "freight"
       ? initialService
+      : initialService === "package-request"
+        ? "barrel"
       : initialService === "car-transport"
         ? "transport"
         : null;
@@ -175,7 +192,9 @@ export function CustomerServiceEntry({
             <small>
               {initialService === "tracking"
                 ? "Check a booking without signing in."
-                : "Compare services and prepare your request."}
+                : initialService === "package-estimate"
+                  ? "Your estimate, ready to confirm."
+                  : "Compare services and prepare your request."}
             </small>
           </span>
         </a>
@@ -217,6 +236,7 @@ export function CustomerServiceEntry({
             initialService={shippingService}
             onAuthenticationRequired={askHowToContinue}
             profile={profile}
+            requestSlug={requestSlug}
             // An accepted price arriving from the tracking page: the guest
             // claimed their request there, accepted a business's answer,
             // and lands here to finish the booking at that number.
@@ -250,6 +270,9 @@ export function CustomerServiceEntry({
         )}
         {staffCandidate && packageCode && (
           <PackageStaffView code={packageCode} firebaseUser={firebaseUser} profile={profile} />
+        )}
+        {initialService === "package-estimate" && (
+          <PackageEstimatePage token={estimateToken} />
         )}
         {initialService === "tracking" && (
           <GuestTracking

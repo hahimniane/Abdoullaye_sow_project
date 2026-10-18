@@ -233,6 +233,21 @@ export function useWaitingPackages(businessId: string, enabled: boolean): Busine
 }
 
 /**
+ * The business's open package requests (docs/PACKAGE_REQUESTS.md §8.3),
+ * live and whole: new, estimate sent, confirmed. Newest first, on the
+ * businessId + status + createdAt index. Closed ones drop out by themselves.
+ */
+export function usePackageRequests(businessId: string, enabled: boolean): BusinessRowsResult {
+  return useBusinessCollection("packageRequests", businessId, enabled, {
+    pageSize: null,
+    orderBy: "createdAt",
+    direction: "desc",
+    where: [["status", "in", ["new", "estimate_sent", "confirmed"]]],
+    sort: "query",
+  });
+}
+
+/**
  * A shop's products, live: the ones on sale (`archived == false`) or the ones
  * put away (`archived == true`), whole - a shop's catalogue is bounded the way
  * its team is. Two equalities, so no composite index; the list orders itself

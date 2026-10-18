@@ -9,6 +9,10 @@ export const customerServices = [
   // A shop's inventory tag, scanned with a phone camera: /i/<CODE> on the
   // customer host. Shows a plain notice, never anything about the product.
   "item-tag",
+  // A package request (docs/PACKAGE_REQUESTS.md §8.8): the form, opened on
+  // one business by /r/<slug>, and the estimate page /e/<token>.
+  "package-request",
+  "package-estimate",
 ] as const;
 
 export type CustomerService = (typeof customerServices)[number];
@@ -24,6 +28,10 @@ export function customerServiceFromSearch(
 
 /** What `https://customer.laawoldigital.com/i/<CODE>` is, whether the host rewrote it to `?service=item-tag` or served it as a path. */
 const ITEM_TAG_PATH = /^\/i\/[A-Za-z0-9-]{1,60}\/?$/;
+/** `/r/<slug>`: a business's request link. */
+const REQUEST_PATH = /^\/r\/[A-Za-z0-9-]{3,40}\/?$/;
+/** `/e/<token>`: the WhatsApp estimate button. */
+const ESTIMATE_PATH = /^\/e\/[A-Za-z0-9_-]{43}\/?$/;
 
 /**
  * The customer service a page address asks for: the `?service=` link, or an
@@ -35,9 +43,12 @@ export function customerServiceFromLocation(
   pathname: string,
   search: string,
 ): CustomerService | null {
+  const path = String(pathname ?? "");
   return (
     customerServiceFromSearch(search) ??
-    (ITEM_TAG_PATH.test(String(pathname ?? "")) ? "item-tag" : null)
+    (ITEM_TAG_PATH.test(path) ? "item-tag" :
+      REQUEST_PATH.test(path) ? "package-request" :
+        ESTIMATE_PATH.test(path) ? "package-estimate" : null)
   );
 }
 

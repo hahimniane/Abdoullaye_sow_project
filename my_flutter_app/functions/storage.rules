@@ -312,6 +312,41 @@ service firebase.storage {
         validSupportUpload();
     }
 
+    // Package request photos (docs/PACKAGE_REQUESTS.md §8.4). The customer's
+    // own session - anonymous on the website - uploads compressed images to
+    // its own folder before submitting; submitPackageRequest checks each
+    // path belongs to the caller and re-checks type and size. Create only:
+    // nobody overwrites or deletes through the client (the server deletes
+    // them 90 days after the request ends). Read by the uploader and the
+    // business's owner and staff who work containers (token claims).
+    function validRequestPhotoUpload() {
+      return request.resource.size < 2 * 1024 * 1024 &&
+        request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    function canReadBusinessContainers(businessId) {
+      return isLinkedToBusiness(businessId) &&
+        (
+          userRole() == 'businessOwner' ||
+          (userRole() == 'staff' && hasBusinessSection('containers'))
+        );
+    }
+
+    match /packageRequestPhotos/{businessId}/{uploaderUid}/{fileName} {
+      allow read: if request.auth != null &&
+        (
+          request.auth.uid == uploaderUid ||
+          canReadBusinessContainers(businessId) ||
+          (isAdmin() && hasBuiltInAdminCapability('operations'))
+        );
+      allow create: if request.auth != null &&
+        resource == null &&
+        request.auth.uid == uploaderUid &&
+        fileName.matches('^[A-Za-z0-9_-]{8,64}([.](jpg|jpeg|png|webp))?$') &&
+        validRequestPhotoUpload();
+      allow update, delete: if false;
+    }
+
     // Optional: allow read-only access for other files if needed
     match /{allPaths=**} {
       allow read: if false;

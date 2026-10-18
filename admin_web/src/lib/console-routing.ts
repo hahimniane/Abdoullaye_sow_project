@@ -26,6 +26,9 @@ export function serviceEntryApplies(
   // An inventory tag's page says the same to everyone, signed in or not: a
   // staff member's browser must not swap it for their console.
   if (service === "item-tag") return kind !== "unsupported";
+  // The estimate page is the customer's (the token is the capability); a
+  // staff member opening a customer's link sees the customer's page too.
+  if (service === "package-estimate") return kind !== "unsupported";
   if (kind === null || kind === "customer") return true;
   return service === "tracking" && (kind === "business" || kind === "admin");
 }

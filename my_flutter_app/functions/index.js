@@ -212,7 +212,15 @@ const {
   notificationRetryPlan,
   notificationTestReadiness,
   platformNotificationEnabled,
+  recipientLanguage,
 } = require("./notification_settings");
+// Customer package requests (docs/PACKAGE_REQUESTS.md §8). Namespaced: the
+// pure rules share names (toMillis, moneyText) with helpers in this file.
+const packageRequests = require("./package_requests");
+const requestReceive = require("./request_receive");
+const {
+  requestTemplateMessage,
+} = require("./whatsapp_templates");
 const {
   buildOpenBarrelMirrorPayload,
   isValidStripeSecretKey,
@@ -395,6 +403,7 @@ const {
   pickupDestinationIds,
   whatsappUpdateMessage,
   whatsappConfigured,
+  destinationName: containerDestinationName,
 } = require("./container_updates");
 const {
   PICKUP_MESSAGES,
@@ -1393,6 +1402,15 @@ exports.notifyBarrelShipmentStatus = onDocumentUpdated(
             ...relatedRecordFields("barrelShipments", event.params.shipmentId),
           },
         });
+        // A business that keeps card booking for barrels gets the paid
+        // order in its Waiting list as Expected (docs/PACKAGE_REQUESTS.md
+        // §8.10).
+        await syncCardBarrelRequest(event.params.shipmentId, paidAfter);
+      }
+      if (packageRequests.shipmentEndsCardRequest(paidAfter) &&
+          !packageRequests.shipmentEndsCardRequest(
+              event.data.before.data() || {})) {
+        await cancelCardBarrelRequest(event.params.shipmentId, paidAfter);
       }
       if (!statusChanged(event)) return;
       const after = event.data.after.data() || {};
@@ -19070,6 +19088,12 @@ exports.sendContainerCustomerUpdates = onDocumentCreated(
  * @return {Promise<void>}
  */
 async function recordContainerUpdateAttempt(db, rowRef, row, fields) {
+  // A package request's message (estimate, reminders) is about the request,
+  // not a line: its state goes on the request.
+  if (row && row.requestId) {
+    await recordPackageRequestMessageAttempt(db, rowRef, row, fields);
+    return;
+  }
   const lineRef = db.collection("containerLines")
       .doc(String(row.lineId || "-"));
   await db.runTransaction(async (tx) => {
@@ -19174,6 +19198,10 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         return;
       }
       if (claim.action !== "claim") return;
+      if (row.requestId) {
+        await deliverPackageRequestMessage(db, rowRef, row, claim);
+        return;
+      }
       const lineDoc = await db.collection("containerLines")
           .doc(String(row.lineId || "-")).get();
       if (!lineDoc.exists) {
@@ -39986,3 +40014,1523 @@ exports.rebuildVolumeMonths = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       maxInstances: 1, timeoutSeconds: 300, memory: "512MiB"},
     volume.rebuildVolumeMonths);
+// ===========================================================================
+// Customer package requests (docs/PACKAGE_REQUESTS.md §2-§4, §7, §8).
+// A customer asks one business to take a load; the business estimates it,
+// the customer confirms it on /e/<token> (or agrees by phone), it waits as
+// Expected, and "Received" turns it into one containerLines line. The rules
+// are pure in package_requests.js / request_receive.js; this is the glue.
+// ===========================================================================
+
+const PACKAGE_REQUESTS = "packageRequests";
+const REQUEST_LINK_BASE = "https://laawoldigital.com/r/";
+const REQUEST_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const REQUEST_CODE_ALPHABET = "23456789BCDFGHJKMNPQRSTVWXYZ";
+const PACKAGE_REQUEST_SWEEP_PAGE = 100;
+
+/**
+ * @param {string} status An HttpsError status.
+ * @param {string} code A REQUEST_MESSAGES code.
+ * @param {object} [details] More details.
+ * @return {HttpsError} The refusal.
+ */
+function requestError(status, code, details = {}) {
+  return new HttpsError(status,
+      packageRequests.REQUEST_MESSAGES[code] || "The request was refused.",
+      {reason: code, ...details});
+}
+
+/**
+ * @param {string[]} codes Every validation problem.
+ * @return {HttpsError} invalid-argument with reasons.
+ */
+function requestInvalid(codes) {
+  return new HttpsError("invalid-argument",
+      packageRequests.REQUEST_MESSAGES[codes[0]] || "Check the form.",
+      {reason: codes[0], reasons: codes});
+}
+
+/**
+ * The timer bookkeeping a request write carries (§8.9), from the request
+ * as it will be after the write.
+ *
+ * @param {object} merged The request after the write.
+ * @param {object} [extra] For nextTimer.
+ * @return {object} nextAction, nextActionAt, expiresAt, expiresAtMs.
+ */
+function requestTimerFields(merged, extra = {}) {
+  const timer = packageRequests.nextTimer(merged, extra);
+  const expires = packageRequests.expiryMs(merged);
+  return {
+    nextAction: timer ? timer.action : "",
+    nextActionAt: timer ? FirestoreTimestamp.fromMillis(timer.atMs) : null,
+    expiresAt: expires ? FirestoreTimestamp.fromMillis(expires) : null,
+    expiresAtMs: expires || 0,
+  };
+}
+
+/**
+ * @param {object} user A profile.
+ * @return {string} The name History and the lock show.
+ */
+function requestStaffName(user) {
+  return String(user?.fullName || user?.displayName || user?.email ||
+    "Staff").trim().slice(0, 120);
+}
+
+/**
+ * @return {object} The Storage bucket request photos live in.
+ */
+function requestPhotoBucket() {
+  const bucketName = process.env.FIREBASE_STORAGE_BUCKET ||
+    process.env.STORAGE_BUCKET ||
+    (process.env.GCLOUD_PROJECT ?
+      `${process.env.GCLOUD_PROJECT}.firebasestorage.app` : undefined);
+  return bucketName ? admin.storage().bucket(bucketName) :
+    admin.storage().bucket();
+}
+
+/**
+ * @return {string} A fresh request code, "R-XXXXX".
+ */
+function newRequestCode() {
+  let body = "";
+  for (let i = 0; i < 5; i++) {
+    body += REQUEST_CODE_ALPHABET[crypto.randomInt(
+        REQUEST_CODE_ALPHABET.length)];
+  }
+  return `R-${body}`;
+}
+
+/**
+ * The business's drop-off spots and one destination, as the customer form
+ * offers them.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} business Its document.
+ * @param {string} destinationId The destination.
+ * @return {Promise<object|null>} requestOption, or null.
+ */
+async function loadPackageRequestOption(db, businessId, business,
+    destinationId) {
+  if (!destinationId || destinationId.includes("/")) return null;
+  const [destinationDoc, locations] = await Promise.all([
+    db.collection("businesses").doc(businessId)
+        .collection("destinationCountries").doc(destinationId).get(),
+    listBusinessOfficeLocations(db, businessId, business),
+  ]);
+  if (!destinationDoc.exists) return null;
+  return packageRequests.requestOption({businessId, business,
+    destinationId, destination: destinationDoc.data() || {}, locations});
+}
+
+/**
+ * Every option of one business (each active destination).
+ *
+ * @param {object} db Firestore.
+ * @param {object} businessDoc The business snapshot.
+ * @return {Promise<object[]>} requestOption rows.
+ */
+async function packageRequestOptionsOf(db, businessDoc) {
+  const business = businessDoc.data() || {};
+  const [destinations, locations] = await Promise.all([
+    businessDoc.ref.collection("destinationCountries")
+        .where("isActive", "==", true).get(),
+    listBusinessOfficeLocations(db, businessDoc.id, business),
+  ]);
+  return destinations.docs.map((doc) => packageRequests.requestOption({
+    businessId: businessDoc.id, business, destinationId: doc.id,
+    destination: doc.data() || {}, locations,
+  })).filter(Boolean);
+}
+
+/**
+ * Loads a request for a staff callable: containers section, same business.
+ *
+ * @param {object} db Firestore.
+ * @param {string} uid The caller.
+ * @param {object} data The callable data.
+ * @return {Promise<{ref: object, user: object, businessId: string}>}
+ */
+async function loadStaffPackageRequest(db, uid, data) {
+  const businessId = String(data?.businessId || "").trim();
+  const user = await requireBusinessPermission(uid, businessId,
+      CONTAINER_SECTION);
+  const requestId = String(data?.requestId || "").trim();
+  if (!requestId || requestId.includes("/")) {
+    throw requestError("not-found", "request_not_found");
+  }
+  const ref = db.collection(PACKAGE_REQUESTS).doc(requestId);
+  const snap = await ref.get();
+  if (!snap.exists || String(snap.data()?.businessId) !== businessId) {
+    throw requestError("not-found", "request_not_found");
+  }
+  return {ref, user, businessId};
+}
+
+/**
+ * Reads a request inside a transaction and checks it is the business's.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} ref The request.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} The request.
+ */
+async function readBusinessRequestIn(tx, ref, businessId) {
+  const snap = await tx.get(ref);
+  const request = snap.exists ? snap.data() || {} : null;
+  if (!request || String(request.businessId) !== businessId) {
+    throw requestError("not-found", "request_not_found");
+  }
+  return request;
+}
+
+/**
+ * Finds a request by its /e/ token.
+ *
+ * @param {object} db Firestore.
+ * @param {*} token The token from the link.
+ * @return {Promise<object>} The request snapshot.
+ */
+async function requestByToken(db, token) {
+  const value = String(token || "").trim();
+  if (!REQUEST_TOKEN_PATTERN.test(value)) {
+    throw requestError("not-found", "request_not_found");
+  }
+  const snap = await db.collection(PACKAGE_REQUESTS)
+      .where("token", "==", value).limit(1).get();
+  if (snap.empty) throw requestError("not-found", "request_not_found");
+  return snap.docs[0];
+}
+
+/**
+ * Queues one request message on the WhatsApp queue (containerUpdates), at
+ * most once per id. Never fails the caller: the request is already written.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {requestId, update}.
+ * @return {Promise<void>}
+ */
+async function queuePackageRequestMessage(db, {requestId, update}) {
+  try {
+    const requestRef = db.collection(PACKAGE_REQUESTS).doc(requestId);
+    const rowRef = db.collection("containerUpdates")
+        .doc(`req_${requestId}_${update}`.replace(/[^A-Za-z0-9_-]/g, ""));
+    const status = containerWhatsAppConfigured() ?
+      CONTAINER_UPDATE_STATUS.QUEUED : CONTAINER_UPDATE_STATUS.WAITING;
+    await db.runTransaction(async (tx) => {
+      const [requestDoc, rowDoc] = await tx.getAll(requestRef, rowRef);
+      if (!requestDoc.exists || rowDoc.exists) return;
+      const request = requestDoc.data() || {};
+      const phone = packageRequests.e164(request.sender?.phoneE164);
+      if (!phone) {
+        tx.update(requestRef, {
+          whatsapp: {update, status: "skipped", error: "no_phone",
+            atMs: Date.now()},
+          whatsappUnreachable: true,
+        });
+        return;
+      }
+      tx.create(rowRef, {
+        businessId: String(request.businessId || ""),
+        requestId,
+        containerId: "",
+        lineId: "",
+        update,
+        role: "sender",
+        name: String(request.sender?.name || ""),
+        phone,
+        trackingCode: String(request.code || ""),
+        businessName: String(request.businessName || ""),
+        status,
+        attempts: 0,
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      tx.update(requestRef, {
+        whatsapp: {update, status, error: "", atMs: Date.now()},
+      });
+    });
+  } catch (error) {
+    logger.error("Could not queue the package request message", {
+      requestId, update, error: String(error),
+    });
+  }
+}
+
+/**
+ * Records one send attempt of a request message on its row and on the
+ * request (`whatsapp`, `whatsappUnreachable`).
+ *
+ * @param {object} db Firestore.
+ * @param {object} rowRef The containerUpdates row.
+ * @param {object} row The row as claimed.
+ * @param {object} fields What to write on the row (status included).
+ * @return {Promise<void>}
+ */
+async function recordPackageRequestMessageAttempt(db, rowRef, row, fields) {
+  const requestRef = db.collection(PACKAGE_REQUESTS)
+      .doc(String(row.requestId || "-"));
+  await db.runTransaction(async (tx) => {
+    const requestDoc = await tx.get(requestRef);
+    tx.update(rowRef, {...fields,
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+    if (!requestDoc.exists) return;
+    const status = String(fields.status || "");
+    // Meta refusing the number is the customer being unreachable; a template
+    // that was never approved is not.
+    const templateTrouble = /template/i.test(String(fields.error || ""));
+    const patch = {
+      whatsapp: {update: String(row.update || ""), status,
+        error: String(fields.error || "").slice(0, 300), atMs: Date.now()},
+    };
+    if (status === CONTAINER_UPDATE_STATUS.SENT) {
+      patch.whatsappUnreachable = false;
+    } else if (status === CONTAINER_UPDATE_STATUS.FAILED && !templateTrouble) {
+      patch.whatsappUnreachable = true;
+    }
+    tx.update(requestRef, patch);
+  });
+}
+
+/**
+ * Sends one claimed request message (deliverContainerCustomerUpdate hands
+ * request rows here). Built at send time from the request as it is now.
+ *
+ * @param {object} db Firestore.
+ * @param {object} rowRef The row.
+ * @param {object} row The row as claimed.
+ * @param {object} claim The claim decision (attempts).
+ * @return {Promise<void>}
+ */
+async function deliverPackageRequestMessage(db, rowRef, row, claim) {
+  const requestDoc = await db.collection(PACKAGE_REQUESTS)
+      .doc(String(row.requestId)).get();
+  if (!requestDoc.exists) {
+    await recordPackageRequestMessageAttempt(db, rowRef, row, {
+      status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
+      error: "The request no longer exists."});
+    return;
+  }
+  const request = requestDoc.data() || {};
+  // A reminder about a request that closed since it was queued says nothing
+  // useful; an estimate too.
+  if (!packageRequests.isOpenStatus(request.status)) {
+    await rowRef.update({status: "skipped", leaseUntilMs: 0,
+      error: `The request is ${request.status}.`,
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+    return;
+  }
+  const businessDoc = await db.collection("businesses")
+      .doc(String(request.businessId || "-")).get();
+  const settings = packageRequests.requestSettingsOf(businessDoc.data() || {});
+  const message = requestTemplateMessage({
+    phone: row.phone,
+    update: row.update,
+    values: packageRequests.requestMessageValues(request, {
+      destinationFr: containerDestinationName(request, null, "fr"),
+      hours: settings.openingHours[String(request.locationId || "")] || null,
+    }),
+  });
+  if (!message) {
+    await recordPackageRequestMessageAttempt(db, rowRef, row, {
+      status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
+      error: `No WhatsApp template for the update "${row.update}".`});
+    return;
+  }
+  const sent = await sendWhatsAppMessage(message);
+  const status = statusAfterAttempt(whatsappSendOutcome(sent),
+      claim.attempts);
+  const waitingForTemplate =
+    status === CONTAINER_UPDATE_STATUS.WAITING_TEMPLATE;
+  await recordPackageRequestMessageAttempt(db, rowRef, row, {
+    status,
+    leaseUntilMs: 0,
+    ...(waitingForTemplate ?
+      {attempts: Math.max(0, claim.attempts - 1)} : {}),
+    whatsappMessageId: sent.messageId,
+    error: status === CONTAINER_UPDATE_STATUS.SENT ? "" : sent.error,
+    ...(status === CONTAINER_UPDATE_STATUS.SENT ?
+      {sentAt: FirestoreFieldValue.serverTimestamp()} : {}),
+  });
+  if (status === CONTAINER_UPDATE_STATUS.RETRYING) {
+    throw new Error(`Request message ${rowRef.id} will be retried: ` +
+      sent.error);
+  }
+}
+
+/**
+ * Tells the business's owner and its staff with the containers section
+ * (push + bell, §8.7). Best-effort.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, requestId, request, event}.
+ * @return {Promise<number>} How many people were told.
+ */
+async function notifyPackageRequestStaff(db, {businessId, requestId, request,
+  event}) {
+  try {
+    const [businessDoc, staffSnap] = await Promise.all([
+      db.collection("businesses").doc(businessId).get(),
+      db.collection("users").where("businessId", "==", businessId)
+          .where("role", "in", ["staff", "businessOwner"]).limit(300).get(),
+    ]);
+    const people = new Map();
+    for (const doc of staffSnap.docs) {
+      const user = {id: doc.id, ...doc.data()};
+      if (accountAccessBlocked(user)) continue;
+      if (!hasBusinessPermission(user, CONTAINER_SECTION)) continue;
+      people.set(doc.id, user);
+    }
+    const ownerUid = String(businessDoc.data()?.ownerUid || "").trim();
+    if (ownerUid && !people.has(ownerUid)) {
+      const owner = await db.collection("users").doc(ownerUid).get();
+      if (owner.exists && !accountAccessBlocked(owner.data())) {
+        people.set(ownerUid, {id: ownerUid, ...owner.data()});
+      }
+    }
+    await Promise.all([...people.values()].map((user) => {
+      const words = packageRequests.requestNotificationText(event, request,
+          recipientLanguage(user));
+      return safeSendPreferenceNotification({
+        uid: user.id,
+        preferenceKey: "businessActivity",
+        title: words.title,
+        body: words.body,
+        data: {
+          type: "package_request",
+          event,
+          requestId,
+          businessId,
+          code: String(request.code || ""),
+          ...relatedRecordFields(PACKAGE_REQUESTS, requestId),
+        },
+        pushOnly: true,
+      });
+    }));
+    return people.size;
+  } catch (error) {
+    logger.warn("Package request staff notification failed", {
+      businessId, requestId, event, error: String(error?.message || error),
+    });
+    return 0;
+  }
+}
+
+/**
+ * @param {object} request A request before a write.
+ * @param {object} patch The write.
+ * @param {object} [extra] For nextTimer.
+ * @return {object} The patch with its timers and updatedAt.
+ */
+function requestPatch(request, patch, extra = {}) {
+  const merged = {...request, ...patch};
+  return {
+    ...patch,
+    ...requestTimerFields(merged, extra),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  };
+}
+
+/**
+ * The fields closing a request writes.
+ *
+ * @param {object} request The request.
+ * @param {string} status The closed status.
+ * @param {object} entry The History entry.
+ * @param {number} nowMs Now.
+ * @param {string} [reason] decline / cancel reason.
+ * @return {object} The patch.
+ */
+function closeRequestPatch(request, status, entry, nowMs, reason = "") {
+  return requestPatch(request, {
+    status,
+    declineReason: reason,
+    lock: null,
+    closedAt: FirestoreTimestamp.fromMillis(nowMs),
+    closedAtMs: nowMs,
+    history: packageRequests.appendHistory(request.history,
+        {...entry, atMs: nowMs, ...(reason ? {reason} : {})}),
+  });
+}
+
+exports.listPackageRequestOptions = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      invoker: "public",
+    },
+    async (request) => {
+      await enforceCallableRateLimit(request, {
+        name: "listPackageRequestOptions",
+        limit: 60,
+        windowSeconds: 60,
+      });
+      const db = admin.firestore();
+      const slug = String(request.data?.slug || "").trim().toLowerCase();
+      if (slug) {
+        if (!packageRequests.slugValid(slug)) {
+          throw requestError("not-found", "business_not_found");
+        }
+        const claim = await db.collection("packageRequestSlugs")
+            .doc(slug).get();
+        const businessId = String(claim.data()?.businessId || "");
+        const businessDoc = businessId ?
+          await db.collection("businesses").doc(businessId).get() : null;
+        if (!businessDoc || !businessDoc.exists ||
+            String(businessDoc.data()?.status) !== "approved") {
+          throw requestError("not-found", "business_not_found");
+        }
+        const business = businessDoc.data() || {};
+        const settings = packageRequests.requestSettingsOf(business);
+        const options = settings.acceptRequests ?
+          await packageRequestOptionsOf(db, businessDoc) : [];
+        return {
+          business: {
+            businessId,
+            name: String(business.name || businessId),
+            phone: String(business.phone || ""),
+            profileImageUrl: String(business.profileImageUrl || ""),
+            slug,
+            acceptRequests: settings.acceptRequests,
+          },
+          options,
+        };
+      }
+      const businesses = await db.collection("businesses")
+          .where("packageRequestSettings.acceptRequests", "==", true)
+          .limit(500)
+          .get();
+      const options = [];
+      for (const group of inGroups(businesses.docs.filter((doc) =>
+        String(doc.data()?.status) === "approved"), 10)) {
+        const lists = await Promise.all(group.map((doc) =>
+          packageRequestOptionsOf(db, doc)));
+        lists.forEach((list) => options.push(...list));
+      }
+      options.sort((a, b) => a.country.name.localeCompare(b.country.name) ||
+        a.businessName.localeCompare(b.businessName));
+      return {business: null, options};
+    },
+);
+
+exports.submitPackageRequest = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      invoker: "public",
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      try {
+        await enforceCallableRateLimit(request, {
+          name: "submitPackageRequestAddress",
+          limit: 20,
+          windowSeconds: 60 * 60,
+        });
+      } catch (error) {
+        if (error?.code === "resource-exhausted") {
+          throw requestError("resource-exhausted", "rate_limited");
+        }
+        throw error;
+      }
+      const db = admin.firestore();
+      const businessId = String(data.businessId || "").trim();
+      const nowMs = Date.now();
+      // The same key from the same session within 10 minutes is the same
+      // request: answered as stored, never written twice.
+      const key = String(data.idempotencyKey || "").trim();
+      const keyRef = key ? db.collection("packageRequestKeys").doc(
+          crypto.createHash("sha256").update(`${uid}|${key}`)
+              .digest("hex")) : null;
+      const replayOf = async (keyDoc) => {
+        const stored = keyDoc.exists ? keyDoc.data() || {} : null;
+        if (!stored || nowMs - Number(stored.createdAtMs || 0) >
+            packageRequests.TIMER.IDEMPOTENCY_MS) {
+          return null;
+        }
+        const first = await db.collection(PACKAGE_REQUESTS)
+            .doc(String(stored.requestId)).get();
+        if (!first.exists) return null;
+        const row = first.data() || {};
+        return {success: true, requestId: first.id, code: row.code,
+          token: row.token, status: row.status,
+          totalCents: row.estimate ? row.estimate.totalCents : null,
+          replayed: true};
+      };
+      if (keyRef) {
+        const replay = await replayOf(await keyRef.get());
+        if (replay) return replay;
+      }
+      const businessDoc = businessId && !businessId.includes("/") ?
+        await db.collection("businesses").doc(businessId).get() : null;
+      const business = businessDoc && businessDoc.exists ?
+        businessDoc.data() || {} : null;
+      const option = business ? await loadPackageRequestOption(db,
+          businessId, business,
+          String(data.destinationCountryId || "").trim()) : null;
+      const checked = packageRequests.validateSubmission(data, {
+        option, business, businessId, uid, nowMs,
+      });
+      if (checked.precondition) {
+        throw requestError("failed-precondition", checked.precondition);
+      }
+      if (checked.errors.length > 0) throw requestInvalid(checked.errors);
+      // Every photo must be one of this session's own uploads, a real image
+      // under the size the rule allows.
+      if (checked.photoPaths.length > 0) {
+        const bucket = requestPhotoBucket();
+        const metas = await Promise.all(checked.photoPaths.map(
+            (path) => bucket.file(path).getMetadata()
+                .then(([meta]) => meta).catch(() => null)));
+        if (metas.some((meta) =>
+          !packageRequests.photoMetadataValid(meta))) {
+          throw requestInvalid(["photo_invalid"]);
+        }
+      }
+      // 5 an hour per sender phone, emulator included: an anonymous session
+      // costs nothing, a phone number does.
+      try {
+        await enforceRateLimitForIdentity(
+            `phone:${checked.record.sender.phoneE164.replace(/\D/g, "")}`,
+            {name: "packageRequestPhone", limit: 5, windowSeconds: 60 * 60});
+      } catch (error) {
+        if (error?.code === "resource-exhausted") {
+          throw requestError("resource-exhausted", "rate_limited");
+        }
+        throw error;
+      }
+      const anonymous = isAnonymousCaller(request.auth);
+      const estimate = packageRequests.automaticEstimate(
+          checked.record.pieces, nowMs);
+      const requestRef = db.collection(PACKAGE_REQUESTS).doc();
+      const token = crypto.randomBytes(32).toString("base64url");
+      let code = "";
+      let replay = null;
+      for (let attempt = 0; attempt < 6 && !code; attempt++) {
+        const candidate = newRequestCode();
+        try {
+          replay = await db.runTransaction(async (tx) => {
+            if (keyRef) {
+              const keyDoc = await tx.get(keyRef);
+              const stored = keyDoc.exists ? keyDoc.data() || {} : null;
+              if (stored && nowMs - Number(stored.createdAtMs || 0) <=
+                  packageRequests.TIMER.IDEMPOTENCY_MS) {
+                return stored;
+              }
+            }
+            const record = {
+              ...checked.record,
+              sender: {...checked.record.sender,
+                ...(anonymous ? {} : {uid})},
+              submittedByUid: uid,
+              code: candidate,
+              token,
+              status: estimate ? packageRequests.STATUS.ESTIMATE_SENT :
+                packageRequests.STATUS.NEW,
+              estimate: estimate ? {...estimate,
+                sentAt: FirestoreTimestamp.fromMillis(nowMs)} : null,
+              estimateHistory: estimate ? [estimate] : [],
+              confirmedVersion: null,
+              confirmedAt: null,
+              confirmedAtMs: 0,
+              confirmedVia: "",
+              confirmedTotalCents: null,
+              priceDropped: false,
+              lock: null,
+              reminders: {},
+              lineId: "",
+              trackingCode: "",
+              receivedAt: null,
+              receivedAtMs: 0,
+              payment: {timing: "at_handoff", paidCents: 0},
+              cardOrder: null,
+              declineReason: "",
+              whatsapp: null,
+              whatsappUnreachable: false,
+              history: packageRequests.appendHistory([], {
+                atMs: nowMs, action: "submitted", byUid: "",
+                byName: checked.record.sender.name,
+                ...(estimate ? {version: 1,
+                  totalCents: estimate.totalCents} : {}),
+              }),
+              closedAt: null,
+              closedAtMs: 0,
+              photosDeletedAt: null,
+              createdAt: FirestoreTimestamp.fromMillis(nowMs),
+              createdAtMs: nowMs,
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            };
+            tx.create(db.collection("packageRequestCodes").doc(candidate), {
+              requestId: requestRef.id, createdAt:
+                FirestoreFieldValue.serverTimestamp(),
+            });
+            tx.create(requestRef, {...record,
+              ...requestTimerFields(record)});
+            if (keyRef) {
+              tx.set(keyRef, {requestId: requestRef.id, createdAtMs: nowMs,
+                expiresAt: FirestoreTimestamp.fromMillis(nowMs +
+                  packageRequests.TIMER.IDEMPOTENCY_MS * 6)});
+            }
+            return null;
+          });
+          code = candidate;
+        } catch (error) {
+          // The code was taken a moment ago: try another one.
+          if (error?.code !== 6 && error?.code !== "already-exists") {
+            throw error;
+          }
+        }
+      }
+      if (replay) {
+        const answer = await replayOf({exists: true, data: () => replay});
+        if (answer) return answer;
+      }
+      if (!code) {
+        throw new HttpsError("internal", "Could not send the request.");
+      }
+      // Tag the uploads so the stray-upload sweep leaves them alone.
+      if (checked.photoPaths.length > 0) {
+        const bucket = requestPhotoBucket();
+        await Promise.all(checked.photoPaths.map((path) => bucket.file(path)
+            .setMetadata({metadata: {requestId: requestRef.id}})
+            .catch((error) => logger.warn("Request photo not tagged", {
+              path, error: String(error)}))));
+      }
+      if (estimate) {
+        await queuePackageRequestMessage(db, {requestId: requestRef.id,
+          update: "estimate_v1"});
+      }
+      const stored = (await requestRef.get()).data() || {};
+      await notifyPackageRequestStaff(db, {businessId,
+        requestId: requestRef.id, request: stored, event: "new"});
+      return {success: true, requestId: requestRef.id, code, token,
+        status: stored.status, totalCents: estimate ? estimate.totalCents :
+          null, replayed: false};
+    },
+);
+
+exports.getPackageRequestByToken = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      invoker: "public",
+    },
+    async (request) => {
+      await enforceCallableRateLimit(request, {
+        name: "getPackageRequestByToken",
+        limit: 60,
+        windowSeconds: 60 * 60,
+      });
+      const db = admin.firestore();
+      const doc = await requestByToken(db, request.data?.token);
+      const row = doc.data() || {};
+      const businessDoc = await db.collection("businesses")
+          .doc(String(row.businessId || "-")).get();
+      const business = businessDoc.data() || {};
+      const settings = packageRequests.requestSettingsOf(business);
+      return {request: packageRequests.publicRequestView(doc.id, row,
+          business, {hours: settings.openingHours[
+              String(row.locationId || "")] || null})};
+    },
+);
+
+exports.confirmPackageEstimate = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      invoker: "public",
+    },
+    async (request) => {
+      await enforceCallableRateLimit(request, {
+        name: "confirmPackageEstimate",
+        limit: 30,
+        windowSeconds: 60 * 60,
+      });
+      const db = admin.firestore();
+      const doc = await requestByToken(db, request.data?.token);
+      const version = request.data?.version;
+      const nowMs = Date.now();
+      const outcome = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(doc.ref);
+        const row = fresh.data() || {};
+        const decision = packageRequests.confirmDecision(row, version);
+        if (decision.action === "refuse") {
+          throw requestError("failed-precondition", decision.code,
+              decision.details);
+        }
+        if (decision.action === "already") {
+          return {already: true, row};
+        }
+        tx.update(doc.ref, requestPatch(row, {
+          status: packageRequests.STATUS.CONFIRMED,
+          confirmedVersion: version,
+          confirmedAt: FirestoreTimestamp.fromMillis(nowMs),
+          confirmedAtMs: nowMs,
+          confirmedVia: packageRequests.CONFIRMED_VIA.LINK,
+          confirmedTotalCents: Number(row.estimate?.totalCents) || 0,
+          priceDropped: false,
+          history: packageRequests.appendHistory(row.history, {
+            atMs: nowMs, action: "confirmed_link", byUid: "",
+            byName: String(row.sender?.name || ""), version,
+            totalCents: Number(row.estimate?.totalCents) || 0}),
+        }));
+        return {already: false, row};
+      });
+      if (!outcome.already) {
+        await notifyPackageRequestStaff(db, {
+          businessId: String(outcome.row.businessId), requestId: doc.id,
+          request: outcome.row, event: "confirmed"});
+      }
+      const confirmedVersion = outcome.already ?
+        outcome.row.confirmedVersion : version;
+      return {success: true, status: packageRequests.STATUS.CONFIRMED,
+        confirmedVersion, alreadyConfirmed: outcome.already};
+    },
+);
+
+exports.declinePackageEstimate = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      invoker: "public",
+    },
+    async (request) => {
+      await enforceCallableRateLimit(request, {
+        name: "declinePackageEstimate",
+        limit: 30,
+        windowSeconds: 60 * 60,
+      });
+      const reason = String(request.data?.reason || "").trim();
+      if (reason.length > packageRequests.LIMIT.REASON) {
+        throw requestInvalid(["text_too_long"]);
+      }
+      const db = admin.firestore();
+      const doc = await requestByToken(db, request.data?.token);
+      const nowMs = Date.now();
+      const outcome = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(doc.ref);
+        const row = fresh.data() || {};
+        const decision = packageRequests.customerDeclineDecision(row);
+        if (decision.action === "refuse") {
+          throw requestError("failed-precondition", decision.code,
+              decision.details);
+        }
+        if (decision.action === "already") return {already: true, row};
+        tx.update(doc.ref, closeRequestPatch(row,
+            packageRequests.STATUS.CUSTOMER_DECLINED,
+            {action: "customer_declined", byUid: "",
+              byName: String(row.sender?.name || "")}, nowMs, reason));
+        return {already: false, row};
+      });
+      if (!outcome.already) {
+        await notifyPackageRequestStaff(db, {
+          businessId: String(outcome.row.businessId), requestId: doc.id,
+          request: outcome.row, event: "customer_declined"});
+      }
+      return {success: true,
+        status: packageRequests.STATUS.CUSTOMER_DECLINED};
+    },
+);
+
+exports.setPackageRequestSettings = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const user = await requireBusinessManager(uid, businessId);
+      if (user.role !== "businessOwner" && user.role !== "admin") {
+        throw new HttpsError("permission-denied",
+            "Only the business owner can change the request settings");
+      }
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw requestError("not-found", "business_not_found");
+      }
+      const business = businessDoc.data() || {};
+      const locations = await listBusinessOfficeLocations(db, businessId,
+          business);
+      const checked = packageRequests.validateRequestSettings({
+        ...data,
+        timeZone: business.packageRequestSettings?.timeZone,
+      }, {locationIds: locations.map((loc) => String(loc.id))});
+      if (checked.errors.length > 0) throw requestInvalid(checked.errors);
+      const current = String(business.requestSlug || "");
+      const edits = Number(business.requestSlugEdits || 0);
+      let wanted = "";
+      if (checked.slug && checked.slug !== current) {
+        if (current && edits >= 1) {
+          throw requestError("failed-precondition", "slug_locked");
+        }
+        wanted = checked.slug;
+      } else if (!current) {
+        // First save: a slug from the name, the first free one.
+        const base = packageRequests.slugFromName(business.name || businessId);
+        for (let attempt = 0; attempt < 30 && !wanted; attempt++) {
+          const candidate = packageRequests.slugCandidate(base,
+              attempt ? attempt + 1 : 0);
+          const claim = await db.collection("packageRequestSlugs")
+              .doc(candidate).get();
+          if (!claim.exists ||
+              String(claim.data()?.businessId) === businessId) {
+            wanted = candidate;
+          }
+        }
+        if (!wanted) {
+          wanted = packageRequests.slugCandidate(base,
+              crypto.randomInt(100, 10000));
+        }
+      }
+      const slug = await db.runTransaction(async (tx) => {
+        if (!wanted) {
+          tx.update(businessRef, {
+            packageRequestSettings: checked.settings,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+          return current;
+        }
+        const claimRef = db.collection("packageRequestSlugs").doc(wanted);
+        const claim = await tx.get(claimRef);
+        if (claim.exists && String(claim.data()?.businessId) !== businessId) {
+          throw requestError("already-exists", "slug_taken");
+        }
+        tx.set(claimRef, {businessId,
+          updatedAt: FirestoreFieldValue.serverTimestamp()});
+        if (current) {
+          tx.delete(db.collection("packageRequestSlugs").doc(current));
+        }
+        tx.update(businessRef, {
+          packageRequestSettings: checked.settings,
+          requestSlug: wanted,
+          requestSlugEdits: current ? edits + 1 : edits,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return wanted;
+      });
+      await bumpPublicCatalogVersion();
+      return {success: true, requestSlug: slug,
+        requestLink: `${REQUEST_LINK_BASE}${slug}`,
+        settings: checked.settings};
+    },
+);
+
+exports.getPackageRequestLinkQr = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    async (request) => {
+      const uid = requireAuth(request);
+      const businessId = String(request.data?.businessId || "").trim();
+      await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+      const businessDoc = await admin.firestore().collection("businesses")
+          .doc(businessId).get();
+      const slug = String(businessDoc.data()?.requestSlug || "");
+      if (!slug) throw requestError("failed-precondition", "slug_missing");
+      const url = `${REQUEST_LINK_BASE}${slug}`;
+      const pngDataUrl = await QRCode.toDataURL(url, {
+        width: 1024, margin: 2, errorCorrectionLevel: "M",
+      });
+      return {success: true, url, pngDataUrl};
+    },
+);
+
+exports.startPackageEstimate = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    async (request) => {
+      const uid = requireAuth(request);
+      const db = admin.firestore();
+      const {ref, user, businessId} =
+        await loadStaffPackageRequest(db, uid, request.data);
+      const name = requestStaffName(user);
+      const nowMs = Date.now();
+      return db.runTransaction(async (tx) => {
+        const row = await readBusinessRequestIn(tx, ref, businessId);
+        const decision = packageRequests.lockDecision(row, {uid, nowMs});
+        if (decision.action === "closed") {
+          throw requestError("failed-precondition", "request_closed",
+              {status: row.status});
+        }
+        if (decision.action === "card") {
+          throw requestError("failed-precondition", "card_order");
+        }
+        if (decision.action === "locked") {
+          throw requestError("failed-precondition", "estimate_locked", {
+            lockedByName: decision.previous.name,
+            untilMs: decision.previous.untilMs,
+          });
+        }
+        const lock = {...decision.lock, name};
+        const patch = {lock, updatedAt:
+          FirestoreFieldValue.serverTimestamp()};
+        if (decision.action === "takeover") {
+          patch.history = packageRequests.appendHistory(row.history, {
+            atMs: nowMs, action: "lock_taken_over", byUid: uid, byName: name,
+            reason: decision.previous.name});
+        }
+        tx.update(ref, patch);
+        return {success: true, lock,
+          version: packageRequests.estimateVersion(row)};
+      });
+    },
+);
+
+exports.releasePackageEstimate = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    async (request) => {
+      const uid = requireAuth(request);
+      const db = admin.firestore();
+      const {ref, businessId} =
+        await loadStaffPackageRequest(db, uid, request.data);
+      await db.runTransaction(async (tx) => {
+        const row = await readBusinessRequestIn(tx, ref, businessId);
+        if (String(row.lock?.uid || "") !== uid) return;
+        tx.update(ref, {lock: null,
+          updatedAt: FirestoreFieldValue.serverTimestamp()});
+      });
+      return {success: true};
+    },
+);
+
+exports.sendPackageEstimate = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      invoker: "public",
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const db = admin.firestore();
+      const data = request.data || {};
+      const {ref, user, businessId} =
+        await loadStaffPackageRequest(db, uid, data);
+      const name = requestStaffName(user);
+      const nowMs = Date.now();
+      const sent = await db.runTransaction(async (tx) => {
+        const row = await readBusinessRequestIn(tx, ref, businessId);
+        const refusal = packageRequests.estimateSendRefusal(row, {
+          uid, nowMs, baseVersion: data.baseVersion});
+        if (refusal) {
+          throw requestError("failed-precondition", refusal.code,
+              refusal.details);
+        }
+        const {estimate: body, errors} =
+          packageRequests.cleanEstimateInput(data, row, nowMs);
+        if (errors.length > 0) throw requestInvalid(errors);
+        const version = packageRequests.estimateVersion(row) + 1;
+        const after = packageRequests.statusAfterEstimate(row,
+            body.totalCents);
+        const estimate = {
+          ...body,
+          version,
+          sentByUid: uid,
+          sentByName: name,
+          sentAtMs: nowMs,
+          sentAt: FirestoreTimestamp.fromMillis(nowMs),
+          auto: false,
+        };
+        const cents = new Map(body.pieces.map((p) => [p.id, p.cents]));
+        tx.update(ref, requestPatch(row, {
+          status: after.status,
+          estimate,
+          estimateHistory: [...(Array.isArray(row.estimateHistory) ?
+            row.estimateHistory : []), estimate].slice(-50),
+          pieces: (row.pieces || []).map((p) => ({...p,
+            estimateCents: cents.has(p.id) ? cents.get(p.id) :
+              p.estimateCents})),
+          priceDropped: after.priceDropped,
+          lock: null,
+          history: packageRequests.appendHistory(row.history, {
+            atMs: nowMs, action: "estimate_sent", byUid: uid, byName: name,
+            version, totalCents: body.totalCents}),
+        }));
+        return {version, ...after, totalCents: body.totalCents};
+      });
+      await queuePackageRequestMessage(db, {requestId: ref.id,
+        update: `estimate_v${sent.version}`});
+      return {success: true, version: sent.version, status: sent.status,
+        totalCents: sent.totalCents,
+        reconfirmRequired: sent.reconfirmRequired,
+        priceDropped: sent.priceDropped};
+    },
+);
+
+exports.confirmPackageRequestByPhone = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    async (request) => {
+      const uid = requireAuth(request);
+      const db = admin.firestore();
+      const data = request.data || {};
+      const {ref, user, businessId} =
+        await loadStaffPackageRequest(db, uid, data);
+      const name = requestStaffName(user);
+      const nowMs = Date.now();
+      const already = await db.runTransaction(async (tx) => {
+        const row = await readBusinessRequestIn(tx, ref, businessId);
+        const decision = packageRequests.confirmDecision(row, data.version);
+        if (decision.action === "refuse") {
+          throw requestError("failed-precondition", decision.code,
+              decision.details);
+        }
+        if (decision.action === "already") return true;
+        tx.update(ref, requestPatch(row, {
+          status: packageRequests.STATUS.CONFIRMED,
+          confirmedVersion: data.version,
+          confirmedAt: FirestoreTimestamp.fromMillis(nowMs),
+          confirmedAtMs: nowMs,
+          confirmedVia: packageRequests.CONFIRMED_VIA.STAFF_PHONE,
+          confirmedTotalCents: Number(row.estimate?.totalCents) || 0,
+          priceDropped: false,
+          lock: null,
+          history: packageRequests.appendHistory(row.history, {
+            atMs: nowMs, action: "confirmed_phone", byUid: uid, byName: name,
+            version: data.version,
+            totalCents: Number(row.estimate?.totalCents) || 0}),
+        }));
+        return false;
+      });
+      return {success: true, status: packageRequests.STATUS.CONFIRMED,
+        alreadyConfirmed: already};
+    },
+);
+
+/**
+ * Staff decline or cancel, with a reason.
+ *
+ * @param {object} request The callable request.
+ * @param {"decline"|"cancel"} kind Which.
+ * @return {Promise<object>} {success, status}.
+ */
+async function closePackageRequestByStaff(request, kind) {
+  const uid = requireAuth(request);
+  const db = admin.firestore();
+  const data = request.data || {};
+  const {reason, error} = packageRequests.cleanReason(data.reason);
+  if (error) throw requestInvalid([error]);
+  const {ref, user, businessId} = await loadStaffPackageRequest(db, uid,
+      data);
+  const name = requestStaffName(user);
+  const nowMs = Date.now();
+  const status = kind === "decline" ? packageRequests.STATUS.DECLINED :
+    packageRequests.STATUS.CANCELLED;
+  await db.runTransaction(async (tx) => {
+    const row = await readBusinessRequestIn(tx, ref, businessId);
+    const refusal = packageRequests.staffCloseRefusal(row, kind);
+    if (refusal) {
+      throw requestError("failed-precondition", refusal.code,
+          refusal.details);
+    }
+    tx.update(ref, closeRequestPatch(row, status, {
+      action: kind === "decline" ? "declined" : "cancelled",
+      byUid: uid, byName: name}, nowMs, reason));
+  });
+  return {success: true, status};
+}
+
+exports.declinePackageRequest = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    (request) => closePackageRequestByStaff(request, "decline"),
+);
+
+exports.cancelPackageRequest = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    (request) => closePackageRequestByStaff(request, "cancel"),
+);
+
+exports.receivePackageRequest = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      invoker: "public",
+      // The received message is queued here (queuePackageReceived).
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const db = admin.firestore();
+      const data = request.data || {};
+      const {ref, user, businessId} =
+        await loadStaffPackageRequest(db, uid, data);
+      const first = (await ref.get()).data() || {};
+      if (first.status === packageRequests.STATUS.RECEIVED &&
+          first.lineId) {
+        return {success: true, lineId: first.lineId,
+          trackingCode: String(first.trackingCode || ""), paidCents: 0,
+          paymentId: "", alreadyReceived: true};
+      }
+      if (!packageRequests.isOpenStatus(first.status)) {
+        throw requestError("failed-precondition", "request_closed",
+            {status: first.status});
+      }
+      const card = packageRequests.isCardPaid(first);
+      const {prices, errors} =
+        requestReceive.cleanReceivePrices(data.pieces, first);
+      if (data.pieces !== undefined && data.pieces !== null &&
+          !Array.isArray(data.pieces)) {
+        errors.push("pieces_required");
+      }
+      const totalCents = requestReceive.receivedTotalCents(prices, first);
+      const payment = containerRegistrationPayment(data);
+      if (payment && card) errors.push("card_order");
+      if (payment && !card) {
+        errors.push(...validateContainerLinePayment(payment, {
+          priceCents: totalCents, paidCents: 0}));
+      }
+      if (errors.length > 0) {
+        throw new HttpsError("invalid-argument",
+            packageRequests.REQUEST_MESSAGES[errors[0]] ||
+              containerMessage(errors),
+            {reason: errors[0], reasons: errors});
+      }
+      if (payment && !await businessPersonProfile(db, businessId,
+          payment.receivedByStaffId)) {
+        throw receivedByInvalid();
+      }
+      const trackingCode = await generateTrackingCode(
+          CONTAINER_LINE_CODE_PREFIX, "containerLines");
+      const lineRef = db.collection("containerLines").doc();
+      const nowMs = Date.now();
+      const cardPaidCents = card ? Math.min(
+          Number(first.payment?.paidCents) || 0,
+          totalCents === null ? Infinity : totalCents) : 0;
+      const paymentRecord = payment ?
+        containerLinePaymentRecord(payment, uid) :
+        (card && cardPaidCents > 0 ? {
+          amountCents: cardPaidCents, method: "other",
+          note: "Paid online by card", receivedByStaffId: uid,
+          recordedByStaffId: uid, reverted: false,
+          source: "card_order"} : null);
+      const payRef = paymentRecord ?
+        db.collection("containerLinePayments").doc() : null;
+      const name = requestStaffName(user);
+      const result = await db.runTransaction(async (tx) => {
+        const row = await readBusinessRequestIn(tx, ref, businessId);
+        if (row.status === packageRequests.STATUS.RECEIVED && row.lineId) {
+          return {already: true, lineId: row.lineId,
+            trackingCode: String(row.trackingCode || "")};
+        }
+        if (!packageRequests.isOpenStatus(row.status)) {
+          throw requestError("failed-precondition", "request_closed",
+              {status: row.status});
+        }
+        // Re-read against the request as it is now: its pieces decide which
+        // ids are its own.
+        const final = requestReceive.cleanReceivePrices(data.pieces, row);
+        if (final.errors.length > 0) {
+          throw new HttpsError("invalid-argument",
+              packageRequests.REQUEST_MESSAGES[final.errors[0]] ||
+                "Check the pieces.",
+              {reason: final.errors[0], reasons: final.errors});
+        }
+        const line = requestReceive.requestLineRecord(row, {
+          lineId: lineRef.id,
+          requestId: ref.id,
+          pieces: final.pieces,
+          prices: final.prices,
+          payOnArrival: data.payOnArrival === true,
+          staffUid: uid,
+          receivedAt: FirestoreTimestamp.fromMillis(nowMs),
+          receivedAtMs: nowMs,
+        });
+        const paidCents = paymentRecord ? paymentRecord.amountCents : 0;
+        tx.set(lineRef, {
+          businessId,
+          ...line,
+          paidCents,
+          trackingCode,
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        if (payRef) {
+          tx.set(payRef, {businessId, lineId: lineRef.id, ...paymentRecord,
+            createdAt: FirestoreFieldValue.serverTimestamp()});
+        }
+        tx.update(ref, requestPatch(row, {
+          status: packageRequests.STATUS.RECEIVED,
+          lineId: lineRef.id,
+          trackingCode,
+          receivedAt: FirestoreTimestamp.fromMillis(nowMs),
+          receivedAtMs: nowMs,
+          closedAt: FirestoreTimestamp.fromMillis(nowMs),
+          closedAtMs: nowMs,
+          lock: null,
+          history: packageRequests.appendHistory(
+              final.added || final.removed ?
+                packageRequests.appendHistory(row.history, {
+                  atMs: nowMs, action: "pieces_changed", byUid: uid,
+                  byName: name, piecesAdded: final.added,
+                  piecesRemoved: final.removed}) : row.history,
+              {atMs: nowMs, action: "received", byUid: uid, byName: name,
+                ...(Number.isInteger(totalCents) ? {totalCents} : {})}),
+        }));
+        return {already: false, lineId: lineRef.id, trackingCode, paidCents,
+          line};
+      });
+      if (result.already) {
+        return {success: true, lineId: result.lineId,
+          trackingCode: result.trackingCode, paidCents: 0, paymentId: "",
+          alreadyReceived: true};
+      }
+      await queuePackageReceived(db, {lineRef, businessId, containerId: ""});
+      await rememberLotCustomer(db, {
+        businessId,
+        seen: {customerName: result.line.customerName,
+          customerPhone: result.line.customerPhone, customerEmail: ""},
+        source: "container",
+        staffId: uid,
+      });
+      await containerLineAudit(businessId, lineRef.id, result.line,
+          "line_added", uid,
+          `Received ${containerLineTitle(result.line)} from request ` +
+          `${String(first.code || "")}` +
+          (result.line.destinationCountryName ?
+            `, going to ${result.line.destinationCountryName}` : "") +
+          ", waiting for a container");
+      return {success: true, lineId: lineRef.id, trackingCode,
+        paidCents: result.paidCents, paymentId: payRef ? payRef.id : "",
+        alreadyReceived: false};
+    },
+);
+
+/**
+ * A paid card barrel shipment of a business that keeps card booking becomes
+ * a confirmed request (§8.10). Idempotent: the id is the shipment's.
+ *
+ * @param {string} shipmentId The barrelShipments id.
+ * @param {object} shipment Its data after the payment.
+ * @return {Promise<void>}
+ */
+async function syncCardBarrelRequest(shipmentId, shipment) {
+  try {
+    const db = admin.firestore();
+    const businessId = String(shipment?.businessId || "").trim();
+    if (!businessId) return;
+    const businessDoc = await db.collection("businesses").doc(businessId)
+        .get();
+    const business = businessDoc.data() || {};
+    const settings = packageRequests.requestSettingsOf(business);
+    if (!settings.cardBarrelBooking) return;
+    const ref = db.collection(PACKAGE_REQUESTS).doc(`card_${shipmentId}`);
+    const nowMs = Date.now();
+    let created = null;
+    for (let attempt = 0; attempt < 6 && !created; attempt++) {
+      const code = newRequestCode();
+      try {
+        created = await db.runTransaction(async (tx) => {
+          const existing = await tx.get(ref);
+          if (existing.exists) return {exists: true};
+          const body = packageRequests.cardRequestFromShipment(shipment, {
+            shipmentId, businessName: business.name, nowMs,
+            timeZone: settings.timeZone});
+          const record = {
+            ...body,
+            code,
+            token: crypto.randomBytes(32).toString("base64url"),
+            estimate: {...body.estimate,
+              sentAt: FirestoreTimestamp.fromMillis(nowMs)},
+            confirmedAt: FirestoreTimestamp.fromMillis(nowMs),
+            confirmedAtMs: nowMs,
+            receivedAt: null,
+            receivedAtMs: 0,
+            history: packageRequests.appendHistory([], {
+              atMs: nowMs, action: "confirmed_card", byUid: "",
+              byName: body.sender.name, version: 1,
+              totalCents: body.estimate.totalCents}),
+            closedAt: null,
+            closedAtMs: 0,
+            photosDeletedAt: null,
+            createdAt: FirestoreTimestamp.fromMillis(nowMs),
+            createdAtMs: nowMs,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          };
+          tx.create(db.collection("packageRequestCodes").doc(code),
+              {requestId: ref.id,
+                createdAt: FirestoreFieldValue.serverTimestamp()});
+          tx.create(ref, {...record, ...requestTimerFields(record)});
+          return {exists: false, record};
+        });
+      } catch (error) {
+        if (error?.code !== 6 && error?.code !== "already-exists") throw error;
+      }
+    }
+    if (created && !created.exists) {
+      await notifyPackageRequestStaff(db, {businessId, requestId: ref.id,
+        request: created.record, event: "card_paid"});
+    }
+  } catch (error) {
+    logger.error("Card barrel request not created", {
+      shipmentId, error: String(error?.message || error)});
+  }
+}
+
+/**
+ * A refunded / cancelled card barrel shipment cancels its open request.
+ *
+ * @param {string} shipmentId The barrelShipments id.
+ * @param {object} shipment Its data after the write.
+ * @return {Promise<void>}
+ */
+async function cancelCardBarrelRequest(shipmentId, shipment) {
+  try {
+    const db = admin.firestore();
+    const ref = db.collection(PACKAGE_REQUESTS).doc(`card_${shipmentId}`);
+    const nowMs = Date.now();
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const row = snap.data() || {};
+      if (!packageRequests.isOpenStatus(row.status)) return;
+      tx.update(ref, closeRequestPatch(row, packageRequests.STATUS.CANCELLED,
+          {action: "cancelled", byUid: "", byName: ""}, nowMs,
+          String(shipment?.paymentStatus) === "refunded" ||
+            String(shipment?.status) === "refunded" ?
+            "Card payment refunded" : "Card order cancelled"));
+    });
+  } catch (error) {
+    logger.error("Card barrel request not cancelled", {
+      shipmentId, error: String(error?.message || error)});
+  }
+}
+
+/**
+ * Runs one request's due timer (§8.9): reminders, the 3-day staff alert,
+ * expiry and photo deletion. Re-decided from the stored request, so a timer
+ * written by an older rule is only bookkeeping.
+ *
+ * @param {object} db Firestore.
+ * @param {object} ref The request.
+ * @param {number} nowMs Now.
+ * @return {Promise<string>} The action taken ("" for none).
+ */
+async function runPackageRequestTimer(db, ref, nowMs) {
+  const first = (await ref.get()).data();
+  if (!first) return "";
+  // A received request's photos wait for its line to be ready for pickup.
+  let extra = {};
+  if (first.status === packageRequests.STATUS.RECEIVED && first.lineId) {
+    const line = (await db.collection("containerLines")
+        .doc(String(first.lineId)).get()).data() || {};
+    let arrivedAtMs = 0;
+    if (String(line.containerStatus) === "arrived" && line.containerId) {
+      const box = (await db.collection("containers")
+          .doc(String(line.containerId)).get()).data() || {};
+      arrivedAtMs = packageRequests.toMillis(box.arrivedAt) || nowMs;
+    }
+    extra = arrivedAtMs ? {lineArrivedAtMs: arrivedAtMs} :
+      {checkedAtMs: nowMs};
+  }
+  const after = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return {action: ""};
+    const row = snap.data() || {};
+    const timer = packageRequests.nextTimer(row, extra);
+    if (!timer || timer.atMs > nowMs) {
+      tx.update(ref, requestTimerFields(row, extra));
+      return {action: ""};
+    }
+    const reminders = {...(row.reminders || {})};
+    switch (timer.action) {
+      case packageRequests.ACTION.EXPIRE:
+        tx.update(ref, closeRequestPatch(row, packageRequests.STATUS.EXPIRED,
+            {action: "expired", byUid: "", byName: ""}, nowMs));
+        return {action: timer.action, row};
+      case packageRequests.ACTION.STAFF_ALERT:
+        reminders.staffAlert3dAt = nowMs;
+        break;
+      case packageRequests.ACTION.ESTIMATE_REMINDER:
+        reminders.estimate24hAt = nowMs;
+        break;
+      case packageRequests.ACTION.DROPOFF_REMINDER:
+        reminders.dropoff3dAt = nowMs;
+        break;
+      case packageRequests.ACTION.DELETE_PHOTOS:
+        tx.update(ref, requestPatch(row, {
+          photosDeletedAt: FirestoreTimestamp.fromMillis(nowMs)}, extra));
+        return {action: timer.action, row};
+      default:
+        tx.update(ref, requestTimerFields(row, extra));
+        return {action: ""};
+    }
+    const patch = {reminders};
+    if (timer.action !== packageRequests.ACTION.STAFF_ALERT) {
+      patch.history = packageRequests.appendHistory(row.history, {
+        atMs: nowMs, action: "reminder_sent", byUid: "", byName: "",
+        reason: timer.action});
+    }
+    tx.update(ref, requestPatch(row, patch, extra));
+    return {action: timer.action, row};
+  });
+  switch (after.action) {
+    case packageRequests.ACTION.STAFF_ALERT:
+      await notifyPackageRequestStaff(db, {
+        businessId: String(after.row.businessId), requestId: ref.id,
+        request: after.row, event: "stale_new"});
+      break;
+    case packageRequests.ACTION.ESTIMATE_REMINDER:
+      await queuePackageRequestMessage(db, {requestId: ref.id,
+        update: "estimate_reminder"});
+      break;
+    case packageRequests.ACTION.DROPOFF_REMINDER:
+      await queuePackageRequestMessage(db, {requestId: ref.id,
+        update: "dropoff_reminder"});
+      break;
+    case packageRequests.ACTION.DELETE_PHOTOS: {
+      const bucket = requestPhotoBucket();
+      const paths = (after.row.pieces || [])
+          .flatMap((p) => Array.isArray(p.photoPaths) ? p.photoPaths : []);
+      await Promise.all(paths.map((path) => bucket.file(path)
+          .delete({ignoreNotFound: true})
+          .catch((error) => logger.warn("Request photo not deleted", {
+            path, error: String(error)}))));
+      break;
+    }
+    default:
+      break;
+  }
+  return after.action;
+}
+
+// Hourly: every request whose timer is due, oldest first, a page at a time,
+// under a deadline; whatever is left is picked up next hour.
+exports.sweepPackageRequests = onSchedule(
+    {
+      schedule: "every 60 minutes",
+      timeZone: "America/New_York",
+      timeoutSeconds: 300,
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+    },
+    async () => {
+      const db = admin.firestore();
+      const startedMs = Date.now();
+      const deadlineMs = startedMs + 240 * 1000;
+      const tally = {};
+      let cursor = null;
+      while (Date.now() < deadlineMs) {
+        let query = db.collection(PACKAGE_REQUESTS)
+            .where("nextActionAt", "<=",
+                FirestoreTimestamp.fromMillis(startedMs))
+            .orderBy("nextActionAt")
+            .limit(PACKAGE_REQUEST_SWEEP_PAGE);
+        if (cursor) query = query.startAfter(cursor);
+        const snap = await query.get();
+        if (snap.empty) break;
+        for (const doc of snap.docs) {
+          if (Date.now() >= deadlineMs) break;
+          try {
+            const action = await runPackageRequestTimer(db, doc.ref,
+                Date.now());
+            if (action) tally[action] = (tally[action] || 0) + 1;
+          } catch (error) {
+            logger.warn("Package request timer failed", {
+              requestId: doc.id, error: String(error?.message || error)});
+          }
+        }
+        cursor = snap.docs[snap.docs.length - 1];
+        if (snap.size < PACKAGE_REQUEST_SWEEP_PAGE) break;
+      }
+      logger.info("Package requests swept", tally);
+    },
+);

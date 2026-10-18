@@ -180,6 +180,7 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "query", what: "useBusinessHasRecords probe (limit 1)", shapes: [raw("cars", [eq("businessId")])] },
   { file: L("business-data.ts"), kind: "query", what: "useBusinessCountsByValue", shapes: [raw("lotActivities", [eq("businessId"), eq("activityTypeId")])] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useWaitingPackages", shapes: [bc("containerLines", { pageSize: null, where: [["containerStatus", "==", "waiting"]] })] },
+  { file: L("business-data.ts"), kind: "useBusinessCollection", what: "usePackageRequests", shapes: [bc("packageRequests", { pageSize: null, orderBy: "createdAt", direction: "desc", where: [["status", "in", ["new", "estimate_sent", "confirmed"]]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryItems on sale and archived", shapes: [true, false].map((archived) => bc("inventoryItems", { pageSize: null, where: [["archived", "==", archived]] })) },
   // Sales: every store at once (owner, all-stores staff), or one store only (staff who work in one store: the rules' shape).
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventorySales newest first, all stores or one store", shapes: [bc("inventorySales", {}), bc("inventorySales", { where: [eq("storeId")] })] },
