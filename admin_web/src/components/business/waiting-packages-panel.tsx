@@ -114,6 +114,8 @@ type WaitingPackagesPanelProps = {
   onFlash: (message: string) => void;
   /** Counters stay off while the business is a preview. */
   enabled: boolean;
+  /** Confirmed package requests, shown as Expected above the packages in the shop. */
+  expected?: ReactNode;
 };
 
 type Modal = "" | "form" | "payment" | "labels";
@@ -140,6 +142,7 @@ export function WaitingPackagesPanel({
   staffOptions,
   onFlash,
   enabled,
+  expected = null,
 }: WaitingPackagesPanelProps) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   // A decimal comma in French; readMoneyInput reads "45,50" and "45.50" alike.
@@ -365,6 +368,7 @@ export function WaitingPackagesPanel({
       </div>
       <p className="panel-lede">Packages customers dropped off before a container was chosen. Print the label now; add them to a container that goes to the same country when it is loading.</p>
       {error && <div className="lst-form-error" role="alert">{error}</div>}
+      {expected}
 
       {loading && rows.length === 0 ? (
         <div className="empty-state"><RefreshCw className="spin" size={16} /> Loading…</div>

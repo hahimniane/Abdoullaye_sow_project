@@ -45,7 +45,7 @@ test("the console routes the tab to ContainersPanel like every other panel", () 
   // The business record rides along so the phone pickers open on its country.
   // A package's "Open in business console" link rides along as the container
   // and line to open.
-  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+focusContainerId=\{containerLink\?\.containerId \?\? ""\}\s+focusLineId=\{containerLink\?\.lineId \?\? ""\}\s+\/>\s*\)\}/);
+  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+focusContainerId=\{containerLink\?\.containerId \?\? ""\}\s+focusLineId=\{containerLink\?\.lineId \?\? ""\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : ""\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
   assert.match(consoleSource, /containers: <Container \{\.\.\.props\} \/>,/, "the sidebar icon map must cover the tab");
 });
 

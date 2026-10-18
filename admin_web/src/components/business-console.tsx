@@ -712,6 +712,8 @@ export function BusinessConsole({
               previewMode={previewMode}
               focusContainerId={containerLink?.containerId ?? ""}
               focusLineId={containerLink?.lineId ?? ""}
+              focusView={notificationFocusView === "requests" ? "requests" : ""}
+              focusRequestId={notificationFocusView === "requests" ? notificationFocusId : ""}
             />
           )}
           {activeTab === "invoices" && (

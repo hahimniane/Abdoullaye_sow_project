@@ -254,6 +254,9 @@ export function businessTargetForNotification(
       return {tab: "profile"};
     case "barrel_shipment_status":
       return {tab: "barrels", focusId};
+    // A customer's package request: Containers, the Requests list, that one.
+    case "package_request":
+      return {tab: "containers", focusId, panelView: "requests"};
     case "freight_shipment_status":
     case "freight_balance_due":
     case "freight_refund_issued":

@@ -36,6 +36,8 @@ import {
   useBusinessStaff,
   useLiveDoc,
   useWaitingPackages,
+  usePackageRequests,
+  useBusinessOfficeLocations,
 } from "@/lib/business-data";
 import { useDocsWhereIn } from "@/lib/use-paged-query";
 import { findBusinessVehicleRecord } from "@/lib/vin-records";
@@ -111,6 +113,7 @@ import { ContainerLabelsDialog } from "@/components/business/container-labels-di
 import { AddWaitingPackagesDialog } from "@/components/business/add-waiting-packages-dialog";
 import { ContactPhone } from "@/components/business/contact-phone";
 import { PackageMoney, PackageSize, WaitingPackagesPanel } from "@/components/business/waiting-packages-panel";
+import { ExpectedRequestsSection, PackageRequestsPanel } from "@/components/business/package-requests-panel";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import {
   lotCustomerFromRow,
@@ -142,12 +145,15 @@ type ContainersPanelProps = {
    */
   focusContainerId?: string;
   focusLineId?: string;
+  /** A package request notification: open the Requests list on that one. */
+  focusView?: string;
+  focusRequestId?: string;
 };
 
 type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels" | "assign";
 
 /** The two lists the panel offers: the containers, and the packages still waiting for one. */
-type ListView = "containers" | "waiting";
+type ListView = "containers" | "waiting" | "requests";
 
 function StatusBadge({ status }: { status: LineStage }) {
   return <span className={statusPillClass(LINE_STAGE_TONES[status])}>{LINE_STAGE_LABELS[status]}</span>;
@@ -192,6 +198,8 @@ export function ContainersPanel({
   previewMode = false,
   focusContainerId = "",
   focusLineId = "",
+  focusView = "",
+  focusRequestId = "",
 }: ContainersPanelProps) {
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   useCarCatalog();
@@ -236,6 +244,10 @@ export function ContainersPanel({
   // Packages dropped off and not on a container yet: their own list, and
   // searchable beside the loaded lines.
   const waiting = useWaitingPackages(businessId, enabled);
+  // Customers' package requests: the Requests list, and Expected in Waiting.
+  const requests = usePackageRequests(businessId, enabled);
+  const officeLocations = useBusinessOfficeLocations(businessId, enabled);
+  const openRequestCount = requests.rows.filter((row) => row.status === "new" || row.status === "estimate_sent").length;
   const destinations = useBusinessDestinations(businessId, enabled);
   const staff = useBusinessStaff(businessId, enabled);
   // The cars in the lot right now (the line form offers them), whole and
@@ -253,7 +265,14 @@ export function ContainersPanel({
   const [destinationFilter, setDestinationFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
-  const [view, setView] = useState<ListView>("containers");
+  const [view, setView] = useState<ListView>(focusView === "requests" ? "requests" : "containers");
+  // A request notification opened while the panel is already on screen.
+  useEffect(() => {
+    if (focusView === "requests") {
+      setSelectedId("");
+      setView("requests");
+    }
+  }, [focusView, focusRequestId]);
 
   const [modal, setModal] = useState<ContainerModal>("");
   const [busy, setBusy] = useState(false);
@@ -938,7 +957,7 @@ export function ContainersPanel({
   // The two lists the panel offers, with how many each holds.
   const viewTabs = (
     <div className="service-segments" role="tablist" aria-label="Container lists">
-      {([["containers", "Containers", containers.rows.length], ["waiting", "Waiting list", waiting.rows.length]] as [ListView, string, number][]).map(([id, label, count]) => (
+      {([["containers", "Containers", containers.rows.length], ["waiting", "Waiting list", waiting.rows.length], ["requests", "Requests", openRequestCount]] as [ListView, string, number][]).map(([id, label, count]) => (
         <span
           key={id}
           role="button"
@@ -1078,8 +1097,30 @@ export function ContainersPanel({
             </div>
           )}
         </article>
+      ) : view === "requests" ? (
+        <PackageRequestsPanel
+          businessId={businessId}
+          business={business}
+          rows={requests.rows}
+          loading={requests.loading}
+          error={requests.error}
+          tabs={viewTabs}
+          officeLocations={officeLocations.rows}
+          onFlash={setFlash}
+          enabled={enabled}
+          focusId={focusRequestId}
+        />
       ) : view === "waiting" ? (
         <WaitingPackagesPanel
+          expected={
+            <ExpectedRequestsSection
+              businessId={businessId}
+              rows={requests.rows}
+              staffOptions={staffOptions}
+              onFlash={setFlash}
+              enabled={enabled}
+            />
+          }
           businessId={businessId}
           rows={waiting.rows}
           loading={waiting.loading}
