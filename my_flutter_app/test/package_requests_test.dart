@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
@@ -750,6 +751,42 @@ void main() {
           'https://customer.laawoldigital.com/?service=package-request',
         )),
         const FormRequestLink(''),
+      );
+    });
+
+    test('Android and iOS hand /e/ and /r/ links to the app', () {
+      String read(String path) => File(path).readAsStringSync();
+      final manifest = read('android/app/src/main/AndroidManifest.xml');
+      final activity = manifest.substring(
+          manifest.indexOf('android:name=".MainActivity"'),
+          manifest.indexOf('</activity>'));
+      for (final prefix in ['/e/', '/r/']) {
+        // Its own verified https filter on the customer host, like /t/.
+        final at = activity.indexOf('android:pathPrefix="$prefix"');
+        expect(at, greaterThan(0), reason: prefix);
+        final filter = activity.substring(
+            activity.lastIndexOf('<intent-filter', at),
+            activity.indexOf('</intent-filter>', at));
+        expect(filter, contains('android:autoVerify="true"'));
+        expect(filter, contains('android.intent.action.VIEW'));
+        expect(filter, contains('android.intent.category.BROWSABLE'));
+        expect(filter, contains('android:scheme="https"'));
+        expect(filter, contains('android:host="customer.laawoldigital.com"'));
+      }
+      final aasa =
+          read('../admin_web/public/.well-known/apple-app-site-association');
+      expect(aasa, contains('/e/*'));
+      expect(aasa, contains('/r/*'));
+      // What either platform hands over, the handler routes.
+      expect(
+        packageRequestLinkFromUri(
+            Uri.parse('https://customer.laawoldigital.com/e/$token')),
+        isA<EstimateRequestLink>(),
+      );
+      expect(
+        packageRequestLinkFromUri(
+            Uri.parse('https://customer.laawoldigital.com/r/dala-shipping')),
+        isA<FormRequestLink>(),
       );
     });
 

@@ -354,8 +354,9 @@ void main() {
         manifest.indexOf('</activity>'));
     expect(activity, contains('android:pathPrefix="/t/"'));
     expect(activity, contains('android:pathPrefix="/i/"'));
-    // Both are verified https filters on the label host, nothing wider.
-    expect('android:autoVerify="true"'.allMatches(activity).length, 2);
+    // Verified https filters on the label host (tracking, tags, and the
+    // package-request /e/ and /r/ pages), nothing wider.
+    expect('android:autoVerify="true"'.allMatches(activity).length, 4);
     expect(activity, isNot(contains('android:pathPrefix="/"')));
     expect(doc, contains('/i/*'));
     // iOS routes by the same associated domain; the path list is the web's.

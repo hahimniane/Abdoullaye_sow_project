@@ -67,6 +67,29 @@
                     android:host="customer.laawoldigital.com"
                     android:pathPrefix="/i/"/>
             </intent-filter>
+            <!-- Package requests (docs/PACKAGE_REQUESTS.md §8.8): the estimate
+                 page (/e/<token>, the WhatsApp button) and a business's
+                 request form (/r/<slug>; laawoldigital.com/r/ redirects here)
+                 open the app's own screens, as iOS does through the
+                 apple-app-site-association /e/* and /r/* paths. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="customer.laawoldigital.com"
+                    android:pathPrefix="/e/"/>
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="customer.laawoldigital.com"
+                    android:pathPrefix="/r/"/>
+            </intent-filter>
             <!-- The app_links plugin handles those links; Flutter's own deep
                  linking would push the path as a named route. -->
             <meta-data
