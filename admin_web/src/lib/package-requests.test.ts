@@ -6,6 +6,7 @@ import { customerServiceFromLocation } from "./customer-service-intent.ts";
 import { serviceEntryApplies } from "./console-routing.ts";
 import { translateValue } from "./french-dom.ts";
 import { businessTargetForNotification } from "./notification-routing.ts";
+import { newPieceDraft as newLinePieceDraft } from "./piece-drafts.ts";
 import {
   REQUEST_ERROR_MESSAGES,
   REQUEST_STATUS_LABELS,
@@ -29,13 +30,14 @@ import {
   moneyText,
   newPieceDraft,
   piecesProblems,
-  piecesSummary,
+  pieceSummaryText,
+  pieceKindLabel,
   plannedDayText,
   readDollars,
-  receivePiecesPayload,
-  newReceiveItem,
-  receiveItemsFrom,
-  receiveItemsPayload,
+  receiveDraftsFrom,
+  receivePayload,
+  receivePrefillCents,
+  receiveTotalCents,
   receivedFlash,
   requestCountries,
   requestFailure,
@@ -126,8 +128,11 @@ test("dates are the business's and read month first in English", () => {
 test("money and pieces are worded in the page's language", () => {
   assert.equal(moneyText(125000, "en"), "$1,250.00");
   assert.equal(moneyText(125000, "fr"), "1 250,00 $");
-  assert.equal(piecesSummary([{ kind: "barrel" }, { kind: "barrel" }, { kind: "box" }], "en"), "2 barrels, 1 box");
-  assert.equal(piecesSummary([{ kind: "other" }], "fr"), "1 colis");
+  // A request's pieces read as phase 1 reads a line's (pieceSummaryText).
+  assert.equal(pieceSummaryText([{ kind: "barrel" }, { kind: "barrel" }, { kind: "box" }], "en"), "2 barrels, 1 box");
+  assert.equal(pieceSummaryText([{ kind: "barrel" }, { kind: "box", description: "Clothes and shoes" }, { kind: "other", description: "Shoes" }], "en"), "1 barrel, 1 box, Shoes");
+  assert.equal(pieceSummaryText([{ kind: "other", description: "TV" }, { kind: "other", description: "Fan" }], "fr"), "2 articles");
+  assert.equal(pieceKindLabel("barrel", "fr"), "Baril");
   assert.equal(readDollars("45"), 4500);
   assert.equal(readDollars("45,50"), 4550);
   assert.equal(readDollars("1,250.00"), 125000);
@@ -274,21 +279,41 @@ test("the estimate editor prefills the barrel price and checks every price", () 
 });
 
 test("Received sends final prices: all or none", () => {
-  const r = row();
-  assert.deepEqual(receivePiecesPayload(r, { p1: "150", p2: "40" }), { pieces: [{ id: "p1", priceCents: 15000 }, { id: "p2", priceCents: 4000 }], error: "" });
-  assert.equal(receivePiecesPayload(r, { p1: "150", p2: "" }).error, "price_required");
-  assert.deepEqual(receivePiecesPayload(r, { p1: "", p2: "" }).pieces.map((p) => p.priceCents), [null, null]);
+  const priced = receiveDraftsFrom(row()).map((d, i) => ({ ...d, price: ["150", "40"][i] }));
+  assert.deepEqual(receivePayload(priced), { error: "", pieces: [
+    { id: "p1", kind: "barrel", description: "", sizeIn: null, priceCents: 15000 },
+    { id: "p2", kind: "box", description: "TV", sizeIn: null, priceCents: 4000 }] });
+  assert.equal(receiveTotalCents(priced), 19000);
+  assert.equal(receivePayload(priced.map((d, i) => (i === 1 ? { ...d, price: "" } : d))).error, "price_required");
+  assert.deepEqual(receivePayload(priced.map((d) => ({ ...d, price: "" }))).pieces.map((p) => p.priceCents), [null, null]);
+});
+
+test("Received opens in phase 1's pieces editor, the pickup fee inside the prices", () => {
+  // The same rule as functions/request_receive.js receivePrefillCents.
+  const estimate = { version: 1, totalCents: 22001, pieces: [{ id: "p1", cents: 15000 }, { id: "p2", cents: 4500 }], pickupFeeCents: 2501 };
+  assert.deepEqual([...receivePrefillCents(row({ estimate }))], [["p1", 15000], ["p2", 4500]]);
+  assert.deepEqual([...receivePrefillCents(row({ estimate, handoff: "collect" }))], [["p1", 16251], ["p2", 5750]]);
+  assert.deepEqual([...receivePrefillCents(row())], [["p1", 15000], ["p2", null]]);
+  const drafts = receiveDraftsFrom(row({ estimate, handoff: "collect", pieces: [
+    { id: "p1", kind: "barrel", description: "", estimateCents: 15000 },
+    { id: "p2", kind: "box", description: "TV", sizeIn: { l: 30, w: 20, h: 10 }, estimateCents: null }] }));
+  assert.deepEqual(drafts.map((d) => [d.id, d.kind, d.description, d.lengthIn, d.price]),
+    [["p1", "barrel", "", "", "162.51"], ["p2", "box", "TV", "30", "57.50"]]);
+  assert.equal(receiveTotalCents(drafts), 22001);
 });
 
 test("Received can add a piece the customer brought and drop one that did not come", () => {
-  const items = receiveItemsFrom(row(), "en");
-  assert.deepEqual(items.map((i) => [i.id, i.price]), [["p1", "150.00"], ["p2", ""]]);
-  const extra = { ...newReceiveItem(), kind: "box" as const, description: "Shoes", price: "30" };
-  const payload = receiveItemsPayload([{ ...items[0] }, extra]);
-  assert.deepEqual(payload, { error: "", pieces: [{ id: "p1", priceCents: 15000 }, { kind: "box", description: "Shoes", priceCents: 3000 }] });
-  assert.equal(receiveItemsPayload([]).error, "pieces_required");
-  assert.equal(receiveItemsPayload([{ ...newReceiveItem(), price: "1" }]).error, "piece_description_required");
-  assert.equal(receiveItemsPayload(items).error, "price_required");
+  const drafts = receiveDraftsFrom(row());
+  const extra = { ...newLinePieceDraft("box"), description: "Shoes", price: "30" };
+  const payload = receivePayload([{ ...drafts[0] }, extra]);
+  assert.deepEqual(payload, { error: "", pieces: [
+    { id: "p1", kind: "barrel", description: "", sizeIn: null, priceCents: 15000 },
+    { id: "", kind: "box", description: "Shoes", sizeIn: null, priceCents: 3000 }] });
+  assert.equal(receivePayload([]).error, "pieces_required");
+  assert.equal(receivePayload([{ ...newLinePieceDraft("box"), price: "1" }]).error, "piece_description_required");
+  assert.equal(receivePayload(drafts).error, "price_required");
+  const many = Array.from({ length: 21 }, () => ({ ...newLinePieceDraft("barrel"), price: "1" }));
+  assert.equal(receivePayload(many).error, "too_many_pieces");
   const history = requestHistory(row({ history: [{ atMs: 1, action: "pieces_changed", byName: "Awa", piecesAdded: 1, piecesRemoved: 2 }] }));
   assert.equal(history[0].label, "Pieces changed at Received");
   assert.equal(history[0].change, "+1 / −2");

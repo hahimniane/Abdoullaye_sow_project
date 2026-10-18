@@ -2635,6 +2635,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Pickup address": "Adresse de collecte",
   "Pickup borough": "Arrondissement de collecte",
   "Pickup fee": "Frais de collecte",
+  "The prices include the pickup fee in the estimate:": "Les prix incluent les frais de collecte de l'estimation :",
   "Pickup time": "Heure de collecte",
   "Platform Administrator": "Administrateur de plateforme",
   "Platform admins": "Administrateurs plateforme",

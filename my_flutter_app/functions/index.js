@@ -361,6 +361,7 @@ const {
   destinationMismatch,
   lineIsWaiting,
   containerLineRecord,
+  lineReceiptFields,
   openContainerHoldingVin,
   containerCounts,
   containerCountsDelta,
@@ -17219,13 +17220,8 @@ function containerLineTitle(row) {
  * @return {object} Fields to merge into the new line.
  */
 function counterReceiptFields(lineId) {
-  return {
-    source: "counter",
-    requestId: "",
-    receivedAt: FirestoreFieldValue.serverTimestamp(),
-    rootLineId: lineId,
-    partIndex: 1,
-  };
+  return lineReceiptFields({lineId, source: "counter", requestId: "",
+    receivedAt: FirestoreFieldValue.serverTimestamp()});
 }
 
 /**
@@ -41166,13 +41162,13 @@ exports.receivePackageRequest = onCall(
             {status: first.status});
       }
       const card = packageRequests.isCardPaid(first);
-      const {prices, errors} =
-        requestReceive.cleanReceivePrices(data.pieces, first);
+      const {pieces, errors} =
+        requestReceive.cleanReceivePieces(data.pieces, first);
       if (data.pieces !== undefined && data.pieces !== null &&
           !Array.isArray(data.pieces)) {
         errors.push("pieces_required");
       }
-      const totalCents = requestReceive.receivedTotalCents(prices, first);
+      const totalCents = requestReceive.receivedTotalCents(pieces);
       const payment = containerRegistrationPayment(data);
       if (payment && card) errors.push("card_order");
       if (payment && !card) {
@@ -41218,7 +41214,7 @@ exports.receivePackageRequest = onCall(
         }
         // Re-read against the request as it is now: its pieces decide which
         // ids are its own.
-        const final = requestReceive.cleanReceivePrices(data.pieces, row);
+        const final = requestReceive.cleanReceivePieces(data.pieces, row);
         if (final.errors.length > 0) {
           throw new HttpsError("invalid-argument",
               packageRequests.REQUEST_MESSAGES[final.errors[0]] ||
@@ -41229,11 +41225,9 @@ exports.receivePackageRequest = onCall(
           lineId: lineRef.id,
           requestId: ref.id,
           pieces: final.pieces,
-          prices: final.prices,
           payOnArrival: data.payOnArrival === true,
           staffUid: uid,
           receivedAt: FirestoreTimestamp.fromMillis(nowMs),
-          receivedAtMs: nowMs,
         });
         const paidCents = paymentRecord ? paymentRecord.amountCents : 0;
         tx.set(lineRef, {
@@ -41264,7 +41258,8 @@ exports.receivePackageRequest = onCall(
                   byName: name, piecesAdded: final.added,
                   piecesRemoved: final.removed}) : row.history,
               {atMs: nowMs, action: "received", byUid: uid, byName: name,
-                ...(Number.isInteger(totalCents) ? {totalCents} : {})}),
+                ...(Number.isInteger(line.priceCents) ?
+                  {totalCents: line.priceCents} : {})}),
         }));
         return {already: false, lineId: lineRef.id, trackingCode, paidCents,
           line};

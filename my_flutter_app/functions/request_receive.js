@@ -5,186 +5,207 @@
  * "Received" (docs/PACKAGE_REQUESTS.md §7 "Line fields", §8.6
  * receivePackageRequest).
  *
- * Deliberately one isolated builder: the pieces-on-lines work (phase 1,
- * branch feat/pieces) adds `pieces[]` to the counter's own line writers in
- * parallel. At merge, `requestLineRecord` is the single place to point at
- * that builder; until then it writes exactly the §7 fields itself, on top of
- * the counter's legacy line body (containerLineRecord), so every existing
- * reader keeps working: `kind`/`quantity` summary fields for old app
- * versions, `pieces[]` and the denormalized counts for new ones.
+ * The line is built by the counter's own writer (`containerLineRecord` in
+ * pieces mode, which runs `piecesLineFields` from line_pieces.js) and gets
+ * the same receipt fields as a counter registration (`lineReceiptFields`),
+ * so a received request and a counter line holding the same pieces are the
+ * same document: pieces normalised, the denormalised counts, the
+ * `kind`/`quantity`/`description` summary old apps read, `priceCents` the
+ * sum of the pieces, `rootLineId` its own id, `partIndex` 1. Labels ("1 of
+ * N"), splitting across containers and monthly volume then treat it like
+ * any other line. Only `source` ("request" / "card_order") and `requestId`
+ * say where it came from.
  *
  * Pure: no Firestore. index.js reads the request and writes the result in
  * one transaction.
  */
 
-const {containerLineRecord, LINE_STATUS_WAITING} =
+const {containerLineRecord, lineReceiptFields, LINE_STATUS_WAITING} =
   require("./container_manifest");
-const {MAX_CENTS} = require("./container_payments");
+const {
+  distributeCents,
+  normalizePieces,
+  pieceErrors,
+  piecePriceOf,
+  piecesTotalCents,
+} = require("./line_pieces");
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
+const asRow = (value) => value && typeof value === "object" ? value : {};
 
-// The fields this builder adds to a counter line. Listed so a test (and the
-// phase 1 merge) can check nothing is missing.
+// The fields Received adds on top of a waiting line's contacts and price.
+// Listed so a test can check nothing is missing.
 const REQUEST_LINE_FIELDS = Object.freeze([
   "pieces", "pieceCount", "barrelPieces", "packagePieces", "carPieces",
   "source", "requestId", "receivedAt", "rootLineId", "partIndex",
 ]);
 
-const PIECE_KINDS = ["barrel", "box", "other"];
-const MAX_PIECES = 20;
-const MAX_DESCRIPTION = 120;
+// The request's own cap (§4 "max 20 pieces per request"); the load that
+// arrives is held to it too.
+const MAX_RECEIVE_PIECES = 20;
+
+// line_pieces.js names its refusals for the counter; Received keeps the
+// request contract's names (§8.6), which both clients already translate.
+const RECEIVE_ERROR_CODES = Object.freeze({
+  pieces_required: "pieces_required",
+  pieces_too_many: "too_many_pieces",
+  piece_kind_invalid: "piece_kind_invalid",
+  piece_description_required: "piece_description_required",
+  piece_description_too_long: "text_too_long",
+  piece_size_invalid: "size_invalid",
+  piece_price_invalid: "price_invalid",
+});
+
+/**
+ * What each request piece is priced at before staff touch anything: the
+ * estimate's price for it (else the piece's own `estimateCents`), and - for
+ * a collected request - the estimate's pickup fee spread over the priced
+ * pieces (distributeCents: the odd cents on the first ones). A line's total
+ * is the sum of its pieces (§1), so the fee rides inside the piece prices
+ * rather than beside them, where an edit or a split would lose it.
+ *
+ * The console's `receivePrefillCents` (package-requests.ts) and the app's
+ * mirror use the same rule, so the Received form opens on these numbers.
+ *
+ * @param {object} request The stored request.
+ * @return {Map<string, ?number>} Piece id -> cents (null: no price).
+ */
+function receivePrefillCents(request) {
+  const row = asRow(request);
+  const requested = Array.isArray(row.pieces) ? row.pieces.map(asRow) : [];
+  const estimate = new Map((asRow(row.estimate).pieces || [])
+      .map((p) => [asRow(p).id, piecePriceOf(asRow(p).cents)]));
+  const prices = new Map(requested.map((piece) => [piece.id,
+    estimate.has(piece.id) ? estimate.get(piece.id) :
+      piecePriceOf(piece.estimateCents)]));
+  const fee = row.handoff === "collect" ?
+    piecePriceOf(asRow(row.estimate).pickupFeeCents) || 0 : 0;
+  const priced = [...prices.keys()].filter((id) => prices.get(id) !== null);
+  if (fee > 0 && priced.length > 0) {
+    const shares = distributeCents(fee, priced.length);
+    priced.forEach((id, i) => prices.set(id, prices.get(id) + shares[i]));
+  }
+  return prices;
+}
 
 /**
  * The pieces staff confirm at the counter (§8.6 receivePackageRequest): the
- * request's own pieces by id with their final prices, pieces the customer
- * brought on top (no id: `{kind, description, priceCents}`), and the
- * request's pieces left out because they did not come.
+ * request's own pieces by id (a missing field keeps the request's value, a
+ * missing `priceCents` the prefilled price; kind, description and size may
+ * be corrected to what actually came), pieces the customer brought on top
+ * (no id: `{kind, description, sizeIn?, priceCents}`), and the request's
+ * pieces left out because they did not come.
  *
- * An absent or empty list keeps every piece of the request at its estimate
- * (the payload of a client that predates adding and removing).
+ * An absent or empty list keeps every piece of the request at its prefilled
+ * price (the payload of a client that predates adding and removing).
  *
- * @param {*} raw [{id, priceCents}] and [{kind, description, priceCents}].
+ * @param {*} raw [{id, priceCents?, kind?, description?, sizeIn?}] and
+ *   [{kind, description, sizeIn?, priceCents}].
  * @param {object} request The stored request.
- * @return {{pieces: object[], prices: Map<string, ?number>, added: number,
- *   removed: number, errors: string[]}} The line's pieces in order (new
- *   ones get the next free ids), their prices, and every problem:
+ * @return {{pieces: object[], added: number, removed: number,
+ *   errors: string[]}} The line's pieces in order, normalised by
+ *   line_pieces.js (`{id, kind, description, sizeIn, priceCents}`; new ones
+ *   get the next free ids after the request's), and every problem:
  *   `estimate_piece_unknown` (an id not on the request, or twice),
- *   `price_invalid`, `piece_kind_invalid`, `piece_description_required`,
- *   `text_too_long`, `too_many_pieces`, `price_required` (some priced, some
- *   not).
+ *   `pieces_required`, `too_many_pieces`, `piece_kind_invalid`,
+ *   `piece_description_required`, `text_too_long`, `size_invalid`,
+ *   `price_invalid`, `price_required` (some priced, some not).
  */
-function cleanReceivePrices(raw, request) {
+function cleanReceivePieces(raw, request) {
   const errors = [];
   const add = (code) => {
     if (!errors.includes(code)) errors.push(code);
   };
-  const requested = Array.isArray(request?.pieces) ? request.pieces : [];
-  const byId = new Map(requested.map((p) => [p.id, p]));
-  const estimate = new Map((request?.estimate?.pieces || [])
-      .map((row) => [row.id, Number.isInteger(row.cents) ? row.cents : null]));
-  const fallback = (piece) => estimate.has(piece.id) ? estimate.get(piece.id) :
-    (Number.isInteger(piece.estimateCents) ? piece.estimateCents : null);
-  const priceOf = (row) => {
-    if (row.priceCents === null || row.priceCents === undefined) return null;
-    if (Number.isInteger(row.priceCents) && row.priceCents >= 0 &&
-        row.priceCents <= MAX_CENTS) {
-      return row.priceCents;
-    }
-    add("price_invalid");
-    return null;
-  };
+  const requested = Array.isArray(request?.pieces) ?
+    request.pieces.map(asRow) : [];
+  const byId = new Map(requested.map((p) => [text(p.id, 40), p]));
+  const prefill = receivePrefillCents(request);
+  const has = (row, key) => Object.prototype.hasOwnProperty.call(row, key);
   const list = Array.isArray(raw) ? raw : [];
-  const pieces = [];
-  const prices = new Map();
+  const typed = [];
   if (list.length === 0) {
     for (const piece of requested) {
-      pieces.push(piece);
-      prices.set(piece.id, fallback(piece));
+      typed.push({id: text(piece.id, 40), kind: piece.kind,
+        description: piece.description, sizeIn: piece.sizeIn || null,
+        priceCents: prefill.get(piece.id) ?? null});
     }
   } else {
     let next = requested.reduce((max, p) =>
       Math.max(max, Number(String(p.id).replace(/\D/g, "")) || 0), 0);
     const seen = new Set();
     for (const value of list) {
-      const row = value && typeof value === "object" ? value : {};
-      const id = text(row.id, 10);
+      const row = asRow(value);
+      const id = text(row.id, 40);
       if (id) {
         if (!byId.has(id) || seen.has(id)) {
           add("estimate_piece_unknown");
           continue;
         }
         seen.add(id);
-        pieces.push(byId.get(id));
-        prices.set(id, "priceCents" in row ? priceOf(row) :
-          fallback(byId.get(id)));
+        const base = byId.get(id);
+        typed.push({
+          id,
+          kind: has(row, "kind") ? row.kind : base.kind,
+          description: has(row, "description") ? row.description :
+            base.description,
+          sizeIn: has(row, "sizeIn") ? row.sizeIn : base.sizeIn || null,
+          priceCents: has(row, "priceCents") ? row.priceCents :
+            prefill.get(id) ?? null,
+        });
         continue;
       }
-      const kind = text(row.kind, 20);
-      if (!PIECE_KINDS.includes(kind)) add("piece_kind_invalid");
-      const description = String(row.description ?? "").trim();
-      if (description.length > MAX_DESCRIPTION) add("text_too_long");
-      if (kind !== "barrel" && !description) add("piece_description_required");
       next += 1;
-      const piece = {id: `p${next}`, kind: PIECE_KINDS.includes(kind) ? kind :
-        "other", description: description.slice(0, MAX_DESCRIPTION),
-      sizeIn: null, photoPaths: [], estimateCents: null, addedAtReceive: true};
-      pieces.push(piece);
-      prices.set(piece.id, priceOf(row));
+      typed.push({id: `p${next}`, kind: row.kind,
+        description: row.description, sizeIn: row.sizeIn || null,
+        priceCents: row.priceCents, added: true});
     }
   }
-  if (pieces.length > MAX_PIECES) add("too_many_pieces");
-  const values = [...prices.values()];
-  if (values.some((v) => v === null) && values.some((v) => v !== null)) {
+  if (typed.length > 0 || errors.length === 0) {
+    for (const code of pieceErrors(typed, MAX_RECEIVE_PIECES)) {
+      add(RECEIVE_ERROR_CODES[code] || code);
+    }
+  }
+  const priced = typed.filter((p) => piecePriceOf(p.priceCents) !== null);
+  if (priced.length > 0 && priced.length < typed.length) {
     add("price_required");
   }
+  const pieces = normalizePieces(typed);
   const kept = new Set(pieces.map((p) => p.id));
   return {
     pieces,
-    prices,
-    added: pieces.filter((p) => p.addedAtReceive === true).length,
-    removed: requested.filter((p) => !kept.has(p.id)).length,
+    added: typed.filter((p) => p.added === true).length,
+    removed: requested.filter((p) => !kept.has(text(p.id, 40))).length,
     errors,
   };
 }
 
 /**
- * @param {Map<string, ?number>} prices From cleanReceivePrices.
- * @param {object} request The stored request.
- * @return {?number} The line's price: the pieces' sum (plus the estimate's
- *   pickup fee for a collected request), or null when nothing is priced.
+ * @param {object[]} pieces From cleanReceivePieces.
+ * @return {?number} The line's price: the pieces' sum, as the counter
+ *   computes it (null when nothing is priced).
  */
-function receivedTotalCents(prices, request) {
-  const values = [...prices.values()];
-  if (values.length === 0 || values.every((v) => v === null)) return null;
-  const pickupFee = request?.handoff === "collect" ?
-    Math.max(0, Number(request?.estimate?.pickupFeeCents) || 0) : 0;
-  return values.reduce((sum, v) => sum + (v || 0), 0) + pickupFee;
-}
-
-/**
- * What the counter's legacy summary calls the load: "barrels" when every
- * piece is a barrel, else "other" with the descriptions joined.
- *
- * @param {object[]} pieces The request's pieces.
- * @return {{kind: string, quantity: number, description: string}}
- */
-function legacySummary(pieces) {
-  const list = Array.isArray(pieces) ? pieces : [];
-  const allBarrels = list.length > 0 && list.every((p) => p.kind === "barrel");
-  const descriptions = [...new Set(list
-      .filter((p) => p.kind !== "barrel")
-      .map((p) => text(p.description, 120) ||
-        (p.kind === "box" ? "box" : "item")))];
-  const barrels = list.filter((p) => p.kind === "barrel").length;
-  const words = [...(barrels ? [`${barrels} barrel${barrels === 1 ? "" :
-    "s"}`] : []), ...descriptions];
-  return {
-    kind: allBarrels ? "barrels" : "other",
-    quantity: Math.max(1, list.length),
-    description: allBarrels ? "" : words.join(", ").slice(0, 120),
-  };
+function receivedTotalCents(pieces) {
+  return piecesTotalCents(pieces);
 }
 
 /**
  * The line body for a received request.
  *
  * @param {object} request The stored request.
- * @param {object} args {lineId, pieces and prices (from
- *   cleanReceivePrices; pieces default to the request's),
- *   payOnArrival, staffUid, receivedAt (a server timestamp sentinel or
- *   Timestamp), receivedAtMs}.
+ * @param {object} args {lineId, requestId, pieces (from cleanReceivePieces;
+ *   default: the request's at their prefilled prices), payOnArrival,
+ *   staffUid, receivedAt (a Timestamp or server-timestamp sentinel)}.
  * @return {object} The line, ready to write (the caller adds trackingCode,
  *   paidCents, createdAt, updatedAt and businessId).
  */
 function requestLineRecord(request, args) {
   const pieces = Array.isArray(args.pieces) ? args.pieces :
-    (Array.isArray(request?.pieces) ? request.pieces : []);
-  const summary = legacySummary(pieces);
-  const priceCents = receivedTotalCents(args.prices, request);
-  const legacy = containerLineRecord({
-    kind: summary.kind,
-    quantity: summary.quantity,
-    description: summary.description,
+    cleanReceivePieces([], request).pieces;
+  const record = containerLineRecord({
+    // In pieces mode the pieces decide the kind; "other" only says "not a
+    // car".
+    kind: "other",
+    pieces,
     ownerKind: "customer",
     customerName: request?.sender?.name,
     customerPhone: request?.sender?.phoneE164,
@@ -194,40 +215,28 @@ function requestLineRecord(request, args) {
     notifyReceiver: true,
     destinationCountryId: request?.destinationCountryId,
     destinationCountryName: request?.destinationCountryName,
-    priceCents,
     payOnArrival: args.payOnArrival === true,
   }, {
     containerId: "",
     containerStatus: LINE_STATUS_WAITING,
     addedByStaffId: args.staffUid,
   });
-  const barrelPieces = pieces.filter((p) => p.kind === "barrel").length;
   return {
-    ...legacy,
-    pieces: pieces.map((p) => ({
-      id: text(p.id, 10),
-      kind: text(p.kind, 20),
-      description: text(p.description, 120),
-      sizeIn: p.sizeIn || null,
-      priceCents: args.prices.has(p.id) ? args.prices.get(p.id) : null,
-    })),
-    pieceCount: pieces.length,
-    barrelPieces,
-    packagePieces: pieces.length - barrelPieces,
-    carPieces: 0,
-    source: request?.payment?.timing === "card" ? "card_order" : "request",
-    requestId: text(args.requestId, 128),
-    receivedAt: args.receivedAt,
-    receivedAtMs: Number(args.receivedAtMs) || 0,
-    rootLineId: text(args.lineId, 128),
-    partIndex: 1,
+    ...record,
+    ...lineReceiptFields({
+      lineId: args.lineId,
+      source: request?.payment?.timing === "card" ? "card_order" : "request",
+      requestId: args.requestId,
+      receivedAt: args.receivedAt,
+    }),
   };
 }
 
 module.exports = {
   REQUEST_LINE_FIELDS,
-  cleanReceivePrices,
+  MAX_RECEIVE_PIECES,
+  receivePrefillCents,
+  cleanReceivePieces,
   receivedTotalCents,
-  legacySummary,
   requestLineRecord,
 };

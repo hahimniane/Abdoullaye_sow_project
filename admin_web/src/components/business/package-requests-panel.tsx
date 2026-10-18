@@ -21,6 +21,9 @@ import {
 } from "lucide-react";
 
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
+import { PiecesEditor } from "@/components/business/pieces-editor";
+import { CONTAINER_MESSAGES } from "@/lib/container-manifest";
+import type { PieceDraft } from "@/lib/piece-drafts";
 import { CopyValue } from "@/components/copy-value";
 import { auth, functions, storage } from "@/lib/firebase";
 import { currentLanguage } from "@/lib/format";
@@ -41,14 +44,11 @@ import {
   filterRequests,
   lockView,
   moneyText,
-  piecesSummary,
+  pieceSummaryText,
   plannedDayText,
   readDollars,
-  newReceiveItem,
-  receiveItemsFrom,
-  receiveItemsPayload,
-  type PieceKind,
-  type ReceiveItem,
+  receiveDraftsFrom,
+  receivePayload,
   requestEstimate,
   requestFailure,
   requestFilterCounts,
@@ -159,7 +159,7 @@ function RequestTitle({ row }: { row: Row }) {
   const destination = { id: str(row.destinationCountryId, 60), name: str(row.destinationCountryName, 120) };
   return (
     <span className="pkq-title">
-      <strong data-no-translate>{piecesSummary(requestPieces(row), l)}</strong>
+      <strong data-no-translate>{pieceSummaryText(requestPieces(row), l)}</strong>
       <small>
         <span data-no-translate>{str(row.code, 20)}</span>
         {destination.id && <span data-no-translate>{` · ${countryName(destination, l)}`}</span>}
@@ -639,9 +639,10 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
 }) {
   const l = lang();
   const card = asRow(row.payment).timing === "card";
-  // The load as it arrived: the request's pieces, plus or minus what the
-  // customer actually brought.
-  const [items, setItems] = useState<ReceiveItem[]>(() => receiveItemsFrom(row, l));
+  // The load as it arrived: the request's pieces in phase 1's pieces editor
+  // (the counter's), plus or minus what the customer actually brought.
+  const [pieces, setPieces] = useState<PieceDraft[]>(() => receiveDraftsFrom(row));
+  const [showErrors, setShowErrors] = useState(false);
   const [payOnArrival, setPayOnArrival] = useState(false);
   const [takeMoney, setTakeMoney] = useState(false);
   const [amount, setAmount] = useState("");
@@ -651,22 +652,12 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   const [error, setError] = useState("");
   const collect = str(row.handoff) === "collect";
   const fee = collect ? requestEstimate(row)?.pickupFeeCents ?? 0 : 0;
-  const total = (() => {
-    let sum = 0;
-    for (const item of items) {
-      const cents = readDollars(item.price);
-      if (cents === null) return null;
-      sum += cents;
-    }
-    return items.length ? sum + fee : null;
-  })();
-  const setItem = (key: string, patch: Partial<ReceiveItem>) =>
-    setItems((list) => list.map((item) => (item.key === key ? { ...item, ...patch } : item)));
 
   async function receive() {
-    const { pieces: payloadPieces, error: problem } = receiveItemsPayload(items);
+    const { pieces: payloadPieces, error: problem } = receivePayload(pieces);
     if (problem) {
-      setError(REQUEST_ERROR_MESSAGES[problem]);
+      setShowErrors(true);
+      setError(REQUEST_ERROR_MESSAGES[problem] ?? CONTAINER_MESSAGES[problem as keyof typeof CONTAINER_MESSAGES] ?? REQUEST_ERROR_MESSAGES.price_invalid);
       return;
     }
     let payment: Record<string, unknown> | undefined;
@@ -713,43 +704,8 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
         </header>
         <div className="lst-modal-body">
           <div className="pkq-detail"><PersonLines row={row} /></div>
-          <div className="pkq-pieces">
-            {items.map((item, index) => (
-              <div className="pkq-piece" key={item.key}>
-                <span>
-                  {item.id ? (
-                    <>
-                      <strong><span data-no-translate>{`${index + 1}. `}</span><span data-no-translate>{pieceKindLabel(item.kind, l)}</span></strong>
-                      {item.description && <small data-no-translate>{item.description}</small>}
-                    </>
-                  ) : (
-                    <>
-                      <select aria-label="What is it?" onChange={(event) => setItem(item.key, { kind: event.target.value as PieceKind })} value={item.kind}>
-                        {(["barrel", "box", "other"] as PieceKind[]).map((kind) => (
-                          <option data-no-translate key={kind} value={kind}>{pieceKindLabel(kind, l)}</option>
-                        ))}
-                      </select>
-                      {item.kind !== "barrel" && (
-                        <input aria-label="What is it?" maxLength={120} onChange={(event) => setItem(item.key, { description: event.target.value })} placeholder="e.g. clothes, a TV, a generator" value={item.description} />
-                      )}
-                    </>
-                  )}
-                </span>
-                <label className="lst-field pkq-price">
-                  <span>Final price ($)</span>
-                  <input inputMode="decimal" onChange={(event) => setItem(item.key, { price: event.target.value })} placeholder={l === "fr" ? "0,00" : "0.00"} value={item.price} />
-                </label>
-                {items.length > 1 && (
-                  <button aria-label="Remove" className="ghost-button" disabled={busy} onClick={() => setItems((list) => list.filter((i) => i.key !== item.key))} title="Remove" type="button"><X size={14} aria-hidden="true" /></button>
-                )}
-              </div>
-            ))}
-          </div>
-          {items.length < 20 && (
-            <button className="lst-btn ghost" disabled={busy} onClick={() => setItems((list) => [...list, newReceiveItem()])} type="button">+ Add a piece</button>
-          )}
-          {fee > 0 && <p className="lst-hint"><span>Pickup fee</span> <span data-no-translate>{moneyText(fee, l)}</span></p>}
-          <p className="pkq-total"><span>Total</span> <strong data-no-translate>{total === null ? "—" : moneyText(total, l)}</strong></p>
+          <PiecesEditor disabled={busy} id="pkq-receive-pieces" lang={l} onChange={setPieces} pieces={pieces} showErrors={showErrors} />
+          {fee > 0 && <p className="lst-hint"><span>The prices include the pickup fee in the estimate:</span> <span data-no-translate>{moneyText(fee, l)}</span></p>}
           {card ? (
             <p className="lst-hint"><CreditCard size={14} aria-hidden="true" /> <span>Paid online by card</span> <span data-no-translate>{moneyText(Number(asRow(row.payment).paidCents) || 0, l)}</span></p>
           ) : (

@@ -633,6 +633,83 @@ describe("Received", () => {
     "estimate_piece_unknown");
   });
 
+  it("writes a line the counter's tools treat as their own: labels, " +
+      "split, volume", async () => {
+    const {requestId} = await submit({pieces: [{kind: "barrel"},
+      {kind: "box", description: "Clothes"}]});
+    const received = await staff("receivePackageRequest", {requestId,
+      pieces: [{id: "p1", priceCents: 15000},
+        {id: "p2", priceCents: 4500, sizeIn: {l: 24, w: 18, h: 18}},
+        {kind: "other", description: "TV", priceCents: 6000}]}, MARIAMA);
+    const lineId = received.lineId;
+    const line = (await db.collection("containerLines").doc(lineId).get())
+        .data();
+    // The same fields a counter registration writes.
+    const counter = await staff("addWaitingPackage", {
+      ownerKind: "customer", customerName: "Fatou Diallo",
+      customerPhone: line.customerPhone, receiverName: "Mariama Bah",
+      receiverPhone: "+224620000000", destinationCountryId: "gn",
+      destinationCountryName: "Guinea", notifyCustomer: true,
+      notifyReceiver: true, pieces: line.pieces.map((p) => ({
+        kind: p.kind, description: p.description, sizeIn: p.sizeIn,
+        priceCents: p.priceCents}))}, MARIAMA);
+    const counterLine = (await db.collection("containerLines")
+        .doc(counter.lineId).get()).data();
+    assert.deepEqual(Object.keys(line).sort(),
+        Object.keys(counterLine).sort());
+    for (const key of ["pieces", "pieceCount", "barrelPieces",
+      "packagePieces", "carPieces", "kind", "quantity", "description",
+      "priceCents", "partIndex", "containerStatus", "lengthIn"]) {
+      assert.deepEqual(line[key], counterLine[key], key);
+    }
+    assert.equal(line.rootLineId, lineId);
+    assert.equal(line.description, "Barrel, Clothes, TV");
+    assert.equal(line.receivedAt.toMillis() > 0, true);
+
+    // One label per piece, "1 of 3".
+    const labels = await staff("getPackageLabels", {lineIds: [lineId],
+      copies: 1}, MARIAMA);
+    const own = labels.labels.filter((l) => l.code === line.trackingCode);
+    assert.deepEqual(own.map((l) => [l.packageNumber, l.packageCount, l.what]),
+        [[1, 3, "Barrel"], [2, 3, "Clothes"], [3, 3, "TV"]]);
+
+    // Two of the three go on a box; the TV stays waiting as part -2.
+    const {containerId} = await staff("createContainer", {
+      label: "Request box", destinationCountryId: "gn",
+      destinationCountryName: "Guinea"});
+    const split = await staff("assignContainerLines", {containerId,
+      lineIds: [lineId], pieceCounts: {[lineId]: 2}});
+    assert.equal(split.parts.length, 1);
+    assert.equal(split.parts[0].trackingCode, `${line.trackingCode}-2`);
+    const part = (await db.collection("containerLines")
+        .doc(split.parts[0].partLineId).get()).data();
+    assert.deepEqual(part.pieces.map((p) => p.description), ["TV"]);
+    assert.equal(part.source, "request");
+    assert.equal(part.requestId, requestId);
+
+    // Monthly volume counts its three pieces in this month.
+    const volume = require("../volume_counts");
+    const month = volume.currentMonthKey(new Date());
+    const after = (await db.collection("containerLines").doc(lineId).get())
+        .data();
+    await functions.rollupVolumeOnLineWrite.run({params: {lineId},
+      data: {before: {exists: false, data: () => undefined},
+        after: {exists: true, data: () => after}}});
+    const tiles = (await staff("getBusinessVolume", {month})).totals;
+    // A recount of the month from the records: every line of this business
+    // (all received during this run), the request's three pieces among
+    // them - once, though they now sit on two lines.
+    const all = (await db.collection("containerLines")
+        .where("businessId", "==", BIZ).get()).docs.map((d) => d.data());
+    const sum = (key) => all.reduce((n, l) => n + (l[key] || 0), 0);
+    assert.equal(tiles.pieces, sum("pieceCount"));
+    assert.equal(tiles.barrels, sum("barrelPieces"));
+    assert.equal(tiles.packages, sum("packagePieces"));
+    const mine = all.filter((l) => l.requestId === requestId);
+    assert.equal(mine.length, 2);
+    assert.equal(mine.reduce((n, l) => n + l.pieceCount, 0), 3);
+  });
+
   it("is refused on a closed request", async () => {
     const {requestId} = await submit();
     await staff("cancelPackageRequest", {requestId, reason: "No"}, MARIAMA);

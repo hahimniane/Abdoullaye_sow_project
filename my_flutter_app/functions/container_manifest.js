@@ -39,6 +39,7 @@ const {OCEAN_CARRIERS} = require("./ocean_carrier_catalog");
 const {
   lineCounts,
   lineHasPieces,
+  lineSourceOf,
   pieceErrors,
   pieceSummaryText,
   piecesLineFields,
@@ -578,6 +579,28 @@ function containerLineRecord(input, opts = {}) {
   }
   // The counts every line carries, so volume is counted without pieces.
   return {...record, ...lineCounts(record)};
+}
+
+/**
+ * The fields a line gets when its pieces are physically received
+ * (docs/PACKAGE_REQUESTS.md §7 "Line fields"), shared by every writer of a
+ * new line so a counter registration and a received request are the same
+ * shape: where it came from, the request it came from (or ""), when the
+ * pieces arrived (monthly volume counts by it) and its place as the root
+ * of its own group.
+ *
+ * @param {object} args {lineId, source (counter|request|card_order),
+ *   requestId, receivedAt (a Timestamp or a server-timestamp sentinel)}.
+ * @return {object} Fields to merge into the new line.
+ */
+function lineReceiptFields({lineId, source, requestId, receivedAt}) {
+  return {
+    source: lineSourceOf(source),
+    requestId: text(requestId, 128),
+    receivedAt,
+    rootLineId: text(lineId, 128),
+    partIndex: 1,
+  };
 }
 
 /**
@@ -1282,6 +1305,7 @@ module.exports = {
   containerAssignRefusal,
   containerLinesCountsDelta,
   containerLineRecord,
+  lineReceiptFields,
   validateContainerLineContacts,
   containerLineContactsUpdate,
   isInternationalPhone,

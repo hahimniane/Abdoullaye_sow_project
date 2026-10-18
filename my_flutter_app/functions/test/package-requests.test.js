@@ -718,35 +718,35 @@ describe("the line Received writes (§7 line fields)", () => {
       {id: "p2", cents: 4500}]},
     payment: {timing: "at_handoff", paidCents: 0},
   };
+  const prices = (out) => out.pieces.map((p) => [p.id, p.priceCents]);
 
   it("prefills final prices from the estimate and refuses half-priced " +
       "loads", () => {
-    const {prices, errors} = rr.cleanReceivePrices([{id: "p1"},
+    const out = rr.cleanReceivePieces([{id: "p1"},
       {id: "p2", priceCents: 5000}], request);
-    assert.deepEqual(errors, []);
-    assert.deepEqual([...prices], [["p1", 15000], ["p2", 5000]]);
-    assert.equal(rr.receivedTotalCents(prices, request), 20000);
+    assert.deepEqual(out.errors, []);
+    assert.deepEqual(prices(out), [["p1", 15000], ["p2", 5000]]);
+    assert.equal(rr.receivedTotalCents(out.pieces), 20000);
     // An empty list keeps every piece at its estimate.
-    assert.deepEqual([...rr.cleanReceivePrices([], request).prices],
+    assert.deepEqual(prices(rr.cleanReceivePieces([], request)),
         [["p1", 15000], ["p2", 4500]]);
-    assert.deepEqual(rr.cleanReceivePrices([{id: "p1", priceCents: null},
+    assert.deepEqual(rr.cleanReceivePieces([{id: "p1", priceCents: null},
       {id: "p2"}], request).errors, ["price_required"]);
-    assert.deepEqual(rr.cleanReceivePrices([{id: "p1", priceCents: -1},
-      {id: "zz", priceCents: 1}], request).errors,
-    ["price_invalid", "estimate_piece_unknown"]);
-    assert.deepEqual(rr.cleanReceivePrices([{id: "p1"}, {id: "p1"}], request)
+    assert.deepEqual(rr.cleanReceivePieces([{id: "zz", priceCents: 1},
+      {id: "p1", priceCents: -1}], request).errors,
+    ["estimate_piece_unknown", "price_invalid"]);
+    assert.deepEqual(rr.cleanReceivePieces([{id: "p1"}, {id: "p1"}], request)
         .errors, ["estimate_piece_unknown"]);
-    const none = rr.cleanReceivePrices([{id: "p1", priceCents: null},
+    const none = rr.cleanReceivePieces([{id: "p1", priceCents: null},
       {id: "p2", priceCents: null}], request);
     assert.deepEqual(none.errors, []);
-    assert.equal(rr.receivedTotalCents(none.prices, request), null);
+    assert.equal(rr.receivedTotalCents(none.pieces), null);
   });
 
   it("writes one waiting line with every §7 field", () => {
-    const {prices} = rr.cleanReceivePrices([], request);
     const line = rr.requestLineRecord(request, {lineId: "line1",
-      requestId: "req1", prices, payOnArrival: false, staffUid: "staff1",
-      receivedAt: "TS", receivedAtMs: NOW});
+      requestId: "req1", payOnArrival: false, staffUid: "staff1",
+      receivedAt: "TS"});
     for (const field of rr.REQUEST_LINE_FIELDS) {
       assert.ok(field in line, field);
     }
@@ -754,7 +754,8 @@ describe("the line Received writes (§7 line fields)", () => {
     assert.equal(line.containerStatus, "waiting");
     assert.equal(line.kind, "other");
     assert.equal(line.quantity, 2);
-    assert.equal(line.description, "1 barrel, Clothes");
+    // phase 1's summary for old apps (piecesSummaryFields).
+    assert.equal(line.description, "Barrel, Clothes");
     assert.equal(line.priceCents, 19500);
     assert.equal(line.paidCents, 0);
     assert.equal(line.pieceCount, 2);
@@ -766,36 +767,106 @@ describe("the line Received writes (§7 line fields)", () => {
     assert.equal(line.rootLineId, "line1");
     assert.equal(line.partIndex, 1);
     assert.equal(line.receivedAt, "TS");
+    assert.equal("receivedAtMs" in line, false);
     assert.equal(line.customerPhone, "+16465550100");
     assert.equal(line.receiverPhone, "+224620000000");
     assert.equal(line.notifyCustomer, true);
-    assert.deepEqual(line.pieces.map((p) => [p.id, p.kind, p.priceCents]),
-        [["p1", "barrel", 15000], ["p2", "box", 4500]]);
+    assert.deepEqual(line.pieces, [
+      {id: "p1", kind: "barrel", description: "", sizeIn: null,
+        priceCents: 15000},
+      {id: "p2", kind: "box", description: "Clothes", sizeIn: null,
+        priceCents: 4500}]);
   });
 
-  it("takes a piece the customer brought on top, and drops one that did " +
-      "not come", () => {
-    const out = rr.cleanReceivePrices([{id: "p2", priceCents: 5000},
-      {kind: "box", description: "Shoes", priceCents: 3000}], request);
+  it("is the same document as the counter's line for the same pieces",
+      () => {
+        const {containerLineRecord, lineReceiptFields} =
+          require("../container_manifest");
+        const pieces = [
+          {kind: "barrel", description: "", priceCents: 15000},
+          {kind: "box", description: "Clothes and shoes",
+            sizeIn: {l: 24, w: 18, h: 18}, priceCents: 4500},
+          {kind: "other", description: "TV", priceCents: 6000}];
+        const counter = {
+          ...containerLineRecord({kind: "other", pieces, ownerKind: "customer",
+            customerName: "Fatou Diallo", customerPhone: "+16465550100",
+            receiverName: "Mariama Bah", receiverPhone: "+224620000000",
+            notifyCustomer: true, notifyReceiver: true,
+            destinationCountryId: "gn", destinationCountryName: "Guinea",
+            payOnArrival: false},
+          {containerId: "", containerStatus: "waiting",
+            addedByStaffId: "staff1"}),
+          ...lineReceiptFields({lineId: "line1", source: "counter",
+            requestId: "", receivedAt: "TS"}),
+        };
+        const asked = {...request, pieces: pieces.map((p, i) => ({
+          id: `p${i + 1}`, kind: p.kind, description: p.description,
+          sizeIn: p.sizeIn || null, estimateCents: p.priceCents})),
+        estimate: null};
+        const received = rr.requestLineRecord(asked, {lineId: "line1",
+          requestId: "req1", staffUid: "staff1", receivedAt: "TS"});
+        assert.deepEqual(Object.keys(received).sort(),
+            Object.keys(counter).sort());
+        assert.deepEqual({...received, source: "counter", requestId: ""},
+            counter);
+        assert.equal(received.source, "request");
+        assert.equal(received.description, "Barrel, Clothes and shoes, TV");
+
+        // Labels: one per piece, "1 of 3", each piece's own name and size.
+        const {containerLabelsModel} = require("../container_labels");
+        const model = containerLabelsModel({container: null,
+          lines: [{...received, trackingCode: "CL-K7M4P2"}],
+          business: {name: "Dala"}, consoleUrl: "https://example.test",
+          copies: 1});
+        assert.deepEqual(model.labels.map((l) =>
+          [l.packageNumber, l.packageCount, l.what, l.size]), [
+          [1, 3, "Barrel", ""],
+          [2, 3, "Clothes and shoes", "24 × 18 × 18 in"],
+          [3, 3, "TV", ""]]);
+
+        // Split: two of the three go, one stays as part 2.
+        const lp = require("../line_pieces");
+        const split = lp.splitPieces(received, 2);
+        assert.equal(split.split, true);
+        assert.deepEqual(split.going.map((p) => p.id), ["p1", "p2"]);
+        assert.deepEqual(split.staying.map((p) => p.id), ["p3"]);
+
+        // Monthly volume reads it like a counter line.
+        const vc = require("../volume_counts");
+        assert.deepEqual(vc.linePieces(received), vc.linePieces(counter));
+        assert.deepEqual(vc.linePieces(received),
+            {pieces: 3, barrels: 1, packages: 2, cars: 0});
+      });
+
+  it("takes a piece the customer brought on top, drops one that did not " +
+      "come, and corrects what one is", () => {
+    const out = rr.cleanReceivePieces([{id: "p2", priceCents: 5000,
+      description: "Clothes and shoes", sizeIn: {l: 20, w: 20, h: 20}},
+    {kind: "box", description: "Shoes", priceCents: 3000}], request);
     assert.deepEqual(out.errors, []);
     assert.deepEqual(out.pieces.map((p) => [p.id, p.kind, p.description]),
-        [["p2", "box", "Clothes"], ["p3", "box", "Shoes"]]);
+        [["p2", "box", "Clothes and shoes"], ["p3", "box", "Shoes"]]);
+    assert.deepEqual(out.pieces[0].sizeIn, {l: 20, w: 20, h: 20});
     assert.equal(out.added, 1);
     assert.equal(out.removed, 1);
-    assert.equal(rr.receivedTotalCents(out.prices, request), 8000);
+    assert.equal(rr.receivedTotalCents(out.pieces), 8000);
     const line = rr.requestLineRecord(request, {lineId: "l", requestId: "r",
-      pieces: out.pieces, prices: out.prices, staffUid: "s",
-      receivedAt: "TS", receivedAtMs: NOW});
+      pieces: out.pieces, staffUid: "s", receivedAt: "TS"});
     assert.equal(line.pieceCount, 2);
     assert.equal(line.barrelPieces, 0);
     assert.equal(line.kind, "other");
     assert.deepEqual(line.pieces.map((p) => p.priceCents), [5000, 3000]);
-    assert.deepEqual(rr.cleanReceivePrices([{kind: "tv", priceCents: 1},
+    assert.deepEqual(rr.cleanReceivePieces([{kind: "tv", priceCents: 1},
       {kind: "other", priceCents: 1}], request).errors,
     ["piece_kind_invalid", "piece_description_required"]);
+    assert.deepEqual(rr.cleanReceivePieces([{id: "p1",
+      sizeIn: {l: 10, w: "", h: 5}}], request).errors, ["size_invalid"]);
+    assert.deepEqual(rr.cleanReceivePieces([{kind: "box",
+      description: "x".repeat(121), priceCents: 1}], request).errors,
+    ["text_too_long"]);
     const many = Array.from({length: 21}, () => ({kind: "barrel",
       priceCents: 1}));
-    assert.deepEqual(rr.cleanReceivePrices(many, request).errors,
+    assert.deepEqual(rr.cleanReceivePieces(many, request).errors,
         ["too_many_pieces"]);
   });
 
@@ -803,20 +874,31 @@ describe("the line Received writes (§7 line fields)", () => {
     const barrels = {...request, pieces: [{id: "p1", kind: "barrel"},
       {id: "p2", kind: "barrel"}], estimate: null,
     payment: {timing: "card", paidCents: 30000}};
-    const {prices} = rr.cleanReceivePrices([{id: "p1", priceCents: 15000},
+    const out = rr.cleanReceivePieces([{id: "p1", priceCents: 15000},
       {id: "p2", priceCents: 15000}], barrels);
     const line = rr.requestLineRecord(barrels, {lineId: "l", requestId: "r",
-      prices, staffUid: "s", receivedAt: "TS", receivedAtMs: NOW});
+      pieces: out.pieces, staffUid: "s", receivedAt: "TS"});
     assert.equal(line.kind, "barrels");
     assert.equal(line.quantity, 2);
     assert.equal(line.description, "");
     assert.equal(line.source, "card_order");
   });
 
-  it("adds a collected request's pickup fee to the line's price", () => {
+  it("carries a collected request's pickup fee inside the piece prices", () => {
     const collect = {...request, handoff: "collect",
-      estimate: {...request.estimate, pickupFeeCents: 2500}};
-    const {prices} = rr.cleanReceivePrices([], collect);
-    assert.equal(rr.receivedTotalCents(prices, collect), 22000);
+      estimate: {...request.estimate, pickupFeeCents: 2501}};
+    // Spread over the priced pieces, the odd cent on the first: the line
+    // total is still the sum of its pieces, so an edit or a split keeps it.
+    assert.deepEqual([...rr.receivePrefillCents(collect)],
+        [["p1", 16251], ["p2", 5750]]);
+    const out = rr.cleanReceivePieces([], collect);
+    assert.equal(rr.receivedTotalCents(out.pieces), 22001);
+    // A bring-in request has no fee to carry.
+    assert.deepEqual([...rr.receivePrefillCents(request)],
+        [["p1", 15000], ["p2", 4500]]);
+    // Nothing priced: nothing to carry it on; staff type the prices.
+    const unpriced = {...collect, estimate: {pickupFeeCents: 2500},
+      pieces: [{id: "p1", kind: "box", description: "TV"}]};
+    assert.deepEqual([...rr.receivePrefillCents(unpriced)], [["p1", null]]);
   });
 });

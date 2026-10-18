@@ -13,6 +13,16 @@
  */
 
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
+import { centsToInput as ledgerCentsToInput } from "./invoice-ledger.ts";
+import { distributeCents, pieceSizeOf } from "./line-pieces.ts";
+import {
+  newPieceDraft as newPieceDraftOf,
+  pieceDraftProblems,
+  piecesDraftTotalCents,
+  piecesPayload,
+  type PieceDraft as LinePieceDraft,
+  type PiecePayload,
+} from "./piece-drafts.ts";
 
 export type Lang = "en" | "fr";
 export type PieceKind = "barrel" | "box" | "other";
@@ -341,32 +351,12 @@ export function centsToInput(cents: number | null | undefined, lang: Lang): stri
   return lang === "fr" ? value.replace(".", ",") : value;
 }
 
-const KIND_WORDS: Record<Lang, Record<PieceKind, [string, string]>> = {
-  en: { barrel: ["barrel", "barrels"], box: ["box", "boxes"], other: ["item", "items"] },
-  fr: { barrel: ["fût", "fûts"], box: ["carton", "cartons"], other: ["colis", "colis"] },
-};
-
-/** "2 barrels, 1 box" / "2 fûts, 1 carton". */
-export function piecesSummary(pieces: readonly { kind?: unknown }[], lang: Lang): string {
-  const counts: Record<PieceKind, number> = { barrel: 0, box: 0, other: 0 };
-  for (const piece of pieces) {
-    const kind = text(piece?.kind, 20) as PieceKind;
-    if (kind in counts) counts[kind] += 1;
-  }
-  return PIECE_KINDS.filter((kind) => counts[kind] > 0)
-    .map((kind) => `${counts[kind]} ${KIND_WORDS[lang][kind][counts[kind] === 1 ? 0 : 1]}`)
-    .join(", ");
-}
-
-export const PIECE_KIND_LABELS: Record<PieceKind, string> = { barrel: "Barrel", box: "Box", other: "Other" };
-const PIECE_KIND_WORDS: Record<Lang, Record<PieceKind, string>> = {
-  en: PIECE_KIND_LABELS,
-  fr: { barrel: "Fût", box: "Carton", other: "Autre" },
-};
-/** What a piece is, in the page's language: render it `data-no-translate`. */
-export function pieceKindLabel(kind: PieceKind, lang: Lang): string {
-  return PIECE_KIND_WORDS[lang][kind] ?? PIECE_KIND_WORDS[lang].other;
-}
+// What a piece is, and what a list of pieces adds up to, are phase 1's
+// (`piece-drafts.ts` `pieceKindLabel`, `line-pieces.ts` `pieceSummaryText`):
+// a request reads the same as the line it becomes. Render both
+// data-no-translate.
+export { pieceKindLabel } from "./piece-drafts.ts";
+export { pieceSummaryText } from "./line-pieces.ts";
 export const PICKUP_WINDOW_LABELS: Record<PickupWindow, string> = {
   morning: "Morning",
   afternoon: "Afternoon",
@@ -883,66 +873,73 @@ export function draftTotalCents(row: Row, prices: Record<string, string>, pickup
   return total;
 }
 
-/** One line of the Received form: a piece of the request (with its id) or one brought on top. */
-export type ReceiveItem = { key: string; id: string; kind: PieceKind; description: string; price: string };
+// ---------------------------------------------------------------------------
+// Received: the load as it arrived, in phase 1's pieces editor
+// (components/business/pieces-editor.tsx). The server builds the line with
+// the counter's own writer (functions/request_receive.js), so a received
+// request and a counter registration are the same line.
+// ---------------------------------------------------------------------------
 
-/** The Received form opens with the request's pieces, priced from the estimate. */
-export function receiveItemsFrom(row: unknown, lang: Lang): ReceiveItem[] {
-  const prices = estimateDraftPrices(row, lang);
-  return requestPieces(row).map((piece) => ({
-    key: piece.id, id: piece.id, kind: piece.kind, description: piece.description, price: prices[piece.id] ?? "",
-  }));
+/**
+ * What each request piece is priced at when Received opens: the estimate's
+ * price (else the piece's `estimateCents`), plus - for a collected request -
+ * the estimate's pickup fee spread over the priced pieces, the odd cents on
+ * the first. A line's total is the sum of its pieces, so the fee rides
+ * inside them. Mirrors `receivePrefillCents` in functions/request_receive.js.
+ */
+export function receivePrefillCents(row: unknown): Map<string, number | null> {
+  const estimate = requestEstimate(row);
+  const prices = new Map<string, number | null>();
+  for (const piece of requestPieces(row)) {
+    prices.set(piece.id, estimate?.pieces.get(piece.id) ?? piece.estimateCents);
+  }
+  const fee = text(asRow(row).handoff, 20) === "collect" ? Math.max(0, estimate?.pickupFeeCents ?? 0) : 0;
+  const priced = [...prices.keys()].filter((id) => prices.get(id) !== null);
+  if (fee > 0 && priced.length > 0) {
+    const shares = distributeCents(fee, priced.length);
+    priced.forEach((id, i) => prices.set(id, (prices.get(id) as number) + (shares[i] ?? 0)));
+  }
+  return prices;
 }
 
-let receiveSerial = 0;
-export function newReceiveItem(): ReceiveItem {
-  receiveSerial += 1;
-  return { key: `new-${Date.now()}-${receiveSerial}`, id: "", kind: "box", description: "", price: "" };
+/** The Received editor opens on the request's pieces, ids kept, priced by receivePrefillCents. */
+export function receiveDraftsFrom(row: unknown): LinePieceDraft[] {
+  const prices = receivePrefillCents(row);
+  const raw = Array.isArray(asRow(row).pieces) ? (asRow(row).pieces as unknown[]) : [];
+  return requestPieces(row).map((piece, i) => {
+    const size = pieceSizeOf(asRow(raw[i]).sizeIn);
+    const cents = prices.get(piece.id) ?? null;
+    return {
+      ...newPieceDraftOf(piece.kind),
+      id: piece.id,
+      description: piece.description,
+      lengthIn: size ? String(size.l) : "",
+      widthIn: size ? String(size.w) : "",
+      heightIn: size ? String(size.h) : "",
+      price: cents === null ? "" : ledgerCentsToInput(cents),
+    };
+  });
 }
 
 /**
- * The receivePackageRequest pieces (§8.6): the request's pieces by id, new
- * ones without, all priced or none; or the first problem.
+ * The receivePackageRequest pieces (§8.6) from the editor: the request's
+ * pieces by id (with what they turned out to be), new ones without an id,
+ * all priced or none; or the first problem (a phase 1 piece code, or
+ * `too_many_pieces` / `price_required`).
  */
-export function receiveItemsPayload(items: readonly ReceiveItem[]): {
-  pieces: ({ id: string; priceCents: number | null } | { kind: PieceKind; description: string; priceCents: number | null })[];
-  error: string;
-} {
-  if (items.length === 0) return { pieces: [], error: "pieces_required" };
-  if (items.length > REQUEST_LIMITS.pieces) return { pieces: [], error: "too_many_pieces" };
-  const pieces: ({ id: string; priceCents: number | null } | { kind: PieceKind; description: string; priceCents: number | null })[] = [];
-  for (const item of items) {
-    const typed = item.price.trim();
-    const cents = typed ? readDollars(typed) : null;
-    if (typed && cents === null) return { pieces: [], error: "price_invalid" };
-    if (item.id) {
-      pieces.push({ id: item.id, priceCents: cents });
-    } else {
-      if (item.kind !== "barrel" && !item.description.trim()) return { pieces: [], error: "piece_description_required" };
-      pieces.push({ kind: item.kind, description: item.description.trim(), priceCents: cents });
-    }
-  }
+export function receivePayload(drafts: readonly LinePieceDraft[]): { pieces: PiecePayload[]; error: string } {
+  const problems = pieceDraftProblems(drafts);
+  if (problems.codes.length > 0) return { pieces: [], error: problems.codes[0] };
+  if (drafts.length > REQUEST_LIMITS.pieces) return { pieces: [], error: "too_many_pieces" };
+  const pieces = piecesPayload(drafts);
   const priced = pieces.filter((p) => p.priceCents !== null).length;
   if (priced > 0 && priced < pieces.length) return { pieces: [], error: "price_required" };
   return { pieces, error: "" };
 }
 
-/** The receivePackageRequest pieces: final prices, prefilled from the estimate. */
-export function receivePiecesPayload(row: Row, prices: Record<string, string>): { pieces: { id: string; priceCents: number | null }[]; error: string } {
-  const pieces: { id: string; priceCents: number | null }[] = [];
-  for (const piece of requestPieces(row)) {
-    const typed = (prices[piece.id] ?? "").trim();
-    if (!typed) {
-      pieces.push({ id: piece.id, priceCents: null });
-      continue;
-    }
-    const cents = readDollars(typed);
-    if (cents === null) return { pieces: [], error: "price_invalid" };
-    pieces.push({ id: piece.id, priceCents: cents });
-  }
-  const priced = pieces.filter((p) => p.priceCents !== null).length;
-  if (priced > 0 && priced < pieces.length) return { pieces: [], error: "price_required" };
-  return { pieces, error: "" };
+/** The Received total: the sum of the pieces, as the line will hold it. */
+export function receiveTotalCents(drafts: readonly LinePieceDraft[]): number | null {
+  return piecesDraftTotalCents(drafts);
 }
 
 // ---------------------------------------------------------------------------
