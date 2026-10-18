@@ -53,7 +53,7 @@ describe("package labels", () => {
         assert.match(page, /Mariama Bah<em>\+224620000000<\/em>/);
         assert.match(page, /Fatou Diallo<em>\+16465550100<\/em>/);
         assert.match(page, /VIN 1HGCM82633A004352/);
-        assert.match(page, /1 \/ 3/);
+        assert.match(page, /1 of 3/);
       });
 
   it("names the receiver and the sender, each with their number", () => {

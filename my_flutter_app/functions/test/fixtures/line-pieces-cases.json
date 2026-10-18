@@ -1,0 +1,2074 @@
+{
+ "about": "Shared cases for line pieces: functions/line_pieces.js, admin_web/src/lib/line-pieces.ts and lib/services/line_pieces.dart must each produce exactly `expected` for `fn(...args)`. Generated from the JS module and reviewed by hand.",
+ "cases": [
+  {
+   "fn": "pieceErrors",
+   "args": [
+    []
+   ],
+   "note": "no pieces",
+   "expected": [
+    "pieces_required"
+   ]
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    null
+   ],
+   "note": "not a list",
+   "expected": [
+    "pieces_required"
+   ]
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "barrel"
+     }
+    ]
+   ],
+   "note": "a bare barrel is fine",
+   "expected": []
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "box",
+      "description": ""
+     }
+    ]
+   ],
+   "note": "a box must say what it is",
+   "expected": [
+    "piece_description_required"
+   ]
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "tv",
+      "description": "TV"
+     }
+    ]
+   ],
+   "note": "unknown kind",
+   "expected": [
+    "piece_kind_invalid"
+   ]
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     }
+    ]
+   ],
+   "note": "description too long",
+   "expected": [
+    "piece_description_too_long"
+   ]
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "TV",
+      "priceCents": -1
+     },
+     {
+      "kind": "barrel",
+      "priceCents": 1.5
+     }
+    ]
+   ],
+   "note": "price must be whole non-negative cents",
+   "expected": [
+    "piece_price_invalid"
+   ]
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "barrel",
+      "priceCents": 0
+     }
+    ]
+   ],
+   "note": "zero is a price",
+   "expected": []
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "box",
+      "description": "Clothes",
+      "sizeIn": {
+       "l": 20,
+       "w": 20
+      }
+     }
+    ]
+   ],
+   "note": "two sides is no size",
+   "expected": [
+    "piece_size_invalid"
+   ]
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "box",
+      "description": "Clothes",
+      "sizeIn": {
+       "l": 20,
+       "w": 20,
+       "h": 601
+      }
+     }
+    ]
+   ],
+   "note": "over 600 in",
+   "expected": [
+    "piece_size_invalid"
+   ]
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "box",
+      "description": "Clothes",
+      "sizeIn": {
+       "l": "",
+       "w": null
+      }
+     }
+    ]
+   ],
+   "note": "an empty size is no size",
+   "expected": []
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     }
+    ]
+   ],
+   "note": "61 pieces",
+   "expected": [
+    "pieces_too_many"
+   ]
+  },
+  {
+   "fn": "pieceErrors",
+   "args": [
+    [
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     }
+    ]
+   ],
+   "note": "60 pieces",
+   "expected": []
+  },
+  {
+   "fn": "normalizePieces",
+   "args": [
+    [
+     {
+      "kind": "Barrel",
+      "description": "  blue  ",
+      "priceCents": 10000
+     },
+     {
+      "id": "p1",
+      "kind": "box",
+      "description": "Clothes",
+      "sizeIn": {
+       "l": "20.555",
+       "w": 10,
+       "h": 10
+      }
+     },
+     {
+      "id": "bad id!",
+      "kind": "other",
+      "description": "TV",
+      "priceCents": ""
+     }
+    ]
+   ],
+   "note": "ids kept or minted, fields cleaned",
+   "expected": [
+    {
+     "id": "p2",
+     "kind": "barrel",
+     "description": "blue",
+     "sizeIn": null,
+     "priceCents": 10000
+    },
+    {
+     "id": "p1",
+     "kind": "box",
+     "description": "Clothes",
+     "sizeIn": {
+      "l": 20.56,
+      "w": 10,
+      "h": 10
+     },
+     "priceCents": null
+    },
+    {
+     "id": "p3",
+     "kind": "other",
+     "description": "TV",
+     "sizeIn": null,
+     "priceCents": null
+    }
+   ]
+  },
+  {
+   "fn": "normalizePieces",
+   "args": [
+    [
+     {
+      "id": "a",
+      "kind": "barrel"
+     },
+     {
+      "id": "a",
+      "kind": "barrel"
+     }
+    ]
+   ],
+   "note": "a repeated id is replaced",
+   "expected": [
+    {
+     "id": "a",
+     "kind": "barrel",
+     "description": "",
+     "sizeIn": null,
+     "priceCents": null
+    },
+    {
+     "id": "p1",
+     "kind": "barrel",
+     "description": "",
+     "sizeIn": null,
+     "priceCents": null
+    }
+   ]
+  },
+  {
+   "fn": "distributeCents",
+   "args": [
+    10000,
+    3
+   ],
+   "note": "odd cents first",
+   "expected": [
+    3334,
+    3333,
+    3333
+   ]
+  },
+  {
+   "fn": "distributeCents",
+   "args": [
+    null,
+    2
+   ],
+   "note": "no price",
+   "expected": [
+    null,
+    null
+   ]
+  },
+  {
+   "fn": "distributeCents",
+   "args": [
+    2,
+    4
+   ],
+   "note": "fewer cents than pieces",
+   "expected": [
+    1,
+    1,
+    0,
+    0
+   ]
+  },
+  {
+   "fn": "linePieces",
+   "args": [
+    {
+     "kind": "barrels",
+     "quantity": 4,
+     "priceCents": 40000
+    }
+   ],
+   "note": "legacy barrels",
+   "expected": [
+    {
+     "id": "p1",
+     "kind": "barrel",
+     "description": "",
+     "sizeIn": null,
+     "priceCents": 10000
+    },
+    {
+     "id": "p2",
+     "kind": "barrel",
+     "description": "",
+     "sizeIn": null,
+     "priceCents": 10000
+    },
+    {
+     "id": "p3",
+     "kind": "barrel",
+     "description": "",
+     "sizeIn": null,
+     "priceCents": 10000
+    },
+    {
+     "id": "p4",
+     "kind": "barrel",
+     "description": "",
+     "sizeIn": null,
+     "priceCents": 10000
+    }
+   ]
+  },
+  {
+   "fn": "linePieces",
+   "args": [
+    {
+     "kind": "other",
+     "quantity": 2,
+     "description": "Tires",
+     "lengthIn": 30,
+     "widthIn": 30,
+     "heightIn": 10
+    }
+   ],
+   "note": "legacy other with a size",
+   "expected": [
+    {
+     "id": "p1",
+     "kind": "other",
+     "description": "Tires",
+     "sizeIn": {
+      "l": 30,
+      "w": 30,
+      "h": 10
+     },
+     "priceCents": null
+    },
+    {
+     "id": "p2",
+     "kind": "other",
+     "description": "Tires",
+     "sizeIn": {
+      "l": 30,
+      "w": 30,
+      "h": 10
+     },
+     "priceCents": null
+    }
+   ]
+  },
+  {
+   "fn": "linePieces",
+   "args": [
+    {
+     "kind": "other",
+     "quantity": 0,
+     "description": "Boxes"
+    }
+   ],
+   "note": "legacy quantity 0 is one piece",
+   "expected": [
+    {
+     "id": "p1",
+     "kind": "other",
+     "description": "Boxes",
+     "sizeIn": null,
+     "priceCents": null
+    }
+   ]
+  },
+  {
+   "fn": "linePieces",
+   "args": [
+    {
+     "kind": "car",
+     "vinNumber": "1HGCM82633A004352",
+     "priceCents": 150000
+    }
+   ],
+   "note": "a car is one car piece",
+   "expected": [
+    {
+     "id": "car",
+     "kind": "car",
+     "description": "",
+     "sizeIn": null,
+     "priceCents": 150000
+    }
+   ]
+  },
+  {
+   "fn": "linePieces",
+   "args": [
+    {
+     "kind": "other",
+     "quantity": 3,
+     "description": "Barrel, Clothes",
+     "pieces": [
+      {
+       "id": "p1",
+       "kind": "barrel",
+       "priceCents": 5000
+      },
+      {
+       "id": "p2",
+       "kind": "box",
+       "description": "Clothes",
+       "priceCents": null
+      }
+     ]
+    }
+   ],
+   "note": "stored pieces win over the summary",
+   "expected": [
+    {
+     "id": "p1",
+     "kind": "barrel",
+     "description": "",
+     "sizeIn": null,
+     "priceCents": 5000
+    },
+    {
+     "id": "p2",
+     "kind": "box",
+     "description": "Clothes",
+     "sizeIn": null,
+     "priceCents": null
+    }
+   ]
+  },
+  {
+   "fn": "linePieces",
+   "args": [
+    {
+     "kind": "car",
+     "pieces": [
+      {
+       "kind": "barrel"
+      }
+     ]
+    }
+   ],
+   "note": "a car ignores pieces",
+   "expected": [
+    {
+     "id": "car",
+     "kind": "car",
+     "description": "",
+     "sizeIn": null,
+     "priceCents": null
+    }
+   ]
+  },
+  {
+   "fn": "lineCounts",
+   "args": [
+    {
+     "kind": "barrels",
+     "quantity": 3
+    }
+   ],
+   "note": "legacy barrels count",
+   "expected": {
+    "pieceCount": 3,
+    "barrelPieces": 3,
+    "packagePieces": 0,
+    "carPieces": 0
+   }
+  },
+  {
+   "fn": "lineCounts",
+   "args": [
+    {
+     "kind": "other",
+     "quantity": 2,
+     "description": "Boxes"
+    }
+   ],
+   "note": "legacy other counts as packages",
+   "expected": {
+    "pieceCount": 2,
+    "barrelPieces": 0,
+    "packagePieces": 2,
+    "carPieces": 0
+   }
+  },
+  {
+   "fn": "lineCounts",
+   "args": [
+    {
+     "kind": "car"
+    }
+   ],
+   "note": "car",
+   "expected": {
+    "pieceCount": 1,
+    "barrelPieces": 0,
+    "packagePieces": 0,
+    "carPieces": 1
+   }
+  },
+  {
+   "fn": "lineCounts",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel"
+      },
+      {
+       "kind": "barrel"
+      },
+      {
+       "kind": "box",
+       "description": "x"
+      },
+      {
+       "kind": "other",
+       "description": "TV"
+      }
+     ]
+    }
+   ],
+   "note": "mixed pieces",
+   "expected": {
+    "pieceCount": 4,
+    "barrelPieces": 2,
+    "packagePieces": 2,
+    "carPieces": 0
+   }
+  },
+  {
+   "fn": "piecesTotalCents",
+   "args": [
+    [
+     {
+      "priceCents": 10000
+     },
+     {
+      "priceCents": null
+     },
+     {
+      "priceCents": 2550
+     }
+    ]
+   ],
+   "note": "sum of priced pieces",
+   "expected": 12550
+  },
+  {
+   "fn": "piecesTotalCents",
+   "args": [
+    [
+     {
+      "priceCents": null
+     }
+    ]
+   ],
+   "note": "nothing priced",
+   "expected": null
+  },
+  {
+   "fn": "piecesTotalCents",
+   "args": [
+    [
+     {
+      "priceCents": 0
+     }
+    ]
+   ],
+   "note": "zero total is no price",
+   "expected": null
+  },
+  {
+   "fn": "piecesSummaryFields",
+   "args": [
+    [
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     }
+    ]
+   ],
+   "note": "all barrels",
+   "expected": {
+    "kind": "barrels",
+    "quantity": 2,
+    "description": ""
+   }
+  },
+  {
+   "fn": "piecesSummaryFields",
+   "args": [
+    [
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "box",
+      "description": "Clothes"
+     },
+     {
+      "kind": "other",
+      "description": "TV"
+     },
+     {
+      "kind": "box",
+      "description": "Clothes"
+     }
+    ]
+   ],
+   "note": "mixed",
+   "expected": {
+    "kind": "other",
+    "quantity": 4,
+    "description": "Barrel, Clothes, TV"
+   }
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "box",
+      "description": "Clothes"
+     }
+    ],
+    "en"
+   ],
+   "note": "2 barrels, 1 box",
+   "expected": "2 barrels, 1 box"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "barrel"
+     },
+     {
+      "kind": "box",
+      "description": "Clothes"
+     }
+    ],
+    "fr"
+   ],
+   "note": "2 fûts, 1 colis",
+   "expected": "2 fûts, 1 colis"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "TV"
+     },
+     {
+      "kind": "other",
+      "description": "TV"
+     }
+    ],
+    "en"
+   ],
+   "note": "same items are named",
+   "expected": "2 × TV"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "TV"
+     }
+    ],
+    "fr"
+   ],
+   "note": "one item is its name",
+   "expected": "TV"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "TV"
+     },
+     {
+      "kind": "other",
+      "description": "Bike"
+     }
+    ],
+    "en"
+   ],
+   "note": "a mix of items is counted",
+   "expected": "2 items"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "other",
+      "description": "TV"
+     },
+     {
+      "kind": "other",
+      "description": "Bike"
+     }
+    ],
+    "fr"
+   ],
+   "note": "articles",
+   "expected": "2 articles"
+  },
+  {
+   "fn": "pieceSummaryText",
+   "args": [
+    [
+     {
+      "kind": "box",
+      "description": "a"
+     },
+     {
+      "kind": "box",
+      "description": "b"
+     },
+     {
+      "kind": "barrel"
+     }
+    ],
+    "en"
+   ],
+   "note": "boxes plural",
+   "expected": "1 barrel, 2 boxes"
+  },
+  {
+   "fn": "linePiecesWhat",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel"
+      },
+      {
+       "kind": "barrel"
+      }
+     ]
+    },
+    "en",
+    {
+     "partCount": 2,
+     "pieceCount": 4
+    }
+   ],
+   "note": "a part of a split group",
+   "expected": "2 of your 4 pieces"
+  },
+  {
+   "fn": "linePiecesWhat",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel"
+      },
+      {
+       "kind": "barrel"
+      }
+     ]
+    },
+    "fr",
+    {
+     "partCount": 2,
+     "pieceCount": 4
+    }
+   ],
+   "note": "une partie",
+   "expected": "2 de vos 4 colis"
+  },
+  {
+   "fn": "linePiecesWhat",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel"
+      },
+      {
+       "kind": "barrel"
+      }
+     ]
+    },
+    "en",
+    {
+     "partCount": 1,
+     "pieceCount": 2
+    }
+   ],
+   "note": "a group of one",
+   "expected": "2 barrels"
+  },
+  {
+   "fn": "linePiecesWhat",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel"
+      },
+      {
+       "kind": "barrel"
+      }
+     ]
+    },
+    "en",
+    null
+   ],
+   "note": "no group",
+   "expected": "2 barrels"
+  },
+  {
+   "fn": "lineGroupSummary",
+   "args": [
+    [
+     {
+      "id": "root",
+      "line": {
+       "rootLineId": "root",
+       "partIndex": 1,
+       "trackingCode": "CL-K7M4P2",
+       "priceCents": 20000,
+       "paidCents": 25000,
+       "payOnArrival": false,
+       "containerId": "box1",
+       "containerStatus": "loading",
+       "pieces": [
+        {
+         "kind": "barrel"
+        },
+        {
+         "kind": "barrel"
+        }
+       ]
+      }
+     },
+     {
+      "id": "part3",
+      "line": {
+       "rootLineId": "root",
+       "partIndex": 3,
+       "trackingCode": "CL-K7M4P2-3",
+       "priceCents": null,
+       "paidCents": 0,
+       "containerId": "",
+       "containerStatus": "waiting",
+       "pieces": [
+        {
+         "kind": "box",
+         "description": "x"
+        }
+       ]
+      }
+     },
+     {
+      "id": "part2",
+      "line": {
+       "rootLineId": "root",
+       "partIndex": 2,
+       "trackingCode": "CL-K7M4P2-2",
+       "priceCents": 10000,
+       "paidCents": 0,
+       "containerId": "",
+       "containerStatus": "waiting",
+       "pieces": [
+        {
+         "kind": "barrel"
+        }
+       ]
+      }
+     },
+     {
+      "id": "stranger",
+      "line": {
+       "rootLineId": "other",
+       "priceCents": 999
+      }
+     }
+    ],
+    "root"
+   ],
+   "note": "three parts, payments on the root",
+   "expected": {
+    "rootLineId": "root",
+    "partCount": 3,
+    "pieceCount": 4,
+    "priceCents": 30000,
+    "paidCents": 25000,
+    "balanceCents": 5000,
+    "payOnArrival": false,
+    "parts": [
+     {
+      "id": "root",
+      "trackingCode": "CL-K7M4P2",
+      "partIndex": 1,
+      "pieceCount": 2,
+      "priceCents": 20000,
+      "containerId": "box1",
+      "containerStatus": "loading"
+     },
+     {
+      "id": "part2",
+      "trackingCode": "CL-K7M4P2-2",
+      "partIndex": 2,
+      "pieceCount": 1,
+      "priceCents": 10000,
+      "containerId": "",
+      "containerStatus": "waiting"
+     },
+     {
+      "id": "part3",
+      "trackingCode": "CL-K7M4P2-3",
+      "partIndex": 3,
+      "pieceCount": 1,
+      "priceCents": null,
+      "containerId": "",
+      "containerStatus": "waiting"
+     }
+    ]
+   }
+  },
+  {
+   "fn": "lineGroupSummary",
+   "args": [
+    [
+     {
+      "id": "solo",
+      "line": {
+       "kind": "barrels",
+       "quantity": 2,
+       "priceCents": 5000,
+       "paidCents": 5000
+      }
+     }
+    ],
+    "solo"
+   ],
+   "note": "a legacy line is a group of one",
+   "expected": {
+    "rootLineId": "solo",
+    "partCount": 1,
+    "pieceCount": 2,
+    "priceCents": 5000,
+    "paidCents": 5000,
+    "balanceCents": 0,
+    "payOnArrival": false,
+    "parts": [
+     {
+      "id": "solo",
+      "trackingCode": "",
+      "partIndex": 1,
+      "pieceCount": 2,
+      "priceCents": 5000,
+      "containerId": "",
+      "containerStatus": ""
+     }
+    ]
+   }
+  },
+  {
+   "fn": "lineGroupSummary",
+   "args": [
+    [
+     {
+      "id": "solo",
+      "line": {
+       "kind": "barrels",
+       "quantity": 2,
+       "payOnArrival": true
+      }
+     }
+    ],
+    "solo"
+   ],
+   "note": "unpriced",
+   "expected": {
+    "rootLineId": "solo",
+    "partCount": 1,
+    "pieceCount": 2,
+    "priceCents": null,
+    "paidCents": 0,
+    "balanceCents": 0,
+    "payOnArrival": true,
+    "parts": [
+     {
+      "id": "solo",
+      "trackingCode": "",
+      "partIndex": 1,
+      "pieceCount": 2,
+      "priceCents": null,
+      "containerId": "",
+      "containerStatus": ""
+     }
+    ]
+   }
+  },
+  {
+   "fn": "paidFloorForLine",
+   "args": [
+    {
+     "rootLineId": "root",
+     "partCount": 3,
+     "pieceCount": 4,
+     "priceCents": 30000,
+     "paidCents": 25000,
+     "balanceCents": 5000,
+     "payOnArrival": false,
+     "parts": [
+      {
+       "id": "root",
+       "trackingCode": "CL-K7M4P2",
+       "partIndex": 1,
+       "pieceCount": 2,
+       "priceCents": 20000,
+       "containerId": "box1",
+       "containerStatus": "loading"
+      },
+      {
+       "id": "part2",
+       "trackingCode": "CL-K7M4P2-2",
+       "partIndex": 2,
+       "pieceCount": 1,
+       "priceCents": 10000,
+       "containerId": "",
+       "containerStatus": "waiting"
+      },
+      {
+       "id": "part3",
+       "trackingCode": "CL-K7M4P2-3",
+       "partIndex": 3,
+       "pieceCount": 1,
+       "priceCents": null,
+       "containerId": "",
+       "containerStatus": "waiting"
+      }
+     ]
+    },
+    "root"
+   ],
+   "note": "root must cover paid less the other parts",
+   "expected": 15000
+  },
+  {
+   "fn": "paidFloorForLine",
+   "args": [
+    {
+     "rootLineId": "root",
+     "partCount": 3,
+     "pieceCount": 4,
+     "priceCents": 30000,
+     "paidCents": 25000,
+     "balanceCents": 5000,
+     "payOnArrival": false,
+     "parts": [
+      {
+       "id": "root",
+       "trackingCode": "CL-K7M4P2",
+       "partIndex": 1,
+       "pieceCount": 2,
+       "priceCents": 20000,
+       "containerId": "box1",
+       "containerStatus": "loading"
+      },
+      {
+       "id": "part2",
+       "trackingCode": "CL-K7M4P2-2",
+       "partIndex": 2,
+       "pieceCount": 1,
+       "priceCents": 10000,
+       "containerId": "",
+       "containerStatus": "waiting"
+      },
+      {
+       "id": "part3",
+       "trackingCode": "CL-K7M4P2-3",
+       "partIndex": 3,
+       "pieceCount": 1,
+       "priceCents": null,
+       "containerId": "",
+       "containerStatus": "waiting"
+      }
+     ]
+    },
+    "part2"
+   ],
+   "note": "part2 floor",
+   "expected": 5000
+  },
+  {
+   "fn": "paidFloorForLine",
+   "args": [
+    {
+     "rootLineId": "solo",
+     "partCount": 1,
+     "pieceCount": 1,
+     "priceCents": 5000,
+     "paidCents": 3000,
+     "balanceCents": 2000,
+     "payOnArrival": false,
+     "parts": [
+      {
+       "id": "solo",
+       "trackingCode": "",
+       "partIndex": 1,
+       "pieceCount": 1,
+       "priceCents": 5000,
+       "containerId": "",
+       "containerStatus": ""
+      }
+     ]
+    },
+    "solo"
+   ],
+   "note": "a line alone",
+   "expected": 3000
+  },
+  {
+   "fn": "splitPieces",
+   "args": [
+    {
+     "pieces": [
+      {
+       "id": "a",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "b",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "c",
+       "kind": "box",
+       "description": "x",
+       "priceCents": 50
+      },
+      {
+       "id": "d",
+       "kind": "box",
+       "description": "y",
+       "priceCents": null
+      }
+     ]
+    },
+    2
+   ],
+   "note": "2 of 4 go",
+   "expected": {
+    "error": null,
+    "split": true,
+    "going": [
+     {
+      "id": "a",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "b",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     }
+    ],
+    "staying": [
+     {
+      "id": "c",
+      "kind": "box",
+      "description": "x",
+      "sizeIn": null,
+      "priceCents": 50
+     },
+     {
+      "id": "d",
+      "kind": "box",
+      "description": "y",
+      "sizeIn": null,
+      "priceCents": null
+     }
+    ]
+   }
+  },
+  {
+   "fn": "splitPieces",
+   "args": [
+    {
+     "pieces": [
+      {
+       "id": "a",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "b",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "c",
+       "kind": "box",
+       "description": "x",
+       "priceCents": 50
+      },
+      {
+       "id": "d",
+       "kind": "box",
+       "description": "y",
+       "priceCents": null
+      }
+     ]
+    },
+    4
+   ],
+   "note": "all go: no split",
+   "expected": {
+    "error": null,
+    "split": false,
+    "going": [
+     {
+      "id": "a",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "b",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "c",
+      "kind": "box",
+      "description": "x",
+      "sizeIn": null,
+      "priceCents": 50
+     },
+     {
+      "id": "d",
+      "kind": "box",
+      "description": "y",
+      "sizeIn": null,
+      "priceCents": null
+     }
+    ],
+    "staying": []
+   }
+  },
+  {
+   "fn": "splitPieces",
+   "args": [
+    {
+     "pieces": [
+      {
+       "id": "a",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "b",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "c",
+       "kind": "box",
+       "description": "x",
+       "priceCents": 50
+      },
+      {
+       "id": "d",
+       "kind": "box",
+       "description": "y",
+       "priceCents": null
+      }
+     ]
+    },
+    null
+   ],
+   "note": "no count: all go",
+   "expected": {
+    "error": null,
+    "split": false,
+    "going": [
+     {
+      "id": "a",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "b",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "c",
+      "kind": "box",
+      "description": "x",
+      "sizeIn": null,
+      "priceCents": 50
+     },
+     {
+      "id": "d",
+      "kind": "box",
+      "description": "y",
+      "sizeIn": null,
+      "priceCents": null
+     }
+    ],
+    "staying": []
+   }
+  },
+  {
+   "fn": "splitPieces",
+   "args": [
+    {
+     "pieces": [
+      {
+       "id": "a",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "b",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "c",
+       "kind": "box",
+       "description": "x",
+       "priceCents": 50
+      },
+      {
+       "id": "d",
+       "kind": "box",
+       "description": "y",
+       "priceCents": null
+      }
+     ]
+    },
+    0
+   ],
+   "note": "zero is not a count",
+   "expected": {
+    "error": "piece_count_invalid",
+    "split": false,
+    "going": [
+     {
+      "id": "a",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "b",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "c",
+      "kind": "box",
+      "description": "x",
+      "sizeIn": null,
+      "priceCents": 50
+     },
+     {
+      "id": "d",
+      "kind": "box",
+      "description": "y",
+      "sizeIn": null,
+      "priceCents": null
+     }
+    ],
+    "staying": []
+   }
+  },
+  {
+   "fn": "splitPieces",
+   "args": [
+    {
+     "pieces": [
+      {
+       "id": "a",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "b",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "c",
+       "kind": "box",
+       "description": "x",
+       "priceCents": 50
+      },
+      {
+       "id": "d",
+       "kind": "box",
+       "description": "y",
+       "priceCents": null
+      }
+     ]
+    },
+    5
+   ],
+   "note": "more than it has",
+   "expected": {
+    "error": "piece_count_invalid",
+    "split": false,
+    "going": [
+     {
+      "id": "a",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "b",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "c",
+      "kind": "box",
+      "description": "x",
+      "sizeIn": null,
+      "priceCents": 50
+     },
+     {
+      "id": "d",
+      "kind": "box",
+      "description": "y",
+      "sizeIn": null,
+      "priceCents": null
+     }
+    ],
+    "staying": []
+   }
+  },
+  {
+   "fn": "splitPieces",
+   "args": [
+    {
+     "pieces": [
+      {
+       "id": "a",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "b",
+       "kind": "barrel",
+       "priceCents": 100
+      },
+      {
+       "id": "c",
+       "kind": "box",
+       "description": "x",
+       "priceCents": 50
+      },
+      {
+       "id": "d",
+       "kind": "box",
+       "description": "y",
+       "priceCents": null
+      }
+     ]
+    },
+    1.5
+   ],
+   "note": "not whole",
+   "expected": {
+    "error": "piece_count_invalid",
+    "split": false,
+    "going": [
+     {
+      "id": "a",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "b",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 100
+     },
+     {
+      "id": "c",
+      "kind": "box",
+      "description": "x",
+      "sizeIn": null,
+      "priceCents": 50
+     },
+     {
+      "id": "d",
+      "kind": "box",
+      "description": "y",
+      "sizeIn": null,
+      "priceCents": null
+     }
+    ],
+    "staying": []
+   }
+  },
+  {
+   "fn": "splitPieces",
+   "args": [
+    {
+     "kind": "car"
+    },
+    1
+   ],
+   "note": "a car goes whole",
+   "expected": {
+    "error": null,
+    "split": false,
+    "going": [
+     {
+      "id": "car",
+      "kind": "car",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": null
+     }
+    ],
+    "staying": []
+   }
+  },
+  {
+   "fn": "splitPieces",
+   "args": [
+    {
+     "kind": "barrels",
+     "quantity": 3,
+     "priceCents": 30000
+    },
+    1
+   ],
+   "note": "a legacy line splits as pieces",
+   "expected": {
+    "error": null,
+    "split": true,
+    "going": [
+     {
+      "id": "p1",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 10000
+     }
+    ],
+    "staying": [
+     {
+      "id": "p2",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 10000
+     },
+     {
+      "id": "p3",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 10000
+     }
+    ]
+   }
+  },
+  {
+   "fn": "nextPartIndex",
+   "args": [
+    {},
+    []
+   ],
+   "note": "first split",
+   "expected": 2
+  },
+  {
+   "fn": "nextPartIndex",
+   "args": [
+    {
+     "lastPartIndex": 3
+    },
+    [
+     {
+      "partIndex": 2
+     }
+    ]
+   ],
+   "note": "a cancelled -3 is not reused",
+   "expected": 4
+  },
+  {
+   "fn": "nextPartIndex",
+   "args": [
+    {
+     "lastPartIndex": 2
+    },
+    [
+     {
+      "partIndex": 1
+     },
+     {
+      "partIndex": 4
+     }
+    ]
+   ],
+   "note": "highest part wins",
+   "expected": 5
+  },
+  {
+   "fn": "partTrackingCode",
+   "args": [
+    "cl-k7m4p2",
+    2
+   ],
+   "note": "code -2",
+   "expected": "CL-K7M4P2-2"
+  }
+ ]
+}

@@ -36,6 +36,15 @@ const {
   linePriceRecord,
 } = require("./container_payments");
 const {OCEAN_CARRIERS} = require("./ocean_carrier_catalog");
+const {
+  lineCounts,
+  lineHasPieces,
+  pieceErrors,
+  pieceSummaryText,
+  piecesLineFields,
+  piecesTotalCents,
+  normalizePieces,
+} = require("./line_pieces");
 
 const CONTAINER_STATUS = Object.freeze({
   LOADING: "loading",
@@ -314,9 +323,16 @@ function containerDeleteRefusal(current, lineCount) {
 function validateContainerLine(input, paidCents = 0) {
   const errors = [];
   const kind = text(input?.kind, 20);
-  if (!CONTAINER_LINE_KINDS.includes(kind)) errors.push("line_kind_invalid");
+  const pieced = linesInPiecesMode(input);
+  if (!pieced && !CONTAINER_LINE_KINDS.includes(kind)) {
+    errors.push("line_kind_invalid");
+  }
 
-  if (kind === "car") {
+  if (pieced) {
+    // What the line is comes from its pieces (line_pieces.js): the kind,
+    // count and description are summaries the server writes for old apps.
+    errors.push(...pieceErrors(input.pieces));
+  } else if (kind === "car") {
     const vin = text(input?.vinNumber, MAX_VIN).toUpperCase();
     if (vin.length < MIN_VIN) errors.push("vin_required");
   } else if (kind === "barrels") {
@@ -338,9 +354,27 @@ function validateContainerLine(input, paidCents = 0) {
     errors.push("customer_name_required");
   }
   errors.push(...contactPhoneErrors(input, owner));
-  errors.push(...sizeErrors(input));
-  errors.push(...priceErrors(input?.priceCents, paidCents));
+  if (pieced) {
+    // Sizes are each piece's own; the price is the sum of the pieces.
+    errors.push(...priceErrors(
+        piecesTotalCents(normalizePieces(input.pieces)), paidCents));
+  } else {
+    errors.push(...sizeErrors(input));
+    errors.push(...priceErrors(input?.priceCents, paidCents));
+  }
   return errors;
+}
+
+/**
+ * Whether a request (or a stored line merged with one) describes its load
+ * as pieces: any `pieces` list on a line that is not a car. A car is always
+ * one implicit piece, whatever else is sent.
+ *
+ * @param {object} input Raw line fields.
+ * @return {boolean} True for pieces, false for the kind/quantity form.
+ */
+function linesInPiecesMode(input) {
+  return text(input?.kind, 20) !== "car" && Array.isArray(input?.pieces);
 }
 
 /**
@@ -505,7 +539,8 @@ function containerLineRecord(input, opts = {}) {
   const kind = text(input.kind, 20);
   const owner = text(input.ownerKind, 20);
   const isCar = kind === "car";
-  return {
+  const pieced = linesInPiecesMode(input) && input.pieces.length > 0;
+  const record = {
     containerId: text(opts.containerId, MAX_LABEL),
     // Denormalised so "is this car already on an open container" is one
     // query on lines, not a read of every container.
@@ -532,7 +567,17 @@ function containerLineRecord(input, opts = {}) {
     // that were not reverted), never something a request can set.
     paidCents: 0,
     addedByStaffId: text(opts.addedByStaffId, MAX_LABEL),
+    // A car, or a line in the old kind/quantity form, has no pieces of its
+    // own: readers expand it (linePieces).
+    pieces: null,
   };
+  if (pieced) {
+    // The pieces decide what the line is, its total and (for one piece) its
+    // size; kind/quantity/description are the summary older apps read.
+    Object.assign(record, piecesLineFields(input.pieces));
+  }
+  // The counts every line carries, so volume is counted without pieces.
+  return {...record, ...lineCounts(record)};
 }
 
 /**
@@ -560,7 +605,8 @@ function openContainerHoldingVin(lines, ignoreContainerId = "") {
 
 /**
  * The summary a container carries so a list of them can be scanned without
- * loading every line. Barrels count by quantity; cars and other by line.
+ * loading every line. Pieces are counted by kind (a legacy line by its
+ * quantity), lines once each.
  *
  * @param {object[]} lines The container's lines.
  * @return {{lineCount: number, carCount: number, barrelCount: number,
@@ -571,10 +617,12 @@ function containerCounts(lines) {
   for (const line of Array.isArray(lines) ? lines : []) {
     const row = line && typeof line === "object" ? line : {};
     out.lineCount += 1;
-    const kind = text(row.kind, 20);
-    if (kind === "car") out.carCount += 1;
-    else if (kind === "barrels") out.barrelCount += positiveInt(row.quantity);
-    else out.otherCount += positiveInt(row.quantity) || 1;
+    // The pieces actually on this line (a split part counts only its own):
+    // barrels as barrels, boxes and other things as "other".
+    const counts = lineCounts(row);
+    out.carCount += counts.carPieces;
+    out.barrelCount += counts.barrelPieces;
+    out.otherCount += counts.packagePieces;
   }
   return out;
 }
@@ -714,14 +762,19 @@ const LINE_CONTACT_FIELDS = Object.freeze([
 ]);
 // What the line IS, including where it goes and how big it is. Editable while
 // it waits and while its container is loading.
+// `pieces` is what each piece is (kind, description, size), compared
+// without the prices.
 const LINE_SUBSTANCE_FIELDS = Object.freeze([
   "kind", "vinNumber", "carMake", "carModel", "carYear", "quantity",
   "description", "ownerKind", "destinationCountryId",
-  "destinationCountryName", "lengthIn", "widthIn", "heightIn",
+  "destinationCountryName", "lengthIn", "widthIn", "heightIn", "pieces",
 ]);
 // What the customer owes. Correctable in every state, like the contacts: a
 // price is agreed or changed after the box has sailed as often as before.
-const LINE_PRICE_FIELDS = Object.freeze(["priceCents", "payOnArrival"]);
+// `piecePrices` is the price of each piece: an edit key, never a field (the
+// prices are written inside `pieces`).
+const LINE_PRICE_FIELDS = Object.freeze(
+    ["priceCents", "payOnArrival", "piecePrices"]);
 const LINE_EDIT_FIELDS = Object.freeze(
     [...LINE_SUBSTANCE_FIELDS, ...LINE_PRICE_FIELDS, ...LINE_CONTACT_FIELDS]);
 
@@ -748,8 +801,10 @@ const LINE_FIELD_LABELS = Object.freeze({
   lengthIn: "size",
   widthIn: "size",
   heightIn: "size",
+  pieces: "pieces",
   priceCents: "price",
   payOnArrival: "pay on arrival",
+  piecePrices: "piece prices",
   ...CONTACT_FIELD_LABELS,
 });
 
@@ -777,6 +832,7 @@ function containerLineWhat(line) {
   if (kind === "car") {
     return `car ${text(row.vinNumber, MAX_VIN).toUpperCase()}`;
   }
+  if (lineHasPieces(row)) return pieceSummaryText(row.pieces, "en");
   if (kind === "barrels") return barrelsLabel(positiveInt(row.quantity));
   return `${positiveInt(row.quantity)} × ${text(row.description, MAX_LABEL)}`;
 }
@@ -794,7 +850,28 @@ function containerLineEditable(line) {
     line : {});
   const out = {};
   for (const key of LINE_EDIT_FIELDS) out[key] = record[key];
+  out.pieces = Array.isArray(record.pieces) ? record.pieces : null;
+  out.piecePrices = out.pieces ? out.pieces.map((p) => p.priceCents) : null;
   return out;
+}
+
+/**
+ * One editable field, as an edit compares it: a list of pieces by what each
+ * piece is (the prices are `piecePrices`), anything else as text.
+ *
+ * @param {string} key The field.
+ * @param {*} value Its value.
+ * @return {string} The comparable form.
+ */
+function editComparable(key, value) {
+  if (key === "pieces") {
+    return Array.isArray(value) ? JSON.stringify(value.map((p) =>
+      [p.id, p.kind, p.description, p.sizeIn])) : "";
+  }
+  if (key === "piecePrices") {
+    return Array.isArray(value) ? JSON.stringify(value) : "";
+  }
+  return String(value ?? "");
 }
 
 /**
@@ -827,14 +904,20 @@ function containerLineEditTarget(current, input, contactsOnly) {
  * @param {object} current The stored line.
  * @param {object} input The requested line, or contacts.
  * @param {boolean} contactsOnly Whether only contacts may change.
+ * @param {number|null} [paidFloor] What this line's price may not go below,
+ *   when the server has worked it out for a split group.
  * @return {string[]} Error codes.
  */
-function validateContainerLineEdit(current, input, contactsOnly) {
+function validateContainerLineEdit(current, input, contactsOnly,
+    paidFloor = null) {
   const row = current && typeof current === "object" ? current : {};
   const asked = input && typeof input === "object" ? input : {};
   if (contactsOnly) return validateContainerLineContacts(asked, row);
-  // What was paid is the stored amount, whatever the request claims.
-  return validateContainerLine({...row, ...asked}, paidCentsOf(row.paidCents));
+  // What was paid is the stored amount, whatever the request claims - or,
+  // for a line split into parts, what the server worked out this part must
+  // still cover (paidFloorForLine).
+  return validateContainerLine({...row, ...asked},
+      paidFloor === null ? paidCentsOf(row.paidCents) : paidCentsOf(paidFloor));
 }
 
 /**
@@ -848,7 +931,7 @@ function containerLineEditChanges(current, next) {
   const before = containerLineEditable(current);
   const after = next && typeof next === "object" ? next : {};
   return LINE_EDIT_FIELDS.filter((key) =>
-    String(before[key] ?? "") !== String(after[key] ?? ""));
+    editComparable(key, before[key]) !== editComparable(key, after[key]));
 }
 
 /**
@@ -934,9 +1017,19 @@ function containerLineEditLabels(changes) {
   const list = Array.isArray(changes) ? changes : [];
   const kindDependent = ["vinNumber", "carMake", "carModel", "carYear",
     "quantity", "description"];
+  // The kind, count, description and single-piece size of a line with
+  // pieces are summaries of them: "pieces" says it.
+  const pieceDependent = ["kind", "quantity", "description", "lengthIn",
+    "widthIn", "heightIn"];
+  // A piece's price moving moves the total: "piece prices" says both, and
+  // new pieces say "pieces" (and "price" when the total moved).
+  const priced = list.includes("piecePrices") && !list.includes("pieces");
   const ownerDependent = ["customerName", "customerPhone", "notifyCustomer"];
   const shown = list.filter((key) =>
     !(list.includes("kind") && kindDependent.includes(key)) &&
+    !(list.includes("pieces") && pieceDependent.includes(key)) &&
+    !(priced && key === "priceCents") &&
+    !(list.includes("pieces") && key === "piecePrices") &&
     !(list.includes("ownerKind") && ownerDependent.includes(key)));
   return [...new Set(shown.map((key) => LINE_FIELD_LABELS[key] || key))];
 }
@@ -1140,6 +1233,21 @@ const CONTAINER_MESSAGES = Object.freeze({
   payment_not_found: "That payment no longer exists.",
   payment_already_reverted: "That payment was already reverted.",
   carrier_invalid: "Choose the shipping line from the list.",
+  pieces_required: "Add at least one piece.",
+  pieces_too_many: "A package can have at most 60 pieces.",
+  piece_kind_invalid:
+    "Say what each piece is: a barrel, a box, or something else.",
+  piece_description_required: "Say what each box or item is.",
+  piece_description_too_long:
+    "Keep each piece's description to 120 characters.",
+  piece_size_invalid:
+    "Enter a piece's length, width and height in inches, or leave all " +
+    "three empty.",
+  piece_price_invalid: "Enter each piece's price in dollars, zero or more.",
+  piece_count_invalid:
+    "Choose how many pieces go in: from 1 to the number the package has.",
+  line_has_parts:
+    "Other parts of this package are still listed. Remove them first.",
 });
 
 module.exports = {
@@ -1163,6 +1271,7 @@ module.exports = {
   containerIsOpen,
   containerDeleteRefusal,
   validateContainerLine,
+  linesInPiecesMode,
   validateWaitingPackage,
   dimensionOf,
   lineVolumeCubicFeet,

@@ -211,6 +211,104 @@ receiver name + **full phone**, sender name + **full phone** (not for business
 stock), destination (the package's, else its container's) and `L x W x H in`
 when all three are set. **Price and payments are never printed.**
 
+One label per piece, `CL-K7M4P2 · 1 of 3` (`packageNumber` / `packageCount`),
+naming that piece (`Barrel`, the box's or item's description) and its own
+size. A legacy line prints its quantity the same way. The copies switch reads
+"per piece".
+
+## Pieces (docs/PACKAGE_REQUESTS.md §1, phase 1)
+
+A line is one customer's load (one sender, one receiver, one destination,
+one code). It holds **pieces**: each physical thing handed over. Several
+things packed in one box are one piece. Pure rules: `functions/line_pieces.js`,
+mirrored by `admin_web/src/lib/line-pieces.ts` and
+`my_flutter_app/lib/services/line_pieces.dart`; all three run the shared cases
+in `functions/test/fixtures/line-pieces-cases.json`.
+
+| field | type | notes |
+| --- | --- | --- |
+| `pieces` | `[{id, kind, description, sizeIn, priceCents}]` \| null | `kind`: `barrel` \| `box` \| `other`; `description` up to 120 chars, required for box/other; `sizeIn` `{l,w,h}` inches (0 < n <= 600, all three) or null; `priceCents` int >= 0 or null. `null` on cars and on lines in the old kind/quantity form |
+| `pieceCount`, `barrelPieces`, `packagePieces`, `carPieces` | int | denormalized on every write; packages = box + other; a car line is 1 car piece |
+| `kind`, `quantity`, `description` | | summaries for older app versions: `barrels` when every piece is a barrel else `other`; quantity = piece count; description names the pieces ("Barrel, Clothes, TV") |
+| `priceCents` | int \| null | = sum of the priced pieces (null while none is priced) |
+| `lengthIn`/`widthIn`/`heightIn` | | the piece's size for a one-piece line, else null |
+| `source` | `counter` \| `request` \| `card_order` | `counter` for `addWaitingPackage` / `addContainerLine` |
+| `requestId` | string | `""` until requests exist (phase 2) |
+| `receivedAt` | timestamp | server time when the pieces were received (counter: creation). Legacy lines: read `createdAt` |
+| `rootLineId`, `partIndex` | string, int | a new line is its own root, part 1. A split part points at the root |
+| `lastPartIndex` | int | on the root: the highest part number ever used (a cancelled part's code is never reused) |
+| `splitFromLineId` | string | on a part: the line it was split from |
+
+**Reading old lines** (`linePieces`): `{kind: "barrels", quantity: 4}` is 4
+barrel pieces; `{kind: "other", quantity: 2, description}` 2 `other` pieces
+with that description; a car 1 `car` piece. A legacy price is spread evenly
+over its pieces (odd cents on the first ones) so totals still read the same.
+Every reader (counts, labels, WhatsApp, tracking, lists) goes through it.
+
+**Writing**: `addWaitingPackage`, `addContainerLine` (`line.pieces`) and
+`updateContainerLine` (`line.pieces`) take `pieces` (1-60). When `pieces` is
+present on a line that is not a car, `kind`/`quantity`/`description`/size/
+`priceCents` in the request are ignored and recomputed from the pieces. A
+request without `pieces` (older app versions) still writes the old form.
+New refusal codes (`invalid-argument`, `details.reasons`): `pieces_required`,
+`pieces_too_many`, `piece_kind_invalid`, `piece_description_required`,
+`piece_description_too_long`, `piece_size_invalid`, `piece_price_invalid`.
+Piece ids are kept when they are `[A-Za-z0-9_-]{1,40}` and unique; others get
+the first free `p<n>`.
+
+**Editing** (`updateContainerLine`): what the pieces are (count, kind,
+description, size) changes while waiting or loading (`container_locked`
+after); their prices change in every state (edit key `piecePrices`). The
+counts follow the current pieces and the History says "Edited 2 barrels, 1
+box (was 3 barrels): pieces for Fatou". `setContainerLinePrice` on a line
+with pieces spreads a changed total evenly over its pieces (the same rule as
+reading a legacy price); an unchanged total only toggles pay on arrival.
+
+## Split across containers
+
+`assignContainerLines` takes `pieceCounts: {[lineId]: n}` (optional). For a
+line whose `n` is below its piece count, the first `n` pieces ride on the
+line itself (its code, its labels); the rest become a **part**: a new waiting
+line coded `<root code>-<k>` (`CL-K7M4P2-2`, then -3; `k` is one past the
+group's highest part), `rootLineId` = the root, `partIndex` = k, the same
+customer, receiver, phones, WhatsApp switches, destination, pay-on-arrival,
+`source`, `requestId` and the root's `receivedAt`; `paidCents: 0`; the pieces
+moved with their prices (each line's `priceCents` is the sum of its own
+pieces). All in the one transaction that moves the lines. `n` must be a whole
+number from 1 to the line's piece count (`piece_count_invalid`,
+`invalid-argument`, `details.lineIds`); a car is never split. A line already
+on this container is skipped, so retrying a request that landed changes
+nothing (`alreadyAssigned`). Answer: `{success, assigned, alreadyAssigned,
+parts: [{lineId, partLineId, trackingCode, pieceCount}]}`. A part can be split
+again. No WhatsApp is sent by a split; each part later gets its own departed
+and ready-for-pickup messages. Container tallies count only the pieces on
+that container (`barrelCount` = barrel pieces, `otherCount` = box + other
+pieces, `carCount` = cars).
+
+Sending a part back to waiting (`unassignContainerLine`) never re-merges it.
+
+**Money stays on the root.** Payments are rows on the root line; `paidCents`
+lives there. Paid and balance are read for the whole group
+(`lineGroupSummary`: sum of the parts' prices, the root's paid):
+- `recordContainerLinePayment` with a part's id records on the root, against
+  the group's balance (answer `lineId` = the root).
+- A price change on any part (`setContainerLinePrice`, a piece price in
+  `updateContainerLine`) may not take the group below what the root was paid
+  (`price_below_paid`).
+- `removeContainerLine`: a root with other parts is refused
+  (`line_has_parts`); removing (cancelling) a part is refused while the rest
+  of the group would be priced below what was paid (`line_has_payments`).
+
+**WhatsApp "what"** for a line with pieces: "2 of your 4 pieces" / "2 de vos
+4 colis" when its group has more than one part, else the piece summary
+("2 barrels, 1 box" / "2 fûts, 1 colis"). Legacy lines read as before.
+
+**Tracking page** (`lookupGuestTracking`, container records): `pieceCount`,
+`parts: [{trackingCode, stage, pieceCount, priceCents}]` (the whole group,
+part order, at least the line itself) and `payment: {priceCents, paidCents,
+balanceCents}` for the group. Either code of a group finds it; part codes
+also match typed without the dash (`clk7m4p22`).
+
 ## VIN
 A waiting car holds its VIN lock like a loaded one. A conflicting add/edit
 (`addContainerLine`, `addWaitingPackage`, `updateContainerLine`) fails with

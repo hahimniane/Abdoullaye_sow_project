@@ -13,6 +13,10 @@
  *     scan can still be typed, or copied onto the package in marker;
  *   - two labels per package, for two sides of it.
  *
+ * Every piece on a line has its own label, "CL-K7M4P2 · 1 of 3" (a line
+ * from before pieces existed prints its quantity the same way), naming what
+ * that piece is and its own size.
+ *
  * The QR holds the public tracking link, not a private id: a stranger who
  * scans a lost barrel sees where it is going and nothing personal, and the
  * business's app reads the code out of the same link to show the owner. The
@@ -30,6 +34,12 @@
 
 const {trackingLink} = require("./container_updates");
 const {lineSizeText} = require("./container_manifest");
+const {
+  lineHasPieces,
+  linePieces,
+  pieceLabelName,
+  pieceSizeText,
+} = require("./line_pieces");
 const {documentLogo} = require("./parking_document");
 
 const LABELS_PER_PACKAGE = 2;
@@ -53,10 +63,6 @@ const escape = (value) => String(value ?? "").replace(/[&<>"]/g, (char) => (
   {"&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"}[char]
 ));
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
-const positiveInt = (value) => {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
-};
 
 /**
  * @param {*} value A requested format.
@@ -119,16 +125,20 @@ function containerLabelsModel({container, lines, business, consoleUrl,
     const code = text(line.trackingCode, 40);
     if (!code || (only && code !== only)) continue;
     codes.push(code);
-    const packages = text(line.kind, 20) === "car" ?
-      1 : Math.max(1, positiveInt(line.quantity));
+    // One label per piece: its own name and size on a line with pieces; a
+    // legacy line repeats its own (linePieces expands its quantity).
+    const pieces = linePieces(line);
+    const ownPieces = lineHasPieces(line);
+    const packages = pieces.length;
     const stock = text(line.ownerKind, 20) === "stock";
     for (let n = 1; n <= packages; n++) {
+      const piece = pieces[n - 1];
       for (let copy = 1; copy <= perPackage; copy++) {
         if (labels.length >= MAX_LABELS) break;
         const label = {
           code,
           link: trackingLink(consoleUrl, code),
-          what: packageName(line),
+          what: ownPieces ? pieceLabelName(piece) : packageName(line),
           vin: text(line.kind, 20) === "car" ? text(line.vinNumber, 17) : "",
           packageNumber: n,
           packageCount: packages,
@@ -142,7 +152,7 @@ function containerLabelsModel({container, lines, business, consoleUrl,
           // The package's own destination, else its container's.
           destination: text(line.destinationCountryName, 120) ||
             text(c.destinationCountryName, 120),
-          size: lineSizeText(line),
+          size: ownPieces ? pieceSizeText(piece) : lineSizeText(line),
         };
         label.place = [label.destination, label.size].filter(Boolean)
             .join(" · ");
@@ -179,10 +189,10 @@ function renderContainerLabels(model, opts = {}) {
   const cells = (m.labels || []).map((label) => `<div class="label">
     <div class="qr">${qr[label.code] || ""}</div>
     <div class="info">
-      <div class="code">${escape(label.code)}</div>
-      <div class="pkg">${escape(label.what)}${label.packageCount > 1 ?
-    ` &middot; ${escape(label.packageNumber)} / ${escape(label.packageCount)}` :
-    ""}</div>
+      <div class="code">${escape(label.code)}${label.packageCount > 1 ?
+    `<span class="of"> &middot; ${escape(label.packageNumber)} of ${
+      escape(label.packageCount)}</span>` : ""}</div>
+      <div class="pkg">${escape(label.what)}</div>
       ${label.vin ? `<div class="sub">VIN ${escape(label.vin)}</div>` : ""}
       ${label.receiver || label.receiverPhone ? `<div class="to"><span>` +
         `To / Pour</span>${escape(label.receiver)}${label.receiverPhone ?
@@ -250,6 +260,8 @@ function renderContainerLabels(model, opts = {}) {
   .code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     font-weight:800;font-size:${big ? "30pt" : "17pt"};letter-spacing:1px;
     line-height:1.1}
+  .code .of{font-size:${big ? "17pt" : "11pt"};letter-spacing:0;
+    white-space:nowrap}
   .pkg{font-weight:700;font-size:${big ? "15pt" : "10.5pt"}}
   .to{font-weight:800;font-size:${big ? "17pt" : "12pt"};line-height:1.15;
     overflow-wrap:anywhere}
@@ -280,9 +292,9 @@ function renderContainerLabels(model, opts = {}) {
   <a class="${format === "thermal" ? "" : "off"}" href="?${link(
     {labels: "thermal"})}">Thermal 4&times;6</a>
   <a class="${m.copies === 1 ? "off" : ""}" href="?${link(
-    {copies: "2"})}">2 per package</a>
+    {copies: "2"})}">2 per piece</a>
   <a class="${m.copies === 1 ? "" : "off"}" href="?${link(
-    {copies: "1"})}">1 per package</a>
+    {copies: "1"})}">1 per piece</a>
   <button type="button" onclick="window.print()">Print</button>
 </div>
 <p class="hint">Stick each label flat on a clean, dry surface - the lid
