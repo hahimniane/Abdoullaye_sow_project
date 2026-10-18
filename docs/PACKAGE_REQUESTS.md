@@ -182,3 +182,58 @@ is counted.
    + expiry, Expected in Waiting list + Received, request link + QR, card
    barrels into the Waiting list.
 3. Monthly volume: counters + admin view + business view + CSV.
+
+## 7. Addenda (2026-10-18, after the screens were approved)
+
+Where this section and the sections above disagree, the sections above win
+(cars are their own line kind; lock 15 min; ≤20 pieces; photos ≤5 per piece).
+
+### Line fields (phase 1)
+- `pieces[] {id, kind: barrel|box|other, description, sizeIn?: {l,w,h}, priceCents|null}`;
+  cars keep `kind: car` lines with one implicit piece.
+- Denormalized counts for cheap counting: `pieceCount`, `barrelPieces`,
+  `packagePieces` (box + other), `carPieces`.
+- `source: counter | request | card_order`, `requestId`, `receivedAt`.
+- Split groups: `rootLineId` (root: its own id), `partIndex` (root 1).
+  Payments stay on the ROOT line; paid/balance are shown for the whole group.
+  A part can be split again (`-3`…); moving a part back to waiting never
+  re-merges. Container tallies count the pieces actually in that container.
+
+### Request document (`packageRequests/{id}`, server-only writes)
+`businessId`, `code` (R-XXXXX, unique), `token` (≥128-bit; the `/e/<token>`
+link — never the code alone), `handoff: bring_in|collect`, `locationId` +
+`plannedDate` | `pickup {address, date, window, note}`,
+`sender {name, phoneE164, uid?}`, `receiver {name, phoneE164}`,
+`destinationCountryId`, `pieces[] {id, kind, description, sizeIn?, photoPaths[], estimateCents|null}`,
+`status: new | estimate_sent | confirmed | received | declined | customer_declined | cancelled | expired`,
+`estimate {version, totalCents, pieces[{id,cents}], pickupFeeCents?, note, sentByUid, sentByName, sentAt}`,
+`estimateHistory[]`, `confirmedVersion`, `confirmedAt`,
+`confirmedVia: link | staff_phone | card`, `lock {uid, name, until}`,
+`reminders {estimate24hAt?, dropoff3dAt?}`, `expiresAt`, `lineId`,
+`payment {timing: at_handoff | card, paidCents?}`, `language`,
+`idempotencyKey` (same key within 10 min returns the first request),
+`declineReason`, `createdAt`, `updatedAt`.
+
+### Timers
+- Unconfirmed estimate: one reminder at 24 h; expires 14 days after the last
+  version was sent.
+- Never estimated (`new`): staff alert at 3 days; expires at 30 days.
+- Confirmed bring_in: one drop-off reminder 3 days after `plannedDate`;
+  expires 30 days after `plannedDate` (or confirmation, whichever later).
+- Collect: no customer reminder (the business owes the pickup).
+- Decline/cancel: reason required; no WhatsApp (no template) — shown on the
+  `/e/` page and in the app.
+- Card barrel orders: Stripe refund/cancel → request `cancelled`.
+- Anonymous web requests are not merged into an app account by phone.
+- `requestSlug`: unique, `[a-z0-9-]{3,40}`.
+
+### WhatsApp templates (submitted 2026-10-18, pending review)
+- `package_estimate_2lang`: 1 name, 2 business, 3 total EN, 4 pieces EN,
+  5 destination EN, 6 business, 7 total FR, 8 pieces FR, 9 destination FR,
+  10 request code; button `https://customer.laawoldigital.com/e/{{1}}`
+  (token). Used for the first estimate, every new version, and the 24 h
+  reminder.
+- `package_dropoff_reminder_2lang`: 1 name, 2 business, 3 pieces EN,
+  4 hours EN, 5 business, 6 pieces FR, 7 hours FR, 8 request code; button
+  `/e/{{1}}`.
+- Sends wait (waiting_for_template on Meta 132001) until approved.
