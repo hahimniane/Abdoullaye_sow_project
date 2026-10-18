@@ -8,12 +8,22 @@ import '../navigation/app_launch_gate.dart';
 import '../navigation/app_navigator.dart';
 import '../providers/auth_provider.dart';
 import '../screens/inventory_sell_screen.dart';
+import '../screens/package_request_detail_screen.dart';
+import '../screens/package_request_form_screen.dart';
 import '../screens/package_result_screen.dart';
 import '../utils/business_permissions.dart';
 import '../widgets/guest_tracking_lookup.dart';
 import 'container_packages.dart';
 import 'inventory.dart';
 import 'package_codes.dart';
+import 'package_requests.dart';
+
+/// The screen a package-request link opens: the estimate page for `/e/`,
+/// the request form (with the business chosen) for `/r/`.
+Widget packageRequestLinkPage(PackageRequestLink link) => switch (link) {
+  EstimateRequestLink(:final token) => PackageRequestDetailScreen(token: token),
+  FormRequestLink(:final slug) => PackageRequestFormScreen(slug: slug),
+};
 
 /// Tracking links that open the app: `https://customer.laawoldigital.com/t/
 /// CL-XXXXXX`, from a scanned package label or a WhatsApp update.
@@ -38,6 +48,7 @@ class PackageLinkService {
   StreamSubscription<Uri>? _sub;
   String? _pendingCode;
   String? _pendingInventoryCode;
+  PackageRequestLink? _pendingRequestLink;
   bool _appReady = false;
   bool _routing = false;
 
@@ -61,6 +72,17 @@ class PackageLinkService {
   /// Takes one incoming link. Anything that is not a package tracking link
   /// is ignored.
   void handleLink(Uri uri) {
+    // Package requests (§8.8): the estimate page (`/e/<token>`, the
+    // WhatsApp button) and a business's request form (`/r/<slug>`).
+    final request = packageRequestLinkFromUri(uri);
+    if (request != null) {
+      if (!_appReady || rootNavigatorKey.currentState == null) {
+        _pendingRequestLink = request;
+        return;
+      }
+      _routeRequestLink(request);
+      return;
+    }
     final tag = inventoryCodeFromLink(uri);
     if (tag != null) {
       if (!_appReady || rootNavigatorKey.currentState == null) {
@@ -84,6 +106,9 @@ class PackageLinkService {
   /// of home.
   void markAppReady() {
     _appReady = true;
+    final request = _pendingRequestLink;
+    _pendingRequestLink = null;
+    if (request != null) _routeRequestLink(request);
     final code = _pendingCode;
     _pendingCode = null;
     if (code != null) unawaited(_route(code));
@@ -91,6 +116,23 @@ class PackageLinkService {
     _pendingInventoryCode = null;
     if (tag != null) unawaited(_routeInventory(tag));
   }
+
+  /// Opens the screen a request link names, over whatever is showing. The
+  /// screens themselves handle a signed-out phone (the estimate page needs
+  /// no account; the form asks to sign in).
+  void _routeRequestLink(PackageRequestLink link) {
+    final navigator = rootNavigatorKey.currentState;
+    if (navigator == null) {
+      _pendingRequestLink = link;
+      return;
+    }
+    navigator.push(
+      MaterialPageRoute<void>(builder: (_) => packageRequestLinkPage(link)),
+    );
+  }
+
+  @visibleForTesting
+  PackageRequestLink? get pendingRequestLink => _pendingRequestLink;
 
   @visibleForTesting
   String? get pendingCode => _pendingCode;
@@ -104,6 +146,7 @@ class PackageLinkService {
     _sub = null;
     _pendingCode = null;
     _pendingInventoryCode = null;
+    _pendingRequestLink = null;
     _appReady = false;
     _routing = false;
   }

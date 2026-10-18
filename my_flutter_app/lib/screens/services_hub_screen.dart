@@ -377,6 +377,13 @@ class ShippingTab extends StatelessWidget {
           AppColors.cobaltMid,
           '/request-transport',
         ),
+        _HubItem(
+          l10n.prqSendPackage,
+          l10n.prqSendPackageSubtitle,
+          Icons.markunread_mailbox_outlined,
+          AppColors.saffron,
+          '/package-request',
+        ),
       ],
     );
   }
@@ -466,6 +473,13 @@ class ActivityTab extends StatelessWidget {
                     Icons.event_available_outlined,
                     AppColors.sage,
                     '/my-viewings',
+                  ),
+                  _HubItem(
+                    l10n.prqMyRequests,
+                    l10n.prqMyRequestsSubtitle,
+                    Icons.mark_email_read_outlined,
+                    AppColors.saffron,
+                    '/my-requests',
                   ),
                 ],
               ),
