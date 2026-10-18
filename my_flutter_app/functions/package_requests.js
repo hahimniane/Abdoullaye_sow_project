@@ -1026,7 +1026,8 @@ function appendHistory(history, entry) {
     byUid: text(entry.byUid, 128),
     byName: text(entry.byName, 120),
   };
-  for (const key of ["version", "totalCents"]) {
+  for (const key of ["version", "totalCents", "piecesAdded",
+    "piecesRemoved"]) {
     if (Number.isInteger(entry[key])) clean[key] = entry[key];
   }
   if (entry.reason) clean.reason = text(entry.reason, LIMIT.REASON);

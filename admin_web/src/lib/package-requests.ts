@@ -159,6 +159,18 @@ export function estimateTokenFromLocation(pathname: string, search: string): str
   return TOKEN.test(param) ? param : "";
 }
 
+/**
+ * `/r/<slug>` and `/e/<token>` in their query form, for a host that serves
+ * the not-found page on unknown paths; "" for any other path.
+ */
+export function requestPathRedirect(pathname: string): string {
+  const slug = SLUG_PATH.exec(String(pathname ?? ""));
+  if (slug) return `/?service=package-request&r=${slug[1].toLowerCase()}`;
+  const token = TOKEN_PATH.exec(String(pathname ?? ""));
+  if (token) return `/?service=package-estimate&t=${token[1]}`;
+  return "";
+}
+
 export function requestLink(slug: string): string {
   return `${REQUEST_LINK_BASE}${text(slug, 40)}`;
 }
@@ -861,6 +873,50 @@ export function draftTotalCents(row: Row, prices: Record<string, string>, pickup
   return total;
 }
 
+/** One line of the Received form: a piece of the request (with its id) or one brought on top. */
+export type ReceiveItem = { key: string; id: string; kind: PieceKind; description: string; price: string };
+
+/** The Received form opens with the request's pieces, priced from the estimate. */
+export function receiveItemsFrom(row: unknown, lang: Lang): ReceiveItem[] {
+  const prices = estimateDraftPrices(row, lang);
+  return requestPieces(row).map((piece) => ({
+    key: piece.id, id: piece.id, kind: piece.kind, description: piece.description, price: prices[piece.id] ?? "",
+  }));
+}
+
+let receiveSerial = 0;
+export function newReceiveItem(): ReceiveItem {
+  receiveSerial += 1;
+  return { key: `new-${Date.now()}-${receiveSerial}`, id: "", kind: "box", description: "", price: "" };
+}
+
+/**
+ * The receivePackageRequest pieces (§8.6): the request's pieces by id, new
+ * ones without, all priced or none; or the first problem.
+ */
+export function receiveItemsPayload(items: readonly ReceiveItem[]): {
+  pieces: ({ id: string; priceCents: number | null } | { kind: PieceKind; description: string; priceCents: number | null })[];
+  error: string;
+} {
+  if (items.length === 0) return { pieces: [], error: "pieces_required" };
+  if (items.length > REQUEST_LIMITS.pieces) return { pieces: [], error: "too_many_pieces" };
+  const pieces: ({ id: string; priceCents: number | null } | { kind: PieceKind; description: string; priceCents: number | null })[] = [];
+  for (const item of items) {
+    const typed = item.price.trim();
+    const cents = typed ? readDollars(typed) : null;
+    if (typed && cents === null) return { pieces: [], error: "price_invalid" };
+    if (item.id) {
+      pieces.push({ id: item.id, priceCents: cents });
+    } else {
+      if (item.kind !== "barrel" && !item.description.trim()) return { pieces: [], error: "piece_description_required" };
+      pieces.push({ kind: item.kind, description: item.description.trim(), priceCents: cents });
+    }
+  }
+  const priced = pieces.filter((p) => p.priceCents !== null).length;
+  if (priced > 0 && priced < pieces.length) return { pieces: [], error: "price_required" };
+  return { pieces, error: "" };
+}
+
 /** The receivePackageRequest pieces: final prices, prefilled from the estimate. */
 export function receivePiecesPayload(row: Row, prices: Record<string, string>): { pieces: { id: string; priceCents: number | null }[]; error: string } {
   const pieces: { id: string; priceCents: number | null }[] = [];
@@ -896,10 +952,11 @@ export const HISTORY_ACTION_LABELS: Record<string, string> = {
   expired: "Request expired",
   received: "Received",
   lock_taken_over: "Took over the estimate",
+  pieces_changed: "Pieces changed at Received",
   reminder_sent: "Reminder sent",
 };
 
-export type HistoryRow = { atMs: number; label: string; byName: string; version: number | null; totalCents: number | null; reason: string };
+export type HistoryRow = { atMs: number; label: string; byName: string; version: number | null; totalCents: number | null; reason: string; change: string };
 
 export function requestHistory(row: unknown): HistoryRow[] {
   const list = Array.isArray(asRow(row).history) ? (asRow(row).history as unknown[]) : [];
@@ -914,6 +971,8 @@ export function requestHistory(row: unknown): HistoryRow[] {
         version: Number.isInteger(entry.version) ? Number(entry.version) : null,
         totalCents: Number.isInteger(entry.totalCents) ? Number(entry.totalCents) : null,
         reason: action === "reminder_sent" || action === "lock_taken_over" ? "" : text(entry.reason, REQUEST_LIMITS.reason),
+        // "+1 / −1": pieces added and left out at Received.
+        change: action === "pieces_changed" ? `+${Number(entry.piecesAdded) || 0} / −${Number(entry.piecesRemoved) || 0}` : "",
       };
     })
     .reverse();

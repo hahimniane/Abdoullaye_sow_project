@@ -334,7 +334,7 @@ no `sender.uid` and read through `getPackageRequestByToken`). Fields:
 | `declineReason` | string | decline / cancel / customer's "No thanks" note |
 | `whatsapp` | `{update, status, error, atMs}` \| null | the last request message's state (`containerUpdates` statuses) |
 | `whatsappUnreachable` | bool | the last request message failed for good: show "Customer not reachable on WhatsApp" |
-| `history[]` | `{atMs, action, byUid, byName, version?, totalCents?, reason?}` | newest last, capped at 100; `action`: `submitted`, `estimate_sent`, `confirmed_link`, `confirmed_phone`, `confirmed_card`, `customer_declined`, `declined`, `cancelled`, `expired`, `received`, `lock_taken_over`, `reminder_sent` |
+| `history[]` | `{atMs, action, byUid, byName, version?, totalCents?, reason?, piecesAdded?, piecesRemoved?}` | newest last, capped at 100; `action`: `submitted`, `estimate_sent`, `confirmed_link`, `confirmed_phone`, `confirmed_card`, `customer_declined`, `declined`, `cancelled`, `expired`, `pieces_changed`, `received`, `lock_taken_over`, `reminder_sent` |
 | `closedAt` | Timestamp \| null | when it left the open statuses |
 | `createdAtMs`, `confirmedAtMs`, `receivedAtMs`, `closedAtMs`, `expiresAtMs` | int | epoch ms twins of the Timestamps (0 when unset), so pure code and clients can compare without a Timestamp |
 | `timeZone` | string | the business's zone when the request was sent |
@@ -549,11 +549,21 @@ cancels the request). No WhatsApp; the reason shows on the `/e/` page and
 in the app.
 
 #### `receivePackageRequest`
-`{businessId, requestId, pieces: [{id, priceCents: int | null}],
-payOnArrival?: bool, payment?: {amountCents, method, receivedByStaffId,
-note?}}` → `{success, lineId, trackingCode, paidCents, paymentId,
-alreadyReceived}`. Any open status (a customer may walk in before
-confirming). One transaction creates ONE `containerLines` line, waiting
+`{businessId, requestId, pieces: [{id, priceCents?: int | null} |
+{kind, description?, priceCents: int | null}], payOnArrival?: bool,
+payment?: {amountCents, method, receivedByStaffId, note?}}` → `{success,
+lineId, trackingCode, paidCents, paymentId, alreadyReceived}`. Any open
+status (a customer may walk in before confirming).
+`pieces` is the load as it arrived: the request's pieces by `id` (a missing
+`priceCents` keeps the estimate's price), pieces brought on top without an
+id (`{kind: barrel|box|other, description, priceCents}`; the server gives
+them the next ids, `p3`, `p4`, …), and request pieces left out did not come.
+An absent or empty `pieces` keeps every request piece at its estimate. At
+least one piece, at most 20. Refusals: `estimate_piece_unknown` (an id not
+on the request, or twice), `price_invalid`, `piece_kind_invalid`,
+`piece_description_required`, `text_too_long`, `too_many_pieces`,
+`price_required`. Any change is written to History as `pieces_changed`
+with `piecesAdded` / `piecesRemoved`, before the `received` entry. One transaction creates ONE `containerLines` line, waiting
 (`containerId: ""`, `containerStatus: "waiting"`), with the counter's
 fields plus `pieces[] {id, kind, description, sizeIn, priceCents}`,
 `pieceCount`, `barrelPieces`, `packagePieces`, `carPieces: 0`,
@@ -587,14 +597,22 @@ the Requests view (console: Containers → Requests) on that request.
 
 - `https://laawoldigital.com/r/<slug>` → 302 to
   `https://customer.laawoldigital.com/r/<slug>` (public_site/.htaccess).
+  The customer host rewrites `/r/<slug>` to `/?service=package-request&r=<slug>`
+  and `/e/<token>` to `/?service=package-estimate&t=<token>`
+  (admin_web/public/.htaccess, like `/t/`), and the iOS app claims `/e/*`
+  and `/r/*` (admin_web/public/.well-known/apple-app-site-association).
 - `https://customer.laawoldigital.com/r/<slug>`: the request form with that
   business chosen (also `?service=package-request&r=<slug>`).
 - `https://customer.laawoldigital.com/?service=package-request`: the form
   from the country step.
 - `https://customer.laawoldigital.com/e/<token>`: the estimate page (also
   `?service=package-estimate&t=<token>`); the WhatsApp button's URL.
-- The customer host serves `index.html` for these paths as it does for
-  `/t/` and `/i/`; the router reads the path.
+- The web router reads both the path forms and the query forms; the
+  not-found page also forwards `/r/<slug>` and `/e/<token>` to the query
+  forms, for a host without the rewrite.
+- Clients read the estimate page's data (business phone, opening hours of
+  the drop-off location) through `getPackageRequestByToken`: the request
+  document itself carries neither.
 
 ### 8.9 Scheduled work
 

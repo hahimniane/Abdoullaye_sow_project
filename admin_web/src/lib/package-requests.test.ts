@@ -33,12 +33,16 @@ import {
   plannedDayText,
   readDollars,
   receivePiecesPayload,
+  newReceiveItem,
+  receiveItemsFrom,
+  receiveItemsPayload,
   receivedFlash,
   requestCountries,
   requestFailure,
   requestFilterCounts,
   requestHistory,
   requestLocationsFor,
+  requestPathRedirect,
   requestSettingsDraft,
   requestSettingsPayload,
   requestSettingsProblems,
@@ -90,6 +94,9 @@ test("request and estimate links open the right page", () => {
   assert.equal(requestSlugFromLocation("/", ""), "");
   assert.equal(estimateTokenFromLocation(`/e/${"b".repeat(43)}`, ""), "b".repeat(43));
   assert.equal(estimateTokenFromLocation("/", `?t=${"c".repeat(43)}`), "c".repeat(43));
+  assert.equal(requestPathRedirect("/r/Dala-Shipping/"), "/?service=package-request&r=dala-shipping");
+  assert.equal(requestPathRedirect(`/e/${"d".repeat(43)}`), `/?service=package-estimate&t=${"d".repeat(43)}`);
+  assert.equal(requestPathRedirect("/nothing"), "");
   // The estimate page is the customer's link: everyone with a console gets it too.
   for (const kind of [null, "customer", "business", "admin"] as const) {
     assert.equal(serviceEntryApplies("package-estimate", kind), true);
@@ -270,6 +277,20 @@ test("Received sends final prices: all or none", () => {
   assert.deepEqual(receivePiecesPayload(r, { p1: "150", p2: "40" }), { pieces: [{ id: "p1", priceCents: 15000 }, { id: "p2", priceCents: 4000 }], error: "" });
   assert.equal(receivePiecesPayload(r, { p1: "150", p2: "" }).error, "price_required");
   assert.deepEqual(receivePiecesPayload(r, { p1: "", p2: "" }).pieces.map((p) => p.priceCents), [null, null]);
+});
+
+test("Received can add a piece the customer brought and drop one that did not come", () => {
+  const items = receiveItemsFrom(row(), "en");
+  assert.deepEqual(items.map((i) => [i.id, i.price]), [["p1", "150.00"], ["p2", ""]]);
+  const extra = { ...newReceiveItem(), kind: "box" as const, description: "Shoes", price: "30" };
+  const payload = receiveItemsPayload([{ ...items[0] }, extra]);
+  assert.deepEqual(payload, { error: "", pieces: [{ id: "p1", priceCents: 15000 }, { kind: "box", description: "Shoes", priceCents: 3000 }] });
+  assert.equal(receiveItemsPayload([]).error, "pieces_required");
+  assert.equal(receiveItemsPayload([{ ...newReceiveItem(), price: "1" }]).error, "piece_description_required");
+  assert.equal(receiveItemsPayload(items).error, "price_required");
+  const history = requestHistory(row({ history: [{ atMs: 1, action: "pieces_changed", byName: "Awa", piecesAdded: 1, piecesRemoved: 2 }] }));
+  assert.equal(history[0].label, "Pieces changed at Received");
+  assert.equal(history[0].change, "+1 / −2");
 });
 
 test("History reads structured rows, newest first", () => {

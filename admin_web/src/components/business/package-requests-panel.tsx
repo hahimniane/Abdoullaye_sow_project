@@ -44,7 +44,11 @@ import {
   piecesSummary,
   plannedDayText,
   readDollars,
-  receivePiecesPayload,
+  newReceiveItem,
+  receiveItemsFrom,
+  receiveItemsPayload,
+  type PieceKind,
+  type ReceiveItem,
   requestEstimate,
   requestFailure,
   requestFilterCounts,
@@ -315,6 +319,7 @@ function HistoryList({ row }: { row: Row }) {
             <span>{entry.label}</span>
             {entry.version !== null && <span data-no-translate>{` v${entry.version}`}</span>}
             {entry.totalCents !== null && <span data-no-translate>{` · ${moneyText(entry.totalCents, l)}`}</span>}
+            {entry.change && <span data-no-translate>{` ${entry.change}`}</span>}
             {entry.byName && <small data-no-translate>{entry.byName}</small>}
             {entry.reason && <small data-no-translate>{entry.reason}</small>}
             {entry.atMs > 0 && (
@@ -627,9 +632,10 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   onFlash: (message: string) => void;
 }) {
   const l = lang();
-  const pieces = requestPieces(row);
   const card = asRow(row.payment).timing === "card";
-  const [prices, setPrices] = useState<Record<string, string>>(() => estimateDraftPrices(row, l));
+  // The load as it arrived: the request's pieces, plus or minus what the
+  // customer actually brought.
+  const [items, setItems] = useState<ReceiveItem[]>(() => receiveItemsFrom(row, l));
   const [payOnArrival, setPayOnArrival] = useState(false);
   const [takeMoney, setTakeMoney] = useState(false);
   const [amount, setAmount] = useState("");
@@ -641,16 +647,18 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   const fee = collect ? requestEstimate(row)?.pickupFeeCents ?? 0 : 0;
   const total = (() => {
     let sum = 0;
-    for (const piece of pieces) {
-      const cents = readDollars(prices[piece.id] ?? "");
+    for (const item of items) {
+      const cents = readDollars(item.price);
       if (cents === null) return null;
       sum += cents;
     }
-    return sum + fee;
+    return items.length ? sum + fee : null;
   })();
+  const setItem = (key: string, patch: Partial<ReceiveItem>) =>
+    setItems((list) => list.map((item) => (item.key === key ? { ...item, ...patch } : item)));
 
   async function receive() {
-    const { pieces: payloadPieces, error: problem } = receivePiecesPayload(row, prices);
+    const { pieces: payloadPieces, error: problem } = receiveItemsPayload(items);
     if (problem) {
       setError(REQUEST_ERROR_MESSAGES[problem]);
       return;
@@ -700,19 +708,40 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
         <div className="lst-modal-body">
           <div className="pkq-detail"><PersonLines row={row} /></div>
           <div className="pkq-pieces">
-            {pieces.map((piece, index) => (
-              <div className="pkq-piece" key={piece.id}>
+            {items.map((item, index) => (
+              <div className="pkq-piece" key={item.key}>
                 <span>
-                  <strong><span data-no-translate>{`${index + 1}. `}</span><span data-no-translate>{pieceKindLabel(piece.kind, lang())}</span></strong>
-                  {piece.description && <small data-no-translate>{piece.description}</small>}
+                  {item.id ? (
+                    <>
+                      <strong><span data-no-translate>{`${index + 1}. `}</span><span data-no-translate>{pieceKindLabel(item.kind, l)}</span></strong>
+                      {item.description && <small data-no-translate>{item.description}</small>}
+                    </>
+                  ) : (
+                    <>
+                      <select aria-label="What is it?" onChange={(event) => setItem(item.key, { kind: event.target.value as PieceKind })} value={item.kind}>
+                        {(["barrel", "box", "other"] as PieceKind[]).map((kind) => (
+                          <option data-no-translate key={kind} value={kind}>{pieceKindLabel(kind, l)}</option>
+                        ))}
+                      </select>
+                      {item.kind !== "barrel" && (
+                        <input aria-label="What is it?" maxLength={120} onChange={(event) => setItem(item.key, { description: event.target.value })} placeholder="e.g. clothes, a TV, a generator" value={item.description} />
+                      )}
+                    </>
+                  )}
                 </span>
                 <label className="lst-field pkq-price">
                   <span>Final price ($)</span>
-                  <input inputMode="decimal" onChange={(event) => setPrices((p) => ({ ...p, [piece.id]: event.target.value }))} placeholder={l === "fr" ? "0,00" : "0.00"} value={prices[piece.id] ?? ""} />
+                  <input inputMode="decimal" onChange={(event) => setItem(item.key, { price: event.target.value })} placeholder={l === "fr" ? "0,00" : "0.00"} value={item.price} />
                 </label>
+                {items.length > 1 && (
+                  <button aria-label="Remove" className="ghost-button" disabled={busy} onClick={() => setItems((list) => list.filter((i) => i.key !== item.key))} title="Remove" type="button"><X size={14} aria-hidden="true" /></button>
+                )}
               </div>
             ))}
           </div>
+          {items.length < 20 && (
+            <button className="lst-btn ghost" disabled={busy} onClick={() => setItems((list) => [...list, newReceiveItem()])} type="button">+ Add a piece</button>
+          )}
           {fee > 0 && <p className="lst-hint"><span>Pickup fee</span> <span data-no-translate>{moneyText(fee, l)}</span></p>}
           <p className="pkq-total"><span>Total</span> <strong data-no-translate>{total === null ? "—" : moneyText(total, l)}</strong></p>
           {card ? (

@@ -40787,6 +40787,10 @@ exports.receivePackageRequest = onCall(
       const card = packageRequests.isCardPaid(first);
       const {prices, errors} =
         requestReceive.cleanReceivePrices(data.pieces, first);
+      if (data.pieces !== undefined && data.pieces !== null &&
+          !Array.isArray(data.pieces)) {
+        errors.push("pieces_required");
+      }
       const totalCents = requestReceive.receivedTotalCents(prices, first);
       const payment = containerRegistrationPayment(data);
       if (payment && card) errors.push("card_order");
@@ -40831,10 +40835,20 @@ exports.receivePackageRequest = onCall(
           throw requestError("failed-precondition", "request_closed",
               {status: row.status});
         }
+        // Re-read against the request as it is now: its pieces decide which
+        // ids are its own.
+        const final = requestReceive.cleanReceivePrices(data.pieces, row);
+        if (final.errors.length > 0) {
+          throw new HttpsError("invalid-argument",
+              packageRequests.REQUEST_MESSAGES[final.errors[0]] ||
+                "Check the pieces.",
+              {reason: final.errors[0], reasons: final.errors});
+        }
         const line = requestReceive.requestLineRecord(row, {
           lineId: lineRef.id,
           requestId: ref.id,
-          prices,
+          pieces: final.pieces,
+          prices: final.prices,
           payOnArrival: data.payOnArrival === true,
           staffUid: uid,
           receivedAt: FirestoreTimestamp.fromMillis(nowMs),
@@ -40862,9 +40876,14 @@ exports.receivePackageRequest = onCall(
           closedAt: FirestoreTimestamp.fromMillis(nowMs),
           closedAtMs: nowMs,
           lock: null,
-          history: packageRequests.appendHistory(row.history, {
-            atMs: nowMs, action: "received", byUid: uid, byName: name,
-            ...(Number.isInteger(totalCents) ? {totalCents} : {})}),
+          history: packageRequests.appendHistory(
+              final.added || final.removed ?
+                packageRequests.appendHistory(row.history, {
+                  atMs: nowMs, action: "pieces_changed", byUid: uid,
+                  byName: name, piecesAdded: final.added,
+                  piecesRemoved: final.removed}) : row.history,
+              {atMs: nowMs, action: "received", byUid: uid, byName: name,
+                ...(Number.isInteger(totalCents) ? {totalCents} : {})}),
         }));
         return {already: false, lineId: lineRef.id, trackingCode, paidCents,
           line};

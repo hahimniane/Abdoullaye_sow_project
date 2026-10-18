@@ -5853,6 +5853,9 @@ Object.assign(TEXT_TRANSLATIONS, {
   "e.g. clothes, a TV, a generator": "ex. des vêtements, une télé, un groupe électrogène",
   "is writing the estimate": "rédige l’estimation",
   "Copy": "Copier",
+  "Pieces changed at Received": "Colis modifiés à la réception",
+  "Add a piece": "Ajouter un colis",
+  "Remove": "Retirer",
   "planned": "prévu",
 });
 

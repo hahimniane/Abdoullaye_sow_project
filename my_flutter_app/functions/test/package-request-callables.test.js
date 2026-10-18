@@ -554,11 +554,11 @@ describe("Received", () => {
       pieces: [{id: "p1", cents: 15000}, {id: "p2", cents: 4500}]}, MARIAMA);
     await call("confirmPackageEstimate", {token, version: 1});
     assert.equal(await reasonOf(staff("receivePackageRequest", {requestId,
-      pieces: [{id: "p2", priceCents: 5000}],
+      pieces: [{id: "p1"}, {id: "p2", priceCents: 5000}],
       payment: {amountCents: 30000, method: "cash",
         receivedByStaffId: MARIAMA}}, MARIAMA)), "payment_exceeds_balance");
     const received = await staff("receivePackageRequest", {requestId,
-      pieces: [{id: "p2", priceCents: 5000}],
+      pieces: [{id: "p1"}, {id: "p2", priceCents: 5000}],
       payment: {amountCents: 10000, method: "cash",
         receivedByStaffId: MARIAMA}}, MARIAMA);
     assert.equal(received.alreadyReceived, false);
@@ -611,6 +611,26 @@ describe("Received", () => {
     const lines = await db.collection("containerLines")
         .where("requestId", "==", requestId).get();
     assert.equal(lines.size, 1);
+  });
+
+  it("adds the extra box the customer brought and drops the one that " +
+      "did not come, in History", async () => {
+    const {requestId} = await submit();
+    const received = await staff("receivePackageRequest", {requestId,
+      pieces: [{id: "p1", priceCents: 15000},
+        {kind: "box", description: "Shoes", priceCents: 2500}]}, MARIAMA);
+    const line = (await db.collection("containerLines")
+        .doc(received.lineId).get()).data();
+    assert.deepEqual(line.pieces.map((p) => [p.id, p.kind]),
+        [["p1", "barrel"], ["p3", "box"]]);
+    assert.equal(line.priceCents, 17500);
+    const history = (await requestDoc(requestId)).history;
+    const changed = history.find((h) => h.action === "pieces_changed");
+    assert.deepEqual([changed.piecesAdded, changed.piecesRemoved], [1, 1]);
+    assert.equal(changed.byName, "Mariama");
+    assert.equal(await reasonOf(staff("receivePackageRequest", {requestId:
+      (await submit()).requestId, pieces: [{id: "p9"}]}, MARIAMA)),
+    "estimate_piece_unknown");
   });
 
   it("is refused on a closed request", async () => {

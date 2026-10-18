@@ -721,16 +721,21 @@ describe("the line Received writes (§7 line fields)", () => {
 
   it("prefills final prices from the estimate and refuses half-priced " +
       "loads", () => {
-    const {prices, errors} = rr.cleanReceivePrices([{id: "p2",
-      priceCents: 5000}], request);
+    const {prices, errors} = rr.cleanReceivePrices([{id: "p1"},
+      {id: "p2", priceCents: 5000}], request);
     assert.deepEqual(errors, []);
     assert.deepEqual([...prices], [["p1", 15000], ["p2", 5000]]);
     assert.equal(rr.receivedTotalCents(prices, request), 20000);
-    assert.deepEqual(rr.cleanReceivePrices([{id: "p1", priceCents: null}],
-        request).errors, ["price_required"]);
+    // An empty list keeps every piece at its estimate.
+    assert.deepEqual([...rr.cleanReceivePrices([], request).prices],
+        [["p1", 15000], ["p2", 4500]]);
+    assert.deepEqual(rr.cleanReceivePrices([{id: "p1", priceCents: null},
+      {id: "p2"}], request).errors, ["price_required"]);
     assert.deepEqual(rr.cleanReceivePrices([{id: "p1", priceCents: -1},
       {id: "zz", priceCents: 1}], request).errors,
     ["price_invalid", "estimate_piece_unknown"]);
+    assert.deepEqual(rr.cleanReceivePrices([{id: "p1"}, {id: "p1"}], request)
+        .errors, ["estimate_piece_unknown"]);
     const none = rr.cleanReceivePrices([{id: "p1", priceCents: null},
       {id: "p2", priceCents: null}], request);
     assert.deepEqual(none.errors, []);
@@ -766,6 +771,32 @@ describe("the line Received writes (§7 line fields)", () => {
     assert.equal(line.notifyCustomer, true);
     assert.deepEqual(line.pieces.map((p) => [p.id, p.kind, p.priceCents]),
         [["p1", "barrel", 15000], ["p2", "box", 4500]]);
+  });
+
+  it("takes a piece the customer brought on top, and drops one that did " +
+      "not come", () => {
+    const out = rr.cleanReceivePrices([{id: "p2", priceCents: 5000},
+      {kind: "box", description: "Shoes", priceCents: 3000}], request);
+    assert.deepEqual(out.errors, []);
+    assert.deepEqual(out.pieces.map((p) => [p.id, p.kind, p.description]),
+        [["p2", "box", "Clothes"], ["p3", "box", "Shoes"]]);
+    assert.equal(out.added, 1);
+    assert.equal(out.removed, 1);
+    assert.equal(rr.receivedTotalCents(out.prices, request), 8000);
+    const line = rr.requestLineRecord(request, {lineId: "l", requestId: "r",
+      pieces: out.pieces, prices: out.prices, staffUid: "s",
+      receivedAt: "TS", receivedAtMs: NOW});
+    assert.equal(line.pieceCount, 2);
+    assert.equal(line.barrelPieces, 0);
+    assert.equal(line.kind, "other");
+    assert.deepEqual(line.pieces.map((p) => p.priceCents), [5000, 3000]);
+    assert.deepEqual(rr.cleanReceivePrices([{kind: "tv", priceCents: 1},
+      {kind: "other", priceCents: 1}], request).errors,
+    ["piece_kind_invalid", "piece_description_required"]);
+    const many = Array.from({length: 21}, () => ({kind: "barrel",
+      priceCents: 1}));
+    assert.deepEqual(rr.cleanReceivePrices(many, request).errors,
+        ["too_many_pieces"]);
   });
 
   it("calls an all-barrel load barrels, and a card one card_order", () => {

@@ -30,56 +30,101 @@ const REQUEST_LINE_FIELDS = Object.freeze([
   "source", "requestId", "receivedAt", "rootLineId", "partIndex",
 ]);
 
+const PIECE_KINDS = ["barrel", "box", "other"];
+const MAX_PIECES = 20;
+const MAX_DESCRIPTION = 120;
+
 /**
- * The final per-piece prices staff confirmed at the counter.
+ * The pieces staff confirm at the counter (§8.6 receivePackageRequest): the
+ * request's own pieces by id with their final prices, pieces the customer
+ * brought on top (no id: `{kind, description, priceCents}`), and the
+ * request's pieces left out because they did not come.
  *
- * @param {*} raw [{id, priceCents: int|null}] from the callable.
+ * An absent or empty list keeps every piece of the request at its estimate
+ * (the payload of a client that predates adding and removing).
+ *
+ * @param {*} raw [{id, priceCents}] and [{kind, description, priceCents}].
  * @param {object} request The stored request.
- * @return {{prices: Map<string, ?number>, errors: string[]}} Every piece of
- *   the request gets an entry (a missing one falls back to the estimate,
- *   then to null); `errors`: `price_invalid`, `estimate_piece_unknown`,
- *   `price_required` (some priced, some not).
+ * @return {{pieces: object[], prices: Map<string, ?number>, added: number,
+ *   removed: number, errors: string[]}} The line's pieces in order (new
+ *   ones get the next free ids), their prices, and every problem:
+ *   `estimate_piece_unknown` (an id not on the request, or twice),
+ *   `price_invalid`, `piece_kind_invalid`, `piece_description_required`,
+ *   `text_too_long`, `too_many_pieces`, `price_required` (some priced, some
+ *   not).
  */
 function cleanReceivePrices(raw, request) {
   const errors = [];
   const add = (code) => {
     if (!errors.includes(code)) errors.push(code);
   };
-  const pieces = Array.isArray(request?.pieces) ? request.pieces : [];
-  const ids = new Set(pieces.map((p) => p.id));
-  const given = new Map();
-  for (const row of Array.isArray(raw) ? raw : []) {
-    const id = text(row?.id, 10);
-    if (!ids.has(id)) {
-      add("estimate_piece_unknown");
-      continue;
-    }
-    if (row.priceCents === null || row.priceCents === undefined) {
-      given.set(id, null);
-    } else if (Number.isInteger(row.priceCents) && row.priceCents >= 0 &&
-        row.priceCents <= MAX_CENTS) {
-      given.set(id, row.priceCents);
-    } else {
-      add("price_invalid");
-    }
-  }
+  const requested = Array.isArray(request?.pieces) ? request.pieces : [];
+  const byId = new Map(requested.map((p) => [p.id, p]));
   const estimate = new Map((request?.estimate?.pieces || [])
       .map((row) => [row.id, Number.isInteger(row.cents) ? row.cents : null]));
+  const fallback = (piece) => estimate.has(piece.id) ? estimate.get(piece.id) :
+    (Number.isInteger(piece.estimateCents) ? piece.estimateCents : null);
+  const priceOf = (row) => {
+    if (row.priceCents === null || row.priceCents === undefined) return null;
+    if (Number.isInteger(row.priceCents) && row.priceCents >= 0 &&
+        row.priceCents <= MAX_CENTS) {
+      return row.priceCents;
+    }
+    add("price_invalid");
+    return null;
+  };
+  const list = Array.isArray(raw) ? raw : [];
+  const pieces = [];
   const prices = new Map();
-  for (const piece of pieces) {
-    if (given.has(piece.id)) prices.set(piece.id, given.get(piece.id));
-    else if (estimate.has(piece.id)) {
-      prices.set(piece.id, estimate.get(piece.id));
-    } else {
-      prices.set(piece.id, Number.isInteger(piece.estimateCents) ?
-        piece.estimateCents : null);
+  if (list.length === 0) {
+    for (const piece of requested) {
+      pieces.push(piece);
+      prices.set(piece.id, fallback(piece));
+    }
+  } else {
+    let next = requested.reduce((max, p) =>
+      Math.max(max, Number(String(p.id).replace(/\D/g, "")) || 0), 0);
+    const seen = new Set();
+    for (const value of list) {
+      const row = value && typeof value === "object" ? value : {};
+      const id = text(row.id, 10);
+      if (id) {
+        if (!byId.has(id) || seen.has(id)) {
+          add("estimate_piece_unknown");
+          continue;
+        }
+        seen.add(id);
+        pieces.push(byId.get(id));
+        prices.set(id, "priceCents" in row ? priceOf(row) :
+          fallback(byId.get(id)));
+        continue;
+      }
+      const kind = text(row.kind, 20);
+      if (!PIECE_KINDS.includes(kind)) add("piece_kind_invalid");
+      const description = String(row.description ?? "").trim();
+      if (description.length > MAX_DESCRIPTION) add("text_too_long");
+      if (kind !== "barrel" && !description) add("piece_description_required");
+      next += 1;
+      const piece = {id: `p${next}`, kind: PIECE_KINDS.includes(kind) ? kind :
+        "other", description: description.slice(0, MAX_DESCRIPTION),
+      sizeIn: null, photoPaths: [], estimateCents: null, addedAtReceive: true};
+      pieces.push(piece);
+      prices.set(piece.id, priceOf(row));
     }
   }
+  if (pieces.length > MAX_PIECES) add("too_many_pieces");
   const values = [...prices.values()];
   if (values.some((v) => v === null) && values.some((v) => v !== null)) {
     add("price_required");
   }
-  return {prices, errors};
+  const kept = new Set(pieces.map((p) => p.id));
+  return {
+    pieces,
+    prices,
+    added: pieces.filter((p) => p.addedAtReceive === true).length,
+    removed: requested.filter((p) => !kept.has(p.id)).length,
+    errors,
+  };
 }
 
 /**
@@ -124,14 +169,16 @@ function legacySummary(pieces) {
  * The line body for a received request.
  *
  * @param {object} request The stored request.
- * @param {object} args {lineId, prices (Map from cleanReceivePrices),
+ * @param {object} args {lineId, pieces and prices (from
+ *   cleanReceivePrices; pieces default to the request's),
  *   payOnArrival, staffUid, receivedAt (a server timestamp sentinel or
  *   Timestamp), receivedAtMs}.
  * @return {object} The line, ready to write (the caller adds trackingCode,
  *   paidCents, createdAt, updatedAt and businessId).
  */
 function requestLineRecord(request, args) {
-  const pieces = Array.isArray(request?.pieces) ? request.pieces : [];
+  const pieces = Array.isArray(args.pieces) ? args.pieces :
+    (Array.isArray(request?.pieces) ? request.pieces : []);
   const summary = legacySummary(pieces);
   const priceCents = receivedTotalCents(args.prices, request);
   const legacy = containerLineRecord({
