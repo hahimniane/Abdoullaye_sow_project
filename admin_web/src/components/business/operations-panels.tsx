@@ -1483,7 +1483,7 @@ export function DestinationsPanel({
                   <span>Pickup in this country</span>
                   <small className="muted">Where customers collect their goods. The ready-for-pickup WhatsApp message gives these. Leave them blank to use your business address and phone.</small>
                 </div>
-                <label className="lst-field"><span>Pickup city (optional)</span>
+                <label className="lst-field wide"><span>Pickup city (optional)</span>
                   <input
                     maxLength={80}
                     value={pickupDraft.pickupCity}
@@ -1492,7 +1492,7 @@ export function DestinationsPanel({
                   />
                   {pickupErrors.pickupCity && <small className="field-error">{pickupErrors.pickupCity}</small>}
                 </label>
-                <div className="lst-field">
+                <div className="lst-field wide">
                   <CustomerPhoneField
                     id="destination-pickup-phone"
                     label="Pickup phone (optional)"

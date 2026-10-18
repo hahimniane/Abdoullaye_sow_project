@@ -14127,8 +14127,10 @@ html[data-lang-pending] body {
    warning when the number cannot be reached on WhatsApp, and the switch for
    whether this person hears about the shipment. */
 .ctn-phone { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.ctn-phone .customer-phone-label { display: flex; flex-direction: column; gap: 6px; }
-.ctn-phone .customer-phone-label > label { font-size: 13px; font-weight: 700; color: var(--ink-soft, #3c5450); }
+.ctn-phone .customer-phone-label,
+.destination-coverage .lst-field .customer-phone-label { display: flex; flex-direction: column; gap: 6px; }
+.ctn-phone .customer-phone-label > label,
+.destination-coverage .lst-field .customer-phone-label > label { font-size: 13px; font-weight: 700; color: var(--ink-soft, #3c5450); }
 .ctn-phone-warn { color: #92400e; font-size: 12px; font-weight: 600; line-height: 1.35; }
 .ctn-notify { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.35; color: var(--ink); cursor: pointer; }
 .ctn-notify input { flex: none; width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--brand); cursor: pointer; }
