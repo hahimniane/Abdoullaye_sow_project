@@ -78,8 +78,29 @@ int _cents(Object? v) {
   return int.tryParse((v ?? '').toString()) ?? 0;
 }
 
-/// "$1,234.50" — negatives keep their sign in front of the currency mark.
-String formatLotCents(int cents) {
+String _moneyLanguage = 'en';
+
+/// The language on-screen money is written in, set by the app shell
+/// (`main.dart`) whenever the app's language changes: a French screen reads
+/// "190,00 $", as the console and the French WhatsApp messages do.
+void setMoneyDisplayLanguage(String languageCode) {
+  _moneyLanguage = languageCode == 'fr' ? 'fr' : 'en';
+}
+
+String get moneyDisplayLanguage => _moneyLanguage;
+
+/// "$1,234.50", or in French "1 234,50 $" (a narrow no-break space between
+/// thousands, a no-break space before the mark) - negatives keep their sign
+/// in front. [language] overrides the app's ([setMoneyDisplayLanguage]).
+String formatLotCents(int cents, {String? language}) {
+  if ((language ?? _moneyLanguage) == 'fr') {
+    final whole = (cents.abs() ~/ 100).toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (_) => ' ',
+    );
+    final part = (cents.abs() % 100).toString().padLeft(2, '0');
+    return '${cents < 0 ? '-' : ''}$whole,$part \$';
+  }
   final formatter = NumberFormat.currency(symbol: r'$', decimalDigits: 2);
   final text = formatter.format(cents.abs() / 100);
   return cents < 0 ? '-$text' : text;

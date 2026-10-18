@@ -666,7 +666,7 @@ Map<String, Object?> piecesLineFields(Object? raw, [Object? pickupFeeCents]) {
 
 String _plural(int n, String one, String many) => '$n ${n == 1 ? one : many}';
 
-/// "2 barrels, 1 box" / "2 fûts, 1 colis". Items that all say the same
+/// "2 barrels, 1 box" / "2 barils, 1 carton". Items that all say the same
 /// thing are named ("2 × TV"); a mix of items is counted. The server's
 /// words, for WhatsApp and the History; the app's own screens say it in its
 /// catalog (containers_screen.dart `containerPiecesSummary`).
@@ -690,13 +690,17 @@ String pieceSummaryText(Object? pieces, [String language = 'en']) {
   if (barrels > 0) {
     parts.add(
       fr
-          ? _plural(barrels, 'fût', 'fûts')
+          ? _plural(barrels, 'baril', 'barils')
           : _plural(barrels, 'barrel', 'barrels'),
     );
   }
   final boxes = of(pieceKind.box).length;
   if (boxes > 0) {
-    parts.add(fr ? '$boxes colis' : _plural(boxes, 'box', 'boxes'));
+    parts.add(
+      fr
+          ? _plural(boxes, 'carton', 'cartons')
+          : _plural(boxes, 'box', 'boxes'),
+    );
   }
   final items = of(pieceKind.other);
   if (items.isNotEmpty) {

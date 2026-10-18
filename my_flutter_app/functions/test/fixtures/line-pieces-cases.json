@@ -1456,8 +1456,8 @@
     ],
     "fr"
    ],
-   "note": "2 fûts, 1 colis",
-   "expected": "2 fûts, 1 colis"
+   "note": "2 barils, 1 carton",
+   "expected": "2 barils, 1 carton"
   },
   {
    "fn": "pieceSummaryText",

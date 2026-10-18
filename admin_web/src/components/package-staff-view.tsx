@@ -307,10 +307,10 @@ export function PackageStaffView({
             {view.size && <div><span>Package size</span><b data-no-translate>{view.size.dimensionsText}</b><small data-no-translate>{view.size.volumeText}</small></div>}
             {view.payment.priceCents !== null && (
               <>
-                {pickupFee > 0 && <div><span>Pickup fee</span><b data-no-translate>{moneyText(pickupFee)}</b></div>}
-                <div><span>Price</span><b data-no-translate>{moneyText(view.payment.priceCents)}</b></div>
-                <div><span>Paid</span><b data-no-translate>{moneyText(view.payment.paidCents)}</b></div>
-                <div><span>Still owed</span><b data-no-translate>{moneyText(view.payment.balanceCents)}</b></div>
+                {pickupFee > 0 && <div><span>Pickup fee</span><b data-no-translate>{moneyText(pickupFee, lang)}</b></div>}
+                <div><span>Price</span><b data-no-translate>{moneyText(view.payment.priceCents, lang)}</b></div>
+                <div><span>Paid</span><b data-no-translate>{moneyText(view.payment.paidCents, lang)}</b></div>
+                <div><span>Still owed</span><b data-no-translate>{moneyText(view.payment.balanceCents, lang)}</b></div>
               </>
             )}
             <div><span>Payment</span><b><span className={`lst-badge ${PACKAGE_PAYMENT_TONES[view.payment.status]}`}>{PACKAGE_PAYMENT_LABELS[view.payment.status]}</span></b>{partHint && <small data-no-translate>{partHint}</small>}</div>

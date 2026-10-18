@@ -237,15 +237,15 @@ test("container History sentences translate around the typed values", () => {
 test("History sentences about pieces and splits translate around the codes and names", () => {
   const cases: Array<[string, string]> = [
     // updateContainerLine on a line with pieces (container_manifest.js containerLineEditAudit).
-    ["Edited 2 barrels, 1 box (was 3 barrels): pieces for Fatou", "Modification de 2 barils, 1 colis (auparavant 3 barils) : colis pour Fatou"],
-    ["Edited 2 barrels, 1 box: piece prices for Fatou", "Modification de 2 barils, 1 colis : prix des colis pour Fatou"],
+    ["Edited 2 barrels, 1 box (was 3 barrels): pieces for Fatou", "Modification de 2 barils, 1 carton (auparavant 3 barils) : colis pour Fatou"],
+    ["Edited 2 barrels, 1 box: piece prices for Fatou", "Modification de 2 barils, 1 carton : prix des colis pour Fatou"],
     ["Edited 3 barrels, 2 × TV (was 3 barrels, TV): pieces, price for Awa Diallo", "Modification de 3 barils, 2 × TV (auparavant 3 barils, TV) : colis, prix pour Awa Diallo"],
     ["Edited 1 barrel, Clothes: pieces (business stock)", "Modification de 1 baril, Clothes : colis (stock de l’entreprise)"],
-    ["Edited 2 items (was 1 box): pieces, size, destination, pay on arrival for Awa", "Modification de 2 articles (auparavant 1 colis) : colis, taille, destination, paiement à l’arrivée pour Awa"],
+    ["Edited 2 items (was 1 box): pieces, size, destination, pay on arrival for Awa", "Modification de 2 articles (auparavant 1 carton) : colis, taille, destination, paiement à l’arrivée pour Awa"],
     // addContainerLine / addWaitingPackage and assignContainerLines with pieces.
-    ["Added 2 barrels, 1 box for Fatou Diallo, to Mariama Bah", "Ajout de 2 barils, 1 colis pour Fatou Diallo, destinataire Mariama Bah"],
-    ["Added 2 barrels, 1 box to MSKU1234567", "Ajout de 2 barils, 1 colis à MSKU1234567"],
-    ["Removed 2 barrels, 1 box", "Retrait de 2 barils, 1 colis"],
+    ["Added 2 barrels, 1 box for Fatou Diallo, to Mariama Bah", "Ajout de 2 barils, 1 carton pour Fatou Diallo, destinataire Mariama Bah"],
+    ["Added 2 barrels, 1 box to MSKU1234567", "Ajout de 2 barils, 1 carton à MSKU1234567"],
+    ["Removed 2 barrels, 1 box", "Retrait de 2 barils, 1 carton"],
     // assignContainerLines with pieceCounts: the split line, then the part.
     ["Split CL-T9W2QA: 2 of 4 pieces to MSKU1234567, 2 stay waiting as CL-T9W2QA-2",
       "Partage de CL-T9W2QA : 2 colis sur 4 vers MSKU1234567, 2 restent en attente sous CL-T9W2QA-2"],

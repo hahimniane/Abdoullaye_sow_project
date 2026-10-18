@@ -92,7 +92,7 @@ export function PackageMoney({ line, group, lang = "en" }: { line: Row; group?: 
       <span className={statusPillClass(PACKAGE_PAYMENT_TONES[payment.status])}>{PACKAGE_PAYMENT_LABELS[payment.status]}</span>
       {payment.priceCents !== null && (
         <small data-no-translate>
-          {moneyText(payment.paidCents)} / {moneyText(payment.priceCents)}
+          {moneyText(payment.paidCents, lang)} / {moneyText(payment.priceCents, lang)}
         </small>
       )}
       {hint && <small className="wpk-part-hint" data-no-translate>{hint}</small>}
@@ -450,13 +450,13 @@ export function WaitingPackagesPanel({
                   <span>
                     <span className={statusPillClass(PACKAGE_PAYMENT_TONES[payment.status])}>{PACKAGE_PAYMENT_LABELS[payment.status]}</span>
                     {payment.priceCents !== null && (
-                      <small data-no-translate>{moneyText(payment.paidCents)} / {moneyText(payment.priceCents)}</small>
+                      <small data-no-translate>{moneyText(payment.paidCents, lang)} / {moneyText(payment.priceCents, lang)}</small>
                     )}
                     {payment.balanceCents !== null && payment.balanceCents > 0 && (
-                      <small><span data-no-translate>{moneyText(payment.balanceCents)}</span> <span>still owed</span></small>
+                      <small><span data-no-translate>{moneyText(payment.balanceCents, lang)}</span> <span>still owed</span></small>
                     )}
                     {pickupFee > 0 && (
-                      <small className="wpk-fee-line"><span>Pickup fee</span> <span data-no-translate>{moneyText(pickupFee)}</span></small>
+                      <small className="wpk-fee-line"><span>Pickup fee</span> <span data-no-translate>{moneyText(pickupFee, lang)}</span></small>
                     )}
                     {partHint && <small className="wpk-part-hint" data-no-translate>{partHint}</small>}
                   </span>

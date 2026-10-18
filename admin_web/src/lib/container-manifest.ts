@@ -1205,7 +1205,7 @@ export function containerTitle(row: unknown): string {
 /**
  * "2019 Toyota Camry" / "12 barrels" / "3 × tires"; a car with no decode
  * shows its VIN. A line with pieces says what they are in the reader's
- * language ("2 barrels, 1 box" / "2 fûts, 1 colis", the server's
+ * language ("2 barrels, 1 box" / "2 barils, 1 carton", the server's
  * `pieceSummaryText`), so it renders as data-no-translate.
  */
 export function containerLineTitle(line: unknown, lang: "en" | "fr" = "en"): string {

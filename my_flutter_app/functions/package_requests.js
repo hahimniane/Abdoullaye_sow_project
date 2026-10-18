@@ -1165,15 +1165,15 @@ function nextTimer(request, extra = {}) {
 const KIND_WORDS = Object.freeze({
   en: {barrel: ["barrel", "barrels"], box: ["box", "boxes"],
     other: ["item", "items"]},
-  fr: {barrel: ["fût", "fûts"], box: ["carton", "cartons"],
-    other: ["colis", "colis"]},
+  fr: {barrel: ["baril", "barils"], box: ["carton", "cartons"],
+    other: ["article", "articles"]},
 });
 
 /**
  * @param {object[]} pieces Stored pieces.
  * @param {"en"|"fr"} language The language.
- * @return {string} e.g. "2 barrels, 1 box, 1 item" / "2 fûts, 1 carton,
- *   1 colis".
+ * @return {string} e.g. "2 barrels, 1 box, 1 item" / "2 barils, 1 carton,
+ *   1 article".
  */
 function describePieces(pieces, language) {
   const words = KIND_WORDS[language === "fr" ? "fr" : "en"];
@@ -1506,7 +1506,7 @@ function requestNotificationText(event, request, language) {
       return {title: fr ? "Demande sans estimation depuis 3 jours" :
         "Request waiting 3 days for an estimate", body: `${who} · ${tail}`};
     case "card_paid":
-      return {title: fr ? "Fûts payés en ligne" : "Barrels paid online",
+      return {title: fr ? "Barils payés en ligne" : "Barrels paid online",
         body: `${who} · ${tail}`};
     default:
       return {title: fr ? "Nouvelle demande d'envoi" : "New package request",

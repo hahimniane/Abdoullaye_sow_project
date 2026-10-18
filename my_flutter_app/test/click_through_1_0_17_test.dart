@@ -637,4 +637,49 @@ void main() {
       expect(source, contains('_photoUrls.get(path)'));
     });
   });
+
+  group('11 · one French word per piece kind, and French money', () {
+    tearDown(() => setMoneyDisplayLanguage('en'));
+
+    test('money follows the app language: "190,00 \$" in French', () {
+      expect(formatLotCents(19000), r'$190.00');
+      expect(formatLotCents(19000, language: 'fr'), '190,00\u00a0\$');
+      expect(formatLotCents(125050, language: 'fr'), '1\u202f250,50\u00a0\$');
+      expect(formatLotCents(-500, language: 'fr'), '-5,00\u00a0\$');
+      setMoneyDisplayLanguage('fr');
+      expect(formatLotCents(19000), '190,00\u00a0\$');
+      expect(formatRequestCents(4500), '45,00\u00a0\$');
+      setMoneyDisplayLanguage('en');
+      expect(formatLotCents(19000), r'$190.00');
+      // The shell sets it from the chosen language.
+      expect(
+        File('lib/main.dart').readAsStringSync(),
+        contains(
+          'setMoneyDisplayLanguage(languageProvider.currentLocale.languageCode);',
+        ),
+      );
+    });
+
+    test('baril, carton, autre; a piece is a colis', () {
+      final fr = lookupAppLocalizations(const Locale('fr'));
+      expect(
+        [fr.pcsKindBarrel, fr.pcsKindBox, fr.pcsKindOther],
+        ['Baril', 'Carton', 'Autre'],
+      );
+      expect(
+        [fr.prqKindBarrel, fr.prqKindBox],
+        [fr.pcsKindBarrel, fr.pcsKindBox],
+      );
+      expect(fr.pcsAddPiece, 'Ajouter un autre colis');
+      expect(fr.pcsPieceCount(3), '3 colis');
+      expect(fr.pcsBoxesCount(2), '2 cartons');
+      expect(fr.volumePiecesReceived(1), '1 colis reçu');
+      final arb = File('lib/l10n/app_fr.arb').readAsStringSync();
+      expect(RegExp(r'fûts?\b', caseSensitive: false).hasMatch(arb), isFalse);
+      final pieceWords = RegExp(
+        r'"(pcs|ctr|pkg|volume|wpk|prq)[A-Za-z]*": "[^"]*\bpièces?\b',
+      );
+      expect(pieceWords.allMatches(arb).map((m) => m.group(0)), isEmpty);
+    });
+  });
 }

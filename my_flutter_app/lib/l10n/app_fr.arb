@@ -2359,7 +2359,7 @@
   "hubCarsSubtitle": "Achetez une voiture vérifiée ou stockez-la auprès d’une entreprise.",
   "hubParkCarSubtitle": "Stocker auprès d’une entreprise",
   "homeHeroTitle": "Envoyer quelque chose au pays",
-  "homeHeroSubtitle": "Un fût, du fret ou une voiture. Choisissez ce qui part, on s'occupe du reste.",
+  "homeHeroSubtitle": "Un baril, du fret ou une voiture. Choisissez ce qui part, on s'occupe du reste.",
   "homeHeroCta": "Commencer un envoi",
   "homeHelpTitle": "Besoin d'aide ?",
   "homeHelpSubtitle": "Écrivez à l'équipe Laawol",
@@ -2593,7 +2593,7 @@
       }
     }
   },
-  "volumePiecesReceived": "{count, plural, =0{0 pièce reçue} =1{1 pièce reçue} other{{count} pièces reçues}}",
+  "volumePiecesReceived": "{count, plural, =0{0 colis reçu} =1{1 colis reçu} other{{count} colis reçus}}",
   "@volumePiecesReceived": {
     "placeholders": {
       "count": {
@@ -4491,7 +4491,7 @@
   "ctrLabelSheetNote": "Avery 5524 ou toute planche Letter de 2 × 3, six étiquettes par page.",
   "ctrLabelThermal": "Thermique 4 × 6",
   "ctrLabelThermalNote": "Une étiquette par étiquette 4 × 6 po en rouleau, pour les imprimantes Zebra, Rollo et similaires.",
-  "ctrLabelCopies": "Étiquettes par pièce",
+  "ctrLabelCopies": "Étiquettes par colis",
   "ctrLabelTwo": "Deux",
   "ctrLabelTwoNote": "Une de chaque côté, pour que le colis reste identifiable si l’une se déchire.",
   "ctrLabelOne": "Une",
@@ -4499,7 +4499,7 @@
   "ctrLabelPrintButton": "Ouvrir les étiquettes à imprimer",
   "ctrLabelOpening": "Ouverture…",
   "ctrLabelsCouldNotOpen": "Les étiquettes n’ont pas pu être ouvertes. Réessayez dans un instant.",
-  "ctrLabelTip": "Les étiquettes s’ouvrent dans votre navigateur, prêtes à imprimer. Sur les fûts, des étiquettes résistantes à l’eau ou du ruban adhésif transparent gardent le code lisible sous la pluie.",
+  "ctrLabelTip": "Les étiquettes s’ouvrent dans votre navigateur, prêtes à imprimer. Sur les barils, des étiquettes résistantes à l’eau ou du ruban adhésif transparent gardent le code lisible sous la pluie.",
   "pkgScanAction": "Scanner un colis",
   "pkgScanTitle": "Trouver un colis",
   "pkgScanHint": "Visez le code QR de l’étiquette du colis",
@@ -5808,7 +5808,7 @@
   "pkgLabelsCouldNotLoad": "Impossible de charger les étiquettes. Réessayez dans un instant.",
   "pkgLabelsNone": "Aucun colis à imprimer.",
   "pkgLabelsPrintFailed": "Impossible d’imprimer les étiquettes. Réessayez.",
-  "pkgLabelsOneNotePrinter": "Une étiquette par pièce : suffisant pour un retrait ou une étiquette déchirée.",
+  "pkgLabelsOneNotePrinter": "Une étiquette par colis : suffisant pour un retrait ou une étiquette déchirée.",
   "pkgLabelsTipPrinter": "Chaque étiquette porte le code QR, le code de suivi, ainsi que les deux noms et numéros de téléphone. Réglez la taille sur le rouleau chargé dans l’imprimante.",
   "pkgLabelsTipSystem": "Choisissez l’imprimante 4 × 6 dans la fenêtre et imprimez en taille réelle (100 %). Deux étiquettes par colis, une pour chaque côté.",
   "@wpkSavedWithPayment": {
@@ -6351,8 +6351,8 @@
   "zelleFailCandidateInvalid": "Ce dépôt ne peut pas servir pour ce paiement. Vérifiez à nouveau.",
   "zelleFailCandidateTaken": "Quelqu'un vient d'associer ce dépôt à un autre paiement. La liste a été revérifiée.",
   "zelleFailBankError": "La banque n'a pas répondu. Réessayez.",
-  "pcsKindPieces": "Barils et colis",
-  "pcsPiecesTitle": "Pièces ({count})",
+  "pcsKindPieces": "Barils et cartons",
+  "pcsPiecesTitle": "Colis ({count})",
   "@pcsPiecesTitle": {
     "placeholders": {
       "count": {
@@ -6361,9 +6361,9 @@
     }
   },
   "pcsKindBarrel": "Baril",
-  "pcsKindBox": "Colis",
+  "pcsKindBox": "Carton",
   "pcsKindOther": "Autre",
-  "pcsKindLabel": "Ce qu'est la pièce {number}",
+  "pcsKindLabel": "Ce qu'est le colis {number}",
   "@pcsKindLabel": {
     "placeholders": {
       "number": {
@@ -6375,7 +6375,7 @@
   "pcsDescriptionWhat": "Qu'est-ce que c'est ?",
   "pcsPrice": "Prix",
   "pcsAddSize": "Ajouter les dimensions (pouces)",
-  "pcsRemovePiece": "Retirer la pièce {number}",
+  "pcsRemovePiece": "Retirer le colis {number}",
   "@pcsRemovePiece": {
     "placeholders": {
       "number": {
@@ -6383,8 +6383,8 @@
       }
     }
   },
-  "pcsAddPiece": "Ajouter une autre pièce",
-  "pcsTotalLabel": "{count, plural, =1{1 pièce · Total} other{{count} pièces · Total}}",
+  "pcsAddPiece": "Ajouter un autre colis",
+  "pcsTotalLabel": "{count, plural, =1{1 colis · Total} other{{count} colis · Total}}",
   "@pcsTotalLabel": {
     "placeholders": {
       "count": {
@@ -6404,7 +6404,7 @@
   "pcsSaveAndAnother": "Enregistrer et en enregistrer un autre pour cet expéditeur",
   "pcsSaveOnly": "Enregistrer sans imprimer",
   "pcsAnotherHint": "« En enregistrer un autre » ne garde que l'expéditeur, pour un autre destinataire ou pays.",
-  "pcsBoxesCount": "{count, plural, other{{count} colis}}",
+  "pcsBoxesCount": "{count, plural, =1{1 carton} other{{count} cartons}}",
   "@pcsBoxesCount": {
     "placeholders": {
       "count": {
@@ -6420,7 +6420,7 @@
       }
     }
   },
-  "pcsPieceCount": "{count, plural, =1{1 pièce} other{{count} pièces}}",
+  "pcsPieceCount": "{count, plural, =1{1 colis} other{{count} colis}}",
   "@pcsPieceCount": {
     "placeholders": {
       "count": {
@@ -6428,16 +6428,16 @@
       }
     }
   },
-  "pcsErrPiecesRequired": "Ajoutez au moins une pièce.",
-  "pcsErrPiecesTooMany": "Un colis peut avoir au plus 60 pièces.",
-  "pcsErrKindInvalid": "Indiquez ce qu'est chaque pièce : un baril, un colis ou autre chose.",
-  "pcsErrDescriptionRequired": "Indiquez ce qu'est chaque colis ou article.",
-  "pcsErrDescriptionTooLong": "Limitez la description de chaque pièce à 120 caractères.",
-  "pcsErrSizeInvalid": "Saisissez la longueur, la largeur et la hauteur de la pièce en pouces, ou laissez les trois vides.",
-  "pcsErrPriceInvalid": "Saisissez le prix de chaque pièce en dollars, zéro ou plus.",
-  "pcsErrCountInvalid": "Choisissez combien de pièces partent : de 1 au nombre de pièces du colis.",
+  "pcsErrPiecesRequired": "Ajoutez au moins un colis.",
+  "pcsErrPiecesTooMany": "Un envoi peut compter au plus 60 colis.",
+  "pcsErrKindInvalid": "Indiquez ce qu'est chaque colis : un baril, un carton ou autre chose.",
+  "pcsErrDescriptionRequired": "Indiquez ce qu'est chaque carton ou article.",
+  "pcsErrDescriptionTooLong": "Limitez la description de chaque colis à 120 caractères.",
+  "pcsErrSizeInvalid": "Saisissez la longueur, la largeur et la hauteur du colis en pouces, ou laissez les trois vides.",
+  "pcsErrPriceInvalid": "Saisissez le prix de chaque colis en dollars, zéro ou plus.",
+  "pcsErrCountInvalid": "Choisissez combien de colis partent : de 1 au nombre de colis de l'envoi.",
   "pcsErrLineHasParts": "D'autres parties de ce colis sont encore enregistrées. Retirez-les d'abord.",
-  "pcsGoingIn": "Pièces qui partent",
+  "pcsGoingIn": "Colis qui partent",
   "pcsGoingOf": "{going} sur {total}",
   "@pcsGoingOf": {
     "placeholders": {
@@ -6449,9 +6449,9 @@
       }
     }
   },
-  "pcsFewer": "Moins de pièces",
-  "pcsMore": "Plus de pièces",
-  "pcsPreviewGoing": "{count, plural, =1{1 pièce → ce conteneur} other{{count} pièces → ce conteneur}}",
+  "pcsFewer": "Moins de colis",
+  "pcsMore": "Plus de colis",
+  "pcsPreviewGoing": "{count, plural, =1{1 colis → ce conteneur} other{{count} colis → ce conteneur}}",
   "@pcsPreviewGoing": {
     "placeholders": {
       "count": {
@@ -6459,7 +6459,7 @@
       }
     }
   },
-  "pcsPreviewStaying": "{count, plural, =1{1 pièce reste en attente} other{{count} pièces restent en attente}}",
+  "pcsPreviewStaying": "{count, plural, =1{1 colis reste en attente} other{{count} colis restent en attente}}",
   "@pcsPreviewStaying": {
     "placeholders": {
       "count": {
@@ -6467,8 +6467,8 @@
       }
     }
   },
-  "pcsSplitNote": "Aucun message n'est envoyé maintenant. Chaque partie reçoit ses propres messages de départ et de retrait. Imprimez de nouvelles étiquettes pour les pièces qui restent.",
-  "pcsPrintPartsTitle": "Imprimer les étiquettes des pièces qui restent ?",
+  "pcsSplitNote": "Aucun message n'est envoyé maintenant. Chaque partie reçoit ses propres messages de départ et de retrait. Imprimez de nouvelles étiquettes pour les colis qui restent.",
+  "pcsPrintPartsTitle": "Imprimer les étiquettes des colis qui restent ?",
   "pcsPrintPartsMessage": "{count, plural, =1{{codes} reste en attente avec un nouveau code : ses anciennes étiquettes ne sont plus bonnes. Imprimez-en de nouvelles maintenant.} other{{codes} restent en attente avec de nouveaux codes : leurs anciennes étiquettes ne sont plus bonnes. Imprimez-en de nouvelles maintenant.}}",
   "@pcsPrintPartsMessage": {
     "placeholders": {
@@ -6500,7 +6500,7 @@
       }
     }
   },
-  "pcsPartPriceHint": "Le prix de cette partie seule. Un total modifié est réparti également sur ses pièces.",
+  "pcsPartPriceHint": "Le prix de cette partie seule. Un total modifié est réparti également sur ses colis.",
   "pcsPartOf": "Partie {index} de {code}",
   "@pcsPartOf": {
     "placeholders": {
@@ -6512,9 +6512,9 @@
       }
     }
   },
-  "pcsTrackingPieces": "Pièces",
+  "pcsTrackingPieces": "Colis",
   "pcsTrackingParts": "Parties de ce colis",
-  "pcsTrackingPartsHint": "Certaines pièces peuvent partir dans un conteneur suivant.",
+  "pcsTrackingPartsHint": "Certains colis peuvent partir dans un conteneur suivant.",
   "pcsTrackingMoney": "Prix et paiements",
   "pcsTrackingPrice": "Prix final",
   "pcsTrackingPaid": "Payé",

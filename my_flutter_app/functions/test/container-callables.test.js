@@ -656,7 +656,7 @@ describe("WhatsApp updates", () => {
         assert.deepEqual(receiverCall.template.components[0].parameters
             .map((p) => p.text).slice(0, 7),
         ["Mariama Bah", "3 barrels", "Dala Shipping", "Guinea",
-          "3 fûts", "Dala Shipping", "Guinée"]);
+          "3 barils", "Dala Shipping", "Guinée"]);
         const line = await db.collection("containerLines").doc(lineId).get();
         assert.deepEqual(line.get("lastCustomerUpdate.results")
             .map((entry) => entry.status), ["sent", "sent"]);
@@ -762,7 +762,7 @@ describe("WhatsApp updates", () => {
     assert.deepEqual(sent.template.components[0].parameters
         .map((p) => p.text),
     ["Fatou Diallo", "Dala Shipping", "2 barrels", "Guinea",
-      "Dala Shipping", "2 fûts", "Guinée", code]);
+      "Dala Shipping", "2 barils", "Guinée", code]);
     assert.deepEqual(sent.template.components[1].parameters
         .map((p) => p.text), [code]);
   });
@@ -850,7 +850,7 @@ describe("WhatsApp updates", () => {
           assert.equal(whatsappCalls[0].template.language.code, "en");
           assert.equal(params(0).length, 10);
           assert.deepEqual(params(0).slice(1, 9), ["3 barrels",
-            "Dala Shipping", "Guinea", "3 fûts", "Dala Shipping", "Guinée",
+            "Dala Shipping", "Guinea", "3 barils", "Dala Shipping", "Guinée",
             "—", "—"]);
           await call("setDestinationPickup", {countryId: "gn",
             pickupCity: "Conakry", pickupAddress: "Madina, near the market",
@@ -858,7 +858,7 @@ describe("WhatsApp updates", () => {
           await ref.update({status: "queued", attempts: 0});
           await deliver(ref.id);
           assert.deepEqual(params(1).slice(1, 9), ["3 barrels",
-            "Dala Shipping", "Conakry, Guinea", "3 fûts", "Dala Shipping",
+            "Dala Shipping", "Conakry, Guinea", "3 barils", "Dala Shipping",
             "Conakry, Guinée", "Madina, near the market", "+224620112233"]);
           const code = (await db.collection("containerLines").doc(lineId)
               .get()).get("trackingCode");
@@ -2518,7 +2518,7 @@ describe("pieces on lines", () => {
     const texts = whatsappCalls[0].template.components[0].parameters
         .map((p) => p.text);
     assert.equal(texts[1], "2 barrels, 1 box");
-    assert.equal(texts[4], "2 fûts, 1 colis");
+    assert.equal(texts[4], "2 barils, 1 carton");
   });
 
   it("ships a part while the original line still waits", async () => {

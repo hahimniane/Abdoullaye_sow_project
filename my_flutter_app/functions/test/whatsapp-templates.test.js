@@ -29,7 +29,7 @@ const VALUES = Object.freeze({
   businessPhone: "+16465550199",
   trackingCode: "CL-K7M4P2",
   whatEn: "3 barrels",
-  whatFr: "3 fûts",
+  whatFr: "3 barils",
   destinationEn: "Guinea",
   destinationFr: "Guinée",
   pickupPlaceEn: "Conakry, Guinea",
@@ -146,7 +146,7 @@ describe("the bilingual variables, in the order Meta numbered them", () => {
     assert.deepEqual(bodyOf("shipment_received_2lang"), [
       "Mariama Bah",
       "Dala Shipping", "3 barrels", "Guinea",
-      "Dala Shipping", "3 fûts", "Guinée",
+      "Dala Shipping", "3 barils", "Guinée",
       "CL-K7M4P2",
     ]);
   });
@@ -157,7 +157,7 @@ describe("the bilingual variables, in the order Meta numbered them", () => {
     assert.deepEqual(bodyOf("shipment_departed_2lang"), [
       "Mariama Bah",
       "3 barrels", "Dala Shipping", "Guinea",
-      "3 fûts", "Dala Shipping", "Guinée",
+      "3 barils", "Dala Shipping", "Guinée",
       "CL-K7M4P2",
     ]);
   });
@@ -168,7 +168,7 @@ describe("the bilingual variables, in the order Meta numbered them", () => {
     assert.deepEqual(bodyOf("shipment_ready_pickup_2lang"), [
       "Mariama Bah",
       "3 barrels", "Dala Shipping", "Conakry, Guinea",
-      "3 fûts", "Dala Shipping", "Conakry, Guinée",
+      "3 barils", "Dala Shipping", "Conakry, Guinée",
       "Madina, near the market", "+224620000000", "CL-K7M4P2",
     ]);
   });

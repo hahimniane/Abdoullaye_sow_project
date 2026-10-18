@@ -13,6 +13,7 @@ import 'navigation/app_navigator.dart';
 import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/app_gate_provider.dart';
+import 'services/lot_ledger.dart' show setMoneyDisplayLanguage;
 import 'services/package_link_service.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
@@ -228,6 +229,8 @@ class MyApp extends StatelessWidget {
       // listen to it themselves, and the route builders read it on demand.
       child: Consumer<LanguageProvider>(
         builder: (context, languageProvider, child) {
+          // Money on French screens reads "190,00 $" (formatLotCents).
+          setMoneyDisplayLanguage(languageProvider.currentLocale.languageCode);
           return MaterialApp(
             title: 'Laawol Digital',
             navigatorKey: rootNavigatorKey,

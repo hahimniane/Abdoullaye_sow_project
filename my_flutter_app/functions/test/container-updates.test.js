@@ -186,7 +186,7 @@ describe("what they read", () => {
 
   it("names what is on the line the way a person would", () => {
     assert.equal(describeLine(line(), "en"), "3 barrels");
-    assert.equal(describeLine(line(), "fr"), "3 fûts");
+    assert.equal(describeLine(line(), "fr"), "3 barils");
     assert.equal(describeLine(line({quantity: 1}), "en"), "1 barrel");
     assert.equal(describeLine({kind: "car", carYear: "2015",
       carMake: "Toyota", carModel: "Camry",
@@ -200,7 +200,7 @@ describe("what they read", () => {
     const pieced = {kind: "other", quantity: 3, pieces: [
       {kind: "barrel"}, {kind: "barrel"}, {kind: "box", description: "x"}]};
     assert.equal(describeLine(pieced, "en"), "2 barrels, 1 box");
-    assert.equal(describeLine(pieced, "fr"), "2 fûts, 1 colis");
+    assert.equal(describeLine(pieced, "fr"), "2 barils, 1 carton");
     const group = {partCount: 2, pieceCount: 5};
     assert.equal(describeLine(pieced, "en", group), "3 of your 5 pieces");
     assert.equal(describeLine(pieced, "fr", group), "3 de vos 5 colis");
@@ -257,7 +257,7 @@ describe("what they read", () => {
     assert.equal(body.template.language.code, "en");
     assert.deepEqual(texts(body), ["Mariama Bah",
       "Dala", "3 barrels", "Senegal",
-      "Dala", "3 fûts", "Sénégal",
+      "Dala", "3 barils", "Sénégal",
       "CL-K7M4P2"]);
   });
 
@@ -269,7 +269,7 @@ describe("what they read", () => {
     assert.equal(fr.template.language.code, "en");
     assert.deepEqual(texts(fr), ["Mariama Bah",
       "3 barrels", "Dala", "Guinea",
-      "3 fûts", "Dala", "Guinée",
+      "3 barils", "Dala", "Guinée",
       "CL-K7M4P2"]);
     assert.deepEqual(texts(en), texts(fr));
     const [, button] = fr.template.components;
@@ -286,7 +286,7 @@ describe("what they read", () => {
     assert.equal(body.template.language.code, "en");
     assert.deepEqual(texts(body), ["Mariama Bah",
       "3 barrels", "Dala", "Conakry, Guinea",
-      "3 fûts", "Dala", "Conakry, Guinée",
+      "3 barils", "Dala", "Conakry, Guinée",
       "Madina, near the market", "+224620112233", "CL-K7M4P2"]);
   });
 
@@ -296,13 +296,13 @@ describe("what they read", () => {
           business: {addressLine1: "12 Main St", city: "Bronx",
             state: "NY", country: "United States"}});
         assert.deepEqual(texts(body).slice(3, 10), ["Guinea",
-          "3 fûts", "Dala", "Guinée",
+          "3 barils", "Dala", "Guinée",
           "12 Main St, Bronx, NY, United States", "+16465550199",
           "CL-K7M4P2"]);
         const bare = message("arrived", {businessPhone: "", business: {},
           container: null});
         assert.deepEqual(texts(bare).slice(3, 10), [
-          "the destination country", "3 fûts", "Dala", "destination",
+          "the destination country", "3 barils", "Dala", "destination",
           "—", "—", "CL-K7M4P2"]);
       });
 
@@ -331,7 +331,7 @@ describe("what they read", () => {
           assert.equal(body.template.name, "container_departed");
           assert.equal(body.template.language.code, "fr");
           assert.deepEqual(texts(body),
-              ["Mariama Bah", "3 fûts", "Dala", "Guinée", "CL-K7M4P2"]);
+              ["Mariama Bah", "3 barils", "Dala", "Guinée", "CL-K7M4P2"]);
         });
 
     it("sends container_arrived with the business's phone", () => {

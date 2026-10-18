@@ -270,7 +270,7 @@ place) are built server-side in French, the English ones in English.
 
 **What** (`describeLine` in `container_updates.js`, pieces rules in
 `line_pieces.js`): a line with pieces names them ("2 barrels, 1 box" /
-"2 fûts, 1 colis"; items sharing one description as "2 × TV"); a part of a
+"2 barils, 1 carton"; items sharing one description as "2 × TV"); a part of a
 package split across containers names its share of the whole, "2 of your 4
 pieces" / "2 de vos 4 colis", read at send time from its group
 (`rootLineId`). Each part gets its own departed and ready-for-pickup
@@ -455,7 +455,7 @@ still reads inside the sentence:
 | --- | --- | --- |
 | name | the line's customer or receiver name | `there` / `à vous` ("Hello there," / "Bonjour à vous,") |
 | business | the business's name | `Laawol` |
-| what | the line: "3 barrels" / "3 fûts", "2015 Toyota Camry (VIN …004352)", "2 × boxes of clothes" | `goods` / `marchandises` (never reached in practice) |
+| what | the line: "3 barrels" / "3 barils", "2015 Toyota Camry (VIN …004352)", "2 × boxes of clothes" | `goods` / `marchandises` (never reached in practice) |
 | destination country | the line's own destination (waiting packages), else its container's; French readers get the French country name ("Guinée") | `its destination country` / `son pays de destination` |
 | business phone | `businesses/{id}.phone` | `the number on your receipt` / `numéro indiqué sur votre reçu` (the French body reads "joindre au {{5}}") |
 | tracking code | the line's code | `-` (every line has a code) |

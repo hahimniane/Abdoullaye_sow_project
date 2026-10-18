@@ -324,7 +324,7 @@ never added again):
 
 **WhatsApp "what"** for a line with pieces: "2 of your 4 pieces" / "2 de vos
 4 colis" when its group has more than one part, else the piece summary
-("2 barrels, 1 box" / "2 fûts, 1 colis"). Legacy lines read as before.
+("2 barrels, 1 box" / "2 barils, 1 carton"). Legacy lines read as before.
 
 **Tracking page** (`lookupGuestTracking`, container records): `pieceCount`,
 `parts: [{trackingCode, stage, pieceCount, priceCents}]` (the whole group,

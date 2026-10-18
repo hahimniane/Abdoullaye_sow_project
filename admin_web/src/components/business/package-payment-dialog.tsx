@@ -122,7 +122,7 @@ export function PackagePaymentDialog({
   async function revert(entryId: string, amountCents: number) {
     const ok = await confirmImportantAction(
       `Revert the ${moneyText(amountCents)} payment? The balance goes back up.`,
-      `Annuler le paiement de ${moneyText(amountCents)} ? Le solde remonte.`,
+      `Annuler le paiement de ${moneyText(amountCents, "fr")} ? Le solde remonte.`,
     );
     if (!ok) return;
     setError("");
@@ -167,7 +167,7 @@ export function PackagePaymentDialog({
             <p>
               <span data-no-translate>{containerLineTitle(line, lang)}</span>
               {" — "}
-              {owed ? <span>{owed}</span> : <span data-no-translate>{moneyText(payment.balanceCents)}</span>}
+              {owed ? <span>{owed}</span> : <span data-no-translate>{moneyText(payment.balanceCents, lang)}</span>}
               {payment.balanceCents !== null && <> <span>still owed</span></>}
             </p>
           </div>
@@ -179,22 +179,22 @@ export function PackagePaymentDialog({
             <span className={statusPillClass(PACKAGE_PAYMENT_TONES[payment.status])}>{PACKAGE_PAYMENT_LABELS[payment.status]}</span>
             {payment.priceCents !== null && (
               <small data-no-translate>
-                {moneyText(payment.paidCents)} / {moneyText(payment.priceCents)}
+                {moneyText(payment.paidCents, lang)} / {moneyText(payment.priceCents, lang)}
               </small>
             )}
             {partHint && <small className="wpk-part-hint" data-no-translate>{partHint}</small>}
           </p>
           {groupNote && <p className="lst-hint" data-no-translate>{groupNote}</p>}
           {group.partCount > 1 && group.pickupFeeCents > 0 && (
-            <p className="lst-hint wpk-fee-line"><span>Includes the pickup fee</span> <span data-no-translate>{moneyText(group.pickupFeeCents)}</span></p>
+            <p className="lst-hint wpk-fee-line"><span>Includes the pickup fee</span> <span data-no-translate>{moneyText(group.pickupFeeCents, lang)}</span></p>
           )}
 
           <div className="lst-form-grid">
             {pieced ? (
               <div className="lst-field">
                 <span>Price</span>
-                <strong data-no-translate>{own.priceCents === null ? "—" : moneyText(own.priceCents)}</strong>
-                {ownFee > 0 && <small className="lst-hint wpk-fee-line"><span>Pickup fee</span> <span data-no-translate>{moneyText(ownFee)}</span></small>}
+                <strong data-no-translate>{own.priceCents === null ? "—" : moneyText(own.priceCents, lang)}</strong>
+                {ownFee > 0 && <small className="lst-hint wpk-fee-line"><span>Pickup fee</span> <span data-no-translate>{moneyText(ownFee, lang)}</span></small>}
                 <small className="lst-hint">Set each piece&apos;s price in Edit package.</small>
               </div>
             ) : (
@@ -262,7 +262,7 @@ export function PackagePaymentDialog({
                 return (
                   <li className={entry.reverted ? "wpk-reverted" : undefined} key={entry.id}>
                     <div>
-                      <strong data-no-translate>{moneyText(entry.amountCents)}</strong>
+                      <strong data-no-translate>{moneyText(entry.amountCents, lang)}</strong>
                       {" "}<span>{entry.methodLabel}</span>
                       {entry.note && <small data-no-translate>{entry.note}</small>}
                       <small>

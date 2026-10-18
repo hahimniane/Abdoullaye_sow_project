@@ -368,11 +368,19 @@ export function invoiceTitle(row: Row): string {
   return [number, title].filter(Boolean).join(" · ") || "Invoice";
 }
 
-export function moneyText(value: unknown): string {
+/**
+ * Cents as people read them: "$1,250.00", or on a French page "1 250,00 $"
+ * (a narrow no-break space between thousands)
+ * (the same form as the server's French WhatsApp messages and
+ * package-requests.ts `moneyText`).
+ */
+export function moneyText(value: unknown, lang: "en" | "fr" = "en"): string {
   const n = Math.round(Number(value) || 0);
   const whole = Math.trunc(Math.abs(n) / 100);
   const part = String(Math.abs(n) % 100).padStart(2, "0");
-  return `${n < 0 ? "-" : ""}$${whole.toLocaleString("en-US")}.${part}`;
+  const sign = n < 0 ? "-" : "";
+  if (lang === "fr") return `${sign}${String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f")},${part} $`;
+  return `${sign}$${whole.toLocaleString("en-US")}.${part}`;
 }
 
 export type InvoiceFilter = "" | "open" | "paid" | "overdue";

@@ -383,7 +383,7 @@ export function piecesLineFields(raw: unknown, pickupFeeCents: unknown = null) {
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * "2 barrels, 1 box" / "2 fûts, 1 colis". Items that all say the same thing
+ * "2 barrels, 1 box" / "2 barils, 1 carton". Items that all say the same thing
  * are named ("2 × TV"); a mix of items is counted.
  */
 export function pieceSummaryText(pieces: unknown, language: "en" | "fr" = "en"): string {
@@ -394,9 +394,9 @@ export function pieceSummaryText(pieces: unknown, language: "en" | "fr" = "en"):
   const cars = of(CAR_PIECE_KIND).length;
   if (cars) parts.push(fr ? plural(cars, "véhicule", "véhicules") : plural(cars, "car", "cars"));
   const barrels = of(PIECE_KIND.BARREL).length;
-  if (barrels) parts.push(fr ? plural(barrels, "fût", "fûts") : plural(barrels, "barrel", "barrels"));
+  if (barrels) parts.push(fr ? plural(barrels, "baril", "barils") : plural(barrels, "barrel", "barrels"));
   const boxes = of(PIECE_KIND.BOX).length;
-  if (boxes) parts.push(fr ? `${boxes} colis` : plural(boxes, "box", "boxes"));
+  if (boxes) parts.push(fr ? plural(boxes, "carton", "cartons") : plural(boxes, "box", "boxes"));
   const items = of(PIECE_KIND.OTHER);
   if (items.length) {
     const names = [...new Set(items.map((p) => text(p.description, MAX_PIECE_DESCRIPTION)))];

@@ -97,7 +97,7 @@ function piecePart(value: string): string | null {
   if (!match) return null;
   const n = match[1];
   if (match[2].startsWith("barrel")) return `${n} ${plural(n, "baril", "barils")}`;
-  if (match[2].startsWith("box")) return `${n} colis`;
+  if (match[2].startsWith("box")) return `${n} ${plural(n, "carton", "cartons")}`;
   if (match[2].startsWith("item")) return `${n} ${plural(n, "article", "articles")}`;
   return `${n} ${plural(n, "voiture", "voitures")}`;
 }

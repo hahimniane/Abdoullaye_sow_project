@@ -255,5 +255,5 @@ export function savePrintLabelsText(count: number, lang: Lang = "en"): string {
 /** "Total: $245.00" / "Total : 245,00 $" - the money in the console's one format. */
 export function piecesTotalText(cents: number | null, lang: Lang = "en"): string {
   if (cents === null) return lang === "fr" ? "Total : pas encore de prix" : "Total: no price yet";
-  return lang === "fr" ? `Total : ${moneyText(cents)}` : `Total: ${moneyText(cents)}`;
+  return lang === "fr" ? `Total : ${moneyText(cents, "fr")}` : `Total: ${moneyText(cents)}`;
 }

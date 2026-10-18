@@ -175,7 +175,7 @@ void main() {
       containerLineFormSheetForTesting(container: _box),
       locale: const Locale('fr'),
     );
-    await tester.tap(find.text('Barils et colis'));
+    await tester.tap(find.text('Barils et cartons'));
     await tester.pumpAndSettle();
     expect(
       find.text(

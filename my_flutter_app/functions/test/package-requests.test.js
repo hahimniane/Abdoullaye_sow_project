@@ -569,7 +569,7 @@ describe("the words in messages", () => {
     assert.equal(pr.describePieces(pieces, "en"),
         "2 barrels, 1 box, 1 item");
     assert.equal(pr.describePieces(pieces, "fr"),
-        "2 fûts, 1 carton, 1 colis");
+        "2 barils, 1 carton, 1 article");
     assert.equal(pr.describePieces([{kind: "box"}, {kind: "box"}], "en"),
         "2 boxes");
   });
@@ -614,7 +614,7 @@ describe("the words in messages", () => {
     assert.deepEqual(body.template.components[0].parameters.map((p) =>
       p.text), ["Fatou", "Dala Shipping", "$195.00",
       "2 barrels, 1 box, 1 item", "Guinea", "Dala Shipping", "195,00 $",
-      "2 fûts, 1 carton, 1 colis", "Guinée", "R-K7M4P"]);
+      "2 barils, 1 carton, 1 article", "Guinée", "R-K7M4P"]);
     assert.deepEqual(body.template.components[1].parameters,
         [{type: "text", text: "t".repeat(43)}]);
     const reminder = requestTemplateMessage({phone: "+16465550100",
@@ -622,7 +622,7 @@ describe("the words in messages", () => {
     assert.deepEqual(reminder.template.components[0].parameters.map((p) =>
       p.text), ["Fatou", "Dala Shipping", "2 barrels, 1 box, 1 item",
       "Mon–Fri 9:00 AM–6:00 PM, Sat 10:00 AM–2:00 PM", "Dala Shipping",
-      "2 fûts, 1 carton, 1 colis",
+      "2 barils, 1 carton, 1 article",
       "lun.–ven. 9 h 00–18 h 00, sam. 10 h 00–14 h 00", "R-K7M4P"]);
   });
 });
@@ -703,7 +703,7 @@ describe("staff notifications (§8.7)", () => {
     assert.deepEqual(pr.requestNotificationText("new", request, "en"),
         {title: "New package request", body: "Fatou · 1 barrel · R-K7M4P"});
     assert.deepEqual(pr.requestNotificationText("confirmed", request, "fr"),
-        {title: "Estimation acceptée", body: "Fatou · 1 fût · R-K7M4P"});
+        {title: "Estimation acceptée", body: "Fatou · 1 baril · R-K7M4P"});
   });
 });
 

@@ -5647,7 +5647,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get homeHeroSubtitle =>
-      'Un fût, du fret ou une voiture. Choisissez ce qui part, on s\'occupe du reste.';
+      'Un baril, du fret ou une voiture. Choisissez ce qui part, on s\'occupe du reste.';
 
   @override
   String get homeHeroCta => 'Commencer un envoi';
@@ -6235,9 +6235,9 @@ class AppLocalizationsFr extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$countString pièces reçues',
-      one: '1 pièce reçue',
-      zero: '0 pièce reçue',
+      other: '$countString colis reçus',
+      one: '1 colis reçu',
+      zero: '0 colis reçu',
     );
     return '$_temp0';
   }
@@ -10125,7 +10125,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Une étiquette par étiquette 4 × 6 po en rouleau, pour les imprimantes Zebra, Rollo et similaires.';
 
   @override
-  String get ctrLabelCopies => 'Étiquettes par pièce';
+  String get ctrLabelCopies => 'Étiquettes par colis';
 
   @override
   String get ctrLabelTwo => 'Deux';
@@ -10153,7 +10153,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get ctrLabelTip =>
-      'Les étiquettes s’ouvrent dans votre navigateur, prêtes à imprimer. Sur les fûts, des étiquettes résistantes à l’eau ou du ruban adhésif transparent gardent le code lisible sous la pluie.';
+      'Les étiquettes s’ouvrent dans votre navigateur, prêtes à imprimer. Sur les barils, des étiquettes résistantes à l’eau ou du ruban adhésif transparent gardent le code lisible sous la pluie.';
 
   @override
   String get pkgScanAction => 'Scanner un colis';
@@ -12668,7 +12668,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pkgLabelsOneNotePrinter =>
-      'Une étiquette par pièce : suffisant pour un retrait ou une étiquette déchirée.';
+      'Une étiquette par colis : suffisant pour un retrait ou une étiquette déchirée.';
 
   @override
   String get pkgLabelsTipPrinter =>
@@ -13403,25 +13403,25 @@ class AppLocalizationsFr extends AppLocalizations {
   String get zelleFailBankError => 'La banque n\'a pas répondu. Réessayez.';
 
   @override
-  String get pcsKindPieces => 'Barils et colis';
+  String get pcsKindPieces => 'Barils et cartons';
 
   @override
   String pcsPiecesTitle(int count) {
-    return 'Pièces ($count)';
+    return 'Colis ($count)';
   }
 
   @override
   String get pcsKindBarrel => 'Baril';
 
   @override
-  String get pcsKindBox => 'Colis';
+  String get pcsKindBox => 'Carton';
 
   @override
   String get pcsKindOther => 'Autre';
 
   @override
   String pcsKindLabel(int number) {
-    return 'Ce qu\'est la pièce $number';
+    return 'Ce qu\'est le colis $number';
   }
 
   @override
@@ -13438,19 +13438,19 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String pcsRemovePiece(int number) {
-    return 'Retirer la pièce $number';
+    return 'Retirer le colis $number';
   }
 
   @override
-  String get pcsAddPiece => 'Ajouter une autre pièce';
+  String get pcsAddPiece => 'Ajouter un autre colis';
 
   @override
   String pcsTotalLabel(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count pièces · Total',
-      one: '1 pièce · Total',
+      other: '$count colis · Total',
+      one: '1 colis · Total',
     );
     return '$_temp0';
   }
@@ -13485,7 +13485,8 @@ class AppLocalizationsFr extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count colis',
+      other: '$count cartons',
+      one: '1 carton',
     );
     return '$_temp0';
   }
@@ -13506,48 +13507,48 @@ class AppLocalizationsFr extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count pièces',
-      one: '1 pièce',
+      other: '$count colis',
+      one: '1 colis',
     );
     return '$_temp0';
   }
 
   @override
-  String get pcsErrPiecesRequired => 'Ajoutez au moins une pièce.';
+  String get pcsErrPiecesRequired => 'Ajoutez au moins un colis.';
 
   @override
-  String get pcsErrPiecesTooMany => 'Un colis peut avoir au plus 60 pièces.';
+  String get pcsErrPiecesTooMany => 'Un envoi peut compter au plus 60 colis.';
 
   @override
   String get pcsErrKindInvalid =>
-      'Indiquez ce qu\'est chaque pièce : un baril, un colis ou autre chose.';
+      'Indiquez ce qu\'est chaque colis : un baril, un carton ou autre chose.';
 
   @override
   String get pcsErrDescriptionRequired =>
-      'Indiquez ce qu\'est chaque colis ou article.';
+      'Indiquez ce qu\'est chaque carton ou article.';
 
   @override
   String get pcsErrDescriptionTooLong =>
-      'Limitez la description de chaque pièce à 120 caractères.';
+      'Limitez la description de chaque colis à 120 caractères.';
 
   @override
   String get pcsErrSizeInvalid =>
-      'Saisissez la longueur, la largeur et la hauteur de la pièce en pouces, ou laissez les trois vides.';
+      'Saisissez la longueur, la largeur et la hauteur du colis en pouces, ou laissez les trois vides.';
 
   @override
   String get pcsErrPriceInvalid =>
-      'Saisissez le prix de chaque pièce en dollars, zéro ou plus.';
+      'Saisissez le prix de chaque colis en dollars, zéro ou plus.';
 
   @override
   String get pcsErrCountInvalid =>
-      'Choisissez combien de pièces partent : de 1 au nombre de pièces du colis.';
+      'Choisissez combien de colis partent : de 1 au nombre de colis de l\'envoi.';
 
   @override
   String get pcsErrLineHasParts =>
       'D\'autres parties de ce colis sont encore enregistrées. Retirez-les d\'abord.';
 
   @override
-  String get pcsGoingIn => 'Pièces qui partent';
+  String get pcsGoingIn => 'Colis qui partent';
 
   @override
   String pcsGoingOf(int going, int total) {
@@ -13555,18 +13556,18 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get pcsFewer => 'Moins de pièces';
+  String get pcsFewer => 'Moins de colis';
 
   @override
-  String get pcsMore => 'Plus de pièces';
+  String get pcsMore => 'Plus de colis';
 
   @override
   String pcsPreviewGoing(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count pièces → ce conteneur',
-      one: '1 pièce → ce conteneur',
+      other: '$count colis → ce conteneur',
+      one: '1 colis → ce conteneur',
     );
     return '$_temp0';
   }
@@ -13576,19 +13577,19 @@ class AppLocalizationsFr extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count pièces restent en attente',
-      one: '1 pièce reste en attente',
+      other: '$count colis restent en attente',
+      one: '1 colis reste en attente',
     );
     return '$_temp0';
   }
 
   @override
   String get pcsSplitNote =>
-      'Aucun message n\'est envoyé maintenant. Chaque partie reçoit ses propres messages de départ et de retrait. Imprimez de nouvelles étiquettes pour les pièces qui restent.';
+      'Aucun message n\'est envoyé maintenant. Chaque partie reçoit ses propres messages de départ et de retrait. Imprimez de nouvelles étiquettes pour les colis qui restent.';
 
   @override
   String get pcsPrintPartsTitle =>
-      'Imprimer les étiquettes des pièces qui restent ?';
+      'Imprimer les étiquettes des colis qui restent ?';
 
   @override
   String pcsPrintPartsMessage(int count, String codes) {
@@ -13624,7 +13625,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pcsPartPriceHint =>
-      'Le prix de cette partie seule. Un total modifié est réparti également sur ses pièces.';
+      'Le prix de cette partie seule. Un total modifié est réparti également sur ses colis.';
 
   @override
   String pcsPartOf(int index, String code) {
@@ -13632,14 +13633,14 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get pcsTrackingPieces => 'Pièces';
+  String get pcsTrackingPieces => 'Colis';
 
   @override
   String get pcsTrackingParts => 'Parties de ce colis';
 
   @override
   String get pcsTrackingPartsHint =>
-      'Certaines pièces peuvent partir dans un conteneur suivant.';
+      'Certains colis peuvent partir dans un conteneur suivant.';
 
   @override
   String get pcsTrackingMoney => 'Prix et paiements';

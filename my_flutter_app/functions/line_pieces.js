@@ -454,7 +454,7 @@ function piecesLineFields(raw, pickupFeeCents = null) {
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * "2 barrels, 1 box" / "2 fûts, 1 colis". Items that all say the same
+ * "2 barrels, 1 box" / "2 barils, 1 carton". Items that all say the same
  * thing are named ("2 × TV"); a mix of items is counted.
  *
  * @param {object[]} pieces The pieces.
@@ -473,12 +473,13 @@ function pieceSummaryText(pieces, language = "en") {
   }
   const barrels = of(PIECE_KIND.BARREL).length;
   if (barrels) {
-    parts.push(fr ? plural(barrels, "fût", "fûts") :
+    parts.push(fr ? plural(barrels, "baril", "barils") :
       plural(barrels, "barrel", "barrels"));
   }
   const boxes = of(PIECE_KIND.BOX).length;
   if (boxes) {
-    parts.push(fr ? `${boxes} colis` : plural(boxes, "box", "boxes"));
+    parts.push(fr ? plural(boxes, "carton", "cartons") :
+      plural(boxes, "box", "boxes"));
   }
   const items = of(PIECE_KIND.OTHER);
   if (items.length) {

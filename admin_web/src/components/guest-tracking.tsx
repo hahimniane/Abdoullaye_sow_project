@@ -336,7 +336,7 @@ export function GuestTracking({
                     <code className="ctn-code" data-no-translate>{part.trackingCode}</code>
                     <span className="status-pill compact">{guestStageLabel(record.service, part.stage)}</span>
                     <small data-no-translate>{guestPiecesText(part.pieceCount, lang)}</small>
-                    {part.priceCents !== null && <small data-no-translate>{moneyText(part.priceCents)}</small>}
+                    {part.priceCents !== null && <small data-no-translate>{moneyText(part.priceCents, lang)}</small>}
                   </li>
                 ))}
               </ul>
@@ -347,11 +347,11 @@ export function GuestTracking({
               <h3 id="guest-tracking-payment-title">Payment</h3>
               <dl>
                 {(record.payment.pickupFeeCents ?? 0) > 0 && (
-                  <div><dt>Pickup fee</dt><dd data-no-translate>{moneyText(record.payment.pickupFeeCents ?? 0)}</dd></div>
+                  <div><dt>Pickup fee</dt><dd data-no-translate>{moneyText(record.payment.pickupFeeCents ?? 0, lang)}</dd></div>
                 )}
-                <div><dt>Final price</dt><dd data-no-translate>{moneyText(record.payment.priceCents)}</dd></div>
-                <div><dt>Paid</dt><dd data-no-translate>{moneyText(record.payment.paidCents)}</dd></div>
-                <div><dt>Balance</dt><dd data-no-translate>{moneyText(record.payment.balanceCents)}</dd></div>
+                <div><dt>Final price</dt><dd data-no-translate>{moneyText(record.payment.priceCents, lang)}</dd></div>
+                <div><dt>Paid</dt><dd data-no-translate>{moneyText(record.payment.paidCents, lang)}</dd></div>
+                <div><dt>Balance</dt><dd data-no-translate>{moneyText(record.payment.balanceCents, lang)}</dd></div>
               </dl>
             </section>
           )}

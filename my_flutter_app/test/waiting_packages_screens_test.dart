@@ -608,7 +608,7 @@ void main() {
       await _openSheet<WaitingPackageSaved>(tester, sheet(_Calls()),
           locale: const Locale('fr'));
       expect(find.text('Enregistrer un colis'), findsOneWidget);
-      expect(find.text('Ajouter une autre pièce'), findsOneWidget);
+      expect(find.text('Ajouter un autre colis'), findsOneWidget);
       expect(find.text('Paiement à l\'arrivée'), findsOneWidget);
       expect(find.text('Enregistrer et imprimer 1 étiquette'), findsOneWidget);
       await _tap(tester, 'pieces-add');

@@ -231,6 +231,12 @@ All three phases are merged on `release/1.0.17`. What the merge settled:
   request holds with phase 1's summary (`pieceSummaryText` /
   `containerPiecesSummary`: "1 barrel, 1 box", "1 barrel, Flat-screen TV"),
   and the kind labels are phase 1's ("Baril" in French).
+- **One French word per piece kind (1.0.17)**, on every surface (app,
+  console, website, tracking, WhatsApp words): barrel **baril**, box
+  **carton**, other **autre** (counted as "article(s)"), and a piece in
+  general **colis** ("Colis 1", "Ajouter un autre colis", "3 colis"). French
+  money reads "190,00 $" (`moneyText(cents, "fr")` on the web,
+  `formatLotCents` in the app's French).
 - **Android app links** claim `/e/` and `/r/` on customer.laawoldigital.com
   beside `/t/` and `/i/` (iOS already did).
 - **Instance budget.** 309 functions reserve 995 of the 1,000 CPUs the

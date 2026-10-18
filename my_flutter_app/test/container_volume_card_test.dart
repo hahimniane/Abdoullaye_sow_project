@@ -87,7 +87,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('Ce mois-ci · octobre 2026'), findsOneWidget);
-    expect(find.textContaining('pièces reçues'), findsOneWidget);
+    expect(find.textContaining('colis reçus'), findsOneWidget);
     expect(find.textContaining('1 284').evaluate().isNotEmpty ||
         find.textContaining('1 284').evaluate().isNotEmpty, isTrue);
     expect(find.text('0 conteneur expédié'), findsOneWidget);

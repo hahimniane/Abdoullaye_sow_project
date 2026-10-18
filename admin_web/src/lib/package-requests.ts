@@ -13,7 +13,7 @@
  */
 
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
-import { centsToInput as ledgerCentsToInput } from "./invoice-ledger.ts";
+import { centsToInput as ledgerCentsToInput, moneyText as ledgerMoneyText } from "./invoice-ledger.ts";
 import { pickupFeeOf, pieceSizeOf, piecesLineFields } from "./line-pieces.ts";
 import {
   newPieceDraft as newPieceDraftOf,
@@ -325,10 +325,8 @@ export function dayIsOpen(week: WeekHours | null | undefined, key: string): bool
 
 /** "$1,250.00" / "1 250,00 $" (as the WhatsApp message writes it). */
 export function moneyText(cents: number | null | undefined, lang: Lang): string {
-  const value = Math.max(0, Number(cents) || 0) / 100;
-  const [whole, part] = value.toFixed(2).split(".");
-  if (lang === "fr") return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ")},${part} $`;
-  return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${part}`;
+  // One French money form on the web (invoice-ledger.ts moneyText).
+  return ledgerMoneyText(Math.max(0, Number(cents) || 0), lang);
 }
 
 /**

@@ -180,7 +180,7 @@ function describeLine(line, language, group = null) {
   }
   const quantity = positiveInt(row.quantity) || 1;
   if (kind === "barrels") {
-    if (fr) return quantity === 1 ? "1 fût" : `${quantity} fûts`;
+    if (fr) return quantity === 1 ? "1 baril" : `${quantity} barils`;
     return quantity === 1 ? "1 barrel" : `${quantity} barrels`;
   }
   const what = text(row.description, 120) || (fr ? "colis" : "package");
