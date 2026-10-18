@@ -42,7 +42,12 @@ class RequestCustomer {
 
   /// The signed-in, non-anonymous customer, or null.
   static RequestCustomer? of(BuildContext context, {bool listen = true}) {
-    final auth = Provider.of<AuthProvider>(context, listen: listen);
+    final AuthProvider auth;
+    try {
+      auth = Provider.of<AuthProvider>(context, listen: listen);
+    } on ProviderNotFoundException {
+      return null;
+    }
     final user = auth.user;
     if (user == null || user.isAnonymous) return null;
     return RequestCustomer(
