@@ -1,4 +1,6 @@
 import '../utils/callable_data.dart';
+import 'container_manifest.dart'
+    show ContainerLine, ShippingContainer, containerStatusLoading;
 import 'waiting_package_service.dart'
     show ContainerCallableCaller, callContainerCallable;
 
@@ -69,4 +71,29 @@ class BusinessVolumeService {
       BusinessVolume.fromCallable(
         await caller('getBusinessVolume', businessVolumeRequest(businessId)),
       );
+}
+
+/// What a business's month in pieces is counted from, as a phone holding
+/// its live lines and containers sees it: the lines, their pieces and
+/// receipt days, and which containers have sailed. Any write that changes
+/// the count changes this (a payment or a phone edit does not), so the
+/// "This month" card reloads on it ([ContainerVolumeCard.refreshKey]).
+String volumeFeedSignature(
+  Iterable<ContainerLine> lines,
+  Iterable<ShippingContainer> containers,
+) {
+  var count = 0, pieces = 0, received = 0;
+  for (final line in lines) {
+    count++;
+    pieces += line.pieceCount;
+    received = received ^ (line.receivedAt?.millisecondsSinceEpoch ?? 0);
+  }
+  var sailed = 0, sailedIds = 0;
+  for (final box in containers) {
+    if (box.status != containerStatusLoading) {
+      sailed++;
+      sailedIds = sailedIds ^ box.id.hashCode;
+    }
+  }
+  return '$count:$pieces:$received:$sailed:$sailedIds';
 }

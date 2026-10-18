@@ -312,6 +312,9 @@ class _PackageEstimateScreenState extends State<PackageEstimateScreen> {
       inputs: {for (final e in _prices.entries) e.key: e.value.text},
       pickupFee: _pickupFee.text,
       note: _note.text,
+      scheduleDate: _scheduleDate,
+      scheduleWindow: _scheduleWindow,
+      now: DateTime.fromMillisecondsSinceEpoch(_now),
     );
     if (!check.ok) {
       AppHaptics.refuse();
@@ -632,6 +635,15 @@ class _PackageEstimateScreenState extends State<PackageEstimateScreen> {
                 ),
             ],
           ),
+          if (_errors.contains('pickup_schedule_invalid'))
+            Padding(
+              key: const Key('estimate-schedule-error'),
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                l10n.prqErrPickupSchedule,
+                style: const TextStyle(fontSize: 12, color: AppColors.errorRed),
+              ),
+            ),
         ],
         const SizedBox(height: AppSpacing.md),
         TextField(
@@ -801,8 +813,7 @@ class _CustomerFacts extends StatelessWidget {
               color: AppColors.ink,
             ),
           ),
-          if (request.isCollect && (request.pickup?.note ?? '').isNotEmpty)
-            Text(request.pickup!.note, style: muted()),
+          RequestPickupNote(request: request),
           if (request.whatsappUnreachable)
             Padding(
               padding: const EdgeInsets.only(top: 6),

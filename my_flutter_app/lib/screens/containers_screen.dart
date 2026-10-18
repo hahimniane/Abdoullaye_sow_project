@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
@@ -13,6 +14,7 @@ import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/business_activity_queries.dart';
 import '../services/container_lot_cars.dart';
+import '../services/business_volume.dart' show volumeFeedSignature;
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
 import '../services/known_car_lookup.dart';
@@ -88,6 +90,14 @@ class ContainerFeed extends ChangeNotifier {
   Map<String, LineGroupSummary> get groups =>
       _groups ??= lineGroupsByRoot(lines);
   Map<String, LineGroupSummary>? _groups;
+
+  /// What this month's volume is counted from ([volumeFeedSignature]):
+  /// worked out once per change, null until both collections answered.
+  String? get volumeSignature => !loaded || !linesLoaded
+      ? null
+      : (_volumeSignature ??= volumeFeedSignature(lines, containers));
+  String? _volumeSignature;
+  bool linesLoaded = false;
   bool loaded = false;
   bool failed = false;
   bool _disposed = false;
@@ -103,6 +113,7 @@ class ContainerFeed extends ChangeNotifier {
       containers = sortContainers([
         for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
       ]);
+      _volumeSignature = null;
       loaded = true;
       failed = false;
       _changed();
@@ -117,6 +128,8 @@ class ContainerFeed extends ChangeNotifier {
         for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
       ];
       _groups = null;
+      _volumeSignature = null;
+      linesLoaded = true;
       _changed();
     }, onError: (_) {}));
   }
@@ -171,8 +184,26 @@ class _ContainersScreenState extends State<ContainersScreen> {
         _people,
         ownerUid: _ownerUid,
         ownerName: _ownerName,
-        fallbackName: _ownerEmail,
+        // The business names no owner: the signed-in owner's own account
+        // does (an owner whose profile never got businessId), else a label.
+        fallbackName: _ownerEmail.isNotEmpty
+            ? _ownerEmail
+            : _signedInNameFor(_ownerUid),
+        unnamedLabel: AppLocalizations.of(context)!.lotBusinessOwner,
       );
+
+  /// The signed-in account's own name or email when it is [uid].
+  String _signedInNameFor(String uid) {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.uid != uid) return '';
+      return [user.displayName, user.email]
+          .map((v) => (v ?? '').trim())
+          .firstWhere((v) => v.isNotEmpty, orElse: () => '');
+    } catch (_) {
+      return ''; // No Firebase (widget tests).
+    }
+  }
   String _ownerEmail = '';
   List<LotCustomer> _customers = const [];
 
@@ -241,13 +272,10 @@ class _ContainersScreenState extends State<ContainersScreen> {
       if (!mounted) return;
       setState(() => _people = [
             for (final d in snap.docs)
-              LotStaff(
-                id: d.id,
-                name: (d.data()['fullName'] ??
-                        d.data()['name'] ??
-                        d.data()['email'] ??
-                        d.id)
-                    .toString(),
+              lotStaffFromProfile(
+                d.id,
+                d.data(),
+                unnamed: AppLocalizations.of(context)!.lotUnnamedPerson,
               ),
           ]);
     }, onError: (_) {
@@ -475,7 +503,11 @@ class _ContainersScreenState extends State<ContainersScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
-              child: ContainerVolumeCard(businessId: widget.businessId),
+              child: ContainerVolumeCard(
+                businessId: widget.businessId,
+                // Live: reloads after a write it is counted from.
+                refreshKey: _feed.volumeSignature,
+              ),
             ),
           ),
           Expanded(
@@ -1266,7 +1298,9 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     final print = await confirmMajorAction(
       context,
       title: l10n.pcsPrintPartsTitle,
+      // One part or several: "stays … under a new code" / "stay … codes".
       message: l10n.pcsPrintPartsMessage(
+          parts.length,
           parts.map((p) => p.trackingCode).where((c) => c.isNotEmpty).join(', ')),
       confirmLabel: l10n.pcsPrintPartsConfirm,
       icon: Icons.qr_code_2,

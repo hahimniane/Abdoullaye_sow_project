@@ -731,6 +731,10 @@ class PackageRequest {
   String get handoffWindow => isCollect
       ? (estimate?.pickupSchedule?.window ?? pickup?.window ?? '')
       : '';
+
+  /// The customer's pickup note ("ring twice"): staff see it on every card
+  /// that shows a collect request. Their words: never translated.
+  String get pickupNote => isCollect ? (pickup?.note ?? '').trim() : '';
 }
 
 // ---------------------------------------------------------------------------
@@ -1289,6 +1293,7 @@ class EstimateCheck {
     required this.pickupFeeCents,
     required this.pickupFeeInvalid,
     required this.noteTooLong,
+    this.scheduleInvalid = false,
   });
 
   final Map<String, int> pieceCents;
@@ -1298,6 +1303,10 @@ class EstimateCheck {
   final bool pickupFeeInvalid;
   final bool noteTooLong;
 
+  /// The pickup day/window the business set fails the server's
+  /// `pickup_schedule_invalid` ([estimateScheduleProblem]).
+  final bool scheduleInvalid;
+
   int get totalCents =>
       pieceCents.values.fold(0, (a, b) => a + b) + (pickupFeeCents ?? 0);
 
@@ -1306,10 +1315,31 @@ class EstimateCheck {
     if (missing.isNotEmpty) 'estimate_piece_missing',
     if (invalid.isNotEmpty) 'amount_invalid',
     if (pickupFeeInvalid) 'pickup_fee_invalid',
+    if (scheduleInvalid) 'pickup_schedule_invalid',
     if (noteTooLong) 'text_too_long',
   ];
 
   bool get ok => reasons.isEmpty;
+}
+
+/// The server's `pickup_schedule_invalid` rule (functions
+/// package_requests.js `cleanEstimateInput`), checked before sending, the
+/// same as the console's `estimateScheduleProblem`: no day sends no
+/// schedule; a day must be today .. +60 days, with a window.
+bool estimateScheduleInvalid({
+  required String date,
+  required String window,
+  required DateTime now,
+  String timeZone = requestDefaultTimeZone,
+}) {
+  if (date.trim().isEmpty) return false;
+  final day = requestDayFromKey(date);
+  if (day == null) return true;
+  final today = requestToday(now, timeZone: timeZone);
+  if (day.isBefore(today) || day.isAfter(requestLastPlannedDay(today))) {
+    return true;
+  }
+  return !requestPickupWindows.contains(window);
 }
 
 EstimateCheck checkEstimate({
@@ -1317,6 +1347,9 @@ EstimateCheck checkEstimate({
   required Map<String, String> inputs,
   String pickupFee = '',
   String note = '',
+  String scheduleDate = '',
+  String scheduleWindow = '',
+  DateTime? now,
 }) {
   final cents = <String, int>{};
   final missing = <String>{};
@@ -1350,6 +1383,14 @@ EstimateCheck checkEstimate({
     pickupFeeCents: fee,
     pickupFeeInvalid: feeInvalid,
     noteTooLong: note.trim().length > requestMaxNote,
+    scheduleInvalid:
+        request.isCollect &&
+        estimateScheduleInvalid(
+          date: scheduleDate,
+          window: scheduleWindow,
+          now: now ?? DateTime.now(),
+          timeZone: request.timeZone,
+        ),
   );
 }
 

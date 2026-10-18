@@ -13591,8 +13591,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Imprimer les étiquettes des pièces qui restent ?';
 
   @override
-  String pcsPrintPartsMessage(String codes) {
-    return '$codes restent en attente avec de nouveaux codes : leurs anciennes étiquettes ne sont plus bonnes. Imprimez-en de nouvelles maintenant.';
+  String pcsPrintPartsMessage(int count, String codes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$codes restent en attente avec de nouveaux codes : leurs anciennes étiquettes ne sont plus bonnes. Imprimez-en de nouvelles maintenant.',
+      one:
+          '$codes reste en attente avec un nouveau code : ses anciennes étiquettes ne sont plus bonnes. Imprimez-en de nouvelles maintenant.',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -14699,5 +14707,19 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String wpkIncludesPickupFee(String amount) {
     return 'Comprend les frais de ramassage : $amount';
+  }
+
+  @override
+  String get wpkGroupLoading => 'Chargement du solde du colis complet…';
+
+  @override
+  String get lotBusinessOwner => 'Propriétaire de l’entreprise';
+
+  @override
+  String get lotUnnamedPerson => 'Membre de l’équipe';
+
+  @override
+  String prqPickupNoteLine(String note) {
+    return 'Note : $note';
   }
 }

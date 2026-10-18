@@ -6469,9 +6469,12 @@
   },
   "pcsSplitNote": "Aucun message n'est envoyé maintenant. Chaque partie reçoit ses propres messages de départ et de retrait. Imprimez de nouvelles étiquettes pour les pièces qui restent.",
   "pcsPrintPartsTitle": "Imprimer les étiquettes des pièces qui restent ?",
-  "pcsPrintPartsMessage": "{codes} restent en attente avec de nouveaux codes : leurs anciennes étiquettes ne sont plus bonnes. Imprimez-en de nouvelles maintenant.",
+  "pcsPrintPartsMessage": "{count, plural, =1{{codes} reste en attente avec un nouveau code : ses anciennes étiquettes ne sont plus bonnes. Imprimez-en de nouvelles maintenant.} other{{codes} restent en attente avec de nouveaux codes : leurs anciennes étiquettes ne sont plus bonnes. Imprimez-en de nouvelles maintenant.}}",
   "@pcsPrintPartsMessage": {
     "placeholders": {
+      "count": {
+        "type": "int"
+      },
       "codes": {
         "type": "String"
       }
@@ -7183,6 +7186,17 @@
     "description": "Payment sheet: the price of a collected request's line includes its own pickup fee (shown as its own amount, never spread into the piece prices).",
     "placeholders": {
       "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkGroupLoading": "Chargement du solde du colis complet…",
+  "lotBusinessOwner": "Propriétaire de l’entreprise",
+  "lotUnnamedPerson": "Membre de l’équipe",
+  "prqPickupNoteLine": "Note : {note}",
+  "@prqPickupNoteLine": {
+    "placeholders": {
+      "note": {
         "type": "String"
       }
     }

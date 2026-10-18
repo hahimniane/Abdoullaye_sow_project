@@ -13390,8 +13390,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pcsPrintPartsTitle => 'Print labels for the pieces that stay?';
 
   @override
-  String pcsPrintPartsMessage(String codes) {
-    return '$codes stay on the waiting list under new codes, so their old labels are wrong. Print new ones now.';
+  String pcsPrintPartsMessage(int count, String codes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$codes stay on the waiting list under new codes, so their old labels are wrong. Print new ones now.',
+      one:
+          '$codes stays on the waiting list under a new code, so its old labels are wrong. Print new ones now.',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -14491,5 +14499,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String wpkIncludesPickupFee(String amount) {
     return 'Includes the pickup fee: $amount';
+  }
+
+  @override
+  String get wpkGroupLoading => 'Loading the whole package\'s balance…';
+
+  @override
+  String get lotBusinessOwner => 'Business owner';
+
+  @override
+  String get lotUnnamedPerson => 'Team member';
+
+  @override
+  String prqPickupNoteLine(String note) {
+    return 'Note: $note';
   }
 }

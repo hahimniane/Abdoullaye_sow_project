@@ -227,6 +227,9 @@ class LotSheetShell extends StatelessWidget {
   }
 }
 
+/// The fill of a [LotSheetButton] that cannot be pressed.
+const Color lotSheetButtonDisabledColor = AppColors.rule;
+
 class LotSheetButton extends StatelessWidget {
   const LotSheetButton({
     super.key,
@@ -250,33 +253,46 @@ class LotSheetButton extends StatelessWidget {
       LotTone.good => AppColors.cobalt,
       LotTone.neutral => AppColors.cobalt,
     };
-    return PressableScale(
-      onTap: busy ? null : onTap,
-      child: Container(
-        height: 50,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: busy ? background.withValues(alpha: 0.5) : background,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // A long French label on a narrow phone shortens instead of
-            // overflowing the button.
-            Flexible(
-              child: Text(
-                busy ? (busyLabel ?? label) : label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+    // No onTap and not busy: the action is not available (someone else
+    // holds the estimate, nothing is chosen yet). It must look it - a
+    // full-colour button that does nothing reads as broken.
+    final disabled = !busy && onTap == null;
+    return Semantics(
+      button: true,
+      enabled: !disabled && !busy,
+      child: PressableScale(
+        onTap: busy || disabled ? null : onTap,
+        child: Container(
+          key: const ValueKey('lot-sheet-button-surface'),
+          height: 50,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: disabled
+                ? lotSheetButtonDisabledColor
+                : busy
+                ? background.withValues(alpha: 0.5)
+                : background,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // A long French label on a narrow phone shortens instead of
+              // overflowing the button.
+              Flexible(
+                child: Text(
+                  busy ? (busyLabel ?? label) : label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: disabled ? AppColors.muted : Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

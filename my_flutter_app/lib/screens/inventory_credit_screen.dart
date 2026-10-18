@@ -88,6 +88,16 @@ class _InventoryCreditScreenState extends State<InventoryCreditScreen> {
   String _storeFilter = '';
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // A person or owner with no name reads as words, never their uid.
+    final l10n = AppLocalizations.of(context)!;
+    _team
+      ..unnamedPersonLabel = l10n.lotUnnamedPerson
+      ..unnamedOwnerLabel = l10n.lotBusinessOwner;
+  }
+
+  @override
   void initState() {
     super.initState();
     _watcher.start();

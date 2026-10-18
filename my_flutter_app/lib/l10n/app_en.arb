@@ -6469,9 +6469,12 @@
   },
   "pcsSplitNote": "No message is sent now. Each part gets its own departed and ready-for-pickup messages. Print new labels for the pieces that stay.",
   "pcsPrintPartsTitle": "Print labels for the pieces that stay?",
-  "pcsPrintPartsMessage": "{codes} stay on the waiting list under new codes, so their old labels are wrong. Print new ones now.",
+  "pcsPrintPartsMessage": "{count, plural, =1{{codes} stays on the waiting list under a new code, so its old labels are wrong. Print new ones now.} other{{codes} stay on the waiting list under new codes, so their old labels are wrong. Print new ones now.}}",
   "@pcsPrintPartsMessage": {
     "placeholders": {
+      "count": {
+        "type": "int"
+      },
       "codes": {
         "type": "String"
       }
@@ -7183,6 +7186,17 @@
     "description": "Payment sheet: the price of a collected request's line includes its own pickup fee (shown as its own amount, never spread into the piece prices).",
     "placeholders": {
       "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "wpkGroupLoading": "Loading the whole package's balance…",
+  "lotBusinessOwner": "Business owner",
+  "lotUnnamedPerson": "Team member",
+  "prqPickupNoteLine": "Note: {note}",
+  "@prqPickupNoteLine": {
+    "placeholders": {
+      "note": {
         "type": "String"
       }
     }

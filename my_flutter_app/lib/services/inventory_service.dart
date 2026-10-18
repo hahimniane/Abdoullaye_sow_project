@@ -11,7 +11,7 @@ import 'firestore_query_spec.dart';
 import 'inventory.dart';
 import 'inventory_credit.dart';
 import 'inventory_stores.dart';
-import 'lot_ledger.dart' show LotStaff;
+import 'lot_ledger.dart' show LotStaff, personDisplayName;
 import 'waiting_package_service.dart';
 
 /// Calls one of the inventory callables and hands back its data. Same shape
@@ -450,15 +450,9 @@ class FirestoreInventorySource implements InventorySource {
       .map(
         (snap) => [
           for (final d in snap.docs)
-            LotStaff(
-              id: d.id,
-              name:
-                  (d.data()['fullName'] ??
-                          d.data()['name'] ??
-                          d.data()['email'] ??
-                          d.id)
-                      .toString(),
-            ),
+            // No name at all reads as the screen's "Team member"
+            // (InventoryTeamWatcher), never as the uid.
+            LotStaff(id: d.id, name: personDisplayName(d.data())),
         ],
       );
 }

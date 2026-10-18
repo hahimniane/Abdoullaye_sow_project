@@ -199,6 +199,13 @@ LineGroupSummary lineGroupOf(
       lineGroupSummary([LineGroupEntry(line.id, line.groupFields)], root);
 }
 
+/// Whether [group] holds its root line. A part's group read without its
+/// root (the root not among the lines a screen holds) has only the part's
+/// own price and none of the payments, which live on the root: never show
+/// that as the package's balance.
+bool groupHasRoot(LineGroupSummary group) =>
+    group.parts.any((part) => part.id == group.rootLineId);
+
 /// Where a package stands on money for its whole group: the parts' prices
 /// added up against what the root was paid. For a line never split this is
 /// [packagePayment].

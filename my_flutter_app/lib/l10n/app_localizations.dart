@@ -23018,8 +23018,8 @@ abstract class AppLocalizations {
   /// No description provided for @pcsPrintPartsMessage.
   ///
   /// In en, this message translates to:
-  /// **'{codes} stay on the waiting list under new codes, so their old labels are wrong. Print new ones now.'**
-  String pcsPrintPartsMessage(String codes);
+  /// **'{count, plural, =1{{codes} stays on the waiting list under a new code, so its old labels are wrong. Print new ones now.} other{{codes} stay on the waiting list under new codes, so their old labels are wrong. Print new ones now.}}'**
+  String pcsPrintPartsMessage(int count, String codes);
 
   /// No description provided for @pcsPrintPartsConfirm.
   ///
@@ -24838,6 +24838,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Includes the pickup fee: {amount}'**
   String wpkIncludesPickupFee(String amount);
+
+  /// No description provided for @wpkGroupLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the whole package\'s balance…'**
+  String get wpkGroupLoading;
+
+  /// No description provided for @lotBusinessOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Business owner'**
+  String get lotBusinessOwner;
+
+  /// No description provided for @lotUnnamedPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Team member'**
+  String get lotUnnamedPerson;
+
+  /// No description provided for @prqPickupNoteLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Note: {note}'**
+  String prqPickupNoteLine(String note);
 }
 
 class _AppLocalizationsDelegate

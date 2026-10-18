@@ -717,6 +717,10 @@ class WaitingPackagesList extends StatelessWidget {
             WaitingPackageCard(
               key: ValueKey(line.id),
               line: line,
+              // The same group as the plain list: with an Expected section
+              // above, a part read alone showed its own price and no
+              // "Part N of" (1.0.17 click-through, CL-Q7F3W9-2).
+              group: lineGroupOf(line, groups),
               staff: staff,
               onTap: onTap == null ? null : () => onTap!(line),
               onPrint: onPrint == null ? null : () => onPrint!(line),
@@ -818,6 +822,7 @@ class ExpectedRequestCard extends StatelessWidget {
                           color: AppColors.ink,
                         ),
                       ),
+                      RequestPickupNote(request: request),
                       Text(
                         [
                           containerPiecesSummary(
@@ -919,16 +924,17 @@ class WaitingPackageCard extends StatelessWidget {
   const WaitingPackageCard({
     super.key,
     required this.line,
+    required this.group,
     required this.staff,
     this.onTap,
     this.onPrint,
-    this.group,
   });
 
   final ContainerLine line;
 
-  /// Its package's group; null reads the line alone.
-  final LineGroupSummary? group;
+  /// Its package's group ([lineGroupOf]): required, so no list can draw a
+  /// part's money without the payments that live on its root.
+  final LineGroupSummary group;
   final List<LotStaff> staff;
   final VoidCallback? onTap;
   final VoidCallback? onPrint;
@@ -953,8 +959,12 @@ class WaitingPackageCard extends StatelessWidget {
       if (size != null) '${size.dimensionsText} · ${size.volumeText}',
     ].join(' · ');
     final g = group;
+    // A part read without its root has only its own price and none of the
+    // package's payments (they live on the root): say it is loading rather
+    // than show a balance that is not the package's.
+    final rootMissing = line.isPart && !groupHasRoot(g);
     // A part split off a package that went ahead: which package it is.
-    final partOf = line.isPart && g != null && g.parts.isNotEmpty
+    final partOf = line.isPart && !rootMissing && g.parts.isNotEmpty
         ? l10n.pcsPartOf(line.partIndex, g.parts.first.trackingCode)
         : '';
     final dropped = line.createdAt == null
@@ -1056,13 +1066,21 @@ class WaitingPackageCard extends StatelessWidget {
                         style: muted(12),
                       ),
                     ),
-                  PackageMoneyLine(
-                    payment: g == null ? packagePayment(line) : groupPayment(g),
-                    alwaysShow: true,
-                    pickupFeeCents: g == null
-                        ? line.pickupFeeCents
-                        : g.pickupFeeCents,
-                  ),
+                  if (rootMissing)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        l10n.wpkGroupLoading,
+                        key: const Key('waiting-group-loading'),
+                        style: muted(12),
+                      ),
+                    )
+                  else
+                    PackageMoneyLine(
+                      payment: groupPayment(g),
+                      alwaysShow: true,
+                      pickupFeeCents: g.pickupFeeCents,
+                    ),
                   if (meta.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),

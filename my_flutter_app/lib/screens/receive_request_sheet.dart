@@ -253,6 +253,7 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
             ].where((s) => s.isNotEmpty).join(' → '),
             style: const TextStyle(fontSize: 13, color: AppColors.muted),
           ),
+          RequestPickupNote(request: request),
           const SizedBox(height: AppSpacing.md),
           PiecesEditor(
             controller: _pieces,

@@ -284,8 +284,17 @@ class FirebasePackageRequestService implements PackageRequestService {
     return path;
   }
 
+  /// One lookup per photo path for the whole app session: every screen
+  /// makes its own service, and the thumbnails were asking Storage for the
+  /// same path's metadata again on every rebuild (~8 times per screen).
+  static final RequestPhotoUrlCache _photoUrls = RequestPhotoUrlCache(
+    (path) => FirebaseStorage.instance.ref(path).getDownloadURL(),
+  );
+
   @override
-  Future<String> photoUrl(String path) => _storage.ref(path).getDownloadURL();
+  Future<String> photoUrl(String path) => _storageOverride == null
+      ? _photoUrls.get(path)
+      : _storage.ref(path).getDownloadURL();
 
   @override
   Stream<List<PackageRequest>> watchOpen(String businessId) =>
@@ -419,5 +428,34 @@ Uint8List? decodePngDataUrl(String dataUrl) {
     return base64Decode(dataUrl.substring(comma + 1));
   } catch (_) {
     return null;
+  }
+}
+
+/// Download URLs of request photos by Storage path, each looked up once:
+/// the same path asked again shares the first lookup. A failed lookup is
+/// forgotten so the next ask tries again. Holds at most [maxEntries] paths,
+/// dropping the oldest.
+class RequestPhotoUrlCache {
+  RequestPhotoUrlCache(this._fetch, {this.maxEntries = 300});
+
+  final Future<String> Function(String path) _fetch;
+  final int maxEntries;
+  final Map<String, Future<String>> _byPath = {};
+
+  /// Paths looked up (or being looked up) right now.
+  int get length => _byPath.length;
+
+  Future<String> get(String path) {
+    final known = _byPath[path];
+    if (known != null) return known;
+    while (_byPath.length >= maxEntries && _byPath.isNotEmpty) {
+      _byPath.remove(_byPath.keys.first);
+    }
+    final lookup = _fetch(path).catchError((Object error, StackTrace stack) {
+      _byPath.remove(path);
+      Error.throwWithStackTrace(error, stack);
+    });
+    _byPath[path] = lookup;
+    return lookup;
   }
 }

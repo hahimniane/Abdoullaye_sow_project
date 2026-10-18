@@ -186,13 +186,10 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       if (!mounted) return;
       setState(() => _staff = [
             for (final d in snap.docs)
-              LotStaff(
-                id: d.id,
-                name: (d.data()['fullName'] ??
-                        d.data()['name'] ??
-                        d.data()['email'] ??
-                        d.id)
-                    .toString(),
+              lotStaffFromProfile(
+                d.id,
+                d.data(),
+                unnamed: AppLocalizations.of(context)!.lotUnnamedPerson,
               ),
           ]);
     }, onError: _keepWhatIsShown('users')));

@@ -14,19 +14,31 @@ import '../utils/date_display.dart';
 /// Containers (the owner, and staff holding the containers permission, as on
 /// the console).
 ///
-/// Loaded once per screen in initState; the spinner always resolves (a
-/// safety timeout), and a failure offers a retry rather than a wrong zero.
+/// Loaded in initState, then again whenever [refreshKey] changes (the
+/// containers screen passes a signature of its live lines and containers),
+/// [refreshDelay] after the change so the server's recount (it waits 1.5 s
+/// for a burst) has landed. The rollup itself is server-only (rules deny
+/// clients), so the card cannot listen to it. The spinner always resolves
+/// (a safety timeout), a refresh keeps the last numbers on screen, and a
+/// failure offers a retry rather than a wrong zero.
 class ContainerVolumeCard extends StatefulWidget {
   const ContainerVolumeCard({
     super.key,
     required this.businessId,
     this.service = const BusinessVolumeService(),
     this.timeout = const Duration(seconds: 20),
+    this.refreshKey,
+    this.refreshDelay = const Duration(seconds: 4),
   });
 
   final String businessId;
   final BusinessVolumeService service;
   final Duration timeout;
+
+  /// What the month's numbers are counted from, as the screen sees it; a
+  /// change reloads the card. Null while the screen has not loaded yet.
+  final Object? refreshKey;
+  final Duration refreshDelay;
 
   @override
   State<ContainerVolumeCard> createState() => _ContainerVolumeCardState();
@@ -44,18 +56,43 @@ class _ContainerVolumeCardState extends State<ContainerVolumeCard> {
     _load(initial: true);
   }
 
+  Timer? _refresh;
+
   @override
   void didUpdateWidget(covariant ContainerVolumeCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.businessId != widget.businessId) _load();
+    if (oldWidget.businessId != widget.businessId) {
+      _refresh?.cancel();
+      _load();
+      return;
+    }
+    // A write the month is counted from (a line received, split, removed;
+    // a container shipped): reload once the burst settles. The first key
+    // (the screen's first load) is no change.
+    if (oldWidget.refreshKey != null &&
+        widget.refreshKey != null &&
+        oldWidget.refreshKey != widget.refreshKey) {
+      _refresh?.cancel();
+      _refresh = Timer(widget.refreshDelay, () {
+        if (mounted) _load(quiet: true);
+      });
+    }
   }
 
-  Future<void> _load({bool initial = false}) async {
+  @override
+  void dispose() {
+    _refresh?.cancel();
+    super.dispose();
+  }
+
+  /// [quiet]: a refresh behind numbers already shown - no spinner, and a
+  /// failure keeps them (the next change or a retry tries again).
+  Future<void> _load({bool initial = false, bool quiet = false}) async {
     final attempt = ++_attempt;
     if (initial) {
       _loading = true;
       _failed = false;
-    } else {
+    } else if (!quiet) {
       setState(() {
         _loading = true;
         _failed = false;
@@ -69,7 +106,7 @@ class _ContainerVolumeCardState extends State<ContainerVolumeCard> {
       setState(() => _volume = volume);
     } catch (_) {
       if (!mounted || attempt != _attempt) return;
-      setState(() => _failed = true);
+      if (!(quiet && _volume != null)) setState(() => _failed = true);
     } finally {
       if (mounted && attempt == _attempt) setState(() => _loading = false);
     }

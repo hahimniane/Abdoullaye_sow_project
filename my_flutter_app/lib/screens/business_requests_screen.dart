@@ -476,6 +476,7 @@ class BusinessRequestCard extends StatelessWidget {
                           color: AppColors.ink,
                         ),
                       ),
+                      RequestPickupNote(request: request),
                       Text(
                         [
                           containerPiecesSummary(

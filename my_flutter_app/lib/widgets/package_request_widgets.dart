@@ -578,6 +578,34 @@ class _ReasonDialogState extends State<_ReasonDialog> {
   }
 }
 
+/// A collect request's pickup note, labelled ("Note: ring twice"), under the
+/// pickup line of every staff card (Requests, Expected, the estimate and
+/// Received). Nothing when there is none.
+class RequestPickupNote extends StatelessWidget {
+  const RequestPickupNote({super.key, required this.request});
+
+  final PackageRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    final note = request.pickupNote;
+    if (note.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        AppLocalizations.of(context)!.prqPickupNoteLine(note),
+        key: ValueKey('request-pickup-note:${request.id}'),
+        style: const TextStyle(
+          fontSize: 12.5,
+          height: 1.35,
+          fontStyle: FontStyle.italic,
+          color: AppColors.ink,
+        ),
+      ),
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Photos (staff and the uploader only).
 // ---------------------------------------------------------------------------

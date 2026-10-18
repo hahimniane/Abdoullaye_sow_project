@@ -43,6 +43,56 @@ import 'support_inbox_screen.dart';
 import 'support_thread_screen.dart';
 import '../services/notification_routing.dart';
 
+/// What "Start a shipment" (the centre truck) offers: every service the
+/// Shipping hub lists, in its order (test/ship_sheet_options_test.dart).
+@visibleForTesting
+List<ShipOption> shipSheetOptions(
+  AppLocalizations l10n, {
+  required bool sharedBarrels,
+}) => [
+    ShipOption(
+      route: '/barrel',
+      icon: Icons.local_shipping_outlined,
+      title: l10n.hubSendBarrel,
+      subtitle: l10n.hubShipFullBarrel,
+      tint: AppColors.cobalt,
+    ),
+    if (sharedBarrels)
+      ShipOption(
+        route: '/open-barrels',
+        icon: Icons.group_add_outlined,
+        title: l10n.hubSharedBarrels,
+        subtitle: l10n.hubSharedBarrelsSubtitle,
+        tint: AppColors.cobaltMid,
+      ),
+    // The tints have to be told apart at a glance, and the palette's
+    // teals read as one colour at 13% alpha — so the four options step
+    // teal, bright teal, amber, slate rather than four shades of green.
+    ShipOption(
+      route: '/send-freight',
+      icon: Icons.inventory_2_outlined,
+      title: l10n.orderTypeFreight,
+      subtitle: l10n.hubFreightSubtitle,
+      tint: AppColors.saffron,
+    ),
+    ShipOption(
+      route: '/request-transport',
+      icon: Icons.car_rental_outlined,
+      title: l10n.hubTransportCar,
+      subtitle: l10n.hubShipCarHome,
+      tint: AppColors.ink,
+    ),
+    // A package request (docs/PACKAGE_REQUESTS.md §2): the same entry
+    // as the Shipping hub's, so Start a shipment offers every service.
+    ShipOption(
+      route: '/package-request',
+      icon: Icons.markunread_mailbox_outlined,
+      title: l10n.prqSendPackage,
+      subtitle: l10n.prqSendPackageSubtitle,
+      tint: AppColors.sage,
+    ),
+];
+
 /// Builds the customer-area screens for the *nested* tab navigators. Keeping
 /// these in the tab navigator (instead of the root navigator) is what lets the
 /// bottom navbar stay visible while a service is open. Returns null for routes
@@ -261,40 +311,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       context,
       title: l10n.shipSheetTitle,
       subtitle: l10n.shipSheetSubtitle,
-      options: [
-        ShipOption(
-          route: '/barrel',
-          icon: Icons.local_shipping_outlined,
-          title: l10n.hubSendBarrel,
-          subtitle: l10n.hubShipFullBarrel,
-          tint: AppColors.cobalt,
-        ),
-        if (sharedBarrels)
-          ShipOption(
-            route: '/open-barrels',
-            icon: Icons.group_add_outlined,
-            title: l10n.hubSharedBarrels,
-            subtitle: l10n.hubSharedBarrelsSubtitle,
-            tint: AppColors.cobaltMid,
-          ),
-        // The tints have to be told apart at a glance, and the palette's
-        // teals read as one colour at 13% alpha — so the four options step
-        // teal, bright teal, amber, slate rather than four shades of green.
-        ShipOption(
-          route: '/send-freight',
-          icon: Icons.inventory_2_outlined,
-          title: l10n.orderTypeFreight,
-          subtitle: l10n.hubFreightSubtitle,
-          tint: AppColors.saffron,
-        ),
-        ShipOption(
-          route: '/request-transport',
-          icon: Icons.car_rental_outlined,
-          title: l10n.hubTransportCar,
-          subtitle: l10n.hubShipCarHome,
-          tint: AppColors.ink,
-        ),
-      ],
+      options: shipSheetOptions(l10n, sharedBarrels: sharedBarrels),
     );
     if (route == null || !mounted) return;
     setState(() => _index = _shippingTab);

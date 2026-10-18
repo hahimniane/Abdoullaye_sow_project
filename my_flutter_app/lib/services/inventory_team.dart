@@ -27,6 +27,11 @@ class InventoryTeamWatcher {
   final void Function() onChange;
 
   List<LotStaff> _people = const [];
+
+  /// What a person or owner with no name at all reads as ("Team member",
+  /// "Business owner"), set by the screen in its language; never the uid.
+  String unnamedPersonLabel = '';
+  String unnamedOwnerLabel = '';
   InventoryBusinessOwner? _owner;
   final List<StreamSubscription<Object?>> _subs = [];
   bool _disposed = false;
@@ -34,13 +39,20 @@ class InventoryTeamWatcher {
   /// The pickers' list: the owner first when their profile is not among the
   /// people.
   List<LotStaff> get people {
+    final named = [
+      for (final p in _people)
+        p.name.trim().isEmpty && unnamedPersonLabel.isNotEmpty
+            ? LotStaff(id: p.id, name: unnamedPersonLabel)
+            : p,
+    ];
     final owner = _owner;
-    if (owner == null) return _people;
+    if (owner == null) return named;
     return withBusinessOwner(
-      _people,
+      named,
       ownerUid: owner.uid,
       ownerName: owner.name,
       fallbackName: owner.email,
+      unnamedLabel: unnamedOwnerLabel,
     );
   }
 

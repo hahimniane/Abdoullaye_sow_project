@@ -1048,6 +1048,28 @@ List<String> validateLotExpenseDraft({
   return errors;
 }
 
+/// The name a person's profile goes by, the chain every picker uses: full
+/// name, display name, name, then email. '' when the profile names nobody -
+/// never the uid, which is no name to a person ("dala-owner").
+String personDisplayName(Map<String, dynamic>? data) {
+  final row = data ?? const <String, dynamic>{};
+  for (final key in const ['fullName', 'displayName', 'name', 'email']) {
+    final value = (row[key] ?? '').toString().trim();
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
+
+/// A profile as a picker row: its [personDisplayName], else [unnamed].
+LotStaff lotStaffFromProfile(
+  String id,
+  Map<String, dynamic>? data, {
+  required String unnamed,
+}) {
+  final name = personDisplayName(data);
+  return LotStaff(id: id, name: name.isEmpty ? unnamed : name);
+}
+
 /// A staff member, as the pickers need them.
 class LotStaff {
   const LotStaff({required this.id, required this.name});
@@ -1060,16 +1082,20 @@ class LotStaff {
 /// owner the business document names ([ownerUid]) when their own profile does
 /// not - the same set the server accepts as "received by". The owner is named
 /// from the business ([ownerName]), else [fallbackName]; never listed twice.
+///
+/// With no name at all the owner reads [unnamedLabel] ("Business owner"),
+/// never their uid.
 List<LotStaff> withBusinessOwner(
   List<LotStaff> people, {
   required String ownerUid,
   String ownerName = '',
   String fallbackName = '',
+  String unnamedLabel = '',
 }) {
   final id = ownerUid.trim();
   if (id.isEmpty || people.any((p) => p.id == id)) return people;
-  final name = ownerName.trim().isNotEmpty
-      ? ownerName.trim()
-      : (fallbackName.trim().isNotEmpty ? fallbackName.trim() : id);
+  final name = [ownerName, fallbackName, unnamedLabel]
+      .map((n) => n.trim())
+      .firstWhere((n) => n.isNotEmpty, orElse: () => '');
   return [LotStaff(id: id, name: name), ...people];
 }

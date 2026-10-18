@@ -13,7 +13,7 @@ import '../services/invoice_ledger.dart';
 import '../services/known_car_lookup.dart';
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart'
-    show LotKnownCar, LotStaff, lotFindKnownCar;
+    show LotKnownCar, LotStaff, lotFindKnownCar, lotStaffFromProfile;
 import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -134,13 +134,10 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
       if (!mounted) return;
       setState(() => _staff = [
             for (final d in snap.docs)
-              LotStaff(
-                id: d.id,
-                name: (d.data()['fullName'] ??
-                        d.data()['name'] ??
-                        d.data()['email'] ??
-                        d.id)
-                    .toString(),
+              lotStaffFromProfile(
+                d.id,
+                d.data(),
+                unnamed: AppLocalizations.of(context)!.lotUnnamedPerson,
               ),
           ]);
     }, onError: (_) {}));
