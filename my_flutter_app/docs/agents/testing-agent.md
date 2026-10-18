@@ -550,3 +550,15 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   when the TMPDIR path is longer than ~100 characters). The console reads
   `NEXT_PUBLIC_FIREBASE_{AUTH,FIRESTORE,FUNCTIONS,STORAGE}_EMULATOR_PORT`
   for those ports.
+- Browser checks against a full local suite (auth, firestore, functions,
+  storage) as a `demo-*` project: the Firebase CLI is the global one
+  (`functions/node_modules/.bin` has none, so `npx firebase` fails), Java
+  must be on PATH (`/opt/homebrew/opt/openjdk/bin`), and the Functions
+  emulator needs a throwaway `functions/.secret.local` naming every
+  `defineSecret` (dummy values; delete it afterwards). Run the console with
+  `NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true NEXT_PUBLIC_FIREBASE_PROJECT_ID=<demo id>`
+  via `next dev -p <port>`; `preview_start` by name in a worktree may start
+  the main checkout's server instead, so start it from Bash and open the URL.
+  Firestore triggers (volume rollups) fire there on their own, unlike the
+  exec'd suites. Any dialog fed a stand-in row after a write (labels after
+  Received) must get the fields it counts from, not just id and code.
