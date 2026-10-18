@@ -878,6 +878,7 @@ test("a stored line opens the add-line form pre-filled for editing", () => {
     receiverPhone: "+224620000000",
     notifyCustomer: false,
     notifyReceiver: true,
+    pickupFee: null,
   });
   assert.deepEqual(validateContainerLineDraft({ ...draft, pieces: carPieces }), []);
   // Saved unchanged, the request is the line as stored: nothing to change.

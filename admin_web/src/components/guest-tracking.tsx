@@ -346,6 +346,9 @@ export function GuestTracking({
             <section aria-labelledby="guest-tracking-payment-title" className="guest-tracking-payment">
               <h3 id="guest-tracking-payment-title">Payment</h3>
               <dl>
+                {(record.payment.pickupFeeCents ?? 0) > 0 && (
+                  <div><dt>Pickup fee</dt><dd data-no-translate>{moneyText(record.payment.pickupFeeCents ?? 0)}</dd></div>
+                )}
                 <div><dt>Final price</dt><dd data-no-translate>{moneyText(record.payment.priceCents)}</dd></div>
                 <div><dt>Paid</dt><dd data-no-translate>{moneyText(record.payment.paidCents)}</dd></div>
                 <div><dt>Balance</dt><dd data-no-translate>{moneyText(record.payment.balanceCents)}</dd></div>

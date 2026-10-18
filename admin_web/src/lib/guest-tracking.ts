@@ -51,6 +51,8 @@ export type GuestTrackingPart = {
 
 export type GuestTrackingPayment = {
   priceCents: number;
+  /** A collected package's pickup fee, inside priceCents (present only when above zero). */
+  pickupFeeCents?: number;
   paidCents: number;
   balanceCents: number;
 };
@@ -136,8 +138,10 @@ export function parseGuestContainerGroup(
     if (priceCents !== null && priceCents > 0) {
       const paidCents = Math.min(centsOrNull(payment.paidCents) ?? 0, priceCents);
       const balance = centsOrNull(payment.balanceCents);
+      const fee = Math.min(centsOrNull(payment.pickupFeeCents) ?? 0, priceCents);
       out.payment = {
         priceCents,
+        ...(fee > 0 ? { pickupFeeCents: fee } : {}),
         paidCents,
         balanceCents: balance === null ? Math.max(0, priceCents - paidCents) : Math.min(balance, priceCents),
       };

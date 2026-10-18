@@ -11,6 +11,7 @@ import {
   pieceKindLabel,
   piecesDraftTotalCents,
   piecesTotalText,
+  readPickupFeeInput,
   removePieceDraft,
   updatePieceDraft,
   type PieceDraft,
@@ -30,6 +31,8 @@ export function PiecesEditor({
   showErrors,
   disabled = false,
   lang,
+  pickupFee,
+  onPickupFeeChange,
 }: {
   /** The wrapper's element id: a refused save scrolls here. */
   id: string;
@@ -39,10 +42,18 @@ export function PiecesEditor({
   showErrors: boolean;
   disabled?: boolean;
   lang: "en" | "fr";
+  /**
+   * A collected request's pickup fee in US dollars as typed, when the line
+   * has one: its own field beside the pieces, inside the total, never spread
+   * into the piece prices (owner decision 2026-10-18). Undefined: no field.
+   */
+  pickupFee?: string;
+  onPickupFeeChange?: (value: string) => void;
 }) {
   const problems = showErrors ? pieceDraftProblems(pieces) : { codes: [], byPiece: [] };
   const listProblems = problems.codes.filter((code) => code === "pieces_required" || code === "pieces_too_many");
-  const total = piecesDraftTotalCents(pieces);
+  const fee = pickupFee === undefined ? null : readPickupFeeInput(pickupFee);
+  const total = piecesDraftTotalCents(pieces, fee?.cents ?? 0);
   // A decimal comma in French; readMoneyInput reads "45,50" and "45.50" alike.
   const moneyPlaceholder = lang === "fr" ? "0,00" : "0.00";
   const set = (key: string, patch: Partial<Omit<PieceDraft, "key">>) => onChange(updatePieceDraft(pieces, key, patch));
@@ -108,6 +119,23 @@ export function PiecesEditor({
           );
         })}
       </ol>
+      {pickupFee !== undefined && (
+        <div className="pcs-fee">
+          <label className="lst-field pcs-price">
+            <span>Pickup fee ($)</span>
+            <input
+              id={`${id}-pickup-fee`}
+              inputMode="decimal"
+              value={pickupFee}
+              disabled={disabled}
+              onChange={(e) => onPickupFeeChange?.(e.target.value)}
+              placeholder={moneyPlaceholder}
+              {...(fee?.error ? { "aria-invalid": true } : {})}
+            />
+          </label>
+          {fee?.error && <small className="lst-field-error">{CONTAINER_MESSAGES.pickup_fee_invalid}</small>}
+        </div>
+      )}
       <div className="pcs-foot">
         <button className="lst-btn ghost" type="button" disabled={disabled || pieces.length >= MAX_PIECES} onClick={() => onChange(addPieceDraft(pieces))}>
           <Plus size={14} /> Add another piece

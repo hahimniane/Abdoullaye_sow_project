@@ -9,7 +9,7 @@ import { useBusinessCollection } from "@/lib/business-data";
 import { containerLineTitle } from "@/lib/container-manifest";
 import { functions } from "@/lib/firebase";
 import { currentLanguage, formatDateTime, text } from "@/lib/format";
-import { groupRootId, type LineGroupSummary } from "@/lib/line-pieces";
+import { groupRootId, linePickupFeeCents, type LineGroupSummary } from "@/lib/line-pieces";
 import { INVOICE_PAYMENT_METHODS, INVOICE_PAYMENT_METHOD_LABELS, moneyText, type InvoicePaymentMethod } from "@/lib/invoice-ledger";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import {
@@ -83,6 +83,8 @@ export function PackagePaymentDialog({
   // Payments live on the root of the group (the line itself when never split).
   const paymentsLineId = group.rootLineId || groupRootId(line, lineId);
   const pieced = packageHasPieces(line);
+  // A collected request's pickup fee: its own amount, inside the price.
+  const ownFee = linePickupFeeCents(line);
   const partHint = partHintText(group, line, lang);
   const groupNote = groupMoneyNote(group, lang);
   // The line's (its root's) payments, live. The business filter is what the
@@ -183,12 +185,16 @@ export function PackagePaymentDialog({
             {partHint && <small className="wpk-part-hint" data-no-translate>{partHint}</small>}
           </p>
           {groupNote && <p className="lst-hint" data-no-translate>{groupNote}</p>}
+          {group.partCount > 1 && group.pickupFeeCents > 0 && (
+            <p className="lst-hint wpk-fee-line"><span>Includes the pickup fee</span> <span data-no-translate>{moneyText(group.pickupFeeCents)}</span></p>
+          )}
 
           <div className="lst-form-grid">
             {pieced ? (
               <div className="lst-field">
                 <span>Price</span>
                 <strong data-no-translate>{own.priceCents === null ? "—" : moneyText(own.priceCents)}</strong>
+                {ownFee > 0 && <small className="lst-hint wpk-fee-line"><span>Pickup fee</span> <span data-no-translate>{moneyText(ownFee)}</span></small>}
                 <small className="lst-hint">Set each piece&apos;s price in Edit package.</small>
               </div>
             ) : (

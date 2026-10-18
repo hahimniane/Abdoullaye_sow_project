@@ -14,12 +14,13 @@
 
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
 import { centsToInput as ledgerCentsToInput } from "./invoice-ledger.ts";
-import { distributeCents, pieceSizeOf, piecesLineFields } from "./line-pieces.ts";
+import { pickupFeeOf, pieceSizeOf, piecesLineFields } from "./line-pieces.ts";
 import {
   newPieceDraft as newPieceDraftOf,
   pieceDraftProblems,
   piecesDraftTotalCents,
   piecesPayload,
+  readPickupFeeInput,
   type PieceDraft as LinePieceDraft,
   type PiecePayload,
 } from "./piece-drafts.ts";
@@ -882,10 +883,11 @@ export function draftTotalCents(row: Row, prices: Record<string, string>, pickup
 
 /**
  * What each request piece is priced at when Received opens: the estimate's
- * price (else the piece's `estimateCents`), plus - for a collected request -
- * the estimate's pickup fee spread over the priced pieces, the odd cents on
- * the first. A line's total is the sum of its pieces, so the fee rides
- * inside them. Mirrors `receivePrefillCents` in functions/request_receive.js.
+ * price, else the piece's `estimateCents`. The pickup fee is NOT in here: it
+ * is the line's own amount beside the pieces (receivePrefillPickupFeeCents;
+ * owner decision 2026-10-18), so the bill reads "Barrel $90 · Box $40 ·
+ * Pickup fee $20 · Total $150". Mirrors `receivePrefillCents` in
+ * functions/request_receive.js.
  */
 export function receivePrefillCents(row: unknown): Map<string, number | null> {
   const estimate = requestEstimate(row);
@@ -893,13 +895,21 @@ export function receivePrefillCents(row: unknown): Map<string, number | null> {
   for (const piece of requestPieces(row)) {
     prices.set(piece.id, estimate?.pieces.get(piece.id) ?? piece.estimateCents);
   }
-  const fee = text(asRow(row).handoff, 20) === "collect" ? Math.max(0, estimate?.pickupFeeCents ?? 0) : 0;
-  const priced = [...prices.keys()].filter((id) => prices.get(id) !== null);
-  if (fee > 0 && priced.length > 0) {
-    const shares = distributeCents(fee, priced.length);
-    priced.forEach((id, i) => prices.set(id, (prices.get(id) as number) + (shares[i] ?? 0)));
-  }
   return prices;
+}
+
+/** Whether Received offers a pickup fee: only for a collected request. */
+export function receiveTakesPickupFee(row: unknown): boolean {
+  return text(asRow(row).handoff, 20) === "collect";
+}
+
+/**
+ * The pickup fee Received opens on: the estimate's, for a collected request;
+ * a request brought in has none. Mirrors `receivePrefillPickupFeeCents` in
+ * functions/request_receive.js.
+ */
+export function receivePrefillPickupFeeCents(row: unknown): number {
+  return receiveTakesPickupFee(row) ? pickupFeeOf(asRow(asRow(row).estimate).pickupFeeCents) : 0;
 }
 
 /** The Received editor opens on the request's pieces, ids kept, priced by receivePrefillCents. */
@@ -924,17 +934,24 @@ export function receiveDraftsFrom(row: unknown): LinePieceDraft[] {
 /**
  * The receivePackageRequest pieces (§8.6) from the editor: the request's
  * pieces by id (with what they turned out to be), new ones without an id,
- * all priced or none; or the first problem (a phase 1 piece code, or
- * `too_many_pieces` / `price_required`).
+ * all priced or none; and, for a collected request, the pickup fee as typed
+ * (`pickupFee`; blank is no fee). Or the first problem (a phase 1 piece code,
+ * `too_many_pieces` / `price_required`, or `pickup_fee_invalid`).
  */
-export function receivePayload(drafts: readonly LinePieceDraft[]): { pieces: PiecePayload[]; error: string } {
+export function receivePayload(
+  drafts: readonly LinePieceDraft[],
+  pickupFee: string | null = null,
+): { pieces: PiecePayload[]; pickupFeeCents?: number; error: string } {
   const problems = pieceDraftProblems(drafts);
   if (problems.codes.length > 0) return { pieces: [], error: problems.codes[0] };
   if (drafts.length > REQUEST_LIMITS.pieces) return { pieces: [], error: "too_many_pieces" };
   const pieces = piecesPayload(drafts);
   const priced = pieces.filter((p) => p.priceCents !== null).length;
   if (priced > 0 && priced < pieces.length) return { pieces: [], error: "price_required" };
-  return { pieces, error: "" };
+  if (pickupFee === null) return { pieces, error: "" };
+  const fee = readPickupFeeInput(pickupFee);
+  if (fee.error) return { pieces: [], error: fee.error };
+  return { pieces, pickupFeeCents: fee.cents, error: "" };
 }
 
 /**
@@ -946,19 +963,20 @@ export function receivePayload(drafts: readonly LinePieceDraft[]): { pieces: Pie
 export function receivedLineStub(
   result: { lineId: string; trackingCode: string },
   pieces: readonly PiecePayload[],
+  pickupFeeCents: number | null = null,
 ): Record<string, unknown> {
   return {
     id: result.lineId,
     trackingCode: result.trackingCode,
     containerId: "",
     containerStatus: "waiting",
-    ...piecesLineFields(pieces),
+    ...piecesLineFields(pieces, pickupFeeCents),
   };
 }
 
-/** The Received total: the sum of the pieces, as the line will hold it. */
-export function receiveTotalCents(drafts: readonly LinePieceDraft[]): number | null {
-  return piecesDraftTotalCents(drafts);
+/** The Received total: the pieces plus the pickup fee (cents, 0 for none), as the line will hold it. */
+export function receiveTotalCents(drafts: readonly LinePieceDraft[], pickupFeeCents = 0): number | null {
+  return piecesDraftTotalCents(drafts, pickupFeeCents);
 }
 
 // ---------------------------------------------------------------------------

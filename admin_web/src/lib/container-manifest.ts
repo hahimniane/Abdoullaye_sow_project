@@ -18,10 +18,13 @@
 import { businessParkingEndLabel } from "./business-parking-entry.ts";
 import { CALLING_CODE_BY_COUNTRY } from "./calling-code-catalog.ts";
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
+import { centsToInput } from "./invoice-ledger.ts";
 import {
   groupRootId,
   lineCounts,
+  lineHasPickupFee,
   lineHasPieces,
+  linePickupFeeCents,
   linePieces,
   lineSourceOf,
   partIndexOf,
@@ -36,6 +39,7 @@ import {
   pieceDraftsFromLine,
   piecesDifferFromLine,
   piecesPayload,
+  readPickupFeeInput,
   type PieceDraft,
   type PiecePayload,
 } from "./piece-drafts.ts";
@@ -256,6 +260,8 @@ export type ContainerRefusal =
   | "line_has_payments"
   | "price_invalid"
   | "price_below_paid"
+  | "price_below_pickup_fee"
+  | "pickup_fee_invalid"
   | "price_required"
   | "amount_required"
   | "amount_too_large"
@@ -326,6 +332,8 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
     "Payments are recorded for this package. Revert them first.",
   price_invalid: "Enter the price in dollars, more than zero.",
   price_below_paid: "The price can't be less than what has been paid.",
+  price_below_pickup_fee: "The price can't be less than the pickup fee.",
+  pickup_fee_invalid: "Enter a valid pickup fee.",
   price_required: "Set a price before recording a payment.",
   amount_required: "Enter the amount received.",
   amount_too_large: "That amount is larger than a package can carry.",
@@ -551,6 +559,13 @@ export type ContainerLineDraft = {
    * `description` are what the server writes from them for older apps.
    */
   pieces: PieceDraft[];
+  /**
+   * A collected request's pickup fee in US dollars as typed, for a line that
+   * has one (`lineHasPickupFee`); null for every other line, which shows no
+   * fee field and sends none. Its own amount beside the pieces, inside the
+   * total (owner decision 2026-10-18).
+   */
+  pickupFee: string | null;
 };
 
 export const emptyContainerLineDraft: ContainerLineDraft = {
@@ -571,6 +586,7 @@ export const emptyContainerLineDraft: ContainerLineDraft = {
   notifyCustomer: true,
   notifyReceiver: true,
   pieces: [newPieceDraft()],
+  pickupFee: null,
 };
 
 /** Whether a line draft is described by its pieces (every kind but a car). */
@@ -593,7 +609,8 @@ export type ContainerLineError =
   | "piece_description_required"
   | "piece_description_too_long"
   | "piece_size_invalid"
-  | "piece_price_invalid";
+  | "piece_price_invalid"
+  | "pickup_fee_invalid";
 
 type ContactPhoneError = "customer_phone_invalid" | "receiver_phone_invalid";
 
@@ -625,6 +642,9 @@ export function validateContainerLineDraft(
     // What the line is comes from its pieces, as on the server
     // (`linesInPiecesMode`): 1-60 of them, each saying what it is.
     errors.push(...pieceDraftProblems(draft.pieces ?? []).codes);
+    if (draft.pickupFee !== null && draft.pickupFee !== undefined && readPickupFeeInput(draft.pickupFee).error) {
+      errors.push("pickup_fee_invalid");
+    }
   }
   const owner = text(draft.ownerKind, 20);
   if (!(CONTAINER_OWNER_KINDS as readonly string[]).includes(owner)) {
@@ -687,6 +707,8 @@ export type ContainerLinePayload = ReturnType<typeof lineContacts> & {
   quantity: number;
   description: string;
   pieces?: PiecePayload[];
+  /** Only for a line that has a pickup fee (a collected request's). */
+  pickupFeeCents?: number;
 };
 
 export function containerLinePayload(draft: ContainerLineDraft): ContainerLinePayload {
@@ -704,12 +726,14 @@ export function containerLinePayload(draft: ContainerLineDraft): ContainerLinePa
   if (isCar) return { kind, ...base, quantity: 1, description: "" };
   const pieces = piecesPayload(draft.pieces ?? []);
   const summary = piecesSummaryFields(pieces);
+  const hasFee = draft.pickupFee !== null && draft.pickupFee !== undefined;
   return {
     kind: summary.kind,
     ...base,
     quantity: Math.min(MAX_QUANTITY, summary.quantity),
     description: summary.kind === "other" ? text(summary.description, MAX_LABEL) : "",
     pieces,
+    ...(hasFee ? { pickupFeeCents: readPickupFeeInput(draft.pickupFee).cents } : {}),
   };
 }
 
@@ -793,6 +817,8 @@ export function containerLineDraftFromRow(line: unknown): ContainerLineDraft {
     notifyReceiver: !text(r.receiverPhone, 40) || onUnlessOff(r.notifyReceiver),
     // The line's pieces, ids kept (a legacy line's count expanded).
     pieces: pieceDraftsFromLine(r),
+    // Its own pickup fee, kept apart from the pieces, when it has one.
+    pickupFee: lineHasPickupFee(r) ? centsToInput(linePickupFeeCents(r)) : null,
   };
 }
 

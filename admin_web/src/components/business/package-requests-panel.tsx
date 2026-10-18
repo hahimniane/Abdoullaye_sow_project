@@ -27,7 +27,7 @@ import type { PieceDraft } from "@/lib/piece-drafts";
 import { CopyValue } from "@/components/copy-value";
 import { auth, functions, storage } from "@/lib/firebase";
 import { currentLanguage } from "@/lib/format";
-import { INVOICE_PAYMENT_METHODS, INVOICE_PAYMENT_METHOD_LABELS, type InvoicePaymentMethod } from "@/lib/invoice-ledger";
+import { INVOICE_PAYMENT_METHODS, INVOICE_PAYMENT_METHOD_LABELS, centsToInput as ledgerCentsToInput, type InvoicePaymentMethod } from "@/lib/invoice-ledger";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import {
   LOCK_HEARTBEAT_MS,
@@ -50,6 +50,8 @@ import {
   receiveDraftsFrom,
   receivedLineStub,
   receivePayload,
+  receivePrefillPickupFeeCents,
+  receiveTakesPickupFee,
   requestEstimate,
   requestFailure,
   requestFilterCounts,
@@ -652,10 +654,12 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const collect = str(row.handoff) === "collect";
-  const fee = collect ? requestEstimate(row)?.pickupFeeCents ?? 0 : 0;
+  // A collected request's pickup fee: its own field beside the pieces,
+  // prefilled from the estimate, inside the total (never in the prices).
+  const [pickupFee, setPickupFee] = useState(() => (receiveTakesPickupFee(row) ? ledgerCentsToInput(receivePrefillPickupFeeCents(row)) : ""));
 
   async function receive() {
-    const { pieces: payloadPieces, error: problem } = receivePayload(pieces);
+    const { pieces: payloadPieces, pickupFeeCents, error: problem } = receivePayload(pieces, receiveTakesPickupFee(row) ? pickupFee : null);
     if (problem) {
       setShowErrors(true);
       setError(REQUEST_ERROR_MESSAGES[problem] ?? CONTAINER_MESSAGES[problem as keyof typeof CONTAINER_MESSAGES] ?? REQUEST_ERROR_MESSAGES.price_invalid);
@@ -681,11 +685,12 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
         businessId,
         requestId: str(row.id),
         pieces: payloadPieces,
+        ...(pickupFeeCents !== undefined ? { pickupFeeCents } : {}),
         payOnArrival,
         ...(payment ? { payment } : {}),
       });
       onFlash(receivedFlash(result.trackingCode, result.alreadyReceived, l));
-      onReceived(receivedLineStub(result, payloadPieces));
+      onReceived(receivedLineStub(result, payloadPieces, pickupFeeCents ?? null));
     } catch (err) {
       setError(requestFailure(err).message);
     } finally {
@@ -705,8 +710,15 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
         </header>
         <div className="lst-modal-body">
           <div className="pkq-detail"><PersonLines row={row} /></div>
-          <PiecesEditor disabled={busy} id="pkq-receive-pieces" lang={l} onChange={setPieces} pieces={pieces} showErrors={showErrors} />
-          {fee > 0 && <p className="lst-hint"><span>The prices include the pickup fee in the estimate:</span> <span data-no-translate>{moneyText(fee, l)}</span></p>}
+          <PiecesEditor
+            disabled={busy}
+            id="pkq-receive-pieces"
+            lang={l}
+            onChange={setPieces}
+            pieces={pieces}
+            showErrors={showErrors}
+            {...(collect ? { pickupFee, onPickupFeeChange: setPickupFee } : {})}
+          />
           {card ? (
             <p className="lst-hint"><CreditCard size={14} aria-hidden="true" /> <span>Paid online by card</span> <span data-no-translate>{moneyText(Number(asRow(row.payment).paidCents) || 0, l)}</span></p>
           ) : (

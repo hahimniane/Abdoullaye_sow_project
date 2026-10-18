@@ -70,6 +70,20 @@ test("an older answer, an unpriced group or another service carries no parts or 
   assert.deepEqual(parseGuestContainerGroup("barrel", { pieceCount: 3, parts: [{ trackingCode: "BS-K7M4P2", stage: "booked" }] }), {});
 });
 
+test("a collected package's pickup fee is its own row, once, inside the final price", () => {
+  // Barrel $90 · Box $40 · Pickup fee $20 · Total $150 (owner decision 2026-10-18).
+  assert.deepEqual(
+    parseGuestContainerGroup("container", { payment: { priceCents: 15000, pickupFeeCents: 2000, paidCents: 5000, balanceCents: 10000 } }),
+    { payment: { priceCents: 15000, pickupFeeCents: 2000, paidCents: 5000, balanceCents: 10000 } },
+  );
+  // No fee, or a zero one, adds no row; a fee can never exceed the price.
+  assert.deepEqual(
+    parseGuestContainerGroup("container", { payment: { priceCents: 15000, pickupFeeCents: 0, paidCents: 0, balanceCents: 15000 } }),
+    { payment: { priceCents: 15000, paidCents: 0, balanceCents: 15000 } },
+  );
+  assert.equal(parseGuestContainerGroup("container", { payment: { priceCents: 1000, pickupFeeCents: 5000 } }).payment?.pickupFeeCents, 1000);
+});
+
 test("guest tracking validates human-formatted booking codes", () => {
   assert.equal(validGuestTrackingIdentifier("bs k7m4p2"), true);
   assert.equal(validGuestTrackingIdentifier("123"), false);

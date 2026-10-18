@@ -1387,6 +1387,8 @@ export function ContainersPanel({
                   showErrors={lineTried}
                   disabled={busy}
                   lang={lang}
+                  pickupFee={lineDraft.pickupFee ?? undefined}
+                  onPickupFeeChange={(pickupFee) => setLineDraft((d) => ({ ...d, pickupFee }))}
                 />
               )}
               {lineDraft.kind === "car" && (

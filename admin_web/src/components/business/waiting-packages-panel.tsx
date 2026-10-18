@@ -21,7 +21,7 @@ import {
   lineDraftHasPieces,
   phoneCountryForDestination,
 } from "@/lib/container-manifest";
-import type { LineGroupSummary } from "@/lib/line-pieces";
+import { linePickupFeeCents, type LineGroupSummary } from "@/lib/line-pieces";
 import { newPieceDraft, savePrintLabelsText } from "@/lib/piece-drafts";
 import { destinationCountryName } from "@/lib/destination-countries";
 import { functions } from "@/lib/firebase";
@@ -417,6 +417,7 @@ export function WaitingPackagesPanel({
               const group = groupForLine(groups, row);
               const payment = groupPayment(group);
               const partHint = partHintText(group, row, lang);
+              const pickupFee = linePickupFeeCents(row);
               const id = text(row.id, "");
               const title = containerLineTitle(row, lang);
               const { summary, warnings } = containerLineWhatsAppText(containerLineWhatsApp(row));
@@ -453,6 +454,9 @@ export function WaitingPackagesPanel({
                     )}
                     {payment.balanceCents !== null && payment.balanceCents > 0 && (
                       <small><span data-no-translate>{moneyText(payment.balanceCents)}</span> <span>still owed</span></small>
+                    )}
+                    {pickupFee > 0 && (
+                      <small className="wpk-fee-line"><span>Pickup fee</span> <span data-no-translate>{moneyText(pickupFee)}</span></small>
                     )}
                     {partHint && <small className="wpk-part-hint" data-no-translate>{partHint}</small>}
                   </span>
@@ -493,6 +497,8 @@ export function WaitingPackagesPanel({
                   showErrors={triedSave}
                   disabled={busy}
                   lang={lang}
+                  pickupFee={draft.pickupFee ?? undefined}
+                  onPickupFeeChange={(pickupFee) => setDraft((d) => ({ ...d, pickupFee }))}
                 />
               )}
               <div className="lst-form-grid">

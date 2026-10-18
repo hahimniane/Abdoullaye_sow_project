@@ -18,8 +18,8 @@ import {
   MAX_PIECE_INCHES,
   PIECE_KINDS,
   linePieces,
+  lineTotalCents,
   pieceErrors,
-  piecesTotalCents,
   type PieceErrorCode,
   type PieceKind,
   type PieceSize,
@@ -177,9 +177,25 @@ export function pieceDraftProblems(drafts: readonly PieceDraft[]): PieceDraftPro
   return { codes: [...codes], byPiece };
 }
 
-/** The line total the pieces add up to (null while none is priced), as the server computes it. */
-export function piecesDraftTotalCents(drafts: readonly PieceDraft[]): number | null {
-  return piecesTotalCents(piecesPayload(drafts));
+/**
+ * The line total the pieces add up to, plus the line's own pickup fee when it
+ * has one (null while no piece is priced), as the server computes it
+ * (`lineTotalCents`): the fee is never spread into the piece prices.
+ */
+export function piecesDraftTotalCents(drafts: readonly PieceDraft[], pickupFeeCents = 0): number | null {
+  return lineTotalCents(piecesPayload(drafts), pickupFeeCents);
+}
+
+/**
+ * A typed pickup fee (US dollars; blank is no fee) as whole cents, or the
+ * refusal the server gives (`pickup_fee_invalid`): zero is fine, negative or
+ * unreadable is not. The console's one money reader, so "20,00" is $20.
+ */
+export function readPickupFeeInput(value: unknown): { cents: number; error: "pickup_fee_invalid" | null } {
+  const read = readMoneyInput(value);
+  if (read.issue === "empty") return { cents: 0, error: null };
+  if (read.cents === null || read.cents < 0) return { cents: 0, error: "pickup_fee_invalid" };
+  return { cents: read.cents, error: null };
 }
 
 /**

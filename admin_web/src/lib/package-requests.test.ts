@@ -40,6 +40,8 @@ import {
   receivedLineStub,
   receivePayload,
   receivePrefillCents,
+  receivePrefillPickupFeeCents,
+  receiveTakesPickupFee,
   receiveTotalCents,
   receivedFlash,
   requestCountries,
@@ -291,18 +293,39 @@ test("Received sends final prices: all or none", () => {
   assert.deepEqual(receivePayload(priced.map((d) => ({ ...d, price: "" }))).pieces.map((p) => p.priceCents), [null, null]);
 });
 
-test("Received opens in phase 1's pieces editor, the pickup fee inside the prices", () => {
-  // The same rule as functions/request_receive.js receivePrefillCents.
+test("Received opens in phase 1's pieces editor, the pickup fee beside the prices", () => {
+  // The same rule and numbers as functions/request_receive.js
+  // (receivePrefillCents / receivePrefillPickupFeeCents) and the app's
+  // mirror. Owner decision 2026-10-18: the fee is never spread into pieces.
   const estimate = { version: 1, totalCents: 22001, pieces: [{ id: "p1", cents: 15000 }, { id: "p2", cents: 4500 }], pickupFeeCents: 2501 };
   assert.deepEqual([...receivePrefillCents(row({ estimate }))], [["p1", 15000], ["p2", 4500]]);
-  assert.deepEqual([...receivePrefillCents(row({ estimate, handoff: "collect" }))], [["p1", 16251], ["p2", 5750]]);
+  assert.deepEqual([...receivePrefillCents(row({ estimate, handoff: "collect" }))], [["p1", 15000], ["p2", 4500]]);
   assert.deepEqual([...receivePrefillCents(row())], [["p1", 15000], ["p2", null]]);
-  const drafts = receiveDraftsFrom(row({ estimate, handoff: "collect", pieces: [
+  assert.equal(receivePrefillPickupFeeCents(row({ estimate, handoff: "collect" })), 2501);
+  assert.equal(receivePrefillPickupFeeCents(row({ estimate })), 0);
+  assert.equal(receiveTakesPickupFee(row({ estimate })), false);
+  assert.equal(receiveTakesPickupFee(row({ estimate, handoff: "collect" })), true);
+  const collect = row({ estimate, handoff: "collect", pieces: [
     { id: "p1", kind: "barrel", description: "", estimateCents: 15000 },
-    { id: "p2", kind: "box", description: "TV", sizeIn: { l: 30, w: 20, h: 10 }, estimateCents: null }] }));
+    { id: "p2", kind: "box", description: "TV", sizeIn: { l: 30, w: 20, h: 10 }, estimateCents: null }] });
+  const drafts = receiveDraftsFrom(collect);
   assert.deepEqual(drafts.map((d) => [d.id, d.kind, d.description, d.lengthIn, d.price]),
-    [["p1", "barrel", "", "", "162.51"], ["p2", "box", "TV", "30", "57.50"]]);
-  assert.equal(receiveTotalCents(drafts), 22001);
+    [["p1", "barrel", "", "", "150"], ["p2", "box", "TV", "30", "45"]]);
+  assert.equal(receiveTotalCents(drafts), 19500);
+  assert.equal(receiveTotalCents(drafts, receivePrefillPickupFeeCents(collect)), 22001);
+  // The payload sends the fee as typed, on its own; a bad one is refused.
+  const sent = receivePayload(drafts, "25.01");
+  assert.equal(sent.error, "");
+  assert.equal(sent.pickupFeeCents, 2501);
+  assert.deepEqual(sent.pieces.map((p) => p.priceCents), [15000, 4500]);
+  assert.equal(receivePayload(drafts, "").pickupFeeCents, 0);
+  assert.equal(receivePayload(drafts, "-5").error, "pickup_fee_invalid");
+  assert.equal("pickupFeeCents" in receivePayload(drafts), false, "a request brought in sends none");
+  // The labels stub carries it as the line will: own field, inside the total.
+  const stub = receivedLineStub({ lineId: "l1", trackingCode: "CL-DCZDPT" }, sent.pieces, 2501);
+  assert.equal(stub.pickupFeeCents, 2501);
+  assert.equal(stub.priceCents, 22001);
+  assert.equal(stub.pieceCount, 2);
 });
 
 test("Received can add a piece the customer brought and drop one that did not come", () => {

@@ -2635,7 +2635,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Pickup address": "Adresse de collecte",
   "Pickup borough": "Arrondissement de collecte",
   "Pickup fee": "Frais de collecte",
-  "The prices include the pickup fee in the estimate:": "Les prix incluent les frais de collecte de l'estimation :",
+  "Pickup fee ($)": "Frais de collecte ($)",
+  "Includes the pickup fee": "Comprend les frais de collecte",
   "Pickup time": "Heure de collecte",
   "Platform Administrator": "Administrateur de plateforme",
   "Platform admins": "Administrateurs plateforme",
@@ -5177,6 +5178,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Enter the price in dollars, more than zero.": "Saisissez le prix en dollars, supérieur à zéro.",
   "The price can't be less than what has been paid.":
     "Le prix ne peut pas être inférieur à ce qui a été payé.",
+  "The price can't be less than the pickup fee.":
+    "Le prix ne peut pas être inférieur aux frais de collecte.",
   "That amount is larger than a package can carry.": "Ce montant dépasse ce qu’un colis peut porter.",
   "Choose where this container is going before adding packages to it.":
     "Choisissez où va ce conteneur avant d’y ajouter des colis.",
