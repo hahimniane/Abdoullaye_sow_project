@@ -184,8 +184,42 @@ is counted.
 2. Requests: business settings, customer request page + app, photos,
    estimates + lock + history, estimate template + confirm page + reminders
    + expiry, Expected in Waiting list + Received, request link + QR, card
-   barrels into the Waiting list.
-3. Monthly volume: counters + admin view + business view + CSV.
+   barrels into the Waiting list. **Built 2026-10-18** (branches
+   `feat/requests` - server, customer website, business console - and
+   `feat/requests-app`; API contract §8). Not yet deployed.
+3. Monthly volume: counters + admin view + business view + CSV. **Built
+   2026-10-18** (branch `feat/monthly-volume`; §9). Not yet deployed.
+
+### Integration (release/1.0.17, 2026-10-18)
+All three phases are merged on `release/1.0.17`. What the merge settled:
+- **Received writes the counter's line.** `request_receive.js` builds the
+  line with phase 1's writer (`containerLineRecord` in pieces mode →
+  `piecesLineFields`) and the shared `lineReceiptFields` the counter uses
+  too, so a received request and a counter registration holding the same
+  pieces are the same document but for `source` / `requestId` (tests
+  compare them field by field, print their labels "1 of N", split the
+  received line, and recount the month). The line carries no
+  `receivedAtMs` (the request document keeps its own).
+- **Pickup fee.** A line's total is the sum of its pieces (§1), and edits
+  and splits re-derive it from them, so a collected request's pickup fee
+  rides inside the piece prices: `receivePrefillCents` spreads it over the
+  priced pieces (odd cents on the first), the same rule in the server, the
+  console and the app; the Received form says "The prices include the
+  pickup fee in the estimate".
+- **Received uses phase 1's pieces editor** in the console and the app:
+  staff confirm prices, correct what a request piece is (kind, description,
+  size), add pieces brought on top and drop ones that did not come (§8.6).
+- **Requests read like lines.** Request cards and Expected rows say what a
+  request holds with phase 1's summary (`pieceSummaryText` /
+  `containerPiecesSummary`: "1 barrel, 1 box", "1 barrel, Flat-screen TV"),
+  and the kind labels are phase 1's ("Baril" in French).
+- **Android app links** claim `/e/` and `/r/` on customer.laawoldigital.com
+  beside `/t/` and `/i/` (iOS already did).
+- **Instance budget.** 309 functions reserve 995 of the 1,000 CPUs the
+  scaling contract allows: request settings, the request QR, the hourly
+  request sweep and the admin volume view run on one instance each.
+- Card barrel orders still show both in the Barrels tab and as Expected in
+  the Waiting list (§2 Payment); left as is on purpose.
 
 ## 7. Addenda (2026-10-18, after the screens were approved)
 
@@ -559,14 +593,19 @@ payment?: {amountCents, method, receivedByStaffId, note?}}` → `{success,
 lineId, trackingCode, paidCents, paymentId, alreadyReceived}`. Any open
 status (a customer may walk in before confirming).
 `pieces` is the load as it arrived: the request's pieces by `id` (a missing
-`priceCents` keeps the estimate's price), pieces brought on top without an
-id (`{kind: barrel|box|other, description, priceCents}`; the server gives
+`priceCents` keeps the prefilled price; `kind`, `description` and `sizeIn`
+may be sent to correct what the piece turned out to be, else the
+request's are kept), pieces brought on top without an id (`{kind:
+barrel|box|other, description, sizeIn?, priceCents}`; the server gives
 them the next ids, `p3`, `p4`, …), and request pieces left out did not come.
-An absent or empty `pieces` keeps every request piece at its estimate. At
+An absent or empty `pieces` keeps every request piece at its prefilled
+price. The prefill is the estimate's price per piece plus, for a collected
+request, the estimate's pickup fee spread over the priced pieces
+(`receivePrefillCents`; clients open the form on the same numbers). At
 least one piece, at most 20. Refusals: `estimate_piece_unknown` (an id not
 on the request, or twice), `price_invalid`, `piece_kind_invalid`,
-`piece_description_required`, `text_too_long`, `too_many_pieces`,
-`price_required`. Any change is written to History as `pieces_changed`
+`piece_description_required`, `text_too_long`, `size_invalid`,
+`too_many_pieces`, `price_required`. Any change is written to History as `pieces_changed`
 with `piecesAdded` / `piecesRemoved`, before the `received` entry. One transaction creates ONE `containerLines` line, waiting
 (`containerId: ""`, `containerStatus: "waiting"`), with the counter's
 fields plus `pieces[] {id, kind, description, sizeIn, priceCents}`,
@@ -575,7 +614,10 @@ fields plus `pieces[] {id, kind, description, sizeIn, priceCents}`,
 `receivedAt`, `rootLineId` = its own id, `partIndex: 1`; `priceCents` = sum
 of the piece prices (null when none is priced; `price_required` when some
 but not all are); summary `kind` `barrels` when every piece is a barrel,
-else `other`, `quantity` = piece count. The optional payment follows
+else `other`, `quantity` = piece count, `description` phase 1's
+("Barrel, Clothes, TV"). Built by the counter's own writer
+(`containerLineRecord` + `lineReceiptFields`), so it is the same document
+as a counter line with those pieces. The optional payment follows
 `addWaitingPackage`'s rules and reasons. A card-paid request records its
 online payment as a `containerLinePayments` row (`method: "other"`, note
 "Paid online by card") and cannot also take `payment`. A second tap returns

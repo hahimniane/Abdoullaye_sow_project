@@ -232,9 +232,9 @@ in `functions/test/fixtures/line-pieces-cases.json`.
 | `kind`, `quantity`, `description` | | summaries for older app versions: `barrels` when every piece is a barrel else `other`; quantity = piece count; description names the pieces ("Barrel, Clothes, TV") |
 | `priceCents` | int \| null | = sum of the priced pieces (null while none is priced) |
 | `lengthIn`/`widthIn`/`heightIn` | | the piece's size for a one-piece line, else null |
-| `source` | `counter` \| `request` \| `card_order` | `counter` for `addWaitingPackage` / `addContainerLine` |
-| `requestId` | string | `""` until requests exist (phase 2) |
-| `receivedAt` | timestamp | server time when the pieces were received (counter: creation). Legacy lines: read `createdAt` |
+| `source` | `counter` \| `request` \| `card_order` | `counter` for `addWaitingPackage` / `addContainerLine`; `request` / `card_order` for `receivePackageRequest` (docs/PACKAGE_REQUESTS.md §8.6) |
+| `requestId` | string | the `packageRequests` id a received request came from; `""` for counter lines |
+| `receivedAt` | timestamp | server time when the pieces were received (counter: creation; a request: when staff tap Received). Legacy lines: read `createdAt` |
 | `rootLineId`, `partIndex` | string, int | a new line is its own root, part 1. A split part points at the root |
 | `lastPartIndex` | int | on the root: the highest part number ever used (a cancelled part's code is never reused) |
 | `splitFromLineId` | string | on a part: the line it was split from |
@@ -257,6 +257,12 @@ New refusal codes (`invalid-argument`, `details.reasons`): `pieces_required`,
 `piece_description_too_long`, `piece_size_invalid`, `piece_price_invalid`.
 Piece ids are kept when they are `[A-Za-z0-9_-]{1,40}` and unique; others get
 the first free `p<n>`.
+`receivePackageRequest` (a customer's request handed over) writes its line
+with the same writer (`containerLineRecord` in pieces mode) and the same
+receipt fields (`lineReceiptFields` in `container_manifest.js`: `source`,
+`requestId`, `receivedAt`, `rootLineId`, `partIndex`), so waiting, labels,
+split, payments and monthly volume treat it like a counter line; it holds at
+most 20 pieces (the request's cap).
 
 **Editing** (`updateContainerLine`): what the pieces are (count, kind,
 description, size) changes while waiting or loading (`container_locked`
