@@ -48,6 +48,7 @@ import {
   plannedDayText,
   readDollars,
   receiveDraftsFrom,
+  receivedLineStub,
   receivePayload,
   requestEstimate,
   requestFailure,
@@ -684,7 +685,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
         ...(payment ? { payment } : {}),
       });
       onFlash(receivedFlash(result.trackingCode, result.alreadyReceived, l));
-      onReceived({ id: result.lineId, trackingCode: result.trackingCode, containerId: "", containerStatus: "waiting" });
+      onReceived(receivedLineStub(result, payloadPieces));
     } catch (err) {
       setError(requestFailure(err).message);
     } finally {

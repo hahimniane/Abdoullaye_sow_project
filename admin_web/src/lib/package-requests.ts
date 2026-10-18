@@ -14,7 +14,7 @@
 
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
 import { centsToInput as ledgerCentsToInput } from "./invoice-ledger.ts";
-import { distributeCents, pieceSizeOf } from "./line-pieces.ts";
+import { distributeCents, pieceSizeOf, piecesLineFields } from "./line-pieces.ts";
 import {
   newPieceDraft as newPieceDraftOf,
   pieceDraftProblems,
@@ -935,6 +935,25 @@ export function receivePayload(drafts: readonly LinePieceDraft[]): { pieces: Pie
   const priced = pieces.filter((p) => p.priceCents !== null).length;
   if (priced > 0 && priced < pieces.length) return { pieces: [], error: "price_required" };
   return { pieces, error: "" };
+}
+
+/**
+ * The line Received just made, as the labels dialog reads it until the
+ * waiting list has the real one: its id and code, waiting, and the pieces
+ * as they arrived (so the dialog names them and counts their labels - the
+ * request's original pieces may have changed at the counter).
+ */
+export function receivedLineStub(
+  result: { lineId: string; trackingCode: string },
+  pieces: readonly PiecePayload[],
+): Record<string, unknown> {
+  return {
+    id: result.lineId,
+    trackingCode: result.trackingCode,
+    containerId: "",
+    containerStatus: "waiting",
+    ...piecesLineFields(pieces),
+  };
 }
 
 /** The Received total: the sum of the pieces, as the line will hold it. */

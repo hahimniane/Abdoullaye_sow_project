@@ -6,7 +6,9 @@ import { customerServiceFromLocation } from "./customer-service-intent.ts";
 import { serviceEntryApplies } from "./console-routing.ts";
 import { translateValue } from "./french-dom.ts";
 import { businessTargetForNotification } from "./notification-routing.ts";
+import { containerLineTitle } from "./container-manifest.ts";
 import { newPieceDraft as newLinePieceDraft } from "./piece-drafts.ts";
+import { labelsPieceCount } from "./waiting-packages.ts";
 import {
   REQUEST_ERROR_MESSAGES,
   REQUEST_STATUS_LABELS,
@@ -35,6 +37,7 @@ import {
   plannedDayText,
   readDollars,
   receiveDraftsFrom,
+  receivedLineStub,
   receivePayload,
   receivePrefillCents,
   receiveTotalCents,
@@ -314,6 +317,15 @@ test("Received can add a piece the customer brought and drop one that did not co
   assert.equal(receivePayload(drafts).error, "price_required");
   const many = Array.from({ length: 21 }, () => ({ ...newLinePieceDraft("barrel"), price: "1" }));
   assert.equal(receivePayload(many).error, "too_many_pieces");
+  // Regression (browser check): the labels dialog after Received was handed
+  // a line with no pieces, so it read "Prints 2 labels: 1 piece × 2" for a
+  // three-piece load. The stub carries the pieces as they arrived.
+  const arrived = receivePayload([{ ...drafts[0] }, { ...drafts[1], price: "45" }, extra]).pieces;
+  const stub = receivedLineStub({ lineId: "l1", trackingCode: "CL-DCZDPT" }, arrived);
+  assert.equal(stub.pieceCount, 3);
+  assert.equal(stub.containerStatus, "waiting");
+  assert.equal(labelsPieceCount([stub]), 3);
+  assert.equal(containerLineTitle(stub), "1 barrel, 2 boxes");
   const history = requestHistory(row({ history: [{ atMs: 1, action: "pieces_changed", byName: "Awa", piecesAdded: 1, piecesRemoved: 2 }] }));
   assert.equal(history[0].label, "Pieces changed at Received");
   assert.equal(history[0].change, "+1 / −2");
