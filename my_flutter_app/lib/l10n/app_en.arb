@@ -7174,11 +7174,15 @@
   "prqErrAppCheck": "This app couldn’t be verified. Try again in a moment.",
   "prqErrPermission": "You don’t have access to this.",
   "prqErrGeneric": "That didn’t work. Try again.",
-  "prqReceiveFeeIncluded": "The prices include the pickup fee in the estimate: {fee}.",
-  "@prqReceiveFeeIncluded": {
-    "description": "Received sheet: a collected request's pickup fee is spread over the piece prices.",
+  "wpkErrPriceBelowPickupFee": "The price can't be less than the pickup fee.",
+  "@wpkErrPriceBelowPickupFee": {
+    "description": "setContainerLinePrice refusal: a collected request's line total may not go below its own pickup fee."
+  },
+  "wpkIncludesPickupFee": "Includes the pickup fee: {amount}",
+  "@wpkIncludesPickupFee": {
+    "description": "Payment sheet: the price of a collected request's line includes its own pickup fee (shown as its own amount, never spread into the piece prices).",
     "placeholders": {
-      "fee": {
+      "amount": {
         "type": "String"
       }
     }

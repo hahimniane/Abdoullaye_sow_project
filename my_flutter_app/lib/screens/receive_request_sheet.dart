@@ -65,9 +65,15 @@ class ReceiveRequestSheet extends StatefulWidget {
 }
 
 class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
+  // A collected request's pickup fee is its own field, prefilled from the
+  // estimate and inside the total, never in the piece prices (owner
+  // decision 2026-10-18); a request brought in has none.
   late final PiecesEditorController _pieces = PiecesEditorController(
     initial: receivePrefillPieces(widget.request),
     limit: requestMaxPieces,
+    pickupFeeCents: widget.request.isCollect
+        ? receivePrefillPickupFeeCents(widget.request)
+        : null,
   )..addListener(_edited);
 
   /// The total as the payment fields read it ("money received" needs a
@@ -102,7 +108,11 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
     super.dispose();
   }
 
-  ReceiveCheck get _check => checkReceive(_pieces.draftPieces);
+  ReceiveCheck get _check => checkReceive(
+    _pieces.draftPieces,
+    pickupFeeCents: _pieces.pickupFeeForRequest,
+    pickupFeeInvalid: _pieces.pickupFeeInvalid,
+  );
 
   void _syncTotal() {
     final check = _check;
@@ -176,7 +186,7 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
         _banner = check.reasons.isEmpty
             ? ''
             : requestReasonText(l10n, check.reasons.first) ??
-                containerErrorText(l10n, check.reasons.first);
+                  containerErrorText(l10n, check.reasons.first);
       });
       return;
     }
@@ -198,7 +208,12 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
       if (!mounted) return;
       AppHaptics.commit();
       Navigator.of(context).pop(
-        result.alreadyReceived ? result : result.withPieces(check.pieces),
+        result.alreadyReceived
+            ? result
+            : result.withPieces(
+                check.pieces,
+                pickupFeeCents: check.pickupFeeCents,
+              ),
       );
     } on RequestFailure catch (failure) {
       if (!mounted) return;
@@ -224,7 +239,6 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
     final l10n = AppLocalizations.of(context)!;
     final request = widget.request;
     final check = _check;
-    final fee = receivePickupFeeCents(request);
     return LotSheetShell(
       title: l10n.prqReceiveTitle,
       subtitle: l10n.prqReceiveSubtitle(request.code),
@@ -249,12 +263,6 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
                 ? requestReasonText(l10n, 'too_many_pieces')
                 : null,
           ),
-          if (fee > 0)
-            Text(
-              l10n.prqReceiveFeeIncluded(formatRequestCents(fee)),
-              key: const Key('receive-fee-included'),
-              style: const TextStyle(fontSize: 13, color: AppColors.muted),
-            ),
           const SizedBox(height: AppSpacing.sm),
           PiecesTotalLine(controller: _pieces),
           if (check.reasons.contains('price_required'))

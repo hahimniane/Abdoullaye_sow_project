@@ -244,6 +244,13 @@ List<String> validatePackagePrice(String raw, int paidCents) {
   return const [];
 }
 
+/// `setContainerLinePrice` refuses a total below a collected request's
+/// pickup fee (`price_below_pickup_fee`): the fee is inside the price and
+/// only what is above it is spread over the pieces. A cleared price (null)
+/// is not judged here.
+bool packagePriceBelowPickupFee(int? priceCents, int pickupFeeCents) =>
+    priceCents != null && pickupFeeCents > 0 && priceCents < pickupFeeCents;
+
 /// The server's checks on `recordContainerLinePayment`, in its order: a real
 /// amount, a price to pay against, never above the balance, a known method,
 /// and who took the money (as parking and lot payments ask). Mirrors

@@ -20,6 +20,7 @@ import 'package:my_flutter_app/services/waiting_packages.dart';
 import 'package:my_flutter_app/theme/app_motion.dart';
 import 'package:my_flutter_app/theme/app_theme.dart';
 import 'package:my_flutter_app/widgets/lot_sheets.dart';
+import 'package:my_flutter_app/widgets/package_money.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// The waiting-package surfaces as staff meet them: the register sheet and its
@@ -499,6 +500,90 @@ void main() {
       expect(find.text('Package updated.'), findsOneWidget);
     });
 
+    testWidgets("a collected request's pickup fee is its own field; the "
+        'total keeps it', (tester) async {
+      // Owner decision 2026-10-18: Barrel $90 · Box $40 · Pickup fee $20 ·
+      // Total $150, never spread into the piece prices.
+      final calls = _Calls();
+      final line = _waiting({
+        'kind': 'other',
+        'source': 'request',
+        'priceCents': 15000,
+        'pickupFeeCents': 2000,
+        'pieces': [
+          {'id': 'p1', 'kind': 'barrel', 'priceCents': 9000},
+          {'id': 'p2', 'kind': 'box', 'description': 'Clothes',
+            'priceCents': 4000},
+        ],
+      });
+      expect(line.pickupFeeCents, 2000);
+      expect(line.hasPickupFee, isTrue);
+      await _openSheet<WaitingPackageSaved>(tester, sheet(calls, existing: line));
+      expect(_field(tester, 'piece-price-0'), '90');
+      expect(_field(tester, 'piece-price-1'), '40');
+      expect(_field(tester, 'pieces-pickup-fee'), '20');
+      await _type(tester, 'pieces-pickup-fee', '25');
+      await _tap(tester, 'wpk-pay-on-arrival');
+      await _tap(tester, 'line-save-edit');
+      final sent = calls.of('updateContainerLine').single['line']
+          as Map<String, Object?>;
+      expect(sent['pickupFeeCents'], 2500);
+      expect(
+        (sent['pieces'] as List).cast<Map>().map((p) => p['priceCents']),
+        [9000, 4000],
+      );
+      // The total the price call carries is pieces + fee: nothing to spread.
+      expect(calls.of('setContainerLinePrice').single['priceCents'], 15500);
+    });
+
+    for (final (locale, text) in [
+      (const Locale('en'), r'Includes the pickup fee: $20.00'),
+      (const Locale('fr'), r'Comprend les frais de ramassage : $20.00'),
+    ]) {
+      testWidgets('the money line says the pickup fee inside the price '
+          '(${locale.languageCode})', (tester) async {
+        final line = _waiting({
+          'kind': 'other',
+          'priceCents': 15000,
+          'pickupFeeCents': 2000,
+          'pieces': [
+            {'id': 'p1', 'kind': 'barrel', 'priceCents': 9000},
+            {'id': 'p2', 'kind': 'box', 'description': 'Clothes',
+              'priceCents': 4000},
+          ],
+        });
+        await _pump(
+          tester,
+          PackageMoneyLine(
+            payment: packagePayment(line),
+            pickupFeeCents: line.pickupFeeCents,
+          ),
+          locale: locale,
+        );
+        expect(find.byKey(const Key('package-pickup-fee')), findsOneWidget);
+        expect(find.text(text), findsOneWidget);
+      });
+    }
+
+    testWidgets('a counter package has no pickup fee field', (tester) async {
+      final line = _waiting({
+        'priceCents': 4550,
+        'pieces': [
+          {'id': 'p1', 'kind': 'barrel', 'priceCents': 2275},
+          {'id': 'p2', 'kind': 'barrel', 'priceCents': 2275},
+        ],
+      });
+      expect(line.hasPickupFee, isFalse);
+      final calls = _Calls();
+      await _openSheet<WaitingPackageSaved>(tester, sheet(calls, existing: line));
+      expect(find.byKey(const Key('pieces-pickup-fee')), findsNothing);
+      await _type(tester, 'piece-price-1', '30');
+      await _tap(tester, 'line-save-edit');
+      final sent = calls.of('updateContainerLine').single['line']
+          as Map<String, Object?>;
+      expect(sent.containsKey('pickupFeeCents'), isFalse);
+    });
+
     testWidgets('pay on arrival alone goes through the price callable, total kept',
         (tester) async {
       final calls = _Calls();
@@ -754,6 +839,33 @@ void main() {
       // Now there is a price: the payment form appears and the chip says so.
       expect(find.byKey(const Key('pay-amount')), findsOneWidget);
       expect(find.text('Pay on arrival'), findsWidgets);
+    });
+
+    testWidgets("a collected request's price says it includes the pickup "
+        'fee, and may not go below it', (tester) async {
+      final calls = _Calls();
+      await _openSheet<void>(
+        tester,
+        sheet(
+          calls,
+          line: _waiting({
+            'kind': 'other',
+            'priceCents': 15000,
+            'pickupFeeCents': 2000,
+            'pieces': [
+              {'id': 'p1', 'kind': 'barrel', 'priceCents': 9000},
+              {'id': 'p2', 'kind': 'box', 'description': 'Clothes',
+                'priceCents': 4000},
+            ],
+          }),
+        ),
+      );
+      expect(find.text(r'Includes the pickup fee: $20.00'), findsOneWidget);
+      await _type(tester, 'pay-price', '15');
+      await _tap(tester, 'pay-save-price');
+      expect(find.text("The price can't be less than the pickup fee."),
+          findsOneWidget);
+      expect(calls.log, isEmpty);
     });
 
     testWidgets('a price below what was paid is refused, and so is rubbish',

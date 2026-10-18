@@ -645,7 +645,7 @@ void main() {
       );
     });
 
-    test("a collection's pickup fee rides inside the piece prices", () {
+    test("a collection's pickup fee is its own amount beside the pieces", () {
       // The same numbers as functions/request_receive.js and the console.
       final request = PackageRequest.fromMap('r1', _doc({
         'handoff': 'collect',
@@ -664,17 +664,46 @@ void main() {
           'pickupFeeCents': 2501,
         },
       }));
-      expect(receivePrefillCents(request), {'p1': 16251, 'p2': 5750});
-      expect(receivePickupFeeCents(request), 2501);
-      final total = checkReceive([
+      // Owner decision 2026-10-18: the same numbers as the server's and the
+      // console's suites - the pieces open on the estimate's own prices, the
+      // fee is the line's own amount beside them.
+      expect(receivePrefillCents(request), {'p1': 15000, 'p2': 4500});
+      expect(receivePrefillPickupFeeCents(request), 2501);
+      final drafts = [
         for (final p in receivePrefillPieces(request)) p.toMap(),
-      ]).totalCents;
-      expect(total, 22001);
+      ];
+      expect(checkReceive(drafts).totalCents, 19500);
+      final check = checkReceive(drafts, pickupFeeCents: 2501);
+      expect(check.totalCents, 22001);
+      expect(check.pickupFeeCents, 2501);
+      final body = receivePayload(
+        businessId: 'b1',
+        requestId: 'r1',
+        check: check,
+      );
+      expect(body['pickupFeeCents'], 2501);
+      expect(
+        [for (final p in body['pieces'] as List) (p as Map)['priceCents']],
+        [15000, 4500],
+      );
+      expect(
+        checkReceive(drafts, pickupFeeCents: 0, pickupFeeInvalid: true)
+            .reasons,
+        ['pickup_fee_invalid'],
+      );
       final bring = PackageRequest.fromMap('r1', _doc({
         'estimate': {'version': 1, 'totalCents': 1, 'pickupFeeCents': 500},
       }));
-      expect(receivePickupFeeCents(bring), 0);
+      expect(receivePrefillPickupFeeCents(bring), 0);
       expect(receivePrefillCents(bring), {'p1': 12000, 'p2': null});
+      expect(
+        receivePayload(
+          businessId: 'b1',
+          requestId: 'r1',
+          check: checkReceive(drafts),
+        ).containsKey('pickupFeeCents'),
+        isFalse,
+      );
     });
   });
 

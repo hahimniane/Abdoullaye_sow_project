@@ -245,7 +245,16 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
   }
 
   Future<void> _savePrice() async {
-    final problems = validatePackagePrice(_price.text, _priceFloor);
+    final problems = [
+      ...validatePackagePrice(_price.text, _priceFloor),
+      // A collected request's pickup fee is inside the price: the server
+      // spreads only what is above it over the pieces.
+      if (packagePriceBelowPickupFee(
+        readPackagePrice(_price.text).cents,
+        widget.line.pickupFeeCents,
+      ))
+        'price_below_pickup_fee',
+    ];
     if (problems.isNotEmpty) {
       AppHaptics.refuse();
       setState(() => _errors = problems.toSet());
@@ -462,16 +471,25 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
             onChanged: (_) => setState(() {
               _errors = {..._errors}
                 ..remove('price_invalid')
-                ..remove('price_below_paid');
+                ..remove('price_below_paid')
+                ..remove('price_below_pickup_fee');
             }),
             decoration: InputDecoration(
               labelText: l10n.wpkPrice,
               prefixText: r'$ ',
-              helperText: _group.isSplit
-                  ? l10n.pcsPartPriceHint
-                  : l10n.wpkPriceHint,
+              helperText: widget.line.pickupFeeCents > 0
+                  ? l10n.wpkIncludesPickupFee(
+                      formatLotCents(widget.line.pickupFeeCents),
+                    )
+                  : (_group.isSplit
+                        ? l10n.pcsPartPriceHint
+                        : l10n.wpkPriceHint),
               helperMaxLines: 3,
-              errorText: errorFor(['price_invalid', 'price_below_paid']),
+              errorText: errorFor([
+                'price_invalid',
+                'price_below_paid',
+                'price_below_pickup_fee',
+              ]),
               errorMaxLines: 3,
             ),
           ),

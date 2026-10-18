@@ -332,6 +332,61 @@ void main() {
     });
   }
 
+  // Owner decision 2026-10-18: a collected package's pickup fee is its own
+  // row, once, inside the final price (Barrel $90 · Box $40 · Pickup fee $20
+  // · Total $150).
+  for (final (locale, label, amount) in [
+    (const Locale('en'), 'Pickup fee', r'$20.00'),
+    (const Locale('fr'), 'Frais de ramassage', r'$20.00'),
+  ]) {
+    testWidgets('a collected package shows its pickup fee as its own row '
+        '(${locale.languageCode})', (tester) async {
+      final service = _FakeGuestTrackingService(
+        (_) async => GuestTrackingResult.fromMap({
+          'version': 1,
+          'found': true,
+          'record': {
+            'trackingCode': 'CL-K7M4P2',
+            'service': 'container',
+            'stage': 'waiting_container',
+            'payment': {
+              'priceCents': 15000,
+              'pickupFeeCents': 2000,
+              'paidCents': 5000,
+              'balanceCents': 10000,
+            },
+          },
+        }),
+      );
+      await _pumpLookup(tester, service, initialCode: 'CL-K7M4P2',
+          locale: locale);
+      await tester.pumpAndSettle();
+      final row = find.byKey(const Key('guest-tracking-pickup-fee'));
+      expect(row, findsOneWidget);
+      expect(tester.widget<Text>(row).data, contains(amount.substring(1)));
+      expect(find.text(label), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  test('no pickup fee, or an older server, adds no row and never exceeds '
+      'the price', () {
+    GuestTrackingRecord parse(Map<String, Object?> payment) =>
+        GuestTrackingRecord.fromMap({
+          'trackingCode': 'CL-K7M4P2',
+          'service': 'container',
+          'stage': 'booked',
+          'payment': payment,
+        });
+    expect(parse({'priceCents': 15000}).payment!.pickupFeeCents, 0);
+    expect(
+      parse({'priceCents': 1000, 'pickupFeeCents': 5000})
+          .payment!
+          .pickupFeeCents,
+      1000,
+    );
+  });
+
   test('a sailed container line reads its shipping details, nothing else',
       () {
     GuestTrackingRecord parse(String service, Object? shipping) =>

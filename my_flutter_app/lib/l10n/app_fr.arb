@@ -7174,11 +7174,15 @@
   "prqErrAppCheck": "L’appli n’a pas pu être vérifiée. Réessayez dans un instant.",
   "prqErrPermission": "Vous n’avez pas accès à cela.",
   "prqErrGeneric": "Cela n’a pas fonctionné. Réessayez.",
-  "prqReceiveFeeIncluded": "Les prix incluent les frais de ramassage de l’estimation : {fee}.",
-  "@prqReceiveFeeIncluded": {
-    "description": "Received sheet: a collected request's pickup fee is spread over the piece prices.",
+  "wpkErrPriceBelowPickupFee": "Le prix ne peut pas être inférieur aux frais de ramassage.",
+  "@wpkErrPriceBelowPickupFee": {
+    "description": "setContainerLinePrice refusal: a collected request's line total may not go below its own pickup fee."
+  },
+  "wpkIncludesPickupFee": "Comprend les frais de ramassage : {amount}",
+  "@wpkIncludesPickupFee": {
+    "description": "Payment sheet: the price of a collected request's line includes its own pickup fee (shown as its own amount, never spread into the piece prices).",
     "placeholders": {
-      "fee": {
+      "amount": {
         "type": "String"
       }
     }

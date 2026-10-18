@@ -261,6 +261,7 @@ class LineGroupSummary implements _Mappable {
     required this.partCount,
     required this.pieceCount,
     required this.priceCents,
+    this.pickupFeeCents = 0,
     required this.paidCents,
     required this.balanceCents,
     required this.payOnArrival,
@@ -271,6 +272,10 @@ class LineGroupSummary implements _Mappable {
   final int partCount;
   final int pieceCount;
   final int? priceCents;
+
+  /// The part of [priceCents] that is a collected request's pickup fee (on
+  /// the root): told apart, never added again.
+  final int pickupFeeCents;
   final int paidCents;
   final int balanceCents;
   final bool payOnArrival;
@@ -285,6 +290,7 @@ class LineGroupSummary implements _Mappable {
     'partCount': partCount,
     'pieceCount': pieceCount,
     'priceCents': priceCents,
+    'pickupFeeCents': pickupFeeCents,
     'paidCents': paidCents,
     'balanceCents': balanceCents,
     'payOnArrival': payOnArrival,
@@ -548,6 +554,60 @@ int? piecesTotalCents(Object? pieces) {
   return priced && total > 0 ? math.min(total, _maxCents) : null;
 }
 
+/// A pickup fee as stored on a line or typed by staff: whole cents, zero
+/// allowed. Anything else (absent, negative, a fraction) reads as no fee.
+int pickupFeeOf(Object? value) {
+  if (!_given(value)) return 0;
+  final n = _number(value);
+  return _isInteger(n) && n >= 0 && n <= _maxCents ? n.toInt() : 0;
+}
+
+/// `["pickup_fee_invalid"]` unless a typed fee is whole cents >= 0 (absent:
+/// no fee, fine).
+List<String> pickupFeeErrors(Object? value) {
+  if (value == null) return const [];
+  final n = value is String && value.trim().isEmpty
+      ? double.nan
+      : _number(value);
+  return _isInteger(n) && n >= 0 && n <= _maxCents
+      ? const []
+      : const ['pickup_fee_invalid'];
+}
+
+/// A line's own pickup fee (a collected request's): a line with pieces may
+/// carry one beside its pieces; a car or a legacy line never does. Never
+/// spread into the piece prices; a split never moves it off the root.
+int linePickupFeeCents(Object? line) {
+  final row = _asRow(line);
+  return lineHasPieces(row) ? pickupFeeOf(row['pickupFeeCents']) : 0;
+}
+
+/// Whether a line carries a pickup fee field at all: a line with pieces
+/// received from a collected request (the fee may be 0), never a counter
+/// line, a car, a legacy line or a part split off. The edit forms show the
+/// "Pickup fee" field only for these.
+bool lineHasPickupFee(Object? line) {
+  final row = _asRow(line);
+  return lineHasPieces(row) && _given(row['pickupFeeCents']);
+}
+
+/// The line total: the pieces' prices plus the line's pickup fee. Null
+/// while no piece has a price (a fee alone is not a price for the load), or
+/// when it all adds up to nothing.
+int? lineTotalCents(Object? pieces, [Object? pickupFeeCents = 0]) {
+  var total = 0;
+  var priced = false;
+  for (final piece in _list(pieces)) {
+    final cents = piecePriceOf(_asRow(piece)['priceCents']);
+    if (cents == null) continue;
+    priced = true;
+    total += cents;
+  }
+  if (!priced) return null;
+  total += pickupFeeOf(pickupFeeCents);
+  return total > 0 ? math.min(total, _maxCents) : null;
+}
+
 const _kindNames = {
   'barrel': 'Barrel',
   'box': 'Box',
@@ -580,16 +640,20 @@ PiecesSummary piecesSummaryFields(Object? pieces) {
 }
 
 /// Everything a line stores about its pieces, from validated pieces: the
-/// pieces, the counts, the summary for old apps, the total, and - for a
-/// single piece - its size as the line's size.
-Map<String, Object?> piecesLineFields(Object? raw) {
+/// pieces, the counts, the summary for old apps, the pickup fee when the
+/// line has one ([pickupFeeCents] null: no such field), the total (pieces +
+/// fee, [lineTotalCents]), and - for a single piece - its size as the line's
+/// size.
+Map<String, Object?> piecesLineFields(Object? raw, [Object? pickupFeeCents]) {
   final pieces = normalizePieces(raw);
   final single = pieces.length == 1 ? pieces[0].sizeIn : null;
+  final fee = pickupFeeCents == null ? 0 : pickupFeeOf(pickupFeeCents);
   return {
     'pieces': [for (final p in pieces) p.toMap()],
     ...pieceCounts(pieces).toMap(),
     ...piecesSummaryFields(pieces).toMap(),
-    'priceCents': piecesTotalCents(pieces),
+    if (pickupFeeCents != null) 'pickupFeeCents': fee,
+    'priceCents': lineTotalCents(pieces, fee),
     'lengthIn': single?.l,
     'widthIn': single?.w,
     'heightIn': single?.h,
@@ -723,6 +787,7 @@ LineGroupSummary lineGroupSummary(Object? entries, Object? rootId) {
   var total = 0;
   var priced = false;
   var paid = 0;
+  var fee = 0;
   var payOnArrival = false;
   for (final (:id, :line) in rows) {
     if (seen.contains(id)) continue;
@@ -731,6 +796,8 @@ LineGroupSummary lineGroupSummary(Object? entries, Object? rootId) {
     if (price != null) {
       priced = true;
       total += price;
+      // Inside that line's price already: told apart, never added again.
+      fee += math.min(linePickupFeeCents(line), price);
     }
     if (id == root) {
       final raw = _number(
@@ -762,6 +829,7 @@ LineGroupSummary lineGroupSummary(Object? entries, Object? rootId) {
     partCount: parts.length,
     pieceCount: parts.fold(0, (sum, part) => sum + part.pieceCount),
     priceCents: priceCents,
+    pickupFeeCents: priceCents == null ? 0 : math.min(fee, priceCents),
     paidCents: paid,
     balanceCents: priceCents == null ? 0 : math.max(0, priceCents - paid),
     payOnArrival: payOnArrival,

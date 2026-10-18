@@ -30,7 +30,7 @@ import {
   groupPayment,
   partHintText,
 } from "@/lib/waiting-packages";
-import { groupRootId, partIndexOf } from "@/lib/line-pieces";
+import { groupRootId, linePickupFeeCents, partIndexOf } from "@/lib/line-pieces";
 import {
   adminHasOperationsAccess,
   packageStaffScope,
@@ -216,6 +216,8 @@ export function PackageStaffView({
     return group ? { ...model, payment: groupPayment(group) } : model;
   }, [line, container, viewLang, group]);
   const partHint = group && line ? partHintText(group, line, viewLang) : "";
+  // A collected request's pickup fee, inside the price: its own row.
+  const pickupFee = group ? group.pickupFeeCents : line ? linePickupFeeCents(line) : 0;
   const [labelsOpen, setLabelsOpen] = useState(false);
 
   // Waiting on an admin's role, or nobody this view is for.
@@ -305,6 +307,7 @@ export function PackageStaffView({
             {view.size && <div><span>Package size</span><b data-no-translate>{view.size.dimensionsText}</b><small data-no-translate>{view.size.volumeText}</small></div>}
             {view.payment.priceCents !== null && (
               <>
+                {pickupFee > 0 && <div><span>Pickup fee</span><b data-no-translate>{moneyText(pickupFee)}</b></div>}
                 <div><span>Price</span><b data-no-translate>{moneyText(view.payment.priceCents)}</b></div>
                 <div><span>Paid</span><b data-no-translate>{moneyText(view.payment.paidCents)}</b></div>
                 <div><span>Still owed</span><b data-no-translate>{moneyText(view.payment.balanceCents)}</b></div>

@@ -14693,7 +14693,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get prqErrGeneric => 'Cela n’a pas fonctionné. Réessayez.';
 
   @override
-  String prqReceiveFeeIncluded(String fee) {
-    return 'Les prix incluent les frais de ramassage de l’estimation : $fee.';
+  String get wpkErrPriceBelowPickupFee =>
+      'Le prix ne peut pas être inférieur aux frais de ramassage.';
+
+  @override
+  String wpkIncludesPickupFee(String amount) {
+    return 'Comprend les frais de ramassage : $amount';
   }
 }

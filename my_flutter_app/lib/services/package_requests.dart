@@ -1408,38 +1408,21 @@ class EstimateSent {
 // ---------------------------------------------------------------------------
 
 /// What each request piece is priced at when the Received sheet opens: the
-/// estimate's price (else the piece's own `estimateCents`), plus - for a
-/// collected request - the estimate's pickup fee spread over the priced
-/// pieces, the odd cents on the first. A line's total is the sum of its
-/// pieces (phase 1), so the fee rides inside them. Mirrors
+/// estimate's price, else the piece's own `estimateCents`. The pickup fee is
+/// NOT in here: it is the line's own amount beside the pieces
+/// ([receivePrefillPickupFeeCents]; owner decision 2026-10-18), so the bill
+/// reads "Barrel $90 · Box $40 · Pickup fee $20 · Total $150". Mirrors
 /// `receivePrefillCents` in functions/request_receive.js and the console's
 /// package-requests.ts.
-Map<String, int?> receivePrefillCents(PackageRequest request) {
-  final prices = <String, int?>{
-    for (final piece in request.pieces) piece.id: request.priceOf(piece),
-  };
-  final fee = request.isCollect ? (request.estimate?.pickupFeeCents ?? 0) : 0;
-  final priced = [
-    for (final e in prices.entries)
-      if (e.value != null) e.key,
-  ];
-  if (fee > 0 && priced.isNotEmpty) {
-    final shares = lp.distributeCents(fee, priced.length);
-    for (var i = 0; i < priced.length; i++) {
-      prices[priced[i]] = prices[priced[i]]! + (shares[i] ?? 0);
-    }
-  }
-  return prices;
-}
+Map<String, int?> receivePrefillCents(PackageRequest request) => {
+  for (final piece in request.pieces) piece.id: request.priceOf(piece),
+};
 
-/// The pickup fee already inside the prefilled prices (shown as a note), 0
-/// unless a collected request's estimate names one and a piece is priced.
-int receivePickupFeeCents(PackageRequest request) {
-  if (!request.isCollect) return 0;
-  final fee = request.estimate?.pickupFeeCents ?? 0;
-  if (fee <= 0) return 0;
-  return request.pieces.any((p) => request.priceOf(p) != null) ? fee : 0;
-}
+/// The pickup fee the Received sheet opens on: the estimate's, for a
+/// collected request; a request brought in has none (and no field). Mirrors
+/// `receivePrefillPickupFeeCents` in functions/request_receive.js.
+int receivePrefillPickupFeeCents(PackageRequest request) =>
+    request.isCollect ? lp.pickupFeeOf(request.estimate?.pickupFeeCents) : 0;
 
 /// A request's pieces as phase 1's line pieces, so staff screens say what a
 /// request holds the way they say what a line holds (`containerPiecesSummary`)
@@ -1470,6 +1453,7 @@ class ReceiveCheck {
     required this.pieces,
     required this.reasons,
     required this.totalCents,
+    this.pickupFeeCents,
   });
 
   /// The pieces as `receivePackageRequest` takes them: a request piece by
@@ -1481,16 +1465,26 @@ class ReceiveCheck {
   /// `too_many_pieces` (a request holds 20) and `price_required`.
   final List<String> reasons;
 
-  /// The line's price: the sum of the pieces, null while none is priced.
+  /// The line's price: the pieces plus the pickup fee, null while no piece
+  /// is priced.
   final int? totalCents;
+
+  /// A collected request's pickup fee as sent (its own amount); null for a
+  /// request brought in, which sends none.
+  final int? pickupFeeCents;
 
   bool get ok => reasons.isEmpty;
 }
 
 /// The checks `receivePackageRequest` makes on the editor's pieces
 /// ([lp.pieceErrors] for each piece, at most [requestMaxPieces], all
-/// priced or none).
-ReceiveCheck checkReceive(List<Map<String, Object?>> drafts) {
+/// priced or none) and, for a collected request, on its pickup fee
+/// ([pickupFeeCents]; [pickupFeeInvalid] when what was typed is not money).
+ReceiveCheck checkReceive(
+  List<Map<String, Object?>> drafts, {
+  int? pickupFeeCents,
+  bool pickupFeeInvalid = false,
+}) {
   final reasons = <String>[...lp.pieceErrors(drafts, requestMaxPieces)];
   if (reasons.remove('pieces_too_many')) reasons.add('too_many_pieces');
   final pieces = <Map<String, Object?>>[];
@@ -1508,10 +1502,12 @@ ReceiveCheck checkReceive(List<Map<String, Object?>> drafts) {
   if (reasons.isEmpty && priced > 0 && priced < pieces.length) {
     reasons.add('price_required');
   }
+  if (pickupFeeInvalid) reasons.add('pickup_fee_invalid');
   return ReceiveCheck(
     pieces: pieces,
     reasons: reasons,
-    totalCents: lp.piecesTotalCents(pieces),
+    totalCents: lp.lineTotalCents(pieces, pickupFeeCents ?? 0),
+    pickupFeeCents: pickupFeeCents,
   );
 }
 
@@ -1526,6 +1522,7 @@ Map<String, Object?> receivePayload({
   'businessId': businessId,
   'requestId': requestId,
   'pieces': check.pieces,
+  'pickupFeeCents': ?check.pickupFeeCents,
   if (payOnArrival) 'payOnArrival': true,
   'payment': ?payment,
 };
@@ -1537,6 +1534,7 @@ class RequestReceived {
     this.paidCents = 0,
     this.alreadyReceived = false,
     this.pieces = const [],
+    this.pickupFeeCents,
   });
 
   factory RequestReceived.fromResponse(Object? data) {
@@ -1559,14 +1557,20 @@ class RequestReceived {
   /// counts what actually arrived.
   final List<Map<String, Object?>> pieces;
 
-  RequestReceived withPieces(List<Map<String, Object?>> sent) =>
-      RequestReceived(
-        lineId: lineId,
-        trackingCode: trackingCode,
-        paidCents: paidCents,
-        alreadyReceived: alreadyReceived,
-        pieces: sent,
-      );
+  /// The pickup fee the sheet sent with them (a collected request's).
+  final int? pickupFeeCents;
+
+  RequestReceived withPieces(
+    List<Map<String, Object?>> sent, {
+    int? pickupFeeCents,
+  }) => RequestReceived(
+    lineId: lineId,
+    trackingCode: trackingCode,
+    paidCents: paidCents,
+    alreadyReceived: alreadyReceived,
+    pieces: sent,
+    pickupFeeCents: pickupFeeCents,
+  );
 }
 
 // ---------------------------------------------------------------------------

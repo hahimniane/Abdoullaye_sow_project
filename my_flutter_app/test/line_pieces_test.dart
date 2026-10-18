@@ -53,7 +53,14 @@ final Map<String, Object? Function(List<Object?>)> _rules = {
   'lineCounts': (a) => lineCounts(a[0]),
   'piecesTotalCents': (a) => piecesTotalCents(a[0]),
   'piecesSummaryFields': (a) => piecesSummaryFields(a[0]),
-  'piecesLineFields': (a) => piecesLineFields(a[0]),
+  'piecesLineFields': (a) =>
+      a.length > 1 ? piecesLineFields(a[0], a[1]) : piecesLineFields(a[0]),
+  'pickupFeeOf': (a) => pickupFeeOf(a[0]),
+  'pickupFeeErrors': (a) => pickupFeeErrors(a[0]),
+  'linePickupFeeCents': (a) => linePickupFeeCents(a[0]),
+  'lineHasPickupFee': (a) => lineHasPickupFee(a[0]),
+  'lineTotalCents': (a) =>
+      a.length > 1 ? lineTotalCents(a[0], a[1]) : lineTotalCents(a[0]),
   'pieceSummaryText': (a) => a.length > 1
       ? pieceSummaryText(a[0], a[1] as String)
       : pieceSummaryText(a[0]),

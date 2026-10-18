@@ -572,9 +572,10 @@ void main() {
       ]);
     });
 
-    testWidgets("a collection's pickup fee is inside the prices",
-        (tester) async {
-      await open(
+    testWidgets("a collection's pickup fee is its own field, beside the "
+        'prices', (tester) async {
+      // Owner decision 2026-10-18: never spread into the piece prices.
+      final opened = await open(
         tester,
         _req('d', 'confirmed', {
           'handoff': 'collect',
@@ -583,9 +584,48 @@ void main() {
       );
       expect(totalShown(tester), r'$175.00');
       expect(
-        find.text(r'The prices include the pickup fee in the estimate: $10.00.'),
-        findsOneWidget,
+        tester
+            .widget<TextField>(find.byKey(const Key('piece-price-0')))
+            .controller!
+            .text,
+        '120',
       );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('pieces-pickup-fee')))
+            .controller!
+            .text,
+        '10',
+      );
+      expect(find.byKey(const Key('pieces-pickup-fee-row')), findsOneWidget);
+      expect(find.textContaining('include the pickup fee'), findsNothing);
+      await _type(tester, 'pieces-pickup-fee', '20');
+      expect(totalShown(tester), r'$185.00');
+      await _type(tester, 'pieces-pickup-fee', '-1');
+      await _tap(tester, 'receive-save');
+      expect(opened.fake.of('receivePackageRequest'), isEmpty);
+      expect(find.text('Enter a valid pickup fee.'), findsWidgets);
+      await _type(tester, 'pieces-pickup-fee', '20');
+      await _tap(tester, 'receive-save');
+      final body = opened.fake.of('receivePackageRequest').single;
+      expect(body['pickupFeeCents'], 2000);
+      expect(
+        [for (final p in body['pieces'] as List) (p as Map)['priceCents']],
+        [12000, 4500],
+      );
+    });
+
+    testWidgets('a request brought in has no pickup fee field and sends '
+        'none', (tester) async {
+      final opened = await open(
+        tester,
+        _req('d', 'confirmed', {'estimate': _estimate(1, 16500)}),
+      );
+      expect(find.byKey(const Key('pieces-pickup-fee')), findsNothing);
+      expect(find.byKey(const Key('pieces-pickup-fee-row')), findsNothing);
+      await _tap(tester, 'receive-save');
+      final body = opened.fake.of('receivePackageRequest').single;
+      expect(body.containsKey('pickupFeeCents'), isFalse);
     });
 
     testWidgets('some priced and some not is refused', (tester) async {

@@ -113,6 +113,10 @@ const containerRefusalCodes = <String>[
   'line_has_payments',
   'price_invalid',
   'price_below_paid',
+  // A collected request's line: the price may not go below its own pickup
+  // fee, and the fee must be whole cents (docs/PACKAGE_REQUESTS.md §8.6).
+  'price_below_pickup_fee',
+  'pickup_fee_invalid',
   'price_required',
   'amount_required',
   'amount_too_large',
@@ -482,6 +486,8 @@ class ContainerLineDraft {
     this.priceCents,
     this.payOnArrival = false,
     this.pieces,
+    this.pickupFeeCents,
+    this.pickupFeeInvalid = false,
   });
 
   final String kind;
@@ -527,13 +533,26 @@ class ContainerLineDraft {
   /// names it). Null for a car, and for the old kind/quantity form.
   final List<Map<String, Object?>>? pieces;
 
+  /// A collected request's pickup fee in whole cents, for a line that has
+  /// one ([ContainerLine.hasPickupFee]); null for every other line, which
+  /// sends none. Its own amount beside the pieces, inside the total (owner
+  /// decision 2026-10-18).
+  final int? pickupFeeCents;
+
+  /// The fee field holds something that is not money (refused, never
+  /// guessed).
+  final bool pickupFeeInvalid;
+
   /// The line is described by its pieces. Mirrors `linesInPiecesMode`.
   bool get usesPieces =>
       _text(kind, 20) != containerLineKindCar && pieces != null;
 
-  /// What the customer owes for it: the sum of the priced pieces, or the
-  /// typed price of a car or an old-form line.
-  int? get totalCents => usesPieces ? piecesTotalCents(pieces) : priceCents;
+  /// What the customer owes for it: the priced pieces plus the line's own
+  /// pickup fee (`lineTotalCents`), or the typed price of a car or an
+  /// old-form line.
+  int? get totalCents => usesPieces
+      ? lineTotalCents(normalizePieces(pieces), pickupFeeCents ?? 0)
+      : priceCents;
 }
 
 /// Error codes. Mirrors `validateContainerLine`: a line with pieces is
@@ -548,6 +567,7 @@ List<String> validateContainerLine(ContainerLineDraft input) {
 
   if (pieced) {
     errors.addAll(pieceErrors(input.pieces));
+    if (input.pickupFeeInvalid) errors.add('pickup_fee_invalid');
   } else if (kind == containerLineKindCar) {
     final vin = _text(input.vinNumber, containerMaxVin).toUpperCase();
     if (vin.length < containerMinVin) errors.add('vin_required');
@@ -572,9 +592,9 @@ List<String> validateContainerLine(ContainerLineDraft input) {
     _contactPhoneErrors(input.customerPhone, input.receiverPhone, owner),
   );
   if (pieced) {
-    // Sizes are each piece's own; the price is the sum of the pieces.
-    errors.addAll(packagePriceErrors(
-        piecesTotalCents(normalizePieces(input.pieces))));
+    // Sizes are each piece's own; the price is the sum of the pieces plus
+    // the line's own pickup fee.
+    errors.addAll(packagePriceErrors(input.totalCents));
   } else {
     errors.addAll(packageSizeErrors(
       input.lengthIn,
@@ -688,6 +708,8 @@ Map<String, dynamic> containerLineRecord(ContainerLineDraft input) {
       'quantity': summary.quantity,
       'description': summary.description,
       'pieces': [for (final p in pieces) p.toMap()],
+      if (input.pickupFeeCents != null)
+        'pickupFeeCents': pickupFeeOf(input.pickupFeeCents),
       'ownerKind': owner,
       ..._containerLineContacts(
         owner: owner,
@@ -837,6 +859,8 @@ class ContainerLine {
     this.paidCents = 0,
     this.payOnArrival = false,
     this.pieces,
+    this.pickupFeeCents = 0,
+    this.hasPickupFee = false,
     this.allPieces = const [],
     this.counts = const PieceCounts(),
     this.source = 'counter',
@@ -907,6 +931,15 @@ class ContainerLine {
   /// The line's own pieces as stored; null for a car and for a line in the
   /// old kind/quantity form (see [allPieces]).
   final List<LinePiece>? pieces;
+
+  /// A collected request's pickup fee: its own amount beside the pieces,
+  /// inside [priceCents] (never spread into the piece prices). 0 for none.
+  final int pickupFeeCents;
+
+  /// The line has its own pickup fee field (`lineHasPickupFee`): a line
+  /// received from a collected request. The edit form offers the fee only
+  /// then.
+  final bool hasPickupFee;
 
   /// Every piece, old lines included, the way every reader sees them
   /// (`linePieces`): a car is one car piece, `{barrels, 4}` four barrels.
@@ -983,6 +1016,8 @@ class ContainerLine {
       paidCents: _paidCents(d['paidCents']),
       payOnArrival: d['payOnArrival'] == true,
       pieces: lineHasPieces(d) ? all : null,
+      pickupFeeCents: linePickupFeeCents(d),
+      hasPickupFee: lineHasPickupFee(d),
       allPieces: all,
       counts: pieceCounts(all),
       source: lineSourceOf(d['source']),
@@ -998,6 +1033,7 @@ class ContainerLine {
         'kind': kind,
         'quantity': quantity,
         'pieces': pieces == null ? null : [for (final p in pieces!) p.toMap()],
+        if (hasPickupFee) 'pickupFeeCents': pickupFeeCents,
         'rootLineId': rootLineId,
         'partIndex': partIndex,
         'trackingCode': trackingCode,

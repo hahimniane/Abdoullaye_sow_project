@@ -89,11 +89,16 @@ class GuestTrackingPart {
 class GuestTrackingPayment {
   const GuestTrackingPayment({
     this.priceCents,
+    this.pickupFeeCents = 0,
     this.paidCents = 0,
     this.balanceCents = 0,
   });
 
   final int? priceCents;
+
+  /// A collected package's pickup fee, inside [priceCents]: its own row on
+  /// the page (0 for none; an older server sends none).
+  final int pickupFeeCents;
   final int paidCents;
   final int balanceCents;
 
@@ -102,6 +107,13 @@ class GuestTrackingPayment {
 
 int _wholeCents(Object? value) =>
     value is num && value.isFinite && value > 0 ? value.round() : 0;
+
+/// A pickup fee never reads larger than the price it is inside.
+int _feeWithin(Object? value, int? priceCents) {
+  final fee = _wholeCents(value);
+  if (priceCents == null) return 0;
+  return fee > priceCents ? priceCents : fee;
+}
 
 int? _priceOrNull(Object? value) =>
     value is num && value.isFinite && value > 0 ? value.round() : null;
@@ -176,6 +188,10 @@ class GuestTrackingRecord {
       payment: container && rawPayment is Map
           ? GuestTrackingPayment(
               priceCents: _priceOrNull(rawPayment['priceCents']),
+              pickupFeeCents: _feeWithin(
+                rawPayment['pickupFeeCents'],
+                _priceOrNull(rawPayment['priceCents']),
+              ),
               paidCents: _wholeCents(rawPayment['paidCents']),
               balanceCents: _wholeCents(rawPayment['balanceCents']),
             )

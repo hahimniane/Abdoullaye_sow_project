@@ -626,7 +626,10 @@ class _GuestParts extends StatelessWidget {
                       Text(
                         [
                           guestTrackingStageLabel(
-                              l10n, record.service, part.stage),
+                            l10n,
+                            record.service,
+                            part.stage,
+                          ),
                           if (part.pieceCount > 0)
                             l10n.pcsPieceCount(part.pieceCount),
                         ].join(' · '),
@@ -664,6 +667,13 @@ class _GuestPayment extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context).textTheme;
     final rows = <(String, String, Key)>[
+      // A collected package's pickup fee: its own row, inside the price.
+      if (payment.pickupFeeCents > 0)
+        (
+          l10n.prqPickupFee,
+          formatLotCents(payment.pickupFeeCents),
+          const Key('guest-tracking-pickup-fee'),
+        ),
       (
         l10n.pcsTrackingPrice,
         formatLotCents(payment.priceCents ?? 0),

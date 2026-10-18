@@ -66,10 +66,15 @@ class PackageMoneyLine extends StatelessWidget {
     super.key,
     required this.payment,
     this.alwaysShow = false,
+    this.pickupFeeCents = 0,
   });
 
   final PackagePayment payment;
   final bool alwaysShow;
+
+  /// A collected request's pickup fee inside the price, said as its own
+  /// amount (0: nothing to say).
+  final int pickupFeeCents;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +109,12 @@ class PackageMoneyLine extends StatelessWidget {
             Text(
               l10n.wpkStillOwed(formatLotCents(balance)),
               key: const Key('package-still-owed'),
+              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+          if (price != null && pickupFeeCents > 0)
+            Text(
+              l10n.wpkIncludesPickupFee(formatLotCents(pickupFeeCents)),
+              key: const Key('package-pickup-fee'),
               style: const TextStyle(fontSize: 12, color: AppColors.muted),
             ),
         ],

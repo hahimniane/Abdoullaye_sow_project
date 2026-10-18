@@ -683,7 +683,10 @@ class PackageResultView extends StatelessWidget {
                     payment: group == null
                         ? packagePayment(line)
                         : groupPayment(group!),
-                    alwaysShow: true),
+                    alwaysShow: true,
+                    pickupFeeCents: group == null
+                        ? line.pickupFeeCents
+                        : group!.pickupFeeCents),
               ],
             ),
           ),

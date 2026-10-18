@@ -207,6 +207,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
             received.pieces.isNotEmpty
                 ? received.pieces
                 : [for (final p in requestLinePieces(request)) p.toMap()],
+            received.pickupFeeCents,
           ),
           'customerName': request.senderName,
           'customerPhone': request.senderPhone,
@@ -1058,6 +1059,9 @@ class WaitingPackageCard extends StatelessWidget {
                   PackageMoneyLine(
                     payment: g == null ? packagePayment(line) : groupPayment(g),
                     alwaysShow: true,
+                    pickupFeeCents: g == null
+                        ? line.pickupFeeCents
+                        : g.pickupFeeCents,
                   ),
                   if (meta.isNotEmpty)
                     Padding(

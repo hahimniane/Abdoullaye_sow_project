@@ -102,11 +102,23 @@ class PiecesEditorController extends ChangeNotifier {
   /// [limit] caps how many pieces can be added: [maxPieces] at the counter,
   /// fewer where the server holds a smaller cap (a request's 20 at
   /// Received).
+  ///
+  /// [pickupFeeCents] opens the "Pickup fee" field on that amount: a
+  /// collected request's fee, its own amount beside the pieces and inside
+  /// the total, never spread into the piece prices (owner decision
+  /// 2026-10-18). Null: the line has none and no field shows.
   PiecesEditorController({
     Iterable<LinePiece> initial = const [],
     String kind = 'barrel',
     this.limit = maxPieces,
-  }) {
+    int? pickupFeeCents,
+  }) : hasPickupFee = pickupFeeCents != null,
+       pickupFee = TextEditingController(
+         text: pickupFeeCents == null
+             ? ''
+             : invoiceCentsToInput(pickupFeeCents),
+       ) {
+    pickupFee.addListener(notifyListeners);
     final start = initial.where((p) => !p.isCar).toList();
     if (start.isEmpty) {
       _rows.add(_row(kind: kind));
@@ -131,6 +143,33 @@ class PiecesEditorController extends ChangeNotifier {
   }
 
   final List<PieceDraftRow> _rows = [];
+
+  /// Whether this load has a pickup fee field (a collected request's).
+  final bool hasPickupFee;
+
+  /// The pickup fee in US dollars as typed; blank is no fee.
+  final TextEditingController pickupFee;
+
+  /// The typed fee in whole cents: 0 for blank, for none, or for something
+  /// that is not money ([pickupFeeInvalid] says which).
+  int get pickupFeeCents {
+    if (!hasPickupFee) return 0;
+    final reading = readMoneyInput(pickupFee.text);
+    final cents = reading.cents;
+    return cents != null && cents >= 0 ? cents : 0;
+  }
+
+  /// The fee typed is not money, or below zero (`pickup_fee_invalid`).
+  bool get pickupFeeInvalid {
+    if (!hasPickupFee) return false;
+    final reading = readMoneyInput(pickupFee.text);
+    if (reading.isEmpty) return false;
+    final cents = reading.cents;
+    return cents == null || cents < 0;
+  }
+
+  /// The fee as a request carries it: null when the line has no fee field.
+  int? get pickupFeeForRequest => hasPickupFee ? pickupFeeCents : null;
 
   /// Rows taken away stay alive until the controller goes: the fields they
   /// fed may still be on screen for the frame that removes them.
@@ -164,6 +203,7 @@ class PiecesEditorController extends ChangeNotifier {
 
   List<PieceDraftRow> get rows => List.unmodifiable(_rows);
   int get count => _rows.length;
+
   /// The most pieces this editor takes.
   final int limit;
 
@@ -174,8 +214,10 @@ class PiecesEditorController extends ChangeNotifier {
     for (final row in _rows) row.toDraft(),
   ];
 
-  /// The line total: the sum of the priced pieces, null while none is.
-  int? get totalCents => piecesTotalCents(normalizePieces(draftPieces));
+  /// The line total: the priced pieces plus the pickup fee when the line
+  /// has one (`lineTotalCents`), null while no piece is priced.
+  int? get totalCents =>
+      lineTotalCents(normalizePieces(draftPieces), pickupFeeCents);
 
   /// One piece's own problems (not the list's: "too many", "none").
   List<String> errorsFor(int index) {
@@ -228,6 +270,7 @@ class PiecesEditorController extends ChangeNotifier {
     for (final row in [..._rows, ..._retired]) {
       row._dispose();
     }
+    pickupFee.dispose();
     super.dispose();
   }
 }
@@ -307,6 +350,31 @@ class PiecesEditor extends StatelessWidget {
                 controller.add();
               },
             ),
+            if (controller.hasPickupFee) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: 180,
+                  child: TextField(
+                    key: const Key('pieces-pickup-fee'),
+                    controller: controller.pickupFee,
+                    enabled: enabled,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: l10n.prqPickupFee,
+                      prefixText: r'$ ',
+                      isDense: true,
+                      errorText: showErrors && controller.pickupFeeInvalid
+                          ? l10n.prqErrPickupFee
+                          : null,
+                    ),
+                  ),
+                ),
+              ),
+            ],
             if (error != null) ...[
               const SizedBox(height: 6),
               Text(
@@ -648,32 +716,67 @@ class PiecesTotalLine extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         final total = controller.totalCents;
+        final fee = controller.pickupFeeCents;
+        final totalRow = Row(
+          key: const Key('pieces-total'),
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(
+              child: Text(
+                l10n.pcsTotalLabel(controller.count),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink,
+                ),
+              ),
+            ),
+            Text(
+              total == null ? l10n.pcsNoPriceYet : formatLotCents(total),
+              key: const Key('pieces-total-amount'),
+              style: TextStyle(
+                fontSize: total == null ? 13 : 20,
+                fontWeight: FontWeight.w800,
+                color: total == null ? AppColors.muted : AppColors.cobaltDeep,
+              ),
+            ),
+          ],
+        );
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: Row(
-            key: const Key('pieces-total'),
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Text(
-                  l10n.pcsTotalLabel(controller.count),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
+              // A collected request's pickup fee, its own row: it is inside
+              // the total, never inside a piece price.
+              if (controller.hasPickupFee && fee > 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    key: const Key('pieces-pickup-fee-row'),
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.prqPickupFee,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        formatLotCents(fee),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              Text(
-                total == null ? l10n.pcsNoPriceYet : formatLotCents(total),
-                key: const Key('pieces-total-amount'),
-                style: TextStyle(
-                  fontSize: total == null ? 13 : 20,
-                  fontWeight: FontWeight.w800,
-                  color: total == null ? AppColors.muted : AppColors.cobaltDeep,
-                ),
-              ),
+              totalRow,
             ],
           ),
         );

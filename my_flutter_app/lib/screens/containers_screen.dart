@@ -2991,8 +2991,13 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     final line = widget.existing;
     // An edit opens on the line's pieces (an old-form line on the pieces it
     // reads as, its price spread over them); a new one on one barrel.
+    // A collected request's line keeps its pickup fee in a field of its own
+    // (never in the piece prices); any other line has none to show.
     _pieceEditor = PiecesEditorController(
       initial: line == null || line.isCar ? const [] : line.allPieces,
+      pickupFeeCents: line != null && line.hasPickupFee
+          ? line.pickupFeeCents
+          : null,
     )..addListener(_onPiecesEdited);
     if (line == null) {
       // At the counter most packages are barrels and boxes; on a container
@@ -3071,6 +3076,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     'piece_description_too_long',
     'piece_size_invalid',
     'piece_price_invalid',
+    'pickup_fee_invalid',
   };
 
   /// A piece was typed in or changed: what the server last said about the
@@ -3402,6 +3408,8 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         carModel: _model.text,
         carYear: _year.text,
         pieces: pieces,
+        pickupFeeCents: pieces == null ? null : _pieceEditor.pickupFeeForRequest,
+        pickupFeeInvalid: pieces != null && _pieceEditor.pickupFeeInvalid,
         ownerKind: _owner,
         customerName: _customer.text,
         customerPhone: _phone.text,
@@ -5170,6 +5178,8 @@ String containerErrorText(
     'line_has_payments' => l10n.wpkErrLineHasPayments,
     'price_invalid' => l10n.wpkErrPriceInvalid,
     'price_below_paid' => l10n.wpkErrPriceBelowPaid,
+    'price_below_pickup_fee' => l10n.wpkErrPriceBelowPickupFee,
+    'pickup_fee_invalid' => l10n.prqErrPickupFee,
     'price_required' => l10n.wpkErrPriceRequired,
     'amount_required' => l10n.wpkErrAmountRequired,
     'amount_too_large' => l10n.wpkErrAmountTooLarge,

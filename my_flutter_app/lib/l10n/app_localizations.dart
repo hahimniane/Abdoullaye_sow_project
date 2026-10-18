@@ -24827,11 +24827,17 @@ abstract class AppLocalizations {
   /// **'That didn’t work. Try again.'**
   String get prqErrGeneric;
 
-  /// Received sheet: a collected request's pickup fee is spread over the piece prices.
+  /// setContainerLinePrice refusal: a collected request's line total may not go below its own pickup fee.
   ///
   /// In en, this message translates to:
-  /// **'The prices include the pickup fee in the estimate: {fee}.'**
-  String prqReceiveFeeIncluded(String fee);
+  /// **'The price can\'t be less than the pickup fee.'**
+  String get wpkErrPriceBelowPickupFee;
+
+  /// Payment sheet: the price of a collected request's line includes its own pickup fee (shown as its own amount, never spread into the piece prices).
+  ///
+  /// In en, this message translates to:
+  /// **'Includes the pickup fee: {amount}'**
+  String wpkIncludesPickupFee(String amount);
 }
 
 class _AppLocalizationsDelegate
