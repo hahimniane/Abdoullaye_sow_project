@@ -8869,7 +8869,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get ctrStatusShipped => 'Expédié';
 
   @override
-  String get ctrStatusArrived => 'Arrivé';
+  String get ctrStatusArrived => 'Prêt à récupérer';
 
   @override
   String get ctrNewContainer => 'Nouveau conteneur';
@@ -8959,7 +8959,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get ctrNoShipped => 'Aucun conteneur expédié.';
 
   @override
-  String get ctrNoArrived => 'Aucun conteneur arrivé pour le moment.';
+  String get ctrNoArrived => 'Aucun conteneur prêt à récupérer pour le moment.';
 
   @override
   String get ctrEmptyContainer => 'Rien de chargé pour l\'instant';
@@ -9008,7 +9008,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String ctrArrivedOn(String date) {
-    return 'Arrivé le $date';
+    return 'Prêt à récupérer le $date';
   }
 
   @override
@@ -9130,17 +9130,17 @@ class AppLocalizationsFr extends AppLocalizations {
   String get ctrShippedDone => 'Marqué expédié.';
 
   @override
-  String get ctrArrive => 'Marquer arrivé';
+  String get ctrArrive => 'Marquer prêt à récupérer';
 
   @override
-  String get ctrArriveTitle => 'Marquer ce conteneur comme arrivé ?';
+  String get ctrArriveTitle => 'Marquer ce conteneur prêt à récupérer ?';
 
   @override
   String get ctrArriveMessage =>
-      'Ses voitures pourront aller dans un nouveau conteneur.';
+      'Les clients sont prévenus sur WhatsApp de l\'endroit où récupérer leurs marchandises. Ses voitures pourront aller dans un nouveau conteneur.';
 
   @override
-  String get ctrArrivedDone => 'Marqué arrivé.';
+  String get ctrArrivedDone => 'Marqué prêt à récupérer.';
 
   @override
   String get ctrDelete => 'Supprimer le conteneur';
@@ -9223,7 +9223,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get ctrErrTransitionInvalid =>
-      'Un conteneur ne fait qu\'avancer : chargement, puis expédié, puis arrivé.';
+      'Un conteneur ne fait qu\'avancer : chargement, puis expédié, puis prêt à récupérer.';
 
   @override
   String get ctrErrDestinationRequired =>
@@ -10252,7 +10252,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pkgMomentAtPort => 'au port de destination';
 
   @override
-  String get pkgMomentArrived => 'arrivé';
+  String get pkgMomentArrived => 'prêt à récupérer';
 
   @override
   String get pkgMomentReceived => 'reçu';
@@ -11218,6 +11218,43 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get dstMainCleared => 'Destination principale retirée.';
+
+  @override
+  String get guestTrackingStageReadyForPickup => 'Prêt à récupérer';
+
+  @override
+  String get dstPickupTitle => 'Retrait dans ce pays';
+
+  @override
+  String get dstPickupHelp =>
+      'Où les clients récupèrent leurs marchandises. Le message WhatsApp « prêt à récupérer » les indique. Laissez vide pour utiliser l\'adresse et le téléphone de votre entreprise.';
+
+  @override
+  String get dstPickupCity => 'Ville de collecte (facultatif)';
+
+  @override
+  String get dstPickupCityHint => 'p. ex. Conakry';
+
+  @override
+  String get dstPickupAddress => 'Adresse de collecte (facultatif)';
+
+  @override
+  String get dstPickupAddressHint => 'p. ex. Madina, près du marché';
+
+  @override
+  String get dstPickupPhone => 'Téléphone de collecte (facultatif)';
+
+  @override
+  String get dstPickupCityTooLong =>
+      'La ville de collecte peut compter au plus 80 caractères.';
+
+  @override
+  String get dstPickupAddressTooLong =>
+      'L\'adresse de collecte peut compter au plus 200 caractères.';
+
+  @override
+  String get dstPickupPhoneInvalid =>
+      'Le téléphone de collecte doit comporter l\'indicatif du pays, comme +224 620 00 00 00.';
 
   @override
   String get dstSeedConfirmTitle => 'Ajouter tous les pays ?';

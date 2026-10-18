@@ -118,6 +118,7 @@ const rules: Rule[] = [
   // --- Containers (containerAudit) ---
   [/^Shipped with (\d+) lines?$/, (m) => `Expédié avec ${m[1]} ${plural(m[1], "ligne", "lignes")}`],
   [/^Marked arrived$/, () => "Marqué comme arrivé"],
+  [/^Marked ready for pickup$/, () => "Marqué prêt à récupérer"],
   [/^Carrier reported (.+)$/, (m) =>
     `Le transporteur signale : ${CARRIER_STATUSES[m[1]] ?? m[1]}`],
   [/^Started (.+)$/, (m) => `Début du chargement : ${m[1]}`],

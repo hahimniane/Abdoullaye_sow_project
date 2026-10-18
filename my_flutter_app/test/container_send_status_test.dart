@@ -133,12 +133,13 @@ void main() {
       );
       expect(
         containerSendStatusSummary(AppLocalizationsEn(), result),
-        'Sending “arrived” to 2 people on WhatsApp. 1 person already had it. '
+        'Sending “ready for pickup” to 2 people on WhatsApp. 1 person already '
+        'had it. '
         '1 person can’t be reached (no phone, updates off, or no country '
         'code).',
       );
       final fr = containerSendStatusSummary(AppLocalizationsFr(), result);
-      expect(fr, startsWith('Envoi de « arrivé » à 2 personnes'));
+      expect(fr, startsWith('Envoi de « prêt à récupérer » à 2 personnes'));
       expect(fr, contains('1 personne l’avait déjà.'));
     });
 

@@ -9652,6 +9652,9 @@ html[data-lang-pending] body {
 .dst-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dst-name strong { font-size: 16px; font-weight: 800; color: var(--ink); }
 .dst-name span { font-size: 12.5px; color: var(--muted); }
+.dst-name .destination-pickup-line { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.destination-pickup { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.destination-pickup > span { font-weight: 800; color: var(--ink); }
 .dst-price { font-size: 22px; font-weight: 800; color: var(--brand-strong); }
 .dst-price small { font-size: 13px; font-weight: 600; color: var(--muted); }
 .dst-note { font-size: 13px; color: var(--ink-soft, #3c5450); background: var(--bg); padding: 9px 12px; border-radius: 10px; }

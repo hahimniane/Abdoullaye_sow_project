@@ -189,7 +189,7 @@ test("the last update is read like the app reads it; anything malformed is no up
   assert.equal(last.at?.toISOString(), "2026-10-03T15:05:00.000Z");
   assert.deepEqual(last.results.map((r) => r.text), ["Customer: sent", "Receiver: not sent, the phone has no country code"]);
   assert.equal(packageLastUpdate({ update: "at_port", results: [] })?.sentence, "Last update: at the destination port");
-  assert.equal(packageLastUpdate({ update: "arrived" })?.sentence, "Last update: arrived");
+  assert.equal(packageLastUpdate({ update: "arrived" })?.sentence, "Last update: ready for pickup");
   // The drop-off message (package_received).
   assert.equal(packageLastUpdate({ update: "received" })?.sentence, "Last update: received");
   assert.equal(packageLastUpdate({ update: "arrived" })?.at, null);

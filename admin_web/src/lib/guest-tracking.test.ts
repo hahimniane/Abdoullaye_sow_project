@@ -110,7 +110,7 @@ test("a CL- code is a container shipment with its own four-step journey", () => 
   assert.equal(guestStageLabel("container", "waiting_container"), "Waiting for a container");
   assert.equal(guestStageLabel("container", "booked"), "In the container");
   assert.equal(guestStageLabel("container", "in_transit"), "At sea");
-  assert.equal(guestStageLabel("container", "arrived"), "Arrived");
+  assert.equal(guestStageLabel("container", "arrived"), "Ready for pickup");
   // Every other service keeps the generic journey and pill words.
   assert.equal(guestJourneyStages("barrel"), GUEST_JOURNEY_STAGES);
   assert.equal(guestStageLabel("barrel", "in_transit"), "In progress");

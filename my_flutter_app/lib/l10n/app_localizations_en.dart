@@ -8729,7 +8729,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctrStatusShipped => 'Shipped';
 
   @override
-  String get ctrStatusArrived => 'Arrived';
+  String get ctrStatusArrived => 'Ready for pickup';
 
   @override
   String get ctrNewContainer => 'New container';
@@ -8818,7 +8818,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctrNoShipped => 'No container has shipped.';
 
   @override
-  String get ctrNoArrived => 'No container has arrived yet.';
+  String get ctrNoArrived => 'No container is ready for pickup yet.';
 
   @override
   String get ctrEmptyContainer => 'Nothing loaded yet';
@@ -8867,7 +8867,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String ctrArrivedOn(String date) {
-    return 'Arrived $date';
+    return 'Ready for pickup $date';
   }
 
   @override
@@ -8987,16 +8987,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctrShippedDone => 'Marked shipped.';
 
   @override
-  String get ctrArrive => 'Mark arrived';
+  String get ctrArrive => 'Mark ready for pickup';
 
   @override
-  String get ctrArriveTitle => 'Mark this container arrived?';
+  String get ctrArriveTitle => 'Mark this container ready for pickup?';
 
   @override
-  String get ctrArriveMessage => 'Its cars are free to go on a new container.';
+  String get ctrArriveMessage =>
+      'Customers are told on WhatsApp where to collect their goods. Its cars are free to go on a new container.';
 
   @override
-  String get ctrArrivedDone => 'Marked arrived.';
+  String get ctrArrivedDone => 'Marked ready for pickup.';
 
   @override
   String get ctrDelete => 'Delete container';
@@ -9078,7 +9079,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctrErrTransitionInvalid =>
-      'A container only moves forward: loading, then shipped, then arrived.';
+      'A container only moves forward: loading, then shipped, then ready for pickup.';
 
   @override
   String get ctrErrDestinationRequired =>
@@ -10100,7 +10101,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pkgMomentAtPort => 'at the destination port';
 
   @override
-  String get pkgMomentArrived => 'arrived';
+  String get pkgMomentArrived => 'ready for pickup';
 
   @override
   String get pkgMomentReceived => 'received';
@@ -11048,6 +11049,43 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dstMainCleared => 'Main destination cleared.';
+
+  @override
+  String get guestTrackingStageReadyForPickup => 'Ready for pickup';
+
+  @override
+  String get dstPickupTitle => 'Pickup in this country';
+
+  @override
+  String get dstPickupHelp =>
+      'Where customers collect their goods. The ready-for-pickup WhatsApp message gives these. Leave them blank to use your business address and phone.';
+
+  @override
+  String get dstPickupCity => 'Pickup city (optional)';
+
+  @override
+  String get dstPickupCityHint => 'e.g. Conakry';
+
+  @override
+  String get dstPickupAddress => 'Pickup address (optional)';
+
+  @override
+  String get dstPickupAddressHint => 'e.g. Madina, near the market';
+
+  @override
+  String get dstPickupPhone => 'Pickup phone (optional)';
+
+  @override
+  String get dstPickupCityTooLong =>
+      'The pickup city can be at most 80 characters.';
+
+  @override
+  String get dstPickupAddressTooLong =>
+      'The pickup address can be at most 200 characters.';
+
+  @override
+  String get dstPickupPhoneInvalid =>
+      'The pickup phone needs its country code, like +224 620 00 00 00.';
 
   @override
   String get dstSeedConfirmTitle => 'Add every country?';

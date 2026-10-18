@@ -264,6 +264,20 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Note d’itinéraire pour les clients (facultatif)",
   "e.g. Door-to-door delivery in Conakry included":
     "p. ex. Livraison porte-à-porte à Conakry incluse",
+  // Pickup details per destination (destination form, destination-pickup.ts).
+  "Pickup in this country": "Retrait dans ce pays",
+  "Where customers collect their goods. The ready-for-pickup WhatsApp message gives these. Leave them blank to use your business address and phone.":
+    "Où les clients récupèrent leurs marchandises. Le message WhatsApp « prêt à récupérer » les indique. Laissez vide pour utiliser l’adresse et le téléphone de votre entreprise.",
+  "Pickup city (optional)": "Ville de collecte (facultatif)",
+  "Pickup phone (optional)": "Téléphone de collecte (facultatif)",
+  "e.g. Conakry": "p. ex. Conakry",
+  "e.g. Madina, near the market": "p. ex. Madina, près du marché",
+  "The pickup city can be at most 80 characters.":
+    "La ville de collecte peut compter au plus 80 caractères.",
+  "The pickup address can be at most 200 characters.":
+    "L’adresse de collecte peut compter au plus 200 caractères.",
+  "The pickup phone needs its country code, like +224 620 00 00 00.":
+    "Le téléphone de collecte doit comporter l’indicatif du pays, comme +224 620 00 00 00.",
   "service visible to customers": "service visible pour les clients",
   "services visible to customers": "services visibles pour les clients",
   "Configuration saved.": "Configuration enregistrée.",
@@ -2648,7 +2662,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Profile photo uploaded": "Photo de profil téléversée",
   "Profile updated": "Profil mis à jour",
   "Ready to review": "Prêt à examiner",
-  "Ready for pickup": "Prêt pour collecte",
+  "Ready for pickup": "Prêt à récupérer",
   Receiver: "Destinataire",
   "Receiver name": "Nom du destinataire",
   "Receiver phone": "Téléphone du destinataire",
@@ -4261,6 +4275,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Last update: left port": "Dernière mise à jour : parti du port",
   "Last update: at the destination port": "Dernière mise à jour : au port de destination",
   "Last update: arrived": "Dernière mise à jour : arrivé",
+  "Last update: ready for pickup": "Dernière mise à jour : prêt à récupérer",
   "Last update: received": "Dernière mise à jour : reçu",
   "Latest update": "Dernière mise à jour",
   // One person's outcome on the last update, as whole sentences.
@@ -4293,6 +4308,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Received and loaded into the container": "Reçu et chargé dans le conteneur",
   "The container has sailed": "Le conteneur est parti",
   "The container has reached its destination": "Le conteneur est arrivé à destination",
+  "Ready to collect at the destination": "Prêt à être récupéré à destination",
   Booked: "Réservé",
   "In progress": "En cours",
   Ready: "Prêt",
@@ -4829,8 +4845,10 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Add a note": "Ajouter une note",
   "Mark shipped": "Marquer expédié",
   "Mark arrived": "Marquer arrivé",
+  "Mark ready for pickup": "Marquer prêt à récupérer",
   "Marked as shipped.": "Marqué comme expédié.",
   "Marked as arrived.": "Marqué comme arrivé.",
+  "Marked ready for pickup.": "Marqué prêt à récupérer.",
   "Container updated.": "Conteneur mis à jour.",
   "Container started.": "Conteneur créé.",
   "Container deleted.": "Conteneur supprimé.",

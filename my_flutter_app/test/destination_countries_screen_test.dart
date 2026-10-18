@@ -110,6 +110,32 @@ void main() {
       expect(find.text('1 destination utilisée'), findsOneWidget);
       expect(find.text('Ajouter un pays'), findsOneWidget);
     });
+
+    testWidgets('shows where customers collect, as the owner typed it',
+        (tester) async {
+      const withPickup = DestinationCountry(
+        id: 'guinea',
+        name: 'Guinea',
+        code: 'GN',
+        isActive: true,
+        barrelShippingAvailable: true,
+        barrelShippingPrice: 120,
+        pickupCity: 'Conakry',
+        pickupAddress: 'Madina, near the market',
+        pickupPhone: '+224620000000',
+      );
+      for (final locale in const [Locale('en'), Locale('fr')]) {
+        await _pump(tester, [withPickup], _Calls(), locale: locale);
+        expect(find.byKey(const Key('dst-pickup-summary-guinea')),
+            findsOneWidget);
+        // Typed values are never translated.
+        expect(find.text('Conakry · Madina, near the market · +224620000000'),
+            findsOneWidget);
+      }
+      // Nothing set: no chip.
+      await _pump(tester, [_guinea], _Calls());
+      expect(find.byKey(const Key('dst-pickup-summary-guinea')), findsNothing);
+    });
   });
 
   group('Add country', () {

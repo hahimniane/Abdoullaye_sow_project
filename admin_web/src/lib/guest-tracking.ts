@@ -212,7 +212,9 @@ export const GUEST_CONTAINER_STAGES: readonly GuestJourneyStage[] = [
   {id: "waiting_container", label: "Waiting for a container", hint: "Received, waiting for a container"},
   {id: "booked", label: "In the container", hint: "Received and loaded into the container"},
   {id: "in_transit", label: "At sea", hint: "The container has sailed"},
-  {id: "arrived", label: "Arrived", hint: "The container has reached its destination"},
+  // Staff mark it when the goods can be collected; the carrier landing the
+  // box at the port does not move a container here.
+  {id: "arrived", label: "Ready for pickup", hint: "Ready to collect at the destination"},
 ];
 
 export function guestJourneyStages(service: string): readonly GuestJourneyStage[] {

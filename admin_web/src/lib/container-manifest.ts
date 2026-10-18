@@ -22,11 +22,15 @@ import { destinationCountryOptionForRow } from "./destination-countries.ts";
 export const CONTAINER_STATUSES = ["loading", "shipped", "arrived"] as const;
 export type ContainerStatus = (typeof CONTAINER_STATUSES)[number];
 
-/** The state badge: its word and its `lst-badge` tone. */
+/**
+ * The state badge: its word and its `lst-badge` tone. `arrived` is stored as
+ * before but means READY FOR PICKUP: staff mark it when the goods can be
+ * collected (the ready-for-pickup WhatsApp message goes out then).
+ */
 export const CONTAINER_STATUS_LABELS: Record<ContainerStatus, string> = {
   loading: "Loading",
   shipped: "Shipped",
-  arrived: "Arrived",
+  arrived: "Ready for pickup",
 };
 
 export const CONTAINER_STATUS_TONES: Record<ContainerStatus, string> = {

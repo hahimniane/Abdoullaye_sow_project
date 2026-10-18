@@ -51,6 +51,16 @@ import {
 } from "lucide-react";
 
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { CustomerPhoneField } from "@/components/customer-phone-field";
+import {
+  destinationPickupChanged,
+  destinationPickupDraft,
+  destinationPickupErrors,
+  destinationPickupPayload,
+  destinationPickupSummary,
+  emptyDestinationPickupDraft,
+  type DestinationPickupDraft,
+} from "@/lib/destination-pickup";
 import { FieldInfo } from "@/components/field-info";
 import { ContainerTrackingCard } from "@/components/business/container-tracking-card";
 import { ParkingMonthEnd } from "@/components/business/parking-month-end";
@@ -642,6 +652,10 @@ export function DestinationsPanel({
 }: PanelProps) {
   const destinations = useBusinessDestinations(businessId, Boolean(businessId && !previewMode));
   const [draft, setDraft] = useState<DestinationDraft>(emptyDestinationDraft);
+  // Where customers collect in this country. Saved through its own callable
+  // (setDestinationPickup), never in the coverage write.
+  const [pickupDraft, setPickupDraft] = useState<DestinationPickupDraft>(emptyDestinationPickupDraft);
+  const [pickupPhoneTouched, setPickupPhoneTouched] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
@@ -701,12 +715,16 @@ export function DestinationsPanel({
   function openNew() {
     setEditingId("");
     setDraft({ ...emptyDestinationDraft, countryId: (availableCountries[0] ?? countries[0]).id });
+    setPickupDraft(emptyDestinationPickupDraft);
+    setPickupPhoneTouched(false);
     setMessage("");
     setFormOpen(true);
   }
   function closeForm() {
     setEditingId("");
     setDraft(emptyDestinationDraft);
+    setPickupDraft(emptyDestinationPickupDraft);
+    setPickupPhoneTouched(false);
     setMessage("");
     setFormOpen(false);
   }
@@ -741,6 +759,8 @@ export function DestinationsPanel({
       freightSea: availability.freightSea,
       carTransport: availability.carTransport,
     });
+    setPickupDraft(destinationPickupDraft(row));
+    setPickupPhoneTouched(false);
     setMessage("");
     setFormOpen(true);
   }
@@ -750,6 +770,8 @@ export function DestinationsPanel({
     if (token <= 0 || token === handledOpenToken || destinations.loading) return;
     setEditingId("");
     setDraft({ ...emptyDestinationDraft, countryId: (availableCountries[0] ?? countries[0]).id });
+    setPickupDraft(emptyDestinationPickupDraft);
+    setPickupPhoneTouched(false);
     setMessage("");
     setFormOpen(true);
     setHandledOpenToken(token);
@@ -812,6 +834,11 @@ export function DestinationsPanel({
     const deliveryAreas = deliveryAvailable
       ? deliveryAreasPayload(draft.destinationDeliveryAreas)
       : [];
+    const pickupError = Object.values(destinationPickupErrors(pickupDraft))[0];
+    if (pickupError) {
+      setPickupPhoneTouched(true);
+      throw new Error(pickupError);
+    }
     await setDoc(
       doc(db, "businesses", businessId, "destinationCountries", country.id),
       {
@@ -866,8 +893,19 @@ export function DestinationsPanel({
       },
       { merge: true },
     );
+    // After the coverage write, so a new destination exists first. The
+    // server validates and stores the pickup fields (blank clears them).
+    if (destinationPickupChanged(editingRow ?? null, pickupDraft)) {
+      await httpsCallable(functions, "setDestinationPickup")({
+        businessId,
+        countryId: country.id,
+        ...destinationPickupPayload(pickupDraft),
+      });
+    }
     setEditingId("");
     setDraft(emptyDestinationDraft);
+    setPickupDraft(emptyDestinationPickupDraft);
+    setPickupPhoneTouched(false);
     setFormOpen(false);
     setMessage(`${country.name} configuration saved.`);
   }
@@ -918,6 +956,10 @@ export function DestinationsPanel({
     fee: moneyDollars(draft.destinationDeliveryFee, 0),
   });
   const listedDeliveryAreas = draft.destinationDeliveryAreas.length;
+  const pickupErrors = destinationPickupErrors(pickupDraft);
+  // The pickup phone starts on the destination's own country.
+  const pickupPhoneCountry =
+    text(destinationCountryById(draft.countryId)?.code ?? editingRow?.code ?? editingRow?.countryCode, "") || "US";
 
   function patchDeliveryArea(index: number, patch: Partial<DeliveryAreaDraft>) {
     setDraft((value) => ({
@@ -1070,6 +1112,9 @@ export function DestinationsPanel({
                   <strong>{destinationRowCountryName(row)}</strong>
                   <span>{text(row.code ?? row.countryCode, "")}</span>
                   {row.isMain === true && <span className="destination-status active">Main destination</span>}
+                  {Boolean(destinationPickupSummary(row)) && (
+                    <small className="destination-pickup-line"><MapPinned size={12} /> <span data-no-translate>{destinationPickupSummary(row)}</span></small>
+                  )}
                 </div>
               </div>
               <div className="destination-service-cell">
@@ -1434,6 +1479,39 @@ export function DestinationsPanel({
                     )}
                   </>
                 )}
+                <div className="lst-field wide destination-pickup">
+                  <span>Pickup in this country</span>
+                  <small className="muted">Where customers collect their goods. The ready-for-pickup WhatsApp message gives these. Leave them blank to use your business address and phone.</small>
+                </div>
+                <label className="lst-field"><span>Pickup city (optional)</span>
+                  <input
+                    maxLength={80}
+                    value={pickupDraft.pickupCity}
+                    onChange={(event) => setPickupDraft((value) => ({ ...value, pickupCity: event.target.value }))}
+                    placeholder="e.g. Conakry"
+                  />
+                  {pickupErrors.pickupCity && <small className="field-error">{pickupErrors.pickupCity}</small>}
+                </label>
+                <div className="lst-field">
+                  <CustomerPhoneField
+                    id="destination-pickup-phone"
+                    label="Pickup phone (optional)"
+                    value={pickupDraft.pickupPhone}
+                    onChange={(next) => { setPickupPhoneTouched(false); setPickupDraft((value) => ({ ...value, pickupPhone: next })); }}
+                    onBlur={() => setPickupPhoneTouched(true)}
+                    initialCountryCode={pickupPhoneCountry}
+                    error={pickupPhoneTouched ? pickupErrors.pickupPhone : undefined}
+                  />
+                </div>
+                <label className="lst-field wide"><span>Pickup address (optional)</span>
+                  <input
+                    maxLength={200}
+                    value={pickupDraft.pickupAddress}
+                    onChange={(event) => setPickupDraft((value) => ({ ...value, pickupAddress: event.target.value }))}
+                    placeholder="e.g. Madina, near the market"
+                  />
+                  {pickupErrors.pickupAddress && <small className="field-error">{pickupErrors.pickupAddress}</small>}
+                </label>
                 <label className="lst-field wide"><span>Customer route note (optional)</span>
                   <textarea rows={2} value={draft.note} onChange={(event) => setDraft((value) => ({ ...value, note: event.target.value }))} placeholder="e.g. Door-to-door delivery in Conakry included" />
                 </label>
@@ -7579,7 +7657,7 @@ function statusLabel(value: unknown) {
       pending: "En attente",
       pending_payment: "Paiement en attente",
       pending_seal: "En attente de scellement",
-      ready_for_pickup: "Prêt pour collecte",
+      ready_for_pickup: "Prêt à récupérer",
       refund_processing: "Remboursement en cours",
       refund_pending: "Remboursement en attente",
       refunded: "Remboursé",

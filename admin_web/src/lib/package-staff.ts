@@ -171,9 +171,10 @@ export const PACKAGE_UPDATE_SENTENCE: Record<string, string> = {
   received: "Last update: received",
   shipped: "Last update: left port",
   // Lines summarised before the carrier's "at the port" and staff's
-  // "arrived" became one message; new lines say "arrived" for either.
+  // "arrived" became one message.
   at_port: "Last update: at the destination port",
-  arrived: "Last update: arrived",
+  // `arrived` is the ready-for-pickup message, sent when staff mark it.
+  arrived: "Last update: ready for pickup",
 };
 
 const RESULT_PHRASE: Record<string, string> = {

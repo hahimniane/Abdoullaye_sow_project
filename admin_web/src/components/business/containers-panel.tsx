@@ -556,13 +556,13 @@ export function ContainersPanel({
     const ok = await confirmImportantAction(
       next === "shipped"
         ? `Mark ${title} as shipped? Today becomes its sailing date and the list is locked; only notes can change after this.`
-        : `Mark ${title} as arrived? This closes the container.`,
+        : `Mark ${title} ready for pickup? Customers are told on WhatsApp where to collect, and the container closes.`,
       next === "shipped"
         ? `Marquer ${title} comme expédié ? Aujourd’hui devient sa date de départ et la liste est verrouillée ; seules les notes pourront changer ensuite.`
-        : `Marquer ${title} comme arrivé ? Cela clôture le conteneur.`,
+        : `Marquer ${title} prêt à récupérer ? Les clients sont prévenus sur WhatsApp de l’endroit où récupérer, et le conteneur est clôturé.`,
     );
     if (!ok) return;
-    await runPanelAction(setBusy, setFlash, next === "shipped" ? "Marked as shipped." : "Marked as arrived.", async () => {
+    await runPanelAction(setBusy, setFlash, next === "shipped" ? "Marked as shipped." : "Marked ready for pickup.", async () => {
       await httpsCallable(functions, "setContainerStatus")({ businessId, containerId: String(row.id), status: next });
     });
   }
@@ -997,7 +997,7 @@ export function ContainersPanel({
                   <button className="lst-btn" type="button" disabled={busy} onClick={() => void advance(selected)}><Ship size={14} /> Mark shipped</button>
                 )}
                 {selectedStatus === "shipped" && (
-                  <button className="lst-btn" type="button" disabled={busy} onClick={() => void advance(selected)}><Container size={14} /> Mark arrived</button>
+                  <button className="lst-btn" type="button" disabled={busy} onClick={() => void advance(selected)}><Container size={14} /> Mark ready for pickup</button>
                 )}
                 {selectedOpen && selectedLines.length === 0 && (
                   <button className="lst-btn ghost danger" type="button" disabled={busy} onClick={() => void deleteContainer(selected)}><Trash2 size={14} /> Delete</button>
@@ -1011,7 +1011,7 @@ export function ContainersPanel({
               <div><span>Shipping line</span>{oceanCarrierLabel(selected.carrierScac) ? <b data-no-translate>{oceanCarrierLabel(selected.carrierScac)}</b> : <b>Not chosen yet</b>}</div>
               <div><span>Started</span><b>{formatDate(selected.createdAt) || "—"}</b></div>
               {Boolean(selected.sailedAt) && <div><span>Sailed</span><b>{formatDate(selected.sailedAt)}</b></div>}
-              {Boolean(selected.arrivedAt) && <div><span>Arrived</span><b>{formatDate(selected.arrivedAt)}</b></div>}
+              {Boolean(selected.arrivedAt) && <div><span>Ready for pickup</span><b>{formatDate(selected.arrivedAt)}</b></div>}
               {selectedCounts && (
                 <div><span>On board</span><b>{selectedCounts.carCount} · {selectedCounts.barrelCount} · {selectedCounts.otherCount}</b><small>cars · barrels · other</small></div>
               )}
@@ -1109,7 +1109,7 @@ export function ContainersPanel({
               <option value="">Every state</option>
               <option value="loading">Loading</option>
               <option value="shipped">Shipped</option>
-              <option value="arrived">Arrived</option>
+              <option value="arrived">Ready for pickup</option>
             </select>
             <select value={destinationFilter} onChange={(e) => setDestinationFilter(e.target.value)} aria-label="Filter by destination">
               <option value="">Every destination</option>
@@ -1618,7 +1618,7 @@ function auditActionLabel(action: string) {
     line_contacts_edited: "Contacts edited",
     line_edited: "Line changed",
     shipped: "Shipped",
-    arrived: "Arrived",
+    arrived: "Ready for pickup",
     deleted: "Deleted",
   };
   return labels[action] ?? "Changed";

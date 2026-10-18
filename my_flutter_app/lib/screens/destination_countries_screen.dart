@@ -9,12 +9,14 @@ import '../models/business_service.dart';
 import '../models/destination_country.dart';
 import '../providers/auth_provider.dart';
 import '../services/barrel_pricing_service.dart';
+import '../services/destination_pickup.dart';
 import '../services/destination_visibility.dart';
 import '../services/waiting_package_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/money_input.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 
 /// The business's destination records, live. A parameter so a widget test
@@ -47,7 +49,8 @@ class DestinationCountriesScreen extends StatefulWidget {
   final String? businessId;
   final DestinationRecordsStream records;
 
-  /// Calls `seedDestinationCountries` and `setMainDestination`.
+  /// Calls `seedDestinationCountries`, `setMainDestination` and
+  /// `setDestinationPickup`.
   final ContainerCallableCaller caller;
 
   @override
@@ -303,6 +306,21 @@ class _DestinationCountriesScreenState
     var freightSeaDepartureDays = {...?country?.freightSeaDepartureDays};
     var carTransportEnabled =
         offersCarTransport && (country?.carTransportAvailable ?? false);
+    // Where customers collect here. Saved through `setDestinationPickup`,
+    // never in the coverage write below.
+    final pickupBefore = DestinationPickup.of(country);
+    final pickupCityController = TextEditingController(
+      text: pickupBefore.city,
+    );
+    final pickupAddressController = TextEditingController(
+      text: pickupBefore.address,
+    );
+    final pickupPhoneController = TextEditingController(
+      text: pickupBefore.phone,
+    );
+    final pickupPhoneCountry = (country?.code ?? '').trim().isEmpty
+        ? 'US'
+        : country!.code!.trim().toUpperCase();
     final formKey = GlobalKey<FormState>();
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -570,6 +588,59 @@ class _DestinationCountriesScreenState
                       },
                     ),
                     const SizedBox(height: 16),
+                    Text(
+                      l10n.dstPickupTitle,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.dstPickupHelp,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      key: const Key('dst-pickup-city'),
+                      controller: pickupCityController,
+                      maxLength: pickupCityMaxLength,
+                      decoration: InputDecoration(
+                        labelText: l10n.dstPickupCity,
+                        hintText: l10n.dstPickupCityHint,
+                        counterText: '',
+                      ),
+                      validator: (value) =>
+                          pickupCityError(l10n, value ?? ''),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('dst-pickup-address'),
+                      controller: pickupAddressController,
+                      maxLength: pickupAddressMaxLength,
+                      decoration: InputDecoration(
+                        labelText: l10n.dstPickupAddress,
+                        hintText: l10n.dstPickupAddressHint,
+                        counterText: '',
+                      ),
+                      validator: (value) =>
+                          pickupAddressError(l10n, value ?? ''),
+                    ),
+                    const SizedBox(height: 12),
+                    CountryPhoneField(
+                      fieldKey: const Key('dst-pickup-phone'),
+                      controller: pickupPhoneController,
+                      labelText: l10n.dstPickupPhone,
+                      initialCountryCode: pickupPhoneCountry,
+                      autofillHints: null,
+                      validator: (value) =>
+                          pickupPhoneError(l10n, value ?? ''),
+                    ),
+                    const SizedBox(height: 16),
                     FilledButton(
                       onPressed: () {
                         if (!formKey.currentState!.validate()) return;
@@ -661,6 +732,19 @@ class _DestinationCountriesScreenState
             'isActive': serviceAvailability.values.any((enabled) => enabled),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+      // After the coverage write, so a new destination exists first. The
+      // server validates and stores them (blank clears).
+      await saveDestinationPickup(
+        businessId: businessId,
+        countryId: id,
+        before: pickupBefore,
+        after: DestinationPickup(
+          city: pickupCityController.text,
+          address: pickupAddressController.text,
+          phone: pickupPhoneController.text,
+        ),
+        caller: widget.caller,
+      );
       if (!context.mounted) return;
       showSuccessSnackBar(context, l10n.recordUpdated);
     } catch (error) {
@@ -679,6 +763,9 @@ class _DestinationCountriesScreenState
       airMaxDaysController.dispose();
       seaMinDaysController.dispose();
       seaMaxDaysController.dispose();
+      pickupCityController.dispose();
+      pickupAddressController.dispose();
+      pickupPhoneController.dispose();
     }
   }
 
@@ -992,8 +1079,22 @@ class _DestinationCountriesScreenState
           icon: Icons.car_rental_outlined,
           label: l10n.destinationCarTransport,
         ),
+      if (_pickupSummary(country).isNotEmpty)
+        _DestinationSummaryChip(
+          key: Key('dst-pickup-summary-${country.id}'),
+          icon: Icons.place_outlined,
+          label: _pickupSummary(country),
+          muted: true,
+        ),
     ];
   }
+
+  /// "Conakry · Madina, near the market · +224620000000" - typed values.
+  String _pickupSummary(DestinationCountry country) => [
+    country.pickupCity,
+    country.pickupAddress,
+    country.pickupPhone,
+  ].where((part) => part.isNotEmpty).join(' · ');
 
   List<Widget> _deliveryEstimateChips(
     AppLocalizations l10n,
@@ -1403,6 +1504,7 @@ class _DestinationServiceToggle extends StatelessWidget {
 
 class _DestinationSummaryChip extends StatelessWidget {
   const _DestinationSummaryChip({
+    super.key,
     required this.icon,
     required this.label,
     this.muted = false,

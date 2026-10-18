@@ -374,7 +374,7 @@ class _GuestTrackingSuccess extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           _GuestFact(
             label: l10n.guestTrackingStatusLabel,
-            value: _stageLabel(l10n, record.stage),
+            value: guestTrackingStageLabel(l10n, record.service, record.stage),
           ),
           if (record.shipping != null) ...[
             const SizedBox(height: AppSpacing.md),
@@ -658,7 +658,18 @@ String _serviceLabel(AppLocalizations l10n, GuestTrackingServiceType service) {
   };
 }
 
-String _stageLabel(AppLocalizations l10n, GuestTrackingStage stage) {
+/// The status a tracking result shows. A container line's last stage is
+/// "Ready for pickup": staff mark it when the goods can be collected (the
+/// stored stage is still `arrived`). Every other service keeps its words.
+String guestTrackingStageLabel(
+  AppLocalizations l10n,
+  GuestTrackingServiceType service,
+  GuestTrackingStage stage,
+) {
+  if (service == GuestTrackingServiceType.container &&
+      stage == GuestTrackingStage.arrived) {
+    return l10n.guestTrackingStageReadyForPickup;
+  }
   return switch (stage) {
     GuestTrackingStage.awaitingPayment =>
       l10n.guestTrackingStageAwaitingPayment,

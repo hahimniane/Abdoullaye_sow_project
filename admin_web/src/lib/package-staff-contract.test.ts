@@ -120,7 +120,7 @@ test("every staff view string has French", () => {
     "Destination",
     "No destination yet",
     "Sailed",
-    "Arrived",
+    "Ready for pickup",
     "Container not found.",
     "Loading the container…",
     "WhatsApp updates",
@@ -130,7 +130,7 @@ test("every staff view string has French", () => {
     // Built by package-staff.ts.
     "Last update: left port",
     "Last update: at the destination port",
-    "Last update: arrived",
+    "Last update: ready for pickup",
     "Latest update",
     ...["Customer", "Receiver"].flatMap((who) => [
       "sent",

@@ -15471,7 +15471,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctrStatusArrived.
   ///
   /// In en, this message translates to:
-  /// **'Arrived'**
+  /// **'Ready for pickup'**
   String get ctrStatusArrived;
 
   /// No description provided for @ctrNewContainer.
@@ -15639,7 +15639,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctrNoArrived.
   ///
   /// In en, this message translates to:
-  /// **'No container has arrived yet.'**
+  /// **'No container is ready for pickup yet.'**
   String get ctrNoArrived;
 
   /// No description provided for @ctrEmptyContainer.
@@ -15681,7 +15681,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctrArrivedOn.
   ///
   /// In en, this message translates to:
-  /// **'Arrived {date}'**
+  /// **'Ready for pickup {date}'**
   String ctrArrivedOn(String date);
 
   /// No description provided for @ctrLoaded.
@@ -15903,25 +15903,25 @@ abstract class AppLocalizations {
   /// No description provided for @ctrArrive.
   ///
   /// In en, this message translates to:
-  /// **'Mark arrived'**
+  /// **'Mark ready for pickup'**
   String get ctrArrive;
 
   /// No description provided for @ctrArriveTitle.
   ///
   /// In en, this message translates to:
-  /// **'Mark this container arrived?'**
+  /// **'Mark this container ready for pickup?'**
   String get ctrArriveTitle;
 
   /// No description provided for @ctrArriveMessage.
   ///
   /// In en, this message translates to:
-  /// **'Its cars are free to go on a new container.'**
+  /// **'Customers are told on WhatsApp where to collect their goods. Its cars are free to go on a new container.'**
   String get ctrArriveMessage;
 
   /// No description provided for @ctrArrivedDone.
   ///
   /// In en, this message translates to:
-  /// **'Marked arrived.'**
+  /// **'Marked ready for pickup.'**
   String get ctrArrivedDone;
 
   /// No description provided for @ctrDelete.
@@ -16047,7 +16047,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctrErrTransitionInvalid.
   ///
   /// In en, this message translates to:
-  /// **'A container only moves forward: loading, then shipped, then arrived.'**
+  /// **'A container only moves forward: loading, then shipped, then ready for pickup.'**
   String get ctrErrTransitionInvalid;
 
   /// No description provided for @ctrErrDestinationRequired.
@@ -17799,7 +17799,7 @@ abstract class AppLocalizations {
   /// No description provided for @pkgMomentArrived.
   ///
   /// In en, this message translates to:
-  /// **'arrived'**
+  /// **'ready for pickup'**
   String get pkgMomentArrived;
 
   /// No description provided for @pkgMomentReceived.
@@ -19355,6 +19355,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Main destination cleared.'**
   String get dstMainCleared;
+
+  /// No description provided for @guestTrackingStageReadyForPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready for pickup'**
+  String get guestTrackingStageReadyForPickup;
+
+  /// No description provided for @dstPickupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup in this country'**
+  String get dstPickupTitle;
+
+  /// No description provided for @dstPickupHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Where customers collect their goods. The ready-for-pickup WhatsApp message gives these. Leave them blank to use your business address and phone.'**
+  String get dstPickupHelp;
+
+  /// No description provided for @dstPickupCity.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup city (optional)'**
+  String get dstPickupCity;
+
+  /// No description provided for @dstPickupCityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Conakry'**
+  String get dstPickupCityHint;
+
+  /// No description provided for @dstPickupAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup address (optional)'**
+  String get dstPickupAddress;
+
+  /// No description provided for @dstPickupAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Madina, near the market'**
+  String get dstPickupAddressHint;
+
+  /// No description provided for @dstPickupPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup phone (optional)'**
+  String get dstPickupPhone;
+
+  /// No description provided for @dstPickupCityTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The pickup city can be at most 80 characters.'**
+  String get dstPickupCityTooLong;
+
+  /// No description provided for @dstPickupAddressTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The pickup address can be at most 200 characters.'**
+  String get dstPickupAddressTooLong;
+
+  /// No description provided for @dstPickupPhoneInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The pickup phone needs its country code, like +224 620 00 00 00.'**
+  String get dstPickupPhoneInvalid;
 
   /// No description provided for @dstSeedConfirmTitle.
   ///

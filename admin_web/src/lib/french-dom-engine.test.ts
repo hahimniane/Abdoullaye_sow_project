@@ -206,6 +206,7 @@ test("container History sentences translate around the typed values", () => {
     ["Shipped with 12 lines", "Expédié avec 12 lignes"],
     ["Shipped with 1 line", "Expédié avec 1 ligne"],
     ["Marked arrived", "Marqué comme arrivé"],
+    ["Marked ready for pickup", "Marqué prêt à récupérer"],
     ["Started Sailing 3 Oct, box 2", "Début du chargement : Sailing 3 Oct, box 2"],
     ["Added 3 barrels for Awa Diallo, to Moussa Ba", "Ajout de 3 barils pour Awa Diallo, destinataire Moussa Ba"],
     ["Added car 1HGCM82633A004352 for Pickup Express", "Ajout de la voiture 1HGCM82633A004352 pour Pickup Express"],

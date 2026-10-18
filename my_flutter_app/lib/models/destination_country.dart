@@ -25,6 +25,9 @@ class DestinationCountry {
     this.freightSeaDeliveryEstimateMaxDays,
     this.destinationNote,
     this.isMain = false,
+    this.pickupCity = '',
+    this.pickupAddress = '',
+    this.pickupPhone = '',
   });
 
   static const fallback = DestinationCountry(
@@ -65,6 +68,15 @@ class DestinationCountry {
   /// Set only through the `setMainDestination` callable, never written from
   /// here ([toFirestore] leaves it out on purpose).
   final bool isMain;
+
+  /// Where customers collect their goods here; the ready-for-pickup
+  /// WhatsApp message gives them. Written only through the
+  /// `setDestinationPickup` callable ([toFirestore] leaves them out).
+  final String pickupCity;
+  final String pickupAddress;
+
+  /// E.164 (`+224620000000`), or empty.
+  final String pickupPhone;
 
   Map<String, bool> get serviceAvailability => {
     'barrelShipping': barrelShippingAvailable,
@@ -212,8 +224,14 @@ class DestinationCountry {
           (data['freightSeaDeliveryEstimateMaxDays'] as num?)?.toInt(),
       destinationNote: data['destinationNote'] as String?,
       isMain: data['isMain'] == true,
+      pickupCity: _text(data['pickupCity']),
+      pickupAddress: _text(data['pickupAddress']),
+      pickupPhone: _text(data['pickupPhone']),
     );
   }
+
+  static String _text(Object? value) =>
+      value is String ? value.trim() : '';
 
   Map<String, dynamic> toFirestore() {
     return {

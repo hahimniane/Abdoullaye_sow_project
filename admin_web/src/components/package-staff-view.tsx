@@ -293,7 +293,7 @@ export function PackageStaffView({
             </div>
             <div><span>Destination</span><b>{destination || "No destination yet"}</b></div>
             {box.sailedAt && <div><span>Sailed</span><b>{formatDate(box.sailedAt)}</b></div>}
-            {box.arrivedAt && <div><span>Arrived</span><b>{formatDate(box.arrivedAt)}</b></div>}
+            {box.arrivedAt && <div><span>Ready for pickup</span><b>{formatDate(box.arrivedAt)}</b></div>}
           </div>
         ) : (
           <p className="pkg-staff-muted">{containerLoaded || !containerId ? "Container not found." : "Loading the container…"}</p>
