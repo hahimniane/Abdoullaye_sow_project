@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../services/container_manifest.dart';
 import '../services/invoice_ledger.dart'
     show invoiceCentsToInput, invoicePaymentMethods;
+import '../services/line_pieces.dart';
 import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../services/waiting_package_service.dart';
 import '../services/waiting_packages.dart';
@@ -48,6 +49,7 @@ Future<void> showPackagePaymentSheet(
   ContainerCallableCaller caller = callContainerCallable,
   LinePaymentsSource? payments,
   bool? isOwner,
+  LineGroupSummary? group,
 }) =>
     showLotSheet<void>(
       context,
@@ -58,6 +60,7 @@ Future<void> showPackagePaymentSheet(
         caller: caller,
         payments: payments,
         isOwner: isOwner,
+        group: group,
       ),
     );
 
@@ -65,6 +68,13 @@ Future<void> showPackagePaymentSheet(
 /// number. The Guinea team records money here as it arrives; a payment is
 /// never above the balance, and a mistaken one is reverted (struck through),
 /// not erased.
+///
+/// A package split across containers is one bill: its payments live on the
+/// root line, and what is paid and owed is read for the whole group
+/// ([group], `lineGroupSummary`). Opened from a part, the sheet shows the
+/// group's balance, records with the part's own line id (the server books it
+/// on the root) and lists the root's payments; the price field is the
+/// part's own.
 class PackagePaymentSheet extends StatefulWidget {
   const PackagePaymentSheet({
     super.key,
@@ -74,10 +84,15 @@ class PackagePaymentSheet extends StatefulWidget {
     this.caller = callContainerCallable,
     this.payments,
     this.isOwner,
+    this.group,
   });
 
   final String businessId;
   final ContainerLine line;
+
+  /// The line's group, when the caller holds its lines; null reads the line
+  /// as a group of one.
+  final LineGroupSummary? group;
   final List<LotStaff> staff;
   final ContainerCallableCaller caller;
 
@@ -100,7 +115,33 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
   Timer? _safety;
 
   late int? _priceCents = widget.line.priceCents;
-  late int _paidCents = widget.line.paidCents;
+
+  /// What the group's root has been paid (the line's own when never split).
+  late int _paidCents = _group.paidCents;
+
+  /// The group, the line alone when the caller had none to give.
+  late final LineGroupSummary _group = widget.group ??
+      lineGroupSummary(
+        [LineGroupEntry(widget.line.id, widget.line.groupFields)],
+        widget.line.rootLineId.isEmpty
+            ? widget.line.id
+            : widget.line.rootLineId,
+      );
+
+  /// Where the payments are kept: the root.
+  String get _paymentsLineId =>
+      _group.rootLineId.isEmpty ? widget.line.id : _group.rootLineId;
+
+  /// The other parts' prices: the group's price is theirs and this one's.
+  late final int _otherPartsCents = _group.parts
+      .where((p) => p.id != widget.line.id)
+      .fold(0, (sum, p) => sum + (p.priceCents ?? 0));
+
+  /// What this line's price may not go below: the root's payments less what
+  /// the other parts cover (`paidFloorForLine`), or simply what was paid.
+  int get _priceFloor => _group.isSplit
+      ? paidFloorForLine(_group, widget.line.id)
+      : _paidCents;
   late bool _savedPayOnArrival = widget.line.payOnArrival;
   late bool _payOnArrival = widget.line.payOnArrival;
   String _method = 'cash';
@@ -118,11 +159,16 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
   Set<String> _errors = {};
   String _serverNote = '';
 
-  PackagePayment get _standing => packageStanding(
-        priceCents: _priceCents,
-        paidCents: _paidCents,
-        payOnArrival: _savedPayOnArrival,
-      );
+  PackagePayment get _standing {
+    final total = _otherPartsCents + (_priceCents ?? 0);
+    return packageStanding(
+      priceCents: _group.isSplit
+          ? (total > 0 ? total : null)
+          : _priceCents,
+      paidCents: _paidCents,
+      payOnArrival: _savedPayOnArrival,
+    );
+  }
 
   @override
   void initState() {
@@ -135,7 +181,8 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
     _safety = Timer(const Duration(seconds: 15), () {
       if (mounted && !_historyLoaded) setState(() => _historyLoaded = true);
     });
-    _sub = source.watch(widget.businessId, widget.line.id).listen((list) {
+    // A part's payments are the root's: the server books them there.
+    _sub = source.watch(widget.businessId, _paymentsLineId).listen((list) {
       if (!mounted) return;
       _safety?.cancel();
       setState(() {
@@ -198,7 +245,7 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
   }
 
   Future<void> _savePrice() async {
-    final problems = validatePackagePrice(_price.text, _paidCents);
+    final problems = validatePackagePrice(_price.text, _priceFloor);
     if (problems.isNotEmpty) {
       AppHaptics.refuse();
       setState(() => _errors = problems.toSet());
@@ -391,6 +438,21 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
             alignment: Alignment.centerLeft,
             child: PackageMoneyLine(payment: standing, alwaysShow: true),
           ),
+          if (_group.isSplit) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              l10n.pcsGroupNote(
+                _group.partCount,
+                _group.parts.firstOrNull?.trackingCode ?? '',
+              ),
+              key: const Key('pay-group-note'),
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                color: AppColors.muted,
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           TextField(
             key: const Key('pay-price'),
@@ -405,7 +467,10 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
             decoration: InputDecoration(
               labelText: l10n.wpkPrice,
               prefixText: r'$ ',
-              helperText: l10n.wpkPriceHint,
+              helperText: _group.isSplit
+                  ? l10n.pcsPartPriceHint
+                  : l10n.wpkPriceHint,
+              helperMaxLines: 3,
               errorText: errorFor(['price_invalid', 'price_below_paid']),
               errorMaxLines: 3,
             ),

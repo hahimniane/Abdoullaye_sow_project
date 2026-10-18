@@ -89,7 +89,12 @@ void main() {
     );
     expect(find.text('Edit line'), findsOneWidget);
     expect(find.byKey(const Key('line-edit-note')), findsOneWidget);
-    expect(_field(tester, 'line-quantity'), '3');
+    // An old-form line of three barrels opens as its three barrel pieces.
+    expect(find.text('Pieces (3)'), findsOneWidget);
+    for (var i = 0; i < 3; i++) {
+      expect(find.byKey(Key('piece-kind-$i-barrel')), findsOneWidget);
+    }
+    expect(find.byKey(const Key('piece-kind-3-barrel')), findsNothing);
     expect(_field(tester, 'line-customer'), 'Fatou Diallo');
     expect(_field(tester, 'line-receiver'), 'Mariama Bah');
     // One line is saved and closed: no "add another", no split hint.
@@ -97,11 +102,15 @@ void main() {
     expect(find.byKey(const Key('line-save-edit')), findsOneWidget);
     expect(find.text('Save'), findsOneWidget);
 
-    // The form's own checks still run before anything is sent.
-    await tester.enterText(find.byKey(const Key('line-quantity')), '');
+    // The form's own checks still run before anything is sent: a box has
+    // to say what it is.
+    await tester.tap(find.byKey(const Key('piece-kind-1-box')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('line-save-edit')));
     await tester.tap(find.byKey(const Key('line-save-edit')));
     await tester.pumpAndSettle();
-    expect(find.text('Enter how many.'), findsOneWidget);
+    expect(find.text('Say what each box or item is.'), findsOneWidget);
+    expect(find.byKey(const Key('piece-error-1')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

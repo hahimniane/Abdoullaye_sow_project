@@ -30,7 +30,13 @@ class WaitingPackageFields extends StatelessWidget {
     this.destinationError,
     this.sizeError,
     this.priceError,
+    this.showSizeAndPrice = true,
   });
+
+  /// The line's own size and price: a car's. A package of pieces has them
+  /// piece by piece (the pieces editor), so only the destination and pay on
+  /// arrival are asked here.
+  final bool showSizeAndPrice;
 
   /// The chosen country's name; empty until one is picked.
   final String destinationName;
@@ -56,21 +62,20 @@ class WaitingPackageFields extends StatelessWidget {
     required TextEditingController controller,
     required String label,
     required bool invalid,
-  }) =>
-      Expanded(
-        child: TextField(
-          key: key,
-          controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [_decimal],
-          onChanged: (_) => onEdited(),
-          decoration: InputDecoration(
-            labelText: label,
-            suffixText: 'in',
-            errorText: invalid ? '' : null,
-          ),
-        ),
-      );
+  }) => Expanded(
+    child: TextField(
+      key: key,
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [_decimal],
+      onChanged: (_) => onEdited(),
+      decoration: InputDecoration(
+        labelText: label,
+        suffixText: 'in',
+        errorText: invalid ? '' : null,
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -87,84 +92,94 @@ class WaitingPackageFields extends StatelessWidget {
           onTap: onPickDestination,
           error: destinationError,
         ),
-        const SizedBox(height: AppSpacing.lg),
-        Text(
-          l10n.wpkSizeTitle,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            color: AppColors.ink,
+        if (showSizeAndPrice) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            l10n.wpkSizeTitle,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color: AppColors.ink,
+            ),
           ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _side(context,
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _side(
+                context,
                 key: const Key('wpk-length'),
                 controller: length,
                 label: l10n.wpkLength,
-                invalid: sizeError != null),
-            const SizedBox(width: AppSpacing.sm),
-            _side(context,
+                invalid: sizeError != null,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _side(
+                context,
                 key: const Key('wpk-width'),
                 controller: width,
                 label: l10n.wpkWidth,
-                invalid: sizeError != null),
-            const SizedBox(width: AppSpacing.sm),
-            _side(context,
+                invalid: sizeError != null,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _side(
+                context,
                 key: const Key('wpk-height'),
                 controller: height,
                 label: l10n.wpkHeight,
-                invalid: sizeError != null),
-          ],
-        ),
-        // The volume follows the three fields as they are typed; the same
-        // length x width x height over 1728 the server and the label use.
-        AnimatedBuilder(
-          animation: Listenable.merge([length, width, height]),
-          builder: (context, _) {
-            final volume = volumeCubicFeet(
-              readInches(length.text),
-              readInches(width.text),
-              readInches(height.text),
-            );
-            return Padding(
-              padding: const EdgeInsets.only(top: 6, left: 2),
-              child: Text(
-                sizeError ??
-                    (volume == null
-                        ? l10n.wpkSizeHint
-                        : '${trimNumber(volume)} ft³'),
-                key: const Key('wpk-size-note'),
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.35,
-                  fontWeight:
-                      sizeError != null || volume != null ? FontWeight.w600 : null,
-                  color: sizeError != null
-                      ? AppColors.errorRed
-                      : (volume != null ? AppColors.sage : AppColors.muted),
-                ),
+                invalid: sizeError != null,
               ),
-            );
-          },
-        ),
-        const SizedBox(height: AppSpacing.md),
-        TextField(
-          key: const Key('wpk-price'),
-          controller: price,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (_) => onEdited(),
-          decoration: InputDecoration(
-            labelText: l10n.wpkPrice,
-            prefixText: r'$ ',
-            helperText: l10n.wpkPriceHint,
-            errorText: priceError,
-            errorMaxLines: 3,
+            ],
           ),
-        ),
+          // The volume follows the three fields as they are typed; the same
+          // length x width x height over 1728 the server and the label use.
+          AnimatedBuilder(
+            animation: Listenable.merge([length, width, height]),
+            builder: (context, _) {
+              final volume = volumeCubicFeet(
+                readInches(length.text),
+                readInches(width.text),
+                readInches(height.text),
+              );
+              return Padding(
+                padding: const EdgeInsets.only(top: 6, left: 2),
+                child: Text(
+                  sizeError ??
+                      (volume == null
+                          ? l10n.wpkSizeHint
+                          : '${trimNumber(volume)} ft³'),
+                  key: const Key('wpk-size-note'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: sizeError != null || volume != null
+                        ? FontWeight.w600
+                        : null,
+                    color: sizeError != null
+                        ? AppColors.errorRed
+                        : (volume != null ? AppColors.sage : AppColors.muted),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            key: const Key('wpk-price'),
+            controller: price,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => onEdited(),
+            decoration: InputDecoration(
+              labelText: l10n.wpkPrice,
+              prefixText: r'$ ',
+              helperText: l10n.wpkPriceHint,
+              errorText: priceError,
+              errorMaxLines: 3,
+            ),
+          ),
+        ] else
+          const SizedBox(height: AppSpacing.sm),
         SwitchListTile.adaptive(
           key: const Key('wpk-pay-on-arrival'),
           contentPadding: EdgeInsets.zero,
@@ -200,6 +215,7 @@ class IntakePaymentFields extends StatelessWidget {
   const IntakePaymentFields({
     super.key,
     required this.price,
+    this.priceCents,
     required this.received,
     required this.onReceived,
     required this.amount,
@@ -215,8 +231,13 @@ class IntakePaymentFields extends StatelessWidget {
     this.receiverError,
   });
 
-  /// The price field: the switch follows it as it is typed.
-  final TextEditingController price;
+  /// What the price follows - the price field, or the pieces editor - so
+  /// the switch follows it as it is typed.
+  final Listenable price;
+
+  /// The price in cents as it stands; without it [price] is read as the
+  /// typed price field.
+  final int? Function()? priceCents;
   final bool received;
   final ValueChanged<bool> onReceived;
   final TextEditingController amount;
@@ -239,7 +260,13 @@ class IntakePaymentFields extends StatelessWidget {
     return AnimatedBuilder(
       animation: price,
       builder: (context, _) {
-        final priced = readPackagePrice(price.text).cents != null;
+        final source = price;
+        final cents = priceCents != null
+            ? priceCents!()
+            : (source is TextEditingController
+                  ? readPackagePrice(source.text).cents
+                  : null);
+        final priced = cents != null;
         final on = received && priced;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -272,8 +299,9 @@ class IntakePaymentFields extends StatelessWidget {
                 key: const Key('wpk-money-amount'),
                 controller: amount,
                 enabled: enabled,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 inputFormatters: [_decimal],
                 onChanged: (_) => onEdited(),
                 decoration: InputDecoration(

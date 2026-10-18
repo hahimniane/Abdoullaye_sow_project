@@ -86,7 +86,7 @@ void main() {
         ],
       ),
     );
-    await tester.tap(find.text('Barrels'));
+    await tester.tap(find.byKey(const Key('line-kind-pieces')));
     await tester.pumpAndSettle();
 
     // Both phones are the shared picker, never a free-text field: the
@@ -175,7 +175,7 @@ void main() {
       containerLineFormSheetForTesting(container: _box),
       locale: const Locale('fr'),
     );
-    await tester.tap(find.text('Des barils'));
+    await tester.tap(find.text('Barils et colis'));
     await tester.pumpAndSettle();
     expect(
       find.text(

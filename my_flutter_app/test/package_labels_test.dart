@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/services/label_printer.dart';
@@ -311,8 +312,10 @@ void main() {
               reason: '${t.part} is wider than its box',
             );
           }
-          expect(layout.part(PackageLabelPart.code)!.text, 'CL-K7M4P2');
           final label = entry.value;
+          // The code, with "· 2 of 3" when the line is several pieces.
+          expect(layout.part(PackageLabelPart.code)!.text,
+              label.packageCount > 1 ? 'CL-K7M4P2 · 2 of 3' : 'CL-K7M4P2');
           if (label.receiverPhone.isNotEmpty) {
             expect(layout.part(PackageLabelPart.receiverPhone)!.text,
                 label.receiverPhone);
@@ -376,18 +379,39 @@ void main() {
           '+224621234567');
     });
 
-    test('what the package is: VIN for a car, n / N for several', () {
+    test('what the piece is: VIN for a car; "CODE · i of N" for several', () {
       final car = layoutPackageLabel(
         _label(what: '2015 Toyota Camry', vin: '4T1BF1FK5FU123456'),
         size: PackageLabelSizes.seventyByEighty,
       );
       expect(car.part(PackageLabelPart.vin)!.text, 'VIN 4T1BF1FK5FU123456');
+      expect(car.part(PackageLabelPart.code)!.text, 'CL-K7M4P2');
+      // One label per piece, numbered with the code as the server's label
+      // prints it (container_labels.js "CL-K7M4P2 · 1 of 3"); the piece's
+      // own name below.
       final barrels = layoutPackageLabel(
         _label(number: 2, count: 3),
         size: PackageLabelSizes.seventyByEighty,
       );
-      expect(barrels.part(PackageLabelPart.what)!.text, 'Barrel · 2 / 3');
+      expect(barrels.part(PackageLabelPart.code)!.text, 'CL-K7M4P2 · 2 of 3');
+      expect(barrels.part(PackageLabelPart.what)!.text, 'Barrel');
       expect(barrels.part(PackageLabelPart.vin), isNull);
+      final server = File('functions/container_labels.js').readAsStringSync();
+      // The page prints the same words, "1 of 3" under the code.
+      expect(server, contains('</i>\${escape(label.packageNumber)} of \${'));
+      // Whole on every size: shrunk, never cut.
+      for (final size in _sizes) {
+        final layout = layoutPackageLabel(
+          _label(code: 'CL-K7M4P2-12', number: 12, count: 60),
+          size: size,
+        );
+        final code = layout.part(PackageLabelPart.code)!;
+        expect(code.text, 'CL-K7M4P2-12 · 12 of 60');
+        expect(code.whole, isTrue);
+        expect(estimatePackageTextWidth(code.text, code.fontMm, mono: true),
+            lessThanOrEqualTo(code.width + 1e-6),
+            reason: '${size.id}: the code line is wider than its box');
+      }
     });
 
     test('TO / POUR and FROM / DE; no sender, no FROM', () {

@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
+import '../services/line_pieces.dart' show LineGroupSummary;
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart' show LotKnownCar, LotStaff;
 import '../services/waiting_package_service.dart';
@@ -238,6 +239,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
           destinations: widget.destinations,
           labelOpener: widget.labelOpener,
           staff: widget.staff,
+          groupLines: widget.feed.lines,
         ),
       ),
     );
@@ -309,6 +311,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
           line: line,
           staff: widget.staff,
           caller: widget.caller,
+          group: lineGroupOf(line, widget.feed.groups),
         );
       case 'print':
         await _printLabel(line);
@@ -426,6 +429,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                 else
                   WaitingPackagesList(
                     lines: shown,
+                    groups: widget.feed.groups,
                     staff: widget.staff,
                     anyAtAll: all.isNotEmpty,
                     searching: searching,
@@ -462,10 +466,15 @@ class WaitingPackagesList extends StatelessWidget {
     required this.searching,
     required this.onTap,
     required this.onPrint,
+    this.groups = const {},
   });
 
   /// What to show, already filtered, newest first.
   final List<ContainerLine> lines;
+
+  /// Every package's group, worked out once by the feed: a part shows what
+  /// its whole package has been paid and still owes.
+  final Map<String, LineGroupSummary> groups;
   final List<LotStaff> staff;
 
   /// Whether anything waits at all, to tell "none" from "none match".
@@ -502,6 +511,7 @@ class WaitingPackagesList extends StatelessWidget {
           index: i,
           child: WaitingPackageCard(
             line: line,
+            group: lineGroupOf(line, groups),
             staff: staff,
             onTap: onTap == null ? null : () => onTap!(line),
             onPrint: onPrint == null ? null : () => onPrint!(line),
@@ -521,9 +531,13 @@ class WaitingPackageCard extends StatelessWidget {
     required this.staff,
     this.onTap,
     this.onPrint,
+    this.group,
   });
 
   final ContainerLine line;
+
+  /// Its package's group; null reads the line alone.
+  final LineGroupSummary? group;
   final List<LotStaff> staff;
   final VoidCallback? onTap;
   final VoidCallback? onPrint;
@@ -542,9 +556,16 @@ class WaitingPackageCard extends StatelessWidget {
         .join(' · ');
     final size = packageSize(line);
     final where = [
+      // "3 pieces · Guinea": the count the labels are printed for.
+      if (!line.isCar) l10n.pcsPieceCount(line.pieceCount),
       if (line.destinationCountryName.isNotEmpty) line.destinationCountryName,
       if (size != null) '${size.dimensionsText} · ${size.volumeText}',
     ].join(' · ');
+    final g = group;
+    // A part split off a package that went ahead: which package it is.
+    final partOf = line.isPart && g != null && g.parts.isNotEmpty
+        ? l10n.pcsPartOf(line.partIndex, g.parts.first.trackingCode)
+        : '';
     final dropped = line.createdAt == null
         ? ''
         : l10n.wpkDroppedOff(displayDate(line.createdAt!, locale));
@@ -635,7 +656,19 @@ class WaitingPackageCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                  PackageMoneyLine(payment: packagePayment(line), alwaysShow: true),
+                  if (partOf.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        partOf,
+                        key: const Key('waiting-part-of'),
+                        style: muted(12),
+                      ),
+                    ),
+                  PackageMoneyLine(
+                    payment: g == null ? packagePayment(line) : groupPayment(g),
+                    alwaysShow: true,
+                  ),
                   if (meta.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
@@ -666,6 +699,7 @@ class WaitingPackageCard extends StatelessWidget {
 @visibleForTesting
 Widget waitingPackagesListForTesting({
   required List<ContainerLine> lines,
+  Map<String, LineGroupSummary> groups = const {},
   List<LotStaff> staff = const [],
   bool anyAtAll = true,
   bool searching = false,
@@ -674,6 +708,7 @@ Widget waitingPackagesListForTesting({
 }) =>
     WaitingPackagesList(
       lines: lines,
+      groups: groups,
       staff: staff,
       anyAtAll: anyAtAll,
       searching: searching,

@@ -145,6 +145,7 @@ typedef ContainerLabelOpener = Future<void> Function({
   required String containerId,
   required LabelPrintChoice choice,
   String lineId,
+  List<String> lineIds,
 });
 
 Future<void> openContainerLabels({

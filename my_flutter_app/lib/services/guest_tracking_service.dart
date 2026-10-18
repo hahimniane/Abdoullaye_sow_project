@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/guest_tracking_result.dart';
+import '../utils/callable_data.dart';
 
 enum GuestTrackingFailureKind { invalid, rateLimited, unavailable }
 
@@ -42,7 +43,9 @@ class FirebaseGuestTrackingService implements GuestTrackingLookupService {
       if (data is! Map) {
         throw const GuestTrackingFailure(GuestTrackingFailureKind.unavailable);
       }
-      return GuestTrackingResult.fromMap(Map<String, dynamic>.from(data));
+      // iOS hands nested maps over as Map<Object?, Object?>: a container
+      // record's parts and payment are decoded all the way down.
+      return GuestTrackingResult.fromMap(callableMap(data));
     } on FirebaseFunctionsException catch (error) {
       throw GuestTrackingFailure(_failureKind(error.code));
     } on GuestTrackingFailure {

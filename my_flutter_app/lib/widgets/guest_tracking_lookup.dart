@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../models/guest_tracking_result.dart';
 import '../screens/freight_quote_details_screen.dart';
 import '../services/guest_tracking_service.dart';
+import '../services/lot_ledger.dart' show formatLotCents;
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import 'app_back_button.dart';
@@ -376,6 +377,23 @@ class _GuestTrackingSuccess extends StatelessWidget {
             label: l10n.guestTrackingStatusLabel,
             value: guestTrackingStageLabel(l10n, record.service, record.stage),
           ),
+          // A package: how many pieces this code covers, every part when it
+          // was split across containers, and what the whole package costs.
+          if (record.pieceCount > 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _GuestFact(
+              label: l10n.pcsTrackingPieces,
+              value: '${record.pieceCount}',
+            ),
+          ],
+          if (record.isSplit) ...[
+            const SizedBox(height: AppSpacing.md),
+            _GuestParts(record: record),
+          ],
+          if (record.payment?.isPriced == true) ...[
+            const SizedBox(height: AppSpacing.md),
+            _GuestPayment(payment: record.payment!),
+          ],
           if (record.shipping != null) ...[
             const SizedBox(height: AppSpacing.md),
             _GuestShippingDetails(shipping: record.shipping!),
@@ -549,6 +567,158 @@ class _GuestFact extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Every part of a package split across containers: each code, where it is,
+/// how many pieces and its price.
+class _GuestParts extends StatelessWidget {
+  const _GuestParts({required this.record});
+
+  final GuestTrackingRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context).textTheme;
+    return Container(
+      key: const Key('guest-tracking-parts'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.lightSurfaceVariant),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.pcsTrackingParts,
+            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            l10n.pcsTrackingPartsHint,
+            style: theme.bodySmall?.copyWith(
+              color: AppColors.lightMuted,
+              height: 1.4,
+            ),
+          ),
+          for (final part in record.parts) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              key: ValueKey('guest-tracking-part:${part.trackingCode}'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SelectableText(
+                        part.trackingCode,
+                        style: theme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: part.trackingCode == record.trackingCode
+                              ? AppColors.cobaltDeep
+                              : null,
+                        ),
+                      ),
+                      Text(
+                        [
+                          guestTrackingStageLabel(
+                              l10n, record.service, part.stage),
+                          if (part.pieceCount > 0)
+                            l10n.pcsPieceCount(part.pieceCount),
+                        ].join(' · '),
+                        style: theme.bodySmall?.copyWith(
+                          color: AppColors.lightMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (part.priceCents != null)
+                  Text(
+                    formatLotCents(part.priceCents!),
+                    style: theme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The whole package's final price, what was paid and what is still owed.
+class _GuestPayment extends StatelessWidget {
+  const _GuestPayment({required this.payment});
+
+  final GuestTrackingPayment payment;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context).textTheme;
+    final rows = <(String, String, Key)>[
+      (
+        l10n.pcsTrackingPrice,
+        formatLotCents(payment.priceCents ?? 0),
+        const Key('guest-tracking-price'),
+      ),
+      (
+        l10n.pcsTrackingPaid,
+        formatLotCents(payment.paidCents),
+        const Key('guest-tracking-paid'),
+      ),
+      (
+        l10n.pcsTrackingBalance,
+        formatLotCents(payment.balanceCents),
+        const Key('guest-tracking-balance'),
+      ),
+    ];
+    return Container(
+      key: const Key('guest-tracking-payment'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.lightSurfaceVariant),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.pcsTrackingMoney,
+            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          for (final (label, value, key) in rows) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.bodySmall?.copyWith(
+                      color: AppColors.lightMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Text(
+                  value,
+                  key: key,
+                  style: theme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -17511,7 +17511,7 @@ abstract class AppLocalizations {
   /// No description provided for @ctrLabelCopies.
   ///
   /// In en, this message translates to:
-  /// **'Labels per package'**
+  /// **'Labels per piece'**
   String get ctrLabelCopies;
 
   /// No description provided for @ctrLabelTwo.
@@ -21692,7 +21692,7 @@ abstract class AppLocalizations {
   /// No description provided for @pkgLabelsOneNotePrinter.
   ///
   /// In en, this message translates to:
-  /// **'One label per package: enough for a pickup or a torn label.'**
+  /// **'One label per piece: enough for a pickup or a torn label.'**
   String get pkgLabelsOneNotePrinter;
 
   /// No description provided for @pkgLabelsTipPrinter.
@@ -22756,6 +22756,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The bank didn\'t answer. Try again.'**
   String get zelleFailBankError;
+
+  /// No description provided for @pcsKindPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrels & boxes'**
+  String get pcsKindPieces;
+
+  /// No description provided for @pcsPiecesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pieces ({count})'**
+  String pcsPiecesTitle(int count);
+
+  /// No description provided for @pcsKindBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel'**
+  String get pcsKindBarrel;
+
+  /// No description provided for @pcsKindBox.
+  ///
+  /// In en, this message translates to:
+  /// **'Box'**
+  String get pcsKindBox;
+
+  /// No description provided for @pcsKindOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get pcsKindOther;
+
+  /// No description provided for @pcsKindLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What piece {number} is'**
+  String pcsKindLabel(int number);
+
+  /// No description provided for @pcsDescriptionOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Description (optional)'**
+  String get pcsDescriptionOptional;
+
+  /// No description provided for @pcsDescriptionWhat.
+  ///
+  /// In en, this message translates to:
+  /// **'What is it?'**
+  String get pcsDescriptionWhat;
+
+  /// No description provided for @pcsPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Price'**
+  String get pcsPrice;
+
+  /// No description provided for @pcsAddSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Add size (inches)'**
+  String get pcsAddSize;
+
+  /// No description provided for @pcsRemovePiece.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove piece {number}'**
+  String pcsRemovePiece(int number);
+
+  /// No description provided for @pcsAddPiece.
+  ///
+  /// In en, this message translates to:
+  /// **'Add another piece'**
+  String get pcsAddPiece;
+
+  /// No description provided for @pcsTotalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece · Total} other{{count} pieces · Total}}'**
+  String pcsTotalLabel(int count);
+
+  /// No description provided for @pcsNoPriceYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No price yet'**
+  String get pcsNoPriceYet;
+
+  /// No description provided for @pcsSaveAndPrint.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Save and print 1 label} other{Save and print {count} labels}}'**
+  String pcsSaveAndPrint(int count);
+
+  /// No description provided for @pcsSaveAndAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Save & register another for this sender'**
+  String get pcsSaveAndAnother;
+
+  /// No description provided for @pcsSaveOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Save without printing'**
+  String get pcsSaveOnly;
+
+  /// No description provided for @pcsAnotherHint.
+  ///
+  /// In en, this message translates to:
+  /// **'“Register another” keeps only the sender, for a different receiver or country.'**
+  String get pcsAnotherHint;
+
+  /// No description provided for @pcsBoxesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 box} other{{count} boxes}}'**
+  String pcsBoxesCount(int count);
+
+  /// No description provided for @pcsItemsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item} other{{count} items}}'**
+  String pcsItemsCount(int count);
+
+  /// No description provided for @pcsPieceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece} other{{count} pieces}}'**
+  String pcsPieceCount(int count);
+
+  /// No description provided for @pcsErrPiecesRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one piece.'**
+  String get pcsErrPiecesRequired;
+
+  /// No description provided for @pcsErrPiecesTooMany.
+  ///
+  /// In en, this message translates to:
+  /// **'A package can have at most 60 pieces.'**
+  String get pcsErrPiecesTooMany;
+
+  /// No description provided for @pcsErrKindInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what each piece is: a barrel, a box, or something else.'**
+  String get pcsErrKindInvalid;
+
+  /// No description provided for @pcsErrDescriptionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what each box or item is.'**
+  String get pcsErrDescriptionRequired;
+
+  /// No description provided for @pcsErrDescriptionTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep each piece\'s description to 120 characters.'**
+  String get pcsErrDescriptionTooLong;
+
+  /// No description provided for @pcsErrSizeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a piece\'s length, width and height in inches, or leave all three empty.'**
+  String get pcsErrSizeInvalid;
+
+  /// No description provided for @pcsErrPriceInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter each piece\'s price in dollars, zero or more.'**
+  String get pcsErrPriceInvalid;
+
+  /// No description provided for @pcsErrCountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how many pieces go in: from 1 to the number the package has.'**
+  String get pcsErrCountInvalid;
+
+  /// No description provided for @pcsErrLineHasParts.
+  ///
+  /// In en, this message translates to:
+  /// **'Other parts of this package are still listed. Remove them first.'**
+  String get pcsErrLineHasParts;
+
+  /// No description provided for @pcsGoingIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Pieces going in'**
+  String get pcsGoingIn;
+
+  /// No description provided for @pcsGoingOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{going} of {total}'**
+  String pcsGoingOf(int going, int total);
+
+  /// No description provided for @pcsFewer.
+  ///
+  /// In en, this message translates to:
+  /// **'Fewer pieces'**
+  String get pcsFewer;
+
+  /// No description provided for @pcsMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More pieces'**
+  String get pcsMore;
+
+  /// No description provided for @pcsPreviewGoing.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece → this container} other{{count} pieces → this container}}'**
+  String pcsPreviewGoing(int count);
+
+  /// No description provided for @pcsPreviewStaying.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece stays waiting} other{{count} pieces stay waiting}}'**
+  String pcsPreviewStaying(int count);
+
+  /// No description provided for @pcsSplitNote.
+  ///
+  /// In en, this message translates to:
+  /// **'No message is sent now. Each part gets its own departed and ready-for-pickup messages. Print new labels for the pieces that stay.'**
+  String get pcsSplitNote;
+
+  /// No description provided for @pcsPrintPartsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Print labels for the pieces that stay?'**
+  String get pcsPrintPartsTitle;
+
+  /// No description provided for @pcsPrintPartsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{codes} stay on the waiting list under new codes, so their old labels are wrong. Print new ones now.'**
+  String pcsPrintPartsMessage(String codes);
+
+  /// No description provided for @pcsPrintPartsConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Print labels'**
+  String get pcsPrintPartsConfirm;
+
+  /// No description provided for @pcsPartLabelsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Labels for the part that stays waiting} other{Labels for the {count} parts that stay waiting}}'**
+  String pcsPartLabelsSubtitle(int count);
+
+  /// No description provided for @pcsGroupNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid and owed are for the whole package ({parts} parts). Payments are kept on {code}.'**
+  String pcsGroupNote(int parts, String code);
+
+  /// No description provided for @pcsPartPriceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This part\'s own price. A changed total is spread evenly over its pieces.'**
+  String get pcsPartPriceHint;
+
+  /// No description provided for @pcsPartOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Part {index} of {code}'**
+  String pcsPartOf(int index, String code);
+
+  /// No description provided for @pcsTrackingPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'Pieces'**
+  String get pcsTrackingPieces;
+
+  /// No description provided for @pcsTrackingParts.
+  ///
+  /// In en, this message translates to:
+  /// **'Parts of this package'**
+  String get pcsTrackingParts;
+
+  /// No description provided for @pcsTrackingPartsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Some pieces may travel on a later container.'**
+  String get pcsTrackingPartsHint;
+
+  /// No description provided for @pcsTrackingMoney.
+  ///
+  /// In en, this message translates to:
+  /// **'Price and payments'**
+  String get pcsTrackingMoney;
+
+  /// No description provided for @pcsTrackingPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Final price'**
+  String get pcsTrackingPrice;
+
+  /// No description provided for @pcsTrackingPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get pcsTrackingPaid;
+
+  /// No description provided for @pcsTrackingBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Still owed'**
+  String get pcsTrackingBalance;
 }
 
 class _AppLocalizationsDelegate

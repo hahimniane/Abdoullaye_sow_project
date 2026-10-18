@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
+import '../services/line_pieces.dart' show LineGroupSummary;
 import '../services/lot_ledger.dart' show LotStaff;
 import '../services/package_codes.dart';
 import '../services/waiting_packages.dart';
@@ -44,6 +45,7 @@ class PackageResultScreen extends StatefulWidget {
     this.repository,
     this.labelOpener = openContainerLabels,
     this.staff = const [],
+    this.groupLines = const [],
   }) : assert(code != '' || lineId != '');
 
   final String businessId;
@@ -69,6 +71,11 @@ class PackageResultScreen extends StatefulWidget {
   /// Names for "recorded by" in the payment history, when the caller has them.
   final List<LotStaff> staff;
 
+  /// The business's lines the caller already holds, so a package split
+  /// across containers shows the money of its whole group (payments live on
+  /// the root). Without them the line is read alone.
+  final List<ContainerLine> groupLines;
+
   @override
   State<PackageResultScreen> createState() => _PackageResultScreenState();
 }
@@ -81,6 +88,9 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
   Timer? _safety;
 
   ContainerLine? _line;
+
+  /// The line's group, worked out when the line arrives (not per build).
+  LineGroupSummary? _group;
   ShippingContainer? _container;
   String _containerId = '';
   bool _loaded = false;
@@ -116,6 +126,7 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
       final own = line != null && line.businessId == widget.businessId;
       setState(() {
         _line = own ? line : null;
+        _group = own ? _groupOf(line) : null;
         _loaded = true;
         _failed = false;
       });
@@ -129,6 +140,18 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
         _failed = true;
       });
     });
+  }
+
+  /// The live line among the lines the caller gave, as one group.
+  LineGroupSummary _groupOf(ContainerLine line) {
+    final root = line.rootLineId.isEmpty ? line.id : line.rootLineId;
+    final siblings = [
+      line,
+      for (final l in widget.groupLines)
+        if (l.id != line.id && (l.rootLineId.isEmpty ? l.id : l.rootLineId) == root)
+          l,
+    ];
+    return lineGroupsByRoot(siblings)[root] ?? lineGroupOf(line, const {});
   }
 
   void _followContainer(String containerId) {
@@ -228,6 +251,7 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
       businessId: widget.businessId,
       line: line,
       staff: widget.staff,
+      group: _group,
     );
   }
 
@@ -309,6 +333,7 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
             _container == null && !line.isWaiting ? null : _printLabels,
         onOpenContainer: _openContainer,
         onPricePayments: _pricePayments,
+        group: _group,
       );
     }
     return Scaffold(
@@ -427,9 +452,13 @@ class PackageResultView extends StatelessWidget {
     required this.onOpenContainer,
     this.onEditLine,
     this.onPricePayments,
+    this.group,
   });
 
   final ContainerLine line;
+
+  /// Its package's group: a part shows the whole package's money.
+  final LineGroupSummary? group;
 
   /// Null while it loads, or when it was deleted.
   final ShippingContainer? container;
@@ -651,7 +680,10 @@ class PackageResultView extends StatelessWidget {
                     muted: true,
                   ),
                 PackageMoneyLine(
-                    payment: packagePayment(line), alwaysShow: true),
+                    payment: group == null
+                        ? packagePayment(line)
+                        : groupPayment(group!),
+                    alwaysShow: true),
               ],
             ),
           ),
@@ -1125,8 +1157,10 @@ Widget packageResultViewForTesting({
   VoidCallback? onPrintLabels,
   VoidCallback? onOpenContainer,
   VoidCallback? onPricePayments,
+  LineGroupSummary? group,
 }) =>
     PackageResultView(
+      group: group,
       line: line,
       container: container,
       onCall: onCall ?? (_) {},

@@ -9,6 +9,7 @@
 /// they are tested the same way.
 library;
 
+import 'line_pieces.dart';
 import 'lot_ledger.dart' show lotDateOf;
 
 // ---------------------------------------------------------------------------
@@ -125,6 +126,17 @@ const containerRefusalCodes = <String>[
   'payment_already_reverted',
   // A shipping line outside lib/data/ocean_carrier_catalog.dart.
   'carrier_invalid',
+  // Pieces on lines (docs/WAITING_PACKAGES.md "Pieces", "Split across
+  // containers"); the rules are lib/services/line_pieces.dart.
+  'pieces_required',
+  'pieces_too_many',
+  'piece_kind_invalid',
+  'piece_description_required',
+  'piece_description_too_long',
+  'piece_size_invalid',
+  'piece_price_invalid',
+  'piece_count_invalid',
+  'line_has_parts',
 ];
 
 String _text(Object? value, [int max = containerMaxText]) {
@@ -469,6 +481,7 @@ class ContainerLineDraft {
     this.heightIn = '',
     this.priceCents,
     this.payOnArrival = false,
+    this.pieces,
   });
 
   final String kind;
@@ -503,18 +516,39 @@ class ContainerLineDraft {
   final String widthIn;
   final String heightIn;
 
-  /// US dollars in whole cents; null is "no price yet".
+  /// US dollars in whole cents; null is "no price yet". Unused when the line
+  /// is described by [pieces]: its price is then the sum of theirs.
   final int? priceCents;
   final bool payOnArrival;
+
+  /// What a line that is not a car holds, piece by piece, as the form typed
+  /// it: `{id, kind, description, sizeIn: {l, w, h}, priceCents}` (a price
+  /// that could not be read stays the text typed, so [validateContainerLine]
+  /// names it). Null for a car, and for the old kind/quantity form.
+  final List<Map<String, Object?>>? pieces;
+
+  /// The line is described by its pieces. Mirrors `linesInPiecesMode`.
+  bool get usesPieces =>
+      _text(kind, 20) != containerLineKindCar && pieces != null;
+
+  /// What the customer owes for it: the sum of the priced pieces, or the
+  /// typed price of a car or an old-form line.
+  int? get totalCents => usesPieces ? piecesTotalCents(pieces) : priceCents;
 }
 
-/// Error codes. Mirrors `validateContainerLine`.
+/// Error codes. Mirrors `validateContainerLine`: a line with pieces is
+/// judged by them (`pieceErrors`, 1-60) and its price is their sum.
 List<String> validateContainerLine(ContainerLineDraft input) {
   final errors = <String>[];
   final kind = _text(input.kind, 20);
-  if (!containerLineKinds.contains(kind)) errors.add('line_kind_invalid');
+  final pieced = input.usesPieces;
+  if (!pieced && !containerLineKinds.contains(kind)) {
+    errors.add('line_kind_invalid');
+  }
 
-  if (kind == containerLineKindCar) {
+  if (pieced) {
+    errors.addAll(pieceErrors(input.pieces));
+  } else if (kind == containerLineKindCar) {
     final vin = _text(input.vinNumber, containerMaxVin).toUpperCase();
     if (vin.length < containerMinVin) errors.add('vin_required');
   } else if (kind == containerLineKindBarrels) {
@@ -537,12 +571,18 @@ List<String> validateContainerLine(ContainerLineDraft input) {
   errors.addAll(
     _contactPhoneErrors(input.customerPhone, input.receiverPhone, owner),
   );
-  errors.addAll(packageSizeErrors(
-    input.lengthIn,
-    input.widthIn,
-    input.heightIn,
-  ));
-  errors.addAll(packagePriceErrors(input.priceCents));
+  if (pieced) {
+    // Sizes are each piece's own; the price is the sum of the pieces.
+    errors.addAll(packagePriceErrors(
+        piecesTotalCents(normalizePieces(input.pieces))));
+  } else {
+    errors.addAll(packageSizeErrors(
+      input.lengthIn,
+      input.widthIn,
+      input.heightIn,
+    ));
+    errors.addAll(packagePriceErrors(input.priceCents));
+  }
   return errors;
 }
 
@@ -629,9 +669,38 @@ Map<String, dynamic> _containerLineContacts({
 /// The line body the callable is sent, shaped the way the server stores it:
 /// a car carries no quantity, stock carries no customer. Mirrors
 /// `containerLineRecord` minus the server-only fields.
+///
+/// A line with pieces sends them (`pieces`, ids kept on an edit) with the
+/// summary older app versions read - `kind`, `quantity` and `description`
+/// from `piecesSummaryFields`; the server recomputes those, the counts, the
+/// size and the price from the pieces themselves.
 Map<String, dynamic> containerLineRecord(ContainerLineDraft input) {
-  final kind = _text(input.kind, 20);
   final owner = _text(input.ownerKind, 20);
+  if (input.usesPieces) {
+    final pieces = normalizePieces(input.pieces);
+    final summary = piecesSummaryFields(pieces);
+    return {
+      'kind': summary.kind,
+      'vinNumber': '',
+      'carMake': '',
+      'carModel': '',
+      'carYear': '',
+      'quantity': summary.quantity,
+      'description': summary.description,
+      'pieces': [for (final p in pieces) p.toMap()],
+      'ownerKind': owner,
+      ..._containerLineContacts(
+        owner: owner,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        receiverName: input.receiverName,
+        receiverPhone: input.receiverPhone,
+        notifyCustomer: input.notifyCustomer,
+        notifyReceiver: input.notifyReceiver,
+      ),
+    };
+  }
+  final kind = _text(input.kind, 20);
   final isCar = kind == containerLineKindCar;
   final quantity = _positiveInt(input.quantity);
   return {
@@ -767,6 +836,14 @@ class ContainerLine {
     this.priceCents,
     this.paidCents = 0,
     this.payOnArrival = false,
+    this.pieces,
+    this.allPieces = const [],
+    this.counts = const PieceCounts(),
+    this.source = 'counter',
+    this.receivedAt,
+    this.rootLineId = '',
+    this.partIndex = 1,
+    this.lastPartIndex = 0,
   });
 
   final String id;
@@ -827,9 +904,49 @@ class ContainerLine {
   /// The team at the destination will record the money.
   final bool payOnArrival;
 
+  /// The line's own pieces as stored; null for a car and for a line in the
+  /// old kind/quantity form (see [allPieces]).
+  final List<LinePiece>? pieces;
+
+  /// Every piece, old lines included, the way every reader sees them
+  /// (`linePieces`): a car is one car piece, `{barrels, 4}` four barrels.
+  final List<LinePiece> allPieces;
+
+  /// What it counts for: all pieces, barrels, packages (box + other), cars.
+  final PieceCounts counts;
+
+  /// counter, request or card_order.
+  final String source;
+
+  /// When the pieces were physically received; the creation time of a line
+  /// written before the field existed.
+  final DateTime? receivedAt;
+
+  /// The first line of its group (its own id unless it was split from one)
+  /// and its place in that group: the root is part 1. Payments live on the
+  /// root.
+  final String rootLineId;
+  final int partIndex;
+
+  /// On a root: the highest part number the group ever used.
+  final int lastPartIndex;
+
+  int get pieceCount => counts.pieceCount;
+  int get barrelPieces => counts.barrelPieces;
+  int get packagePieces => counts.packagePieces;
+  int get carPieces => counts.carPieces;
+
+  /// The line carries its own pieces (not a car, not an old-form line).
+  bool get hasPieces => pieces != null;
+
+  /// Split off another line: its money is the root's.
+  bool get isPart => rootLineId.isNotEmpty && rootLineId != id;
+
   factory ContainerLine.fromMap(String id, Map<String, dynamic> d) {
     final customerPhone = _text(d['customerPhone'], 40);
     final receiverPhone = _text(d['receiverPhone'], 40);
+    final all = linePieces(d);
+    final createdAt = lotDateOf(d['createdAt']);
     return ContainerLine(
       id: id,
       businessId: _text(d['businessId'], containerMaxLabel),
@@ -853,7 +970,7 @@ class ContainerLine {
       notifyReceiver:
           receiverPhone.isNotEmpty && _onUnlessOff(d['notifyReceiver']),
       addedByStaffId: _text(d['addedByStaffId'], containerMaxLabel),
-      createdAt: lotDateOf(d['createdAt']),
+      createdAt: createdAt,
       updatedAt: lotDateOf(d['updatedAt']),
       lastCustomerUpdate: ContainerLineUpdate.fromMap(d['lastCustomerUpdate']),
       destinationCountryId: _text(d['destinationCountryId'], 60),
@@ -865,8 +982,31 @@ class ContainerLine {
       priceCents: _priceCents(d['priceCents']),
       paidCents: _paidCents(d['paidCents']),
       payOnArrival: d['payOnArrival'] == true,
+      pieces: lineHasPieces(d) ? all : null,
+      allPieces: all,
+      counts: pieceCounts(all),
+      source: lineSourceOf(d['source']),
+      receivedAt: lotDateOf(d['receivedAt']) ?? createdAt,
+      rootLineId: groupRootId(d, id),
+      partIndex: partIndexOf(d),
+      lastPartIndex: _positiveInt(d['lastPartIndex']),
     );
   }
+
+  /// The fields `lineGroupSummary` reads, as the server would hold them.
+  Map<String, Object?> get groupFields => {
+        'kind': kind,
+        'quantity': quantity,
+        'pieces': pieces == null ? null : [for (final p in pieces!) p.toMap()],
+        'rootLineId': rootLineId,
+        'partIndex': partIndex,
+        'trackingCode': trackingCode,
+        'priceCents': priceCents,
+        'paidCents': paidCents,
+        'payOnArrival': payOnArrival,
+        'containerId': containerId,
+        'containerStatus': containerStatus,
+      };
 
   /// Dropped off and not on any container yet. Mirrors `lineIsWaiting`.
   bool get isWaiting =>
@@ -1086,8 +1226,9 @@ List<ContainerLine> containerLinesForVin(
 }
 
 /// The summary a container carries so a list of them can be scanned without
-/// loading every line. Barrels count by quantity; cars and other by line.
-/// Mirrors `containerCounts`.
+/// loading every line. Pieces are counted by kind - a split part counts only
+/// its own, a legacy line by its quantity: barrels as barrels, boxes and
+/// other things as "other", cars as cars. Mirrors `containerCounts`.
 class ContainerCounts {
   const ContainerCounts({
     this.lineCount = 0,
@@ -1106,13 +1247,9 @@ ContainerCounts containerCounts(Iterable<ContainerLine> lines) {
   var lineCount = 0, carCount = 0, barrelCount = 0, otherCount = 0;
   for (final line in lines) {
     lineCount += 1;
-    if (line.isCar) {
-      carCount += 1;
-    } else if (line.isBarrels) {
-      barrelCount += line.quantity;
-    } else {
-      otherCount += line.quantity > 0 ? line.quantity : 1;
-    }
+    carCount += line.carPieces;
+    barrelCount += line.barrelPieces;
+    otherCount += line.packagePieces;
   }
   return ContainerCounts(
     lineCount: lineCount,

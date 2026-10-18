@@ -330,6 +330,7 @@ void main() {
         required String containerId,
         required LabelPrintChoice choice,
         String lineId = '',
+        List<String> lineIds = const [],
       }) async {
         calls.add(containerLabelsRequest(
           businessId: businessId,
@@ -487,7 +488,7 @@ void main() {
       expect(find.text('Imprimer les étiquettes'), findsOneWidget);
       expect(find.text('Feuille Letter'), findsOneWidget);
       expect(find.text('Thermique 4 × 6'), findsOneWidget);
-      expect(find.text('Étiquettes par colis'), findsOneWidget);
+      expect(find.text('Étiquettes par pièce'), findsOneWidget);
       expect(find.text('Ouvrir les étiquettes à imprimer'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

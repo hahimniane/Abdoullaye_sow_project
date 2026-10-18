@@ -10082,7 +10082,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Une étiquette par étiquette 4 × 6 po en rouleau, pour les imprimantes Zebra, Rollo et similaires.';
 
   @override
-  String get ctrLabelCopies => 'Étiquettes par colis';
+  String get ctrLabelCopies => 'Étiquettes par pièce';
 
   @override
   String get ctrLabelTwo => 'Deux';
@@ -12625,7 +12625,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pkgLabelsOneNotePrinter =>
-      'Une étiquette par colis : suffisant pour un retrait ou une étiquette déchirée.';
+      'Une étiquette par pièce : suffisant pour un retrait ou une étiquette déchirée.';
 
   @override
   String get pkgLabelsTipPrinter =>
@@ -13358,4 +13358,247 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get zelleFailBankError => 'La banque n\'a pas répondu. Réessayez.';
+
+  @override
+  String get pcsKindPieces => 'Barils et colis';
+
+  @override
+  String pcsPiecesTitle(int count) {
+    return 'Pièces ($count)';
+  }
+
+  @override
+  String get pcsKindBarrel => 'Baril';
+
+  @override
+  String get pcsKindBox => 'Colis';
+
+  @override
+  String get pcsKindOther => 'Autre';
+
+  @override
+  String pcsKindLabel(int number) {
+    return 'Ce qu\'est la pièce $number';
+  }
+
+  @override
+  String get pcsDescriptionOptional => 'Description (facultative)';
+
+  @override
+  String get pcsDescriptionWhat => 'Qu\'est-ce que c\'est ?';
+
+  @override
+  String get pcsPrice => 'Prix';
+
+  @override
+  String get pcsAddSize => 'Ajouter les dimensions (pouces)';
+
+  @override
+  String pcsRemovePiece(int number) {
+    return 'Retirer la pièce $number';
+  }
+
+  @override
+  String get pcsAddPiece => 'Ajouter une autre pièce';
+
+  @override
+  String pcsTotalLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pièces · Total',
+      one: '1 pièce · Total',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pcsNoPriceYet => 'Pas encore de prix';
+
+  @override
+  String pcsSaveAndPrint(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Enregistrer et imprimer $count étiquettes',
+      one: 'Enregistrer et imprimer 1 étiquette',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pcsSaveAndAnother =>
+      'Enregistrer et en enregistrer un autre pour cet expéditeur';
+
+  @override
+  String get pcsSaveOnly => 'Enregistrer sans imprimer';
+
+  @override
+  String get pcsAnotherHint =>
+      '« En enregistrer un autre » ne garde que l\'expéditeur, pour un autre destinataire ou pays.';
+
+  @override
+  String pcsBoxesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count colis',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pcsItemsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count articles',
+      one: '1 article',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pcsPieceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pièces',
+      one: '1 pièce',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pcsErrPiecesRequired => 'Ajoutez au moins une pièce.';
+
+  @override
+  String get pcsErrPiecesTooMany => 'Un colis peut avoir au plus 60 pièces.';
+
+  @override
+  String get pcsErrKindInvalid =>
+      'Indiquez ce qu\'est chaque pièce : un baril, un colis ou autre chose.';
+
+  @override
+  String get pcsErrDescriptionRequired =>
+      'Indiquez ce qu\'est chaque colis ou article.';
+
+  @override
+  String get pcsErrDescriptionTooLong =>
+      'Limitez la description de chaque pièce à 120 caractères.';
+
+  @override
+  String get pcsErrSizeInvalid =>
+      'Saisissez la longueur, la largeur et la hauteur de la pièce en pouces, ou laissez les trois vides.';
+
+  @override
+  String get pcsErrPriceInvalid =>
+      'Saisissez le prix de chaque pièce en dollars, zéro ou plus.';
+
+  @override
+  String get pcsErrCountInvalid =>
+      'Choisissez combien de pièces partent : de 1 au nombre de pièces du colis.';
+
+  @override
+  String get pcsErrLineHasParts =>
+      'D\'autres parties de ce colis sont encore enregistrées. Retirez-les d\'abord.';
+
+  @override
+  String get pcsGoingIn => 'Pièces qui partent';
+
+  @override
+  String pcsGoingOf(int going, int total) {
+    return '$going sur $total';
+  }
+
+  @override
+  String get pcsFewer => 'Moins de pièces';
+
+  @override
+  String get pcsMore => 'Plus de pièces';
+
+  @override
+  String pcsPreviewGoing(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pièces → ce conteneur',
+      one: '1 pièce → ce conteneur',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pcsPreviewStaying(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pièces restent en attente',
+      one: '1 pièce reste en attente',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pcsSplitNote =>
+      'Aucun message n\'est envoyé maintenant. Chaque partie reçoit ses propres messages de départ et de retrait. Imprimez de nouvelles étiquettes pour les pièces qui restent.';
+
+  @override
+  String get pcsPrintPartsTitle =>
+      'Imprimer les étiquettes des pièces qui restent ?';
+
+  @override
+  String pcsPrintPartsMessage(String codes) {
+    return '$codes restent en attente avec de nouveaux codes : leurs anciennes étiquettes ne sont plus bonnes. Imprimez-en de nouvelles maintenant.';
+  }
+
+  @override
+  String get pcsPrintPartsConfirm => 'Imprimer les étiquettes';
+
+  @override
+  String pcsPartLabelsSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Étiquettes des $count parties qui restent en attente',
+      one: 'Étiquettes de la partie qui reste en attente',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pcsGroupNote(int parts, String code) {
+    return 'Le payé et le reste dû portent sur tout le colis ($parts parties). Les paiements sont enregistrés sur $code.';
+  }
+
+  @override
+  String get pcsPartPriceHint =>
+      'Le prix de cette partie seule. Un total modifié est réparti également sur ses pièces.';
+
+  @override
+  String pcsPartOf(int index, String code) {
+    return 'Partie $index de $code';
+  }
+
+  @override
+  String get pcsTrackingPieces => 'Pièces';
+
+  @override
+  String get pcsTrackingParts => 'Parties de ce colis';
+
+  @override
+  String get pcsTrackingPartsHint =>
+      'Certaines pièces peuvent partir dans un conteneur suivant.';
+
+  @override
+  String get pcsTrackingMoney => 'Prix et paiements';
+
+  @override
+  String get pcsTrackingPrice => 'Prix final';
+
+  @override
+  String get pcsTrackingPaid => 'Payé';
+
+  @override
+  String get pcsTrackingBalance => 'Reste dû';
 }

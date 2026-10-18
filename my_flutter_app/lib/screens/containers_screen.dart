@@ -16,6 +16,7 @@ import '../services/container_lot_cars.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
 import '../services/known_car_lookup.dart';
+import '../services/line_pieces.dart';
 import '../services/label_printer.dart' show LabelPrinterController;
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
@@ -36,6 +37,7 @@ import '../widgets/country_phone_field.dart';
 import '../widgets/label_print_sheet.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_money.dart';
+import '../widgets/pieces_editor.dart';
 import '../widgets/waiting_package_fields.dart';
 import 'add_waiting_packages_sheet.dart';
 import 'label_printer_settings_screen.dart';
@@ -76,6 +78,12 @@ class ContainerFeed extends ChangeNotifier {
 
   List<ShippingContainer> containers = const [];
   List<ContainerLine> lines = const [];
+
+  /// Every package's group (a line and the parts split from it), by root
+  /// id: worked out once per change of [lines], never per row drawn.
+  Map<String, LineGroupSummary> get groups =>
+      _groups ??= lineGroupsByRoot(lines);
+  Map<String, LineGroupSummary>? _groups;
   bool loaded = false;
   bool failed = false;
   bool _disposed = false;
@@ -104,6 +112,7 @@ class ContainerFeed extends ChangeNotifier {
       lines = [
         for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
       ];
+      _groups = null;
       _changed();
     }, onError: (_) {}));
   }
@@ -383,6 +392,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
           destinations: _destinations,
           onOpenContainer: _openDetail,
           staff: _staff,
+          groupLines: _lines,
         ),
       ),
     );
@@ -442,6 +452,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
                 else if (searching)
                   _SearchResults(
                     hits: searchContainerLines(_lines, byId, _search),
+                    groups: _feed.groups,
                     staff: _staff,
                     onOpen: _openDetail,
                     onOpenWaiting: _openWaitingHit,
@@ -916,10 +927,14 @@ class _SearchResults extends StatelessWidget {
     required this.staff,
     required this.onOpen,
     required this.onOpenWaiting,
+    this.groups = const {},
   });
 
   final List<ContainerSearchHit> hits;
   final List<LotStaff> staff;
+
+  /// The feed's groups, so a part shows its whole package's money.
+  final Map<String, LineGroupSummary> groups;
   final ValueChanged<String> onOpen;
   final ValueChanged<ContainerLine> onOpenWaiting;
 
@@ -951,6 +966,7 @@ class _SearchResults extends StatelessWidget {
               key: ValueKey('hit-${hit.line.id}'),
               line: hit.line,
               staff: staff,
+              payment: groupPayment(lineGroupOf(hit.line, groups)),
               // The line's whereabouts, which is what a search is asking: the
               // box it is on, or that it has none yet.
               trailing: hit.isWaiting
@@ -1191,10 +1207,30 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
       businessId: widget.businessId,
       container: container,
       packages: waitingLines(_allLines),
+      lines: _allLines,
     );
     if (added == null || !mounted) return;
     AppHaptics.commit();
-    showSuccessSnackBar(context, l10n.wpkAdded(added, container.displayName));
+    showSuccessSnackBar(
+        context, l10n.wpkAdded(added.assigned, container.displayName));
+    // A split left parts waiting under new codes: their pieces still carry
+    // the old labels, so offer the new ones now.
+    final parts = added.parts;
+    if (parts.isEmpty) return;
+    final print = await confirmMajorAction(
+      context,
+      title: l10n.pcsPrintPartsTitle,
+      message: l10n.pcsPrintPartsMessage(
+          parts.map((p) => p.trackingCode).where((c) => c.isNotEmpty).join(', ')),
+      confirmLabel: l10n.pcsPrintPartsConfirm,
+      icon: Icons.qr_code_2,
+    );
+    if (!print || !mounted) return;
+    await showContainerLabelSheet(
+      context,
+      businessId: widget.businessId,
+      lineIds: [for (final p in parts) p.partLineId],
+    );
   }
 
   Future<void> _ship() async {
@@ -1332,6 +1368,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         line: line,
         staff: widget.staff,
         open: container.isLoading,
+        payment: groupPayment(lineGroupOf(line, _feed.groups)),
       ),
     );
     if (action == null || !mounted) return;
@@ -1361,6 +1398,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         businessId: widget.businessId,
         line: line,
         staff: widget.staff,
+        group: lineGroupOf(line, _feed.groups),
       );
       return;
     }
@@ -1671,6 +1709,8 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                           child: _LineCard(
                             line: lines[i],
                             staff: widget.staff,
+                            payment: groupPayment(
+                                lineGroupOf(lines[i], _feed.groups)),
                             onTap: busy ? null : () => _lineActions(lines[i]),
                             trailing: IconButton(
                               key: ValueKey('line-print-labels:${lines[i].id}'),
@@ -2091,12 +2131,17 @@ class _LineCard extends StatelessWidget {
     required this.staff,
     this.trailing,
     this.onTap,
+    this.payment,
   });
 
   final ContainerLine line;
   final List<LotStaff> staff;
   final Widget? trailing;
   final VoidCallback? onTap;
+
+  /// Where its package stands on money: for a part of a split package, the
+  /// whole group's (payments live on the root). The line's own otherwise.
+  final PackagePayment? payment;
 
   @override
   Widget build(BuildContext context) {
@@ -2218,7 +2263,7 @@ class _LineCard extends StatelessWidget {
                   ],
                   // Priced packages show their payment standing; most lines on
                   // a container predate prices and show nothing.
-                  PackageMoneyLine(payment: packagePayment(line)),
+                  PackageMoneyLine(payment: payment ?? packagePayment(line)),
                   if (updated.isNotEmpty)
                     _LineNote(
                       key: const Key('line-updates'),
@@ -2313,10 +2358,14 @@ class _LineActionsSheet extends StatelessWidget {
     required this.line,
     required this.staff,
     required this.open,
+    this.payment,
   });
 
   final ContainerLine line;
   final List<LotStaff> staff;
+
+  /// The group's standing on money ([_LineCard.payment]).
+  final PackagePayment? payment;
 
   /// Whether the container is still loading. A shipped list is the record
   /// of what went, so its lines are shown and left alone.
@@ -2331,7 +2380,7 @@ class _LineActionsSheet extends StatelessWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _LineCard(line: line, staff: staff),
+          _LineCard(line: line, staff: staff, payment: payment),
           const SizedBox(height: AppSpacing.sm),
           // Contacts stay correctable after the box ships; the rest of the
           // line is the record of what went.
@@ -2816,12 +2865,21 @@ class _LineFormSheet extends StatefulWidget {
 }
 
 class _LineFormSheetState extends State<_LineFormSheet> {
+  /// The form's second choice beside a car: a load described piece by piece
+  /// (barrels, boxes, anything else). Never sent: the request carries the
+  /// pieces and the summary kind they make.
+  static const _kindPieces = 'pieces';
+
   final _vin = TextEditingController();
   final _make = TextEditingController();
   final _model = TextEditingController();
   final _year = TextEditingController();
-  final _quantity = TextEditingController();
-  final _description = TextEditingController();
+
+  /// What a package that is not a car holds, piece by piece.
+  late final PiecesEditorController _pieceEditor;
+
+  /// Each piece says what is wrong with it once a save was refused.
+  bool _showPieceErrors = false;
   final _customer = TextEditingController();
   final _phone = TextEditingController();
   final _receiver = TextEditingController();
@@ -2885,7 +2943,15 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   void initState() {
     super.initState();
     final line = widget.existing;
+    // An edit opens on the line's pieces (an old-form line on the pieces it
+    // reads as, its price spread over them); a new one on one barrel.
+    _pieceEditor = PiecesEditorController(
+      initial: line == null || line.isCar ? const [] : line.allPieces,
+    )..addListener(_onPiecesEdited);
     if (line == null) {
+      // At the counter most packages are barrels and boxes; on a container
+      // the yard starts with a car, as it always has.
+      if (_waiting) _kind = _kindPieces;
       final start = widget.defaultDestination;
       if (_waiting && start != null) {
         _destinationId = start.id;
@@ -2896,9 +2962,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     // The stored line, as the form would have typed it. A car opens on the
     // typed-VIN branch with its fields filled; its VIN counts as decoded so
     // nothing is looked up until it is changed.
-    _kind = containerLineKinds.contains(line.kind)
-        ? line.kind
-        : containerLineKindCar;
+    _kind = line.isCar ? containerLineKindCar : _kindPieces;
     _owner = line.isStock ? containerOwnerStock : containerOwnerCustomer;
     if (line.isCar) {
       _inLot = false;
@@ -2907,10 +2971,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       _model.text = line.carModel;
       _year.text = line.carYear;
       _decodedVin = line.vinNumber;
-    } else if (line.quantity > 0) {
-      _quantity.text = '${line.quantity}';
     }
-    if (line.isOther) _description.text = line.description;
     if (!line.isStock) {
       _customer.text = line.customerName;
       _phone.text = line.customerPhone;
@@ -2924,19 +2985,27 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     if (_waiting) {
       _destinationId = line.destinationCountryId;
       _destinationName = line.destinationCountryName;
-      _length.text = line.lengthIn == null ? '' : trimNumber(line.lengthIn!);
-      _width.text = line.widthIn == null ? '' : trimNumber(line.widthIn!);
-      _height.text = line.heightIn == null ? '' : trimNumber(line.heightIn!);
-      _price.text =
-          line.priceCents == null ? '' : invoiceCentsToInput(line.priceCents!);
       _payOnArrival = line.payOnArrival;
+      // A car keeps its size and price on the line; any other package has
+      // them piece by piece.
+      if (line.isCar) {
+        _length.text = line.lengthIn == null ? '' : trimNumber(line.lengthIn!);
+        _width.text = line.widthIn == null ? '' : trimNumber(line.widthIn!);
+        _height.text = line.heightIn == null ? '' : trimNumber(line.heightIn!);
+        _price.text = line.priceCents == null
+            ? ''
+            : invoiceCentsToInput(line.priceCents!);
+      }
     }
   }
 
   @override
   void dispose() {
+    _pieceEditor
+      ..removeListener(_onPiecesEdited)
+      ..dispose();
     for (final c in [
-      _vin, _make, _model, _year, _quantity, _description, _customer, _phone,
+      _vin, _make, _model, _year, _customer, _phone,
       _receiver, _receiverPhone, _lotFilter, _length, _width, _height, _price,
       _payAmount, _payNote,
     ]) {
@@ -2945,15 +3014,47 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     super.dispose();
   }
 
+  bool get _isCar => _kind == containerLineKindCar;
+
+  /// The refusals that belong to the pieces, cleared as they are edited.
+  static const _pieceCodes = {
+    'pieces_required',
+    'pieces_too_many',
+    'piece_kind_invalid',
+    'piece_description_required',
+    'piece_description_too_long',
+    'piece_size_invalid',
+    'piece_price_invalid',
+  };
+
+  /// A piece was typed in or changed: what the server last said about the
+  /// pieces no longer stands (the pieces show their own problems live).
+  void _onPiecesEdited() {
+    if (!mounted) return;
+    final stale = _serverNote.isNotEmpty ||
+        _errors.any(_pieceCodes.contains) ||
+        _errors.contains('price_below_paid');
+    if (!stale) return;
+    setState(() {
+      _serverNote = '';
+      _errors = {..._errors}
+        ..removeAll(_pieceCodes)
+        ..remove('price_below_paid');
+    });
+  }
+
+  /// What the package costs: the pieces' total, or a car's typed price.
+  int? get _totalCents => _isCar
+      ? (_waiting ? readPackagePrice(_price.text).cents : null)
+      : _pieceEditor.totalCents;
+
   /// Money is asked about only when a new package is registered; an existing
   /// one takes payments in its own sheet.
   bool get _asksForMoney => _waiting && !_editing;
 
   /// Whether this save carries a payment: switched on, against a price.
   bool get _sendsPayment =>
-      _asksForMoney &&
-      _moneyReceived &&
-      readPackagePrice(_price.text).cents != null;
+      _asksForMoney && _moneyReceived && _totalCents != null;
 
   IntakePaymentDraft get _intakePayment => IntakePaymentDraft(
         amount: _payAmount.text,
@@ -2979,7 +3080,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       _errors = {..._errors}..removeAll(_paymentCodes);
       // Most customers hand over the whole price: start there, editable.
       if (on && _payAmount.text.trim().isEmpty) {
-        _payAmount.text = intakeAmountInput(readPackagePrice(_price.text).cents);
+        _payAmount.text = intakeAmountInput(_totalCents);
       }
     });
   }
@@ -3242,14 +3343,19 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     _applyVin(vin);
   }
 
-  ContainerLineDraft get _draft => ContainerLineDraft(
-        kind: _kind,
+  ContainerLineDraft get _draft {
+    final pieces = _isCar ? null : _pieceEditor.draftPieces;
+    return ContainerLineDraft(
+        // A load of pieces is named by what they make (barrels when they all
+        // are, else other); the server works that out again from the pieces.
+        kind: pieces == null
+            ? _kind
+            : piecesSummaryFields(normalizePieces(pieces)).kind,
         vinNumber: _vin.text,
         carMake: _make.text,
         carModel: _model.text,
         carYear: _year.text,
-        quantity: int.tryParse(_quantity.text.trim()) ?? 0,
-        description: _description.text,
+        pieces: pieces,
         ownerKind: _owner,
         customerName: _customer.text,
         customerPhone: _phone.text,
@@ -3261,12 +3367,14 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         // sends none of them, so editing it leaves its size and price alone.
         destinationCountryId: _waiting ? _destinationId : '',
         destinationCountryName: _waiting ? _destinationName : '',
-        lengthIn: _waiting ? _length.text : '',
-        widthIn: _waiting ? _width.text : '',
-        heightIn: _waiting ? _height.text : '',
-        priceCents: _waiting ? readPackagePrice(_price.text).cents : null,
+        lengthIn: _waiting && _isCar ? _length.text : '',
+        widthIn: _waiting && _isCar ? _width.text : '',
+        heightIn: _waiting && _isCar ? _height.text : '',
+        priceCents:
+            _waiting && _isCar ? readPackagePrice(_price.text).cents : null,
         payOnArrival: _waiting && _payOnArrival,
       );
+  }
 
   Future<void> _pickDestination() async {
     final picked = await pickContainerDestination(
@@ -3297,9 +3405,9 @@ class _LineFormSheetState extends State<_LineFormSheet> {
 
   /// What a saved line reads as in the "added so far" tally.
   String _tallyLabel(AppLocalizations l10n, ContainerLineDraft d) {
-    final what = d.kind == containerLineKindBarrels
-        ? l10n.ctrBarrelsCount(d.quantity)
-        : '${d.description} ${l10n.ctrTimes(d.quantity)}';
+    final what = d.usesPieces
+        ? containerPiecesSummary(l10n, normalizePieces(d.pieces))
+        : (d.kind == containerLineKindCar ? d.vinNumber.toUpperCase() : '');
     final whose = d.ownerKind == containerOwnerStock
         ? l10n.ctrStock
         : d.customerName.trim();
@@ -3320,15 +3428,16 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             .toSet();
     // A price that was typed but cannot be read is its own refusal; the draft
     // only carries the cents it could read.
-    if (_waiting && readPackagePrice(_price.text).error != null) {
+    if (_waiting && _isCar && readPackagePrice(_price.text).error != null) {
       errors.add('price_invalid');
     }
     // Money taken at the counter: the same checks a payment recorded later
-    // gets, against this package's price with nothing paid yet.
+    // gets, against this package's price (the pieces' total) with nothing
+    // paid yet.
     if (_sendsPayment) {
       errors.addAll(intakePaymentErrors(
         _intakePayment,
-        priceCents: draft.priceCents,
+        priceCents: draft.totalCents,
         staffIds: [for (final s in widget.staff) s.id],
       ));
     }
@@ -3337,7 +3446,12 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     }
     if (errors.isNotEmpty) {
       AppHaptics.refuse();
-      setState(() => _errors = errors);
+      setState(() {
+        _errors = errors;
+        // Each piece then says its own problem, and keeps saying it (or
+        // stops) as it is corrected.
+        if (errors.any(_pieceCodes.contains)) _showPieceErrors = true;
+      });
       return;
     }
 
@@ -3380,8 +3494,17 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       widget.onLineAdded?.call();
       if (andAnother) {
         setState(() {
+          _errors = {};
+          _serverNote = '';
+          _showPieceErrors = false;
           _addedThisSitting.add(_tallyLabel(l10n, draft));
-          _quantity.clear();
+          // The next customer's share of the same cargo: one piece of the
+          // same kind and name, the people cleared.
+          final first = _pieceEditor.rows.firstOrNull;
+          _pieceEditor.reset(
+            kind: first?.kind ?? pieceKind.barrel,
+            description: first?.description.text ?? '',
+          );
           _customer.clear();
           _phone.clear();
           _receiver.clear();
@@ -3389,8 +3512,6 @@ class _LineFormSheetState extends State<_LineFormSheet> {
           _notifyCustomer = true;
           _notifyReceiver = true;
           _suggestions = const [];
-          _errors = {};
-          _serverNote = '';
         });
         return;
       }
@@ -3404,6 +3525,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       final rest = refusal.codes.where((c) => !_fieldCodes.contains(c));
       setState(() {
         _errors = fieldCodes;
+        if (fieldCodes.any(_pieceCodes.contains)) _showPieceErrors = true;
         _conflictWaiting = refusal.conflictWaiting;
         if (refusal.conflictContainerId.isNotEmpty) {
           _conflictName = widget.containers
@@ -3444,15 +3566,16 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         'updateContainerLine',
         updateWaitingPackageRequest(widget.businessId, existing.id, draft),
       );
-      // The price is audited and checked against what was paid, so it goes
-      // through its own callable.
+      // A car's price is audited and checked against what was paid, so it
+      // goes through its own callable. The pieces carried their prices just
+      // now: only pay on arrival is left, with the total they make.
       if (packagePriceChanged(existing, draft)) {
         await widget.caller(
           'setContainerLinePrice',
           setPackagePriceRequest(
             widget.businessId,
             existing.id,
-            priceCents: draft.priceCents,
+            priceCents: draft.totalCents,
             payOnArrival: draft.payOnArrival,
           ),
         );
@@ -3504,29 +3627,36 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     AppHaptics.commit();
     widget.onLineAdded?.call();
     if (andAnother) {
-      // The same customer's next box: the people, the country and the
-      // WhatsApp switches stay; everything about the box itself starts over.
+      // The same sender's next package, for another receiver or country:
+      // only the sender (name, phone, WhatsApp switch) stays; the receiver,
+      // the destination, the pieces and the money start over.
       setState(() {
+        _errors = {};
+        _serverNote = '';
+        _showPieceErrors = false;
         _addedThisSitting.add(
-          '${draft.kind == containerLineKindCar ? draft.vinNumber : _tallyLabel(l10n, draft)}'
+          '${_tallyLabel(l10n, draft)}'
           '${saved.trackingCode.isEmpty ? '' : ' (${saved.trackingCode})'}',
         );
         _pickedCar = null;
         _inLot = null;
         for (final c in [
-          _vin, _make, _model, _year, _quantity, _description, _lotFilter,
-          _length, _width, _height, _price,
+          _vin, _make, _model, _year, _lotFilter,
+          _length, _width, _height, _price, _receiver, _receiverPhone,
         ]) {
           c.clear();
         }
+        _pieceEditor.reset();
+        _notifyReceiver = true;
+        final start = widget.defaultDestination;
+        _destinationId = start?.id ?? '';
+        _destinationName = start?.name ?? '';
         _vinHint = '';
         _decodedVin = '';
         _conflictName = '';
         _conflictWaiting = false;
         _payOnArrival = false;
         _resetMoney();
-        _errors = {};
-        _serverNote = '';
       });
       return;
     }
@@ -3555,6 +3685,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     'price_invalid',
     'price_below_paid',
     ..._paymentCodes,
+    ..._pieceCodes,
   };
 
   @override
@@ -3568,13 +3699,13 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             conflictWaiting: _conflictWaiting,
           )
         : null;
-    final isCar = _kind == containerLineKindCar;
-    final isOther = _kind == containerLineKindOther;
+    final isCar = _isCar;
     // A car's fields (and whose it is) appear once the lot question is
     // answered: straight away under "No", after a pick under "Yes".
     final showCarFields =
         isCar && (_inLot == false || (_inLot == true && _pickedCar != null));
     final showOwner = !isCar || showCarFields;
+    final registering = _waiting && showOwner && !_editing;
 
     return LotSheetShell(
       title: _waiting
@@ -3591,12 +3722,14 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             _RefusalNote(text: _serverNote),
             const SizedBox(height: AppSpacing.sm),
           ],
-          // A waiting package: add another box for the same customer, or
-          // print this one's label now. Any kind of cargo, cars included.
-          if (_waiting && showOwner && !_editing) ...[
+          // How many pieces and what they come to, as they are typed.
+          if (!isCar) PiecesTotalLine(controller: _pieceEditor),
+          // A waiting package: register another for the same sender, save it
+          // alone, or - first choice - save it and print a label per piece.
+          if (registering) ...[
             LotSheetButton(
               key: const Key('line-save-and-another'),
-              label: l10n.wpkSaveAndAnother,
+              label: l10n.pcsSaveAndAnother,
               busy: _busy,
               busyLabel: l10n.ctrAdding,
               tone: LotTone.neutral,
@@ -3604,40 +3737,53 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             ),
             const SizedBox(height: AppSpacing.sm),
             LotSheetButton(
-              key: const Key('line-save-and-print'),
-              label: l10n.wpkSaveAndPrint,
+              key: const Key('line-save'),
+              label: l10n.pcsSaveOnly,
               busy: _busy,
               busyLabel: l10n.ctrAdding,
               tone: LotTone.neutral,
-              onTap: () => _submit(printLabel: true),
+              onTap: _submit,
             ),
             const SizedBox(height: AppSpacing.sm),
-          ],
-          // One line edited is saved and closed; "add another" is for adding.
-          if (!_waiting && showOwner && !isCar && !_editing) ...[
+            ListenableBuilder(
+              listenable: _pieceEditor,
+              builder: (context, _) => LotSheetButton(
+                key: const Key('line-save-and-print'),
+                label: l10n.pcsSaveAndPrint(isCar ? 1 : _pieceEditor.count),
+                busy: _busy,
+                busyLabel: l10n.ctrAdding,
+                tone: LotTone.good,
+                onTap: () => _submit(printLabel: true),
+              ),
+            ),
+          ] else ...[
+            // One line edited is saved and closed; "add another" is for
+            // adding.
+            if (!_waiting && showOwner && !isCar && !_editing) ...[
+              LotSheetButton(
+                key: const Key('line-save-and-another'),
+                label: l10n.ctrSaveAndAnother,
+                busy: _busy,
+                busyLabel: l10n.ctrAdding,
+                tone: LotTone.neutral,
+                onTap: () => _submit(andAnother: true),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
             LotSheetButton(
-              key: const Key('line-save-and-another'),
-              label: l10n.ctrSaveAndAnother,
+              key: Key(_editing ? 'line-save-edit' : 'line-save'),
+              label: _editing
+                  ? l10n.lotSave
+                  : (_waiting
+                      ? l10n.lotSave
+                      : (_addedThisSitting.isEmpty
+                          ? l10n.ctrAdd
+                          : l10n.ctrAddAndClose)),
               busy: _busy,
-              busyLabel: l10n.ctrAdding,
-              tone: LotTone.neutral,
-              onTap: () => _submit(andAnother: true),
+              busyLabel: _editing ? l10n.lotSaving : l10n.ctrAdding,
+              onTap: _submit,
             ),
-            const SizedBox(height: AppSpacing.sm),
           ],
-          LotSheetButton(
-            key: Key(_editing ? 'line-save-edit' : 'line-save'),
-            label: _editing
-                ? l10n.lotSave
-                : (_waiting
-                    ? l10n.lotSave
-                    : (_addedThisSitting.isEmpty
-                        ? l10n.ctrAdd
-                        : l10n.ctrAddAndClose)),
-            busy: _busy,
-            busyLabel: _editing ? l10n.lotSaving : l10n.ctrAdding,
-            onTap: _submit,
-          ),
         ],
       ),
       body: Column(
@@ -3671,6 +3817,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               _kind = k;
               _errors = {};
               _serverNote = '';
+              _showPieceErrors = false;
               // The lot question belongs to a car; a new kind starts over.
               _inLot = null;
               _clearCarDraft();
@@ -3789,36 +3936,27 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               ),
             ],
           ],
-          if (isOther) ...[
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              key: const Key('line-description'),
-              controller: _description,
-              textCapitalization: TextCapitalization.sentences,
-              onChanged: (_) => _clearError('description_required'),
-              decoration: InputDecoration(
-                labelText: l10n.ctrDescription,
-                errorText: errorFor('description_required'),
-              ),
-            ),
-          ],
+          // Anything but a car is the pieces handed over, each with what it
+          // is, its size and its own price; the line's total is theirs.
           if (!isCar) ...[
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              key: const Key('line-quantity'),
-              controller: _quantity,
-              keyboardType: TextInputType.number,
-              onChanged: (_) => _clearError('quantity_required'),
-              decoration: InputDecoration(
-                labelText: l10n.ctrQuantity,
-                errorText: errorFor('quantity_required'),
-              ),
+            const SizedBox(height: AppSpacing.lg),
+            PiecesEditor(
+              controller: _pieceEditor,
+              describe: (code) => containerErrorText(l10n, code),
+              showErrors: _showPieceErrors,
+              enabled: !_busy,
+              error: errorFor('pieces_required') ??
+                  errorFor('pieces_too_many') ??
+                  errorFor('price_below_paid'),
             ),
           ],
           if (_waiting && showOwner)
             WaitingPackageFields(
               destinationName: _destinationName,
               onPickDestination: _pickDestination,
+              // A car's size and price are the line's own; pieces carry
+              // theirs.
+              showSizeAndPrice: isCar,
               length: _length,
               width: _width,
               height: _height,
@@ -3848,7 +3986,9 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             ),
           if (_asksForMoney && showOwner)
             IntakePaymentFields(
-              price: _price,
+              // Judged against the pieces' total, or a car's price.
+              price: isCar ? _price : _pieceEditor,
+              priceCents: () => _totalCents,
               received: _moneyReceived,
               onReceived: _switchMoneyReceived,
               amount: _payAmount,
@@ -4019,6 +4159,12 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               Text(
                 l10n.wpkUpdatesNotice,
                 key: const Key('wpk-no-notice'),
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.pcsAnotherHint,
+                key: const Key('wpk-another-hint'),
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),
             ],
@@ -4649,20 +4795,28 @@ class _LotCarRow extends StatelessWidget {
   }
 }
 
+/// A car, or a load of pieces (barrels, boxes, anything else - each piece
+/// says which in the pieces editor).
 class _KindChips extends StatelessWidget {
   const _KindChips({required this.selected, required this.onChanged});
 
   final String selected;
   final ValueChanged<String> onChanged;
 
+  static const _kinds = [
+    containerLineKindCar,
+    _LineFormSheetState._kindPieces,
+  ];
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
-        for (final kind in containerLineKinds) ...[
+        for (final kind in _kinds) ...[
           Expanded(
             child: PressableScale(
+              key: Key('line-kind-$kind'),
               scale: 0.96,
               onTap: () {
                 AppHaptics.selection();
@@ -4684,7 +4838,9 @@ class _KindChips extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      containerKindIcon(kind),
+                      kind == containerLineKindCar
+                          ? containerKindIcon(kind)
+                          : Icons.inventory_2_outlined,
                       size: 16,
                       color: kind == selected
                           ? AppColors.cobaltDeep
@@ -4693,7 +4849,9 @@ class _KindChips extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        containerKindLabel(l10n, kind),
+                        kind == containerLineKindCar
+                            ? l10n.ctrKindCar
+                            : l10n.pcsKindPieces,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -4710,8 +4868,7 @@ class _KindChips extends StatelessWidget {
               ),
             ),
           ),
-          if (kind != containerLineKinds.last)
-            const SizedBox(width: AppSpacing.sm),
+          if (kind != _kinds.last) const SizedBox(width: AppSpacing.sm),
         ],
       ],
     );
@@ -4871,13 +5028,45 @@ String containerKindLabel(AppLocalizations l10n, String kind) => switch (kind) {
       _ => l10n.ctrKindOther,
     };
 
-/// What a line is, in one phrase: "2019 Toyota Camry", "3 barrels".
+/// What a line is, in one phrase: "2019 Toyota Camry", "3 barrels",
+/// "2 barrels, 1 box".
 String containerLineTitle(AppLocalizations l10n, ContainerLine line) {
   if (line.isCar) return line.vehicleLabel;
+  if (line.hasPieces) return containerPiecesSummary(l10n, line.allPieces);
   if (line.isBarrels) return l10n.ctrBarrelsCount(line.quantity);
   return line.quantity > 1
       ? '${line.description} ${l10n.ctrTimes(line.quantity)}'
       : line.description;
+}
+
+/// "2 barrels, 1 box", "2 × TV", "TV" - pieces in the app's own words, the
+/// same shape as the server's `pieceSummaryText` (which writes WhatsApp and
+/// the History): items that all say the same thing are named, a mix of
+/// items is counted.
+String containerPiecesSummary(AppLocalizations l10n, List<LinePiece> pieces) {
+  int count(String kind) => pieces.where((p) => p.kind == kind).length;
+  final parts = <String>[];
+  final cars = count(carPieceKind);
+  if (cars > 0) parts.add(l10n.ctrCarsCount(cars));
+  final barrels = count(pieceKind.barrel);
+  if (barrels > 0) parts.add(l10n.ctrBarrelsCount(barrels));
+  final boxes = count(pieceKind.box);
+  if (boxes > 0) parts.add(l10n.pcsBoxesCount(boxes));
+  final items = [
+    for (final p in pieces)
+      if (p.kind == pieceKind.other) p,
+  ];
+  if (items.isNotEmpty) {
+    final names = {for (final p in items) p.description.trim()}.toList();
+    if (names.length == 1 && names.first.isNotEmpty) {
+      parts.add(items.length == 1
+          ? names.first
+          : '${names.first} ${l10n.ctrTimes(items.length)}');
+    } else {
+      parts.add(l10n.pcsItemsCount(items.length));
+    }
+  }
+  return parts.join(', ');
 }
 
 /// "2 cars · 14 barrels · 1 other item", leaving out what there is none of.
@@ -4945,6 +5134,16 @@ String containerErrorText(
     'payment_not_found' => l10n.wpkErrPaymentNotFound,
     'payment_already_reverted' => l10n.wpkErrPaymentReverted,
     'carrier_invalid' => l10n.ctrErrCarrierInvalid,
+    // Pieces on lines: copy in lib/l10n (pcsErr*), the server's own words.
+    'pieces_required' => l10n.pcsErrPiecesRequired,
+    'pieces_too_many' => l10n.pcsErrPiecesTooMany,
+    'piece_kind_invalid' => l10n.pcsErrKindInvalid,
+    'piece_description_required' => l10n.pcsErrDescriptionRequired,
+    'piece_description_too_long' => l10n.pcsErrDescriptionTooLong,
+    'piece_size_invalid' => l10n.pcsErrSizeInvalid,
+    'piece_price_invalid' => l10n.pcsErrPriceInvalid,
+    'piece_count_invalid' => l10n.pcsErrCountInvalid,
+    'line_has_parts' => l10n.pcsErrLineHasParts,
     _ => l10n.lotCouldNotSave,
   };
 }
@@ -5205,36 +5404,47 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
 ///
 /// A package still waiting for a container has none: pass the [line] alone and
 /// the labels are asked for by line id, printable before any container exists.
+///
+/// [lineIds] without a container prints several waiting packages at once:
+/// the parts a split left waiting, whose old labels no longer say them.
 Future<void> showContainerLabelSheet(
   BuildContext context, {
   required String businessId,
   ShippingContainer? container,
   ContainerLine? line,
+  List<String> lineIds = const [],
   ContainerLabelOpener opener = openContainerLabels,
   PackageLabelsLoader loader = loadPackageLabels,
   PackageLabelsPdfPrinter pdfPrinter = printPackageLabelsPdf,
   LabelPrinterController? printer,
 }) {
-  assert(container != null || line != null);
+  assert(container != null || line != null || lineIds.isNotEmpty);
   final l10n = AppLocalizations.of(context)!;
-  final containerId = container?.id ?? '';
+  final containerId = line == null && lineIds.isNotEmpty
+      ? ''
+      : (container?.id ?? '');
   final lineId = line?.id ?? '';
+  final ids = line == null ? lineIds : const <String>[];
   return showLotSheet<bool>(
     context,
     LabelPrintSheet(
-      subtitle: line == null
-          ? l10n.ctrPrintLabelsAll(container!.displayName)
-          : l10n.ctrPrintLabelsOne(containerLineTitle(l10n, line)),
+      subtitle: line != null
+          ? l10n.ctrPrintLabelsOne(containerLineTitle(l10n, line))
+          : (ids.isNotEmpty
+              ? l10n.pcsPartLabelsSubtitle(ids.length)
+              : l10n.ctrPrintLabelsAll(container!.displayName)),
       onPrint: (choice) => opener(
         businessId: businessId,
         containerId: containerId,
         choice: choice,
         lineId: lineId,
+        lineIds: ids,
       ),
       target: PackageLabelsTarget(
         businessId: businessId,
         containerId: containerId,
         lineId: lineId,
+        lineIds: ids,
       ),
       loader: loader,
       pdfPrinter: pdfPrinter,

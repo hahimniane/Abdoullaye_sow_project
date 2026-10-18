@@ -227,133 +227,155 @@ void main() {
           lines: lines,
         );
 
-    testWidgets('opens on the main destination and says nobody is messaged',
+    testWidgets('opens on one barrel and the main destination, says nobody is messaged',
         (tester) async {
       await _openSheet<WaitingPackageSaved>(tester, sheet(_Calls()));
       expect(find.text('Register a package'), findsOneWidget);
-      await _tap(tester, 'line-lot-no');
+      // At the counter: pieces first, one barrel to start.
+      expect(find.byKey(const Key('pieces-editor')), findsOneWidget);
+      expect(find.byKey(const Key('piece-description-0')), findsOneWidget);
+      expect(find.byKey(const Key('piece-description-1')), findsNothing);
       expect(find.byKey(const Key('wpk-destination')), findsOneWidget);
       expect(find.text('Guinea'), findsOneWidget);
       expect(find.byKey(const Key('wpk-no-notice')), findsOneWidget);
       // Always a customer's: no stock to choose.
       expect(find.text('Stock'), findsNothing);
       expect(find.byKey(const Key('line-save-and-another')), findsOneWidget);
-      expect(find.byKey(const Key('line-save-and-print')), findsOneWidget);
+      expect(find.text('Save and print 1 label'), findsOneWidget);
+      expect(find.text('No price yet'), findsOneWidget);
+    });
+
+    testWidgets('pieces add up: one label per piece, the total is their sum',
+        (tester) async {
+      await _openSheet<WaitingPackageSaved>(tester, sheet(_Calls()));
+      await _type(tester, 'piece-price-0', '100');
+      await _tap(tester, 'pieces-add');
+      await _tap(tester, 'pieces-add');
+      expect(find.text('Save and print 3 labels'), findsOneWidget);
+      await _type(tester, 'piece-price-1', '100');
+      await _tap(tester, 'piece-kind-2-box');
+      await _type(tester, 'piece-description-2', 'Clothes');
+      await _type(tester, 'piece-price-2', '45,50');
+      expect(find.text(r'$245.50'), findsOneWidget);
+      expect(find.text('3 pieces · Total'), findsOneWidget);
+      await _tap(tester, 'piece-remove-1');
+      expect(find.text('Save and print 2 labels'), findsOneWidget);
+      expect(find.text(r'$145.50'), findsOneWidget);
     });
 
     testWidgets('saving an empty form names each missing field and sends nothing',
         (tester) async {
       final calls = _Calls();
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
+      // A box has to say what it is.
+      await _tap(tester, 'piece-kind-0-box');
+      await _tap(tester, 'line-save');
+      expect(find.text("Enter the customer's name."), findsOneWidget);
+      expect(find.byKey(const Key('piece-error-0')), findsOneWidget);
+      expect(find.text('Say what each box or item is.'), findsOneWidget);
+      expect(find.text('Choose where this package is going.'), findsNothing);
+      expect(calls.log, isEmpty);
+
+      // A car asks for its VIN instead.
+      await tester.tap(find.text('A car'));
+      await tester.pumpAndSettle();
       await _tap(tester, 'line-lot-no');
       await _tap(tester, 'line-save');
       expect(find.text('Enter the VIN.'), findsOneWidget);
-      expect(find.text("Enter the customer's name."), findsOneWidget);
-      expect(calls.log, isEmpty);
-
-      // A barrel needs a count and a customer; the destination is already set.
-      await tester.tap(find.text('Barrels'));
-      await tester.pumpAndSettle();
-      await _tap(tester, 'line-save');
-      expect(find.text('Enter how many.'), findsOneWidget);
-      expect(find.text("Enter the customer's name."), findsOneWidget);
-      expect(find.text('Choose where this package is going.'), findsNothing);
       expect(calls.log, isEmpty);
     });
 
-    testWidgets('size needs all three sides, and shows the volume as it is typed',
-        (tester) async {
+    testWidgets("a piece's size needs all three sides", (tester) async {
       final calls = _Calls();
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
-      await tester.tap(find.text('Barrels'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'line-quantity', '2');
       await _type(tester, 'line-customer', 'Fatou Diallo');
-      await _type(tester, 'wpk-length', '40');
+      await _tap(tester, 'piece-add-size-0');
+      await _type(tester, 'piece-length-0', '40');
       await _tap(tester, 'line-save');
       expect(
         find.text(
-            'Enter the length, width and height in inches, or leave all three empty.'),
+            "Enter a piece's length, width and height in inches, or leave all three empty."),
         findsOneWidget,
       );
       expect(calls.log, isEmpty, reason: 'refused at the field, no round trip');
-
-      await _type(tester, 'wpk-width', '30');
-      await _type(tester, 'wpk-height', '20');
-      expect(find.text('13.89 ft³'), findsOneWidget);
     });
 
-    testWidgets('a price that cannot be read is refused at the field',
+    testWidgets('a price that cannot be read is refused at the piece',
         (tester) async {
       final calls = _Calls();
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
-      await tester.tap(find.text('Barrels'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'line-quantity', '2');
       await _type(tester, 'line-customer', 'Fatou Diallo');
-      await _type(tester, 'wpk-price', 'free');
+      await _type(tester, 'piece-price-0', '1.2.3');
       await _tap(tester, 'line-save');
-      expect(find.text('Enter the price in dollars, more than zero.'),
+      expect(find.text("Enter each piece's price in dollars, zero or more."),
           findsOneWidget);
       expect(calls.log, isEmpty);
     });
 
-    testWidgets('registers a waiting barrel with its size, price and country',
+    testWidgets('registers pieces with their sizes, prices and the country',
         (tester) async {
       final calls = _Calls()
         ..answers['addWaitingPackage'] = {
           'success': true,
           'lineId': 'l9',
-          'trackingCode': 'CL-ABCDEF',
+          'trackingCode': 'CL-BCDFGH',
+          'pieceCount': 2,
         };
       final opened = await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
-      await tester.tap(find.text('Barrels'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'line-quantity', '2');
+      await _type(tester, 'piece-price-0', '45,50');
+      await _tap(tester, 'pieces-add');
+      await _tap(tester, 'piece-kind-1-other');
+      await _type(tester, 'piece-description-1', 'TV');
+      await _tap(tester, 'piece-add-size-1');
+      await _type(tester, 'piece-length-1', '40');
+      await _type(tester, 'piece-width-1', '30');
+      await _type(tester, 'piece-height-1', '20');
       await _type(tester, 'line-customer', 'Fatou Diallo');
       await _type(tester, 'line-receiver', 'Mariama Bah');
-      await _type(tester, 'wpk-length', '40');
-      await _type(tester, 'wpk-width', '30');
-      await _type(tester, 'wpk-height', '20');
-      await _type(tester, 'wpk-price', '45,50');
       await _tap(tester, 'wpk-pay-on-arrival');
       await _tap(tester, 'line-save');
 
       final sent = calls.of('addWaitingPackage').single;
       expect(sent['businessId'], 'b1');
-      expect(sent['kind'], 'barrels');
-      expect(sent['quantity'], 2);
       expect(sent['ownerKind'], 'customer');
       expect(sent['customerName'], 'Fatou Diallo');
       expect(sent['receiverName'], 'Mariama Bah');
       expect(sent['destinationCountryId'], 'guinea');
       expect(sent['destinationCountryName'], 'Guinea');
-      expect(sent['lengthIn'], 40);
-      expect(sent['widthIn'], 30);
-      expect(sent['heightIn'], 20);
-      expect(sent['priceCents'], 4550);
       expect(sent['payOnArrival'], isTrue);
+      final pieces = (sent['pieces'] as List).cast<Map>();
+      expect(pieces, hasLength(2));
+      expect(pieces[0]['kind'], 'barrel');
+      expect(pieces[0]['priceCents'], 4550);
+      expect(pieces[1]['kind'], 'other');
+      expect(pieces[1]['description'], 'TV');
+      expect(pieces[1]['priceCents'], isNull);
+      expect(pieces[1]['sizeIn'], {'l': 40, 'w': 30, 'h': 20});
+      // The old-app summary rides along; the server recomputes it.
+      expect(sent['kind'], 'other');
+      expect(sent['quantity'], 2);
+      // The price is the pieces'; the line carries none of its own.
+      expect(sent.containsKey('priceCents'), isFalse);
+      expect(sent.containsKey('lengthIn'), isFalse);
       expect(sent.containsKey('containerId'), isFalse,
           reason: 'there is no container yet');
 
       expect(opened.closed, isTrue);
       expect(opened.value!.lineId, 'l9');
-      expect(opened.value!.trackingCode, 'CL-ABCDEF');
+      expect(opened.value!.trackingCode, 'CL-BCDFGH');
       expect(opened.value!.printLabel, isFalse);
       // Named enough for the label sheet before the live list catches up.
       expect(opened.value!.line!.isWaiting, isTrue);
-      expect(opened.value!.line!.trackingCode, 'CL-ABCDEF');
-      expect(find.text('Package saved: CL-ABCDEF'), findsOneWidget);
+      expect(opened.value!.line!.trackingCode, 'CL-BCDFGH');
+      expect(opened.value!.line!.pieceCount, 2);
+      expect(find.text('Package saved: CL-BCDFGH'), findsOneWidget);
     });
 
     testWidgets('another destination is picked from the business list first',
         (tester) async {
       final calls = _Calls()
-        ..answers['addWaitingPackage'] = {'lineId': 'l1', 'trackingCode': 'CL-AAAAAA'};
+        ..answers['addWaitingPackage'] = {'lineId': 'l1', 'trackingCode': 'CL-BBBBBB'};
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
-      await tester.tap(find.text('Barrels'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'line-quantity', '1');
       await _type(tester, 'line-customer', 'Fatou');
       await _tap(tester, 'wpk-destination');
       expect(find.text('Your destinations'), findsOneWidget);
@@ -365,52 +387,45 @@ void main() {
       expect(sent['destinationCountryName'], 'Senegal');
     });
 
-    testWidgets('save & add another keeps the customer and the country, '
-        'starts the box over', (tester) async {
+    testWidgets('save & add another keeps only the sender, for another receiver '
+        'or country', (tester) async {
       final calls = _Calls()
-        ..answers['addWaitingPackage'] = {'lineId': 'l1', 'trackingCode': 'CL-AAAAAA'};
+        ..answers['addWaitingPackage'] = {'lineId': 'l1', 'trackingCode': 'CL-BBBBBB'};
       final opened = await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
-      await tester.tap(find.text('Barrels'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'line-quantity', '2');
+      await _type(tester, 'piece-price-0', '45');
+      await _tap(tester, 'pieces-add');
       await _type(tester, 'line-customer', 'Fatou Diallo');
       await _type(tester, 'line-receiver', 'Mariama Bah');
-      await _type(tester, 'wpk-length', '40');
-      await _type(tester, 'wpk-width', '30');
-      await _type(tester, 'wpk-height', '20');
-      await _type(tester, 'wpk-price', '45');
+      await _tap(tester, 'wpk-destination');
+      await tester.tap(find.text('Senegal').first);
+      await tester.pumpAndSettle();
       await _tap(tester, 'line-save-and-another');
 
       expect(calls.of('addWaitingPackage'), hasLength(1));
       expect(opened.closed, isFalse, reason: 'the sheet stays open');
+      // The sender stays; the receiver, the country and the pieces start over.
       expect(_field(tester, 'line-customer'), 'Fatou Diallo');
-      expect(_field(tester, 'line-receiver'), 'Mariama Bah');
+      expect(_field(tester, 'line-receiver'), '');
       expect(find.text('Guinea'), findsOneWidget);
-      expect(_field(tester, 'line-quantity'), '');
-      expect(_field(tester, 'wpk-length'), '');
-      expect(_field(tester, 'wpk-price'), '');
+      expect(find.byKey(const Key('piece-description-1')), findsNothing);
+      expect(_field(tester, 'piece-price-0'), '');
+      expect(find.text('Save and print 1 label'), findsOneWidget);
       expect(find.byKey(const Key('line-added-so-far')), findsOneWidget);
-      expect(find.textContaining('CL-AAAAAA'), findsOneWidget);
+      expect(find.textContaining('CL-BBBBBB'), findsOneWidget);
 
-      // The next box goes through the same checks, then the same callable.
-      await _tap(tester, 'line-save-and-another');
-      expect(find.text('Enter how many.'), findsOneWidget);
-      expect(calls.of('addWaitingPackage'), hasLength(1));
-      await _type(tester, 'line-quantity', '1');
+      await _type(tester, 'line-receiver', 'Aissatou Bah');
       await _tap(tester, 'line-save');
       expect(calls.of('addWaitingPackage'), hasLength(2));
       expect(calls.of('addWaitingPackage').last['customerName'], 'Fatou Diallo');
+      expect(calls.of('addWaitingPackage').last['receiverName'], 'Aissatou Bah');
       expect(opened.closed, isTrue);
     });
 
-    testWidgets('save & print label closes with the package, asking for its label',
+    testWidgets('save & print closes with the package, asking for its labels',
         (tester) async {
       final calls = _Calls()
-        ..answers['addWaitingPackage'] = {'lineId': 'l5', 'trackingCode': 'CL-PRINT2'};
+        ..answers['addWaitingPackage'] = {'lineId': 'l5', 'trackingCode': 'CL-PRNT22'};
       final opened = await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
-      await tester.tap(find.text('Barrels'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'line-quantity', '1');
       await _type(tester, 'line-customer', 'Fatou');
       await _tap(tester, 'line-save-and-print');
       expect(opened.value!.printLabel, isTrue);
@@ -422,9 +437,6 @@ void main() {
       final calls = _Calls()
         ..refuse = (_) => _refusal('destination_mismatch');
       final opened = await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
-      await tester.tap(find.text('Barrels'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'line-quantity', '1');
       await _type(tester, 'line-customer', 'Fatou');
       await _tap(tester, 'line-save');
       expect(find.text('A package can only go on a container headed to the same country.'),
@@ -432,7 +444,7 @@ void main() {
       expect(opened.closed, isFalse);
       // The button is released: a second try is possible.
       calls.refuse = null;
-      calls.answers['addWaitingPackage'] = {'lineId': 'l1', 'trackingCode': 'CL-AAAAAA'};
+      calls.answers['addWaitingPackage'] = {'lineId': 'l1', 'trackingCode': 'CL-BBBBBB'};
       await _tap(tester, 'line-save');
       expect(opened.closed, isTrue);
     });
@@ -445,6 +457,8 @@ void main() {
       }, 'w2');
       await _openSheet<WaitingPackageSaved>(
           tester, sheet(_Calls(), lines: [other]));
+      await tester.tap(find.text('A car'));
+      await tester.pumpAndSettle();
       await _tap(tester, 'line-lot-no');
       await _type(tester, 'line-vin', 'ABC1234567');
       await tester.pumpAndSettle();
@@ -452,70 +466,68 @@ void main() {
           findsOneWidget);
     });
 
-    testWidgets('editing opens pre-filled; the price goes through its own call, '
-        'an emptied size is cleared', (tester) async {
+    testWidgets('editing opens on the pieces; their prices travel with them',
+        (tester) async {
       final calls = _Calls();
-      final line = _waiting({
-        'lengthIn': 40,
-        'widthIn': 30,
-        'heightIn': 20,
-        'priceCents': 4550,
-      });
+      // A line from before pieces: 2 barrels, $45.50, read as two pieces.
+      final line = _waiting({'priceCents': 4550});
       final opened =
           await _openSheet<WaitingPackageSaved>(tester, sheet(calls, existing: line));
       expect(find.text('Edit package'), findsOneWidget);
-      expect(_field(tester, 'line-quantity'), '2');
       expect(_field(tester, 'line-customer'), 'Fatou Diallo');
-      expect(_field(tester, 'wpk-length'), '40');
-      expect(_field(tester, 'wpk-price'), '45.50');
-      expect(find.text('13.89 ft³'), findsOneWidget);
+      expect(find.byKey(const Key('piece-description-1')), findsOneWidget);
+      expect(_field(tester, 'piece-price-0'), '22.75');
+      expect(_field(tester, 'piece-price-1'), '22.75');
       // Edited, not added: no "add another".
       expect(find.byKey(const Key('line-save-and-another')), findsNothing);
       expect(find.byKey(const Key('wpk-no-notice')), findsNothing);
 
-      await _type(tester, 'wpk-length', '');
-      await _type(tester, 'wpk-width', '');
-      await _type(tester, 'wpk-height', '');
-      await _type(tester, 'wpk-price', '50');
+      await _type(tester, 'piece-price-1', '30');
       await _tap(tester, 'line-save-edit');
 
       final update = calls.of('updateContainerLine').single;
       expect(update['lineId'], 'w1');
       expect(update['containerId'], '');
       final sent = update['line'] as Map<String, Object?>;
-      expect(sent['lengthIn'], isNull);
-      expect(sent.containsKey('lengthIn'), isTrue);
+      final pieces = (sent['pieces'] as List).cast<Map>();
+      expect(pieces.map((p) => p['id']), ['p1', 'p2']);
+      expect(pieces.map((p) => p['priceCents']), [2275, 3000]);
       expect(sent.containsKey('priceCents'), isFalse);
-      final price = calls.of('setContainerLinePrice').single;
-      expect(price['priceCents'], 5000);
-      expect(price['lineId'], 'w1');
-      expect(calls.log.map((c) => c.$1),
-          ['updateContainerLine', 'setContainerLinePrice']);
+      // The prices went with the pieces: nothing else to call.
+      expect(calls.of('setContainerLinePrice'), isEmpty);
       expect(opened.value!.edited, isTrue);
       expect(find.text('Package updated.'), findsOneWidget);
     });
 
-    testWidgets('an edit that leaves the price alone does not touch it',
+    testWidgets('pay on arrival alone goes through the price callable, total kept',
         (tester) async {
       final calls = _Calls();
-      final line = _waiting({'priceCents': 4550});
+      final line = _waiting({
+        'priceCents': 4550,
+        'pieces': [
+          {'id': 'p1', 'kind': 'barrel', 'priceCents': 2275},
+          {'id': 'p2', 'kind': 'barrel', 'priceCents': 2275},
+        ],
+      });
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls, existing: line));
-      await _type(tester, 'line-quantity', '3');
+      await _tap(tester, 'wpk-pay-on-arrival');
       await _tap(tester, 'line-save-edit');
-      expect(calls.of('updateContainerLine'), hasLength(1));
-      expect(calls.of('setContainerLinePrice'), isEmpty);
+      expect(calls.log.map((c) => c.$1),
+          ['updateContainerLine', 'setContainerLinePrice']);
+      final price = calls.of('setContainerLinePrice').single;
+      expect(price['priceCents'], 4550);
+      expect(price['payOnArrival'], isTrue);
     });
 
     testWidgets('renders in French', (tester) async {
       await _openSheet<WaitingPackageSaved>(tester, sheet(_Calls()),
           locale: const Locale('fr'));
       expect(find.text('Enregistrer un colis'), findsOneWidget);
-      await tester.tap(find.text('Des barils'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Dimensions en pouces'), findsOneWidget);
+      expect(find.text('Ajouter une autre pièce'), findsOneWidget);
       expect(find.text('Paiement à l\'arrivée'), findsOneWidget);
-      expect(find.text('Enregistrer et imprimer l\'étiquette'), findsOneWidget);
-      expect(find.textContaining('même client'), findsOneWidget);
+      expect(find.text('Enregistrer et imprimer 1 étiquette'), findsOneWidget);
+      await _tap(tester, 'pieces-add');
+      expect(find.text('Enregistrer et imprimer 2 étiquettes'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
@@ -796,7 +808,7 @@ void main() {
 
     testWidgets('a package for another country is disabled with the reason',
         (tester) async {
-      await _openSheet<int>(tester, sheet(_Calls()));
+      await _openSheet<AssignLinesResult>(tester, sheet(_Calls()));
       expect(find.text('Add waiting packages'), findsOneWidget);
       expect(find.byKey(const Key('assign-row:a')), findsOneWidget);
       final blocked = tester.widget<CheckboxListTile>(
@@ -819,20 +831,20 @@ void main() {
         (tester) async {
       final calls = _Calls()
         ..answers['assignContainerLines'] = {'success': true, 'assigned': 2};
-      final opened = await _openSheet<int>(tester, sheet(calls));
+      final opened = await _openSheet<AssignLinesResult>(tester, sheet(calls));
       await _tap(tester, 'assign-select-all');
       expect(find.text('2 selected'), findsOneWidget);
       await _tap(tester, 'assign-submit');
       final sent = calls.of('assignContainerLines').single;
       expect(sent['containerId'], 'c1');
       expect(sent['lineIds'], ['a', 'c']);
-      expect(opened.value, 2);
+      expect(opened.value!.assigned, 2);
     });
 
     testWidgets('the search narrows the list, and select all follows it',
         (tester) async {
       final calls = _Calls();
-      await _openSheet<int>(tester, sheet(calls));
+      await _openSheet<AssignLinesResult>(tester, sheet(calls));
       await _type(tester, 'assign-search', 'aissatou');
       expect(find.byKey(const Key('assign-row:a')), findsNothing);
       expect(find.byKey(const Key('assign-row:c')), findsOneWidget);
@@ -844,7 +856,7 @@ void main() {
 
     testWidgets('Add is off until something is ticked; Clear empties the ticks',
         (tester) async {
-      await _openSheet<int>(tester, sheet(_Calls()));
+      await _openSheet<AssignLinesResult>(tester, sheet(_Calls()));
       expect(_onTapOf(tester, 'assign-submit'), isNull);
       await _tap(tester, 'assign-select-all');
       expect(find.byKey(const Key('assign-clear')), findsOneWidget);
@@ -854,7 +866,7 @@ void main() {
 
     testWidgets('a container with no destination says so, and takes none that name one',
         (tester) async {
-      await _openSheet<int>(
+      await _openSheet<AssignLinesResult>(
           tester, sheet(_Calls(), container: _box(destinationId: null, destinationName: null)));
       expect(find.byKey(const Key('assign-no-destination')), findsOneWidget);
       for (final id in ['a', 'b']) {
@@ -873,7 +885,7 @@ void main() {
         (tester) async {
       final calls = _Calls()
         ..refuse = (_) => _refusal('destination_mismatch', lineIds: ['a']);
-      final opened = await _openSheet<int>(tester, sheet(calls));
+      final opened = await _openSheet<AssignLinesResult>(tester, sheet(calls));
       await _tap(tester, 'assign-select-all');
       await _tap(tester, 'assign-submit');
       expect(
@@ -884,8 +896,65 @@ void main() {
       expect(find.byKey(const Key('assign-submit')), findsOneWidget);
     });
 
+    testWidgets('a package of several pieces can go in part, with a preview',
+        (tester) async {
+      final four = _waiting({
+        'kind': 'other',
+        'quantity': 4,
+        'pieces': [
+          {'id': 'p1', 'kind': 'barrel'},
+          {'id': 'p2', 'kind': 'barrel'},
+          {'id': 'p3', 'kind': 'box', 'description': 'Clothes'},
+          {'id': 'p4', 'kind': 'other', 'description': 'TV'},
+        ],
+        'trackingCode': 'CL-T9W2QB',
+      }, 'f4');
+      final calls = _Calls()
+        ..answers['assignContainerLines'] = {
+          'success': true,
+          'assigned': 1,
+          'alreadyAssigned': 0,
+          'parts': [
+            {
+              'lineId': 'f4',
+              'partLineId': 'f4-2',
+              'trackingCode': 'CL-T9W2QB-2',
+              'pieceCount': 2,
+            },
+          ],
+        };
+      final opened = await _openSheet<AssignLinesResult>(
+        tester,
+        AddWaitingPackagesSheet(
+          businessId: 'b1',
+          container: _box(),
+          packages: [four],
+          lines: [four],
+          caller: calls.call,
+        ),
+      );
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+      // Every piece goes unless the stepper says fewer: no preview yet.
+      expect(find.text('4 of 4'), findsOneWidget);
+      expect(find.byKey(const Key('assign-preview-staying:f4')), findsNothing);
+      await _tap(tester, 'assign-fewer:f4');
+      await _tap(tester, 'assign-fewer:f4');
+      expect(find.text('2 of 4'), findsOneWidget);
+      expect(find.byKey(const Key('assign-preview-going:f4')), findsOneWidget);
+      expect(find.text('CL-T9W2QB-2'), findsOneWidget);
+      expect(find.byKey(const Key('assign-split-note:f4')), findsOneWidget);
+      await _tap(tester, 'assign-submit');
+      final sent = calls.of('assignContainerLines').single;
+      expect(sent['lineIds'], ['f4']);
+      expect(sent['pieceCounts'], {'f4': 2});
+      expect(opened.value!.assigned, 1);
+      expect(opened.value!.parts.single.partLineId, 'f4-2');
+      expect(opened.value!.parts.single.trackingCode, 'CL-T9W2QB-2');
+    });
+
     testWidgets('nothing waiting says so; French reads', (tester) async {
-      await _openSheet<int>(
+      await _openSheet<AssignLinesResult>(
         tester,
         AddWaitingPackagesSheet(
             businessId: 'b1', container: _box(), packages: const []),
@@ -1020,6 +1089,7 @@ void main() {
         required String containerId,
         required LabelPrintChoice choice,
         String lineId = '',
+        List<String> lineIds = const [],
       }) async {
         calls.add({'containerId': containerId, 'lineId': lineId});
       }
@@ -1072,7 +1142,7 @@ void main() {
       expect(find.text('2 barrels'), findsNWidgets(2));
       expect(find.textContaining('Fatou Diallo · +19175551234'), findsNWidgets(2));
       expect(find.text('→ Mariama Bah · +224621234567'), findsNWidgets(2));
-      expect(find.text('Guinea · 40 × 30 × 20 in · 13.89 ft³'), findsOneWidget);
+      expect(find.text('2 pieces · Guinea · 40 × 30 × 20 in · 13.89 ft³'), findsOneWidget);
       expect(find.text('Paid'), findsOneWidget);
       expect(find.text('No price yet'), findsOneWidget);
       expect(find.textContaining('Dropped off Oct 1, 2026'), findsNWidgets(2));
@@ -1203,10 +1273,8 @@ void main() {
     SwitchListTile moneySwitch(WidgetTester tester) => tester
         .widget<SwitchListTile>(find.byKey(const Key('wpk-money-received')));
 
+    // One barrel (the sheet opens on it) for Fatou.
     Future<void> barrel(WidgetTester tester) async {
-      await tester.tap(find.text('Barrels'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'line-quantity', '2');
       await _type(tester, 'line-customer', 'Fatou Diallo');
     }
 
@@ -1220,11 +1288,11 @@ void main() {
           findsOneWidget);
       expect(find.byKey(const Key('wpk-money-amount')), findsNothing);
 
-      await _type(tester, 'wpk-price', 'free');
+      await _type(tester, 'piece-price-0', 'free');
       expect(moneySwitch(tester).onChanged, isNull,
           reason: 'an unreadable price is no price');
 
-      await _type(tester, 'wpk-price', '45,50');
+      await _type(tester, 'piece-price-0', '45,50');
       expect(moneySwitch(tester).onChanged, isNotNull);
       await _tap(tester, 'wpk-money-received');
       // The whole price to start with; the method and who took it shown.
@@ -1234,7 +1302,7 @@ void main() {
       expect(find.byKey(const Key('wpk-money-received-by')), findsOneWidget);
 
       // Clearing the price takes the section away again.
-      await _type(tester, 'wpk-price', '');
+      await _type(tester, 'piece-price-0', '');
       expect(moneySwitch(tester).value, isFalse);
       expect(find.byKey(const Key('wpk-money-amount')), findsNothing);
     });
@@ -1244,7 +1312,7 @@ void main() {
       final calls = _Calls();
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await barrel(tester);
-      await _type(tester, 'wpk-price', '45');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'wpk-money-received');
       await _tap(tester, 'line-save');
       expect(find.text('Say which staff member took the payment.'),
@@ -1270,7 +1338,7 @@ void main() {
       final opened =
           await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await barrel(tester);
-      await _type(tester, 'wpk-price', '45');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'wpk-money-received');
       await _type(tester, 'wpk-money-amount', '20');
       await _tap(tester, 'wpk-money-method');
@@ -1286,7 +1354,7 @@ void main() {
       await _tap(tester, 'line-save-and-another');
 
       final sent = calls.of('addWaitingPackage').single;
-      expect(sent['priceCents'], 4500);
+      expect(((sent['pieces'] as List).single as Map)['priceCents'], 4500);
       expect(sent['payment'], {
         'amountCents': 2000,
         'method': 'zelle',
@@ -1298,8 +1366,7 @@ void main() {
       // The next box: no money section until asked again, nobody chosen.
       expect(moneySwitch(tester).value, isFalse);
       expect(find.byKey(const Key('wpk-money-amount')), findsNothing);
-      await _type(tester, 'line-quantity', '1');
-      await _type(tester, 'wpk-price', '30');
+      await _type(tester, 'piece-price-0', '30');
       await _tap(tester, 'wpk-money-received');
       expect(_field(tester, 'wpk-money-amount'), '30');
       expect(find.text('Ibrahima Sow'), findsNothing);
@@ -1324,7 +1391,7 @@ void main() {
       final opened =
           await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await barrel(tester);
-      await _type(tester, 'wpk-price', '45');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'wpk-money-received');
       await _tap(tester, 'wpk-money-received-by');
       await tester.tap(find.text('Aissatou Barry'));
@@ -1348,7 +1415,7 @@ void main() {
       final opened =
           await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await barrel(tester);
-      await _type(tester, 'wpk-price', '45');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'wpk-money-received');
       await _tap(tester, 'wpk-money-received-by');
       await tester.tap(find.text('Aissatou Barry'));
@@ -1369,9 +1436,7 @@ void main() {
         locale: const Locale('fr'),
         width: 320,
       );
-      await tester.tap(find.text('Des barils'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'wpk-price', '45');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'wpk-money-received');
       expect(find.text('Argent reçu maintenant ?'), findsOneWidget);
       await _tap(tester, 'line-save');
@@ -1385,7 +1450,7 @@ void main() {
     // 320 logical pixels is the smallest phone still in use; French labels are
     // the longest. Overflow is an exception in a test, so a clean run is the
     // proof that nothing is clipped or pushed off screen.
-    testWidgets('the register sheet, a barrel, with every field and error',
+    testWidgets('the register sheet, pieces with every field and error',
         (tester) async {
       await _openSheet<WaitingPackageSaved>(
         tester,
@@ -1397,11 +1462,14 @@ void main() {
         locale: const Locale('fr'),
         width: 320,
       );
-      await tester.tap(find.text('Des barils'));
-      await tester.pumpAndSettle();
-      await _type(tester, 'wpk-length', '40');
+      await _tap(tester, 'pieces-add');
+      await _tap(tester, 'piece-kind-1-other');
+      await _tap(tester, 'piece-add-size-0');
+      await _type(tester, 'piece-length-0', '40');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'line-save');
-      expect(find.textContaining('longueur, la largeur'), findsOneWidget);
+      expect(find.byKey(const Key('piece-error-0')), findsOneWidget);
+      expect(find.byKey(const Key('piece-error-1')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -1444,7 +1512,7 @@ void main() {
     });
 
     testWidgets('the add sheet, a blocked row and a long reason', (tester) async {
-      await _openSheet<int>(
+      await _openSheet<AssignLinesResult>(
         tester,
         AddWaitingPackagesSheet(
           businessId: 'b1',

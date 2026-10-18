@@ -6,8 +6,9 @@
 ///
 /// One description of the label, whatever its size ([layoutPackageLabel]):
 /// the QR of the public tracking link (error correction H) on top, the code
-/// large in monospace, what the package is (VIN for a car, "n / N" when a line
-/// is several packages), TO / POUR the receiver with their phone, FROM / DE the
+/// large in monospace with which piece this is ("CL-K7M4P2 · 1 of 3" when a
+/// line is several pieces, as the server's label prints it), what the piece
+/// is (VIN for a car), TO / POUR the receiver with their phone, FROM / DE the
 /// sender with theirs, where it is going and its size, and a footer with the
 /// business and the container reference. It never carries the price.
 ///
@@ -427,6 +428,12 @@ class _Line {
   final bool gapBefore;
 }
 
+/// The code line of a label: the code, and which piece of the line this is
+/// when the line has several - "CL-K7M4P2 · 1 of 3".
+String packageLabelCodeLine(PackageLabel label) => label.packageCount > 1
+    ? '${label.code} · ${label.packageNumber} of ${label.packageCount}'
+    : label.code;
+
 /// The footer's left half: the business and its phone.
 String packageLabelFooter(String businessName, String businessPhone) {
   final name = businessName.trim().isEmpty
@@ -456,14 +463,14 @@ PackageLabelLayout layoutPackageLabel(
   final innerH = h - 2 * margin;
   final gap = math.max(0.5, innerH * 0.012);
 
-  final what = label.packageCount > 1
-      ? '${label.what.isEmpty ? '—' : label.what} · '
-          '${label.packageNumber} / ${label.packageCount}'
-      : label.what;
+  // One label per piece: "CL-K7M4P2 · 1 of 3", the server's words
+  // (container_labels.js), printed whole with the code.
+  final code = packageLabelCodeLine(label);
+  final what = label.what;
   final hasTo = label.receiver.isNotEmpty || label.receiverPhone.isNotEmpty;
   final hasFrom = label.sender.isNotEmpty || label.senderPhone.isNotEmpty;
   final lines = <_Line>[
-    _Line(PackageLabelPart.code, label.code, 2.0, mono: true),
+    _Line(PackageLabelPart.code, code, 2.0, mono: true),
     if (what.isNotEmpty) _Line(PackageLabelPart.what, what, 1.1),
     if (label.vin.isNotEmpty)
       _Line(PackageLabelPart.vin, 'VIN ${label.vin}', 0.8,

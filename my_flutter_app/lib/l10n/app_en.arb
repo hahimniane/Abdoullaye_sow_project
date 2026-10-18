@@ -4463,7 +4463,7 @@
   "ctrLabelSheetNote": "Avery 5524 or any 2 × 3 letter label sheet, six labels a page.",
   "ctrLabelThermal": "4 × 6 thermal",
   "ctrLabelThermalNote": "One label per 4 × 6 in. roll label, for Zebra, Rollo and similar printers.",
-  "ctrLabelCopies": "Labels per package",
+  "ctrLabelCopies": "Labels per piece",
   "ctrLabelTwo": "Two",
   "ctrLabelTwoNote": "One for each side, so the package can still be read if one gets torn.",
   "ctrLabelOne": "One",
@@ -5807,7 +5807,7 @@
   "pkgLabelsCouldNotLoad": "The labels could not be loaded. Try again in a moment.",
   "pkgLabelsNone": "No packages to print.",
   "pkgLabelsPrintFailed": "The labels could not be printed. Try again.",
-  "pkgLabelsOneNotePrinter": "One label per package: enough for a pickup or a torn label.",
+  "pkgLabelsOneNotePrinter": "One label per piece: enough for a pickup or a torn label.",
   "pkgLabelsTipPrinter": "Each label carries the QR code, the tracking code, and both names and phone numbers. Set the label size to the roll loaded in the printer.",
   "pkgLabelsTipSystem": "Choose the 4 × 6 printer in the dialog and print at actual size (100 %). Two labels per package, one for each side.",
   "invCreditMe": "{name} (me)",
@@ -6322,5 +6322,170 @@
   "zelleFailNoDepositoryAccount": "Pick a checking or savings account: that is where Zelle arrives.",
   "zelleFailCandidateInvalid": "That deposit can't be used for this payment. Check again.",
   "zelleFailCandidateTaken": "Someone just matched that deposit to another payment. The list was checked again.",
-  "zelleFailBankError": "The bank didn't answer. Try again."
+  "zelleFailBankError": "The bank didn't answer. Try again.",
+  "pcsKindPieces": "Barrels & boxes",
+  "pcsPiecesTitle": "Pieces ({count})",
+  "@pcsPiecesTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsKindBarrel": "Barrel",
+  "pcsKindBox": "Box",
+  "pcsKindOther": "Other",
+  "pcsKindLabel": "What piece {number} is",
+  "@pcsKindLabel": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsDescriptionOptional": "Description (optional)",
+  "pcsDescriptionWhat": "What is it?",
+  "pcsPrice": "Price",
+  "pcsAddSize": "Add size (inches)",
+  "pcsRemovePiece": "Remove piece {number}",
+  "@pcsRemovePiece": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsAddPiece": "Add another piece",
+  "pcsTotalLabel": "{count, plural, =1{1 piece · Total} other{{count} pieces · Total}}",
+  "@pcsTotalLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsNoPriceYet": "No price yet",
+  "pcsSaveAndPrint": "{count, plural, =1{Save and print 1 label} other{Save and print {count} labels}}",
+  "@pcsSaveAndPrint": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsSaveAndAnother": "Save & register another for this sender",
+  "pcsSaveOnly": "Save without printing",
+  "pcsAnotherHint": "“Register another” keeps only the sender, for a different receiver or country.",
+  "pcsBoxesCount": "{count, plural, =1{1 box} other{{count} boxes}}",
+  "@pcsBoxesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsItemsCount": "{count, plural, =1{1 item} other{{count} items}}",
+  "@pcsItemsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsPieceCount": "{count, plural, =1{1 piece} other{{count} pieces}}",
+  "@pcsPieceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsErrPiecesRequired": "Add at least one piece.",
+  "pcsErrPiecesTooMany": "A package can have at most 60 pieces.",
+  "pcsErrKindInvalid": "Say what each piece is: a barrel, a box, or something else.",
+  "pcsErrDescriptionRequired": "Say what each box or item is.",
+  "pcsErrDescriptionTooLong": "Keep each piece's description to 120 characters.",
+  "pcsErrSizeInvalid": "Enter a piece's length, width and height in inches, or leave all three empty.",
+  "pcsErrPriceInvalid": "Enter each piece's price in dollars, zero or more.",
+  "pcsErrCountInvalid": "Choose how many pieces go in: from 1 to the number the package has.",
+  "pcsErrLineHasParts": "Other parts of this package are still listed. Remove them first.",
+  "pcsGoingIn": "Pieces going in",
+  "pcsGoingOf": "{going} of {total}",
+  "@pcsGoingOf": {
+    "placeholders": {
+      "going": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsFewer": "Fewer pieces",
+  "pcsMore": "More pieces",
+  "pcsPreviewGoing": "{count, plural, =1{1 piece → this container} other{{count} pieces → this container}}",
+  "@pcsPreviewGoing": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsPreviewStaying": "{count, plural, =1{1 piece stays waiting} other{{count} pieces stay waiting}}",
+  "@pcsPreviewStaying": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsSplitNote": "No message is sent now. Each part gets its own departed and ready-for-pickup messages. Print new labels for the pieces that stay.",
+  "pcsPrintPartsTitle": "Print labels for the pieces that stay?",
+  "pcsPrintPartsMessage": "{codes} stay on the waiting list under new codes, so their old labels are wrong. Print new ones now.",
+  "@pcsPrintPartsMessage": {
+    "placeholders": {
+      "codes": {
+        "type": "String"
+      }
+    }
+  },
+  "pcsPrintPartsConfirm": "Print labels",
+  "pcsPartLabelsSubtitle": "{count, plural, =1{Labels for the part that stays waiting} other{Labels for the {count} parts that stay waiting}}",
+  "@pcsPartLabelsSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsGroupNote": "Paid and owed are for the whole package ({parts} parts). Payments are kept on {code}.",
+  "@pcsGroupNote": {
+    "placeholders": {
+      "parts": {
+        "type": "int"
+      },
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "pcsPartPriceHint": "This part's own price. A changed total is spread evenly over its pieces.",
+  "pcsPartOf": "Part {index} of {code}",
+  "@pcsPartOf": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "pcsTrackingPieces": "Pieces",
+  "pcsTrackingParts": "Parts of this package",
+  "pcsTrackingPartsHint": "Some pieces may travel on a later container.",
+  "pcsTrackingMoney": "Price and payments",
+  "pcsTrackingPrice": "Final price",
+  "pcsTrackingPaid": "Paid",
+  "pcsTrackingBalance": "Still owed"
 }

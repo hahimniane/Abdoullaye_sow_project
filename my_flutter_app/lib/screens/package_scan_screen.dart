@@ -146,6 +146,7 @@ class _PackageScanScreenState extends State<PackageScanScreen> {
           onOpenContainer: widget.onOpenContainer,
           repository: widget.repository,
           staff: widget.staff,
+          groupLines: _lines,
         ),
       ),
     );

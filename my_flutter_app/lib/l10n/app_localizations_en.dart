@@ -9933,7 +9933,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'One label per 4 × 6 in. roll label, for Zebra, Rollo and similar printers.';
 
   @override
-  String get ctrLabelCopies => 'Labels per package';
+  String get ctrLabelCopies => 'Labels per piece';
 
   @override
   String get ctrLabelTwo => 'Two';
@@ -12439,7 +12439,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pkgLabelsOneNotePrinter =>
-      'One label per package: enough for a pickup or a torn label.';
+      'One label per piece: enough for a pickup or a torn label.';
 
   @override
   String get pkgLabelsTipPrinter =>
@@ -13161,4 +13161,245 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get zelleFailBankError => 'The bank didn\'t answer. Try again.';
+
+  @override
+  String get pcsKindPieces => 'Barrels & boxes';
+
+  @override
+  String pcsPiecesTitle(int count) {
+    return 'Pieces ($count)';
+  }
+
+  @override
+  String get pcsKindBarrel => 'Barrel';
+
+  @override
+  String get pcsKindBox => 'Box';
+
+  @override
+  String get pcsKindOther => 'Other';
+
+  @override
+  String pcsKindLabel(int number) {
+    return 'What piece $number is';
+  }
+
+  @override
+  String get pcsDescriptionOptional => 'Description (optional)';
+
+  @override
+  String get pcsDescriptionWhat => 'What is it?';
+
+  @override
+  String get pcsPrice => 'Price';
+
+  @override
+  String get pcsAddSize => 'Add size (inches)';
+
+  @override
+  String pcsRemovePiece(int number) {
+    return 'Remove piece $number';
+  }
+
+  @override
+  String get pcsAddPiece => 'Add another piece';
+
+  @override
+  String pcsTotalLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces · Total',
+      one: '1 piece · Total',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pcsNoPriceYet => 'No price yet';
+
+  @override
+  String pcsSaveAndPrint(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Save and print $count labels',
+      one: 'Save and print 1 label',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pcsSaveAndAnother => 'Save & register another for this sender';
+
+  @override
+  String get pcsSaveOnly => 'Save without printing';
+
+  @override
+  String get pcsAnotherHint =>
+      '“Register another” keeps only the sender, for a different receiver or country.';
+
+  @override
+  String pcsBoxesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count boxes',
+      one: '1 box',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pcsItemsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items',
+      one: '1 item',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pcsPieceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces',
+      one: '1 piece',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pcsErrPiecesRequired => 'Add at least one piece.';
+
+  @override
+  String get pcsErrPiecesTooMany => 'A package can have at most 60 pieces.';
+
+  @override
+  String get pcsErrKindInvalid =>
+      'Say what each piece is: a barrel, a box, or something else.';
+
+  @override
+  String get pcsErrDescriptionRequired => 'Say what each box or item is.';
+
+  @override
+  String get pcsErrDescriptionTooLong =>
+      'Keep each piece\'s description to 120 characters.';
+
+  @override
+  String get pcsErrSizeInvalid =>
+      'Enter a piece\'s length, width and height in inches, or leave all three empty.';
+
+  @override
+  String get pcsErrPriceInvalid =>
+      'Enter each piece\'s price in dollars, zero or more.';
+
+  @override
+  String get pcsErrCountInvalid =>
+      'Choose how many pieces go in: from 1 to the number the package has.';
+
+  @override
+  String get pcsErrLineHasParts =>
+      'Other parts of this package are still listed. Remove them first.';
+
+  @override
+  String get pcsGoingIn => 'Pieces going in';
+
+  @override
+  String pcsGoingOf(int going, int total) {
+    return '$going of $total';
+  }
+
+  @override
+  String get pcsFewer => 'Fewer pieces';
+
+  @override
+  String get pcsMore => 'More pieces';
+
+  @override
+  String pcsPreviewGoing(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces → this container',
+      one: '1 piece → this container',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pcsPreviewStaying(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces stay waiting',
+      one: '1 piece stays waiting',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pcsSplitNote =>
+      'No message is sent now. Each part gets its own departed and ready-for-pickup messages. Print new labels for the pieces that stay.';
+
+  @override
+  String get pcsPrintPartsTitle => 'Print labels for the pieces that stay?';
+
+  @override
+  String pcsPrintPartsMessage(String codes) {
+    return '$codes stay on the waiting list under new codes, so their old labels are wrong. Print new ones now.';
+  }
+
+  @override
+  String get pcsPrintPartsConfirm => 'Print labels';
+
+  @override
+  String pcsPartLabelsSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Labels for the $count parts that stay waiting',
+      one: 'Labels for the part that stays waiting',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pcsGroupNote(int parts, String code) {
+    return 'Paid and owed are for the whole package ($parts parts). Payments are kept on $code.';
+  }
+
+  @override
+  String get pcsPartPriceHint =>
+      'This part\'s own price. A changed total is spread evenly over its pieces.';
+
+  @override
+  String pcsPartOf(int index, String code) {
+    return 'Part $index of $code';
+  }
+
+  @override
+  String get pcsTrackingPieces => 'Pieces';
+
+  @override
+  String get pcsTrackingParts => 'Parts of this package';
+
+  @override
+  String get pcsTrackingPartsHint =>
+      'Some pieces may travel on a later container.';
+
+  @override
+  String get pcsTrackingMoney => 'Price and payments';
+
+  @override
+  String get pcsTrackingPrice => 'Final price';
+
+  @override
+  String get pcsTrackingPaid => 'Paid';
+
+  @override
+  String get pcsTrackingBalance => 'Still owed';
 }

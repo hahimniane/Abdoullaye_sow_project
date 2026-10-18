@@ -19,9 +19,11 @@
 library;
 
 import '../models/destination_country.dart';
+import '../utils/callable_data.dart';
 import '../utils/money_input.dart';
 import 'container_manifest.dart';
 import 'invoice_ledger.dart' show invoiceCentsToInput, invoicePaymentMethods;
+import 'line_pieces.dart';
 import 'lot_ledger.dart' show lotDateOf;
 import 'zelle_check.dart' show BankCheck;
 
@@ -165,6 +167,46 @@ PackagePayment packageStanding({
     payOnArrival: payOnArrival,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Groups: a package split across containers keeps its money on the root.
+// ---------------------------------------------------------------------------
+
+/// Every group among [lines], by root id: one pass over the lines a screen
+/// already holds, so a list reads a row's group money with one lookup. A
+/// line never split is a group of one. Mirrors `lineGroupSummary`.
+Map<String, LineGroupSummary> lineGroupsByRoot(Iterable<ContainerLine> lines) {
+  final byRoot = <String, List<LineGroupEntry>>{};
+  for (final line in lines) {
+    if (line.id.isEmpty) continue;
+    (byRoot[line.rootLineId.isEmpty ? line.id : line.rootLineId] ??= [])
+        .add(LineGroupEntry(line.id, line.groupFields));
+  }
+  return {
+    for (final entry in byRoot.entries)
+      entry.key: lineGroupSummary(entry.value, entry.key),
+  };
+}
+
+/// The group [line] belongs to, from [groups] ([lineGroupsByRoot]); the line
+/// alone when its group is not among them.
+LineGroupSummary lineGroupOf(
+  ContainerLine line,
+  Map<String, LineGroupSummary> groups,
+) {
+  final root = line.rootLineId.isEmpty ? line.id : line.rootLineId;
+  return groups[root] ??
+      lineGroupSummary([LineGroupEntry(line.id, line.groupFields)], root);
+}
+
+/// Where a package stands on money for its whole group: the parts' prices
+/// added up against what the root was paid. For a line never split this is
+/// [packagePayment].
+PackagePayment groupPayment(LineGroupSummary group) => packageStanding(
+      priceCents: group.priceCents,
+      paidCents: group.paidCents,
+      payOnArrival: group.payOnArrival,
+    );
 
 /// Whether the money half of a line is worth showing: a package nobody priced
 /// shows nothing on a container (most lines predate prices), but a waiting
@@ -481,6 +523,15 @@ Map<String, Object?> _packageExtras(
   ];
   final complete = sides.every((s) => s != null);
   final price = draft.priceCents;
+  // A line with pieces carries its sizes and prices in them; the server
+  // works the line's own out from the pieces.
+  if (draft.usesPieces) {
+    return {
+      'destinationCountryId': draft.destinationCountryId.trim(),
+      'destinationCountryName': draft.destinationCountryName.trim(),
+      'payOnArrival': draft.payOnArrival,
+    };
+  }
   return {
     'destinationCountryId': draft.destinationCountryId.trim(),
     'destinationCountryName': draft.destinationCountryName.trim(),
@@ -555,10 +606,11 @@ Map<String, Object?> intakePaymentRecord(IntakePaymentDraft payment) {
   };
 }
 
-/// The `addWaitingPackage` request body, flat as the server reads it. With
+/// The `addWaitingPackage` request body, flat as the server reads it: the
+/// pieces of a package that is not a car (`pieces`), or a car. With
 /// [payment] - money handed over at the counter - the package is registered
 /// and paid (in part or in full) in one call. A payment needs the price on
-/// the same package, so it is never sent without one.
+/// the same package (the pieces' total), so it is never sent without one.
 Map<String, Object?> addWaitingPackageRequest(
   String businessId,
   ContainerLineDraft draft, {
@@ -568,14 +620,15 @@ Map<String, Object?> addWaitingPackageRequest(
       'businessId': businessId.trim(),
       ...containerLineRecord(draft),
       ..._packageExtras(draft, withPrice: true, clearEmptySize: false),
-      if (payment != null && draft.priceCents != null)
+      if (payment != null && draft.totalCents != null)
         'payment': intakePaymentRecord(payment),
     };
 
 /// The `updateContainerLine` request for an edited waiting package: no
-/// container, and the package's own fields alongside the line's. The price
-/// goes through `setContainerLinePrice` (it is audited and checked against
-/// what has been paid), so it is left out here.
+/// container, and the package's own fields alongside the line's. A car's
+/// price goes through `setContainerLinePrice` (it is audited and checked
+/// against what has been paid), so it is left out here; the pieces of any
+/// other package carry their own prices, ids kept.
 Map<String, Object?> updateWaitingPackageRequest(
   String businessId,
   String lineId,
@@ -592,10 +645,14 @@ Map<String, Object?> updateWaitingPackageRequest(
     };
 
 /// Whether saving an edit changes the price or the pay-on-arrival switch, so
-/// `setContainerLinePrice` is called after the line is updated.
-bool packagePriceChanged(ContainerLine line, ContainerLineDraft draft) =>
-    line.priceCents != draft.priceCents ||
-    line.payOnArrival != draft.payOnArrival;
+/// `setContainerLinePrice` is called after the line is updated. A line with
+/// pieces has its prices saved with them by `updateContainerLine`: only the
+/// switch is left, sent with the new total unchanged.
+bool packagePriceChanged(ContainerLine line, ContainerLineDraft draft) {
+  if (draft.usesPieces) return line.payOnArrival != draft.payOnArrival;
+  return line.priceCents != draft.priceCents ||
+      line.payOnArrival != draft.payOnArrival;
+}
 
 /// The `setContainerLinePrice` request; a null price clears it.
 Map<String, Object?> setPackagePriceRequest(
@@ -637,20 +694,149 @@ Map<String, Object?> revertPackagePaymentRequest(
     {'businessId': businessId.trim(), 'paymentId': paymentId.trim()};
 
 /// The `assignContainerLines` request. Duplicates dropped; the caller checks
-/// the count first ([assignSelectionRefusal]).
+/// the count first ([assignSelectionRefusal]). [pieceCounts] is how many
+/// pieces of a package go in when not all of them do: only those below the
+/// package's own count (and of a package that is sent) are named, so a
+/// request that moves whole packages is the one it always was.
 Map<String, Object?> assignLinesRequest(
   String businessId,
   String containerId,
-  Iterable<String> lineIds,
-) =>
-    {
-      'businessId': businessId.trim(),
-      'containerId': containerId.trim(),
-      'lineIds': {
-        for (final id in lineIds)
-          if (id.trim().isNotEmpty) id.trim(),
-      }.toList(),
-    };
+  Iterable<String> lineIds, {
+  Map<String, int> pieceCounts = const {},
+  Map<String, int> pieceTotals = const {},
+}) {
+  final ids = {
+    for (final id in lineIds)
+      if (id.trim().isNotEmpty) id.trim(),
+  }.toList();
+  final counts = <String, int>{
+    for (final id in ids)
+      if (pieceCounts[id] != null &&
+          pieceCounts[id]! >= 1 &&
+          pieceCounts[id]! < (pieceTotals[id] ?? 0))
+        id: pieceCounts[id]!,
+  };
+  return {
+    'businessId': businessId.trim(),
+    'containerId': containerId.trim(),
+    'lineIds': ids,
+    if (counts.isNotEmpty) 'pieceCounts': counts,
+  };
+}
+
+/// One part a split left waiting: the line it was split from, the new
+/// line, its code and how many pieces it holds.
+class AssignedPart {
+  const AssignedPart({
+    required this.lineId,
+    required this.partLineId,
+    required this.trackingCode,
+    required this.pieceCount,
+  });
+
+  final String lineId;
+  final String partLineId;
+  final String trackingCode;
+  final int pieceCount;
+}
+
+/// What `assignContainerLines` answered: `{success, assigned,
+/// alreadyAssigned, parts: [{lineId, partLineId, trackingCode, pieceCount}]}`.
+class AssignLinesResult {
+  const AssignLinesResult({
+    required this.assigned,
+    this.alreadyAssigned = 0,
+    this.parts = const [],
+  });
+
+  final int assigned;
+
+  /// Already on this container (a retried request that had landed).
+  final int alreadyAssigned;
+  final List<AssignedPart> parts;
+
+  /// Read defensively: iOS hands nested maps over as `Map<Object?, Object?>`,
+  /// and an older server answers without `parts`. [sent] is how many
+  /// packages were asked for, the count when the answer has none.
+  factory AssignLinesResult.fromCallable(Object? data, {int sent = 0}) {
+    final map = callableMap(data);
+    int count(Object? v) => v is num && v.isFinite && v > 0 ? v.round() : 0;
+    final raw = map['parts'];
+    return AssignLinesResult(
+      assigned: map['assigned'] is num ? count(map['assigned']) : sent,
+      alreadyAssigned: count(map['alreadyAssigned']),
+      parts: [
+        if (raw is List)
+          for (final item in raw)
+            if (item is Map && callableString(item['partLineId']).isNotEmpty)
+              AssignedPart(
+                lineId: callableString(item['lineId']),
+                partLineId: callableString(item['partLineId']),
+                trackingCode: callableString(item['trackingCode']).toUpperCase(),
+                pieceCount: count(item['pieceCount']),
+              ),
+      ],
+    );
+  }
+}
+
+/// What the split sheet previews for a package when [going] of its pieces
+/// go in: its own code rides with them, and the rest stay waiting under the
+/// code the server will give the new part (`partTrackingCode`, one past the
+/// group's highest part). [lines] are the lines the screen holds, so the
+/// group's other parts are known; the server decides, this only says it
+/// first.
+class SplitPreview {
+  const SplitPreview({
+    required this.going,
+    required this.total,
+    required this.code,
+    required this.partCode,
+  });
+
+  final int going;
+  final int total;
+  final String code;
+
+  /// The waiting part's code, "" when nothing stays.
+  final String partCode;
+
+  int get staying => total - going;
+  bool get splits => going < total;
+}
+
+SplitPreview splitPreview(
+  ContainerLine line,
+  int going,
+  Iterable<ContainerLine> lines,
+) {
+  final total = line.pieceCount;
+  final n = going < 1 ? 1 : (going > total ? total : going);
+  if (n >= total) {
+    return SplitPreview(
+        going: total, total: total, code: line.trackingCode, partCode: '');
+  }
+  final rootId = line.rootLineId.isEmpty ? line.id : line.rootLineId;
+  final group = [
+    for (final l in lines)
+      if ((l.rootLineId.isEmpty ? l.id : l.rootLineId) == rootId) l,
+  ];
+  final root = group.where((l) => l.id == rootId).firstOrNull ?? line;
+  // The root's code; a part's own ends in "-k" when its root is not held.
+  final rootCode = root.id == rootId
+      ? root.trackingCode
+      : line.trackingCode.replaceFirst(RegExp(r'-\d+$'), '');
+  final next = nextPartIndex(
+    {'lastPartIndex': root.lastPartIndex},
+    [for (final l in group) {'partIndex': l.partIndex}],
+  );
+  return SplitPreview(
+    going: n,
+    total: total,
+    code: line.trackingCode,
+    partCode: rootCode.isEmpty ? '' : partTrackingCode(rootCode, next),
+  );
+}
 
 /// The `unassignContainerLine` request: back to the waiting list.
 Map<String, Object?> unassignLineRequest(String businessId, String lineId) =>

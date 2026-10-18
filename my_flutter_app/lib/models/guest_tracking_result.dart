@@ -67,6 +67,45 @@ class GuestContainerShipping {
   }
 }
 
+/// One part of a package split across containers, on the public page:
+/// its own code and stage, how many pieces and its price (cents, null when
+/// not priced). Nothing about the people.
+class GuestTrackingPart {
+  const GuestTrackingPart({
+    required this.trackingCode,
+    required this.stage,
+    required this.pieceCount,
+    this.priceCents,
+  });
+
+  final String trackingCode;
+  final GuestTrackingStage stage;
+  final int pieceCount;
+  final int? priceCents;
+}
+
+/// What the whole package costs, what was paid and what is still owed
+/// (cents). Payments live on the first line of the package.
+class GuestTrackingPayment {
+  const GuestTrackingPayment({
+    this.priceCents,
+    this.paidCents = 0,
+    this.balanceCents = 0,
+  });
+
+  final int? priceCents;
+  final int paidCents;
+  final int balanceCents;
+
+  bool get isPriced => priceCents != null;
+}
+
+int _wholeCents(Object? value) =>
+    value is num && value.isFinite && value > 0 ? value.round() : 0;
+
+int? _priceOrNull(Object? value) =>
+    value is num && value.isFinite && value > 0 ? value.round() : null;
+
 class GuestTrackingRecord {
   const GuestTrackingRecord({
     required this.trackingCode,
@@ -75,6 +114,9 @@ class GuestTrackingRecord {
     this.updatedAt,
     this.quoteCount = 0,
     this.shipping,
+    this.pieceCount = 0,
+    this.parts = const [],
+    this.payment,
   });
 
   final String trackingCode;
@@ -89,6 +131,19 @@ class GuestTrackingRecord {
   /// Container lines only, once the box has sailed.
   final GuestContainerShipping? shipping;
 
+  /// Container lines: how many pieces this code covers.
+  final int pieceCount;
+
+  /// Container lines: every part of the package (at least the line itself),
+  /// in part order; more than one when it was split across containers.
+  final List<GuestTrackingPart> parts;
+
+  /// Container lines: the whole package's price, paid and balance.
+  final GuestTrackingPayment? payment;
+
+  /// Some of the package travels under another code.
+  bool get isSplit => parts.length > 1;
+
   factory GuestTrackingRecord.fromMap(Map<String, dynamic> data) {
     final trackingCode = data['trackingCode'];
     if (trackingCode is! String || trackingCode.trim().isEmpty) {
@@ -97,7 +152,34 @@ class GuestTrackingRecord {
 
     final rawCount = data['quoteCount'];
     final service = _serviceFromWire(data['service']);
+    final container = service == GuestTrackingServiceType.container;
+    final rawParts = data['parts'];
+    final rawPayment = data['payment'];
     return GuestTrackingRecord(
+      pieceCount: container ? _wholeCents(data['pieceCount']) : 0,
+      // Read defensively: a part with no code or an unknown stage is left
+      // out rather than failing the whole answer.
+      parts: [
+        if (container && rawParts is List)
+          for (final part in rawParts)
+            if (part is Map &&
+                part['trackingCode'] is String &&
+                (part['trackingCode'] as String).trim().isNotEmpty &&
+                _stageOrNull(part['stage']) != null)
+              GuestTrackingPart(
+                trackingCode: (part['trackingCode'] as String).trim(),
+                stage: _stageOrNull(part['stage'])!,
+                pieceCount: _wholeCents(part['pieceCount']),
+                priceCents: _priceOrNull(part['priceCents']),
+              ),
+      ],
+      payment: container && rawPayment is Map
+          ? GuestTrackingPayment(
+              priceCents: _priceOrNull(rawPayment['priceCents']),
+              paidCents: _wholeCents(rawPayment['paidCents']),
+              balanceCents: _wholeCents(rawPayment['balanceCents']),
+            )
+          : null,
       trackingCode: trackingCode.trim(),
       service: service,
       shipping: GuestContainerShipping.fromWire(service, data['shipping']),
@@ -145,6 +227,14 @@ GuestTrackingServiceType _serviceFromWire(Object? value) {
     'container' => GuestTrackingServiceType.container,
     _ => throw const FormatException('Unsupported guest tracking service'),
   };
+}
+
+GuestTrackingStage? _stageOrNull(Object? value) {
+  try {
+    return _stageFromWire(value);
+  } on FormatException {
+    return null;
+  }
 }
 
 GuestTrackingStage _stageFromWire(Object? value) {
