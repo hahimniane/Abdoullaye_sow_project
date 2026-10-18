@@ -32,6 +32,11 @@ import { overlayDismiss } from "@/lib/overlay-dismiss";
 import {
   LOCK_HEARTBEAT_MS,
   PICKUP_WINDOW_LABELS,
+  PICKUP_WINDOWS,
+  DEFAULT_TIME_ZONE,
+  estimateScheduleDraft,
+  pickableDays,
+  pickupWhen,
   pieceKindLabel,
   REQUEST_ERROR_MESSAGES,
   REQUEST_STATUS_LABELS,
@@ -66,7 +71,6 @@ import {
   receivedFlash,
   sendEstimatePayload,
   slugEditable,
-  type PickupWindow,
   type RequestFilter,
   type RequestSettingsDraft,
   type SettingsLocation,
@@ -103,21 +107,27 @@ async function callRequest<T = Row>(name: string, data: Record<string, unknown>)
   return response.data;
 }
 
-/** "planned Sat, Oct 24" / "Tue morning, 12 Grand Concourse": when the goods come in. */
+/**
+ * "planned Sat, Oct 24" / "Tue morning, 12 Grand Concourse": when the goods
+ * come in. A collect request shows the business's own day and window once
+ * an estimate set them, and the customer's pickup note, always.
+ */
 function WhenLine({ row }: { row: Row }) {
   const l = lang();
-  if (str(row.handoff) === "collect") {
-    const pickup = asRow(row.pickup);
-    const estimate = asRow(asRow(row.estimate).pickupSchedule);
-    const date = str(estimate.date) || str(pickup.date);
-    const window = (str(estimate.window) || str(pickup.window)) as PickupWindow;
+  const when = pickupWhen(row);
+  if (when) {
     return (
-      <small className="pkq-when">
-        <Truck aria-hidden="true" size={13} /> <span>Pickup</span>{" "}
-        {date && <span data-no-translate>{plannedDayText(date, l)}</span>}{" "}
-        {PICKUP_WINDOW_LABELS[window] && <span>{PICKUP_WINDOW_LABELS[window]}</span>}
-        {str(pickup.address) && <span data-no-translate>{` · ${str(pickup.address)}`}</span>}
-      </small>
+      <>
+        <small className="pkq-when">
+          <Truck aria-hidden="true" size={13} /> <span>{when.scheduled ? "Pickup scheduled" : "Pickup"}</span>{" "}
+          {when.date && <span data-no-translate>{plannedDayText(when.date, l)}</span>}{" "}
+          {when.window && <span>{PICKUP_WINDOW_LABELS[when.window]}</span>}
+          {when.address && <span data-no-translate>{` · ${when.address}`}</span>}
+        </small>
+        {when.note && (
+          <small className="pkq-note"><span>Note:</span> <span data-no-translate>{when.note}</span></small>
+        )}
+      </>
     );
   }
   const planned = str(row.plannedDate, 10);
@@ -139,7 +149,12 @@ function WhatsAppLine({ row }: { row: Row }) {
     return <small className="pkq-warn"><Phone aria-hidden="true" size={13} /> Customer not reachable on WhatsApp — call them.</small>;
   }
   const status = str(asRow(row.whatsapp).status);
-  if (status === "waiting_for_whatsapp" || status === "waiting_for_template") {
+  // waiting_for_whatsapp: the business has no WhatsApp number connected
+  // yet; waiting_for_template: Meta has not approved the template yet.
+  if (status === "waiting_for_whatsapp") {
+    return <small className="pkq-muted">WhatsApp is not connected yet. The message goes once it is.</small>;
+  }
+  if (status === "waiting_for_template") {
     return <small className="pkq-muted">Waiting for WhatsApp to approve the message.</small>;
   }
   return null;
@@ -343,6 +358,9 @@ function EstimateDialog({ businessId, row, onClose, onFlash }: { businessId: str
   const [prices, setPrices] = useState<Record<string, string>>(() => estimateDraftPrices(row, l));
   const [pickupFee, setPickupFee] = useState(() => centsToInput(requestEstimate(row)?.pickupFeeCents || null, l));
   const [note, setNote] = useState(() => requestEstimate(row)?.note ?? "");
+  // The real pickup day and time (spec §2, §8.6 sendPackageEstimate
+  // pickupSchedule): prefilled from the last estimate, else the customer's ask.
+  const [schedule, setSchedule] = useState(() => estimateScheduleDraft(row));
   const [lockState, setLockState] = useState<"taking" | "mine" | "other" | "closed">("taking");
   const [lockedBy, setLockedBy] = useState("");
   const [busy, setBusy] = useState<"" | "send" | "phone" | "lock">("");
@@ -393,7 +411,7 @@ function EstimateDialog({ businessId, row, onClose, onFlash }: { businessId: str
   }, [businessId, requestId]);
 
   async function send() {
-    const { payload, error: problem } = sendEstimatePayload(businessId, row, prices, { pickupFee, note });
+    const { payload, error: problem } = sendEstimatePayload(businessId, row, prices, { pickupFee, note, schedule });
     if (!payload) {
       setError(REQUEST_ERROR_MESSAGES[problem] ?? REQUEST_ERROR_MESSAGES.amount_invalid);
       return;
@@ -480,6 +498,37 @@ function EstimateDialog({ businessId, row, onClose, onFlash }: { businessId: str
               </div>
             )}
           </div>
+          {collect && (
+            <div className="pkq-schedule">
+              <label className="lst-field">
+                <span>Pickup day</span>
+                <input
+                  disabled={!editable}
+                  max={pickableDays(str(row.timeZone, 60) || DEFAULT_TIME_ZONE).max}
+                  min={pickableDays(str(row.timeZone, 60) || DEFAULT_TIME_ZONE).min}
+                  onChange={(event) => setSchedule((current) => ({ ...current, date: event.target.value }))}
+                  type="date"
+                  value={schedule.date}
+                />
+              </label>
+              <div aria-label="Pickup time" className="service-segments pkq-windows" role="radiogroup">
+                {PICKUP_WINDOWS.map((window) => (
+                  <button
+                    aria-checked={schedule.window === window}
+                    className={`segment${schedule.window === window ? " active" : ""}`}
+                    disabled={!editable}
+                    key={window}
+                    onClick={() => setSchedule((current) => ({ ...current, window }))}
+                    role="radio"
+                    type="button"
+                  >
+                    {PICKUP_WINDOW_LABELS[window]}
+                  </button>
+                ))}
+              </div>
+              <small className="lst-hint">The customer sees this day and time on their estimate.</small>
+            </div>
+          )}
           <p className="pkq-total"><span>Estimated total</span> <strong data-no-translate>{total === null ? "—" : moneyText(total, l)}</strong></p>
           <label className="lst-field wide">
             <span>Note for the customer (optional)</span>
@@ -709,7 +758,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
           <button aria-label="Close" className="lst-icon-btn" onClick={onClose} type="button"><X size={18} /></button>
         </header>
         <div className="lst-modal-body">
-          <div className="pkq-detail"><PersonLines row={row} /></div>
+          <div className="pkq-detail"><PersonLines row={row} /><WhenLine row={row} /></div>
           <PiecesEditor
             disabled={busy}
             id="pkq-receive-pieces"

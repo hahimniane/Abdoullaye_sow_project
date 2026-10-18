@@ -796,7 +796,17 @@ export function requestPieces(row: unknown): { id: string; kind: PieceKind; desc
   });
 }
 
-export function requestEstimate(row: unknown): { version: number; totalCents: number; pieces: Map<string, number>; pickupFeeCents: number; note: string } | null {
+export type PickupSchedule = { date: string; window: PickupWindow };
+
+/** An estimate's `pickupSchedule` read defensively: a valid day and window, or null. */
+export function pickupScheduleOf(raw: unknown): PickupSchedule | null {
+  const value = asRow(raw);
+  const date = text(value.date, 10);
+  const window = text(value.window, 20) as PickupWindow;
+  return dateKeyValid(date) && PICKUP_WINDOWS.includes(window) ? { date, window } : null;
+}
+
+export function requestEstimate(row: unknown): { version: number; totalCents: number; pieces: Map<string, number>; pickupFeeCents: number; pickupSchedule: PickupSchedule | null; note: string } | null {
   const estimate = asRow(asRow(row).estimate);
   const version = Number(estimate.version || 0);
   if (!Number.isInteger(version) || version <= 0) return null;
@@ -810,8 +820,65 @@ export function requestEstimate(row: unknown): { version: number; totalCents: nu
     totalCents: Number(estimate.totalCents) || 0,
     pieces,
     pickupFeeCents: Number(estimate.pickupFeeCents) || 0,
+    pickupSchedule: pickupScheduleOf(estimate.pickupSchedule),
     note: text(estimate.note, REQUEST_LIMITS.note),
   };
+}
+
+/**
+ * When a collect request is picked up: the business's own day and window
+ * from its estimate (`scheduled`), else what the customer asked for. The
+ * customer's pickup note rides along - staff must see it on every card
+ * (it is user text: render it data-no-translate).
+ */
+export function pickupWhen(row: unknown): { date: string; window: PickupWindow | ""; scheduled: boolean; address: string; note: string } | null {
+  const r = asRow(row);
+  if (text(r.handoff, 20) !== "collect") return null;
+  const pickup = asRow(r.pickup);
+  const scheduled = pickupScheduleOf(asRow(r.estimate).pickupSchedule);
+  const askedWindow = text(pickup.window, 20) as PickupWindow;
+  return {
+    date: scheduled?.date ?? (dateKeyValid(text(pickup.date, 10)) ? text(pickup.date, 10) : ""),
+    window: scheduled?.window ?? (PICKUP_WINDOWS.includes(askedWindow) ? askedWindow : ""),
+    scheduled: scheduled !== null,
+    address: text(pickup.address, REQUEST_LIMITS.address),
+    note: text(pickup.note, REQUEST_LIMITS.note),
+  };
+}
+
+/**
+ * The /e/ page's "confirmed" banner: a collect request is not "expected"
+ * anywhere - the business comes to the customer.
+ */
+export function confirmedBannerText(request: { handoff?: unknown; payment?: { timing?: unknown } | null }): string {
+  const collect = text(request.handoff, 20) === "collect";
+  if (text(request.payment?.timing, 20) === "card") {
+    return collect ? "Paid online. The business will come to collect it." : "Paid online. The business is expecting you.";
+  }
+  return collect ? "You confirmed this estimate. The business will come to collect it." : "You confirmed this estimate. The business is expecting you.";
+}
+
+/**
+ * The estimate editor's pickup day and window: the last estimate's, else
+ * the customer's preferred day and window (as the app's estimate screen).
+ */
+export function estimateScheduleDraft(row: unknown): { date: string; window: string } {
+  const when = pickupWhen(row);
+  return when ? { date: when.date, window: when.window } : { date: "", window: "" };
+}
+
+/**
+ * The server's `pickup_schedule_invalid` rule (functions/package_requests.js
+ * cleanEstimateInput), checked before sending: an empty day sends no
+ * schedule; a day must be today .. +60 in the business's zone, with a window.
+ */
+export function estimateScheduleProblem(schedule: { date: string; window: string }, zone: string, nowMs = Date.now()): "" | "pickup_schedule_invalid" {
+  const date = schedule.date.trim();
+  if (!date) return "";
+  const { min, max } = pickableDays(zone, nowMs);
+  if (!dateKeyValid(date) || date < min || date > max) return "pickup_schedule_invalid";
+  if (!PICKUP_WINDOWS.includes(schedule.window as PickupWindow)) return "pickup_schedule_invalid";
+  return "";
 }
 
 /** The per-piece prices an editor opens with: the latest estimate, else the barrel prefill. */
@@ -830,7 +897,7 @@ export function sendEstimatePayload(
   businessId: string,
   row: Row,
   prices: Record<string, string>,
-  extra: { pickupFee: string; note: string },
+  extra: { pickupFee: string; note: string; schedule?: { date: string; window: string }; nowMs?: number },
 ): { payload: Record<string, unknown> | null; error: string } {
   const pieces: { id: string; cents: number }[] = [];
   for (const piece of requestPieces(row)) {
@@ -844,6 +911,14 @@ export function sendEstimatePayload(
     if (fee === null) return { payload: null, error: "pickup_fee_invalid" };
     pickupFeeCents = fee;
   }
+  // The real pickup day and window (spec §2: the business sets the real
+  // time in its estimate) - the same contract as the app's estimate screen.
+  let pickupSchedule: { date: string; window: string } | undefined;
+  if (text(row.handoff, 20) === "collect" && extra.schedule && extra.schedule.date.trim()) {
+    const problem = estimateScheduleProblem(extra.schedule, text(row.timeZone, 60) || DEFAULT_TIME_ZONE, extra.nowMs);
+    if (problem) return { payload: null, error: problem };
+    pickupSchedule = { date: extra.schedule.date.trim(), window: extra.schedule.window };
+  }
   if (extra.note.trim().length > REQUEST_LIMITS.note) return { payload: null, error: "text_too_long" };
   return {
     error: "",
@@ -853,6 +928,7 @@ export function sendEstimatePayload(
       baseVersion: requestEstimate(row)?.version ?? 0,
       pieces,
       ...(pickupFeeCents !== undefined ? { pickupFeeCents } : {}),
+      ...(pickupSchedule ? { pickupSchedule } : {}),
       note: extra.note.trim(),
     },
   };

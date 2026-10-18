@@ -5947,6 +5947,16 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Add a piece": "Ajouter un colis",
   "Remove": "Retirer",
   "planned": "prévu",
+  // Release 1.0.17 click-through: a collect request's note and real pickup
+  // time, and the WhatsApp-not-connected state.
+  "Pickup scheduled": "Collecte fixée",
+  "Note:": "Note :",
+  "WhatsApp is not connected yet. The message goes once it is.": "WhatsApp n’est pas encore connecté. Le message partira dès qu’il le sera.",
+  "Pickup day": "Jour de collecte",
+  "The customer sees this day and time on their estimate.": "Le client voit ce jour et ce moment sur son estimation.",
+  "The business comes": "L’entreprise passe",
+  "Paid online. The business will come to collect it.": "Payé en ligne. L’entreprise viendra le chercher.",
+  "You confirmed this estimate. The business will come to collect it.": "Vous avez confirmé cette estimation. L’entreprise viendra le chercher.",
 });
 
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

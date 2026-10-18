@@ -55,6 +55,11 @@ import {
   requestSettingsProblems,
   requestSlugFromLocation,
   sendEstimatePayload,
+  confirmedBannerText,
+  estimateScheduleDraft,
+  estimateScheduleProblem,
+  pickupWhen,
+  requestEstimate,
   slugEditable,
   submitRequestPayload,
   todayKeyIn,
@@ -281,6 +286,65 @@ test("the estimate editor prefills the barrel price and checks every price", () 
   const collect = row({ handoff: "collect" });
   assert.equal(draftTotalCents(collect, { p1: "150", p2: "50" }, "25"), 22500);
   assert.equal(draftTotalCents(collect, { p1: "150", p2: "" }, "25"), null);
+});
+
+test("a collect request's note and pickup time reach staff (1.0.17 click-through)", () => {
+  // The customer's pickup.note was never shown; the estimate's real day and
+  // window (pickupSchedule) win over what the customer asked for.
+  const asked = row({ handoff: "collect", timeZone: "America/New_York",
+    pickup: { address: "12 Grand Concourse", date: "2026-10-22", window: "morning", note: "Ring twice, 3rd floor" } });
+  assert.deepEqual(pickupWhen(asked), { date: "2026-10-22", window: "morning", scheduled: false, address: "12 Grand Concourse", note: "Ring twice, 3rd floor" });
+  assert.equal(pickupWhen(row()), null);
+  const set = { ...asked, estimate: { version: 1, totalCents: 15000, pieces: [], pickupSchedule: { date: "2026-10-24", window: "evening" } } };
+  assert.deepEqual(pickupWhen(set), { date: "2026-10-24", window: "evening", scheduled: true, address: "12 Grand Concourse", note: "Ring twice, 3rd floor" });
+  assert.deepEqual(requestEstimate(set)?.pickupSchedule, { date: "2026-10-24", window: "evening" });
+  assert.equal(requestEstimate({ estimate: { version: 1, pickupSchedule: { date: "nope", window: "noon" } } })?.pickupSchedule, null);
+  // The console's editor opens on the last estimate's schedule, else the ask.
+  assert.deepEqual(estimateScheduleDraft(asked), { date: "2026-10-22", window: "morning" });
+  assert.deepEqual(estimateScheduleDraft(set), { date: "2026-10-24", window: "evening" });
+  assert.deepEqual(estimateScheduleDraft(row()), { date: "", window: "" });
+  // Every card that shows a pickup shows the note, labelled, as user text.
+  const panel = readFileSync("src/components/business/package-requests-panel.tsx", "utf8");
+  assert.match(panel, /<span>Note:<\/span> <span data-no-translate>\{when\.note\}<\/span>/);
+  assert.match(panel, /<div className="pkq-detail"><PersonLines row=\{row\} \/><WhenLine row=\{row\} \/><\/div>/);
+  assert.equal(translateValue("Note:", "fr"), "Note :");
+});
+
+test("the console's estimate sends the real pickup day and window, as the app does", () => {
+  const collect = row({ handoff: "collect", timeZone: "America/New_York",
+    pickup: { address: "12 Grand Concourse", date: "2026-10-22", window: "morning", note: "" } });
+  const prices = { p1: "150", p2: "40" };
+  const sent = sendEstimatePayload("dala", collect, prices, { pickupFee: "20", note: "", schedule: { date: "2026-10-23", window: "afternoon" }, nowMs: NOW });
+  assert.deepEqual(sent.payload?.pickupSchedule, { date: "2026-10-23", window: "afternoon" });
+  assert.equal(sent.payload?.pickupFeeCents, 2000);
+  // An empty day sends no schedule (the server keeps null).
+  assert.equal("pickupSchedule" in (sendEstimatePayload("dala", collect, prices, { pickupFee: "", note: "", schedule: { date: "", window: "" }, nowMs: NOW }).payload ?? {}), false);
+  // The server's pickup_schedule_invalid: today .. +60 in the business's zone, with a window.
+  assert.equal(estimateScheduleProblem({ date: "2026-10-20", window: "evening" }, "America/New_York", NOW), "");
+  assert.equal(estimateScheduleProblem({ date: "2026-10-19", window: "evening" }, "America/New_York", NOW), "pickup_schedule_invalid");
+  assert.equal(estimateScheduleProblem({ date: "2026-12-19", window: "morning" }, "America/New_York", NOW), "");
+  assert.equal(estimateScheduleProblem({ date: "2026-12-20", window: "morning" }, "America/New_York", NOW), "pickup_schedule_invalid");
+  assert.equal(estimateScheduleProblem({ date: "2026-10-23", window: "" }, "America/New_York", NOW), "pickup_schedule_invalid");
+  assert.equal(sendEstimatePayload("dala", collect, prices, { pickupFee: "", note: "", schedule: { date: "2026-10-01", window: "morning" }, nowMs: NOW }).error, "pickup_schedule_invalid");
+  // A bring-in request never carries one.
+  assert.equal("pickupSchedule" in (sendEstimatePayload("dala", row(), prices, { pickupFee: "", note: "", schedule: { date: "2026-10-23", window: "morning" }, nowMs: NOW }).payload ?? {}), false);
+  assert.equal(REQUEST_ERROR_MESSAGES.pickup_schedule_invalid, "Choose a valid pickup day and time.");
+  const panel = readFileSync("src/components/business/package-requests-panel.tsx", "utf8");
+  assert.match(panel, /sendEstimatePayload\(businessId, row, prices, \{ pickupFee, note, schedule \}\)/);
+  assert.match(panel, /type="date"/);
+});
+
+test("collect wording: the /e/ page and WhatsApp-not-connected (1.0.17 click-through)", () => {
+  assert.equal(confirmedBannerText({ handoff: "bring_in", payment: { timing: "" } }), "You confirmed this estimate. The business is expecting you.");
+  assert.equal(confirmedBannerText({ handoff: "collect", payment: { timing: "" } }), "You confirmed this estimate. The business will come to collect it.");
+  assert.equal(confirmedBannerText({ handoff: "collect", payment: { timing: "card" } }), "Paid online. The business will come to collect it.");
+  for (const value of ["You confirmed this estimate. The business will come to collect it.", "Paid online. The business will come to collect it."]) {
+    assert.notEqual(translateValue(value, "fr"), value);
+  }
+  const panel = readFileSync("src/components/business/package-requests-panel.tsx", "utf8");
+  const line = panel.slice(panel.indexOf("function WhatsAppLine"), panel.indexOf("function PersonLines"));
+  // waiting_for_whatsapp = no WhatsApp connected, not "waiting for approval".
+  assert.match(line, /status === "waiting_for_whatsapp"\) \{\s*return <small className="pkq-muted">WhatsApp is not connected yet\./);
 });
 
 test("Received sends final prices: all or none", () => {

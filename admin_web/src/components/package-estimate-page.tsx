@@ -8,6 +8,8 @@ import { functions } from "@/lib/firebase";
 import { currentWebLanguage } from "@/lib/language";
 import {
   PICKUP_WINDOW_LABELS,
+  confirmedBannerText,
+  pickupWhen,
   pieceKindLabel,
   REQUEST_ERROR_MESSAGES,
   estimatePageState,
@@ -16,7 +18,6 @@ import {
   moneyText,
   plannedDayText,
   requestFailure,
-  type PickupWindow,
   type PublicRequest,
 } from "@/lib/package-requests";
 
@@ -133,6 +134,7 @@ export function PackageEstimatePage({ token }: { token: string }) {
   const estimate = request.estimate;
   const location = request.location;
   const open = state === "confirm" || state === "confirmed" || state === "price_dropped" || state === "waiting_estimate";
+  const when = pickupWhen(request);
 
   return (
     <section className="pkr-card pkr-estimate">
@@ -146,7 +148,7 @@ export function PackageEstimatePage({ token }: { token: string }) {
 
       {changed && <p className="pkr-banner warn" role="status">This estimate changed — see the new one.</p>}
       {state === "confirmed" && (
-        <p className="pkr-banner ok" role="status"><CheckCircle2 aria-hidden="true" size={18} /> {request.payment.timing === "card" ? "Paid online. The business is expecting you." : "You confirmed this estimate. The business is expecting you."}</p>
+        <p className="pkr-banner ok" role="status"><CheckCircle2 aria-hidden="true" size={18} /> {confirmedBannerText(request)}</p>
       )}
       {state === "price_dropped" && (
         <p className="pkr-banner ok" role="status"><CheckCircle2 aria-hidden="true" size={18} /> Good news: the price went down. Nothing to do, your confirmation stands.</p>
@@ -212,16 +214,17 @@ export function PackageEstimatePage({ token }: { token: string }) {
           </div>
         </div>
       )}
-      {open && request.handoff === "collect" && request.pickup && (
+      {open && when && (
         <div className="pkr-place">
           <Truck aria-hidden="true" size={18} />
           <div>
-            <small>Pickup</small>
-            <span data-no-translate>{request.pickup.address}</span>
-            {(estimate?.pickupSchedule?.date || request.pickup.date) && (
+            {/* The business's own day and time once its estimate set them. */}
+            <small>{when.scheduled ? "The business comes" : "Pickup"}</small>
+            <span data-no-translate>{when.address}</span>
+            {when.date && (
               <span>
-                <span data-no-translate>{plannedDayText(estimate?.pickupSchedule?.date || request.pickup.date, lang)}</span>{" "}
-                {PICKUP_WINDOW_LABELS[(estimate?.pickupSchedule?.window || request.pickup.window) as PickupWindow] ?? ""}
+                <span data-no-translate>{plannedDayText(when.date, lang)}</span>{" "}
+                {when.window ? PICKUP_WINDOW_LABELS[when.window] : ""}
               </span>
             )}
           </div>
