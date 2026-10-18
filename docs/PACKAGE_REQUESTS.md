@@ -250,9 +250,12 @@ and the code disagree, the code is wrong: fix it, or change both together.
 
 - Every callable is an `onCall` with `{enforceAppCheck, cors: true,
   invoker: "public"}` (App Check enforced in production; the emulator skips
-  it). All of them need a signed-in caller (`unauthenticated` otherwise); a
-  web customer with no account signs in **anonymously** first
-  (`signInAnonymously`), exactly as guest checkout does.
+  it). `listPackageRequestOptions`, `getPackageRequestByToken`,
+  `confirmPackageEstimate` and `declinePackageEstimate` need no sign-in (the
+  token is the capability; they are rate-limited per address). Every other
+  callable needs a signed-in caller (`unauthenticated` otherwise); a web
+  customer with no account signs in **anonymously** before uploading photos
+  and submitting (`signInAnonymously`), exactly as guest checkout does.
 - Money is US dollars in **whole cents** (int). Dates a person picks are
   `"YYYY-MM-DD"` strings in the **business's time zone**
   (`America/New_York` unless the business's settings say otherwise).
@@ -314,7 +317,7 @@ no `sender.uid` and read through `getPackageRequestByToken`). Fields:
 | `pieces[]` | `{id, kind, description, sizeIn, photoPaths[], estimateCents}` | `id` `p1`…`p20`; `kind` `barrel` \| `box` \| `other`; `sizeIn` `{l,w,h}` inches or null; `estimateCents` int \| null (prefill: barrel price) |
 | `pieceCount`, `barrelPieces`, `packagePieces` | int | box + other = packages |
 | `status` | §8.2 | |
-| `estimate` | `{version, totalCents, pieces[{id,cents}], pickupFeeCents, pickupSchedule, note, sentByUid, sentByName, sentAt, auto}` \| null | latest version; `pickupSchedule` `{date, window}` \| null (collect) |
+| `estimate` | `{version, totalCents, pieces[{id,cents}], pickupFeeCents, pickupSchedule, note, sentByUid, sentByName, sentAt, sentAtMs, auto}` \| null | latest version; `pickupSchedule` `{date, window}` \| null (collect) |
 | `estimateHistory[]` | same shape | every version ever sent, oldest first |
 | `confirmedVersion`, `confirmedAt`, `confirmedVia` | int \| null, Timestamp \| null, `link` \| `staff_phone` \| `card` \| "" | |
 | `confirmedTotalCents` | int \| null | total of the confirmed version |
@@ -333,6 +336,8 @@ no `sender.uid` and read through `getPackageRequestByToken`). Fields:
 | `whatsappUnreachable` | bool | the last request message failed for good: show "Customer not reachable on WhatsApp" |
 | `history[]` | `{atMs, action, byUid, byName, version?, totalCents?, reason?}` | newest last, capped at 100; `action`: `submitted`, `estimate_sent`, `confirmed_link`, `confirmed_phone`, `confirmed_card`, `customer_declined`, `declined`, `cancelled`, `expired`, `received`, `lock_taken_over`, `reminder_sent` |
 | `closedAt` | Timestamp \| null | when it left the open statuses |
+| `createdAtMs`, `confirmedAtMs`, `receivedAtMs`, `closedAtMs`, `expiresAtMs` | int | epoch ms twins of the Timestamps (0 when unset), so pure code and clients can compare without a Timestamp |
+| `timeZone` | string | the business's zone when the request was sent |
 | `photosDeletedAt` | Timestamp \| null | |
 | `createdAt`, `updatedAt` | Timestamp | |
 

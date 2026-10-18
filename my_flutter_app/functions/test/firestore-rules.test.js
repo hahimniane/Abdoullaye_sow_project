@@ -3787,3 +3787,132 @@ describe("lot expense receipt Storage rules", () => {
         await assertFails(putReceipt(storageFor("owner-b"), "biz_a", "x.jpg"));
       });
 });
+
+// Customer package requests (docs/PACKAGE_REQUESTS.md §8.3, §8.4). The
+// console and the app read requests as `where businessId == mine` queries;
+// the app's "My requests" as `where sender.uid == me`. Every write is a
+// callable.
+describe("package request rules", () => {
+  async function seedRequests() {
+    const {doc, setDoc} = require("firebase/firestore");
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users/staff-containers-a"), {role: "staff",
+        businessId: "biz_a", businessPermissions: ["containers"]});
+      await setDoc(doc(db, "packageRequests/req_a"), {businessId: "biz_a",
+        status: "new", code: "R-K7M4P", token: "t".repeat(43),
+        sender: {name: "Fatou", phoneE164: "+16465550100",
+          uid: "customer-owner"}});
+      await setDoc(doc(db, "packageRequests/req_anon"), {businessId: "biz_a",
+        status: "new", sender: {name: "Guest", phoneE164: "+16465550101"}});
+      await setDoc(doc(db, "packageRequestSlugs/dala"),
+          {businessId: "biz_a"});
+    });
+  }
+
+  it("lets the business's container people query their requests", async () => {
+    const {query, collection, where, getDocs} = require("firebase/firestore");
+    await seedRequests();
+    for (const uid of ["owner-a", "staff-containers-a"]) {
+      await assertSucceeds(getDocs(query(
+          collection(firestoreFor(uid), "packageRequests"),
+          where("businessId", "==", "biz_a"),
+          where("status", "in", ["new", "estimate_sent", "confirmed"]))));
+    }
+    // Staff without the containers section, another business, no filter.
+    await assertFails(getDocs(query(
+        collection(firestoreFor("staff-barrels-a"), "packageRequests"),
+        where("businessId", "==", "biz_a"))));
+    await assertFails(getDocs(query(
+        collection(firestoreFor("owner-b"), "packageRequests"),
+        where("businessId", "==", "biz_a"))));
+    await assertFails(getDocs(query(
+        collection(firestoreFor("owner-a"), "packageRequests"))));
+  });
+
+  it("lets a signed-in customer read only their own requests", async () => {
+    const {query, collection, where, getDocs, doc, getDoc} =
+        require("firebase/firestore");
+    await seedRequests();
+    const customer = firestoreFor("customer-owner");
+    await assertSucceeds(getDocs(query(
+        collection(customer, "packageRequests"),
+        where("sender.uid", "==", "customer-owner"))));
+    await assertSucceeds(getDoc(doc(customer, "packageRequests/req_a")));
+    await assertFails(getDoc(doc(customer, "packageRequests/req_anon")));
+    await assertFails(getDoc(doc(firestoreFor("customer-stranger"),
+        "packageRequests/req_a")));
+    await assertFails(getDocs(query(
+        collection(firestoreFor("customer-stranger"), "packageRequests"),
+        where("sender.uid", "==", "customer-owner"))));
+    await assertFails(getDoc(doc(firestoreFor(null),
+        "packageRequests/req_a")));
+  });
+
+  it("never lets a client write a request or its bookkeeping", async () => {
+    const {doc, setDoc, updateDoc, getDoc} = require("firebase/firestore");
+    await seedRequests();
+    const owner = firestoreFor("owner-a");
+    await assertFails(setDoc(doc(owner, "packageRequests/forged"),
+        {businessId: "biz_a", status: "confirmed"}));
+    await assertFails(updateDoc(doc(owner, "packageRequests/req_a"),
+        {status: "confirmed"}));
+    await assertFails(updateDoc(doc(firestoreFor("customer-owner"),
+        "packageRequests/req_a"), {status: "confirmed"}));
+    for (const path of ["packageRequestSlugs/dala",
+      "packageRequestCodes/R-K7M4P", "packageRequestKeys/k"]) {
+      await assertFails(getDoc(doc(owner, path)));
+      await assertFails(setDoc(doc(owner, path), {businessId: "biz_a"}));
+    }
+  });
+
+  function putRequestPhoto(storage, businessId, uploader, fileName,
+      options = {}) {
+    return storage.ref(
+        `packageRequestPhotos/${businessId}/${uploader}/${fileName}`).put(
+        imageBytes(options.size), {contentType: options.contentType ||
+          "image/jpeg"});
+  }
+  const anonymous = (uid) => storageForToken(uid,
+      {firebase: {sign_in_provider: "anonymous"}});
+
+  it("lets an anonymous customer upload images to their own folder only",
+      async () => {
+        await assertSucceeds(putRequestPhoto(anonymous("anon-1"), "biz_a",
+            "anon-1", "photo-0001.jpg"));
+        await assertSucceeds(putRequestPhoto(anonymous("anon-1"), "biz_a",
+            "anon-1", "photo-0002.webp", {contentType: "image/webp"}));
+        await assertFails(putRequestPhoto(anonymous("anon-1"), "biz_a",
+            "anon-2", "photo-0003.jpg"));
+        await assertFails(putRequestPhoto(storageFor(null), "biz_a",
+            "anon-1", "photo-0004.jpg"));
+        for (const contentType of ["image/gif", "text/html", "video/mp4",
+          "application/pdf"]) {
+          await assertFails(putRequestPhoto(anonymous("anon-1"), "biz_a",
+              "anon-1", "photo-0005.jpg", {contentType}));
+        }
+        await assertFails(putRequestPhoto(anonymous("anon-1"), "biz_a",
+            "anon-1", "photo-0006.jpg", {size: 2 * 1024 * 1024}));
+        await assertFails(putRequestPhoto(anonymous("anon-1"), "biz_a",
+            "anon-1", "bad name.jpg"));
+        // Create only: no overwriting a photo once it is attached.
+        await assertFails(putRequestPhoto(anonymous("anon-1"), "biz_a",
+            "anon-1", "photo-0001.jpg"));
+      });
+
+  it("shows request photos to the uploader and the business's container " +
+      "people only", async () => {
+    await assertSucceeds(putRequestPhoto(anonymous("anon-1"), "biz_a",
+        "anon-1", "photo-0101.jpg"));
+    const path = "packageRequestPhotos/biz_a/anon-1/photo-0101.jpg";
+    await assertSucceeds(anonymous("anon-1").ref(path).getMetadata());
+    await assertSucceeds(storageFor("owner-a").ref(path).getMetadata());
+    await assertSucceeds(storageForToken("staff-containers-a", {
+      role: "staff", businessId: "biz_a",
+      businessPermissions: ["containers"]}).ref(path).getMetadata());
+    await assertFails(storageFor("staff-barrels-a").ref(path).getMetadata());
+    await assertFails(storageFor("owner-b").ref(path).getMetadata());
+    await assertFails(anonymous("anon-2").ref(path).getMetadata());
+    await assertFails(anonymous("anon-1").ref(path).delete());
+  });
+});
