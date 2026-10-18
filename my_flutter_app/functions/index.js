@@ -39604,3 +39604,42 @@ exports.plaidWebhook = onRequest(
       res.status(200).send({ok: true});
     },
 );
+
+// ---- Monthly volume (volume_counts.js, volume_rollup.js) ------------------
+// Pieces received and containers shipped per business per month, kept in
+// `volumeMonthly/{businessId}_{yyyy-mm}` (server-only). Two triggers recount
+// the months a line or container write touched - a recount, never an
+// increment, so retries and bursts converge - and the screens read only the
+// rollups. docs/PACKAGE_REQUESTS.md "Monthly volume - as built".
+// A small budget (two instances, one for the rebuild): the regional CPU
+// quota is shared by every function.
+const volume = require("./volume_rollup").createVolumeHandlers({
+  admin,
+  HttpsError,
+  logger,
+  requireAuth,
+  getUserProfile,
+  hasAdminCapability,
+  hasAdminSectionAccess,
+  requireBusinessPermission,
+});
+exports.rollupVolumeOnLineWrite = onDocumentWritten(
+    {document: "containerLines/{lineId}", maxInstances: 2,
+      timeoutSeconds: 120},
+    volume.rollupVolumeOnLineWrite);
+exports.rollupVolumeOnContainerWrite = onDocumentWritten(
+    {document: "containers/{containerId}", maxInstances: 2,
+      timeoutSeconds: 120},
+    volume.rollupVolumeOnContainerWrite);
+exports.getPlatformVolume = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      maxInstances: 2},
+    volume.getPlatformVolume);
+exports.getBusinessVolume = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      maxInstances: 2},
+    volume.getBusinessVolume);
+exports.rebuildVolumeMonths = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      maxInstances: 1, timeoutSeconds: 300, memory: "512MiB"},
+    volume.rebuildVolumeMonths);

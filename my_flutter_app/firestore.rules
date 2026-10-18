@@ -684,6 +684,13 @@ service cloud.firestore {
     match /containerVinLocks/{lockId} {
       allow read, write: if false;
     }
+    // Monthly volume rollups (pieces received, containers shipped), one per
+    // business and month. Recounted by the volume triggers and read through
+    // getPlatformVolume / getBusinessVolume, which check who may see them.
+    // No client reads or writes them directly - not even the business.
+    match /volumeMonthly/{rollupId} {
+      allow read, write: if false;
+    }
     // Inventory (docs/INVENTORY.md): products a shop sells, the sales staff
     // ring up, and every stock change. Read by the business's managers (the
     // same read as containers); every write goes through the inventory

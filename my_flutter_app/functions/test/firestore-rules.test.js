@@ -1100,6 +1100,32 @@ describe("business dashboard Firestore rules", () => {
         `containerVinLocks/${lockId}`)));
   });
 
+  // Monthly volume rollups are recounted by the server and read through
+  // getPlatformVolume / getBusinessVolume, which decide who sees them. A
+  // client that could write one could rewrite what the platform bills on;
+  // even reading is left to the callables. Server-only for everyone.
+  it("keeps the monthly volume rollups server-only", async () => {
+    const {doc, setDoc, getDoc, deleteDoc, getDocs, collection, query,
+      where} = require("firebase/firestore");
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "volumeMonthly/biz_a_2026-10"),
+          {businessId: "biz_a", month: "2026-10", pieces: 40});
+    });
+    for (const uid of ["owner-a", "super-admin", "owner-b", null]) {
+      const db = firestoreFor(uid);
+      await assertFails(getDoc(doc(db, "volumeMonthly/biz_a_2026-10")));
+      await assertFails(getDocs(query(collection(db, "volumeMonthly"),
+          where("businessId", "==", "biz_a"))));
+      await assertFails(getDocs(query(collection(db, "volumeMonthly"),
+          where("month", "==", "2026-10"))));
+      await assertFails(setDoc(doc(db, "volumeMonthly/biz_a_2026-10"),
+          {businessId: "biz_a", month: "2026-10", pieces: 1}));
+      await assertFails(setDoc(doc(db, "volumeMonthly/biz_a_2026-11"),
+          {businessId: "biz_a", month: "2026-11", pieces: 999}));
+      await assertFails(deleteDoc(doc(db, "volumeMonthly/biz_a_2026-10")));
+    }
+  });
+
   // Inventory (docs/INVENTORY.md): products, sales and stock movements are
   // read by the business's own managers as `where businessId == mine`
   // queries (a product also by code, a sale newest first, a product's
