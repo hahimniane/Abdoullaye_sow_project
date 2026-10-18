@@ -8,10 +8,12 @@ const {describe, it} = require("node:test");
 
 const {
   ANDROID_PACKAGE_NAME,
+  DEFAULT_LINK_CUSTOMIZATION,
   PLAID_IOS_REDIRECT_URI,
   PlaidError,
   bankErrorInfo,
   createPlaidClient,
+  linkCustomizationName,
   linkTokenRequest,
   plaidEnvironment,
   plaidWebhookUrl,
@@ -78,6 +80,30 @@ describe("Link token request", () => {
         `applicationId "${ANDROID_PACKAGE_NAME.replace(/\./g, "\\.")}"`));
   });
 
+  it("names the laawol Link customization unless told otherwise", () => {
+    assert.equal(DEFAULT_LINK_CUSTOMIZATION, "laawol");
+    const plain = linkTokenRequest({uid: "u1", platform: "web"});
+    assert.equal(plain.link_customization_name, "laawol");
+    assert.equal(plain.client_name, "Laawol");
+    assert.equal(linkTokenRequest({uid: "u1", platform: "ios",
+      linkCustomizationName: " dala "}).link_customization_name, "dala");
+    // "" (PLAID_LINK_CUSTOMIZATION= in the env) sends none at all.
+    const none = linkTokenRequest({uid: "u1", platform: "web",
+      linkCustomizationName: ""});
+    assert.equal("link_customization_name" in none, false);
+    assert.equal(none.client_name, "Laawol");
+    // Update mode keeps the look too.
+    assert.equal(linkTokenRequest({uid: "u1", platform: "android",
+      accessToken: "access-x"}).link_customization_name, "laawol");
+  });
+
+  it("reads the customization from PLAID_LINK_CUSTOMIZATION", () => {
+    assert.equal(linkCustomizationName({}), "laawol");
+    assert.equal(linkCustomizationName({PLAID_LINK_CUSTOMIZATION: "x"}), "x");
+    assert.equal(linkCustomizationName({PLAID_LINK_CUSTOMIZATION: " "}), "");
+    assert.equal(linkCustomizationName({PLAID_LINK_CUSTOMIZATION: ""}), "");
+  });
+
   it("repairs an expired login in update mode, without products", () => {
     const body = linkTokenRequest({uid: "u1", platform: "web",
       accessToken: "access-x"});
@@ -90,7 +116,52 @@ describe("Plaid environment and webhook URL", () => {
   it("is sandbox unless production is spelled out", () => {
     assert.equal(plaidEnvironment({}), "sandbox");
     assert.equal(plaidEnvironment({PLAID_ENV: "production"}), "production");
+    assert.equal(plaidEnvironment({PLAID_ENV: "production",
+      GCLOUD_PROJECT: "car-selling-flutter-app"}), "production");
     assert.equal(plaidEnvironment({PLAID_ENV: "prod"}), "sandbox");
+  });
+
+  it("is always sandbox in an emulator or a test run", () => {
+    const prod = {PLAID_ENV: "production",
+      GCLOUD_PROJECT: "car-selling-flutter-app"};
+    assert.equal(plaidEnvironment({...prod, FUNCTIONS_EMULATOR: "true"}),
+        "sandbox");
+    assert.equal(plaidEnvironment({...prod,
+      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080"}), "sandbox");
+    assert.equal(plaidEnvironment({...prod,
+      FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099"}), "sandbox");
+    assert.equal(plaidEnvironment({PLAID_ENV: "production",
+      GCLOUD_PROJECT: "demo-laawol-bank"}), "sandbox");
+  });
+
+  it("production is configured for the production project only", () => {
+    const dir = path.join(__dirname, "..");
+    const read = (name) => {
+      const out = {};
+      for (const line of fs.readFileSync(path.join(dir, name), "utf8")
+          .split(/\r?\n/)) {
+        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+        if (m) out[m[1]] = m[2];
+      }
+      return out;
+    };
+    const prod = read(".env.car-selling-flutter-app");
+    assert.equal(prod.PLAID_ENV, "production");
+    assert.equal(prod.PLAID_LINK_CUSTOMIZATION, "laawol");
+    // Secrets stay in Secret Manager, never in a committed file.
+    for (const key of ["PLAID_CLIENT_ID", "PLAID_SECRET", "BANK_TOKEN_KEY"]) {
+      assert.equal(key in prod, false, `${key} is not in the env file`);
+    }
+    // No env file every project (and the emulators) would load says
+    // production.
+    for (const name of [".env", ".env.local", ".env.example"]) {
+      if (!fs.existsSync(path.join(dir, name))) continue;
+      assert.notEqual(read(name).PLAID_ENV, "production", name);
+    }
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.startsWith(".env.demo-")) continue;
+      assert.notEqual(read(name).PLAID_ENV, "production", name);
+    }
   });
 
   it("derives the webhook from the running project", () => {

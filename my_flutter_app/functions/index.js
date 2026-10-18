@@ -39031,6 +39031,7 @@ exports.createBankLinkToken = onCall(
       try {
         const token = await bankPlaidClient().createLinkToken({uid,
           platform, webhookUrl: plaidClient.plaidWebhookUrl(),
+          linkCustomizationName: plaidClient.linkCustomizationName(),
           language: data.language, ...(repairing ? {accessToken} : {})});
         return {linkToken: String(token.link_token || ""),
           expiration: String(token.expiration || ""),
@@ -39120,6 +39121,7 @@ exports.connectBusinessBank = onCall(
           windowMinutes: zelleCheck.windowMinutesOf(old),
           lastSyncAt: sameFeed ? old.lastSyncAt || null : null,
           lastRefreshAt: null,
+          lastRefreshAtByRecord: {},
           lastErrorCode: null,
           updatedAt: now,
         });
@@ -39328,15 +39330,23 @@ exports.checkZellePayment = onCall(
       if (linkProblem) throw bankRefusal(linkProblem);
       const accessToken = openBankToken(link, businessId);
 
-      // Ask the bank for anything new: billed, so once a minute per
-      // business, and best effort (a refusal falls back to what was read).
+      // Ask the bank for anything new: billed ($0.12), so at most once per
+      // record in 5 minutes and once a minute per business
+      // (zelleCheck.refreshPlan), and best effort (a refusal falls back to
+      // what was read). Re-checks in between only sync, which is free; a
+      // deposit the refresh turns up also arrives by the plaidWebhook sync.
       const refresh = await db.runTransaction(async (tx) => {
         const doc = await tx.get(linkRef);
-        if (!zelleCheck.refreshDue(doc.data()?.lastRefreshAt, Date.now())) {
-          return false;
-        }
+        const current = doc.data() || {};
+        const plan = zelleCheck.refreshPlan({
+          lastRefreshAt: current.lastRefreshAt,
+          marks: current.lastRefreshAtByRecord,
+          recordKey: zelleCheck.refreshRecordKey(kind, id),
+          nowMs: Date.now()});
+        if (!plan.refresh) return false;
         tx.update(linkRef, {
-          lastRefreshAt: FirestoreFieldValue.serverTimestamp()});
+          lastRefreshAt: FirestoreFieldValue.serverTimestamp(),
+          lastRefreshAtByRecord: plan.marks});
         return true;
       }).catch(() => false);
       if (refresh) {

@@ -17,6 +17,13 @@ const crypto = require("crypto");
 /** Link shows this name to the owner. Also set in the Plaid dashboard. */
 const LINK_CLIENT_NAME = "Laawol";
 /**
+ * The Link customization (Plaid dashboard -> Link -> Customization) every
+ * Link token names: the team is shared with the sister apps, so Laawol's own
+ * look is picked by name. PLAID_LINK_CUSTOMIZATION overrides it; an empty
+ * value sends none (Plaid's default customization).
+ */
+const DEFAULT_LINK_CUSTOMIZATION = "laawol";
+/**
  * Registered in the Plaid dashboard (Allowed redirect URIs) and covered by the
  * apple-app-site-association file, so a bank's OAuth page hands the owner
  * back to the app. See docs/ZELLE_BANK_CHECK.md (TODO: AASA not set up yet).
@@ -33,15 +40,47 @@ const SYNC_PAGE_SIZE = 250;
 const PLAID_REGION = "us-central1";
 
 /**
- * "sandbox" or "production" (PLAID_ENV). Anything else reads as sandbox, so a
- * typo can only ever reach Plaid's fake banks.
+ * True when this process is an emulator or a test run: the Functions
+ * emulator, any Firebase emulator host, or a demo-* project (what every
+ * emulator suite here runs as).
+ *
+ * @param {object} env process.env.
+ * @return {boolean} Whether this is not a deployed function.
+ */
+function runsAgainstEmulators(env = process.env) {
+  if (String(env.FUNCTIONS_EMULATOR || "").trim() === "true") return true;
+  if (env.FIRESTORE_EMULATOR_HOST || env.FIREBASE_AUTH_EMULATOR_HOST ||
+      env.FIREBASE_STORAGE_EMULATOR_HOST) {
+    return true;
+  }
+  const projectId = String(env.GCLOUD_PROJECT || env.GCP_PROJECT || "")
+      .trim();
+  return projectId.startsWith("demo-");
+}
+
+/**
+ * "sandbox" or "production" (PLAID_ENV, set per project in
+ * functions/.env.<project id>). Anything else reads as sandbox, so a typo
+ * can only ever reach Plaid's fake banks - and an emulator or a test run is
+ * always sandbox, whatever its environment says, so no local run can read a
+ * real bank or be billed.
  *
  * @param {object} env process.env.
  * @return {string} The environment.
  */
 function plaidEnvironment(env = process.env) {
-  return String(env.PLAID_ENV || "").trim() === "production" ?
-    "production" : "sandbox";
+  if (String(env.PLAID_ENV || "").trim() !== "production") return "sandbox";
+  return runsAgainstEmulators(env) ? "sandbox" : "production";
+}
+
+/**
+ * @param {object} env process.env.
+ * @return {string} The Link customization name to send ("" sends none).
+ */
+function linkCustomizationName(env = process.env) {
+  const value = env.PLAID_LINK_CUSTOMIZATION;
+  if (value === undefined || value === null) return DEFAULT_LINK_CUSTOMIZATION;
+  return String(value).trim();
 }
 
 /**
@@ -176,7 +215,11 @@ function bankErrorInfo(code, type) {
  * popup on the web (neither field). Plaid says never to send both. Update
  * mode (an expired login) passes the access token and no products.
  *
- * @param {object} input {uid, platform, webhookUrl, accessToken?, language?}.
+ * The customization is `input.linkCustomizationName` when given ("" sends
+ * none), else DEFAULT_LINK_CUSTOMIZATION.
+ *
+ * @param {object} input {uid, platform, webhookUrl, accessToken?, language?,
+ *   linkCustomizationName?}.
  * @return {object} The request body, without client id and secret.
  */
 function linkTokenRequest(input) {
@@ -186,6 +229,10 @@ function linkTokenRequest(input) {
     language: input.language === "fr" ? "fr" : "en",
     country_codes: ["US"],
   };
+  const customization = input.linkCustomizationName === undefined ||
+    input.linkCustomizationName === null ? DEFAULT_LINK_CUSTOMIZATION :
+    String(input.linkCustomizationName).trim();
+  if (customization) body.link_customization_name = customization;
   if (input.webhookUrl) body.webhook = input.webhookUrl;
   if (input.platform === "ios") body.redirect_uri = PLAID_IOS_REDIRECT_URI;
   if (input.platform === "android") {
@@ -385,6 +432,7 @@ async function verifyPlaidWebhook(input) {
 
 module.exports = {
   ANDROID_PACKAGE_NAME,
+  DEFAULT_LINK_CUSTOMIZATION,
   LINK_CLIENT_NAME,
   LINK_PLATFORMS,
   MUTATION_DURING_PAGINATION,
@@ -396,9 +444,11 @@ module.exports = {
   WEBHOOK_MAX_AGE_SECONDS,
   bankErrorInfo,
   createPlaidClient,
+  linkCustomizationName,
   linkTokenRequest,
   plaidBaseUrl,
   plaidEnvironment,
   plaidWebhookUrl,
+  runsAgainstEmulators,
   verifyPlaidWebhook,
 };

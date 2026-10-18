@@ -258,6 +258,75 @@ describe("zelle check: settings and bank state", () => {
     assert.equal(z.refreshDue({toMillis: () => AT - 60 * 1000}, AT), true);
   });
 
+  describe("one paid refresh per Check Zelle", () => {
+    const KEY = z.refreshRecordKey("inventory_sale", "s1");
+    // Replays one press of Check Zelle: the first check, then what each
+    // check stored, as the callable writes it back.
+    const run = (startMs, offsetsS, link = {}) => {
+      let lastRefreshAt = link.lastRefreshAt ?? null;
+      let marks = link.marks ?? {};
+      return offsetsS.map((s) => {
+        const plan = z.refreshPlan({lastRefreshAt, marks, recordKey: KEY,
+          nowMs: startMs + s * 1000});
+        if (plan.refresh) {
+          lastRefreshAt = startMs + s * 1000;
+          marks = plan.marks;
+        }
+        return plan.refresh;
+      });
+    };
+
+    it("the first check refreshes; re-checks at 20/40/60/120 s do not",
+        () => {
+          assert.equal(z.RECORD_REFRESH_WINDOW_MS, 5 * 60 * 1000);
+          assert.deepEqual(run(AT, [0, 20, 40, 60, 120, 180]),
+              [true, false, false, false, false, false]);
+          assert.equal(z.refreshPlan({lastRefreshAt: null, marks: {},
+            recordKey: KEY, nowMs: AT}).reason, "due");
+        });
+
+    it("the same record refreshes again once 5 minutes have passed", () => {
+      assert.deepEqual(run(AT, [0, 299, 300]), [true, false, true]);
+      const plan = z.refreshPlan({lastRefreshAt: AT - 10 * 60000,
+        marks: {[KEY]: AT - 4 * 60000}, recordKey: KEY, nowMs: AT});
+      assert.deepEqual([plan.refresh, plan.reason], [false, "record_recent"]);
+    });
+
+    it("another record within 60 s waits for the business throttle", () => {
+      const other = z.refreshRecordKey("inventory_sale", "s2");
+      const first = z.refreshPlan({lastRefreshAt: null, marks: {},
+        recordKey: KEY, nowMs: AT});
+      const soon = z.refreshPlan({lastRefreshAt: AT, marks: first.marks,
+        recordKey: other, nowMs: AT + 30 * 1000});
+      assert.deepEqual([soon.refresh, soon.reason],
+          [false, "business_throttle"]);
+      assert.equal(other in soon.marks, false, "no mark without a refresh");
+      const later = z.refreshPlan({lastRefreshAt: AT, marks: first.marks,
+        recordKey: other, nowMs: AT + 60 * 1000});
+      assert.equal(later.refresh, true);
+      assert.deepEqual(Object.keys(later.marks).sort(), [KEY, other].sort());
+      // Kinds are part of the key: a sale and a package payment with the
+      // same id are two records.
+      assert.notEqual(z.refreshRecordKey("container_line_payment", "s1"), KEY);
+    });
+
+    it("drops expired marks and reads stored timestamps", () => {
+      const plan = z.refreshPlan({lastRefreshAt: {toMillis: () => AT - 61000},
+        marks: {"inventory_sale:old": AT - 6 * 60000,
+          "inventory_sale:recent": {toMillis: () => AT - 60000},
+          "inventory_sale:junk": "not a time"},
+        recordKey: KEY, nowMs: AT});
+      assert.equal(plan.refresh, true);
+      assert.deepEqual(plan.marks, {"inventory_sale:recent": AT - 60000,
+        [KEY]: AT});
+      // A missing or malformed map is an empty one.
+      for (const marks of [null, undefined, [], "x"]) {
+        assert.equal(z.refreshPlan({lastRefreshAt: null, marks,
+          recordKey: KEY, nowMs: AT}).refresh, true);
+      }
+    });
+  });
+
   it("picks the chosen depository account, else the first one", () => {
     const accounts = [{account_id: "card", type: "credit"},
       {account_id: "chk", type: "depository"},

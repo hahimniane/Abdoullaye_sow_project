@@ -73,10 +73,14 @@ A sale entirely on credit (paid now 0, method "") is `not_zelle`.
 `businessBankLinks/{businessId}`: `businessId, itemId, accessTokenEnc,
 institutionId, institutionName, accountId, accountMask, accountName, status
 ("active" | "needs_reauth" | "disconnected"), cursor, connectedAt,
-connectedByUid, windowMinutes, lastSyncAt, lastRefreshAt, lastErrorCode,
-updatedAt`, plus `windowUpdatedByUid`, `disconnectedAt`, `disconnectedByUid`.
+connectedByUid, windowMinutes, lastSyncAt, lastRefreshAt,
+lastRefreshAtByRecord, lastErrorCode, updatedAt`, plus `windowUpdatedByUid`, `disconnectedAt`, `disconnectedByUid`.
 A window set before any bank is connected creates the document with only
 `businessId, windowMinutes` (reads as not connected).
+`lastRefreshAtByRecord` is `{"<kind>:<id>": epoch ms}` for the payment
+records that paid for a `/transactions/refresh` in the last 5 minutes
+(expired entries are dropped on every write, so it holds a handful of keys;
+see "Cost and the refresh rule").
 
 `businessBankCredits/{businessId}_{transactionId}`: `businessId,
 transactionId, accountId, amountCents` (money IN, positive), `pending,
@@ -140,10 +144,12 @@ signed-in callers only. Refusals are `HttpsError` with the English message and
 6. `checkZellePayment {businessId, kind, id}` -> `{result, confirmation?,
    candidates?}`; `confirmation = {amountCents, atMs, timeKnown, senderName,
    institutionName, pending?}`, `candidates = [{creditId, atMs, timeKnown,
-   senderName, pending}]`. Asks Plaid to refresh (`/transactions/refresh`, at
-   most once per 60 s per business, best effort), syncs (`/transactions/sync`,
-   250 a page, at most 20 pages), then applies the rule. A sync that fails for
-   any reason but an expired login falls back to the deposits already read.
+   senderName, pending}]`. Asks Plaid to refresh (`/transactions/refresh`,
+   billed: at most once per record in 5 minutes and once per 60 s per
+   business, best effort - see "Cost and the refresh rule"), syncs
+   (`/transactions/sync`, free, 250 a page, at most 20 pages), then applies
+   the rule. A sync that fails for any reason but an expired login falls back
+   to the deposits already read.
 7. `confirmZelleCandidate {businessId, kind, id, creditId}` -> `{result:
    "confirmed"|"already_confirmed", confirmation}`. Same permission and record
    checks; the credit must still pass the rule (`candidate_invalid`) and be
@@ -166,6 +172,37 @@ Refusal codes: `bank_owner_required`, `bank_access_denied`,
 `service_unavailable`, `not_ready`, `link_expired` or `setup`), plus the
 inventory gate's own (`service_disabled`, `store_not_allowed`, ...) and the
 section refusal for package payments.
+
+## Cost and the refresh rule
+
+Plaid bills the shared team (Wouri, Dala and Laawol, same owner) for:
+
+- **Transactions: $0.30 per connected bank per month** (one Item per
+  business that connected a bank; a disconnected bank is removed at Plaid
+  and stops costing).
+- **Transactions Refresh: $0.12 per successful `/transactions/refresh`.**
+  `/transactions/sync`, the webhook and everything else are free.
+
+So the running cost is **$0.30 per connected bank per month + at most $0.12
+per press of Check Zelle**. The rule (`zelle_check.refreshPlan`, decided in
+the same transaction that records it on the link):
+
+1. A payment record (`businessId` + `kind` + `id`) asks for **at most one
+   refresh per 5 minutes** (`RECORD_REFRESH_WINDOW_MS`). The screens re-check
+   automatically every 20 s for 3 minutes after a "not found yet"; those
+   re-checks (and a staff member pressing Check again) only sync, which is
+   free.
+2. On top of that, **at most one refresh per 60 s per business**
+   (`REFRESH_THROTTLE_MS`). A second payment checked within that minute only
+   syncs; it gets its own refresh on a later re-check once the minute is up
+   (still at most one for it).
+3. A refresh that finds something new makes Plaid send
+   `SYNC_UPDATES_AVAILABLE`; `plaidWebhook` syncs, the deposit is stored, and
+   the next (free) re-check matches it. The re-check also syncs itself, so a
+   late or lost webhook only delays the match.
+
+The mark is taken before Plaid is asked, so a refresh that fails is not
+retried within the 5 minutes either (a failed refresh is not billed).
 
 ## Hardening over Wouri
 
@@ -219,9 +256,12 @@ section refusal for package payments.
 
 ## Setup for the owner of the Plaid account
 
-1. **Plaid dashboard -> Link -> Customization**: create/choose the
-   customization and set the display name **Laawol** (the Link token also
-   sends `client_name: "Laawol"`).
+1. **Plaid dashboard -> Link -> Customization**: the customization named
+   exactly **`laawol`** (United States, English) - done. Every Link token
+   sends `link_customization_name: "laawol"` and `client_name: "Laawol"`.
+   `PLAID_LINK_CUSTOMIZATION` (functions env) changes the name; an empty
+   value sends none (Plaid's default customization). The team is shared with
+   Wouri and Dala, so never edit their customizations for Laawol.
 2. **Plaid dashboard -> Developers -> API -> Allowed Android package names**:
    add `com.laawoldigital.app` (from `android/app/build.gradle`
    `applicationId`).
@@ -239,8 +279,9 @@ section refusal for package payments.
    project the functions run in (e.g. `car-selling-flutter-app`, or
    `laawol-a855a` after the migration). If Plaid's dashboard asks for a
    default webhook, use that URL.
-5. **Production access**: request Plaid production for the **Transactions**
-   product (the only product asked for). Until then use sandbox.
+5. **Production access**: approved for **Transactions**; the
+   **Transactions Refresh** add-on is being enabled (without it
+   `/transactions/refresh` fails, the check still syncs - best effort).
 6. **Secrets** (from `my_flutter_app`):
 
    ```bash
@@ -252,9 +293,20 @@ section refusal for package payments.
    Keep a copy of `BANK_TOKEN_KEY` in the password manager: a changed key
    makes every connected bank read as "not connected" and the owner connects
    it again (nothing else is lost).
-7. **PLAID_ENV**: `sandbox` (default) or `production`, as a functions
-   environment variable (`my_flutter_app/functions/.env.<project id>`:
-   `PLAID_ENV=production`). The secret in step 6 must match the environment.
+7. **PLAID_ENV**: `sandbox` (default) or `production`, a functions
+   environment variable. The production project's values are committed in
+   `my_flutter_app/functions/.env.car-selling-flutter-app`
+   (`PLAID_ENV=production`, `PLAID_LINK_CUSTOMIZATION=laawol`; no secrets;
+   un-ignored in `functions/.gitignore`), which `firebase deploy` loads for
+   that project id only. Every other project (staging, `demo-*` emulator
+   projects) has no such file and is sandbox. `plaidEnvironment` also forces
+   sandbox whenever it runs under an emulator (`FUNCTIONS_EMULATOR`, any
+   `*_EMULATOR_HOST`, or a `demo-*` project), so no test or emulator run can
+   reach a real bank even with `PLAID_ENV=production` exported. The secret
+   in step 6 must match the environment (`PLAID_SECRET` in
+   car-selling-flutter-app = the production secret). **After the migration
+   to `laawol-a855a`**, copy the file to `.env.laawol-a855a` (and un-ignore
+   it) or that project runs sandbox.
 8. Deploy the functions, the rules and the index
    (`firebase deploy --only firestore:rules,firestore:indexes,functions:createBankLinkToken,...`)
    through the normal gate (`deploy/` preflight), one function batch at a time.
@@ -263,14 +315,22 @@ section refusal for package payments.
 
 - Unit (`npm run test:unit`): `test/bank-token-crypto.test.js` (round trip,
   tamper, wrong key/business), `test/plaid-client.test.js` (errors, Link
-  request, webhook URL, fetch client, webhook verification ported from Wouri),
+  request incl. the `laawol` customization, environment incl. the emulator
+  guard and the committed production env file, webhook URL, fetch client,
+  webhook verification ported from Wouri),
   `test/bank-sync.test.js` (sign flip, pending kept, account filter, removed,
   pending->posted, paging and mutation restart, ITEM statuses),
   `test/zelle-check.test.js` (exact amount, window both sides, consumed /
   removed / other account excluded, several -> choose, date-only -> choose,
-  none -> not_found, record reading, permission planning, status views, and
-  a source contract over the callables and rules).
+  none -> not_found, record reading, permission planning, status views, the
+  refresh rule (first check refreshes, re-checks at 20/40/60/120 s do not,
+  the same record after 5 minutes does, another record within 60 s waits for
+  the business throttle), and a source contract over the callables and
+  rules).
 - Emulator (`npm run test:bank`): `test/bank-callables.test.js`, Plaid faked at
-  `fetch`.
+  `fetch` (every call must go to `sandbox.plaid.com`, even with
+  `PLAID_ENV=production`): one refresh per record across re-checks, again
+  after 5 minutes, and a deposit synced by the webhook confirming on the next
+  free re-check.
 - Rules (`npm run test:rules`): "keeps the connected bank and its deposits
   server-only", "does not let a client write a payment's bankCheck".

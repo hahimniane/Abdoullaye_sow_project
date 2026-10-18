@@ -31,8 +31,17 @@ const KINDS = Object.freeze({
 const DEFAULT_WINDOW_MINUTES = 15;
 const MIN_WINDOW_MINUTES = 2;
 const MAX_WINDOW_MINUTES = 60;
-/** /transactions/refresh is billed: at most once a minute per business. */
+/**
+ * /transactions/refresh is billed per successful call ($0.12): at most once
+ * a minute per business...
+ */
 const REFRESH_THROTTLE_MS = 60 * 1000;
+/**
+ * ...and at most once per payment record in five minutes, so one press of
+ * "Check Zelle" (and the screens' automatic re-checks every 20 s for 3
+ * minutes) costs at most one refresh. Re-checks inside it only sync (free).
+ */
+const RECORD_REFRESH_WINDOW_MS = 5 * 60 * 1000;
 /** Same-amount credits read per check; far more than a counter ever sees. */
 const MAX_CANDIDATE_READ = 200;
 const DEFAULT_TIME_ZONE = "America/New_York";
@@ -446,6 +455,49 @@ function refreshDue(lastRefreshAt, nowMs) {
 }
 
 /**
+ * @param {string} kind A KINDS key.
+ * @param {string} id The record's id.
+ * @return {string} The record's key in the link's lastRefreshAtByRecord.
+ */
+function refreshRecordKey(kind, id) {
+  return `${kind}:${id}`;
+}
+
+/**
+ * Whether this check may ask Plaid to refresh (billed). Pure.
+ *
+ * A record refreshed less than RECORD_REFRESH_WINDOW_MS ago is not
+ * refreshed again; otherwise the business-wide throttle (refreshDue)
+ * decides. `marks` comes back without the expired entries (and with this
+ * record's mark when it refreshes), so the stored map stays a handful of
+ * keys: write it back only when `refresh` is true.
+ *
+ * @param {object} input {lastRefreshAt (the link's), marks (the link's
+ *   lastRefreshAtByRecord), recordKey, nowMs}.
+ * @return {object} {refresh, reason: "due" | "record_recent" |
+ *   "business_throttle", marks}.
+ */
+function refreshPlan(input) {
+  const nowMs = Number(input.nowMs);
+  const stored = input.marks && typeof input.marks === "object" &&
+    !Array.isArray(input.marks) ? input.marks : {};
+  const marks = {};
+  for (const [key, value] of Object.entries(stored)) {
+    const ms = millisOf(value);
+    if (ms !== null && nowMs - ms < RECORD_REFRESH_WINDOW_MS) marks[key] = ms;
+  }
+  const key = String(input.recordKey || "");
+  if (Object.prototype.hasOwnProperty.call(marks, key)) {
+    return {refresh: false, reason: "record_recent", marks};
+  }
+  if (!refreshDue(input.lastRefreshAt, nowMs)) {
+    return {refresh: false, reason: "business_throttle", marks};
+  }
+  marks[key] = nowMs;
+  return {refresh: true, reason: "due", marks};
+}
+
+/**
  * The account Zelle checks read: the one the owner picked when it is a
  * depository account, else the login's first depository account.
  *
@@ -496,6 +548,7 @@ module.exports = {
   MAX_CANDIDATE_READ,
   MAX_WINDOW_MINUTES,
   MIN_WINDOW_MINUTES,
+  RECORD_REFRESH_WINDOW_MS,
   REFRESH_THROTTLE_MS,
   bankRefusalKind,
   bankRefusalMessage,
@@ -519,6 +572,8 @@ module.exports = {
   paymentOfRecord,
   pickDepositoryAccount,
   refreshDue,
+  refreshPlan,
+  refreshRecordKey,
   safeTimeZone,
   windowDateKeys,
   windowMinutesOf,

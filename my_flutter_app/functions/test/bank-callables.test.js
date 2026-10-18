@@ -79,6 +79,8 @@ const json = (status, body) => new Response(JSON.stringify(body), {status});
 function installPlaid() {
   global.fetch = async (url, init) => {
     if (!String(url).includes("plaid.com")) return realFetch(url, init);
+    // Never a real bank: an emulator run is sandbox whatever PLAID_ENV says.
+    assert.equal(new URL(url).origin, "https://sandbox.plaid.com");
     const endpoint = new URL(url).pathname;
     const body = JSON.parse(init.body);
     plaid.calls.push({endpoint, body});
@@ -209,6 +211,49 @@ afterEach(() => {
   global.fetch = realFetch;
 });
 
+// ---- Plaid webhooks, signed like Plaid signs them -----------------------
+const {privateKey: WEBHOOK_PRIVATE, publicKey: WEBHOOK_PUBLIC} =
+  crypto.generateKeyPairSync("ec", {namedCurve: "P-256"});
+const WEBHOOK_KEY = {...WEBHOOK_PUBLIC.export({format: "jwk"}),
+  kid: "kid-1", alg: "ES256", expired_at: null};
+/**
+ * Delivers a webhook to plaidWebhook, signed (or with the given JWT).
+ *
+ * @param {object} payload The JSON body.
+ * @param {object} options {jwt}.
+ * @return {Promise<object>} {status, body}.
+ */
+async function deliverWebhook(payload, {jwt} = {}) {
+  const b64 = (v) => Buffer.from(JSON.stringify(v)).toString("base64url");
+  const signed = (body) => {
+    const header = b64({alg: "ES256", kid: "kid-1", typ: "JWT"});
+    const payload = b64({iat: Math.floor(Date.now() / 1000),
+      request_body_sha256: crypto.createHash("sha256").update(body)
+          .digest("hex")});
+    const sig = crypto.sign("sha256", Buffer.from(`${header}.${payload}`),
+        {key: WEBHOOK_PRIVATE, dsaEncoding: "ieee-p1363"});
+    return `${header}.${payload}.${sig.toString("base64url")}`;
+  };
+  const raw = JSON.stringify(payload);
+  const sent = {};
+  const res = Object.assign(new EventEmitter(), {
+    set() {}, setHeader() {}, getHeader() {}, removeHeader() {},
+    status(code) {
+      sent.status = code;
+      return this;
+    },
+    send(body) {
+      sent.body = body;
+      return this;
+    },
+  });
+  const headers = {"plaid-verification": jwt ?? signed(raw)};
+  await functions.plaidWebhook({method: "POST", headers, body: payload,
+    rawBody: Buffer.from(raw), get: (name) => headers[name.toLowerCase()]},
+  res);
+  return sent;
+}
+
 describe("connecting the bank", () => {
   it("is for the owner only", async () => {
     assert.equal(await reasonOf(call("createBankLinkToken",
@@ -229,6 +274,7 @@ describe("connecting the bank", () => {
     assert.equal(answer.mode, "connect");
     const [sent] = callsTo("/link/token/create");
     assert.equal(sent.body.client_name, "Laawol");
+    assert.equal(sent.body.link_customization_name, "laawol");
     assert.equal(sent.body.android_package_name, "com.laawoldigital.app");
     assert.match(sent.body.webhook, /cloudfunctions\.net\/plaidWebhook$/);
     assert.equal(await reasonOf(call("createBankLinkToken",
@@ -510,6 +556,70 @@ describe("checking a Zelle payment", () => {
     assert.ok(callsTo("/transactions/sync").length >= 3);
   });
 
+  it("refreshes once per record: re-checks of the same payment only sync",
+      async () => {
+        await connect();
+        const id = await sale(310);
+        for (let i = 0; i < 4; i += 1) {
+          assert.equal((await call("checkZellePayment",
+              {kind: "inventory_sale", id}, CASHIER)).result, "not_found");
+        }
+        assert.equal(callsTo("/transactions/refresh").length, 1);
+        assert.ok(callsTo("/transactions/sync").length >= 5);
+        const link = (await db.collection("businessBankLinks").doc(BIZ)
+            .get()).data();
+        assert.deepEqual(Object.keys(link.lastRefreshAtByRecord),
+            [`inventory_sale:${id}`]);
+
+        // Five minutes on (the stored marks aged), the same payment may ask
+        // the bank again - once.
+        const aged = Date.now() - 5 * 60 * 1000 - 1000;
+        await db.collection("businessBankLinks").doc(BIZ).update({
+          lastRefreshAt: Timestamp.fromMillis(aged),
+          lastRefreshAtByRecord: {[`inventory_sale:${id}`]: aged}});
+        await call("checkZellePayment", {kind: "inventory_sale", id},
+            CASHIER);
+        await call("checkZellePayment", {kind: "inventory_sale", id},
+            CASHIER);
+        assert.equal(callsTo("/transactions/refresh").length, 2);
+      });
+
+  it("a deposit the webhook syncs confirms on the next free re-check",
+      async () => {
+        await connect();
+        const id = await sale(4321);
+        assert.equal((await call("checkZellePayment",
+            {kind: "inventory_sale", id}, CASHIER)).result, "not_found");
+        assert.equal(callsTo("/transactions/refresh").length, 1);
+        // The refresh found it; Plaid says so with SYNC_UPDATES_AVAILABLE.
+        plaid.webhookKey = WEBHOOK_KEY;
+        plaid.pages = [page([deposit("hook", 4321, NOW + 60000)])];
+        assert.equal((await deliverWebhook({webhook_type: "TRANSACTIONS",
+          webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "item-1"}))
+            .status, 200);
+        // The re-check's own sync finds nothing new: the match comes from
+        // what the webhook stored, and no second refresh is paid for.
+        const again = await call("checkZellePayment",
+            {kind: "inventory_sale", id}, CASHIER);
+        assert.equal(again.result, "confirmed");
+        assert.equal(again.confirmation.amountCents, 4321);
+        assert.equal(callsTo("/transactions/refresh").length, 1);
+      });
+
+  it("never reaches production Plaid from an emulator", async () => {
+    const before = process.env.PLAID_ENV;
+    process.env.PLAID_ENV = "production";
+    try {
+      await connect();
+      await call("checkZellePayment", {kind: "inventory_sale",
+        id: await sale(320)}, CASHIER);
+      assert.ok(plaid.calls.length > 0);
+      // installPlaid asserts every call's origin is sandbox.plaid.com.
+    } finally {
+      process.env.PLAID_ENV = before;
+    }
+  });
+
   it("restarts the sync from the saved cursor after a mutation",
       async () => {
         await connect();
@@ -549,42 +659,10 @@ describe("checking a Zelle payment", () => {
 });
 
 describe("the Plaid webhook", () => {
-  const {privateKey, publicKey} = crypto.generateKeyPairSync("ec",
-      {namedCurve: "P-256"});
-  const jwk = publicKey.export({format: "jwk"});
-  const b64 = (v) => Buffer.from(JSON.stringify(v)).toString("base64url");
-  const signed = (body) => {
-    const header = b64({alg: "ES256", kid: "kid-1", typ: "JWT"});
-    const payload = b64({iat: Math.floor(Date.now() / 1000),
-      request_body_sha256: crypto.createHash("sha256").update(body)
-          .digest("hex")});
-    const sig = crypto.sign("sha256", Buffer.from(`${header}.${payload}`),
-        {key: privateKey, dsaEncoding: "ieee-p1363"});
-    return `${header}.${payload}.${sig.toString("base64url")}`;
-  };
-  const deliver = async (payload, {jwt} = {}) => {
-    const raw = JSON.stringify(payload);
-    const sent = {};
-    const res = Object.assign(new EventEmitter(), {
-      set() {}, setHeader() {}, getHeader() {}, removeHeader() {},
-      status(code) {
-        sent.status = code;
-        return this;
-      },
-      send(body) {
-        sent.body = body;
-        return this;
-      },
-    });
-    const headers = {"plaid-verification": jwt ?? signed(raw)};
-    await functions.plaidWebhook({method: "POST", headers, body: payload,
-      rawBody: Buffer.from(raw), get: (name) => headers[name.toLowerCase()]},
-    res);
-    return sent;
-  };
+  const deliver = deliverWebhook;
 
   beforeEach(() => {
-    plaid.webhookKey = {...jwk, kid: "kid-1", alg: "ES256", expired_at: null};
+    plaid.webhookKey = WEBHOOK_KEY;
   });
 
   it("refuses what Plaid did not sign", async () => {
