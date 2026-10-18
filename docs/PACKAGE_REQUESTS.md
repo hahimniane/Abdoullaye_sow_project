@@ -237,3 +237,73 @@ link — never the code alone), `handoff: bring_in|collect`, `locationId` +
   4 hours EN, 5 business, 6 pieces FR, 7 hours FR, 8 request code; button
   `/e/{{1}}`.
 - Sends wait (waiting_for_template on Meta 132001) until approved.
+
+## 8. Monthly volume — as built (phase 3, branch feat/monthly-volume)
+
+Pure rules: `functions/volume_counts.js` (unit tests
+`test/volume-counts.test.js`); Firestore glue: `functions/volume_rollup.js`
+(emulator tests `test/volume-callables.test.js`, `npm run test:volume`).
+
+### What counts
+- **Pieces** of a line: `barrelPieces` / `packagePieces` / `carPieces` when
+  present, else `pieces[]` (barrel → barrel, box/other → package), else the
+  legacy reading (`car` → 1 car, `barrels` → `quantity` barrels, anything
+  else → `quantity` packages, at least 1). A `car` line is always 1 car piece.
+- **Month of a line**: `receivedAt` in America/New_York; legacy lines (no
+  `receivedAt`) use `createdAt`; a split part with no `receivedAt` inherits
+  its root's (`rootLineId`). Oct 31 11:30 PM New York is October.
+- **Customer lines**: root lines (`rootLineId` empty or its own id) that are
+  not the business's own stock (`ownerKind: "stock"`).
+- **Containers**: count in the New York month of `sailedAt` while `status`
+  is `shipped` or `arrived`. What one carried = the pieces of the lines whose
+  `containerId` is that container, whenever they were received.
+
+### Rollup document — `volumeMonthly/{businessId}_{yyyy-mm}` (server-only)
+`businessId`, `month`, `timeZone`, `pieces`, `barrels`, `packages`, `cars`,
+`lineCount`, `customerLines`, `containersShipped`, `containerPieces`,
+`avgPerContainer` (null when nothing sailed),
+`containers[] {id, number, destination, destinationCountryId, status,
+sailedAtMs, lineCount, pieces, barrels, packages, cars}` (first 200 by
+sailing date; `containersTruncated` when more), `complete` (false if a read
+hit its deadline), `requestSeq`, `computedAtMs`, `updatedAt`. Rules deny
+every client read and write.
+
+### How it stays right
+- `rollupVolumeOnLineWrite` (`containerLines/{lineId}`) and
+  `rollupVolumeOnContainerWrite` (`containers/{containerId}`), maxInstances 2,
+  work out which months a write touched (`lineWriteTargets`,
+  `containerWriteTargets`) and **recount** each month from the records:
+  lines by `receivedAt` range + by `createdAt` range (only those without
+  `receivedAt`) + split parts of the month's roots, deduped by id; containers
+  by `sailedAt` range; each sailed container's lines by `containerId`.
+  Writes that change nothing counted (payments, contacts, a status catching
+  up on lines) recount nothing.
+- Recounts are idempotent. A turn number (`requestSeq`) claimed before
+  reading means only the latest recount of a month writes; triggers wait
+  1.5 s after claiming and step aside for a newer turn, so a burst (fifty
+  lines assigned at once) costs one recount.
+- Indexes: `containerLines (businessId, receivedAt)`,
+  `containerLines (businessId, createdAt)`, `containers (businessId, sailedAt)`.
+  `receivedAt` and `sailedAt` must be Firestore Timestamps for the range
+  queries to find them.
+
+### Callables
+- `getPlatformVolume {month}` — finance capability or Finance view. Totals,
+  per-business rows (current business name, else the id), the previous
+  month's pieces and % change (null when the previous month is 0), and a
+  12-month pieces trend (aggregate sums over the rollups only).
+- `getBusinessVolume {businessId, month}` — the owner, staff holding
+  `containers`, or a finance admin. Tiles + the container list.
+- `rebuildVolumeMonths {fromMonth, toMonth, businessId?,
+  startAfterBusinessId?}` — finance managers; up to 24 months; without a
+  business, 50 businesses per call (`nextBusinessId` resumes; `done`). Run
+  once after deploy for history: the admin Volume page's "Recount the last
+  12 months" does it.
+
+### Screens
+- Admin console → Volume (opens with Finance access): month picker, four
+  tiles, By business table → side panel of that business's containers, the
+  12-month bars, CSV (one row per business + totals, built in the browser).
+- Business console → Volume (owner + `containers` staff, shipping services):
+  three tiles and the containers shipped that month.
+- App → Containers: a "This month" card (pieces received, containers shipped).

@@ -10938,6 +10938,36 @@ abstract class AppLocalizations {
   /// **'Try again'**
   String get tryAgain;
 
+  /// No description provided for @volumeThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get volumeThisMonth;
+
+  /// No description provided for @volumeThisMonthNamed.
+  ///
+  /// In en, this message translates to:
+  /// **'This month · {month}'**
+  String volumeThisMonthNamed(String month);
+
+  /// No description provided for @volumePiecesReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece received} other{{count} pieces received}}'**
+  String volumePiecesReceived(int count);
+
+  /// No description provided for @volumeContainersShipped.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 container shipped} other{{count} containers shipped}}'**
+  String volumeContainersShipped(int count);
+
+  /// No description provided for @volumeLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this month\'s volume.'**
+  String get volumeLoadFailed;
+
   /// No description provided for @notProvided.
   ///
   /// In en, this message translates to:

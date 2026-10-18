@@ -2584,6 +2584,34 @@
   "loadMorePeople": "Afficher plus de personnes",
   "peopleCouldNotLoad": "Impossible de charger les personnes",
   "tryAgain": "Réessayer",
+  "volumeThisMonth": "Ce mois-ci",
+  "volumeThisMonthNamed": "Ce mois-ci · {month}",
+  "@volumeThisMonthNamed": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "volumePiecesReceived": "{count, plural, =0{0 pièce reçue} =1{1 pièce reçue} other{{count} pièces reçues}}",
+  "@volumePiecesReceived": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "volumeContainersShipped": "{count, plural, =0{0 conteneur expédié} =1{1 conteneur expédié} other{{count} conteneurs expédiés}}",
+  "@volumeContainersShipped": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "volumeLoadFailed": "Impossible de charger le volume du mois.",
   "notProvided": "Non renseigné",
   "noPeopleFound": "Aucune personne trouvée",
   "noPeopleFoundHelp": "Essayez un autre filtre ou recherchez une adresse e-mail, un numéro de téléphone ou un identifiant exact.",

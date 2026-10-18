@@ -2584,6 +2584,34 @@
   "loadMorePeople": "Load more people",
   "peopleCouldNotLoad": "People could not be loaded",
   "tryAgain": "Try again",
+  "volumeThisMonth": "This month",
+  "volumeThisMonthNamed": "This month · {month}",
+  "@volumeThisMonthNamed": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "volumePiecesReceived": "{count, plural, =1{1 piece received} other{{count} pieces received}}",
+  "@volumePiecesReceived": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "volumeContainersShipped": "{count, plural, =1{1 container shipped} other{{count} containers shipped}}",
+  "@volumeContainersShipped": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "volumeLoadFailed": "Couldn't load this month's volume.",
   "notProvided": "Not provided",
   "noPeopleFound": "No people found",
   "noPeopleFoundHelp": "Try another filter or search for an exact email, phone number, or user ID.",
