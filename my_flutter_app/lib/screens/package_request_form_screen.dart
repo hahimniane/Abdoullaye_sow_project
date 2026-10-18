@@ -339,7 +339,7 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
       context,
       initial: current ?? today,
       first: today,
-      last: today.add(const Duration(days: requestPlannedDaysAhead)),
+      last: requestLastPlannedDay(today),
     );
     if (picked == null || !mounted) return;
     setState(() {

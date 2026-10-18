@@ -296,7 +296,7 @@ class _PackageEstimateScreenState extends State<PackageEstimateScreen> {
       context,
       initial: requestDayFromKey(_scheduleDate) ?? today,
       first: today,
-      last: today.add(const Duration(days: requestPlannedDaysAhead)),
+      last: requestLastPlannedDay(today),
     );
     if (picked == null || !mounted) return;
     setState(() => _scheduleDate = requestDayKey(picked));

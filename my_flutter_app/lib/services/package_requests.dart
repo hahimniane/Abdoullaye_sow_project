@@ -268,6 +268,12 @@ DateTime requestToday(
   String timeZone = requestDefaultTimeZone,
 }) => shopToday(now);
 
+/// The last day a customer may plan for: [today] plus 60 calendar days.
+/// Counted in days, never as a Duration - 60 × 24 h across the end of
+/// daylight time lands on the evening before.
+DateTime requestLastPlannedDay(DateTime today) =>
+    DateTime(today.year, today.month, today.day + requestPlannedDaysAhead);
+
 final _hhmm = RegExp(r'^([01]\d|2[0-3]):([0-5]\d)$');
 
 /// Minutes after midnight for "HH:MM", or null.
@@ -967,7 +973,7 @@ List<String> validateRequestDraft(
   }
 
   final todayDay = DateTime(today.year, today.month, today.day);
-  final lastDay = todayDay.add(const Duration(days: requestPlannedDaysAhead));
+  final lastDay = requestLastPlannedDay(todayDay);
   bool inWindow(DateTime d) => !d.isBefore(todayDay) && !d.isAfter(lastDay);
 
   if (draft.handoff == requestHandoffBringIn) {
