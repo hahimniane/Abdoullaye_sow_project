@@ -1501,6 +1501,10 @@ PODS:
   - nanopb/encode (3.30910.0)
   - package_info_plus (0.4.5):
     - Flutter
+  - Plaid (6.4.7)
+  - plaid_flutter (5.2.1):
+    - Flutter
+    - Plaid (= 6.4.7)
   - printing (1.0.0):
     - Flutter
   - PromisesObjC (2.4.1)
@@ -1599,6 +1603,7 @@ DEPENDENCIES:
   - local_auth_darwin (from `.symlinks/plugins/local_auth_darwin/darwin`)
   - mobile_scanner (from `.symlinks/plugins/mobile_scanner/darwin`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
+  - plaid_flutter (from `.symlinks/plugins/plaid_flutter/ios`)
   - printing (from `.symlinks/plugins/printing/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
@@ -1637,6 +1642,7 @@ SPEC REPOS:
     - GTMSessionFetcher
     - leveldb-library
     - nanopb
+    - Plaid
     - PromisesObjC
     - PromisesSwift
     - RecaptchaInterop
@@ -1691,6 +1697,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/mobile_scanner/darwin"
   package_info_plus:
     :path: ".symlinks/plugins/package_info_plus/ios"
+  plaid_flutter:
+    :path: ".symlinks/plugins/plaid_flutter/ios"
   printing:
     :path: ".symlinks/plugins/printing/ios"
   share_plus:
@@ -1754,6 +1762,8 @@ SPEC CHECKSUMS:
   mobile_scanner: 9157936403f5a0644ca3779a38ff8404c5434a93
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
+  Plaid: 2f4e0d6deb335e141ac62e082a872414ca058b74
+  plaid_flutter: 2509900cefcf718c765e1624aeb80cc06d2255d2
   printing: a8960104e6c1a2b4bd3483a2f79c69be60830d08
   PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
   PromisesSwift: 217dea0fd5d2ad65222a109c48698add13cc1c5b
