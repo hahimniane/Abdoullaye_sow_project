@@ -417,6 +417,7 @@ const {
   lineGroupSummary,
   lineHasPieces,
   linePickupFeeCents,
+  lineHasPickupFee,
   linePieces,
   lineSourceOf,
   nextPartIndex,
@@ -18260,7 +18261,8 @@ exports.assignContainerLines = onCall(
           // The pickup fee stays on the line that goes (the root keeps it;
           // a part never had one); the part that stays has none.
           const going = piecesLineFields(plan.going,
-              linePickupFeeCents(plan.line));
+              lineHasPickupFee(plan.line) ? linePickupFeeCents(plan.line) :
+                null);
           const staying = piecesLineFields(plan.staying);
           const isRoot = rootId === plan.id;
           tx.update(lineRef, {

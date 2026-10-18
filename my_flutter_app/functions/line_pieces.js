@@ -350,6 +350,20 @@ function linePickupFeeCents(line) {
 }
 
 /**
+ * Whether a line carries a pickup fee field at all: a line with pieces
+ * received from a collected request (the fee may be 0), never a counter
+ * line, a car, a legacy line or a part split off. The edit forms show the
+ * "Pickup fee" field only for these.
+ *
+ * @param {object} line A stored line.
+ * @return {boolean} True when the line has its own pickupFeeCents.
+ */
+function lineHasPickupFee(line) {
+  const row = asRow(line);
+  return lineHasPieces(row) && given(row.pickupFeeCents);
+}
+
+/**
  * The line total: the pieces' prices plus the line's pickup fee. Null while
  * no piece has a price (a fee alone is not a price for the load), or when it
  * all adds up to nothing.
@@ -407,23 +421,25 @@ function piecesSummaryFields(pieces) {
 
 /**
  * Everything a line stores about its pieces, from validated pieces: the
- * pieces, the counts, the summary for old apps, the pickup fee, the total
- * (pieces + fee, lineTotalCents), and - for a single piece - its size as
- * the line's size.
+ * pieces, the counts, the summary for old apps, the pickup fee when the
+ * line has one, the total (pieces + fee, lineTotalCents), and - for a
+ * single piece - its size as the line's size.
  *
  * @param {*} raw Validated request pieces.
- * @param {*} [pickupFeeCents] The line's pickup fee (0 by default).
+ * @param {*} [pickupFeeCents] The line's pickup fee; absent (undefined or
+ *   null) writes no pickupFeeCents field at all.
  * @return {object} The fields to merge into the line.
  */
-function piecesLineFields(raw, pickupFeeCents = 0) {
+function piecesLineFields(raw, pickupFeeCents = null) {
   const pieces = normalizePieces(raw);
   const single = pieces.length === 1 ? pieces[0].sizeIn : null;
-  const fee = pickupFeeOf(pickupFeeCents);
+  const hasFee = pickupFeeCents !== null && pickupFeeCents !== undefined;
+  const fee = hasFee ? pickupFeeOf(pickupFeeCents) : 0;
   return {
     pieces,
     ...pieceCounts(pieces),
     ...piecesSummaryFields(pieces),
-    pickupFeeCents: fee,
+    ...(hasFee ? {pickupFeeCents: fee} : {}),
     priceCents: lineTotalCents(pieces, fee),
     lengthIn: single ? single.l : null,
     widthIn: single ? single.w : null,
@@ -719,6 +735,7 @@ module.exports = {
   pickupFeeOf,
   pickupFeeErrors,
   linePickupFeeCents,
+  lineHasPickupFee,
   lineTotalCents,
   piecesSummaryFields,
   piecesLineFields,

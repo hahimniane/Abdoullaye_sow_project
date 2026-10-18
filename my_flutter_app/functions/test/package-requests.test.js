@@ -921,6 +921,10 @@ describe("the line Received writes (§7 line fields)", () => {
     assert.deepEqual([...rr.receivePrefillCents(request)],
         [["p1", 15000], ["p2", 4500]]);
     assert.equal(rr.receivePrefillPickupFeeCents(request), 0);
+    const brought = rr.requestLineRecord(request, {lineId: "l",
+      requestId: "r", staffUid: "s", receivedAt: "TS"});
+    assert.equal("pickupFeeCents" in brought, false);
+    assert.equal(brought.priceCents, 19500);
     assert.deepEqual(rr.cleanReceivePickupFee(2000, request).errors,
         ["pickup_fee_invalid"]);
     assert.deepEqual(rr.cleanReceivePickupFee(0, request),

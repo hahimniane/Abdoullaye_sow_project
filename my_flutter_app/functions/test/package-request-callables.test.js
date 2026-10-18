@@ -797,7 +797,7 @@ describe("Received", () => {
         assert.equal(root.pickupFeeCents, 2000);
         assert.equal(root.priceCents, 11000);
         assert.deepEqual(root.pieces.map((p) => p.priceCents), [9000]);
-        assert.equal(part.pickupFeeCents, 0);
+        assert.equal("pickupFeeCents" in part, false);
         assert.equal(part.priceCents, 4000);
         assert.equal(root.pieceCount + part.pieceCount, 2);
         for (const code of [root.trackingCode, part.trackingCode]) {

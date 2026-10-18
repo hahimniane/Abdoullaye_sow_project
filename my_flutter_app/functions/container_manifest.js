@@ -575,15 +575,15 @@ function containerLineRecord(input, opts = {}) {
     // A car, or a line in the old kind/quantity form, has no pieces of its
     // own: readers expand it (linePieces).
     pieces: null,
-    // A collected request's pickup fee: its own amount beside the pieces,
-    // inside priceCents. Only a line with pieces carries one.
-    pickupFeeCents: 0,
   };
   if (pieced) {
     // The pieces decide what the line is, its total and (for one piece) its
-    // size; kind/quantity/description are the summary older apps read.
+    // size; kind/quantity/description are the summary older apps read. A
+    // collected request's pickup fee is its own amount beside the pieces,
+    // inside priceCents; a line without one has no such field.
+    const fee = input.pickupFeeCents;
     Object.assign(record, piecesLineFields(input.pieces,
-        pickupFeeOf(input.pickupFeeCents)));
+        fee === undefined || fee === null ? null : pickupFeeOf(fee)));
   }
   // The counts every line carries, so volume is counted without pieces.
   return {...record, ...lineCounts(record)};

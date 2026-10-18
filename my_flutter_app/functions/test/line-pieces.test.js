@@ -35,7 +35,7 @@ describe("the shared line-pieces cases", () => {
       "pieceSummaryText", "linePiecesWhat", "lineGroupSummary",
       "paidFloorForLine", "splitPieces", "nextPartIndex",
       "partTrackingCode", "lineTotalCents", "pickupFeeOf", "pickupFeeErrors",
-      "linePickupFeeCents", "piecesLineFields"]) {
+      "linePickupFeeCents", "lineHasPickupFee", "piecesLineFields"]) {
       assert.ok(covered.has(fn), `${fn} has no shared case`);
     }
   });
@@ -180,8 +180,13 @@ describe("editing a line with pieces", () => {
   it("a legacy line has no pickup fee and keeps its price", () => {
     const legacy = containerLineRecord({...customer, kind: "barrels",
       quantity: 2, priceCents: 20000});
-    assert.equal(legacy.pickupFeeCents, 0);
+    assert.equal(legacy.pickupFeeCents, undefined);
     assert.equal(legacy.priceCents, 20000);
+    // A counter line with pieces has no fee field either.
+    const counterLine = containerLineRecord({...customer,
+      pieces: [{kind: "barrel", priceCents: 9000}]});
+    assert.equal("pickupFeeCents" in counterLine, false);
+    assert.equal(pieces.lineHasPickupFee(counterLine), false);
     assert.equal(pieces.linePickupFeeCents({kind: "barrels", quantity: 2,
       priceCents: 20000}), 0);
   });
@@ -266,7 +271,8 @@ describe("a line with a pickup fee (owner decision 2026-10-18)", () => {
     const staying = pieces.piecesLineFields(plan.staying);
     assert.equal(going.pickupFeeCents, 2000);
     assert.equal(going.priceCents, 11000);
-    assert.equal(staying.pickupFeeCents, 0);
+    // The part has no fee field: its edit form offers none.
+    assert.equal("pickupFeeCents" in staying, false);
     assert.equal(staying.priceCents, 4000);
     const group = pieces.lineGroupSummary([
       {id: "root", line: {...stored, ...going, rootLineId: "root",

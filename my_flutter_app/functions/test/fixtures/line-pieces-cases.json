@@ -1245,6 +1245,107 @@
    }
   },
   {
+   "fn": "piecesLineFields",
+   "args": [
+    [
+     {
+      "kind": "barrel",
+      "priceCents": 9000
+     },
+     {
+      "kind": "box",
+      "description": "Clothes",
+      "priceCents": 4000
+     }
+    ]
+   ],
+   "note": "no fee given: no pickupFeeCents field, the pieces' sum",
+   "expected": {
+    "pieces": [
+     {
+      "id": "p1",
+      "kind": "barrel",
+      "description": "",
+      "sizeIn": null,
+      "priceCents": 9000
+     },
+     {
+      "id": "p2",
+      "kind": "box",
+      "description": "Clothes",
+      "sizeIn": null,
+      "priceCents": 4000
+     }
+    ],
+    "pieceCount": 2,
+    "barrelPieces": 1,
+    "packagePieces": 1,
+    "carPieces": 0,
+    "kind": "other",
+    "quantity": 2,
+    "description": "Barrel, Clothes",
+    "priceCents": 13000,
+    "lengthIn": null,
+    "widthIn": null,
+    "heightIn": null
+   }
+  },
+  {
+   "fn": "lineHasPickupFee",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel"
+      }
+     ],
+     "pickupFeeCents": 0
+    }
+   ],
+   "note": "a collected request's line, fee 0",
+   "expected": true
+  },
+  {
+   "fn": "lineHasPickupFee",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel"
+      }
+     ],
+     "pickupFeeCents": 2000
+    }
+   ],
+   "note": "a collected request's line",
+   "expected": true
+  },
+  {
+   "fn": "lineHasPickupFee",
+   "args": [
+    {
+     "pieces": [
+      {
+       "kind": "barrel"
+      }
+     ]
+    }
+   ],
+   "note": "a counter line or a part",
+   "expected": false
+  },
+  {
+   "fn": "lineHasPickupFee",
+   "args": [
+    {
+     "kind": "car",
+     "pickupFeeCents": 0
+    }
+   ],
+   "note": "a car",
+   "expected": false
+  },
+  {
    "fn": "lineCounts",
    "args": [
     {

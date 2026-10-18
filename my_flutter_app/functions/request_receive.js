@@ -38,10 +38,10 @@ const asRow = (value) => value && typeof value === "object" ? value : {};
 
 // The fields Received adds on top of a waiting line's contacts and price.
 // Listed so a test can check nothing is missing.
+// (A collected request's line also gets `pickupFeeCents`.)
 const REQUEST_LINE_FIELDS = Object.freeze([
   "pieces", "pieceCount", "barrelPieces", "packagePieces", "carPieces",
-  "pickupFeeCents", "source", "requestId", "receivedAt", "rootLineId",
-  "partIndex",
+  "source", "requestId", "receivedAt", "rootLineId", "partIndex",
 ]);
 
 // The request's own cap (§4 "max 20 pieces per request"); the load that
@@ -234,9 +234,14 @@ function receivedTotalCents(pieces, pickupFeeCents = 0) {
 function requestLineRecord(request, args) {
   const pieces = Array.isArray(args.pieces) ? args.pieces :
     cleanReceivePieces([], request).pieces;
-  const pickupFeeCents = args.pickupFeeCents === undefined ||
-    args.pickupFeeCents === null ? receivePrefillPickupFeeCents(request) :
-    pickupFeeOf(args.pickupFeeCents);
+  // Only a collected request's line has a pickup fee (0 allowed; null: no
+  // such field): the edit forms offer it there, never for a request brought
+  // in.
+  const collect = asRow(request).handoff === "collect";
+  const pickupFeeCents = !collect ? null :
+    (args.pickupFeeCents === undefined || args.pickupFeeCents === null ?
+      receivePrefillPickupFeeCents(request) :
+      pickupFeeOf(args.pickupFeeCents));
   const record = containerLineRecord({
     // In pieces mode the pieces decide the kind; "other" only says "not a
     // car".
