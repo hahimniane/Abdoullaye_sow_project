@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { Bell } from "lucide-react";
 
+import { dropdownPlacement, type DropdownPlacement } from "@/lib/dropdown-placement";
 import { db } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
 
@@ -34,6 +35,27 @@ export function NotificationBell({ uid, enabled, onSelect }: NotificationBellPro
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  // Measured on open and on resize: right-aligned to the bell, but never
+  // past either edge of the screen (a phone's bell sits mid-header).
+  const [placement, setPlacement] = useState<DropdownPlacement | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    function place() {
+      const rect = wrapperRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPlacement(
+        dropdownPlacement({
+          anchorLeft: rect.left,
+          anchorRight: rect.right,
+          viewportWidth: document.documentElement.clientWidth || window.innerWidth,
+        }),
+      );
+    }
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open]);
 
   useEffect(() => {
     if (!enabled || !uid) {
@@ -115,7 +137,11 @@ export function NotificationBell({ uid, enabled, onSelect }: NotificationBellPro
         )}
       </button>
       {open && (
-        <div className="notification-dropdown" role="menu">
+        <div
+          className="notification-dropdown"
+          role="menu"
+          style={placement ? { left: placement.left, right: "auto", width: placement.width } : undefined}
+        >
           <div className="notification-dropdown-header">
             <span>Notifications</span>
             {unreadCount > 0 && (

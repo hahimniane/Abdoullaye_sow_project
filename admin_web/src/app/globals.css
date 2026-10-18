@@ -249,6 +249,9 @@ button[data-loading="true"]::before {
   right: 0;
   top: calc(100% + 8px);
   width: 340px;
+  /* Before the bell measures itself (notification-bell.tsx places it inside
+     the viewport), never wider than the screen. */
+  max-width: calc(100vw - 32px);
   z-index: 30;
 }
 
@@ -1425,6 +1428,22 @@ button[data-loading="true"]::before {
 
 .vol-tiles.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* A tile's figure is the strong itself (never a span inside it), and the
+   note under it is plain text: ".metric span" is the tile's LABEL style
+   (12px uppercase muted) and must not reach either. */
+.vol-tiles .metric strong.vol-figure {
+  font-size: 32px;
+}
+
+.vol-tiles .metric small span {
+  color: inherit;
+  display: inline;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .vol-tiles .metric strong.vol-split {
@@ -6145,11 +6164,15 @@ html[data-lang-pending] body {
 .lst-chiprow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
 .lst-chiprow .status-pill { cursor: pointer; }
 
-.lst-field { display: flex; flex-direction: column; gap: 6px; }
+/* min-width: 0 on the field and its control: a grid/flex item's default
+   minimum is its content's, and an <input>'s intrinsic width (~180px) then
+   pushed the pieces editor 649px wide in a 350px phone dialog. */
+.lst-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .lst-field.wide { grid-column: 1 / -1; }
 .lst-field span,
 .lst-field > label { font-size: 13px; font-weight: 700; color: var(--ink-soft, #3c5450); }
 .lst-field small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.lst-field input, .lst-field select, .lst-field textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
 .lst-field input, .lst-field select { padding: 11px 13px; border: 1.5px solid var(--rule); border-radius: 12px; font: inherit; font-size: 14.5px; background: #fff; color: var(--ink); }
 .lst-field input:focus, .lst-field select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px rgba(13,148,136,.12); }
 .lst-field [aria-invalid="true"] {
@@ -6160,7 +6183,11 @@ html[data-lang-pending] body {
   outline: 3px solid rgba(220,38,38,.2);
   outline-offset: 2px;
 }
-.lst-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 22px; border-top: 1px solid var(--rule); background: var(--paper-soft); }
+/* Wraps: a footer with three actions (the estimate's Decline, Customer
+   agreed by phone, Send) pushed "Decline request" off the dialog's left edge
+   (x = -24 at 390px) when it could not. */
+.lst-modal-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 16px 22px; border-top: 1px solid var(--rule); background: var(--paper-soft); }
+.lst-modal-foot > * { max-width: 100%; }
 
 @media (max-width: 560px) {
   .lst-form-grid { grid-template-columns: 1fr; }
@@ -14464,13 +14491,34 @@ html[data-lang-pending] body {
 .guest-tracking-payment dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0 0; }
 .guest-tracking-payment dd { margin: 0; font-weight: 700; }
 @media (max-width: 720px) {
-  .pcs-fields { grid-template-columns: 1fr 1fr 1fr; }
+  .pcs-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pcs-fields .pcs-price { grid-column: 1 / -1; }
   .wpk-split { margin-left: 12px; }
   .guest-tracking-payment dl { grid-template-columns: 1fr; }
-  .wpk-size-grid { grid-template-columns: 1fr 1fr 1fr; }
+  .wpk-size-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .wpk-pick-list label { grid-template-columns: 20px minmax(0, 1fr); }
   .wpk-pick-side { grid-column: 2; align-items: flex-start; text-align: left; }
+}
+/* Phone width (320-480px): the dialogs that hold the pieces editor
+   (Register a package, Received, Add a line) fit without sideways scroll.
+   The size fields keep three narrow columns, everything else stacks. */
+@media (max-width: 480px) {
+  /* Each action takes a full row: long French labels never overflow. */
+  .lst-modal-foot > button,
+  .lst-modal-foot > a { flex: 1 1 100%; justify-content: center; white-space: normal; text-align: center; }
+  .lst-modal-overlay { padding: 10px; }
+  .lst-modal-head { padding: 14px 16px; }
+  .lst-modal-body { padding: 16px; }
+  .lst-modal-foot { padding: 12px 16px; }
+  .pcs-piece { padding: 10px; }
+  .pcs-piece-head > strong { min-width: 0; }
+  .pcs-kinds .segment { padding: 6px 10px; }
+  .pcs-fields { gap: 10px 8px; }
+  .pcs-fields .lst-field span { font-size: 12px; }
+  .pcs-fields .lst-field input { padding: 10px 8px; }
+  .pcs-fee .lst-field { max-width: none; }
+  .wpk-size-grid { gap: 10px 8px; }
+  .wpk-size-grid .lst-field input { padding: 10px 8px; }
 }
 
 /* The staff view of a package, above the public result on the tracking page:
@@ -15152,6 +15200,14 @@ button.pkq-card:hover { border-color: var(--brand); }
 .pkq-card small { color: var(--muted); }
 .pkq-title, .pkq-people { display: grid; gap: 2px; }
 .pkq-when { align-items: center; display: inline-flex; flex-wrap: wrap; gap: 4px; }
+/* The customer's pickup note: their words, on every card that shows a pickup. */
+.pkq-note { color: var(--ink) !important; overflow-wrap: anywhere; }
+.pkq-note > span:first-child { color: var(--muted); font-weight: 700; }
+/* The estimate's real pickup day and time (collect requests). */
+.pkq-schedule { display: grid; gap: 8px; margin-top: 12px; padding: 10px; border: 1px dashed var(--rule); border-radius: 8px; }
+.pkq-schedule .lst-field { max-width: 220px; }
+.pkq-windows { gap: 6px; }
+.pkq-windows .segment { padding: 6px 12px; font-size: 13.5px; box-shadow: none; cursor: pointer; }
 .pkq-lock { color: var(--warning) !important; display: inline-flex; gap: 4px; align-items: center; }
 .pkq-warn { color: var(--danger) !important; display: inline-flex; gap: 4px; align-items: center; }
 .pkq-muted { color: var(--muted); }

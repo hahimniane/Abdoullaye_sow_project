@@ -90,8 +90,10 @@ function VolumeTiles({ totals, showCustomerLines }: { totals: VolumeTotals; show
     <div className={`metric-grid vol-tiles ${showCustomerLines ? "" : "three"}`}>
       <article className="metric">
         <span>Pieces received</span>
-        <strong>
-          <Count value={totals.pieces} />
+        {/* The figure sits in the strong itself: a <span> here takes the
+            label's ".metric span" look (12px, uppercase, muted). */}
+        <strong className="vol-figure" data-no-translate>
+          {formatVolumeCount(totals.pieces, language)}
         </strong>
         <small>
           {change ? (
@@ -108,15 +110,15 @@ function VolumeTiles({ totals, showCustomerLines }: { totals: VolumeTotals; show
       </article>
       <article className="metric neutral">
         <span>Barrels · Packages · Cars</span>
-        <strong className="vol-split" data-no-translate>
+        <strong className="vol-figure vol-split" data-no-translate>
           {formatVolumeCount(totals.barrels, language)} · {formatVolumeCount(totals.packages, language)} ·{" "}
           {formatVolumeCount(totals.cars, language)}
         </strong>
       </article>
       <article className="metric neutral">
         <span>Containers shipped</span>
-        <strong>
-          <Count value={totals.containersShipped} />
+        <strong className="vol-figure" data-no-translate>
+          {formatVolumeCount(totals.containersShipped, language)}
         </strong>
         <small>
           <b data-no-translate>{formatVolumeAverage(totals.avgPerContainer, language)}</b>{" "}
@@ -126,8 +128,8 @@ function VolumeTiles({ totals, showCustomerLines }: { totals: VolumeTotals; show
       {showCustomerLines && (
         <article className="metric neutral">
           <span>Customer lines</span>
-          <strong>
-            <Count value={totals.customerLines} />
+          <strong className="vol-figure" data-no-translate>
+            {formatVolumeCount(totals.customerLines, language)}
           </strong>
           <small>
             <span>customer loads received</span>
