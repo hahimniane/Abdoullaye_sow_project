@@ -216,6 +216,7 @@ test("the payload carries only the chosen handoff's answers and ready photos", (
 test("countries list once each, in the page's language", () => {
   const options = [OPTION, { ...OPTION, businessId: "b2", businessName: "B2" }, { ...OPTION, country: { id: "senegal", name: "Senegal" } }];
   assert.deepEqual(requestCountries(options, "en").map((c) => c.id), ["guinea", "senegal"]);
+  assert.deepEqual(requestCountries(options, "fr").map((c) => c.name), ["Guinée", "Sénégal"]);
 });
 
 test("photos are drawn at most 1600 px on the long side, never enlarged", () => {
@@ -370,7 +371,7 @@ test("every request screen string has a French translation", () => {
     for (const value of Object.values(table)) strings.add(value);
   }
   // Names, codes and units that read the same in both languages.
-  const same = new Set(["Total", "Containers", "History", "Pickup", "Estimate", "Expected", "Received", "Box", "Other", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "PM", "UTC", "your-business", "Saving...", "Sending...", "Loading…"]);
+  const same = new Set(["Total", "Containers", "History", "Pickup", "Estimate", "Expected", "Received", "Box", "Other", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "PM", "UTC", "your-business", "Reçu", "Saving...", "Sending...", "Loading…"]);
   const missing = [...strings].filter((value) => !same.has(value) && translateValue(value, "fr") === value);
   assert.deepEqual(missing, []);
 });

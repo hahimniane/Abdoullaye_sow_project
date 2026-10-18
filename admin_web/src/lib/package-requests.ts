@@ -12,7 +12,7 @@
  * produced here in the page's language and rendered `data-no-translate`.
  */
 
-import { destinationCountryName } from "./destination-countries.ts";
+import { destinationCountryOptionForRow } from "./destination-countries.ts";
 
 export type Lang = "en" | "fr";
 export type PieceKind = "barrel" | "box" | "other";
@@ -463,12 +463,22 @@ export function requestCountries(options: readonly RequestOption[], lang: Lang):
     .sort((a, b) => a.name.localeCompare(b.name, lang));
 }
 
+let frenchRegions: Intl.DisplayNames | null = null;
+
+/** A destination's name in the page's language ("Guinée" in French), else its stored name. */
 export function countryName(country: { id: string; name: string }, lang: Lang): string {
-  const fromCatalog = destinationCountryName(country.id, lang);
-  // A business's own destination id need not be a catalog id: keep its name.
-  return lang === "fr" && fromCatalog && fromCatalog.toLowerCase() !== country.id.replace(/_/g, " ")
-    ? fromCatalog
-    : country.name || fromCatalog;
+  const known = destinationCountryOptionForRow({ id: country.id, name: country.name });
+  const english = country.name || known.name;
+  if (lang !== "fr") return english;
+  if (known.nameFr) return known.nameFr;
+  if (!known.code) return english;
+  try {
+    frenchRegions = frenchRegions ?? new Intl.DisplayNames(["fr"], { type: "region" });
+    const french = frenchRegions.of(known.code.toUpperCase());
+    return french && french !== known.code.toUpperCase() ? french : english;
+  } catch {
+    return english;
+  }
 }
 
 export function optionsForCountry(options: readonly RequestOption[], countryId: string): RequestOption[] {
@@ -723,7 +733,7 @@ export const REQUEST_STATUS_LABELS: Record<RequestStatus, string> = {
   new: "Needs estimate",
   estimate_sent: "Waiting for customer",
   confirmed: "Expected",
-  received: "Received",
+  received: "Package received",
   declined: "Declined",
   customer_declined: "Customer said no",
   cancelled: "Cancelled",
@@ -950,7 +960,7 @@ export const HISTORY_ACTION_LABELS: Record<string, string> = {
   declined: "Request declined",
   cancelled: "Request cancelled",
   expired: "Request expired",
-  received: "Received",
+  received: "Received at the counter",
   lock_taken_over: "Took over the estimate",
   pieces_changed: "Pieces changed at Received",
   reminder_sent: "Reminder sent",

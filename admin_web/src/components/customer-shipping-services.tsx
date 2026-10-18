@@ -631,12 +631,21 @@ export function CustomerShippingServices({
       ),
     [destinationOptions],
   );
+  // "Send a package" loads its own businesses (listPackageRequestOptions);
+  // the card barrel catalog below only matters if the customer picks card,
+  // so it must not hold up or fail the request form.
   const loadingOptions =
     service === "transport"
       ? loadingTransportOptions
-      : loadingDestinationOptions;
+      : service === "barrel"
+        ? false
+        : loadingDestinationOptions;
   const optionsError =
-    service === "transport" ? transportOptionsError : destinationOptionsError;
+    service === "transport"
+      ? transportOptionsError
+      : service === "barrel"
+        ? ""
+        : destinationOptionsError;
 
   return (
     <section className="customer-shipping">

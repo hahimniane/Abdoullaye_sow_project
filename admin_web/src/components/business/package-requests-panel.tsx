@@ -570,7 +570,11 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
   const [receiving, setReceiving] = useState<Row | null>(null);
   const [cancelling, setCancelling] = useState("");
   const [labels, setLabels] = useState<Row | null>(null);
-  if (expected.length === 0) return null;
+  // The labels dialog outlives the list: receiving the last expected
+  // request empties it, and the labels for that package must still print.
+  if (expected.length === 0) {
+    return labels ? <ContainerLabelsDialog businessId={businessId} line={labels} lines={[labels]} onClose={() => setLabels(null)} /> : null;
+  }
   return (
     <section className="pkq-expected">
       <h3><span>Expected</span> <b data-no-translate>· {expected.length}</b></h3>
@@ -591,7 +595,9 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
               </span>
               <span className="pkq-actions">
                 <button className="lst-add" disabled={!enabled} onClick={() => setReceiving(row)} type="button">
-                  <CheckCircle2 size={14} aria-hidden="true" /> {collect ? "Picked up · Received" : "Received"}
+                  <CheckCircle2 size={14} aria-hidden="true" />{" "}
+                  {/* "Received" alone is a date label in the dictionary ("Reçu le"). */}
+                  {collect ? "Picked up · Received" : <span data-no-translate>{lang() === "fr" ? "Reçu" : "Received"}</span>}
                 </button>
                 {!card && (
                   <button className="lst-btn ghost" disabled={!enabled} onClick={() => setCancelling(str(row.id))} type="button">Cancel</button>
@@ -700,7 +706,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
       <div className="lst-modal pkq-modal" onClick={(event) => event.stopPropagation()}>
         <header className="lst-modal-head">
           <div>
-            <h3>{collect ? "Picked up · Received" : "Received"}</h3>
+            <h3>{collect ? "Picked up · Received" : <span data-no-translate>{l === "fr" ? "Reçu" : "Received"}</span>}</h3>
             <p>Confirm the final price of each piece. This registers the package and sends the received message on WhatsApp.</p>
           </div>
           <button aria-label="Close" className="lst-icon-btn" onClick={onClose} type="button"><X size={18} /></button>
@@ -892,7 +898,7 @@ function RequestSettingsDialog({ businessId, business, officeLocations, onClose,
             {isOwner && canEditSlug && (
               <label className="lst-field">
                 <span>{currentSlug ? "Change the link (once)" : "Link name (optional)"}</span>
-                <input maxLength={40} onChange={(event) => setDraft((d) => ({ ...d, slug: event.target.value.toLowerCase() }))} placeholder="your-business" value={draft.slug} />
+                <input data-no-translate maxLength={40} onChange={(event) => setDraft((d) => ({ ...d, slug: event.target.value.toLowerCase() }))} placeholder="your-business" value={draft.slug} />
               </label>
             )}
           </section>
