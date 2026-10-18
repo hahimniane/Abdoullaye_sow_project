@@ -7173,5 +7173,14 @@
   "prqErrOffline": "You’re offline. Check your connection and try again.",
   "prqErrAppCheck": "This app couldn’t be verified. Try again in a moment.",
   "prqErrPermission": "You don’t have access to this.",
-  "prqErrGeneric": "That didn’t work. Try again."
+  "prqErrGeneric": "That didn’t work. Try again.",
+  "prqReceiveFeeIncluded": "The prices include the pickup fee in the estimate: {fee}.",
+  "@prqReceiveFeeIncluded": {
+    "description": "Received sheet: a collected request's pickup fee is spread over the piece prices.",
+    "placeholders": {
+      "fee": {
+        "type": "String"
+      }
+    }
+  }
 }

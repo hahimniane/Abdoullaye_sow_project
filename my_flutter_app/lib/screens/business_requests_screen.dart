@@ -16,6 +16,7 @@ import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_request_widgets.dart';
+import 'containers_screen.dart' show containerPiecesSummary;
 import 'package_estimate_screen.dart';
 import 'package_request_settings_screen.dart';
 
@@ -477,9 +478,9 @@ class BusinessRequestCard extends StatelessWidget {
                       ),
                       Text(
                         [
-                          requestPiecesSummary(
+                          containerPiecesSummary(
                             l10n,
-                            countRequestPieces(request),
+                            requestLinePieces(request),
                           ),
                           if (request.destinationCountryName.isNotEmpty)
                             request.destinationCountryName,

@@ -146,7 +146,8 @@ void main() {
       expect(find.text('Bring it in · Brings it Sat, Oct 24'), findsWidgets);
       expect(find.text('Mariama is writing the estimate'), findsOneWidget);
       expect(find.text('Customer not reachable on WhatsApp'), findsOneWidget);
-      expect(find.textContaining('1 barrel · 1 other item · Guinea'), findsOneWidget);
+      // Said the way a line's pieces are (phase 1's containerPiecesSummary).
+      expect(find.textContaining('1 barrel, Flat-screen TV · Guinea'), findsOneWidget);
       // The confirmed one is Expected, in the Waiting list - not here.
       expect(find.byKey(const ValueKey('request-card:d')), findsNothing);
     });
@@ -441,6 +442,13 @@ void main() {
       expect(find.text('Planned Sat, Oct 24 · Bronx shop'), findsOneWidget);
       expect(find.text('Collect Tue, Oct 27, Morning · 9 Elm'), findsOneWidget);
       expect(find.text('Paid online'), findsOneWidget);
+      // What is expected reads as the line it becomes (phase 1's summary),
+      // never the legacy "N × description".
+      expect(
+        find.textContaining('1 barrel, Flat-screen TV · Guinea'),
+        findsNWidgets(2),
+      );
+      expect(find.textContaining(' × '), findsNothing);
       expect(find.text('Picked up · Received'), findsOneWidget);
       // A card-paid order is cancelled through its card order, not here.
       expect(find.byKey(const ValueKey('expected-cancel:e')), findsNothing);
@@ -502,15 +510,21 @@ void main() {
       return (fake: fake, results: results);
     }
 
+    String totalShown(WidgetTester tester) => tester
+        .widget<Text>(find.byKey(const Key('pieces-total-amount')))
+        .data!;
+
     testWidgets('prices from the estimate, a payment, then the line',
         (tester) async {
       final opened = await open(
         tester,
         _req('d', 'confirmed', {'estimate': _estimate(1, 16500)}),
       );
-      expect(find.text(r'Total $165.00'), findsOneWidget);
-      await _type(tester, 'receive-price:p2', '50');
-      expect(find.text(r'Total $170.00'), findsOneWidget);
+      // Phase 1's pieces editor, on the request's pieces.
+      expect(find.byKey(const Key('pieces-editor')), findsOneWidget);
+      expect(totalShown(tester), r'$165.00');
+      await _type(tester, 'piece-price-1', '50');
+      expect(totalShown(tester), r'$170.00');
       await _tap(tester, 'wpk-money-received');
       await _tap(tester, 'receive-save');
       expect(find.text('Say which staff member received the payment.'), findsNothing);
@@ -521,8 +535,10 @@ void main() {
       await _tap(tester, 'receive-save');
       final body = opened.fake.of('receivePackageRequest').single;
       expect(body['pieces'], [
-        {'id': 'p1', 'priceCents': 12000},
-        {'id': 'p2', 'priceCents': 5000},
+        {'id': 'p1', 'kind': 'barrel', 'description': '', 'sizeIn': null,
+          'priceCents': 12000},
+        {'id': 'p2', 'kind': 'other', 'description': 'Flat-screen TV',
+          'sizeIn': null, 'priceCents': 5000},
       ]);
       expect(body['payment'], {
         'amountCents': 17000,
@@ -530,6 +546,46 @@ void main() {
         'receivedByStaffId': 's1',
       });
       expect(opened.results.single?.trackingCode, 'CL-K7M4P2');
+    });
+
+    testWidgets('adds a piece the customer brought and drops one that did '
+        'not come', (tester) async {
+      final opened = await open(
+        tester,
+        _req('d', 'confirmed', {'estimate': _estimate(1, 16500)}),
+      );
+      // The TV did not come.
+      await _tap(tester, 'piece-remove-1');
+      // A box of shoes came on top.
+      await _tap(tester, 'pieces-add');
+      await _tap(tester, 'piece-kind-1-box');
+      await _type(tester, 'piece-description-1', 'Shoes');
+      await _type(tester, 'piece-price-1', '25');
+      expect(totalShown(tester), r'$145.00');
+      await _tap(tester, 'receive-save');
+      final body = opened.fake.of('receivePackageRequest').single;
+      expect(body['pieces'], [
+        {'id': 'p1', 'kind': 'barrel', 'description': '', 'sizeIn': null,
+          'priceCents': 12000},
+        {'id': '', 'kind': 'box', 'description': 'Shoes', 'sizeIn': null,
+          'priceCents': 2500},
+      ]);
+    });
+
+    testWidgets("a collection's pickup fee is inside the prices",
+        (tester) async {
+      await open(
+        tester,
+        _req('d', 'confirmed', {
+          'handoff': 'collect',
+          'estimate': {..._estimate(1, 16500), 'pickupFeeCents': 1000},
+        }),
+      );
+      expect(totalShown(tester), r'$175.00');
+      expect(
+        find.text(r'The prices include the pickup fee in the estimate: $10.00.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('some priced and some not is refused', (tester) async {

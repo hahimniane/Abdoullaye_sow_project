@@ -7173,5 +7173,6 @@
   "prqErrOffline": "Vous êtes hors ligne. Vérifiez votre connexion et réessayez.",
   "prqErrAppCheck": "L’appli n’a pas pu être vérifiée. Réessayez dans un instant.",
   "prqErrPermission": "Vous n’avez pas accès à cela.",
-  "prqErrGeneric": "Cela n’a pas fonctionné. Réessayez."
+  "prqErrGeneric": "Cela n’a pas fonctionné. Réessayez.",
+  "prqReceiveFeeIncluded": "Les prix incluent les frais de ramassage de l’estimation : {fee}."
 }

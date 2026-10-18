@@ -98,9 +98,14 @@ class PieceDraftRow {
 class PiecesEditorController extends ChangeNotifier {
   /// Opens on [initial] (an edit: its ids, kinds, descriptions, sizes and
   /// prices), else on one piece of [kind].
+  ///
+  /// [limit] caps how many pieces can be added: [maxPieces] at the counter,
+  /// fewer where the server holds a smaller cap (a request's 20 at
+  /// Received).
   PiecesEditorController({
     Iterable<LinePiece> initial = const [],
     String kind = 'barrel',
+    this.limit = maxPieces,
   }) {
     final start = initial.where((p) => !p.isCar).toList();
     if (start.isEmpty) {
@@ -159,7 +164,10 @@ class PiecesEditorController extends ChangeNotifier {
 
   List<PieceDraftRow> get rows => List.unmodifiable(_rows);
   int get count => _rows.length;
-  bool get canAdd => _rows.length < maxPieces;
+  /// The most pieces this editor takes.
+  final int limit;
+
+  bool get canAdd => _rows.length < limit;
 
   /// The pieces as the request carries them before they are cleaned.
   List<Map<String, Object?>> get draftPieces => [

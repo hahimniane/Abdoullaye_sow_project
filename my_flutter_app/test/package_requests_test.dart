@@ -564,61 +564,116 @@ void main() {
   });
 
   group('Received', () {
-    test('prefills from the estimate; none or all priced', () {
+    // The editor's own drafts, as PiecesEditorController.draftPieces gives
+    // them.
+    Map<String, Object?> draft(
+      String id,
+      String kind,
+      Object? price, {
+      String description = '',
+    }) => {
+      'id': id,
+      'kind': kind,
+      'description': description,
+      'sizeIn': {'l': '', 'w': '', 'h': ''},
+      'priceCents': price,
+    };
+
+    test('opens on the request pieces in the pieces editor; none or all '
+        'priced', () {
       final request = PackageRequest.fromMap('r1', _doc());
-      final drafts = receivePrefill(request);
-      expect(drafts.map((d) => d.price), ['120', '']);
-      expect(checkReceive(drafts).reasons, ['price_required']);
+      final pieces = receivePrefillPieces(request);
       expect(
-        checkReceive([for (final d in drafts) d.copyWith(price: '')]).ok,
+        [for (final p in pieces) [p.id, p.kind, p.description, p.priceCents]],
+        [
+          ['p1', 'barrel', '', 12000],
+          ['p2', 'other', 'TV', null],
+        ],
+      );
+      expect(
+        checkReceive([draft('p1', 'barrel', 12000), draft('p2', 'other', null,
+            description: 'TV')]).reasons,
+        ['price_required'],
+      );
+      expect(
+        checkReceive([draft('p1', 'barrel', null), draft('p2', 'other', null,
+            description: 'TV')]).ok,
         isTrue,
       );
-      final priced = [
-        drafts[0],
-        drafts[1].copyWith(price: '30'),
-      ];
-      final check = checkReceive(priced);
+      final check = checkReceive([
+        draft('p1', 'barrel', 12000),
+        draft('p2', 'other', 3000, description: 'TV'),
+      ]);
       expect(check.totalCents, 15000);
       expect(
-        checkReceive([drafts[0].copyWith(price: 'abc')]).reasons,
-        ['price_invalid'],
+        checkReceive([draft('p1', 'barrel', 'unreadable')]).reasons,
+        ['piece_price_invalid'],
       );
       expect(
-        receivePayload(
-          businessId: 'b1',
-          requestId: 'r1',
-          pieces: priced,
-          check: check,
-        ),
+        receivePayload(businessId: 'b1', requestId: 'r1', check: check),
         {
           'businessId': 'b1',
           'requestId': 'r1',
           'pieces': [
-            {'id': 'p1', 'priceCents': 12000},
-            {'id': 'p2', 'priceCents': 3000},
+            {'id': 'p1', 'kind': 'barrel', 'description': '', 'sizeIn': null,
+              'priceCents': 12000},
+            {'id': 'p2', 'kind': 'other', 'description': 'TV',
+              'sizeIn': null, 'priceCents': 3000},
           ],
         },
       );
     });
 
-    test('a collection\'s line price includes the pickup fee', () {
+    test('a piece brought on top goes without an id; one that did not come '
+        'is left out; at most 20', () {
+      final check = checkReceive([
+        draft('p2', 'other', 3000, description: 'TV'),
+        draft('', 'box', 2500, description: 'Shoes'),
+      ]);
+      expect(check.ok, isTrue);
+      expect([for (final p in check.pieces) p['id']], ['p2', '']);
+      expect(check.totalCents, 5500);
+      expect(
+        checkReceive([draft('', 'box', 1)]).reasons,
+        ['piece_description_required'],
+      );
+      expect(
+        checkReceive([for (var i = 0; i < 21; i++) draft('', 'barrel', 1)])
+            .reasons,
+        ['too_many_pieces'],
+      );
+    });
+
+    test("a collection's pickup fee rides inside the piece prices", () {
+      // The same numbers as functions/request_receive.js and the console.
       final request = PackageRequest.fromMap('r1', _doc({
         'handoff': 'collect',
+        'pieces': [
+          {'id': 'p1', 'kind': 'barrel', 'estimateCents': 15000},
+          {'id': 'p2', 'kind': 'box', 'description': 'Clothes',
+            'estimateCents': null},
+        ],
+        'estimate': {
+          'version': 1,
+          'totalCents': 22001,
+          'pieces': [
+            {'id': 'p1', 'cents': 15000},
+            {'id': 'p2', 'cents': 4500},
+          ],
+          'pickupFeeCents': 2501,
+        },
+      }));
+      expect(receivePrefillCents(request), {'p1': 16251, 'p2': 5750});
+      expect(receivePickupFeeCents(request), 2501);
+      final total = checkReceive([
+        for (final p in receivePrefillPieces(request)) p.toMap(),
+      ]).totalCents;
+      expect(total, 22001);
+      final bring = PackageRequest.fromMap('r1', _doc({
         'estimate': {'version': 1, 'totalCents': 1, 'pickupFeeCents': 500},
       }));
-      final fee = receivePickupFeeCents(request);
-      expect(fee, 500);
-      final check = checkReceive(
-        const [ReceivePieceDraft(id: 'p1', kind: 'barrel', price: '100')],
-        pickupFeeCents: fee,
-      );
-      expect(check.totalCents, 10500);
-      expect(
-        receivePickupFeeCents(PackageRequest.fromMap('r1', _doc({
-          'estimate': {'version': 1, 'totalCents': 1, 'pickupFeeCents': 500},
-        }))),
-        0,
-      );
+      expect(receivePickupFeeCents(bring), 0);
+      expect(receivePrefillCents(bring), {'p1': 12000, 'p2': null});
     });
   });
 

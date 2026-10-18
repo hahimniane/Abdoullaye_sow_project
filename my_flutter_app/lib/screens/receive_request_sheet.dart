@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart' show invoicePaymentMethods;
@@ -17,6 +16,7 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_request_widgets.dart';
+import '../widgets/pieces_editor.dart';
 import '../widgets/waiting_package_fields.dart';
 import 'containers_screen.dart' show containerErrorText;
 import 'package_payment_sheet.dart' show containerPaymentMethodLabel;
@@ -39,10 +39,13 @@ Future<RequestReceived?> showReceiveRequestSheet(
   ),
 );
 
-/// "Received" on an Expected request (§2 Received): the final price of each
-/// piece (prefilled from the estimate - it never binds) and the money if
-/// some is handed over now. One `receivePackageRequest` makes the waiting
-/// line; the caller then prints its labels, one per piece.
+/// "Received" on an Expected request (§2 Received): the load as it arrived,
+/// in phase 1's pieces editor (the counter's) - the request's pieces with
+/// their final prices (prefilled from the estimate - it never binds), what
+/// each turned out to be, pieces brought on top, pieces that did not come -
+/// and the money if some is handed over now. One `receivePackageRequest`
+/// makes the waiting line, the same line the counter would; the caller then
+/// prints its labels, one per piece.
 class ReceiveRequestSheet extends StatefulWidget {
   const ReceiveRequestSheet({
     super.key,
@@ -62,10 +65,10 @@ class ReceiveRequestSheet extends StatefulWidget {
 }
 
 class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
-  late final List<ReceivePieceDraft> _drafts = receivePrefill(widget.request);
-  late final List<TextEditingController> _prices = [
-    for (final d in _drafts) TextEditingController(text: d.price),
-  ];
+  late final PiecesEditorController _pieces = PiecesEditorController(
+    initial: receivePrefillPieces(widget.request),
+    limit: requestMaxPieces,
+  )..addListener(_edited);
 
   /// The total as the payment fields read it ("money received" needs a
   /// price), kept in step with the piece prices.
@@ -78,7 +81,7 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
   String? _receivedBy;
 
   Set<String> _errors = {};
-  Set<int> _invalid = {};
+  bool _showPieceErrors = false;
   String _banner = '';
   bool _busy = false;
 
@@ -92,24 +95,14 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
 
   @override
   void dispose() {
-    for (final c in _prices) {
-      c.dispose();
-    }
+    _pieces.dispose();
     _total.dispose();
     _amount.dispose();
     _note.dispose();
     super.dispose();
   }
 
-  List<ReceivePieceDraft> get _pieces => [
-    for (var i = 0; i < _drafts.length; i++)
-      _drafts[i].copyWith(price: _prices[i].text),
-  ];
-
-  ReceiveCheck get _check => checkReceive(
-    _pieces,
-    pickupFeeCents: receivePickupFeeCents(widget.request),
-  );
+  ReceiveCheck get _check => checkReceive(_pieces.draftPieces);
 
   void _syncTotal() {
     final check = _check;
@@ -118,10 +111,10 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
   }
 
   void _edited() {
+    if (!mounted) return;
     setState(() {
       _syncTotal();
       _errors = {};
-      _invalid = {};
       _banner = '';
     });
   }
@@ -166,7 +159,6 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context)!;
     if (_busy) return;
-    final pieces = _pieces;
     final check = _check;
     final takesMoney = !_card && _moneyReceived && check.totalCents != null;
     final paymentErrors = takesMoney
@@ -180,10 +172,11 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
       AppHaptics.refuse();
       setState(() {
         _errors = {...check.reasons, ...paymentErrors};
-        _invalid = check.invalid;
+        _showPieceErrors = check.reasons.isNotEmpty;
         _banner = check.reasons.isEmpty
             ? ''
-            : requestReasonText(l10n, check.reasons.first) ?? '';
+            : requestReasonText(l10n, check.reasons.first) ??
+                containerErrorText(l10n, check.reasons.first);
       });
       return;
     }
@@ -197,7 +190,6 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
         receivePayload(
           businessId: widget.businessId,
           requestId: widget.request.id,
-          pieces: pieces,
           check: check,
           payOnArrival: !_card && _payOnArrival,
           payment: takesMoney ? intakePaymentRecord(_payment) : null,
@@ -205,7 +197,9 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
       );
       if (!mounted) return;
       AppHaptics.commit();
-      Navigator.of(context).pop(result);
+      Navigator.of(context).pop(
+        result.alreadyReceived ? result : result.withPieces(check.pieces),
+      );
     } on RequestFailure catch (failure) {
       if (!mounted) return;
       AppHaptics.refuse();
@@ -230,7 +224,6 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
     final l10n = AppLocalizations.of(context)!;
     final request = widget.request;
     final check = _check;
-    final total = check.totalCents;
     final fee = receivePickupFeeCents(request);
     return LotSheetShell(
       title: l10n.prqReceiveTitle,
@@ -247,80 +240,33 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
             style: const TextStyle(fontSize: 13, color: AppColors.muted),
           ),
           const SizedBox(height: AppSpacing.md),
-          for (var i = 0; i < _drafts.length; i++)
-            Container(
-              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.parchment,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                border: Border.all(color: AppColors.rule),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    requestPieceKindIcon(_drafts[i].kind),
-                    size: 18,
-                    color: AppColors.cobaltDeep,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      _drafts[i].description.isNotEmpty
-                          ? _drafts[i].description
-                          : requestPieceKindLabel(l10n, _drafts[i].kind),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  SizedBox(
-                    width: 120,
-                    child: TextField(
-                      key: Key('receive-price:${_drafts[i].id}'),
-                      controller: _prices[i],
-                      enabled: !_busy,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                      ],
-                      onChanged: (_) => _edited(),
-                      decoration: InputDecoration(
-                        labelText: l10n.prqFinalPrice,
-                        isDense: true,
-                        errorText: _invalid.contains(i)
-                            ? l10n.prqPriceInvalid
-                            : null,
-                        errorMaxLines: 3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          PiecesEditor(
+            controller: _pieces,
+            describe: (code) => containerErrorText(l10n, code),
+            showErrors: _showPieceErrors,
+            enabled: !_busy,
+            error: _errors.contains('too_many_pieces')
+                ? requestReasonText(l10n, 'too_many_pieces')
+                : null,
+          ),
           if (fee > 0)
             Text(
-              '${l10n.prqPickupFee}: ${formatRequestCents(fee)}',
+              l10n.prqReceiveFeeIncluded(formatRequestCents(fee)),
+              key: const Key('receive-fee-included'),
               style: const TextStyle(fontSize: 13, color: AppColors.muted),
             ),
-          Text(
-            !check.ok || total == null
-                ? l10n.prqPriceAllOrNone
-                : l10n.prqLineTotal(formatRequestCents(total)),
-            key: const Key('receive-total'),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: check.reasons.contains('price_required')
-                  ? AppColors.errorRed
-                  : AppColors.ink,
+          const SizedBox(height: AppSpacing.sm),
+          PiecesTotalLine(controller: _pieces),
+          if (check.reasons.contains('price_required'))
+            Text(
+              l10n.prqPriceAllOrNone,
+              key: const Key('receive-price-all-or-none'),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.errorRed,
+              ),
             ),
-          ),
           const SizedBox(height: AppSpacing.md),
           if (_card)
             RequestBanner(

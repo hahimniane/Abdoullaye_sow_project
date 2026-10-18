@@ -24826,6 +24826,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That didn’t work. Try again.'**
   String get prqErrGeneric;
+
+  /// Received sheet: a collected request's pickup fee is spread over the piece prices.
+  ///
+  /// In en, this message translates to:
+  /// **'The prices include the pickup fee in the estimate: {fee}.'**
+  String prqReceiveFeeIncluded(String fee);
 }
 
 class _AppLocalizationsDelegate

@@ -14691,4 +14691,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get prqErrGeneric => 'Cela n’a pas fonctionné. Réessayez.';
+
+  @override
+  String prqReceiveFeeIncluded(String fee) {
+    return 'Les prix incluent les frais de collecte de l’estimation : $fee.';
+  }
 }

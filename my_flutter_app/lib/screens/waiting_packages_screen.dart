@@ -5,7 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
-import '../services/line_pieces.dart' show LineGroupSummary;
+import '../services/line_pieces.dart' show LineGroupSummary, piecesLineFields;
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart' show LotKnownCar, LotStaff;
 import '../services/package_request_feed.dart';
@@ -201,10 +201,13 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
           'businessId': widget.businessId,
           'containerId': '',
           'containerStatus': containerLineStatusWaiting,
-          'kind': request.pieces.every((p) => p.isBarrel)
-              ? containerLineKindBarrels
-              : containerLineKindOther,
-          'quantity': request.pieces.length,
+          // The pieces as they arrived (some may have been added or left
+          // out at Received), the way the server stored them.
+          ...piecesLineFields(
+            received.pieces.isNotEmpty
+                ? received.pieces
+                : [for (final p in requestLinePieces(request)) p.toMap()],
+          ),
           'customerName': request.senderName,
           'customerPhone': request.senderPhone,
           'receiverName': request.receiverName,
@@ -816,9 +819,9 @@ class ExpectedRequestCard extends StatelessWidget {
                       ),
                       Text(
                         [
-                          requestPiecesSummary(
+                          containerPiecesSummary(
                             l10n,
-                            countRequestPieces(request),
+                            requestLinePieces(request),
                           ),
                           if (request.destinationCountryName.isNotEmpty)
                             request.destinationCountryName,
