@@ -4,6 +4,7 @@ import 'business_transport_jobs.dart' show transportJobFinalStatuses;
 import 'container_manifest.dart'
     show containerStatusLoading, containerStatusShipped;
 import 'firestore_query_spec.dart';
+import 'package_requests.dart' show requestOpenStatuses;
 
 /// Every query a business screen runs against its own records, as data.
 ///
@@ -215,6 +216,35 @@ FirestoreQuerySpec openContainerLinesSpec(String businessId) =>
         ),
       ],
     );
+
+// ---------------------------------------------------------------------------
+// Package requests (docs/PACKAGE_REQUESTS.md §8.3).
+// ---------------------------------------------------------------------------
+
+/// The business's open requests: the Requests tab and the Waiting list's
+/// Expected section. Equality filters only, sorted newest first on the
+/// phone, so it needs no composite index (the contract's
+/// `orderBy createdAt` form needs `businessId, status, createdAt desc`).
+FirestoreQuerySpec packageRequestsOpenSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'packageRequests',
+      filters: [
+        _business(businessId),
+        const QueryFilterSpec(
+          'status',
+          QueryFilterOp.whereIn,
+          requestOpenStatuses,
+        ),
+      ],
+    );
+
+/// A signed-in customer's own requests ("My requests"): the rule lets the
+/// sender read them by `sender.uid`. A customer has few, so the phone sorts
+/// them and no composite index is needed.
+FirestoreQuerySpec packageRequestsMineSpec(String uid) => FirestoreQuerySpec(
+  collection: 'packageRequests',
+  filters: [QueryFilterSpec('sender.uid', QueryFilterOp.equal, uid.trim())],
+);
 
 // ---------------------------------------------------------------------------
 // VIN memory: the recent cars, then an exact lookup.
