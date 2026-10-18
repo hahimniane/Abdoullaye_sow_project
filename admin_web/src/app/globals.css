@@ -14449,6 +14449,7 @@ html[data-lang-pending] body {
 /* A collected request's pickup fee: its own amount beside the pieces. */
 .pcs-fee { border: 1px dashed var(--rule); border-radius: 12px; padding: 10px 12px; background: var(--paper); display: flex; flex-direction: column; gap: 4px; }
 .pcs-fee .lst-field { max-width: 220px; }
+.pcs-total-row { align-self: flex-end; }
 .wpk-split { display: flex; flex-direction: column; gap: 4px; margin: 6px 12px 10px 42px; padding: 8px 10px; border-radius: 10px; background: var(--mist); }
 .wpk-split-stepper { display: flex; align-items: center; gap: 8px; }
 .wpk-split-stepper .ghost-button { min-width: 30px; justify-content: center; }

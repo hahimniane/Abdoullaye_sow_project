@@ -119,6 +119,12 @@ export function PiecesEditor({
           );
         })}
       </ol>
+      <div className="pcs-foot">
+        <button className="lst-btn ghost" type="button" disabled={disabled || pieces.length >= MAX_PIECES} onClick={() => onChange(addPieceDraft(pieces))}>
+          <Plus size={14} /> Add another piece
+        </button>
+        {pickupFee === undefined && <strong className="pcs-total" data-no-translate>{piecesTotalText(total, lang)}</strong>}
+      </div>
       {pickupFee !== undefined && (
         <div className="pcs-fee">
           <label className="lst-field pcs-price">
@@ -136,12 +142,7 @@ export function PiecesEditor({
           {fee?.error && <small className="lst-field-error">{CONTAINER_MESSAGES.pickup_fee_invalid}</small>}
         </div>
       )}
-      <div className="pcs-foot">
-        <button className="lst-btn ghost" type="button" disabled={disabled || pieces.length >= MAX_PIECES} onClick={() => onChange(addPieceDraft(pieces))}>
-          <Plus size={14} /> Add another piece
-        </button>
-        <strong className="pcs-total" data-no-translate>{piecesTotalText(total, lang)}</strong>
-      </div>
+      {pickupFee !== undefined && <strong className="pcs-total pcs-total-row" data-no-translate>{piecesTotalText(total, lang)}</strong>}
       {listProblems.length > 0 && <small className="lst-field-error">{listProblems.map((code) => CONTAINER_MESSAGES[code]).join(" ")}</small>}
     </div>
   );
