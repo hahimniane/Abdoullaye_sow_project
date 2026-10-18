@@ -309,14 +309,14 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
               style: const TextStyle(fontSize: 13, color: AppColors.muted),
             ),
           Text(
-            total == null
+            !check.ok || total == null
                 ? l10n.prqPriceAllOrNone
                 : l10n.prqLineTotal(formatRequestCents(total)),
             key: const Key('receive-total'),
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: _errors.contains('price_required')
+              color: check.reasons.contains('price_required')
                   ? AppColors.errorRed
                   : AppColors.ink,
             ),

@@ -35,7 +35,7 @@ class FakePackageRequests implements PackageRequestService {
   PackageRequestSettings settings = const PackageRequestSettings();
   RequestLinkQr qr = RequestLinkQr(
     url: 'https://laawoldigital.com/r/conakry',
-    png: Uint8List(0),
+    png: null,
   );
 
   /// Refusals by call name.

@@ -214,11 +214,8 @@ class _PackageRequestSettingsScreenState
     );
     if (reasons.isNotEmpty) {
       AppHaptics.refuse();
+      // Each problem shows at its own field (hours, areas, link name).
       setState(() => _errors = reasons.toSet());
-      showErrorSnackBar(
-        context,
-        requestReasonText(l10n, reasons.first) ?? l10n.prqFixErrors,
-      );
       return;
     }
     setState(() {
@@ -272,6 +269,8 @@ class _PackageRequestSettingsScreenState
     try {
       final qr = await _service.linkQr(widget.businessId);
       if (!mounted) return;
+      // Loaded: the button stops spinning while the QR is on screen.
+      setState(() => _busy = '');
       final png = qr.png;
       await showDialog<void>(
         context: context,
