@@ -180,17 +180,27 @@ class _ContainersScreenState extends State<ContainersScreen> {
   List<LotStaff> _people = const [];
   String _ownerUid = '';
   String _ownerName = '';
-  List<LotStaff> get _staff => withBusinessOwner(
-        _people,
-        ownerUid: _ownerUid,
-        ownerName: _ownerName,
-        // The business names no owner: the signed-in owner's own account
-        // does (an owner whose profile never got businessId), else a label.
-        fallbackName: _ownerEmail.isNotEmpty
-            ? _ownerEmail
-            : _signedInNameFor(_ownerUid),
-        unnamedLabel: AppLocalizations.of(context)!.lotBusinessOwner,
-      );
+  List<LotStaff> get _staff {
+    final l10n = AppLocalizations.of(context)!;
+    // The owner as the business names them, else their own signed-in
+    // account (an owner whose profile names nobody), else "Business owner".
+    final owner = [_ownerName, _ownerEmail, _signedInNameFor(_ownerUid)]
+        .map((n) => n.trim())
+        .firstWhere((n) => n.isNotEmpty, orElse: () => l10n.lotBusinessOwner);
+    return withBusinessOwner(
+      [
+        for (final p in _people)
+          p.name.isNotEmpty
+              ? p
+              : LotStaff(
+                  id: p.id,
+                  name: p.id == _ownerUid ? owner : l10n.lotUnnamedPerson,
+                ),
+      ],
+      ownerUid: _ownerUid,
+      ownerName: owner,
+    );
+  }
 
   /// The signed-in account's own name or email when it is [uid].
   String _signedInNameFor(String uid) {
@@ -272,11 +282,8 @@ class _ContainersScreenState extends State<ContainersScreen> {
       if (!mounted) return;
       setState(() => _people = [
             for (final d in snap.docs)
-              lotStaffFromProfile(
-                d.id,
-                d.data(),
-                unnamed: AppLocalizations.of(context)!.lotUnnamedPerson,
-              ),
+              // Named in [_staff]: a profile with no name may be the owner.
+              LotStaff(id: d.id, name: personDisplayName(d.data())),
           ]);
     }, onError: (_) {
       // Reading the team needs the people permission; without it every

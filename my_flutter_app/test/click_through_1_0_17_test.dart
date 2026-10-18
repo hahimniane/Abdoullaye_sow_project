@@ -568,11 +568,11 @@ void main() {
       final containers = File(
         'lib/screens/containers_screen.dart',
       ).readAsStringSync();
+      // A profile with no name that is the owner reads as the owner.
+      expect(containers, contains('orElse: () => l10n.lotBusinessOwner'));
       expect(
         containers,
-        contains(
-          'unnamedLabel: AppLocalizations.of(context)!.lotBusinessOwner',
-        ),
+        contains('name: p.id == _ownerUid ? owner : l10n.lotUnnamedPerson'),
       );
     });
   });
