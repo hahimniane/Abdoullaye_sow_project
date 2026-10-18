@@ -230,7 +230,8 @@ in `functions/test/fixtures/line-pieces-cases.json`.
 | `pieces` | `[{id, kind, description, sizeIn, priceCents}]` \| null | `kind`: `barrel` \| `box` \| `other`; `description` up to 120 chars, required for box/other; `sizeIn` `{l,w,h}` inches (0 < n <= 600, all three) or null; `priceCents` int >= 0 or null. `null` on cars and on lines in the old kind/quantity form |
 | `pieceCount`, `barrelPieces`, `packagePieces`, `carPieces` | int | denormalized on every write; packages = box + other; a car line is 1 car piece |
 | `kind`, `quantity`, `description` | | summaries for older app versions: `barrels` when every piece is a barrel else `other`; quantity = piece count; description names the pieces ("Barrel, Clothes, TV") |
-| `priceCents` | int \| null | = sum of the priced pieces (null while none is priced) |
+| `priceCents` | int \| null | = sum of the priced pieces + `pickupFeeCents` (`lineTotalCents`; null while no piece is priced) |
+| `pickupFeeCents` | int >= 0, absent | a collected request's pickup fee, the line's own amount beside the pieces (owner decision 2026-10-18: never spread into piece prices). Present (0 allowed) only on the line Received makes from a "Collect from me" request; absent on counter lines, bring-in requests, cars, legacy lines and split parts (absent reads as 0). `lineHasPickupFee` says whether the edit forms show the field |
 | `lengthIn`/`widthIn`/`heightIn` | | the piece's size for a one-piece line, else null |
 | `source` | `counter` \| `request` \| `card_order` | `counter` for `addWaitingPackage` / `addContainerLine`; `request` / `card_order` for `receivePackageRequest` (docs/PACKAGE_REQUESTS.md §8.6) |
 | `requestId` | string | the `packageRequests` id a received request came from; `""` for counter lines |
@@ -248,7 +249,9 @@ Every reader (counts, labels, WhatsApp, tracking, lists) goes through it.
 **Writing**: `addWaitingPackage`, `addContainerLine` (`line.pieces`) and
 `updateContainerLine` (`line.pieces`) take `pieces` (1-60). When `pieces` is
 present on a line that is not a car, `kind`/`quantity`/`description`/size/
-`priceCents` in the request are ignored and recomputed from the pieces. A
+`priceCents` in the request are ignored and recomputed from the pieces (plus
+`pickupFeeCents` when the request carries one; whole cents >= 0, else
+`pickup_fee_invalid`). A
 request without `pieces` (older app versions) still writes the old form.
 Both add callables answer with `pieceCount` too, and money received at
 drop-off is judged against the sum of the pieces.
@@ -268,9 +271,17 @@ most 20 pieces (the request's cap).
 description, size) changes while waiting or loading (`container_locked`
 after); their prices change in every state (edit key `piecePrices`). The
 counts follow the current pieces and the History says "Edited 2 barrels, 1
-box (was 3 barrels): pieces for Fatou". `setContainerLinePrice` on a line
-with pieces spreads a changed total evenly over its pieces (the same rule as
-reading a legacy price); an unchanged total only toggles pay on arrival.
+box (was 3 barrels): pieces for Fatou". An edit that leaves
+`pickupFeeCents` out keeps the stored fee; sending it changes it (edit key
+`pickupFeeCents`, open in every state like the prices, History "pickup
+fee"). The console and app line edit forms show a "Pickup fee" field only
+for a line that has one (`lineHasPickupFee`), and the price call an edit
+makes carries pieces + fee, so nothing is spread. `setContainerLinePrice` on
+a line with pieces spreads a changed total evenly over its pieces (the same
+rule as reading a legacy price) - only what is above the line's pickup fee:
+the fee stays as it is, and a total below it is refused
+(`price_below_pickup_fee`, beside any `price_below_paid`); an unchanged
+total only toggles pay on arrival.
 
 ## Split across containers
 
@@ -282,7 +293,9 @@ group's highest part), `rootLineId` = the root, `partIndex` = k, the same
 customer, receiver, phones, WhatsApp switches, destination, pay-on-arrival,
 `source`, `requestId` and the root's `receivedAt`; `paidCents: 0`; the pieces
 moved with their prices (each line's `priceCents` is the sum of its own
-pieces). All in the one transaction that moves the lines. `n` must be a whole
+pieces). A pickup fee stays on the line that goes (the root keeps it, inside
+its `priceCents`); the part gets no `pickupFeeCents`, so the group's total
+holds the fee once. All in the one transaction that moves the lines. `n` must be a whole
 number from 1 to the line's piece count (`piece_count_invalid`,
 `invalid-argument`, `details.lineIds`); a car is never split. A line already
 on this container is skipped, so retrying a request that landed changes
@@ -297,7 +310,9 @@ Sending a part back to waiting (`unassignContainerLine`) never re-merges it.
 
 **Money stays on the root.** Payments are rows on the root line; `paidCents`
 lives there. Paid and balance are read for the whole group
-(`lineGroupSummary`: sum of the parts' prices, the root's paid):
+(`lineGroupSummary`: sum of the parts' prices, the root's paid, and
+`pickupFeeCents` - the part of that sum that is a pickup fee, told apart and
+never added again):
 - `recordContainerLinePayment` with a part's id records on the root, against
   the group's balance (answer `lineId` = the root).
 - A price change on any part (`setContainerLinePrice`, a piece price in
@@ -313,8 +328,10 @@ lives there. Paid and balance are read for the whole group
 
 **Tracking page** (`lookupGuestTracking`, container records): `pieceCount`,
 `parts: [{trackingCode, stage, pieceCount, priceCents}]` (the whole group,
-part order, at least the line itself) and `payment: {priceCents, paidCents,
-balanceCents}` for the group. Either code of a group finds it; part codes
+part order, at least the line itself) and `payment: {priceCents,
+pickupFeeCents, paidCents, balanceCents}` for the group (`pickupFeeCents` is
+inside `priceCents`; the page shows it as its own "Pickup fee" row when above
+zero). Volume counts are pieces only: a fee never changes them. Either code of a group finds it; part codes
 also match typed without the dash (`clk7m4p22`).
 
 ## VIN

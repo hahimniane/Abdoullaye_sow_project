@@ -511,6 +511,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `line_pieces_test.dart` each replay every case (JSON null = null or
   absent). A rule change regenerates the file and all three must pass.
   Doubles are part of the contract: include a rounding case (20.555 in).
+  An optional field a mirrored writer emits only sometimes (a line's
+  `pickupFeeCents`, present only for a collected request) is left OUT of the
+  map when absent on all three sides, never written as `null`: the Dart
+  replay compares maps key by key, so `{k: null}` and `{}` differ there.
+  Money that is a line's own amount beside its pieces (the pickup fee) is
+  checked where a total feeds a second call: an edit's
+  `setContainerLinePrice` must carry pieces + fee, or the server reads a
+  price drop and spreads it over the pieces.
 - Calling `pumpWidget` twice in one test with the same screen type keeps the
   first State (`didUpdateWidget`, not `initState`), so `late final` fields built
   from `widget.source` keep the first fake and the second setup is silently

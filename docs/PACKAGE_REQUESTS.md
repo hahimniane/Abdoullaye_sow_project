@@ -17,7 +17,9 @@ is counted.
 - Each piece: `kind` (`barrel` | `box` | `other`; cars stay their own line
   kind `car`, always 1 piece), `description` (optional for barrels),
   optional size, `priceCents` (per piece, optional until staff set it).
-- The line total = sum of piece prices. Payments stay per line (existing
+- The line total = sum of piece prices, plus the line's own pickup fee
+  when it came from a "Collect from me" request (`pickupFeeCents`, never
+  spread into the pieces; Integration below). Payments stay per line (existing
   `containerLinePayments`, partial payments, received-by, methods).
 - Labels: one per piece, "CL-K7M4P2 · 1 of 3", "2 of 3"… (thermal 4×6 and
   Letter sheets). One set of WhatsApp messages per line.
@@ -110,7 +112,9 @@ is counted.
 
 ### Received
 - Staff tap "Received" on an Expected request: they confirm the final price
-  per piece (prefilled from the estimate), optionally record payment; this
+  per piece (prefilled from the estimate) and, for a collected request, the
+  pickup fee in its own field (prefilled from the estimate), optionally
+  record payment; this
   creates/updates the line with `receivedAt`, prints labels, and sends the
   bilingual "received" WhatsApp.
 
@@ -200,12 +204,26 @@ All three phases are merged on `release/1.0.17`. What the merge settled:
   compare them field by field, print their labels "1 of N", split the
   received line, and recount the month). The line carries no
   `receivedAtMs` (the request document keeps its own).
-- **Pickup fee.** A line's total is the sum of its pieces (§1), and edits
-  and splits re-derive it from them, so a collected request's pickup fee
-  rides inside the piece prices: `receivePrefillCents` spreads it over the
-  priced pieces (odd cents on the first), the same rule in the server, the
-  console and the app; the Received form says "The prices include the
-  pickup fee in the estimate".
+- **Pickup fee (owner decision 2026-10-18).** A collected request's pickup
+  fee is NOT spread into the piece prices: it is the line's own amount,
+  `pickupFeeCents`, beside the pieces, and the bill reads "Barrel $90 · Box
+  $40 · Pickup fee $20 · Total $150". The line total is pieces + fee
+  (`lineTotalCents` in `line_pieces.js`, mirrored in the console and the
+  app over the shared cases) wherever it is computed: the writer, edits,
+  payments and their "below paid" checks, group money. Received opens the
+  pieces on the estimate's own prices (`receivePrefillCents`) and a separate
+  "Pickup fee" field on the estimate's fee (`receivePrefillPickupFeeCents`,
+  collect only; none for bring-in) - the same rule and the same test
+  numbers (15000 + 4500, fee 2501, total 22001) in all three suites. Only
+  that line carries the field (`lineHasPickupFee`): counter lines, bring-in
+  requests and split parts have none. A split leaves the fee on the root;
+  an edit keeps it unless the line edit form (console and app, shown only
+  for such a line) changes it; `setContainerLinePrice` spreads only what is
+  above it and refuses a total below it (`price_below_pickup_fee`). The
+  waiting list row and payment dialog, the Received total, the package view
+  and the public tracking page (`payment.pickupFeeCents`) show it as its
+  own row. Volume counts pieces only (a test pins that the fee changes
+  none).
 - **Received uses phase 1's pieces editor** in the console and the app:
   staff confirm prices, correct what a request piece is (kind, description,
   size), add pieces brought on top and drop ones that did not come (§8.6).
@@ -232,6 +250,9 @@ Where this section and the sections above disagree, the sections above win
 - Denormalized counts for cheap counting: `pieceCount`, `barrelPieces`,
   `packagePieces` (box + other), `carPieces`.
 - `source: counter | request | card_order`, `requestId`, `receivedAt`.
+- `pickupFeeCents` (int >= 0): only on the line received from a collected
+  request; inside `priceCents` (= pieces + fee), never in the piece prices;
+  stays on the root when the line is split.
 - Split groups: `rootLineId` (root: its own id), `partIndex` (root 1).
   Payments stay on the ROOT line; paid/balance are shown for the whole group.
   A part can be split again (`-3`…); moving a part back to waiting never
@@ -599,9 +620,13 @@ request's are kept), pieces brought on top without an id (`{kind:
 barrel|box|other, description, sizeIn?, priceCents}`; the server gives
 them the next ids, `p3`, `p4`, …), and request pieces left out did not come.
 An absent or empty `pieces` keeps every request piece at its prefilled
-price. The prefill is the estimate's price per piece plus, for a collected
-request, the estimate's pickup fee spread over the priced pieces
-(`receivePrefillCents`; clients open the form on the same numbers). At
+price. The prefill is the estimate's price per piece (`receivePrefillCents`;
+clients open the form on the same numbers). `pickupFeeCents?: int` (collect
+only) is the line's own pickup fee, beside the pieces and never spread into
+them (owner decision 2026-10-18): absent keeps the estimate's fee
+(`receivePrefillPickupFeeCents`); whole cents >= 0, else
+`pickup_fee_invalid`; a bring-in request takes none (any fee above 0 is
+`pickup_fee_invalid`). At
 least one piece, at most 20. Refusals: `estimate_piece_unknown` (an id not
 on the request, or twice), `price_invalid`, `piece_kind_invalid`,
 `piece_description_required`, `text_too_long`, `size_invalid`,
@@ -611,9 +636,11 @@ with `piecesAdded` / `piecesRemoved`, before the `received` entry. One transacti
 fields plus `pieces[] {id, kind, description, sizeIn, priceCents}`,
 `pieceCount`, `barrelPieces`, `packagePieces`, `carPieces: 0`,
 `source: "request"` (`"card_order"` for card-paid), `requestId`,
-`receivedAt`, `rootLineId` = its own id, `partIndex: 1`; `priceCents` = sum
-of the piece prices (null when none is priced; `price_required` when some
-but not all are); summary `kind` `barrels` when every piece is a barrel,
+`receivedAt`, `rootLineId` = its own id, `partIndex: 1`, and for a
+collected request `pickupFeeCents` (0 allowed; bring-in lines have no such
+field); `priceCents` = sum of the piece prices + `pickupFeeCents` (null when
+no piece is priced; `price_required` when some but not all are); an
+optional payment is judged against that total; summary `kind` `barrels` when every piece is a barrel,
 else `other`, `quantity` = piece count, `description` phase 1's
 ("Barrel, Clothes, TV"). Built by the counter's own writer
 (`containerLineRecord` + `lineReceiptFields`), so it is the same document
